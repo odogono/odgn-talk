@@ -16,6 +16,14 @@ _Avoid_: program, plugin
 A Host-granted permission to perform one kind of effect. Scripts have no ambient I/O; every effect goes through a Capability.
 _Avoid_: permission, API access
 
+**Host Object**:
+An opaque handle to something the Host owns, with identity: copying the handle never copies the thing. The only kind of value through which a Script can observe sharing.
+_Avoid_: reference, native object, proxy
+
+**Script Variable**:
+A variable declared at Script level, visible to all of the Script's Handlers and kept for as long as the Host keeps the Script loaded.
+_Avoid_: global, static, script property
+
 ## Handlers
 
 **Handler**:
@@ -41,6 +49,14 @@ Matching the shape of a structured value (list, map) and binding its parts to na
 _Avoid_: pattern (unqualified), unpacking
 
 ## Values
+
+**Value Semantics**:
+The rule that no Script-created value (text, number, list, map) is ever both shared and changeable: changing a value through one name is never visible through another.
+_Avoid_: immutability, copy-on-write (those are ways to implement it)
+
+**Container**:
+Somewhere a value can be put: a variable, or a Chunk Expression or key path rooted in one. Putting into a Container rebinds its root variable.
+_Avoid_: slot, lvalue, reference
 
 **Chunk Expression**:
 A readable reference to part of a text or list value by ordinal and kind, e.g. `word 3 of line 2 of report`.
