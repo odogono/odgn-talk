@@ -38,6 +38,22 @@ _Avoid_: overload
 The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds.
 _Avoid_: filter, predicate
 
+**Run**:
+One execution of a Handler, from the message that starts it to its end, possibly spanning several Suspension Points. A Script never executes two Runs at the same instant, but a new Run may start while another is suspended.
+_Avoid_: activation, invocation, task, thread, process
+
+**Suspension Point**:
+A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, or a call to a Suspending Capability. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
+_Avoid_: await, yield point
+
+**Suspending Capability**:
+A Capability that the Host declares may take time to answer, so calling it is a Suspension Point. Every other Capability answers immediately.
+_Avoid_: async function, blocking call
+
+**Message Path**:
+The chain a message follows when a Script has no matching Handler Clause for it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
+_Avoid_: bubbling, propagation, inheritance chain
+
 ## Matching
 
 **Text Pattern**:
