@@ -65,3 +65,23 @@ _Avoid_: substring, slice
 **Unit**:
 A unit of measure attached to a number (e.g. `5 kg`), taking part in conversion and arithmetic.
 _Avoid_: dimension, suffix
+
+**Quantity**:
+A number together with its Unit, e.g. `5 kg`. The Unit is part of the value, so `5 kg` and `5` are different values.
+_Avoid_: measurement, unit value, tagged number
+
+**Unit Kind**:
+The family of Units that convert into one another, e.g. mass (`kg`, `lb`) or duration (`s`, `min`).
+_Avoid_: dimension, unit type
+
+**Nothing**:
+The single value meaning "no value here", distinct from empty text, an empty list or an empty map.
+_Avoid_: null, nil, undefined, empty
+
+**Instant**:
+A point on the global timeline, independent of any time zone.
+_Avoid_: timestamp, date (unqualified)
+
+**Civil Date**:
+A calendar date, or date and time of day, with no time zone attached, e.g. `2026-09-27`.
+_Avoid_: local date, naive date, date (unqualified)
