@@ -12,6 +12,10 @@ _Avoid_: runtime, engine, platform
 A unit of source code, written by an end user, that a Host loads and runs.
 _Avoid_: program, plugin
 
+**Example Host**:
+A small Host kept alongside the spec to exercise the embedding API and the Conformance Corpus end to end. It is not a product.
+_Avoid_: demo, sample app, example app
+
 **Capability**:
 A Host-granted permission to perform one kind of effect. Scripts have no ambient I/O; every effect goes through a Capability.
 _Avoid_: permission, API access
@@ -41,6 +45,16 @@ _Avoid_: test suite, golden tests
 **Trace**:
 The spec-defined record of what a Script Group observably did: per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step.
 _Avoid_: log, transcript, event log
+
+## Tooling
+
+**REPL**:
+A command-line Host where a user enters source a line at a time and sees each result straight away, against a live session. Each Core has one.
+_Avoid_: console, shell, interpreter
+
+**Playground**:
+The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
+_Avoid_: sandbox (that word means the security boundary), editor, IDE
 
 ## Handlers
 
