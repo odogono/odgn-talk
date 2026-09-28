@@ -67,14 +67,34 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - Every match is replaced by default, and `replace first <p> …` replaces only the first.
 - **Sessions:** narrows ADR 0014.
   - `say x` is sugar for `tell console to write x`, and it is a load-time error without a `console` Grant.
-  - At the prompt, an Entry that doesn't parse as a statement but does parse as an expression echoes its value.
-  - A lone word is a command if the Session Script has a Handler by that name, and an expression otherwise. The loader knows every Handler, so this is deterministic.
+  - At the prompt, an Entry is decided on its first token, with no second parse. A Reserved Word that starts a statement starts one. A non-reserved word starts a Command Call only if the Session Script has a Handler by that name. Anything else is an expression, and its value is echoed. So `n - 1` echoes rather than calling a Handler `n` with `-1`. The loader knows every Handler, so this is deterministic.
 - **Diagnostics and conformance:**
   - Only the first syntax error (its code and position) is normative. Recovery after it is a Core and tooling freedom, for the LSP and formatter.
   - When parsing succeeds, every checker diagnostic is normative, in source order.
   - The corpus needs no new case kind (ADR 0018). Disassembly Cases pin how accepted programs parse, since a different parse lowers differently, and diagnostic Trace Cases pin rejected ones.
+- **Checked by the parser prototype** (#38): all 11 syntax sketch files, updated to these spellings, parse with two tokens of lookahead, no backtracking, and the lexer mode always known in time. Staying at two tokens needs these rules:
+  - **Reserved words:**
+    - Every statement keyword is reserved (`add`, `set`, `delete`, `replace`, `wait`, `exit`, `pass`, `throw`, …). Otherwise `add 1 to x` and a Command Call `add 1` differ only at `to`.
+    - So are `in` (for `x is in r`), `wait` (for `… and wait`), `after` (it ends a `wait for` branch) and `the`, `of`, `is`, `not`, `and`, `or`.
+    - `to`, `into`, `be`, `then` and `where` aren't needed to parse valid code. They stay reserved because they put first errors on the right token.
+  - **Chunk words:** a chunk word followed by a token that can start an index is a Chunk Expression.
+    - `grammar.toml` publishes a FOLLOW set: the contextual words that may follow a complete expression (`as`, `mod`, `contains`, `ignoring`, …). None of them starts an index.
+    - A chunk word followed by `-` is a chunk, so `line - 1` with a variable `line` needs parentheses.
+  - **Keys:** a word followed by `:` is a key in `{…}` and in Destructuring too, Reserved Words included. `{to: who}` is read back with `the "to" of m`.
+  - **Handler heads:** after a comma, `replacing`, `dropping`, `queued` and `deciding` are modifiers, and `every time` and `during name` are decided on their second word. None of them can be a parameter name there.
+  - **Calls:** `name(` with no space is a call. With a space, `(` is grouping, so `say (a + b) & "!"` works.
+  - **Units:** compound Units are written without spaces (`60 mi/hr`), and a spaced `/` is division (`500 mi / 4 hr`). `3..7 m/s` means `3..(7 m/s)`.
+  - **Modifiers:** `delimited by` attaches to the outermost Chunk Expression of an `of` chain. On a Text Pattern element, `ignoring case` is trailing (`"x" ignoring case`).
+  - **Patterns:** Text Pattern elements group with a nested `<…>` (`one or more of <letter or digit>`), because `( … )` always means an expression.
+  - **Binary builds:** inside `<< >>`, `as` followed by an integer type is the field type, so `<< the length of b as uint16, b >>` needs no parentheses.
+  - **`wait for`:** `from` takes a postfix-level operand, so in `wait for click from okButton or 30 s` the `or` is the timeout.
+  - **Kinds:** a kind or Unit after `is a`, `can be` or `as` is never a Reserved Word.
+  - **Error positions:** the spec must say where the end-of-line token sits (the prototype puts it after a trailing comment), and that a lexer error is reported where its token starts (unterminated text at the opening quote). It must also say whether "not a Container" is a syntax error or a checker diagnostic, since that changes which error comes first.
+  - **Source:** the [parser prototype](https://github.com/odogono/odgn-talk/tree/prototype/parser-sketch/prototypes/parser-sketch) is the primary source: its `FINDINGS.md`, the draft `grammar.toml`, and `broken.talk`.
 - **Left for later:**
   - The productions themselves, the notation's exact syntax and the full reserved list, written with the final spec.
-  - A throwaway parser prototype to check the two-token lookahead claim against the syntax sketch.
+  - `return` as the line-break constant (`& return &`). It parses by position, but reads as a trap.
+  - An attachment point for `ignoring case` on functions such as `offset`.
+  - Whether Script functions may be called as `the f of x`. If so, `the tax of 100` would read as a key or a call depending on which functions the Script has.
   - A naming guide for Operations (`ask inbox to ask` reads badly), which belongs with the Host embedding API.
   - Other built-in operations are functions (`the f of x`, `f(x, y)`) unless an ADR adds syntax.
