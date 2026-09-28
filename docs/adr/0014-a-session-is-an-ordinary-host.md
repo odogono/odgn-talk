@@ -20,3 +20,4 @@ The core has no session concept. A REPL or Playground session is a Host holding 
 - `:runs`, `:mailbox` and `:vars` render a same-core Script Snapshot (ADR 0008) taken at a Quiescent moment. `:save`/`:restore` wrap the same-core save. Playground sharing is source-only: a Session Transcript or an exported Script.
 - A message reaching the end of a session's flat Message Path is reported, not an error.
 - Narrowed by ADR 0018: the display form must round-trip, since corpus cases write every value in it. A Session Transcript is a readable `.transcript` file with a blessed Trace beside it.
+- Narrowed by ADR 0019: `say x` is sugar for `tell console to write x`. At the prompt, an Entry that parses only as an expression echoes, and a lone word is a command only if the Session Script has a Handler by that name.
