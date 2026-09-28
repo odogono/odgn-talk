@@ -54,3 +54,4 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - None of these differences can be observed by a Script.
 - **Source:** the [Example Hosts sketch](https://github.com/odogono/odgn-talk/tree/prototype/example-hosts/prototypes/example-hosts) is the primary source.
 - Narrowed by ADR 0017: a `Fail` raises the Host's code with its `Data` as fields. A catalogue code, or a clashing key, becomes `host error`. `timeout` and `host error` have catalogue shapes, and a failed `Request` rejects with `send failed`.
+- Narrowed by ADR 0018: the Host input records are part of the Trace grammar, a Pump records the Clock reading it took, and results for immediate calls in the corpus come from `> stub` lines.

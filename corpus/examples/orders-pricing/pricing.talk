@@ -1,0 +1,10 @@
+-- pricing.talk: the other half of the orders-pricing sketch case (ADR 0018).
+-- Grants come from case.toml: prices: lookup (suspending, answered by a
+-- `> answer` line in case.trace)
+
+on quote sku, qty
+  ask prices to lookup sku
+  put it into unit
+  wait 1 s                 -- deadline on the case's virtual Clock
+  return unit * qty
+end quote

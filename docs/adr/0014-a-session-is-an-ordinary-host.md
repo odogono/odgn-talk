@@ -19,3 +19,4 @@ The core has no session concept. A REPL or Playground session is a Host holding 
 - A bare session grants only `console` (write, immediate; read, suspending). Mock Capabilities, and any real ones the REPL Host has built in, are added with `:grant`. The Clock is real by default, or virtual under `:clock virtual`.
 - `:runs`, `:mailbox` and `:vars` render a same-core Script Snapshot (ADR 0008) taken at a Quiescent moment. `:save`/`:restore` wrap the same-core save. Playground sharing is source-only: a Session Transcript or an exported Script.
 - A message reaching the end of a session's flat Message Path is reported, not an error.
+- Narrowed by ADR 0018: the display form must round-trip, since corpus cases write every value in it. A Session Transcript is a readable `.transcript` file with a blessed Trace beside it.

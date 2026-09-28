@@ -59,15 +59,35 @@ _Avoid_: event (unqualified), request, dispatch
 ## Conformance
 
 **Conformance Corpus**:
-The shared set of example Scripts with their inputs and expected Traces that every Core must reproduce exactly. Together with the spec, it is the authority on what the language does.
+The shared set of cases (Trace Cases, Disassembly Cases and Session Transcripts) that every Core must reproduce exactly. Together with the spec, it is the authority on what the language does.
 _Avoid_: test suite, golden tests
 
 **Trace**:
-The spec-defined record of what a Script Group observably did: per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step.
+The spec-defined record of a Script Group's life: the Host Inputs it received, in order, and what it observably did in response (per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step). Because it holds its own inputs, a Trace replays on its own.
 _Avoid_: log, transcript, event log
 
+**Host Input**:
+One thing the Host does to a Script Group that the Trace records as input: a load, a Pump with its Clock reading, a Delivery, an answer, a cancellation, a save and so on.
+_Avoid_: step, event, command
+
+**Trace Case**:
+A Conformance Corpus case made of a setup and one Trace. Replaying the Trace's Host Inputs on any Core must reproduce every other line of it exactly.
+_Avoid_: test, fixture, golden file
+
+**Disassembly Case**:
+A Conformance Corpus case that pairs a Script with the exact Abstract Machine instructions it must compile to.
+_Avoid_: bytecode test, snapshot test
+
+**Stub**:
+A result a Trace Case supplies in advance for the next call to an immediate Operation (or a charge for a fire-and-forget one), since such a call answers before any later Host Input could.
+_Avoid_: mock (unqualified), fake, canned response
+
+**Bless**:
+To fill in a case's expected output from the Cores themselves, allowed only when every available Core produces the same output, and followed by human review.
+_Avoid_: snapshot, record, accept
+
 **Session Transcript**:
-A recorded REPL or Playground session: its Entries and Session Commands in order, with the Clock readings, Capability answers and cancellations it saw. It is a Conformance Corpus case kind, and replaying it must give the same echoed output and Trace on every Core.
+A recorded REPL or Playground session: its Entries and Session Commands in order, with the Clock readings, Capability answers and cancellations it saw. It is a Conformance Corpus case kind, kept in a readable form a user can share, and replaying it must give the same echoed output and Trace on every Core.
 _Avoid_: history, log, recording, notebook
 
 ## Tooling
