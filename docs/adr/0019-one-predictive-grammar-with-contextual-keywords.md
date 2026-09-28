@@ -102,3 +102,7 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - The loader's `and wait` check covers Command Calls too: a Command Call to a Handler that may suspend, local or imported, is written `name args and wait`, checked both ways, with the result left in `it`.
   - Functions, and Handlers called function-style, may never suspend, which settles the syntax sketch's `put report(s, day) into …`.
   - `use`, `from`, `as`, `constant` and `private` start top-level declarations, and none of them is reserved.
+- **Narrowed by ADR 0021:**
+  - The built-in property list is `length`, `keys`, `values`, `items`, `lines`, `words`, `characters`, `bytes` and `code points`. Every other function, Script functions included, is called `f(x, y)`, which settles `the f of x`.
+  - A Guard may call Built-ins but never a Script or Library function.
+  - Grouping becomes a `grouped by` Comprehension clause, left to a follow-up.

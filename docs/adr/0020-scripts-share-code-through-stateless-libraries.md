@@ -112,3 +112,4 @@ A Library is a unit of source code that the Host registers on a Script Group, ho
   - The exact shape of the `addLibrary` and `replaceLibrary` calls in each Core's embedding API.
   - Whether a Library should be able to declare the Operations it needs, so a Host can check them before any import.
 - **Source:** the [Libraries sketch](https://github.com/odogono/odgn-talk/tree/prototype/libraries-sketch/prototypes/libraries-sketch) rewrites the Damocles `epilogue`, a stdlib-style `text` Library, and the syntax sketch's `report`.
+- Narrowed by ADR 0021: the stdlib Libraries are `text`, `list`, `map`, `bytes`, `json`, `date` and `units`, and every stdlib name is unique across them and the Built-ins. A function is a Built-in only if it can't be written in the language or a Guard must call it. Stdlib Library source is normative spec text with its own Disassembly Cases.

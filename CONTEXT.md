@@ -16,6 +16,14 @@ _Avoid_: program, plugin
 A unit of source code, supplied by the Host, that holds Handlers, functions and Constants for Scripts to use. It has no state, no Grants and no mailbox of its own: its code runs inside the calling Script's Run.
 _Avoid_: module, package, include
 
+**Standard Library**:
+The seven Libraries every Core ships with the language (`text`, `list`, `map`, `bytes`, `json`, `date`, `units`). Their names are reserved, and no two stdlib names are the same.
+_Avoid_: stdlib module, prelude, runtime library
+
+**Built-in**:
+A function or property that is always available without an Import, because it can't be written in the language or a Guard must be able to call it. The Cores implement it natively.
+_Avoid_: primitive, intrinsic, native function
+
 **Example Host**:
 A small Host kept alongside the spec to exercise the embedding API and the Conformance Corpus end to end. It is not a product.
 _Avoid_: demo, sample app, example app
@@ -145,7 +153,7 @@ One of several Handlers for the same message, chosen by Destructuring the messag
 _Avoid_: overload
 
 **Guard**:
-The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds.
+The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds. A Guard may call Built-ins, but never a Script or Library function.
 _Avoid_: filter, predicate
 
 **Run**:
@@ -299,6 +307,10 @@ _Avoid_: measurement, unit value, tagged number
 **Unit Kind**:
 The family of Units that convert into one another, e.g. mass (`kg`, `lb`) or duration (`s`, `min`).
 _Avoid_: dimension, unit type
+
+**Unit Catalogue**:
+The fixed table of every Unit, with its Unit Kind and exact conversion factor, that a language version pins. Neither Hosts nor Scripts can add to it.
+_Avoid_: unit registry, unit table, units list
 
 **Nothing**:
 The single value meaning "no value here", distinct from empty text, an empty list or an empty map.
