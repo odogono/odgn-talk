@@ -1,0 +1,102 @@
+# The stdlib is a small built-in core plus Libraries written in the language
+
+A function is a Built-in only if it can't be written in the language: it needs the pinned Unicode tables, the Text Pattern engine, decimal internals or the representation of a value kind. Or it's something a Guard must be able to call, because a Guard may call Built-ins and nothing else. Speed alone never makes a function built in. Everything else lives in one of seven Core-shipped Libraries (`text`, `list`, `map`, `bytes`, `json`, `date`, `units`), written in the language and imported with `use … from` (ADR 0020). The Cores bundle no locale data and no time-zone database. Collation, locale-aware case, locale formats and zone conversion come from Host Capabilities, whose answers the Trace records. We chose this because every Built-in is written twice and hand-priced in the Cost Model, while a Library function is written once, goes through the one normative lowering (ADR 0010), and gets its Fuel from its instructions on both Cores (ADR 0009). A Library loop that costs more Fuel than a native one is charged honestly, not mispriced. The same Fuel on both Cores is what parity needs. Guards stay a closed sublanguage. A Library function can't be proven to terminate, and a Limit Fault during clause selection, before any Run exists, would be a new failure mode. Locale and zone data are large and change on their own schedule. As Capabilities they cost nothing in the ~1 MB browser payload and don't turn each CLDR or tzdb release into a language version.
+
+## Considered Options
+
+- **Built in when hot:** it brings back the twice-written, hand-priced stdlib that ADR 0020 rejected, and "hot" has no test the spec can state.
+- **Guards calling pure Library functions:** the loader can check purity (no Capability, no `wait`), but not termination. Fuel would bound it, but a Limit Fault in clause selection has no Run to fault.
+- **A Guard-safe subset of Built-ins:** every Built-in is already a pure leaf that never suspends or calls a Capability (ADR 0010), so there is nothing to exclude.
+- **Library functions as properties (`the average of xs`):** a word's meaning would change with the importer's `use` lines, which ADR 0019 rejects for keys.
+- **Aggregates as built-in properties** (`sum`, `average`, as in HyperTalk): they can be written in the language, and only `min` and `max` are wanted in Guards.
+- **JSON as a Built-in sharing the Host codec:** cheaper per call, but hand-priced and implemented twice.
+- **`reduce` and `group` as Library functions:** the language has no function values (ADR 0019 rejected lambdas). Taking a key name instead of an expression can't group by a computed key.
+- **Transcendentals by a spec-defined algorithm:** parity comes from both Cores running the same steps, but results can be one ulp off and the algorithm is frozen into the spec. Correct rounding has one right answer by definition.
+- **Half-even as `round`'s default:** it matches arithmetic, but `round(2.5)` giving 2 surprises beginners and breaks money rounding.
+- **Float fields in Binary Patterns:** they would hide a lossy conversion inside a match (ADR 0013).
+- **A pinned CLDR subset, or root collation only:** hundreds of KB against the payload budget, and a language-version bump each release.
+- **A pinned tz database:** the same cost, and zone rules change often.
+- **A Host-extensible Unit Catalogue:** Unit suffixes are syntax, and Hosts can't add syntax (ADR 0019).
+- **A lenient number parser:** a second number grammar beside `as number`. The Typed Element `a number` already extracts numbers from text.
+- **Raw Unicode property lookups (`generalCategory(c)`):** they would pin the table layout as an API, so a Unicode bump could break Scripts.
+- **Qualified stdlib names that may repeat across Libraries:** every importer of two Libraries would need `as` renames.
+
+## Consequences
+
+- **Guards:** narrows ADR 0019.
+  - A Guard may use operators, conversions, `matches`, Built-in properties and Built-in functions.
+  - Calling a Script or Library function in a Guard is a load error.
+  - This is the first ADR to state the Guard sublanguage. The rest (reading message arguments, Destructured bindings and Script Variables, and comparing Host Objects by identity) stands as decided in #7.
+- **Call shape:** narrows ADR 0019.
+  - `the p of x` is only for the fixed property list in `grammar.toml`: `length`, `keys`, `values`, `items`, `lines`, `words`, `characters`, `bytes`, `code points`.
+  - Every other function, whether a Built-in, a Library function or a Script function, is called `f(x, y)`. This settles ADR 0019's question: a Script function is never `the f of x`.
+  - A Command Call is only for Handlers.
+  - `the json of`, `the average of` and `the max of` in the sketches become `decodeJson(…)`, `average(…)` and `max(…)`.
+- **Built-ins:**
+  - Values: the property list, `min(xs)`, `max(xs)`, `codePoint(c)`, `fromCodePoint(n)`, `upper(s)`, `lower(s)` and `offset`.
+    - `upper` and `lower` use Unicode full default case mapping, which may change length.
+    - The pinned Unicode tables are reached only through these, Text Pattern classes and `ignoring case`.
+  - Numbers: `abs`, `floor`, `ceiling`, `truncate`, `round`, `sqrt`, `exp`, `ln`, `log10`, `power`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` and the Constant `pi`.
+  - Floats: `fromFloat64(b)`, `fromFloat32(b)`, `toFloat64(n)` and `toFloat32(n)`.
+  - Dates: field functions such as `year(d)` and `weekday(d)`, whose list belongs to the dates follow-up.
+  - Every Built-in is ambient, and a Guard may call it.
+- **Numbers:** narrows ADR 0002.
+  - Transcendental functions are correctly rounded. The result is the exact value rounded half-even to 34 digits, so both Cores agree by definition.
+  - An argument outside the domain (`sqrt(-1)`, `ln(0)`) raises `out of domain` with `{function, value}`.
+  - `round(x)`, `round(x, places)` and `round(x, places, mode)` round half away from zero by default. `mode` is text: `"half even"`, `"half up"`, `"up"`, `"down"`, `"floor"` or `"ceiling"`.
+  - There is no lenient number parser. `as number` stays strict, Scripts extract numbers with the Typed Element `a number`, and locale-aware parsing goes through the locale Capability.
+- **Floats:** narrows ADR 0013.
+  - `fromFloat64(b)` and `fromFloat32(b)` read 8 or 4 bytes, big-endian, or little-endian with a trailing `"little"` argument. They round the exact binary value half-even to 34 digits.
+  - NaN and Infinity raise `can't convert`.
+  - `toFloat64(n)` and `toFloat32(n)` round to the nearest float, ties to even, and return Bytes.
+  - The Host's float → decimal rule uses the same definition.
+- **The Libraries:** narrows ADR 0020.
+  - `text`: `pad`, `padLeft`, `trim`, `split`, `join`, `repeated`.
+  - `list`: `sum`, `average`, `zip`, `unique`, `reverse`, `flatten`.
+  - `map`: `merge`, `without`.
+  - `bytes`: `toHex`, `fromHex`, `toBase64`, `fromBase64`.
+  - `json`: `decodeJson`, `encodeJson`.
+  - `date`: formatting and parsing with an explicit format.
+  - `units`: absolute-temperature conversions, as functions over plain numbers.
+  - These seven names are the only reserved Library names.
+  - Every stdlib name is unique across all seven Libraries and the Built-ins, so no combination of stdlib imports can clash. Names are camelCase.
+  - The lists above are the outline. Each Library's full contents are written with the final spec.
+- **JSON:**
+  - One spec section defines the JSON ↔ Value mapping, and both `json` and each Core's Host-side codec follow it.
+  - `null` decodes to Nothing, and Nothing is allowed inside lists and maps.
+  - Objects keep insertion order.
+  - Numbers decode through `as number` and encode in the canonical decimal form, so trailing zeros survive.
+  - Invalid JSON raises `can't decode` with `{format, at}`.
+  - Encoding a Quantity, date, Bytes, Text Pattern or Host Object raises `wrong kind` unless the Script converts it first.
+- **Collections:**
+  - Filter, map and sort stay Comprehensions (ADR 0019).
+  - Grouping becomes a `grouped by` Comprehension clause, giving a map of lists. It is syntax, so it gets its own follow-up.
+  - There is no `reduce`. A `repeat for each` loop covers it.
+  - A join over several concurrent Runs can't be stdlib, because Libraries can't `send` and Built-ins can't suspend, so it is a syntax question of its own.
+- **Text and locale:** narrows ADR 0011.
+  - The Core keeps only locale-free Unicode defaults: full default case mapping, simple folding for `ignoring case`, and code-point order for sorting.
+  - Collation, locale-aware case, and locale number and date formatting and parsing are Operations of a Host `locale` Capability.
+  - Lenient decoding and other encodings are functions in `bytes`, with the encoding named. Which encodings are included is left to the final spec.
+- **Units:**
+  - The Unit Catalogue is fixed per language version, and neither Hosts nor Scripts can add Units.
+  - Factors are exact decimals.
+  - Each ISO 4217 currency is its own Unit Kind, and nothing converts between them.
+  - Temperature Units are differences only.
+  - Game-style units ("gold", "hp") are plain numbers or map fields.
+- **Dates and time zones:**
+  - Converting between an Instant and a Civil Date in a zone is an Operation of a zone-bound Host Capability.
+  - `date` formats and parses with explicit, numeric format tokens.
+  - Month and day names come from the locale Capability.
+- **Cost and parity:** narrows ADR 0020.
+  - Each stdlib Library's source is normative spec text, shipped as `.talk` files, with Disassembly Cases like any Library.
+  - A stdlib Library's code identity is fixed by the language version.
+  - Each Built-in has one entry in `cost-model.toml`: a static base plus per-unit terms over its operand and result sizes (ADR 0010). Transcendentals take a flat per-call rate.
+- **Layering:** the stdlib takes no position. Beginner and advanced layering, when decided, applies through lints and docs, not Library boundaries.
+- **Left for later:**
+  - The Unit Catalogue's contents, the normal form of compound Units and the printed form of Quantities.
+  - Dates and time zones: the format tokens, the field functions and the zone-bound Capability's Operations.
+  - The `locale` Capability's Operations and how a locale is named.
+  - The `grouped by` clause.
+  - A join over concurrent Runs.
+  - Each Library's full function list and each Built-in's Cost Model rate, written with the final spec.
+- **Source:** the [stdlib sketch](https://github.com/odogono/odgn-talk/tree/prototype/stdlib-sketch/prototypes/stdlib-sketch) writes a few Scripts against these Libraries and Built-ins.

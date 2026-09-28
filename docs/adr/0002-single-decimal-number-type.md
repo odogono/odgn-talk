@@ -14,3 +14,4 @@ The language has a single number type: a decimal with 34 significant digits and 
 - Both cores need their own decimal implementation, including transcendental functions whose rounding the spec must define (left to the stdlib outline).
 - Numbers crossing the Host boundary have to be converted between host floats and decimals, following a rule the spec defines.
 - The canonical text form is locale-free, with no global `numberFormat`. Formatting is always an explicit call.
+- Narrowed by ADR 0021: transcendental functions are Built-ins, correctly rounded (the exact value rounded half-even to 34 digits), and an argument outside the domain raises `out of domain`. `round(x, places, mode)` rounds half away from zero by default, with the mode named as text. Floats come in and go out only through `fromFloat64`/`toFloat64` and the 32-bit pair.
