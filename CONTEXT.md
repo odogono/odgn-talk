@@ -50,6 +50,10 @@ _Avoid_: test suite, golden tests
 The spec-defined record of what a Script Group observably did: per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step.
 _Avoid_: log, transcript, event log
 
+**Session Transcript**:
+A recorded REPL or Playground session: its Entries and Session Commands in order, with the Clock readings, Capability answers and cancellations it saw. It is a Conformance Corpus case kind, and replaying it must give the same echoed output and Trace on every Core.
+_Avoid_: history, log, recording, notebook
+
 ## Tooling
 
 **REPL**:
@@ -59,6 +63,18 @@ _Avoid_: console, shell, interpreter
 **Playground**:
 The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
 _Avoid_: sandbox (that word means the security boundary), editor, IDE
+
+**Session Script**:
+The one ordinary Script a REPL or Playground session builds up, to which every definition the user enters is added.
+_Avoid_: session (as a language concept), workspace, scratch script
+
+**Entry**:
+One unit of input at a REPL or Playground prompt: definitions, statements, or both. Its statements execute as a Run of an implicit Handler of the Session Script.
+_Avoid_: line, cell, command, input
+
+**Session Command**:
+A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
+_Avoid_: meta-command, directive, magic command
 
 ## Handlers
 
