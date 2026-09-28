@@ -48,3 +48,4 @@ This refines ADR 0009's "normative abstract instruction set". The spec defines a
   - `machine.toml` holds opcodes, operand kinds, stack effects, Suspension-Point flags, Cost Model keys and error codes.
   - `cost-model.toml` holds costs as formulas in a small arithmetic language.
   - One TS/Bun generator emits the tables, cost functions, disassembler and assembler into both Cores, and the instruction tables into the spec.
+- Narrowed by ADR 0015: a Fuel Slice belongs to a Script, per Pump, and overrun debt is carried per Script.

@@ -24,6 +24,14 @@ _Avoid_: permission, API access
 One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command, endpoint
 
+**Operation Declaration**:
+The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget) and longest time pending. The same form serves Hosts, the Conformance Corpus and tooling.
+_Avoid_: signature, schema, spec (unqualified)
+
+**Grant**:
+A Capability made available to one Script at load, limited to a set of its Operations and carrying the Host's own binding data. The loader checks every Capability call against the Script's Grants.
+_Avoid_: permission, token, entitlement
+
 **Host Object**:
 An opaque handle to something the Host owns, with identity: copying the handle never copies the thing. The only kind of value through which a Script can observe sharing.
 _Avoid_: reference, native object, proxy
@@ -39,6 +47,14 @@ _Avoid_: runtime, engine, interpreter (for the whole), VM
 **Script Group**:
 A set of Scripts driven by one deterministic scheduler, so the order of messages between them is fixed by the spec. A message from outside the group is an input the Host delivers.
 _Avoid_: realm, isolate, shard, cluster
+
+**Pump**:
+One Host call that runs a Script Group until nothing in it is runnable or its Fuel Slices are spent, leaving it Quiescent. A Group makes progress only inside a Pump.
+_Avoid_: tick, step, run (a Run is something else)
+
+**Delivery**:
+One message the Host hands to a Script Group from outside, identified by a delivery id that the Run it starts reports.
+_Avoid_: event (unqualified), request, dispatch
 
 ## Conformance
 
@@ -105,6 +121,18 @@ _Avoid_: async function, blocking call
 **Message Path**:
 The chain a message follows when a Script has no matching Handler Clause for it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
 _Avoid_: bubbling, propagation, inheritance chain
+
+**Owning Script**:
+The one Script whose `me` is a given Host Object, and so the first to receive messages delivered to that object. An object has at most one.
+_Avoid_: attached script, behaviour, object script
+
+**Target**:
+The object a message was delivered to, written `the target`. It stays the same as the message climbs the Message Path.
+_Avoid_: receiver, sender, source
+
+**Broadcast**:
+A Delivery to every Script in a Group that currently wants the message, through a Handler for it or a pending `wait for`. It never climbs a Message Path.
+_Avoid_: publish, fan-out, multicast
 
 **Quiescent**:
 The state of a Script in which no Run is mid-step: every Run is suspended, queued, or preempted at a time-slice boundary.
