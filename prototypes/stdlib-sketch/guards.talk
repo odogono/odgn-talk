@@ -1,0 +1,30 @@
+-- guards.talk: what a Guard may call (ADR 0021).
+-- A Guard may call Built-ins, but never a Script or Library function.
+
+use average from list
+
+on score {player: p, points: pts} where max(pts) >= 100
+  tell log to write p & " hit a century"
+end score
+
+on score {player: p, points: pts} where round(sqrt(the length of pts)) > 3
+  -- Any Built-in may appear here: they are all pure leaves that never
+  -- suspend or call a Capability (ADR 0010).
+  tell log to write p & " played a long game"
+end score
+
+on score {player: p, points: pts}
+  -- `average` is a `list` function, so it can't be in a Guard:
+  --   on score {points: pts} where average(pts) > 50    -- load error
+  -- A Library function could loop without end. Fuel would stop it, but a
+  -- Limit Fault during clause selection has no Run to fault. Test it in
+  -- the body instead:
+  if average(pts) > 50 then tell log to write p & " is steady"
+end score
+
+-- A Script's own functions are called `f(x)`, never `the f of x`:
+function tax amount, rate
+  return round(amount * rate, 2, "half even")
+end tax
+-- put tax(100, 0.2) into t       -- a call
+-- put the tax of order into t    -- always the `tax` key of `order`

@@ -1,0 +1,38 @@
+-- report.talk: the syntax sketch's 09-http-fetch `summarise`, rewritten
+-- against the stdlib outline (ADR 0021).
+
+use average, unique from list
+use pad, padLeft, join from text
+
+on summarise station, readings
+  put the temp of r for every r in readings into temps
+
+  put average(temps) into mean     -- `list`, written in the language
+  put max(temps) into warmest      -- Built-in: ambient, no `use` needed
+  put round(mean, 1) into mean     -- Built-in, rounds half away from zero
+  -- Was: put the average of temps into mean
+  --      put the max of temps into warmest
+  -- ADR 0021: `the p of x` is only for the structural property list, so
+  -- aggregates are called `f(x)`. `average` needs a `use` line and `max`
+  -- doesn't, because Guards need `max` and it has to be a Built-in.
+
+  put the length of temps into n   -- a structural property, unchanged
+
+  put unique(the wind of r for every r in readings) into winds
+  tell log to write row(station, mean) & "  winds: " & join(winds, ", ")
+end summarise
+
+function row station, mean
+  return pad(station, 8) & padLeft(mean as text, 6)
+end row
+
+-- Grouping is a Comprehension clause, left to a follow-up (ADR 0021):
+--   put every r in readings grouped by the day of r into byDay
+-- ?? That gives a map of lists keyed by day. Without it there's no
+--    stdlib `group`: the language has no function values to pass one.
+--
+-- There is no `reduce` either. A loop does it:
+--   put 0 into total
+--   repeat for each r in readings
+--     add the rain of r to total
+--   end repeat

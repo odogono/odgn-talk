@@ -1,0 +1,29 @@
+-- json.talk: decoding and encoding JSON with the `json` Library (ADR 0021).
+-- The Host granted `http` (suspending) and `log`.
+
+use decodeJson, encodeJson from json
+
+on fetchStation url
+  ask http to get url and wait
+  put decodeJson(the body of it as text) into data
+  -- Was: put the json of (raw as text) into data
+  -- `json` is a Library written in the language, so its Fuel comes from its
+  -- instructions, the same on both Cores. Invalid JSON raises `can't decode`
+  -- with {format: "json", at: …}.
+
+  -- {"station": "LHR", "gust_kph": null, "temp_c": 11.20}
+  --   `null` decodes to Nothing, which may sit inside a map or list.
+  --   `11.20` decodes through `as number`, so the trailing zero survives.
+  if the gust_kph of data is nothing then tell log to write "no gust reading"
+
+  -- Encoding keeps insertion order and writes decimals in canonical form.
+  tell log to write encodeJson({station: "LHR", temp: 11.20, gust: nothing})
+  -- → {"station":"LHR","temp":11.20,"gust":null}
+
+  -- Kinds with no JSON form must be converted first:
+  --   encodeJson({wind: 14 km/hr})          -- raises `wrong kind`
+  --   encodeJson({wind: (14 km/hr) as text}) -- "14 km/hr"
+  -- ?? Or should Quantities encode as {"value": 14, "unit": "km/hr"}? ADR 0021
+  --    says convert first. One spec section governs the mapping for the
+  --    Library and the Host's JSON ↔ Value codec alike.
+end fetchStation

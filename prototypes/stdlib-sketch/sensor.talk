@@ -1,0 +1,33 @@
+-- sensor.talk: a binary sensor frame with a float32 reading, and hex for
+-- logging (ADR 0021, narrowing ADR 0013).
+--
+-- Frame: 0xA5, id: uint16, reading: float32 (little-endian), ...rest
+
+use toHex from bytes
+
+on frame data
+  match data
+    when << 0xA5, id: uint16, raw: 4 bytes, ... >> then
+      put fromFloat32(raw, "little") into reading
+      -- A Built-in, because it needs decimal internals. It rounds the exact
+      -- binary value half-even to 34 digits. 0.1f fits exactly and reads as
+      -- 0.100000001490116119384765625, which shows the float's own error. A
+      -- float64 often needs more than 34 digits and is rounded. NaN and
+      -- Infinity raise `can't convert`.
+      -- There are no float fields in Binary Patterns: a lossy conversion
+      -- shouldn't hide inside a match.
+      put round(reading, 2) into reading
+      tell log to write "sensor " & id & ": " & reading
+    else
+      tell log to write "bad frame " & toHex(data)
+      -- `toHex` is in the `bytes` Library, since it can be written in the
+      -- language over `byte n of data`.
+  end match
+end frame
+
+-- Building a frame goes the other way:
+function reply id, value
+  return << 0xA5, id as uint16, toFloat32(value, "little") >>
+  -- `toFloat32` rounds to the nearest float32, ties to even, and returns
+  -- 4 Bytes, which the build splices in as they are.
+end reply
