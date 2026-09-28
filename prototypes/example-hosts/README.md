@@ -3,6 +3,8 @@
 Sketches for [Example Hosts: sketch Host code and Scripts against a proposed embedding API](https://github.com/odogono/odgn-talk/issues/24).
 Nothing here compiles or runs: there is no Core yet. The files exist to show where the proposed API holds up and where it strains.
 
+**Superseded by the decisions in [ADR 0015](https://github.com/odogono/odgn-talk/pull/31) (the Host drives the Core through a Pump) and ADR 0016 (messages reach Scripts through Core-owned object parents).** Where these sketches disagree with the ADRs, the ADRs win. For example, Damocles trigger arming moves to the Host, and Message Path parents are Core-owned rather than a Host `parent` function.
+
 - `// ??` or `-- ??` marks a place where the API (or the language) strained while writing.
 - `DEPARTURE` (Damocles only) marks where the re-expression does more than, or differs from, the original game.
 - Scripts use the spellings settled so far (ADR 0012: `ask`/`tell … to <operation>`, `set` for Host Object properties, suffix queueing modifiers).
