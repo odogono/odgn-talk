@@ -1,0 +1,131 @@
+-- 10: Elixir-style binary matching on bytes.
+--
+-- Elixir:   <<0x89, "PNG", _::binary-size(12), w::32, h::32, _::binary>> = data
+--           <<len::16, body::binary-size(len), rest::binary>> = frame
+--
+-- The key idea to borrow: a binary pattern is DESTRUCTURING, not a Text
+-- Pattern. It reads left to right with fixed or already-known sizes, never
+-- searches, never backtracks. A size can refer to a field bound earlier in the
+-- same pattern. So it's linear and cheap to charge Fuel for, and it lives next to
+-- `[a, ...rest]` and `{k: v}` rather than next to `<…>`.
+--
+-- Spelling sketched here: `<< … >>`, with fields written like Captures
+-- (`name: type`), and `...rest` for the remaining bytes, the same as lists.
+
+-- Field types (sketch):
+--   uint8 uint16 uint32 uint64      unsigned, big-endian (network order) by default
+--   int8 … int64                    two's complement
+--   uint32 little                   byte order as a trailing modifier
+--   n bytes                         n bytes, as bytes
+--   n bytes as text                 strict UTF-8 (ADR 0011); failure = no match
+--   4 bits                          sub-byte fields (see ?? below)
+--   0x89 / "PNG" / bytes 0D 0A      literals: a byte, UTF-8 of a text, a bytes literal
+--   _                               skip, bind nothing
+--   ...rest                         everything left (only last)
+
+-- PNG dimensions from a fetched image (ties in with 09)
+on imageSize url
+  ask http to get url
+  match it's body
+    when << 0x89, "PNG", bytes 0D 0A 1A 0A,
+            _: 4 bytes, "IHDR",
+            w: uint32, h: uint32, ... >> then
+      return {width: w, height: h}
+    else
+      return nothing
+  end match
+  -- ?? `...` with no name for "and the rest, ignored", as in list patterns.
+  -- ?? `bytes 0D 0A 1A 0A` as a bytes literal, with a lead word like `date …`.
+  -- ALT: 0x"0D0A1A0A"
+  -- ALT: <<0x0D, 0x0A, 0x1A, 0x0A>>
+end imageSize
+
+-- Length-prefixed frames: a size that depends on an earlier field
+on frames data
+  put [] into out
+  repeat while data is not empty
+    match data
+      when << len: uint16, body: len bytes, ...rest >> then
+        put body after out
+        put rest into data
+      else
+        log "truncated frame"
+        exit repeat
+    end match
+  end repeat
+  return out
+end frames
+-- ALT (let form; a failed let is an error rather than a skip):
+--   let << len: uint16, body: len bytes, ...data >> be data
+-- ?? `...data` rebinding the name being matched is neat, and a little too clever.
+
+-- Dispatch on a message type byte: binary patterns in Handler Clause heads
+on packet << 0x01, id: uint32, nameLen: uint8, name: nameLen bytes as text >>
+  send joined with {id: id, name: name} to lobby
+end packet
+
+on packet << 0x02, id: uint32, x: int16, y: int16 >>
+  send moved with {id: id, x: x, y: y} to lobby
+  -- a whole-value match, like `when <…>`: extra trailing bytes mean no match,
+  -- unless the pattern ends in `...`
+end packet
+
+on packet << kind: uint8, ... >>
+  log "unknown packet kind " & kind
+end packet
+
+-- Bit fields: an IPv4 header
+on ipv4 header
+  match header
+    when << version: 4 bits, ihl: 4 bits, _: 1 byte, total: uint16,
+            _: 4 bytes, ttl: uint8, protocol: uint8, _: uint16,
+            src: 4 bytes, dst: 4 bytes, ... >> where version = 4 then
+      return {ttl: ttl, protocol: protocol, from: src, to: dst, headerLen: ihl * 4 bytes}
+  end match
+  -- ?? Elixir has bitstrings (lengths that aren't whole bytes). Sketch rule:
+  --    bytes only; bit fields are allowed, but each run of them must add up to
+  --    whole bytes, checked at load time where the sizes are constants.
+  -- ?? `ihl * 4 bytes`: here `bytes` is a Unit (a size Quantity), not the kind.
+  --    Is a data size a Unit Kind (`bytes`, `KiB`)? It collides with `n bytes`
+  --    in the pattern.
+end ipv4
+
+-- Building bytes with the same syntax (Elixir does this too)
+on encodeMove id, x, y
+  return << 0x02, id: uint32, x: int16, y: int16 >>
+  -- ?? In construction the `name:` part is the VALUE, not a binding: in Elixir
+  --    it's `<<2, id::32, x::16-signed, y::16-signed>>`. Reusing `name: type`
+  --    for both reads oddly. Maybe construction is `<< 0x02, id as uint32, x as int16 >>`.
+  -- An out-of-range value (x = 40000 as int16) is an error, never a wraparound.
+end encodeMove
+
+on encodeText t
+  put t as bytes into b                     -- UTF-8
+  return << the length of b as uint16, b >>
+  -- ?? `the length of b` for bytes is a byte count; for text it's Characters.
+  --    Consistent with each kind, and exactly the trap Elixir's `byte_size` vs
+  --    `String.length` split avoids.
+end encodeText
+
+-- Numbers from bytes
+on readFloat b
+  match b
+    when << f: float64 >> then return f
+  end match
+  -- ?? The language has no floats (ADR 0002). A float64 field would convert to
+  --    the nearest 34-digit decimal: deterministic, but not exact (a float64
+  --    can need hundreds of digits), and NaN/Infinity have nowhere to go (an
+  --    error? no match?). Maybe no float fields in v1, and a stdlib function instead.
+end readFloat
+
+-- Why not reuse Text Patterns (`<…>`) on bytes?
+--   * Text Patterns search, and count Characters. Binary data has no Characters,
+--     and parsing it is almost always "fixed layout, left to right".
+--   * Sizes that depend on earlier fields (`len bytes`) aren't regular, so
+--     they don't fit the linear-time matcher (ADR 0007). They are, however,
+--     linear in sequential Destructuring.
+--   * Integer fields with endianness don't fit a text-element vocabulary.
+-- Grammar note: `<<` is the SenseTalk binary-literal token already listed as a
+-- collision in the grammar fog, next to `<` (less-than, Text Pattern).
+-- ALT spelling with no new brackets:
+--   when bytes [0x02, id: uint32, x: int16, y: int16] then …

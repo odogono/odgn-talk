@@ -19,5 +19,6 @@ Read in order:
 | `06-async-and-events.talk` | `send`, `send … and wait`, queueing modifiers, `wait for … or`, `veto` |
 | `07-host-and-capabilities.talk` | Host Objects, Capabilities, suspending calls |
 | `08-invoice-server.talk` | a realistic multi-tenant server Script |
-| `09-damocles-room.talk` | a realistic game Script |
+| `09-http-fetch.talk` | fetch JSON over HTTP, validate its shape, filter/map/sort it, paging, several fetches at once |
+| `10-binary-patterns.talk` | Elixir-style binary matching and building on bytes |
 | `NOTES.md` | what felt right, what felt wrong, open questions |

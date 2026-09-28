@@ -45,9 +45,9 @@ end quantities
 
 on ranges
   put 1..10 into r
-  -- ALT: put 1 to 10 into r
-  -- ?? `1 to 10` reads better, but `to` is everywhere (`add x to y`, `round x to`).
-  --    `..` is symbol-y but unambiguous.
+  -- DECIDED: ranges are `..` everywhere (`to` is taken by `add x to y`, `round x to`).
+  -- ?? `..` (range) sits next to `...` (rest in Destructuring): `[a, ...rest]`
+  --    vs `1..5`. One dot apart. Fine for the grammar, easy to misread.
   put 3..7 m/s into comfortable               -- a Quantity range
   if speed is in comfortable then say "ok"
   -- ALT: if speed is between 3 m/s and 7 m/s then …
@@ -56,7 +56,6 @@ on ranges
     say n
   end repeat
   put items 2..4 of "a,b,c,d,e" into mid      -- "b,c,d"
-  -- ALT: put items 2 to 4 of … into mid       -- HyperTalk's spelling; very readable
 end ranges
 
 on dates

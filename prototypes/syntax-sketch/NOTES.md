@@ -26,13 +26,29 @@ Throwaway notes from writing the sketches in this folder. The lines tagged `??` 
 7. **Splicing a Pattern value** by bare name inside `<…>` collides with pattern keywords (`word`, `digits`, `text`). Keywords would need to win, or splicing needs a marker.
 8. **Whole-value `when <…>` as the default** will quietly fail to match a prefix (`when <"WARN">` on `"WARN: disk"`). It needs a lint.
 9. **Precedence of trailing modifiers.** `as`, `delimited by` and `ignoring case` all attach to the right of an expression. Each needs a "nearest" rule, and `(item 2 of line 3 of report) as number * 2` needs parentheses.
-10. **`to` is everywhere** (`add x to y`, `round x to 2 places`, `send m to o`, `repeat with i from 1 to 3`), which pushes ranges to `..`. But `items 2 to 4 of x` is the HyperTalk spelling people know.
+10. **Ranges are `..`** (decided). `to` is everywhere else (`add x to y`, `round x to 2 places`, `send m to o`), so HyperTalk's `repeat with i from 1 to 3` and `items 2 to 4` are gone. The remaining risk is misreading `1..5` (range) as `...rest` (rest).
 11. **Keywords as variable names** (`line`, `word`, `item`, `m`, `s`, `min`). A number followed by a unit name is always a Quantity, so a variable called `s` can't follow a number. How big the reserved-word list gets is a beginner-layer concern.
 12. **`is nothing` vs `is empty`.** A beginner will test a missing key with `is empty` and get false. That needs a lint.
 13. **Expression-form `replace`** (no Container) has no good spelling yet.
 14. **Script Variable initialisers** use `=`, which is equality everywhere else.
 15. **Guard errors skip the clause.** `where p as number > 10` silently skips the clause on `"lots"`. That is consistent with Elixir destructuring and multi-clause dispatch, but it hides typos.
 16. **"Now" is a Capability,** so `today()` doesn't exist. Honest, but date-heavy Scripts get verbose (`the date from clock in zone …`).
+
+## From the HTTP example (09)
+
+- **The response as plain data** (`{status, headers, body}`), then Destructuring it, works well. A `match` on the decoded JSON doubles as validation, because a missing key means no match.
+- **JSON decoding spelling:** `as json` looks like a kind conversion but JSON is a format. `json of …` (a stdlib function) is probably more honest. JSON `null` needs Nothing to be allowed inside lists and maps.
+- **Collection operations are missing.** Filter, map and sort need a spelling. `every r in xs where …` reuses the Guard keyword nicely; `the temp of every r in xs` (map) is lovely but a hard parse; `sort xs by the wind of each` adds another implicit name (`each`).
+- **JSON key names that are English words** (`at`, `date`, `next`) read badly with `the k of m`. Keys held in a variable or containing hyphens have no good spelling (`the (s) of results`?).
+- **`put list after list`:** append one element, or splice in each? It needs two spellings.
+- **Concurrency means one Run per request.** A Run can only wait for one thing at a time, so fanning out over several fetches needs `send … to me` plus Script-level bookkeeping. A "join" is a question for the stdlib and host fog.
+- **Calling this Script's own Handler like a function** can hide a Suspension Point behind something that looks immediate.
+
+## From the binary example (10)
+
+- **A binary pattern is Destructuring, not a Text Pattern.** It runs left to right with sizes that are fixed or already bound, never searches and never backtracks. So it's linear and cheap to charge, and sizes can depend on earlier fields (`len: uint16, body: len bytes`), which a regular-language matcher can't do.
+- **`<< name: type, …, ...rest >>`** mirrors Captures and list rest, and works in `match`, `let` and Handler Clause heads (dispatch on a type byte reads very well).
+- **Open:** a spelling for bytes literals (`bytes 0D 0A` vs `0x"0D0A"`); bit fields limited to whole-byte runs; whether building bytes reuses the pattern syntax (`name:` would then mean a value, not a binding); what a float64 field means with no float type (probably no float fields in v1); `length` of bytes counting bytes while `length` of text counts Characters; and `n bytes` in a pattern vs `bytes` as a data-size Unit.
 
 ## Dropped while sketching
 
@@ -48,4 +64,5 @@ The sketches lean on the same grammar features again and again. Each needs a dec
 - `name:` inside `<…>`, `{…}` and Destructuring
 - Unit suffixes after numeric literals
 - lead-word literals (`date`, `instant`)
-- whether Hosts can add commands or predicates (`carries`, `save … in storage`)
+- whether Hosts can add commands (`save … in storage`)
+- `<< … >>` binary patterns next to `<…>` and `<`
