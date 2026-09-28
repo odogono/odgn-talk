@@ -74,3 +74,6 @@ A Script handles ordinary errors with `try … catch … finally … end try`. A
 - **Left for later:**
   - `with`, a `throw "code"` shorthand, and the rollback lint go to the grammar and layering fog.
   - The full error-code catalogue goes with the final spec.
+- **Narrowed by ADR 0020:**
+  - A call into a Library is a plain call like a local one, and errors unwind through Library frames using each Library's own Unwind Table.
+  - A Command Call to a Handler that may suspend is written `… and wait`, and a Handler called function-style may never suspend.

@@ -1,0 +1,114 @@
+# Scripts share code through stateless Libraries, imported by name and called in the caller's Run
+
+A Library is a unit of source code that the Host registers on a Script Group, holding Handlers, functions and Constants for Scripts to use. It is not a Script: it has no Script Variables, no `me`, no mailbox, no Grants and no Owning Script role, and it is never loaded, messaged or run on its own. A Script or Library imports the names it uses with a top-level `use pad, trim from text` line and calls them unqualified. A call into a Library is a plain call in the caller's Run, like a call to the Script's own Handler (ADR 0017). The caller pays its Fuel and allocation, it sits inside the caller's Segment, and it acts only with the caller's Grants. A Command Call to any Handler that may suspend, local or imported, is written `… and wait`, and a function may never suspend, so every Suspension Point is visible in the source again. The standard library is two tiers: a small built-in core that stays ambient, and Core-shipped Libraries written in the language that use the same `use` line. We chose this because the Damocles `epilogue` (62 original scripts share it) needs to pause inside the caller's own Run so the blank line lands in order and "busy" holds until it returns. As a Command Call into another Script it climbs the Message Path as a `send` that doesn't wait. `send … and wait` would order it, but it costs a second Run, a Delivery in the Trace and a Suspension Point that splits the caller's Segment. That is too much for `pad`. Statelessness is what makes sharing safe: a Library's code and Constants are immutable, so one compiled copy can serve every importer without breaking Value Semantics (ADR 0001) or the actor model (ADR 0004). Anything that needs its own state or authority is still a Script. Writing the stdlib in the language puts it through the one normative lowering, so both Cores get its behaviour and its Fuel from the same source (ADRs 0009 and 0010).
+
+## Considered Options
+
+- **A helper Script and `send … and wait` only:** it already works, but every helper call is a Suspension Point, a Run and a Delivery. Other Runs of the caller can interleave, and rollback covers only the part before the send.
+- **A synchronous call into another Script:** it runs one Script's code in another's Run, which ADR 0004's actor model rules out.
+- **Modules with one shared copy of state:** that is shared, changeable state across Scripts, which breaks Value Semantics and parity of interleaving.
+- **Modules with a private copy of state per importer:** these are mixin Script Variables. They complicate Persistent State, snapshots and name clashes, and "which copy?" surprises beginners.
+- **A module as a Script that other Scripts import from:** it blurs "a unit a Host loads and runs", and a thing with a mailbox can't also be code inside someone else's Run.
+- **An entirely built-in stdlib:** every function is hand-written twice and hand-priced in the Cost Model, and parity rests on two implementations.
+- **Everything a Library, primitives included:** Unicode, the Text Pattern engine and conversions can't be written in the language. They would need intrinsic hooks anyway.
+- **`me`, `the target` and `wait for` meaning the caller's, inside Library code:** a Library's behaviour would then depend on who called it, through dynamic scope.
+- **Banning suspension in Libraries:** it rules out `epilogue`.
+- **A lint for suspending calls instead of syntax:** ADR 0019 already rejected this for Capability calls.
+- **Libraries holding their own Grants:** a Library becomes a confused deputy. A helper Script already covers "code with more authority than its caller".
+- **Library source in each Script's load options:** it duplicates source, and two Scripts in one Group could import different code under one name.
+- **Version ranges or semver resolution in the Core:** that is policy, and it belongs to the Host.
+- **Importing every name unqualified (`use text`):** a new Library version that adds a name can break an importer at load.
+- **Qualified names:**
+  - `text.pad` needs a new `.` token.
+  - `text's pad` reuses `'s`, which means property or key access everywhere else.
+  - `pad of text` collides with `the f of x` and key access (ADR 0019).
+  - An explicit list shows where each name comes from without any of these.
+- **Explicit export lists:** more ceremony for small user Libraries. `private` covers the stdlib's need to hide helpers.
+- **Clashes resolved by shadowing:** a name's meaning would change with what else is loaded, which ADR 0019 rejects for built-in properties.
+- **Imported Handlers as message entry points:** importing a Library could silently change which Handler a Delivery runs.
+- **Inlining Library code into the importer:** a Script's disassembly would change whenever a Library does, and Snapshot positions would lose their meaning.
+- **A surcharge for calls across code units:** linking happens at load, so it would only penalise factoring code out.
+- **Old Runs keep running on old Library code:** Erlang-style two versions, already rejected in ADR 0014.
+- **A prefix for stdlib names (`std/text`):** it avoids a future clash with a Host's Library name, but beginners read `use pad from text` more easily. A new stdlib name is a language-version change, which Hosts handle deliberately.
+
+## Consequences
+
+- **What a Library holds:**
+  - Handlers, functions and Constants.
+  - A Constant is declared as `constant name = expr`. Its initialiser may use only literals, other Constants and built-ins, so evaluating it has no effects.
+  - Every top-level definition is exported unless it starts with `private` (`private function widthOf s`).
+  - A name a Library imports is not re-exported, so a `use … from` line always names the Library that defines it.
+  - Scripts may declare Constants too. `private` in a Script is a load error.
+- **What Library code may use:**
+  - It may use its own definitions, the Libraries it imports, built-ins, Capabilities and `wait <duration>`.
+  - It may not use `me`, `the target`, `pass`, `wait for`, `send`, well-known object names (ADR 0016) or Handlers the importer defines. Any of these is a load error.
+  - So a Library is a function of its arguments plus Capability answers. Anything context-dependent is passed in.
+- **Execution:**
+  - A Library call is a plain call in the caller's Run.
+  - It charges Fuel, the Allocation Budget and call depth to the caller.
+  - Its frames sit on the caller's stack and count toward the caller's Persistent State while suspended.
+  - A Limit Fault rolls back the caller's Segment as usual (ADR 0006).
+  - Errors unwind through Library frames using each Library's own Unwind Table (ADR 0017), and unwinding is charged per frame as for any call.
+  - A Library call costs the same as a local call in the Cost Model.
+- **Suspension:** narrows ADRs 0017 and 0019.
+  - A Command Call to a Handler that may suspend, whether the Script's own or imported, must be written `name args and wait`.
+  - `and wait` on a Handler that can't suspend is a load error.
+  - The loader infers "may suspend" over the call graph, reaching a fixpoint for recursion.
+  - A suspending call's result is left in `it`.
+  - Functions, and Handlers called function-style (`f(x)`, `the f of x`), may never suspend. Reaching a Suspension Point through one is a load error.
+  - This settles the syntax sketch's `put report(s, day) into …`. It becomes `report s, day and wait`, then `put it into …`.
+- **Grants:**
+  - A Library has none. When it compiles, the loader records the Operations it uses and checks each `and wait` against the Host's Operation Declarations (ADR 0015).
+  - At import, the loader checks those Operations, through every Library it imports in turn, against the importer's Grants.
+  - A missing Grant is the importer's load error. It is reported at the `use` line and names the Library's call site.
+  - A Host that grants "what the Script uses, from this allowlist" counts the Library's uses too.
+- **Syntax:**
+  - `use a, b from lib` is a top-level declaration, and `use pad from text as padLeft` renames on import.
+  - `use`, `from`, `as`, `constant` and `private` are contextual, not Reserved Words (ADR 0019). A top-level line can only start a declaration, so they need no lookahead beyond two tokens.
+- **Clashes and resolution:** narrows ADR 0016.
+  - An imported name (after any rename) that clashes with a local Handler, function, Constant, Script Variable, well-known object name or built-in is a load error, and so are two imports of the same name.
+  - A Command Call resolves to a local Handler, then an imported one, and only then climbs the Message Path as a `send`. Since clashes are errors, the order never has to break a tie.
+  - Imported Handlers are never message entry points. A Delivery of `mouseUp` never runs an imported `on mouseUp`, and a Library never joins a Message Path.
+- **Registration and loading:**
+  - The Host registers a Library on a Group with `group.addLibrary({ name, version, source })`, before loading the Scripts that import it. It is a Host Input, recorded in the Trace.
+  - `addLibrary` parses the Library and runs every checker diagnostic, which parity covers. A rejected Library is a Host error. Only the Grant check waits for import.
+  - A Group holds at most one version of each Library name.
+  - Libraries may import Libraries. A cycle, or a missing Library, is a load error.
+- **Sharing and accounting:**
+  - A Core compiles each Library once per process, and Groups share it when the code identities match.
+  - Code is not Persistent State, the same as a Script's own code.
+  - A Library's Constants are counted once per Group, as a fixed per-Library overhead.
+- **Identity:**
+  - A Library's code identity covers its source, the language and Cost Model versions, and the identities of the Libraries it imports.
+  - A Script's code identity (the stamp in ADR 0008) includes the identities of every Library it imports, directly or through another Library.
+  - Lockstep Hosts compare code identities to confirm both sides have the same Libraries.
+- **Code positions:** a code position is a code unit plus an instruction index (ADR 0010), where the code unit is a Script or a Library named by its code identity. So a Snapshot can hold a suspended Run paused inside Library code.
+- **Replacing a Library:**
+  - `group.replaceLibrary` is one Host Input.
+  - It is a code change for every importer, so all of them go through stop-and-reload together (ADR 0005). Script Variables carry over by name if the Host opts in, and suspended Runs, including those paused in Library frames, are discarded and reported.
+  - *extend Script* (ADR 0014) may add `use` lines, since that adds names without touching existing code.
+- **Snapshots:**
+  - A Script Snapshot records Library code identities, not source.
+  - Restoring needs the Host to register matching Libraries first. A mismatch falls back to ADR 0008's variables-only restore.
+- **Conformance:** narrows ADR 0018.
+  - `case.toml` gets `[[libraries]]` entries (`name`, `version`, `source`) beside `[[scripts]]`.
+  - The Trace records `add library` and `replace library` Host Inputs.
+  - A Library call lowers to a call whose target is resolved at load and shown by name (`call damocles:epilogue`). It is never inlined, so a Script's Disassembly Case doesn't pin any Library body.
+  - Libraries have Disassembly Cases of their own.
+- **Sessions:** narrows ADR 0014.
+  - An Entry that starts with `use` or `constant` followed by a name is a declaration, the same way `script variable` is, and *extend Script* applies it.
+  - The stdlib Libraries are always registered, so `use pad from text` works at a bare prompt.
+  - User Libraries come in by Session Command. At the REPL, `:library add name path` reads a file. In the Playground, an extra editor tab can be marked as a Library, and saving it does `replaceLibrary`, which stop-and-reloads the Session Script.
+  - A Session Transcript records each `add library` with its source, so it still replays on its own. `:export` writes the Session Script with its `use` lines and each user Library as its own file.
+- **The stdlib:**
+  - The built-in core stays ambient: functions the Cores implement natively, which can't be written in the language.
+  - Core-shipped Libraries (`text`, `list`, …) have bare names listed in the spec, and a Host may not register a Library under one of them. A new stdlib name is a language-version change.
+  - The stdlib is versioned with the language.
+- **Damocles:**
+  - `epilogue` moves to a `damocles` Library, and each of its 7 call sites becomes `epilogue and wait`.
+  - It pauses the caller's Run, so the blank line can no longer race the next landing, and "busy" holds until it returns.
+- **Left for later:**
+  - The stdlib catalogue itself: which Libraries exist, and what goes in the built-in core.
+  - The exact shape of the `addLibrary` and `replaceLibrary` calls in each Core's embedding API.
+  - Whether a Library should be able to declare the Operations it needs, so a Host can check them before any import.
+- **Source:** the [Libraries sketch](https://github.com/odogono/odgn-talk/tree/prototype/libraries-sketch/prototypes/libraries-sketch) rewrites the Damocles `epilogue`, a stdlib-style `text` Library, and the syntax sketch's `report`.
