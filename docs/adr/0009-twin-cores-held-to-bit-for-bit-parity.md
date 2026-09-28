@@ -1,0 +1,23 @@
+# Twin native Cores, held to bit-for-bit parity by the Conformance Corpus
+
+The language has two Cores: a Go Core for the Go server Host (and, later, Elixir through standard-Go `wasip1` or a sidecar) and a TS Core for Bun and the browser. Each is a full pipeline: parser, checker, compiler and interpreter. They share no logic. What keeps them the same language is the spec and the Conformance Corpus, which together are the only authority; neither Core is a reference implementation, and every divergence found becomes a corpus case (plus a spec fix if the spec was ambiguous). Parity is bit-for-bit: given the same inputs to a Script Group (Scripts, delivered events and their order, Capability answers, Clock readings and limits), both Cores produce the same results and Script Variable state, use the same Fuel and fault at the same step, measure the same allocation and Persistent State, interleave identically (including call ids), report the same error kind, code and source location, and give the same load-time diagnostics. We chose this because the Damocles port runs a TS browser client and a Go server in lockstep, the browser Host is a TypeScript game that would pay a JS↔WASM crossing on every event and Capability call under a single Go→WASM core, and the Go→WASM spike showed a WASM core must be trap-free, with one trap killing every Script in the instance and no cheap way to suspend a Run.
+
+## Considered Options
+
+- **One standard-Go core, native in Go and WASM in Bun and the browser** (the Jsonnet model): one implementation, but a JS↔WASM crossing per event and Capability call, whole-instance traps, suspension only through asyncify, and a ~1 MB payload with no upside for the TS game.
+- **A TS core embedded in Go through goja, qjs or v8go:** ~43–50× slower than native, on immature engines, for the primary server Host.
+- **Go as the reference implementation:** its accidents would harden into the spec.
+- **"Same language, documented host differences":** breaks lockstep.
+- **Only Go compiles, and the TS Core is a bare VM:** the browser couldn't load Script source on its own, and a TS REPL or LSP would need a server.
+
+## Consequences
+
+- **Abstract machine:** the spec defines a normative abstract instruction set. Fuel is charged per instruction, code positions are instruction indices, and preemption falls only between instructions. Its byte encoding is not normative, so each Core compiles to its own. The corpus can diff compiled instruction streams as a cheap parity check.
+- **No host libraries for observable behaviour:** the spec pins a Unicode version and defines decimal arithmetic, character and chunk boundaries, case folding, normalisation, date and calendar maths, and number formatting and parsing exactly. Each Core uses only its own implementation or pinned data tables, never `Intl`, locale data, or Go's `strings`/`unicode` where they could drift. Maps iterate in insertion order and sorting is stable.
+- **Shared data, not shared logic:** the instruction set, the Cost Model, the error-code catalogue, the Unicode tables, the Unit catalogue and the limit defaults live once, as machine-readable spec files, and are generated into both Cores.
+- **Script Groups:** a Script Group is driven by one deterministic scheduler, so the order of cross-Script sends inside it is spec-defined. The Go Core runs different Script Groups in parallel. A message from outside a group is a Host-delivered input, and parity holds given the order it arrived in. A multi-tenant Host might use a group per Script or per tenant; a game uses one group. A save (ADR 0008) covers whole Script Groups.
+- **Traces:** corpus cases assert on a spec-defined Trace. Differential fuzzing (generated Scripts run on both Cores, Traces compared) is a required engineering practice, not part of the spec.
+- **Not covered by parity:** error message wording (the error code is covered), performance, and save bytes (same-core only, ADR 0008).
+- **Versions:** each Core declares its language version and Cost Model version. Parity is promised only between equal versions, and lockstep Hosts must check both before exchanging anything.
+- **Go→WASM:** not a supported way to run the language in Bun or the browser. The Go Core builds for `wasip1` only for a future Elixir Host, and there it must be trap-free, with one instance per trust boundary. TinyGo stays ruled out.
+- **Shared runtime shape:** both Cores need heap-allocated frames and a run loop that can return (ADR 0004), the per-step checks and Segment rollback (ADR 0006), and plain-data Run state (ADR 0005, ADR 0008).
