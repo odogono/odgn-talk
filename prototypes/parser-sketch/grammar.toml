@@ -1,0 +1,137 @@
+# PROTOTYPE (throwaway, issue #38): first draft of the ADR 0019 grammar table.
+#
+# The parser in this folder reads every list below, so the draft is exercised,
+# not just written down. `bun prototypes/parser-sketch/run.ts --check-table`
+# runs the checks the spec generator would (e.g. no Unit is a reserved word).
+
+[reserved]
+# Never a name, anywhere. Each group says why it has to be reserved for a
+# two-token predictive parse; see FINDINGS.md for the cases that forced it.
+
+# Block structure: `end`, `else`, `when`, `catch`, `finally` and `after` end a
+# block at statement start (`after 2 min then` in `wait for`), so none of them
+# can be a Handler name; `then` ends an `if`/`when` condition.
+structure = ["on", "end", "function", "if", "then", "else", "repeat", "for",
+             "while", "until", "match", "when", "where", "try", "catch", "finally",
+             "after"]
+
+# Statement keywords. If any of these were only contextual, `add 1 to x` and a
+# Command Call `add 1` to a Handler named `add` would differ only at `to`,
+# arbitrarily far from the start of the statement.
+statements = ["put", "let", "set", "add", "subtract", "multiply", "divide",
+              "delete", "send", "ask", "tell", "wait", "return", "pass",
+              "exit", "throw", "replace"]
+
+# Separator words. `into`, `to` and `be` must be reserved so that
+# `ask X to op` and `let p be e` can stop an expression without a lookahead
+# rule, and `in` must be reserved so that `x is in r` (membership) and
+# `x is in` (equality with a variable `in`) aren't a three-token decision.
+separators = ["into", "to", "be", "in", "of"]
+
+# Expression words. `the` and `not` start operands; `and`/`or`/`is` are
+# operators. (`wait`, a statement keyword, also ends `send …`/`ask …` after `and`.)
+expression = ["the", "not", "and", "or", "is"]
+
+# Constants.
+constants = ["true", "false", "nothing", "it", "me"]
+
+[contextual]
+# Words with a meaning only in the position given. Anywhere else they are
+# ordinary names. `position` is documentation for the notation.
+kind_article = { words = ["a", "an"], position = "after `is`, `is not`, `can be`, and in Text Patterns" }
+empty        = { words = ["empty"], position = "after `is` / `is not`" }
+declaration  = { words = ["script", "variable"], position = "top level: `script variable x [= e]`" }
+repeat_words = { words = ["each", "times", "forever"], position = "in a `repeat` header" }
+loop_exits   = { words = ["next"], position = "`next repeat`" }
+send_words   = { words = ["with"], position = "`send m with args to t`, `replace … with e`" }
+from_words   = { words = ["from"], position = "`subtract x from c`, `wait for ev from x`" }
+by_words     = { words = ["by"], position = "`multiply c by e`, `divide c by e`, `delimited by`, `sorted by`" }
+modifiers    = { words = ["ignoring", "case", "delimited", "lazily"], position = "trailing modifiers, see [modifiers]" }
+comprehension = { words = ["every", "sorted", "ascending", "descending"], position = "operand position (`every r in xs`), after `for`" }
+ordinals     = { words = ["first", "second", "third", "fourth", "fifth", "middle", "last", "any"], position = "after `the` before a chunk word; after `replace`" }
+lead_words   = { words = ["date", "instant", "at"], position = "operand position, before a date-shaped token; `at` after a date" }
+# After a comma in a Handler head these are modifiers, never parameter names.
+# `every time` and `during <name>` are decided on the second word.
+handler_head = { words = ["replacing", "dropping", "queued", "deciding"], position = "after a comma in a Handler head" }
+handler_head_2 = { words = ["every", "time", "during"], position = "`, every time` and `, during msg` in a Handler head" }
+# The FOLLOW set: contextual words that may come straight after a complete
+# expression. After a chunk word (`line`, `item`, …) one of these means the
+# chunk word was a plain name, so none of them can start a chunk index.
+follow = { words = ["as", "ignoring", "delimited", "sorted", "ascending", "descending",
+                    "with", "from", "by", "times", "at", "lazily",
+                    "mod", "div", "contains", "matches", "begins", "ends", "can"],
+           position = "straight after an expression" }
+count_form   = { words = ["number"], position = "`the number of <chunks> in e`" }
+match_iter   = { words = ["contains"], position = "`when contains <…>`" }
+kinds        = { words = ["number", "integer", "text", "list", "map", "bytes", "date", "instant", "boolean", "pattern", "quantity"], position = "after `as`, `is a`, `can be a`" }
+target       = { words = ["target"], position = "`the target`" }
+
+[operators]
+# Lowest to highest. `assoc` is left, right or none (comparisons don't chain).
+# `for every` (the map Comprehension) sits below all of these, and postfix
+# `as` sits above all of them (ADR 0019).
+levels = [
+  { prec = 1, assoc = "left",  ops = ["or"] },
+  { prec = 2, assoc = "left",  ops = ["and"] },
+  { prec = 3, assoc = "prefix", ops = ["not"] },
+  { prec = 4, assoc = "none",  ops = ["=", "<>", "<", ">", "<=", ">=",
+                                      "is", "is not", "is in", "is not in",
+                                      "is a", "is not a", "is empty", "is not empty",
+                                      "can be a", "contains", "begins with",
+                                      "ends with", "matches"] },
+  { prec = 5, assoc = "left",  ops = ["&"] },
+  { prec = 6, assoc = "none",  ops = [".."] },
+  { prec = 7, assoc = "left",  ops = ["+", "-"] },
+  { prec = 8, assoc = "left",  ops = ["*", "/", "mod", "div"] },
+  { prec = 9, assoc = "right", ops = ["^"] },
+  { prec = 10, assoc = "prefix", ops = ["-"] },
+]
+# Word operators are recognised only in operator position, so `mod`, `div`,
+# `contains`, `matches`, `begins`, `ends` and `can` stay usable as names.
+word_operators = ["mod", "div", "contains", "matches", "begins", "ends", "can"]
+
+[modifiers]
+# Each trailing modifier and the construct it attaches to (ADR 0019).
+as              = { attaches = "postfix, above every binary operator, below chunk `of` and `'s`" }
+ignoring_case   = { attaches = "the nearest comparison or match operator, a `match` statement, a Text Pattern element" }
+delimited_by    = { attaches = "the outermost Chunk Expression of an `of` chain" }
+lazily          = { attaches = "a Text Pattern element" }
+sorted_by       = { attaches = "a Comprehension" }
+and_wait        = { attaches = "`send … to t` and `ask X to op args`; `and` followed by `wait` ends the expression" }
+little_big      = { attaches = "a Binary Pattern integer field" }
+
+[properties]
+# `the <word> of x` is this built-in, never a key (ADR 0019). Includes the
+# plural chunk words, which read the whole list of chunks.
+builtin = ["length", "keys", "values", "items", "lines", "words",
+           "characters", "chars", "bytes", "code points",
+           "json", "average", "max", "min", "sum"]
+
+[chunks]
+# singular = plural. `code point` is two words, decided on the second.
+kinds = { character = "characters", char = "chars", word = "words", line = "lines",
+          item = "items", byte = "bytes", "code point" = "code points" }
+
+[units]
+# Only a numeric literal takes a suffix. A compound Unit is written with no
+# spaces (`mi/hr`, `m/s^2`); a spaced `/` is always division.
+# The generator rejects a catalogue entry that is a reserved word.
+catalogue = ["kg", "g", "mg", "lb", "oz",
+             "m", "km", "cm", "mm", "mi", "yd", "ft", "inch", "inches",
+             "s", "ms", "min", "hr", "h", "day", "days", "week", "weeks",
+             "month", "months", "year", "years",
+             "L", "mL",
+             "GBP", "USD", "EUR"]
+
+[text_patterns]
+# A bare word inside `<…>` is one of these, or a Capture (`name:`).
+keywords = ["digit", "digits", "letter", "letters", "word", "words", "text",
+            "space", "spaces", "whitespace", "punctuation", "character",
+            "characters", "number", "date", "instant", "integer"]
+# fixed phrases, decided on their first word
+phrases = ["one or more of", "zero or more of", "optional"]
+
+[binary_patterns]
+integer_types = ["uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64"]
+size_units = ["byte", "bytes", "bit", "bits"]
+byte_order = ["little", "big"]
