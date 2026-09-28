@@ -164,6 +164,10 @@ _Avoid_: slot, lvalue, reference
 A readable reference to part of a text or list value by ordinal and kind, e.g. `word 3 of line 2 of report`.
 _Avoid_: substring, slice
 
+**Character**:
+One user-perceived character of text: an extended grapheme cluster under the Unicode version the language version pins. Indexes, ranges, lengths and Text Pattern positions all count Characters.
+_Avoid_: code point, rune, char, code unit
+
 **Unit**:
 A unit of measure attached to a number (e.g. `5 kg`), taking part in conversion and arithmetic.
 _Avoid_: dimension, suffix
