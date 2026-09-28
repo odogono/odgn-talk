@@ -54,6 +54,14 @@ _Avoid_: async function, blocking call
 The chain a message follows when a Script has no matching Handler Clause for it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
 _Avoid_: bubbling, propagation, inheritance chain
 
+**Quiescent**:
+The state of a Script in which no Run is mid-step: every Run is either suspended or queued.
+_Avoid_: idle, paused, stable
+
+**Script Snapshot**:
+The complete state of a Quiescent Script: its Script Variables, mailbox and suspended Runs, as plain data plus Host Object handles.
+_Avoid_: checkpoint, image, dump
+
 ## Matching
 
 **Text Pattern**:
