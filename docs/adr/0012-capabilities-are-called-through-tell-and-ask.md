@@ -14,3 +14,4 @@ A Script calls a Capability in one uniform form: `ask <capability> to <operation
 - `tell` is allowed only on Operations the Host declares as fire-and-forget, because otherwise the result and any failure would go nowhere.
 - The Host embedding API registers Operations with their names, argument shapes, costs and flags. Host Objects keep properties, which Scripts write with `set` (`set the state of door to "open"`) so that a Host effect doesn't look like `put … into` on a Script value.
 - Operation names become part of a Host's documented surface, and the LSP can complete them from the grant list.
+- Narrowed by ADR 0019: a call to a suspending Operation is written `ask … and wait`, and the loader checks the form against the Operation Declaration both ways, so every Suspension Point is visible in the source.

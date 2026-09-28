@@ -21,7 +21,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Operation**:
-One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
+One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command, endpoint
 
 **Operation Declaration**:
@@ -111,6 +111,20 @@ _Avoid_: line, cell, command, input
 **Session Command**:
 A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
+
+## Syntax
+
+**Reserved Word**:
+One of the small, fixed set of structure words (`on`, `end`, `if`, `put`, `into`, …) that can never be a name. Every other word the language uses has its meaning only where the grammar gives it one, and can be a name elsewhere.
+_Avoid_: keyword (unqualified), reserved keyword
+
+**Command Call**:
+A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`.
+_Avoid_: procedure call, invocation, message send (a `send` is something else)
+
+**Comprehension**:
+An `every` expression that builds a new list from another one, filtering it (`every r in xs where …`), mapping it (`… for every r in xs`) or sorting it (`sorted by …`), with the element bound to an explicit name.
+_Avoid_: query, list expression, filter/map (unqualified)
 
 ## Handlers
 

@@ -3,7 +3,7 @@
 -- `> answer` line in case.trace)
 
 on quote sku, qty
-  ask prices to lookup sku
+  ask prices to lookup sku and wait   -- suspending, so `and wait` (ADR 0019)
   put it into unit
   wait 1 s                 -- deadline on the case's virtual Clock
   return unit * qty
