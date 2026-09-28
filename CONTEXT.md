@@ -154,6 +154,10 @@ _Avoid_: typed capture, converter
 Matching the shape of a structured value (list, map) and binding its parts to names, e.g. `[first, ...rest]` or `{type: "invoice", amount: a}`.
 _Avoid_: pattern (unqualified), unpacking
 
+**Binary Pattern**:
+Destructuring for Bytes, written `<< … >>`, that reads fixed-layout fields left to right and binds them, e.g. `<< len: uint16, body: len bytes, ...rest >>`. It never searches and never backtracks. The same brackets build Bytes, with `value as type` fields.
+_Avoid_: bitstring, binary match, byte pattern, Text Pattern on bytes
+
 ## Values
 
 **Value Semantics**:
@@ -171,6 +175,10 @@ _Avoid_: substring, slice
 **Character**:
 One user-perceived character of text: an extended grapheme cluster under the Unicode version the language version pins. Indexes, ranges, lengths and Text Pattern positions all count Characters.
 _Avoid_: code point, rune, char, code unit
+
+**Bytes**:
+An immutable sequence of 8-bit values, the kind that Binary Patterns read and build. Its length and positions count bytes, never Characters. Bytes become text only through an explicit `as text`.
+_Avoid_: binary, buffer, blob, byte array
 
 **Unit**:
 A unit of measure attached to a number (e.g. `5 kg`), taking part in conversion and arithmetic.
