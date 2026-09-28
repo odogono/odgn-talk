@@ -95,8 +95,16 @@ _Avoid_: timer, system time
 ## Matching
 
 **Text Pattern**:
-A readable alternative to regular expressions for matching text, in the style of SenseTalk's Pattern Language, e.g. `<"ID-", num: 4 digits>`.
+A readable alternative to regular expressions for matching text, in the style of SenseTalk's Pattern Language, e.g. `<"ID-", num: 4 digits as number>`. It is also an immutable value kind, so Text Patterns can be stored, passed around and spliced into one another.
 _Avoid_: pattern (unqualified), regex
+
+**Capture**:
+A named part of a Text Pattern, written `name: element`, whose matched text is bound to that name. A Capture that took no part in the match binds Nothing.
+_Avoid_: group, capture group, submatch
+
+**Typed Element**:
+A Text Pattern element that both matches a literal of some kind and converts it to that kind, e.g. `a number` or `a date`, so the Capture holding it binds a Number or Civil Date rather than text.
+_Avoid_: typed capture, converter
 
 **Destructuring**:
 Matching the shape of a structured value (list, map) and binding its parts to names, e.g. `[first, ...rest]` or `{type: "invoice", amount: a}`.
