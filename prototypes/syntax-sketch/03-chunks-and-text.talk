@@ -1,0 +1,88 @@
+-- 03: Chunk Expressions and text (ADR 0011)
+
+on reading report
+  put line 3 of report into l
+  put word 2 of line 3 of report into w
+  put character 1 of w into initial
+  put the last character of w into final
+  put character -1 of w into final            -- same thing
+  -- ALT: put the last char of w into final
+  -- `last` reads better; `-1` is there for computed positions (`character -n of w`).
+  put characters 2..4 of w into middle
+  put the number of words in report into n
+  -- ALT: put the count of words of report into n
+  -- ?? `the number of words in report` is the HyperTalk classic, but it puts
+  --    `number` (a kind name) and `in` (unit/preposition) in one phrase.
+  put the words of line 1 of report into ws   -- a list of text
+
+  -- out-of-range reads give empty text, never an error
+  put word 99 of "one two" into blank         -- ""
+end reading
+
+on writing
+  put "a,b,c" into row
+  put "X" into item 2 of row                  -- "a,X,c"
+  put "x" into item 5 of row                  -- "a,X,c,,x"  (items pad)
+  put "new last line" into line 10 of doc     -- lines pad with empty lines
+  put "!" after the last character of greeting
+  put "Dear " before line 1 of letter
+  delete word 2 of title
+  put "Z" into character 20 of "short"        -- ERROR: characters don't pad
+  -- ?? Padding items but not characters is right, but will surprise someone.
+  --    The error message has to say why.
+
+  -- nested write: rebinds `doc` (Value Semantics, ADR 0001)
+  put "Total" into item 1 of line 4 of doc
+end writing
+
+on delimiters
+  put "a;b;c" into row
+  put item 2 of row delimited by ";" into b
+  put tab into sep
+  put item 3 of row delimited by sep into c
+  put the items of row delimited by sep into parts
+
+  put item 2 of line 3 of report delimited by ";" into cell
+  -- ?? Which chunk does `delimited by` apply to? Rule sketch: it binds to the
+  --    nearest `item` to its left. If you need it elsewhere, parenthesise:
+  --      put item 2 of (line 3 of report) delimited by ";" into cell
+  -- ?? Without an itemDelimiter property this repeats on every line of a CSV
+  --    loop. The workaround is a local:
+  repeat for each l in the lines of report
+    let [name, qty, price] be the items of l delimited by ";"
+    say name & " x" & qty
+  end repeat
+  -- ...which reads fine. The noise is concentrated in the `let`, not spread out.
+  -- ALT: item 2 of row by ";"          -- shorter, but `by` is also `multiply x by`
+  -- ALT: item 2 of row split at ";"
+end delimiters
+
+on caseless answer, msg, code, cmd
+  -- ?? I first wrote the parameter as `line` — a chunk keyword. Can keywords be
+  --    names? HyperTalk said no, and that's a long reserved-word list for beginners.
+  if answer is "yes" ignoring case then say "ok"
+  if msg contains "error" ignoring case then say "problem"
+  if name begins with "mc" ignoring case then say "Scottish, maybe"
+  if code matches <"inv-", digits> ignoring case then say "invoice code"
+  match cmd ignoring case
+    when "quit" then stop
+    when "help" then show help
+  end match
+  put offset of "abc" in s ignoring case into pos
+  -- ?? `ignoring case` at the end reads naturally on every form, but it binds to
+  --    the WHOLE comparison: `if a is b and c is d ignoring case` — which one?
+  --    Rule sketch: it binds to the nearest comparison; use parentheses otherwise.
+  -- ALT: if answer is "yes", ignoring case, then …
+  -- ALT: if answer is like "yes" then …   -- a separate operator; loses `contains`
+end caseless
+
+on emoji
+  put "👨‍👩‍👧 hi" into s
+  put the length of s into n                  -- 4: family, space, h, i
+  if s contains "👧" then say "never: not a whole Character"
+  -- [advanced]
+  put code point 1 of s into cp               -- "👨"
+  put the number of code points in s into cps -- 8
+  put the code points of s into scalars
+  -- ?? `code point` is two words; `codepoint` is one token for the grammar.
+end emoji

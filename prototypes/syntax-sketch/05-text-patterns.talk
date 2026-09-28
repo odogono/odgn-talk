@@ -1,0 +1,102 @@
+-- 05: Text Patterns (ADR 0007) composing with Destructuring
+
+-- Reference flavour:
+on scan report
+  match line 3 of report
+    when <"ID-", num: 4 digits as number, " ", name: word> then put num into ids
+  end match
+end scan
+
+-- Typed captures: explicit `as`, or a Typed Element.
+on parseOrder orderLine
+  match orderLine
+    when <qty: a number, " x ", sku: word, " @ ", price: a number> then
+      put qty * price into lineTotal         -- both are numbers already
+    when <"due ", d: a date> then
+      put d into dueDate                     -- a Civil Date
+    when <n: 4 digits as number> then
+      put n into year
+  end match
+  -- ?? `qty: a number` reads beautifully. `n: 4 digits as number` is fine but the
+  --    `as number` at the end looks like it might apply to the whole pattern.
+  -- ALT: <n: (4 digits) as number>
+  -- ALT: <n: a 4-digit number>              -- a Typed Element with a size; tempting
+end parseOrder
+
+-- Whole-value match vs search
+on triage msg
+  match msg
+    when <"ERROR: ", rest: text> then log error rest     -- whole value must match
+    when contains <"WARN">       then log warning msg    -- anywhere in msg
+    when contains <code: 3 digits, " ", "timeout"> then retry code
+  end match
+  if msg matches <"OK", text> then say "fine"            -- whole value
+  if msg contains <3 digits> then say "has a number"     -- search
+  -- ?? `when <…>` (whole) vs `when contains <…>` (search) is clear once you know,
+  --    but the default being "whole" will bite: `when <"WARN">` on "WARN: disk"
+  --    silently doesn't match. Lint: "pattern starts with a literal and has no
+  --    trailing `text`; did you mean `when contains`?"
+end triage
+
+-- Replace with Captures in scope
+on flip names
+  -- names = "Smith, Ann" & return & "Jones, Bob"
+  replace <last: word, ", ", first: word> in names with first & " " & last
+  -- rewrites the Container `names`, every occurrence
+  replace first <"  "> in names with " "
+  -- ALT: replace every <…> in names with …    -- make "every" explicit, default first?
+  -- ?? `with first & " " & last`: the replacement is an expression evaluated per
+  --    match with Captures bound. Is `first` then a Capture, or `first` the ordinal
+  --    (`replace first <…>`)? Real collision. `first`/`last` as Capture names is
+  --    exactly what people will write.
+  put names with <last: word, ", ", first: word> replaced by first & " " & last into flipped
+  -- ?? an expression form (no Container) is needed too; this one is awful.
+  -- ALT: put replace(<…>, names, fn) into flipped  -- needs a lambda; not beginner
+end flip
+
+-- A Text Pattern in a Destructuring clause head
+on handle {ref: <"INV-", n: digits as number>, amount: a}
+  say "invoice " & n & " for " & a
+end handle
+on handle {ref: <"CN-", n: digits as number>}
+  say "credit note " & n
+end handle
+-- The Captures bind in the clause, alongside the Destructuring names. Reads well.
+
+-- Pattern values spliced into each other
+on patterns
+  put <4 digits> into year
+  put <2 digits> into twoDigit
+  put <year, "-", twoDigit, "-", twoDigit> into isoDate
+  -- ?? Inside `<…>`, is `year` a variable holding a pattern, or a keyword element
+  --    like `word`/`digits`? Rule sketch: pattern keywords win, anything else is
+  --    looked up as a variable and must hold a Text Pattern or text (load-time
+  --    check where possible). That means a variable named `word` can't be spliced.
+  -- ALT: <{year}, "-", {twoDigit}>             -- explicit splice, looks like a map
+  -- ALT: <pattern year, "-", pattern twoDigit> -- explicit, wordy
+  put <y: year, "-", m: twoDigit> into yearMonth  -- capture a spliced pattern
+  if "2026-09-27" matches isoDate then say "a date"
+
+  put <one or more of (letter or digit)> into ident
+  put <"#", tag: ident> into hashtag
+  -- [advanced]
+  put <"<", body: text lazily, ">"> into angled
+  put <"id", (ignoring case) "x"> into mixed        -- per-element case modifier
+end patterns
+
+-- `the match of` and `every match of`
+on details s
+  put the match of <n: digits> in s into m
+  if m is nothing then return "no digits"
+  let {text: t, range: r, captures: {n: n}} be m
+  -- ?? `captures: {n: n}` is noisy. Since names bind, allow `{captures: {n}}`
+  --    as shorthand for `{n: n}`? Then `let {text, range, captures} be m` too.
+  let {text, range, captures: {n}} be m
+  say "found " & text & " at " & range     -- range prints as "5..7"
+
+  repeat for each hit in every match of <tag: ident> in s
+    say the tag of the captures of hit
+    -- ALT: say hit's captures's tag           -- 's chains get ugly fast
+  end repeat
+  -- ALT: repeat for each <"#", tag: ident> in s  -- loop head IS the pattern, Captures bind
+end details

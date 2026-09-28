@@ -1,0 +1,51 @@
+-- 07: Host Objects and Capabilities
+-- The Host granted this Script: `storage` (suspending), `clock` (immediate),
+-- `http` (suspending), `log` (immediate). Nothing else is reachable.
+
+on remember key, value
+  save value as key in storage
+  -- ALT: storage.save(key, value)                 -- [advanced]? method call style
+  -- ALT: call save of storage with key, value
+  -- ALT: tell storage to save key, value
+  -- ?? What does a Capability look like at the call site? Options:
+  --    1. Host-defined commands: the Host registers a command grammar (`save … as … in storage`).
+  --       Most English, but Hosts extend the syntax. Big grammar question.
+  --    2. Uniform call: `storage.save(key, value)` or `save(storage, key, value)`.
+  --    3. Uniform verb: `tell storage to save key, value` / `ask storage for key`.
+  --       No syntax extension; `ask` = suspending with a result in `it`.
+end remember
+
+on recall key
+  ask storage for key          -- suspends (storage is a Suspending Capability)
+  if it is nothing then return "unknown"
+  return it
+end recall
+
+on fetchPage url
+  ask http to get url
+  -- ALT: put the body of (ask http to get url) into html
+  put the body of it into html
+  if the status of it is not 200 then log "bad status " & the status of it
+  -- ?? Calling a revoked Capability is an ordinary error (sandbox contract).
+  --    Its shape is error-handling fog.
+end fetchPage
+
+on stamp
+  put the time from clock into t     -- immediate: not a Suspension Point
+  -- ?? Nothing in the source says whether a call suspends. ADR 0004 says Hosts
+  --    declare it, so the loader knows. Should the syntax show it? `ask` for
+  --    suspending, `get`/`put … from` for immediate would make it visible.
+end stamp
+
+-- Host Objects have identity; copying the handle copies the handle only.
+on openDoor d
+  put d into same
+  set the state of same to "open"
+  -- ALT: put "open" into the state of same
+  -- ?? For Script maps, `put … into the x of m` rebinds m (Value Semantics).
+  --    For a Host Object, `the state of d` is a Host property, and the write goes
+  --    to the Host. Same syntax, very different effect. `set` for Host
+  --    properties only would make the difference visible (HyperTalk had `set`).
+  if same = d then say "same door"       -- identity
+  send opened to the room of d
+end openDoor

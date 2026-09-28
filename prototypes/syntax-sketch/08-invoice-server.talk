@@ -1,0 +1,63 @@
+-- 08: a realistic Script on the multi-tenant Go server.
+-- Host grants: `ledger` (suspending), `mail` (suspending), `clock` (immediate).
+-- Host messages: `handle` (one per incoming document), `nightly`.
+-- Written in the spellings I liked best in 01–07.
+
+script variable seen = 0
+script variable approvalLimit = 1000 GBP
+
+on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d}
+    where a > approvalLimit
+  add 1 to seen
+  send review with {ref: n, amount: a} to approvals and wait
+  match it
+    when "approved" then record n, a, d
+    when {rejected: reason} then mail supplier about n because reason
+  end match
+end handle
+
+on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d}
+  add 1 to seen
+  record n, a, d
+end handle
+
+on handle {type: "remittance", body: text}
+  -- body is a CSV: ref;amount;date
+  repeat for each l in the lines of text
+    match l
+      when <"INV-", n: digits as number, ";", amt: a number, ";", on: a date> then
+        tell ledger to mark paid n, (amt as GBP), on
+        -- ?? `amt as GBP`: a plain number given a unit. Could the Typed Element
+        --    do it? <amt: a number as GBP> hmm, or <amt: an amount in GBP>.
+      else
+        log "skipped: " & l
+    end match
+  end repeat
+end handle
+
+on handle other
+  pass handle
+end handle
+
+on record n, a, d
+  tell ledger to add {ref: n, amount: a, due: d}
+  if d - today() < 7 days then
+    mail finance about n because "due within a week"
+  end if
+  -- ?? `today()` needs the clock Capability and a zone; there is no ambient date.
+  --    Really: `put the date from clock in zone "Europe/London" into today`.
+  --    Painful, but honest. The Host might grant a zone-bound `calendar` instead.
+end record
+
+on mail who about n because why
+  tell mail to send {to: who, subject: "Invoice " & n, body: why}
+  -- ?? handler `mail … about … because …` with keyword-separated parameters:
+  --    very HyperTalk-ish (SenseTalk has it too), but a big grammar feature.
+  --    Also `mail` is both this handler and the Capability. Don't do that.
+end mail
+
+on nightly, queued
+  put round (seen / 24) to 1 places into rate
+  log "invoices per hour: " & rate
+  put 0 into seen
+end nightly

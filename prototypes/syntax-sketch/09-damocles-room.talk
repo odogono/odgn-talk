@@ -1,0 +1,49 @@
+-- 09: a trusted built-in Script in the Damocles game.
+-- Host Objects: `the player`, rooms, items. Host events: `tick`, `enter`,
+-- `take`, `before drop` (decision mode). Game time is the Clock.
+
+script variable torchLeft = 300 s
+
+on enter room r, every time
+  if r is the cellar and torchLeft > 0 s then
+    say "Your torch flickers."
+  end if
+end enter
+
+on tick dt, every time
+  -- dt is a duration Quantity supplied by the Host: e.g. 50 ms
+  if the player carries torch then
+    subtract dt from torchLeft
+    if torchLeft <= 0 s then
+      put 0 s into torchLeft
+      send darkness to the room of the player
+    end if
+  end if
+end tick
+
+on take {thing: t} where t is the sword
+  say "It's heavier than it looks."
+  wait 2 s                                        -- game seconds: pauses with the game
+  if the player still carries t then send cursed to the player
+  -- ?? `still carries`: Host-defined predicates (`carries`) read wonderfully but
+  --    are Host syntax again (see 07). Otherwise: `if carries(the player, t)`.
+end take
+
+on take other
+  pass take
+end take
+
+on before drop {thing: t} where t is the amulet, deciding
+  veto "The amulet won't leave your hand."
+end before drop
+
+on talk to npc, replacing
+  match the name of npc ignoring case
+    when <"sir ", rest: text> then say "Good day, " & rest & "."
+    when contains "ghost" then
+      say "Wooo."
+      wait for answer from the player or 10 s
+      -- ?? prefer the block form here; the one-liner hides the timeout branch.
+    else say "…"
+  end match
+end talk
