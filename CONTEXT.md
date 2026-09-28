@@ -94,6 +94,14 @@ _Avoid_: gas, steps, CPU time
 The versioned, normative table of how much Fuel each operation costs and how large each kind of value counts as.
 _Avoid_: pricing, cost estimate
 
+**Abstract Machine**:
+The normative stack machine that every Core's compiler targets: its instruction set, and the exact instructions each construct lowers to. Fuel is charged per instruction, code positions are instruction indices, and a Run can be preempted only between instructions. It is versioned together with the Cost Model.
+_Avoid_: bytecode, VM, IR
+
+**Fuel Slice**:
+A Host-set amount of Fuel after which a Run is preempted at the next instruction boundary, e.g. once per game tick. Fuel spent past the end of a slice is carried as debt into the next one.
+_Avoid_: quantum, time slice (unqualified), tick budget
+
 **Allocation Budget**:
 The limit on how much value a single Run may construct, counted by logical size, with frees ignored.
 _Avoid_: heap limit, memory limit (unqualified)
