@@ -1,0 +1,89 @@
+{
+  "memcap": [
+    {
+      "module": "tiny-star",
+      "maxMiB": 64,
+      "heldMiB": 22,
+      "memoryMiB": 48,
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.hold(1)')",
+      "healthAfter": "dead: RuntimeError: Unreachable code should not be executed (evaluating 'x.bench(0, 20)')",
+      "afterRelease": "",
+      "ms": 94,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "go-star",
+      "maxMiB": 64,
+      "heldMiB": 59,
+      "memoryMiB": 63.5,
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.hold(1)')",
+      "healthAfter": "dead: ExitError: proc_exit(4)",
+      "afterRelease": "",
+      "ms": 14,
+      "stderr": "runtime: out of memory: cannot allocate 1048576-byte block (62226432 in use) | fatal error: out of memory | "
+    },
+    {
+      "module": "tiny-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 3072,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 2139,
+      "stderr": ""
+    },
+    {
+      "module": "go-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 1506.5,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 145,
+      "stderr": ""
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxMiB": 32,
+      "heldMiB": 10,
+      "memoryMiB": 24,
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.hold(1)')",
+      "healthAfter": "dead: RuntimeError: Unreachable code should not be executed (evaluating 'x.bench(0, 20)')",
+      "afterRelease": "",
+      "ms": 55,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxPages": 2048,
+      "outcome": "load failed → LinkError: Memory import env:memory provided a 'maximum' that is larger than the module's declared 'maximum' import memory size (evaluating 'WebAssembly.instant"
+    }
+  ],
+  "instances": [
+    {
+      "module": "tiny-star",
+      "requested": 1000,
+      "created": 1000,
+      "msPerInstance": 2.514,
+      "linearMemoryMiB": 3000,
+      "error": "",
+      "rssDeltaMiB": 2542.8
+    },
+    {
+      "module": "go-star",
+      "requested": 1000,
+      "created": 1000,
+      "msPerInstance": 6.659,
+      "linearMemoryMiB": 3812.5,
+      "error": "",
+      "rssDeltaMiB": -70.1
+    }
+  ],
+  "env": {
+    "bun": "1.4.2",
+    "platform": "darwin",
+    "arch": "arm64"
+  }
+}

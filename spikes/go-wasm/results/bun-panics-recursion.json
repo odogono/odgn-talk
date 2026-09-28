@@ -1,0 +1,375 @@
+{
+  "panics": [
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(0, 1)')"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.try_panic(kind, rec)')",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded.",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    }
+  ],
+  "panicLogs": [
+    "tiny-star panic(\"boom\"): panic: boom",
+    "tiny-star panic(\"boom\"): panic: boom",
+    "tiny-star VM divide by zero: panic: runtime error: divide by zero",
+    "tiny-star VM divide by zero: panic: boom",
+    "tiny-star VM index out of range: panic: runtime error: index out of range",
+    "tiny-star VM index out of range: panic: boom",
+    "tiny-star nil map write: panic: runtime error: assignment to entry in nil map",
+    "tiny-star nil map write: panic: boom",
+    "tiny-star nil pointer deref: panic: runtime error: nil pointer dereference",
+    "tiny-star nil pointer deref: panic: boom",
+    "tiny-star Go recursion 10M deep: panic: boom",
+    "tiny-star panic(\"boom\"): panic: boom",
+    "tiny-star panic(\"boom\"): panic: boom",
+    "tiny-star VM divide by zero: panic: runtime error: divide by zero",
+    "tiny-star VM divide by zero: panic: boom",
+    "tiny-star VM index out of range: panic: runtime error: index out of range",
+    "tiny-star VM index out of range: panic: boom",
+    "tiny-star nil map write: panic: runtime error: assignment to entry in nil map",
+    "tiny-star nil map write: panic: boom",
+    "tiny-star nil pointer deref: panic: runtime error: nil pointer dereference",
+    "tiny-star nil pointer deref: panic: boom",
+    "tiny-star Go recursion 10M deep: panic: boom",
+    "go-star panic(\"boom\"): panic: boom",
+    "go-star panic(\"boom\"): ",
+    "go-star panic(\"boom\"): goroutine 1 [running]:",
+    "go-star panic(\"boom\"): spike/core.TryPanic(0x0, 0x0)",
+    "go-star panic(\"boom\"): \tspike/core/core.go:34 +0x1e",
+    "go-star panic(\"boom\"): main.tryPanic(0x0, 0x0)",
+    "go-star panic(\"boom\"): \tspike/cmd/wasm/main.go:15 +0x2",
+    "go-star panic(\"boom\"): panic: boom",
+    "go-star panic(\"boom\"): fatal error: panic during malloc",
+    "go-star panic(\"boom\"): panic during panic",
+    "go-star panic(\"boom\"): ",
+    "go-star panic(\"boom\"): goroutine 1 gp=0x3021c0 m=0 mp=0x2217c0 [running]:",
+    "go-star panic(\"boom\"): runtime.throw({0xec69, 0x13})",
+    "go-star panic(\"boom\"): \truntime/panic.go:1243 +0x3 fp=0x40fcc8 sp=0x40fca0 pc=0x15540003",
+    "go-star panic(\"boom\"): panic({0x1f4f40, 0x18b38})",
+    "go-star panic(\"boom\"): \truntime/panic.go:830 +0x4f fp=0x40fd68 sp=0x40fcc8 pc=0x154f004f",
+    "go-star panic(\"boom\"): spike/core.TryPanic(0x0, 0x1)",
+    "go-star panic(\"boom\"): \tspike/core/core.go:34 +0x1e fp=0x40fe00 sp=0x40fd68 pc=0x1b9a001e",
+    "go-star panic(\"boom\"): main.tryPanic(0x0, 0x1)",
+    "go-star panic(\"boom\"): \tspike/cmd/wasm/main.go:15 +0x2 fp=0x40fe18 sp=0x40fe00 pc=0x1ba10002",
+    "go-star panic(\"boom\"): try_panic()",
+    "go-star panic(\"boom\"): \t<autogenerated>:1 +0x1 fp=0x40fe30 sp=0x40fe18 pc=0x1ba80001",
+    "go-star panic(\"boom\"): runtime.crash(...)",
+    "go-star panic(\"boom\"): \truntime/os_wasm.go:104",
+    "go-star panic(\"boom\"): runtime.fatalpanic(0x33aea0)",
+    "go-star panic(\"boom\"): \truntime/panic.go:1504 +0x6 fp=0x40fe78 sp=0x40fe30 pc=0x12c50006",
+    "go-star panic(\"boom\"): panic({0x1f4f40, 0x18b38})",
+    "go-star panic(\"boom\"): \truntime/panic.go:878 +0x25 fp=0x40ff18 sp=0x40fe78 pc=0x154f0025",
+    "go-star panic(\"boom\"): spike/core.TryPanic(0x0, 0x0)",
+    "go-star panic(\"boom\"): \tspike/core/core.go:34 +0x1e fp=0x40ffb0 sp=0x40ff18 pc=0x1b9a001e",
+    "go-star panic(\"boom\"): main.tryPanic(0x0, 0x0)",
+    "go-star panic(\"boom\"): \tspike/cmd/wasm/main.go:15 +0x2 fp=0x40ffc8 sp=0x40ffb0 pc=0x1ba10002",
+    "go-star panic(\"boom\"): try_panic()",
+    "go-star panic(\"boom\"): \t<autogenerated>:1 +0x1 fp=0x40ffe0 sp=0x40ffc8 pc=0x1ba80001",
+    "go-star panic(\"boom\"): runtime.goexit({})",
+    "go-star panic(\"boom\"): \truntime/asm_wasm.s:413 +0x1 fp=0x40ffe8 sp=0x40ffe0 pc=0x15b20001",
+    "go-star panic(\"boom\"): ",
+    "go-star panic(\"boom\"): goroutine 2 gp=0x302380 m=nil [force gc (idle)]:",
+    "go-star panic(\"boom\"): runtime.gopark(0x20ecb0, 0x220360, 0xb, 0xa, 0x1)",
+    "go-star panic(\"boom\"): \truntime/proc.go:474 +0x21 fp=0x32efa0 sp=0x32ef68 pc=0x15550021"
+  ],
+  "recursion": [
+    {
+      "module": "tiny-star",
+      "maxDepth": 32512,
+      "failsAt": 32768,
+      "error": "RuntimeError: Unreachable code should not be executed (evaluating 'inst.exports.recurse(n)')"
+    },
+    {
+      "module": "go-star",
+      "maxDepth": 93184,
+      "failsAt": 93696,
+      "error": "RangeError: Maximum call stack size exceeded."
+    }
+  ],
+  "env": {
+    "bun": "1.4.2",
+    "platform": "darwin",
+    "arch": "arm64"
+  }
+}

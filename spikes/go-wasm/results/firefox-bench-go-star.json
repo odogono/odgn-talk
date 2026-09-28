@@ -1,0 +1,92 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "crossOriginIsolated": false
+  },
+  "bench": [
+    {
+      "module": "go-star",
+      "name": "(compile)",
+      "best": 28,
+      "median": 28
+    },
+    {
+      "module": "go-star",
+      "name": "(instantiate+init)",
+      "best": 2,
+      "median": 2
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 371,
+      "median": 380
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 434,
+      "median": 436
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 630,
+      "median": 669
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 752,
+      "median": 773
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 713,
+      "median": 717
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 763,
+      "median": 794
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 760,
+      "median": 781
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 962,
+      "median": 979
+    }
+  ]
+}

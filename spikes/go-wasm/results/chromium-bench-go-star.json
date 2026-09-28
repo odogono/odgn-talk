@@ -1,0 +1,92 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/135.0.0.0 Safari/537.36",
+    "crossOriginIsolated": false
+  },
+  "bench": [
+    {
+      "module": "go-star",
+      "name": "(compile)",
+      "best": 5.5,
+      "median": 5.5
+    },
+    {
+      "module": "go-star",
+      "name": "(instantiate+init)",
+      "best": 18.099999994039536,
+      "median": 18.099999994039536
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 733.4000000059605,
+      "median": 734.2000000029802
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 866.5,
+      "median": 872
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 870.3999999910593,
+      "median": 877.5
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 1121.199999988079,
+      "median": 1138.7000000029802
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 650.4000000059605,
+      "median": 654.3999999910593
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 645.3000000119209,
+      "median": 653.8999999910593
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 698,
+      "median": 699.2000000029802
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 894.8999999910593,
+      "median": 906.2999999970198
+    }
+  ]
+}

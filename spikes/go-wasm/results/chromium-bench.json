@@ -1,0 +1,404 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/135.0.0.0 Safari/537.36",
+    "crossOriginIsolated": false
+  },
+  "bench": [
+    {
+      "module": "tiny-vm",
+      "name": "(compile)",
+      "best": 0.3999999910593033,
+      "median": 0.3999999910593033
+    },
+    {
+      "module": "tiny-vm",
+      "name": "(instantiate+init)",
+      "best": 1.5,
+      "median": 1.5
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 353.20000000298023,
+      "median": 357.3999999910593
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 388.5,
+      "median": 394
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 485.90000000596046,
+      "median": 493.79999999701977
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 595,
+      "median": 614.3999999910593
+    },
+    {
+      "module": "tiny-vm-o2",
+      "name": "(compile)",
+      "best": 0.29999999701976776,
+      "median": 0.29999999701976776
+    },
+    {
+      "module": "tiny-vm-o2",
+      "name": "(instantiate+init)",
+      "best": 1.300000011920929,
+      "median": 1.300000011920929
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 196.5,
+      "median": 203.20000000298023
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 245.8999999910593,
+      "median": 246.70000000298023
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 322.69999998807907,
+      "median": 339.5
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 425.5,
+      "median": 433.20000000298023
+    },
+    {
+      "module": "go-vm",
+      "name": "(compile)",
+      "best": 1.699999988079071,
+      "median": 1.699999988079071
+    },
+    {
+      "module": "go-vm",
+      "name": "(instantiate+init)",
+      "best": 11.300000011920929,
+      "median": 11.300000011920929
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 715.0999999940395,
+      "median": 717.7999999970198
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 846.3999999910593,
+      "median": 847.8999999910593
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 847.5999999940395,
+      "median": 855.5
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 1123.5,
+      "median": 1128.0999999940395
+    },
+    {
+      "module": "tiny-star",
+      "name": "(compile)",
+      "best": 1,
+      "median": 1
+    },
+    {
+      "module": "tiny-star",
+      "name": "(instantiate+init)",
+      "best": 1.8999999910593033,
+      "median": 1.8999999910593033
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 362.20000000298023,
+      "median": 365.5
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 404,
+      "median": 405.5
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 478.09999999403954,
+      "median": 480
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 616.5,
+      "median": 623.7999999970198
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 572.2000000029802,
+      "median": 593.2999999970198
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 656.9000000059605,
+      "median": 660.6000000089407
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 662.7000000029802,
+      "median": 687.6000000089407
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 744.8999999910593,
+      "median": 754.5
+    },
+    {
+      "module": "tiny-star-o2",
+      "name": "(compile)",
+      "best": 0.7999999970197678,
+      "median": 0.7999999970197678
+    },
+    {
+      "module": "tiny-star-o2",
+      "name": "(instantiate+init)",
+      "best": 1.7999999970197678,
+      "median": 1.7999999970197678
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 197.29999999701977,
+      "median": 197.79999999701977
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 246.20000000298023,
+      "median": 247.09999999403954
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 315.40000000596046,
+      "median": 344.70000000298023
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 411.20000000298023,
+      "median": 421.8999999910593
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 435.29999999701977,
+      "median": 437.5
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 498.3999999910593,
+      "median": 501.70000000298023
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 491.09999999403954,
+      "median": 516.5
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 602.7000000029802,
+      "median": 607.5
+    },
+    {
+      "module": "go-star",
+      "name": "(compile)",
+      "best": 3.6000000089406967,
+      "median": 3.6000000089406967
+    },
+    {
+      "module": "go-star",
+      "name": "(instantiate+init)",
+      "best": 14.200000002980232,
+      "median": 14.200000002980232
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 694.5999999940395,
+      "median": 695
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 822.4000000059605,
+      "median": 824.2999999970198
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 829.8999999910593,
+      "median": 837.2000000029802
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 1093.0999999940395,
+      "median": 1127.6000000089407
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 641.0999999940395,
+      "median": 642.9000000059605
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 646.3999999910593,
+      "median": 662
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 698,
+      "median": 701.5
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 934.4000000059605,
+      "median": 939.2999999970198
+    }
+  ]
+}

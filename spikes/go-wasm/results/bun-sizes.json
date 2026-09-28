@@ -1,0 +1,75 @@
+{
+  "sizes": [
+    {
+      "module": "go-star-js.wasm",
+      "rawKiB": 4809.9,
+      "gzipKiB": 1290.3,
+      "brotliKiB": 950.6
+    },
+    {
+      "module": "go-star-wasmopt.wasm",
+      "rawKiB": 4440.3,
+      "gzipKiB": 1274.6,
+      "brotliKiB": 953.5
+    },
+    {
+      "module": "go-star.wasm",
+      "rawKiB": 4776.6,
+      "gzipKiB": 1281.1,
+      "brotliKiB": 944.6
+    },
+    {
+      "module": "go-vm-wasmopt.wasm",
+      "rawKiB": 1853.5,
+      "gzipKiB": 571.5,
+      "brotliKiB": 444.1
+    },
+    {
+      "module": "go-vm.wasm",
+      "rawKiB": 1957.4,
+      "gzipKiB": 576.3,
+      "brotliKiB": 445.2
+    },
+    {
+      "module": "tiny-star-importmem.wasm",
+      "rawKiB": 905.5,
+      "gzipKiB": 307.8,
+      "brotliKiB": 238.4
+    },
+    {
+      "module": "tiny-star-o2.wasm",
+      "rawKiB": 1061.4,
+      "gzipKiB": 368.7,
+      "brotliKiB": 279.3
+    },
+    {
+      "module": "tiny-star-trap.wasm",
+      "rawKiB": 651.7,
+      "gzipKiB": 250.4,
+      "brotliKiB": 201.6
+    },
+    {
+      "module": "tiny-star.wasm",
+      "rawKiB": 905.5,
+      "gzipKiB": 309.2,
+      "brotliKiB": 238.8
+    },
+    {
+      "module": "tiny-vm-o2.wasm",
+      "rawKiB": 103.7,
+      "gzipKiB": 37.7,
+      "brotliKiB": 30.1
+    },
+    {
+      "module": "tiny-vm.wasm",
+      "rawKiB": 84.5,
+      "gzipKiB": 31.8,
+      "brotliKiB": 26.3
+    }
+  ],
+  "env": {
+    "bun": "1.4.2",
+    "platform": "darwin",
+    "arch": "arm64"
+  }
+}

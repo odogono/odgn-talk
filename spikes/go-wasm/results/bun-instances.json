@@ -1,0 +1,36 @@
+{
+  "instances": [
+    {
+      "module": "tiny-star-stack64k",
+      "requested": 3000,
+      "created": 3000,
+      "msPerInstance": 3.927,
+      "linearMemoryMiB": 1125,
+      "error": "",
+      "rssDeltaMiB": 932.8
+    },
+    {
+      "module": "tiny-star",
+      "requested": 3000,
+      "created": 3000,
+      "msPerInstance": 5.732,
+      "linearMemoryMiB": 9000,
+      "error": "",
+      "rssDeltaMiB": 1263.3
+    },
+    {
+      "module": "go-star",
+      "requested": 3000,
+      "created": 3000,
+      "msPerInstance": 12.079,
+      "linearMemoryMiB": 11437.5,
+      "error": "",
+      "rssDeltaMiB": 574.9
+    }
+  ],
+  "env": {
+    "bun": "1.4.2",
+    "platform": "darwin",
+    "arch": "arm64"
+  }
+}
