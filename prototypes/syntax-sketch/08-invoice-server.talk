@@ -6,13 +6,14 @@
 script variable seen = 0
 script variable approvalLimit = 1000 GBP
 
-on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d}
-    where a > approvalLimit
+on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d} where a > approvalLimit
+  -- ?? was on two lines, with `where` starting the second. ADR 0019 only
+  --    continues a line after an open bracket, a binary operator, `&` or a comma.
   add 1 to seen
   send review with {ref: n, amount: a} to approvals and wait
   match it
     when "approved" then record n, a, d
-    when {rejected: reason} then mail supplier about n because reason
+    when {rejected: reason} then notifySupplier n, reason
   end match
 end handle
 
@@ -25,12 +26,14 @@ on handle {type: "remittance", body: text}
   -- body is a CSV: ref;amount;date
   repeat for each l in the lines of text
     match l
-      when <"INV-", n: digits as number, ";", amt: a number, ";", on: a date> then
-        tell ledger to mark paid n, (amt as GBP), on
+      when <"INV-", n: digits as number, ";", amt: a number, ";", paidOn: a date> then
+        tell ledger to markPaid n, amt as GBP, paidOn
+        -- was `on:` as a Capture name. `on` is reserved: a Capture may be
+        --    named `on:`, but the Script could never read it back.
         -- ?? `amt as GBP`: a plain number given a unit. Could the Typed Element
         --    do it? <amt: a number as GBP> hmm, or <amt: an amount in GBP>.
       else
-        log "skipped: " & l
+        tell log to write "skipped: " & l
     end match
   end repeat
 end handle
@@ -41,23 +44,27 @@ end handle
 
 on record n, a, d
   tell ledger to add {ref: n, amount: a, due: d}
-  if d - today() < 7 days then
-    mail finance about n because "due within a week"
+  ask clock to today
+  if d - it < 7 days then
+    notifyFinance n, "due within a week"
   end if
   -- ?? `today()` needs the clock Capability and a zone; there is no ambient date.
   --    Really: `put the date from clock in zone "Europe/London" into today`.
   --    Painful, but honest. The Host might grant a zone-bound `calendar` instead.
 end record
 
-on mail who about n because why
-  tell mail to send {to: who, subject: "Invoice " & n, body: why}
-  -- ?? handler `mail … about … because …` with keyword-separated parameters:
-  --    very HyperTalk-ish (SenseTalk has it too), but a big grammar feature.
-  --    Also `mail` is both this handler and the Capability. Don't do that.
-end mail
+on notifySupplier n, why
+  ask mail to send {to: "supplier", subject: "Invoice " & n, body: why} and wait
+  -- ADR 0019: Handler names are one word and a Command Call takes
+  --    comma-separated arguments, so `mail … about … because …` is gone.
+end notifySupplier
+
+on notifyFinance n, why
+  ask mail to send {to: "finance", subject: "Invoice " & n, body: why} and wait
+end notifyFinance
 
 on nightly, queued
-  put round (seen / 24) to 1 places into rate
-  log "invoices per hour: " & rate
+  put round(seen / 24, 1) into rate
+  tell log to write "invoices per hour: " & rate
   put 0 into seen
 end nightly

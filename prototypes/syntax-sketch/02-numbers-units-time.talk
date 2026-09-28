@@ -6,12 +6,13 @@ on numbers
   if 1.0 = 1 then say "equal by value"
 
   put 10 / 3 into third
-  put round third to 2 places into shown      -- 3.33
+  put round(third, 2) into shown              -- 3.33
+  -- ADR 0019: built-in operations are functions unless an ADR adds syntax.
   -- ALT: put third rounded to 2 places into shown
-  -- ALT: put round(third, 2) into shown
+  -- was: put round third to 2 places into shown
   -- ?? `round third to 2 places` is lovely as a command-style expression, but
   --    `put round x to 2 places into y` has two prepositions fighting (`to`, `into`).
-  round third to 2 places                     -- command form: rewrites the Container
+  put round(third, 2) into third              -- was the command form `round third to 2 places`
   -- ALT: round third to the nearest 0.05
 
   if third is an integer then say "whole"     -- a test on the value, not a kind
@@ -48,7 +49,8 @@ on ranges
   -- DECIDED: ranges are `..` everywhere (`to` is taken by `add x to y`, `round x to`).
   -- ?? `..` (range) sits next to `...` (rest in Destructuring): `[a, ...rest]`
   --    vs `1..5`. One dot apart. Fine for the grammar, easy to misread.
-  put 3..7 m/s into comfortable               -- a Quantity range
+  put 3 m/s..7 m/s into comfortable          -- a Quantity range
+  -- ?? `3..7 m/s` parses as `3..(7 m/s)`: only a literal takes a suffix.
   if speed is in comfortable then say "ok"
   -- ALT: if speed is between 3 m/s and 7 m/s then …
   -- ALT: if comfortable contains speed then …
@@ -73,8 +75,9 @@ on dates
   put renewal - launch into gap               -- 30 days (Civil - Civil)
   if later > stamp then say "time moves forward"
   -- `now` is a Capability, not a keyword:
-  put the time from clock into t
-  -- ALT: put clock's now into t
+  ask clock to now                            -- immediate Operation: no `and wait`
+  put it into t
+  -- was: put the time from clock into t
 end dates
 
 -- "Could it convert?" vs "is it already?"

@@ -26,8 +26,8 @@ end parseOrder
 -- Whole-value match vs search
 on triage msg
   match msg
-    when <"ERROR: ", rest: text> then log error rest     -- whole value must match
-    when contains <"WARN">       then log warning msg    -- anywhere in msg
+    when <"ERROR: ", rest: text> then tell log to write "error: " & rest   -- whole value must match
+    when contains <"WARN">       then tell log to write "warning: " & msg  -- anywhere in msg
     when contains <code: 3 digits, " ", "timeout"> then retry code
   end match
   if msg matches <"OK", text> then say "fine"            -- whole value
@@ -49,8 +49,8 @@ on flip names
   --    match with Captures bound. Is `first` then a Capture, or `first` the ordinal
   --    (`replace first <…>`)? Real collision. `first`/`last` as Capture names is
   --    exactly what people will write.
-  put names with <last: word, ", ", first: word> replaced by first & " " & last into flipped
-  -- ?? an expression form (no Container) is needed too; this one is awful.
+  put replace <last: word, ", ", first: word> in names with first & " " & last into flipped
+  -- ADR 0019: the expression form is the same words in operand position.
   -- ALT: put replace(<…>, names, fn) into flipped  -- needs a lambda; not beginner
 end flip
 
@@ -67,21 +67,25 @@ end handle
 on patterns
   put <4 digits> into year
   put <2 digits> into twoDigit
-  put <year, "-", twoDigit, "-", twoDigit> into isoDate
+  put <(year), "-", (twoDigit), "-", (twoDigit)> into isoDate
+  -- ADR 0019: `( … )` splices; a bare word is always a keyword or a Capture.
   -- ?? Inside `<…>`, is `year` a variable holding a pattern, or a keyword element
   --    like `word`/`digits`? Rule sketch: pattern keywords win, anything else is
   --    looked up as a variable and must hold a Text Pattern or text (load-time
   --    check where possible). That means a variable named `word` can't be spliced.
   -- ALT: <{year}, "-", {twoDigit}>             -- explicit splice, looks like a map
   -- ALT: <pattern year, "-", pattern twoDigit> -- explicit, wordy
-  put <y: year, "-", m: twoDigit> into yearMonth  -- capture a spliced pattern
+  put <y: (year), "-", m: (twoDigit)> into yearMonth  -- capture a spliced pattern
   if "2026-09-27" matches isoDate then say "a date"
 
-  put <one or more of (letter or digit)> into ident
-  put <"#", tag: ident> into hashtag
+  put <one or more of <letter or digit>> into ident
+  -- ?? was `(letter or digit)`. Under ADR 0019 `( … )` splices an expression,
+  --    so that parsed as the boolean `letter or digit`. Grouping is `<…>` here.
+  put <"#", tag: (ident)> into hashtag
   -- [advanced]
   put <"<", body: text lazily, ">"> into angled
-  put <"id", (ignoring case) "x"> into mixed        -- per-element case modifier
+  put <"id", "x" ignoring case> into mixed          -- per-element case modifier
+  -- was `(ignoring case) "x"`: a trailing modifier now, like everywhere else
 end patterns
 
 -- `the match of` and `every match of`
@@ -94,7 +98,7 @@ on details s
   let {text, range, captures: {n}} be m
   say "found " & text & " at " & range     -- range prints as "5..7"
 
-  repeat for each hit in every match of <tag: ident> in s
+  repeat for each hit in every match of <tag: (ident)> in s
     say the tag of the captures of hit
     -- ALT: say hit's captures's tag           -- 's chains get ugly fast
   end repeat

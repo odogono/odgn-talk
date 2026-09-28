@@ -27,7 +27,8 @@ on writing
   put "!" after the last character of greeting
   put "Dear " before line 1 of letter
   delete word 2 of title
-  put "Z" into character 20 of "short"        -- ERROR: characters don't pad
+  put "short" into s
+  put "Z" into character 20 of s              -- ERROR: characters don't pad
   -- ?? Padding items but not characters is right, but will surprise someone.
   --    The error message has to say why.
 
@@ -68,7 +69,9 @@ on caseless answer, msg, code, cmd
     when "quit" then stop
     when "help" then show help
   end match
-  put offset of "abc" in s ignoring case into pos
+  put offset("abc", s) into pos
+  -- ?? was `offset of "abc" in s ignoring case`. `offset` is a function now,
+  --    and `ignoring case` only attaches to comparisons and `match`.
   -- ?? `ignoring case` at the end reads naturally on every form, but it binds to
   --    the WHOLE comparison: `if a is b and c is d ignoring case` — which one?
   --    Rule sketch: it binds to the nearest comparison; use parentheses otherwise.

@@ -3,7 +3,7 @@
 -- `http` (suspending), `log` (immediate). Nothing else is reachable.
 
 on remember key, value
-  save value as key in storage
+  ask storage to save key, value and wait
   -- ALT: storage.save(key, value)                 -- [advanced]? method call style
   -- ALT: call save of storage with key, value
   -- ALT: tell storage to save key, value
@@ -16,22 +16,23 @@ on remember key, value
 end remember
 
 on recall key
-  ask storage for key          -- suspends (storage is a Suspending Capability)
+  ask storage to load key and wait     -- suspends: `and wait` (ADR 0019)
   if it is nothing then return "unknown"
   return it
 end recall
 
 on fetchPage url
-  ask http to get url
+  ask http to get url and wait
   -- ALT: put the body of (ask http to get url) into html
   put the body of it into html
-  if the status of it is not 200 then log "bad status " & the status of it
+  if the status of it is not 200 then tell log to write "bad status " & the status of it
   -- ?? Calling a revoked Capability is an ordinary error (sandbox contract).
   --    Its shape is error-handling fog.
 end fetchPage
 
 on stamp
-  put the time from clock into t     -- immediate: not a Suspension Point
+  ask clock to now                   -- immediate: no `and wait`, not a Suspension Point
+  put it into t
   -- ?? Nothing in the source says whether a call suspends. ADR 0004 says Hosts
   --    declare it, so the loader knows. Should the syntax show it? `ask` for
   --    suspending, `get`/`put … from` for immediate would make it visible.

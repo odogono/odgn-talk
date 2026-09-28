@@ -1,12 +1,12 @@
 -- 04: Handlers, Handler Clauses, Guards, Destructuring (issue #4)
 -- The reference flavour first, unchanged:
 
-on handle {type: "invoice", amount: a} where a > 1000
-  send it to approvals
+on handle {type: "invoice", amount: a} as inv where a > 1000
+  send review with inv to approvals
 end handle
 
-on handle {type: "invoice"}
-  file it
+on handle {type: "invoice"} as inv
+  file inv
 end handle
 
 -- ?? `it` here means "the whole message argument". In HyperTalk `it` is the
@@ -14,7 +14,9 @@ end handle
 --    Options: keep `it` for the argument only when the head is a pattern;
 --    or bind the whole with `as`:
 on handle {type: "refund"} as refund
-  send refund to approvals
+  send review with refund to approvals
+  -- ?? `send refund to approvals` parses too, but it sends a message NAMED
+  --    `refund` with no argument: the word after `send` is always the message.
 end handle
 -- ALT: on handle refund = {type: "refund"}    -- Elixir order; `=` reads as a test
 

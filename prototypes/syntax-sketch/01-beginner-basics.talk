@@ -80,9 +80,9 @@ on addUp csvLine
     --    only if `as` binds tighter than the `to` of `add`. Fine here, but:
   end repeat
 
-  put (item 2 of line 3 of report) as number * 2 into doubled
-  -- ?? noisy. Without the parentheses, `as` would grab `number * 2`, or the
-  --    `* 2` would attach to the chunk. The parentheses are needed.
+  put item 2 of line 3 of report as number * 2 into doubled
+  -- ADR 0019: `as` binds tighter than every binary operator and looser than
+  --    chunk `of`, so this is ((item 2 of line 3 of report) as number) * 2.
   -- ALT: put number(item 2 of line 3 of report) * 2 into doubled
   -- ALT: put the number in item 2 of line 3 of report ...   -- `in` collides with units
   return sum

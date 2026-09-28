@@ -23,7 +23,7 @@ on addUp csvLine
     try
       add part as number to sum
     catch {code: "not a number", value: v}
-      log "skipping " & v
+      tell log to write "skipping " & v
     catch e
       throw e                                  -- ALT: rethrow
     end try
@@ -35,14 +35,14 @@ end addUp
 
 on fetchOrFallback url
   try
-    ask http to get url
-    return json of (it's body as text)
+    ask http to get url and wait
+    return the json of (it's body as text)
   catch {code: "capability revoked"}
     return nothing
   catch {code: "http", status: s} where s >= 500
     wait 1 s
-    ask http to get url                        -- one retry
-    return json of (it's body as text)
+    ask http to get url and wait               -- one retry
+    return the json of (it's body as text)
   end try
 end fetchOrFallback
 
@@ -74,36 +74,14 @@ on addUpB csvLine
   repeat for each part in the items of csvLine
     match parseQty(part)
       when {ok: n} then add n to sum
-      when {error: why} then log "skipping " & part & ": " & why
+      when {error: why} then tell log to write "skipping " & part & ": " & why
     end match
   end repeat
   return sum
 end addUpB
 
--- Capabilities return tagged results instead of raising:
-on fetchB url
-  ask http to get url
-  match it
-    when {ok: {status: 200, body: b}} then return {ok: json of (b as text)}
-    when {ok: {status: s}} then return {error: "http", status: s}
-    when {error: e} then return {error: e}
-  end match
-  -- ?? Honest and composable, and Destructuring makes it pleasant. But
-  --    built-in operations (`+`, `as number`, chunk writes) can't return tagged
-  --    results, so style B still needs A or C underneath for those.
-  -- ?? Every caller needs its own `match`. Elixir has `with`; we'd want one:
-end fetchB
-
-on loadConfig url
-  with {ok: {status: 200, body: b}} from fetchRaw(url),
-       {ok: cfg} from parseConfig(b as text)
-    return cfg
-  else {error: e}
-    log "config failed: " & e
-    return defaults
-  end with
-  -- ?? Powerful, and very much the advanced layer.
-end loadConfig
+-- ADR 0017: tagged results are only a Script convention, Capabilities raise,
+-- and `with` is deferred, so `fetchB` and `loadConfig` are gone.
 
 ------------------------------------------------------------------------
 -- C. Let it crash (Erlang): an error ends the Run; the Host (or a Script-level
@@ -116,8 +94,9 @@ on handle {type: "invoice", amount: a}
 end handle
 
 -- A Script-level handler that sees any Run that ended in an error
-on error {code: c, message: m, at: where}, during msg
-  log "handling " & the name of msg & " failed: " & m
+on error {code: c, message: m, at: loc}, during msg
+  -- was `at: where`: `where` is reserved (the Guard word), so it can't be a name.
+  tell log to write "handling " & the name of msg & " failed: " & m
   send alert with {code: c, message: m} to ops
   -- ?? Runs after the failed Run ends, as a new Run with its own budgets.
   --    Can't resume, can't retry in place. Changes before the error stand
@@ -141,7 +120,7 @@ end submit
 on search term, replacing
   show spinner
   send query with term to index and wait
-  show results it
+  showResults it
 finally
   hide spinner
   -- ?? Runs on normal end, on error, and on cancellation by `replacing`.
