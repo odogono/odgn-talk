@@ -55,11 +55,11 @@ The chain a message follows when a Script has no matching Handler Clause for it 
 _Avoid_: bubbling, propagation, inheritance chain
 
 **Quiescent**:
-The state of a Script in which no Run is mid-step: every Run is either suspended or queued.
+The state of a Script in which no Run is mid-step: every Run is suspended, queued, or preempted at a time-slice boundary.
 _Avoid_: idle, paused, stable
 
 **Script Snapshot**:
-The complete state of a Quiescent Script: its Script Variables, mailbox and suspended Runs, as plain data plus Host Object handles.
+The complete state of one or more Quiescent Scripts, taken at one instant: their Script Variables, mailboxes, suspended and preempted Runs, pending Capability calls, resource counters and the last Clock reading, as plain data plus Host Object ids.
 _Avoid_: checkpoint, image, dump
 
 **Segment**:

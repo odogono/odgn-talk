@@ -15,3 +15,4 @@ Suspended Runs live only in memory in the v1 core. Unloading a Script, or the Ho
 - On restore the Host resolves the handle tokens it issued. A handle it can't resolve restores as a disposed Host Object.
 - A snapshot is bound to one exact code version. When code is replaced, Script Variables reset by default, and a Host may opt to carry over those whose names still exist.
 - When a Script is unloaded, the Host is told which suspended Runs were discarded. There is no `on unload` hook.
+- Narrowed by ADR 0008: same-core save and restore of Quiescent Scripts is now a core feature. The stable cross-core format stays deferred.
