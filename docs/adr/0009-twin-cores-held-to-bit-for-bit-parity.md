@@ -21,3 +21,4 @@ The language has two Cores: a Go Core for the Go server Host (and, later, Elixir
 - **Versions:** each Core declares its language version and Cost Model version. Parity is promised only between equal versions, and lockstep Hosts must check both before exchanging anything.
 - **Go→WASM:** not a supported way to run the language in Bun or the browser. The Go Core builds for `wasip1` only for a future Elixir Host, and there it must be trap-free, with one instance per trust boundary. TinyGo stays ruled out.
 - **Shared runtime shape:** both Cores need heap-allocated frames and a run loop that can return (ADR 0004), the per-step checks and Segment rollback (ADR 0006), and plain-data Run state (ADR 0005, ADR 0008).
+- Narrowed by ADR 0018: a corpus case is a setup plus a Trace whose `>` lines are the Host inputs, and the whole Trace is compared. The language version also pins the Unit and error-code catalogues. Differential fuzzing runs nightly, Core against Core.

@@ -1,0 +1,43 @@
+# orders-pricing: SKETCH of a Trace (ADR 0018). The `>` lines are Host
+# Inputs: an author writes those, and `bless` fills in everything else.
+# Every Fuel, allocation and state figure is invented until the Cost Model
+# exists; record and key names are illustrative until the final spec.
+
+> load orders
+> load pricing
+
+# An order that crosses to the pricing Script and waits on a suspending call.
+> deliver d1 to=orders message=order args=[{sku: "A1", qty: 3}]
+> pump clock=2026-09-28T09:00:00Z
+send orders/r1 to=pricing message=quote args=["A1", 3] wait=yes
+seg orders/r1 start delivery=d1 handler=order clause=1 fuel=41 alloc=96 state=212 end=send-wait
+call pricing/r1.c1 op=prices.lookup args=["A1"]
+seg pricing/r1 start from=orders/r1 handler=quote clause=1 fuel=18 alloc=24 state=148 end=call
+> answer pricing/r1.c1 value=2.50 GBP
+> pump clock=2026-09-28T09:00:00Z
+seg pricing/r1 resume fuel=9 alloc=16 state=156 end=wait until=2026-09-28T09:00:01Z
+> pump clock=2026-09-28T09:00:01Z
+seg pricing/r1 resume fuel=12 alloc=16 state=0 end=return value=7.50 GBP
+run pricing/r1 outcome=completed fuel=39 alloc=56
+call orders/r1.c1 op=log.write args=["total 7.50 GBP"]
+seg orders/r1 resume fuel=35 alloc=40 state=0 end=return
+run orders/r1 outcome=completed delivery=d1 fuel=76 alloc=136
+
+# The first clause's Guard fails on "lots", so the second clause runs.
+> deliver d2 to=orders message=order args=[{sku: "B2", qty: "lots"}]
+> pump clock=2026-09-28T09:00:01Z
+call orders/r2.c1 op=log.write args=["bad qty for B2: lots"]
+seg orders/r2 start delivery=d2 handler=order clause=2 fuel=52 alloc=40 state=0 end=return
+run orders/r2 outcome=completed delivery=d2 fuel=52 alloc=40
+
+# Runs out of Fuel. The fault instruction is pinned, and the Segment's
+# `add 1 GBP to total` is rolled back.
+> deliver d3 to=orders message=spin
+> pump clock=2026-09-28T09:00:02Z
+seg orders/r3 start delivery=d3 handler=spin fuel=20000 alloc=19872 end=fault
+fault orders/r3 limit=fuel at=spin:17 line=22 rollback=total
+run orders/r3 outcome=limit-fault delivery=d3 fuel=20000 alloc=19872
+
+# Implicit at the end of every case: every Script's Script Variables.
+vars orders total=7.50 GBP
+vars pricing

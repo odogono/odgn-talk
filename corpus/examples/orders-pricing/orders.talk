@@ -1,0 +1,24 @@
+-- orders.talk: part of the orders-pricing sketch case (ADR 0018).
+-- Grants come from case.toml: log: write
+
+script variable total = 0.00 GBP
+
+on order {sku: s, qty: q} where q is a number
+  send quote with s, q to pricing and wait     -- cross-Script, same Group
+  add it to total                              -- 2.50 GBP * 3 → 7.50 GBP (trailing zeros kept)
+  tell log to write "total " & total
+end order
+
+on order {sku: s, qty: q}
+  tell log to write "bad qty for " & s & ": " & q
+end order
+
+-- Runs out of Fuel on purpose. The Trace pins the exact instruction it
+-- faults at, and the rollback of `total`.
+on spin
+  add 1 GBP to total
+  put "" into junk
+  repeat while true
+    put "x" after junk
+  end repeat
+end spin
