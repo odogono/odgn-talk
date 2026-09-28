@@ -21,4 +21,5 @@ Read in order:
 | `08-invoice-server.talk` | a realistic multi-tenant server Script |
 | `09-http-fetch.talk` | fetch JSON over HTTP, validate its shape, filter/map/sort it, paging, several fetches at once |
 | `10-binary-patterns.talk` | Elixir-style binary matching and building on bytes |
+| `11-error-handling.talk` | try/catch vs tagged results vs let-it-crash, errors across `send … and wait`, cleanup on cancel (input for the error-handling fog) |
 | `NOTES.md` | what felt right, what felt wrong, open questions |

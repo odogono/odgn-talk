@@ -2,6 +2,15 @@
 
 Throwaway notes from writing the sketches in this folder. The lines tagged `??` in each file have the detail; this is the digest.
 
+## Agreed in review
+
+- **`it`** is for results only (the reply to `send … and wait`, `ask`, `wait for`). A clause binds the whole argument with `as name` (`on handle {type: "refund"} as refund`).
+- **Handler queueing modifiers** are suffixes: `, replacing` / `, dropping` / `, queued` / `, every time`. Decision mode is `, deciding`.
+- **Capability calls** use a uniform `tell X to …` (immediate) and `ask X …` (suspending, result in `it`), with no Host-defined syntax. So a Suspension Point is visible at the call site.
+- **`set`** is for Host Object properties only. `put … into the k of m` is for Script values.
+- **Ranges** are `..`.
+- **Damocles** is dropped from this sketch and will be revisited later.
+
 ## Felt right
 
 - **The reference flavour holds up.** Handler Clauses with Destructuring heads plus `where` Guards read well, with or without Text Patterns in the head (`on handle {ref: <"INV-", n: digits as number>}`). Captures and Destructuring names binding side by side in one clause felt natural.
@@ -49,6 +58,15 @@ Throwaway notes from writing the sketches in this folder. The lines tagged `??` 
 - **A binary pattern is Destructuring, not a Text Pattern.** It runs left to right with sizes that are fixed or already bound, never searches and never backtracks. So it's linear and cheap to charge, and sizes can depend on earlier fields (`len: uint16, body: len bytes`), which a regular-language matcher can't do.
 - **`<< name: type, …, ...rest >>`** mirrors Captures and list rest, and works in `match`, `let` and Handler Clause heads (dispatch on a type byte reads very well).
 - **Open:** a spelling for bytes literals (`bytes 0D 0A` vs `0x"0D0A"`); bit fields limited to whole-byte runs; whether building bytes reuses the pattern syntax (`name:` would then mean a value, not a binding); what a float64 field means with no float type (probably no float fields in v1); `length` of bytes counting bytes while `length` of text counts Characters; and `n bytes` in a pattern vs `bytes` as a data-size Unit.
+
+## From the error-handling sketch (11)
+
+- **Try/catch with catch clauses as Destructuring heads** (`catch {code: "not a number", value: v}`) reuses Handler Clause machinery and reads well. Error values are plain maps.
+- **Tagged results** (`{ok: v}` / `{error: e}`) are pleasant with `match`, but built-in operations can't return them, so they need another mechanism underneath. Chaining them needs an Elixir-style `with` (advanced layer).
+- **Let it crash** with a Script-level `on error` handler is a good backstop, but cascading failures across `send … and wait` without supervisors is risky.
+- **A caught error doesn't roll anything back** (only Limit Faults roll back a Segment), which may surprise readers.
+- **A bounded `finally`** on a Handler covers cancellation by `, replacing` and Stop Script, as long as it has its own small Fuel budget and no Suspension Points.
+- **Lean:** try/catch in the beginner layer, `on error` as the backstop, tagged results as a stdlib convention.
 
 ## Dropped while sketching
 
