@@ -16,3 +16,4 @@ Each Script is an actor. It has one FIFO mailbox and never executes two steps at
 - Handler Clause dispatch, Guards and the walk along the Message Path never suspend.
 - `veto` in a decision-mode event must be reachable before the Run's first Suspension Point. Otherwise it's a load-time error.
 - Hosts must say which of their Capabilities suspend. That's part of the embedding API.
+- Narrowed by ADR 0016: queueing policies belong to Handler Clauses, not whole messages. A `, queued` Run parks after dispatch without blocking the mailbox, and a `, dropping` Run ends as `dropped`. Message Path parents are Core-owned, and `the target` names the object a message was delivered to.

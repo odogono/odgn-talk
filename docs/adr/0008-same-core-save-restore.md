@@ -22,3 +22,4 @@ This narrows ADR 0005. Every core (TS now, Go later) must be able to save a set 
 - **Text Patterns:** Text Pattern values are saved in source form and recompiled on restore at no Fuel cost.
 - **Format:** the format is unstable across core families, and a TS save never restores on the Go core. The cross-core durable format stays deferred (ADR 0005).
 - **Conformance:** the corpus checks that saves are unobservable, including preempted Runs, pending calls, cross-Script pairs and variables-only restores.
+- Narrowed by ADR 0015: a pending call can also be settled by **adopt**, meaning the Host still has it in progress and will answer it under the same call id. Adopting costs nothing.
