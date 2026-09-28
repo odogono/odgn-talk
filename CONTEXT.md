@@ -20,6 +20,10 @@ _Avoid_: demo, sample app, example app
 A Host-granted permission to perform one kind of effect. Scripts have no ambient I/O; every effect goes through a Capability.
 _Avoid_: permission, API access
 
+**Operation**:
+One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
+_Avoid_: method, command, endpoint
+
 **Host Object**:
 An opaque handle to something the Host owns, with identity: copying the handle never copies the thing. The only kind of value through which a Script can observe sharing.
 _Avoid_: reference, native object, proxy
@@ -79,7 +83,7 @@ A place where a Run may pause and let other Runs of the same Script proceed: a `
 _Avoid_: await, yield point
 
 **Suspending Capability**:
-A Capability that the Host declares may take time to answer, so calling it is a Suspension Point. Every other Capability answers immediately.
+A Capability with an Operation that the Host declares may take time to answer, so calling that Operation is a Suspension Point. Every other Operation answers immediately.
 _Avoid_: async function, blocking call
 
 **Message Path**:
