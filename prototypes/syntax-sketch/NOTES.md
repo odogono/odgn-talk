@@ -51,6 +51,7 @@ Throwaway notes from writing the sketches in this folder. The lines tagged `??` 
 - **JSON key names that are English words** (`at`, `date`, `next`) read badly with `the k of m`. Keys held in a variable or containing hyphens have no good spelling (`the (s) of results`?).
 - **`put list after list`:** append one element, or splice in each? It needs two spellings.
 - **Concurrency means one Run per request.** A Run can only wait for one thing at a time, so fanning out over several fetches needs `send … to me` plus Script-level bookkeeping. A "join" is a question for the stdlib and host fog.
+- **HTTP methods are operation names:** `ask http to get/post/put/patch/delete/head url, {options}`, plus a generic `ask http to request {method: …}`. Because operation names are literal words, the loader can check them against a per-operation grant (a `get`-only `http` makes `ask http to delete …` a load-time error). After `ask X to`, the next word is always an operation name, even if it's also a keyword (`put`, `delete`). Body options name their encoding (`json:`, `form:`, `text:`, `bytes:`). Header keys need normalising, because map keys are case-sensitive. It's open whether `tell` can be used on a suspending operation.
 - **Calling this Script's own Handler like a function** can hide a Suspension Point behind something that looks immediate.
 
 ## From the binary example (10)
