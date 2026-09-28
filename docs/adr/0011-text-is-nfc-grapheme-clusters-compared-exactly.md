@@ -1,0 +1,20 @@
+# Text is NFC grapheme clusters, compared exactly
+
+A Character is an extended grapheme cluster (UAX #29) under the Unicode version each language version pins, and text is always a sequence of Unicode scalar values in NFC. Every comparison is case-sensitive: `=`, `is`, map keys, Destructuring literals, Text Patterns, and `<`/sort (code-point order of the NFC text). Ignoring case is always explicit (`… ignoring case`) and uses Unicode simple case folding, with no locale. There is no hidden per-Handler state: no `itemDelimiter`, `caseSensitive` or `numberFormat`; delimiters are given per expression (`delimited by`). This breaks with HyperTalk and SenseTalk, where `is` ignores case and chunk meaning depends on handler-local properties. We chose it because the audience includes beginners, and a Character should be what a person sees. Bit-for-bit parity needs one spec-defined Unicode table set rather than Go runes vs JS UTF-16 units. And ADR 0003 made `=` the one unambiguous equality that map keys, Destructuring and Guards rely on: case-insensitive `=` would make two distinct values equal and let `{type: "invoice"}` match `"Invoice"`.
+
+## Considered Options
+
+- **Code points as Characters** (Go runes). These are simpler for the matcher, but `"👨‍👩‍👧"` would have length 5 and a combining accent would count separately. Code points stay reachable through an advanced `code point` chunk.
+- **Canonical-equivalence comparison without normalising** (Swift). This is lossless, but equivalence has to happen in every comparison, key lookup and Destructuring test. Always-NFC is lossy for a few compatibility ideographs; bytes are the exact form.
+- **Case-insensitive `=` and map keys** (HyperTalk, SenseTalk). Rejected for the reason above. Instead, a beginner-layer lint suggests `ignoring case`.
+- **Full case folding** (`ß` → `ss`). It changes length, so match ranges would stop lining up with the original text.
+- **A lexically scoped delimiter block** (`using delimiter … end using`). It is still a second place where the meaning of `item` is decided, and Text Patterns must not see modes.
+
+## Consequences
+
+- Upgrading Unicode (segmentation, NFC, case folding and classes) is a language version bump. The tables are generated into both Cores.
+- Literals, `contains`, `offset`, `begins with` and Text Pattern literals match only on whole-Character boundaries: `"👨‍👩‍👧" contains "👧"` is false. A Character is in a class when its first scalar is. `digit` is the exception: it matches only a Character that is exactly one ASCII `0-9`.
+- `ignoring case` folds literal text only; `uppercase letter` keeps its meaning. In Text Patterns, the use-site `ignoring case` (beginner layer) is sugar for the per-element modifier (advanced layer), so Pattern values carry no mode flag.
+- `word` is a run of non-White_Space Characters, and the `word break` anchor agrees with it, so the only word in `"cat, dog"` is `"cat,"`, then `"dog"`. `line` breaks at LF, CRLF or CR. `item` splits at commas, isn't trimmed, and a trailing delimiter doesn't make an empty item.
+- Positions are 1-based with inclusive ranges, and `-1`/`last` are allowed. Reading past the end, reading index 0, or reading a reversed range gives empty text. Writing past the end pads for `item` and `line` and is an ordinary error for `character` and `word`, as is a write at index 0 or with a reversed range.
+- `as text` from bytes accepts strict UTF-8 only, and `as bytes` produces UTF-8. `as civil date` accepts only ISO 8601 extended form, and `as instant` accepts only RFC 3339 with an offset. There is no implicit date parsing. Other encodings, formats, collation and locale-aware case are stdlib functions with explicit arguments.
