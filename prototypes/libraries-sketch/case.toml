@@ -1,0 +1,39 @@
+# SKETCH: a Trace Case setup (ADR 0018) with Libraries (ADR 0020).
+# Key names are illustrative until the final spec.
+
+[versions]
+language = "1.0"            # also pins the stdlib Libraries
+cost-model = "1"
+
+[[operations]]
+capability = "display"
+name = "clear"
+mode = "suspending"
+args = ["map"]
+cost = { fuel = 20 }
+
+[[operations]]
+capability = "display"
+name = "say"
+mode = "suspending"
+args = ["text"]
+cost = { fuel = 20 }
+
+# Registered before any Script that imports it. Each one becomes an
+# `add library` Host Input in the Trace.
+[[libraries]]
+name = "damocles"
+version = "1"
+source = "damocles.talk"
+
+[[scripts]]
+name = "tolosa"
+source = "tolosa.talk"
+# damocles's `ask display to clear` is checked against THESE Grants when
+# tolosa loads. Leaving out `clear` would make the `use` line a load error.
+grants = { display = ["say", "clear"] }
+owner = "body-25"
+
+[[objects]]
+id = "body-25"
+kind = "body"

@@ -1,0 +1,25 @@
+-- report.talk: the syntax sketch's 09-http-fetch `fetchOne`, rewritten for
+-- ADR 0020's suspending-call rule, plus a use of the text Library.
+
+use pad, padLeft from text
+use trim from text as tidy       -- renamed on import
+
+script variable results = {}
+
+on fetchOne s, every time
+  report s, "2026-09-27" and wait
+  put it into the (s) of results
+  -- Was: put report(s, "2026-09-27") into the (s) of results
+  -- `report` calls `ask http to get … and wait`, so it may suspend. That
+  -- makes a function-style call to it a load error, and the Command Call
+  -- must say `and wait`. The result is left in `it`, as after an `ask`.
+  if the length of results = 3 then tell log to write "all in: " & results
+end fetchOne
+
+-- Functions can never suspend, so this one reads as immediate and is.
+function row station, mean
+  return pad(tidy(station), 8) & padLeft(mean as text, 6)
+end row
+
+-- `report` and `summarise` as in 09-http-fetch.talk, unchanged except that
+-- `report` is the Handler called above.

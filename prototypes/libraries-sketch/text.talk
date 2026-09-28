@@ -1,0 +1,30 @@
+-- text.talk: a stdlib-style Library (ADR 0020). The real stdlib ships with
+-- the Core under bare names listed in the spec. This one only shows the
+-- shape. It uses no Capabilities, so importing it needs no Grants.
+
+constant space = " "
+constant blank = <one or more of <" " or tab>>
+
+-- pad(s, width): right-pads s with spaces to `width` Characters.
+function pad s, width
+  return s & fill(width - the length of s)
+end pad
+
+-- padLeft(s, width): the same, on the left.
+function padLeft s, width
+  return fill(width - the length of s) & s
+end padLeft
+
+-- trim(s): strips blanks from both ends.
+function trim s
+  return replace <start, (blank)> in (replace <(blank), end> in s with "") with ""
+end trim
+
+-- Not importable: `use fill from text` is a load error.
+private function fill n
+  put "" into out
+  repeat n times
+    put space after out
+  end repeat
+  return out
+end fill

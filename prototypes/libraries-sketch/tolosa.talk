@@ -1,0 +1,25 @@
+-- tolosa.talk, rewritten against the damocles Library (ADR 0020). Compare
+-- prototype/example-hosts: prototypes/example-hosts/03-browser-damocles/scripts/tolosa.talk.
+-- Owned by the Body TOLOSA (body-25). `session` is a well-known object name,
+-- bound at load (ADR 0016).
+
+use epilogue from damocles
+
+script variable visited = false     -- flag word bit 1 in the original
+
+on landed body
+  if not visited then
+    put true into visited
+    ask display to say "script56-inline-1" and wait
+    ask display to say "script56-inline-2" and wait
+  end if
+  ask display to say "tolosa-attack" and wait
+  set the encounterGate of session to 1
+  epilogue and wait
+  -- Was a bare `epilogue`, which found no Handler here and climbed the
+  -- Message Path as a `send` that didn't wait, so the blank line raced the
+  -- next landing. Now it's a plain call in THIS Run. The Run holds until the
+  -- blank line has shown, and `and wait` shows the reader it pauses.
+  -- The loader checks both ways: a bare `epilogue` is now a load error,
+  -- because epilogue may suspend.
+end landed

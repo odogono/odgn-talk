@@ -1,0 +1,33 @@
+-- session.talk excerpts, rewritten against the damocles Library (ADR 0020).
+-- Only the parts that change are shown. See prototype/example-hosts for the
+-- whole Script.
+
+use epilogue, sayAll from damocles
+-- A local `on epilogue` would now be a load error: it clashes with the import.
+
+script variable spent = []
+
+-- V.I.P. LIMO key, resident slot 183 → trigger $02, arming $80 (discard while busy)
+on taken item where the id of item is "object-slot-183", dropping
+  if "trigger-02" is in spent then exit taken
+  put "trigger-02" after spent
+  sayAll ["script2-inline-1", "script2-inline-2", "script2-inline-3"] and wait
+  wait 4 s                       -- 200 frames at 50 Hz, game Clock
+  epilogue and wait
+end taken
+
+-- Every Body without a Script of its own climbs to here.
+on landed body
+  put "landing-" & the id of body into trigger
+  if trigger is in spent then exit landed
+  put trigger after spent
+  ask dice to draw
+  if it >= 40960 then exit landed
+  wait 2 s
+  sayAll the landingLines of body and wait
+  epilogue and wait
+end landed
+
+-- An imported Handler is never a message entry point. If the Host delivered
+-- `epilogue` to the session object, it would NOT run damocles's epilogue.
+-- It would climb past this Script and be reported as unhandled.

@@ -1,0 +1,34 @@
+-- damocles.talk: a Library (ADR 0020), registered on the Damocles Group
+-- with group.addLibrary({ name: "damocles", version: "1", source }).
+-- It holds only code that every Damocles Script shares. It has no Script
+-- Variables, no `me` and no Grants of its own. Its `ask display …` is
+-- checked against each importer's Grants when that importer loads.
+
+-- How long a blank line holds: 50 frames at 50 Hz.
+constant blankHold = 1 s
+
+-- Shared epilogue $072CAE (62 original scripts use it). Clears the line,
+-- then holds it blank. `display.clear` is suspending, so this Handler may
+-- suspend, and every call to it must be written `epilogue and wait`.
+on epilogue
+  ask display to clear {for: blankHold} and wait
+end epilogue
+
+-- Not importable. Used only by `sayAll`.
+private function isBlank id
+  return id is ""
+end isBlank
+
+-- Says each string id in turn, skipping blanks. Every Body's landing text
+-- goes through this. It suspends (`say` is suspending), so callers write
+-- `sayAll ids and wait`.
+on sayAll ids
+  repeat for each id in ids
+    if not isBlank(id) then ask display to say id and wait
+  end repeat
+end sayAll
+
+-- Load errors, if a Library tried them (ADR 0020):
+--   set the encounterGate of session to 1   -- well-known object name
+--   send epilogue to me                     -- no `me`, no `send`
+--   wait for keypress k                     -- whose mailbox?
