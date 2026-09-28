@@ -53,3 +53,4 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - The two APIs differ only in idiom: errors as values vs exceptions, `Start`/`Answer` vs an optional Promise-returning `run`, and pairs-only map building in Go vs `record()`, which refuses integer-like keys, in TS.
   - None of these differences can be observed by a Script.
 - **Source:** the [Example Hosts sketch](https://github.com/odogono/odgn-talk/tree/prototype/example-hosts/prototypes/example-hosts) is the primary source.
+- Narrowed by ADR 0017: a `Fail` raises the Host's code with its `Data` as fields. A catalogue code, or a clashing key, becomes `host error`. `timeout` and `host error` have catalogue shapes, and a failed `Request` rejects with `send failed`.

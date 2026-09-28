@@ -17,3 +17,4 @@ Every resource a Script uses is metered by a versioned, normative Cost Model, th
 - Capabilities are charged by the same rules: a declared per-call cost, plus a budget handle to charge in proportion to their work before doing it. Converting a result into Script values is charged to the calling Run. A pending Suspending Capability costs no Fuel, but its suspended frames count toward Persistent State.
 - The scheduler observes the Host's Clock only at scheduler boundaries, so per-Run deadlines are deterministic given the sequence of Clock readings. The conformance corpus runs on a virtual Clock.
 - Changing a cost is a new Cost Model version, not a silent retune.
+- Narrowed by ADR 0017: ordinary errors are caught with `try`/`catch` and roll nothing back. A cancelled Run runs its `finally` blocks after the rollback, on a separate Cleanup Budget. A Limit Fault runs none.

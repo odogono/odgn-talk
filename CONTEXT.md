@@ -160,6 +160,10 @@ _Avoid_: pricing, cost estimate
 The normative stack machine that every Core's compiler targets: its instruction set, and the exact instructions each construct lowers to. Fuel is charged per instruction, code positions are instruction indices, and a Run can be preempted only between instructions. It is versioned together with the Cost Model.
 _Avoid_: bytecode, VM, IR
 
+**Unwind Table**:
+The normative table, one per code unit, that says where an error goes: for each instruction range, a `catch`, `finally` or `guard` entry and its target. Entering a `try` costs nothing; only raising and unwinding are charged.
+_Avoid_: exception table, handler table (a Handler is something else), landing pads
+
 **Fuel Slice**:
 A Host-set amount of Fuel after which a Run is preempted at the next instruction boundary, e.g. once per game tick. Fuel spent past the end of a slice is carried as debt into the next one.
 _Avoid_: quantum, time slice (unqualified), tick budget
@@ -176,9 +180,23 @@ _Avoid_: heap, live memory
 The end of a Run caused by exceeding a resource limit. A Script can never catch it; the failing Segment is rolled back and no further Script code runs in that Run.
 _Avoid_: out-of-memory, resource error, exception
 
+**Cleanup Budget**:
+The small, Host-set Fuel allowance on which a cancelled Run's `finally` blocks run after its Segment is rolled back. When it runs out, cleanup just ends.
+_Avoid_: grace period, finaliser budget
+
 **Clock**:
 The Host-supplied source of time that the scheduler reads to fire waits and deadlines. The core has no clock of its own.
 _Avoid_: timer, system time
+
+## Errors
+
+**Error**:
+A plain map with a text `code`, raised by `throw`, by a built-in, by a Capability or by a failed `send … and wait`. It is caught by Destructuring in a `catch` clause; uncaught, it ends the Run as `errored`. Limit Faults and cancellation are not Errors.
+_Avoid_: exception, fault (a Limit Fault is something else), failure (unqualified)
+
+**Error Code**:
+The lowercase text in words that names what went wrong, e.g. `"capability revoked"`. Codes the Core raises are listed, with their fields, in the error-code catalogue, and parity covers them exactly; the `message` wording is not covered.
+_Avoid_: error type, error class, errno
 
 ## Matching
 
