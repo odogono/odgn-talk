@@ -1,0 +1,8 @@
+{"suite":"vm","name":"fib","n":30,"result":832040,"best":97.34,"median":97.37}
+{"suite":"vm","name":"loop","n":3000000,"result":4499998500000,"best":114.67,"median":115.31}
+{"suite":"vm","name":"strings","n":1000000,"result":1000000,"best":123.88,"median":125.60}
+{"suite":"vm","name":"maps","n":1000000,"result":5000,"best":158.09,"median":159.78}
+{"suite":"star","name":"fib","n":27,"result":196418,"best":74.22,"median":74.96}
+{"suite":"star","name":"loop","n":1000000,"result":499999500000,"best":98.69,"median":99.90}
+{"suite":"star","name":"strings","n":300000,"result":300000,"best":98.52,"median":99.58}
+{"suite":"star","name":"maps","n":300000,"result":5000,"best":107.64,"median":109.64}

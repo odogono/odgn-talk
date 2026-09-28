@@ -1,0 +1,32 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/135.0.0.0 Safari/537.36",
+    "crossOriginIsolated": false
+  },
+  "instances": [
+    {
+      "module": "tiny-star-stack64k",
+      "requested": 3000,
+      "created": 125,
+      "msPerInstance": 0.395,
+      "linearMemoryMiB": 46.9,
+      "error": "RangeError: WebAssembly.instantiate(): Out of memory: Cannot allocate Wasm memory for new instance"
+    },
+    {
+      "module": "tiny-star",
+      "requested": 3000,
+      "created": 125,
+      "msPerInstance": 0.496,
+      "linearMemoryMiB": 375,
+      "error": "RangeError: WebAssembly.instantiate(): Out of memory: Cannot allocate Wasm memory for new instance"
+    },
+    {
+      "module": "go-star",
+      "requested": 3000,
+      "created": 125,
+      "msPerInstance": 1.61,
+      "linearMemoryMiB": 476.6,
+      "error": "RangeError: WebAssembly.instantiate(): Out of memory: Cannot allocate Wasm memory for new instance"
+    }
+  ]
+}

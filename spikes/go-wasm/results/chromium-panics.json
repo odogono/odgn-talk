@@ -1,0 +1,310 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/135.0.0.0 Safari/537.36",
+    "crossOriginIsolated": false
+  },
+  "panics": [
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → RangeError: Maximum call stack size exceeded",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    }
+  ],
+  "recursion": [
+    {
+      "module": "tiny-star",
+      "maxDepth": 12224,
+      "failsAt": 12288,
+      "error": "RangeError: Maximum call stack size exceeded"
+    },
+    {
+      "module": "go-star",
+      "maxDepth": 36096,
+      "failsAt": 36352,
+      "error": "RangeError: Maximum call stack size exceeded"
+    }
+  ]
+}

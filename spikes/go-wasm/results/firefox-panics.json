@@ -1,0 +1,310 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "crossOriginIsolated": false
+  },
+  "panics": [
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "tiny-star-trap",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "trap: RuntimeError: unreachable executed"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "panic(\"boom\")",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM divide by zero",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "VM index out of range",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil map write",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "nil pointer deref",
+      "outcome": "recovered",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": true,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "panic(\"boom\")",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM divide by zero",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "VM index out of range",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil map write",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "nil pointer deref",
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "ok",
+      "again": "trap: ExitError: proc_exit(4)"
+    },
+    {
+      "module": "go-star",
+      "recover": false,
+      "panic": "Go recursion 10M deep",
+      "outcome": "trap → InternalError: too much recursion",
+      "healthAfter": "ok",
+      "again": "recover still works"
+    }
+  ],
+  "recursion": [
+    {
+      "module": "tiny-star",
+      "maxDepth": 14720,
+      "failsAt": 14848,
+      "error": "InternalError: too much recursion"
+    },
+    {
+      "module": "go-star",
+      "maxDepth": 38400,
+      "failsAt": 38656,
+      "error": "InternalError: too much recursion"
+    }
+  ]
+}

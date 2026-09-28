@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>go-wasm spike</title>
+<pre id="log">running…</pre>
+<script type="module">
+  import * as suite from "./suite.js";
+  const q = new URLSearchParams(location.search);
+  const part = q.get("part");
+  const fetchBytes = async (name) => new Uint8Array(await (await fetch(`/out/${name}.wasm`)).arrayBuffer());
+  const workloads = await (await fetch("/workloads.json")).json();
+  const post = (body) => fetch(`/result?browser=${q.get("browser")}&part=${part}`, { method: "POST", body: JSON.stringify(body, (k, v) => (typeof v === "bigint" ? String(v) : v)) });
+  const results = { env: { userAgent: navigator.userAgent, crossOriginIsolated } };
+  try {
+    if (part === "bench") results.bench = await suite.bench(fetchBytes, q.get("modules")?.split(",") ?? ["tiny-vm", "tiny-vm-o2", "go-vm", "tiny-star", "tiny-star-o2", "go-star"], workloads, (r) => fetch("/progress", { method: "POST", body: JSON.stringify(r) }));
+    if (part === "panics") {
+      results.panics = [];
+      for (const m of ["tiny-star", "tiny-star-trap", "go-star"]) results.panics.push(...(await suite.panics(fetchBytes, m)).rows);
+      results.recursion = [await suite.recursion(fetchBytes, "tiny-star"), await suite.recursion(fetchBytes, "go-star")];
+    }
+    if (part === "instances") {
+      results.instances = [];
+      for (const m of ["tiny-star-stack64k", "tiny-star", "go-star"]) { const r = await suite.instances(fetchBytes, m, 3000); delete r.keep; results.instances.push(r); await new Promise((r) => setTimeout(r, 2000)); }
+    }
+    if (part === "memcap") {
+      results.memcap = [];
+      for (const [m, pages] of [["tiny-star", 1024], ["go-star", 1024], ["tiny-star", undefined], ["go-star", undefined], ["tiny-star-importmem", 512], ["tiny-star-importmem", 2048]])
+        results.memcap.push(await suite.memcap(fetchBytes, m, pages, 1500));
+      results.instances = [];
+      for (const m of ["tiny-star", "go-star"]) { const r = await suite.instances(fetchBytes, m, 1000); delete r.keep; results.instances.push(r); }
+    }
+  } catch (e) {
+    results.error = String(e?.stack ?? e);
+  }
+  await post(results);
+  document.getElementById("log").textContent = "done";
+</script>

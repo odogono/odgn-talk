@@ -1,0 +1,86 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/135.0.0.0 Safari/537.36",
+    "crossOriginIsolated": false
+  },
+  "memcap": [
+    {
+      "module": "tiny-star",
+      "maxMiB": 64,
+      "heldMiB": 22,
+      "memoryMiB": 48,
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "dead: RuntimeError: unreachable",
+      "afterRelease": "",
+      "ms": 109,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "go-star",
+      "maxMiB": 64,
+      "heldMiB": 59,
+      "memoryMiB": 63.5,
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "dead: ExitError: proc_exit(4)",
+      "afterRelease": "",
+      "ms": 16,
+      "stderr": "runtime: out of memory: cannot allocate 1048576-byte block (62226432 in use) | fatal error: out of memory | "
+    },
+    {
+      "module": "tiny-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 3072,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 1934,
+      "stderr": ""
+    },
+    {
+      "module": "go-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 1506.5,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 176,
+      "stderr": ""
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxMiB": 32,
+      "heldMiB": 10,
+      "memoryMiB": 24,
+      "outcome": "trap → RuntimeError: unreachable",
+      "healthAfter": "dead: RuntimeError: unreachable",
+      "afterRelease": "",
+      "ms": 59,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxPages": 2048,
+      "outcome": "load failed → LinkError: WebAssembly.instantiate(): Import #0 \"env\" \"memory\": memory import has a larger maximum size 2048 than the module's declared maximum 1024"
+    }
+  ],
+  "instances": [
+    {
+      "module": "tiny-star",
+      "requested": 1000,
+      "created": 124,
+      "msPerInstance": 0.929,
+      "linearMemoryMiB": 372,
+      "error": "RangeError: WebAssembly.instantiate(): Out of memory: Cannot allocate Wasm memory for new instance"
+    },
+    {
+      "module": "go-star",
+      "requested": 1000,
+      "created": 124,
+      "msPerInstance": 1.477,
+      "linearMemoryMiB": 472.8,
+      "error": "RangeError: WebAssembly.instantiate(): Out of memory: Cannot allocate Wasm memory for new instance"
+    }
+  ]
+}

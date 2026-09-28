@@ -1,0 +1,404 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "crossOriginIsolated": false
+  },
+  "bench": [
+    {
+      "module": "tiny-vm",
+      "name": "(compile)",
+      "best": 3,
+      "median": 3
+    },
+    {
+      "module": "tiny-vm",
+      "name": "(instantiate+init)",
+      "best": 0,
+      "median": 0
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 418,
+      "median": 430
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 472,
+      "median": 473
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 515,
+      "median": 528
+    },
+    {
+      "module": "tiny-vm",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 589,
+      "median": 616
+    },
+    {
+      "module": "tiny-vm-o2",
+      "name": "(compile)",
+      "best": 1,
+      "median": 1
+    },
+    {
+      "module": "tiny-vm-o2",
+      "name": "(instantiate+init)",
+      "best": 1,
+      "median": 1
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 240,
+      "median": 246
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 311,
+      "median": 312
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 415,
+      "median": 417
+    },
+    {
+      "module": "tiny-vm-o2",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 406,
+      "median": 441
+    },
+    {
+      "module": "go-vm",
+      "name": "(compile)",
+      "best": 12,
+      "median": 12
+    },
+    {
+      "module": "go-vm",
+      "name": "(instantiate+init)",
+      "best": 0,
+      "median": 0
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 364,
+      "median": 365
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 425,
+      "median": 426
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 560,
+      "median": 563
+    },
+    {
+      "module": "go-vm",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 693,
+      "median": 710
+    },
+    {
+      "module": "tiny-star",
+      "name": "(compile)",
+      "best": 6,
+      "median": 6
+    },
+    {
+      "module": "tiny-star",
+      "name": "(instantiate+init)",
+      "best": 0,
+      "median": 0
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 414,
+      "median": 415
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 470,
+      "median": 473
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 439,
+      "median": 465
+    },
+    {
+      "module": "tiny-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 588,
+      "median": 600
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 521,
+      "median": 524
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 589,
+      "median": 593
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 555,
+      "median": 593
+    },
+    {
+      "module": "tiny-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 652,
+      "median": 686
+    },
+    {
+      "module": "tiny-star-o2",
+      "name": "(compile)",
+      "best": 6,
+      "median": 6
+    },
+    {
+      "module": "tiny-star-o2",
+      "name": "(instantiate+init)",
+      "best": 1,
+      "median": 1
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 240,
+      "median": 241
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 309,
+      "median": 313
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 359,
+      "median": 363
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 423,
+      "median": 467
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 443,
+      "median": 464
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 523,
+      "median": 531
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 483,
+      "median": 510
+    },
+    {
+      "module": "tiny-star-o2",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 621,
+      "median": 1555
+    },
+    {
+      "module": "go-star",
+      "name": "(compile)",
+      "best": 52,
+      "median": 52
+    },
+    {
+      "module": "go-star",
+      "name": "(instantiate+init)",
+      "best": 29,
+      "median": 29
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "fib",
+      "n": 30,
+      "result": "832040",
+      "best": 859,
+      "median": 1652
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "loop",
+      "n": 3000000,
+      "result": "4499998500000",
+      "best": 1598,
+      "median": 1893
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "strings",
+      "n": 1000000,
+      "result": "1000000",
+      "best": 2751,
+      "median": 3294
+    },
+    {
+      "module": "go-star",
+      "suite": "vm",
+      "name": "maps",
+      "n": 1000000,
+      "result": "5000",
+      "best": 2453,
+      "median": 3985
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "fib",
+      "n": 27,
+      "result": "196418",
+      "best": 2350,
+      "median": 3363
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "loop",
+      "n": 1000000,
+      "result": "499999500000",
+      "best": 2745,
+      "median": 2876
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "strings",
+      "n": 300000,
+      "result": "300000",
+      "best": 2358,
+      "median": 2727
+    },
+    {
+      "module": "go-star",
+      "suite": "star",
+      "name": "maps",
+      "n": 300000,
+      "result": "5000",
+      "best": 3104,
+      "median": 4082
+    }
+  ]
+}

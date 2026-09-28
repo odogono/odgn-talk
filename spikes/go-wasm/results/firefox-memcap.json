@@ -1,0 +1,86 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "crossOriginIsolated": false
+  },
+  "memcap": [
+    {
+      "module": "tiny-star",
+      "maxMiB": 64,
+      "heldMiB": 22,
+      "memoryMiB": 48,
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "dead: RuntimeError: unreachable executed",
+      "afterRelease": "",
+      "ms": 159,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "go-star",
+      "maxMiB": 64,
+      "heldMiB": 59,
+      "memoryMiB": 63.5,
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "dead: ExitError: proc_exit(4)",
+      "afterRelease": "",
+      "ms": 10,
+      "stderr": "runtime: out of memory: cannot allocate 1048576-byte block (62226432 in use) | fatal error: out of memory | "
+    },
+    {
+      "module": "tiny-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 3072,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 2745,
+      "stderr": ""
+    },
+    {
+      "module": "go-star",
+      "maxMiB": "none",
+      "heldMiB": 1500,
+      "memoryMiB": 1506.5,
+      "outcome": "reached 1500 MiB without failing",
+      "healthAfter": "ok",
+      "afterRelease": "ok, held 1 MiB",
+      "ms": 308,
+      "stderr": ""
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxMiB": 32,
+      "heldMiB": 10,
+      "memoryMiB": 24,
+      "outcome": "trap → RuntimeError: unreachable executed",
+      "healthAfter": "dead: RuntimeError: unreachable executed",
+      "afterRelease": "",
+      "ms": 85,
+      "stderr": "fatal error: out of memory | fatal error: out of memory"
+    },
+    {
+      "module": "tiny-star-importmem",
+      "maxPages": 2048,
+      "outcome": "load failed → LinkError: imported Memory with incompatible maximum size"
+    }
+  ],
+  "instances": [
+    {
+      "module": "tiny-star",
+      "requested": 1000,
+      "created": 999,
+      "msPerInstance": 0.866,
+      "linearMemoryMiB": 2997,
+      "error": "String: undefined"
+    },
+    {
+      "module": "go-star",
+      "requested": 1000,
+      "created": 999,
+      "msPerInstance": 3.494,
+      "linearMemoryMiB": 3808.7,
+      "error": "String: undefined"
+    }
+  ]
+}

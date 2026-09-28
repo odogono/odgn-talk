@@ -1,0 +1,32 @@
+{
+  "env": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "crossOriginIsolated": false
+  },
+  "instances": [
+    {
+      "module": "tiny-star-stack64k",
+      "requested": 3000,
+      "created": 999,
+      "msPerInstance": 0.929,
+      "linearMemoryMiB": 374.6,
+      "error": "thrown string: out of memory"
+    },
+    {
+      "module": "tiny-star",
+      "requested": 3000,
+      "created": 999,
+      "msPerInstance": 0.999,
+      "linearMemoryMiB": 2997,
+      "error": "thrown string: out of memory"
+    },
+    {
+      "module": "go-star",
+      "requested": 3000,
+      "created": 999,
+      "msPerInstance": 3.987,
+      "linearMemoryMiB": 3808.7,
+      "error": "thrown string: out of memory"
+    }
+  ]
+}
