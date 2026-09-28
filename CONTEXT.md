@@ -62,6 +62,36 @@ _Avoid_: idle, paused, stable
 The complete state of a Quiescent Script: its Script Variables, mailbox and suspended Runs, as plain data plus Host Object handles.
 _Avoid_: checkpoint, image, dump
 
+**Segment**:
+The part of a Run between two consecutive Suspension Points, or between one and the Run's start or end. A Segment is all-or-nothing: if it ends in a Limit Fault, its changes to Script Variables are undone.
+_Avoid_: turn, slice, tick
+
+## Resources
+
+**Fuel**:
+The deterministic, abstract measure of work a Run does, charged by the Cost Model. The same Script with the same inputs uses the same Fuel on every Host.
+_Avoid_: gas, steps, CPU time
+
+**Cost Model**:
+The versioned, normative table of how much Fuel each operation costs and how large each kind of value counts as.
+_Avoid_: pricing, cost estimate
+
+**Allocation Budget**:
+The limit on how much value a single Run may construct, counted by logical size, with frees ignored.
+_Avoid_: heap limit, memory limit (unqualified)
+
+**Persistent State**:
+Everything a Script retains between Segments: its Script Variables, the frames of its suspended Runs and the messages in its mailbox, counted by logical size and capped.
+_Avoid_: heap, live memory
+
+**Limit Fault**:
+The end of a Run caused by exceeding a resource limit. A Script can never catch it; the failing Segment is rolled back and no further Script code runs in that Run.
+_Avoid_: out-of-memory, resource error, exception
+
+**Clock**:
+The Host-supplied source of time that the scheduler reads to fire waits and deadlines. The core has no clock of its own.
+_Avoid_: timer, system time
+
 ## Matching
 
 **Text Pattern**:
