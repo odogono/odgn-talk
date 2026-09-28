@@ -24,6 +24,24 @@ _Avoid_: reference, native object, proxy
 A variable declared at Script level, visible to all of the Script's Handlers and kept for as long as the Host keeps the Script loaded.
 _Avoid_: global, static, script property
 
+**Core**:
+An implementation of the language that Hosts embed: the Go Core or the TS Core. Neither is the reference; both answer to the spec and the Conformance Corpus.
+_Avoid_: runtime, engine, interpreter (for the whole), VM
+
+**Script Group**:
+A set of Scripts driven by one deterministic scheduler, so the order of messages between them is fixed by the spec. A message from outside the group is an input the Host delivers.
+_Avoid_: realm, isolate, shard, cluster
+
+## Conformance
+
+**Conformance Corpus**:
+The shared set of example Scripts with their inputs and expected Traces that every Core must reproduce exactly. Together with the spec, it is the authority on what the language does.
+_Avoid_: test suite, golden tests
+
+**Trace**:
+The spec-defined record of what a Script Group observably did: per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step.
+_Avoid_: log, transcript, event log
+
 ## Handlers
 
 **Handler**:
