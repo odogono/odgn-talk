@@ -98,3 +98,7 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - Whether Script functions may be called as `the f of x`. If so, `the tax of 100` would read as a key or a call depending on which functions the Script has.
   - A naming guide for Operations (`ask inbox to ask` reads badly), which belongs with the Host embedding API.
   - Other built-in operations are functions (`the f of x`, `f(x, y)`) unless an ADR adds syntax.
+- **Narrowed by ADR 0020:**
+  - The loader's `and wait` check covers Command Calls too: a Command Call to a Handler that may suspend, local or imported, is written `name args and wait`, checked both ways, with the result left in `it`.
+  - Functions, and Handlers called function-style, may never suspend, which settles the syntax sketch's `put report(s, day) into …`.
+  - `use`, `from`, `as`, `constant` and `private` start top-level declarations, and none of them is reserved.

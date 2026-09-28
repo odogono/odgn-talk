@@ -39,3 +39,8 @@ A Host Object has at most one Owning Script (set when that Script is loaded), an
   - The Host owns trigger arming and the waiting slot, and it delivers the next trigger when the previous Run's report arrives.
 - **Still untested:** decision-mode dispatch. No Example Host needed a veto, because Damocles's refusals are native and silent.
 - **Source:** the [Example Hosts sketch](https://github.com/odogono/odgn-talk/tree/prototype/example-hosts/prototypes/example-hosts) is the primary source.
+- **Narrowed by ADR 0020:**
+  - A Command Call resolves to a local Handler, then an imported one, and only then climbs the Message Path as a `send`.
+  - Imported Handlers are never message entry points, and a Library never joins a Message Path.
+  - An imported name that clashes with a Handler, function, Constant, Script Variable, well-known object name or built-in is a load error.
+  - Library code may not use well-known object names.

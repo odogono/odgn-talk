@@ -12,6 +12,10 @@ _Avoid_: runtime, engine, platform
 A unit of source code, written by an end user, that a Host loads and runs.
 _Avoid_: program, plugin
 
+**Library**:
+A unit of source code, supplied by the Host, that holds Handlers, functions and Constants for Scripts to use. It has no state, no Grants and no mailbox of its own: its code runs inside the calling Script's Run.
+_Avoid_: module, package, include
+
 **Example Host**:
 A small Host kept alongside the spec to exercise the embedding API and the Conformance Corpus end to end. It is not a product.
 _Avoid_: demo, sample app, example app
@@ -122,6 +126,10 @@ _Avoid_: keyword (unqualified), reserved keyword
 A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`.
 _Avoid_: procedure call, invocation, message send (a `send` is something else)
 
+**Import**:
+A `use … from …` line naming the definitions a Script or Library takes from a Library, e.g. `use pad, trim from text`. Only the names it lists are brought in.
+_Avoid_: include, require
+
 **Comprehension**:
 An `every` expression that builds a new list from another one, filtering it (`every r in xs where …`), mapping it (`… for every r in xs`) or sorting it (`sorted by …`), with the element bound to an explicit name.
 _Avoid_: query, list expression, filter/map (unqualified)
@@ -145,7 +153,7 @@ One execution of a Handler, from the message that starts it to its end, possibly
 _Avoid_: activation, invocation, task, thread, process
 
 **Suspension Point**:
-A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, or a call to a Suspending Capability. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
+A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, or a call to a Handler that may reach one. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
 _Avoid_: await, yield point
 
 **Suspending Capability**:
@@ -263,6 +271,10 @@ _Avoid_: immutability, copy-on-write (those are ways to implement it)
 **Container**:
 Somewhere a value can be put: a variable, or a Chunk Expression or key path rooted in one. Putting into a Container rebinds its root variable.
 _Avoid_: slot, lvalue, reference
+
+**Constant**:
+A named value fixed when its Script or Library loads, declared with `constant`. It can never be put into.
+_Avoid_: static, final, script variable (a Script Variable can change)
 
 **Chunk Expression**:
 A readable reference to part of a text or list value by ordinal and kind, e.g. `word 3 of line 2 of report`.
