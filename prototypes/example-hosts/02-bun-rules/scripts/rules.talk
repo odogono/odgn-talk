@@ -1,0 +1,43 @@
+-- rules.talk: a webhook rules service Script (one team's rules, trusted-ish).
+-- The Host turns each POST /hooks/github into `webhook event` and sends the
+-- Handler's return value back as the HTTP response (Script.request).
+--
+-- Grants: http: post (suspending); kv: get, put (immediate, bun:sqlite);
+--         log: write (fire-and-forget)
+-- Clock: real time.
+
+script variable chatUrl = "https://chat.example.com/hooks/T123"
+
+-- Issues labelled or titled urgent: ping chat, answer GitHub at once.
+on webhook {event: "issues", action: "opened", issue: {number: n, title: t}}, every time
+    where t contains "urgent" ignoring case
+  ask http to post chatUrl, {json: {text: "Urgent issue #" & n & ": " & t}}
+  -- Suspends on a real fetch. Other webhooks keep flowing (`every time`).
+  return {status: 200, body: "pinged"}
+end webhook
+
+-- Pushes to main: debounce, then trigger one deploy for a burst of pushes.
+on webhook {event: "push", ref: "refs/heads/main", after: sha}, replacing
+  ask kv to put "pending-sha", sha
+  -- Immediate: bun:sqlite is synchronous, so this never suspends.
+  wait 30 s
+  -- Real Clock. A newer push arrives → this Run is cancelled (`replacing`)
+  -- and the new one starts its own 30 s.
+  ask kv to get "pending-sha"
+  ask http to post "https://ci.example.com/deploy", {json: {sha: it}}
+  return {status: 202, body: "deploying " & it}
+  -- ?? Problem: with `replacing`, the cancelled Run's HTTP request never
+  --    gets a reply from this Handler. The Host's `request` promise rejects
+  --    with RunEnded(cancelled). The Host has to map that to 202 itself. A
+  --    debounced Handler and a request/reply message don't mix well.
+end webhook
+
+on webhook {event: e}, every time
+  tell log to write "ignored " & e
+  return {status: 204}
+end webhook
+-- ?? The queueing suffix is per Handler Clause here, but ADR 0004 says the
+--    policy is per Handler (per message). Three clauses of `webhook` with
+--    three different policies: is that allowed? If not, `push` needs its own
+--    message name, which means the Host must route by event type before
+--    delivery, and the Script loses the nice single entry point.

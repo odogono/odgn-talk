@@ -1,0 +1,25 @@
+{
+  "//": "PROTOTYPE parity case. Format is a sketch; the Conformance Corpus format is still fog.",
+  "versions": { "language": "1.0", "costModel": "1", "machine": "1" },
+  "limits": { "fuelPerRun": 20000, "allocPerRun": 65536, "persistentState": 16384 },
+  "capabilities": {
+    "log":    { "write":  { "mode": "fire-and-forget", "args": ["text"], "cost": { "fuel": 20 } } },
+    "prices": { "lookup": { "mode": "suspending", "args": ["text"], "cost": { "fuel": 100 } } }
+  },
+  "scripts": [
+    { "name": "orders",  "source": "scripts/orders.talk",  "grants": { "log": ["write"] } },
+    { "name": "pricing", "source": "scripts/pricing.talk", "grants": { "prices": ["lookup"] } }
+  ],
+  "steps": [
+    { "clock": "2026-09-28T09:00:00Z",
+      "deliver": { "to": "orders", "name": "order", "args": [{ "sku": "A1", "qty": 3 }] } },
+    { "clock": "2026-09-28T09:00:00Z",
+      "answer": { "call": "pricing/r1.c1", "value": { "$quantity": ["2.50", "GBP"] } } },
+    { "clock": "2026-09-28T09:00:01Z" },
+    { "clock": "2026-09-28T09:00:01Z",
+      "deliver": { "to": "orders", "name": "order", "args": [{ "sku": "B2", "qty": "lots" }] } },
+    { "clock": "2026-09-28T09:00:02Z",
+      "deliver": { "to": "orders", "name": "spin" } }
+  ],
+  "expect": "expected.trace"
+}

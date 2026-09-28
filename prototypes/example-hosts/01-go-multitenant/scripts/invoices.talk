@@ -1,0 +1,67 @@
+-- invoices.talk: one tenant's rules, written by the tenant (untrusted).
+-- Adapted from syntax-sketch 08, now in the ADR 0012 spellings.
+--
+-- Grants (see ../host.go, grantsFor):
+--   ledger:   record (suspending), settle (fire-and-forget)
+--   mail:     send (fire-and-forget)
+--   calendar: today (immediate; zone bound by the Host from tenant settings)
+--   log:      write (fire-and-forget)
+-- Host messages: `handle doc` (one per posted document, queued), `nightly`.
+-- Same Group: the tenant's `approvals` Script.
+
+script variable seen = 0
+script variable approvalLimit = 1000 GBP
+
+on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d}
+    where a > approvalLimit
+  add 1 to seen
+  send review with {ref: n, amount: a} to approvals and wait
+  -- Suspension Point: another Script in this Group. Deterministic order (ADR 0009).
+  match it
+    when "approved" then record n, a, d
+    when {rejected: reason} then notify "supplier", n, reason
+  end match
+end handle
+
+on handle {type: "invoice", ref: <"INV-", n: digits as number>, amount: a, due: d}
+  add 1 to seen
+  record n, a, d
+end handle
+
+on handle {type: "remittance", body: csv}
+  repeat for each l in the lines of csv
+    match l
+      when <"INV-", n: digits as number, ";", amt: a number, ";", on: a date> then
+        tell ledger to settle {ref: n, amount: amt as GBP, on: on}
+      else
+        tell log to write "skipped: " & l
+    end match
+  end repeat
+end handle
+
+on handle other
+  pass handle
+  -- End of this Script's Message Path. The Host reports it as unhandled
+  -- (the tenant sees "no rule for document type X" in their activity log).
+end handle
+
+on record n, a, d
+  ask ledger to record {ref: n, amount: a, due: d}
+  -- Suspends: a DB write on the Host side. `it` is {id: …}.
+  ask calendar to today
+  -- ?? Immediate, but still spelled `ask`. `ask` means "I want a result",
+  --    not "this suspends". The reader can't see the difference.
+  if d - it < 7 days then
+    notify "finance", n, "due within a week"
+  end if
+end record
+
+on notify who, n, why
+  tell mail to send {to: who, subject: "Invoice " & n, body: why}
+  -- `send` after `to` is an Operation name, not the `send` command (ADR 0012).
+end notify
+
+on nightly, queued
+  tell log to write "invoices today: " & seen
+  put 0 into seen
+end nightly

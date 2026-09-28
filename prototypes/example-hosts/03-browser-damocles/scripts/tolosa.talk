@@ -1,0 +1,27 @@
+-- tolosa.talk: owned by the Body TOLOSA (body-25), so `landed` delivered to
+-- TOLOSA reaches this Script first. Landing trigger $38, arming $C0 (sticky:
+-- it runs on every landing, never spent).
+
+script variable visited = false     -- flag word bit 1 in the original
+
+on landed body
+  if not visited then
+    put true into visited
+    ask display to say "script56-inline-1"
+    ask display to say "script56-inline-2"
+  end if
+  ask display to say "tolosa-attack"
+  set the encounterGate of session to 1
+  -- Bank word $070104. Native code reads it to arm the attack ship and to
+  -- light the panel's second (red) lamp. A Host property shared with
+  -- native code: exactly what `set` is for.
+  -- ?? `session` here is a Host Object this Script didn't receive as an
+  --    argument. It must be a well-known name the Host binds at Load
+  --    (LoadOptions.objects?). talk.ts has no such option yet.
+  epilogue
+  -- ?? `epilogue` is a Handler in session.talk, not here. Calling it as a
+  --    command sends it along THIS Script's Message Path (body-25 → session),
+  --    which works, but it's a `send`, so it doesn't suspend this Run and
+  --    the blank line races the next landing. The honest spelling is
+  --    `send epilogue to session and wait`, or a shared module (Modules fog).
+end landed

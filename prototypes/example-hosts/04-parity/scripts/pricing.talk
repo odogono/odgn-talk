@@ -1,0 +1,9 @@
+-- pricing.talk: parity example, the other half of the Group.
+-- Grants: prices: lookup (suspending; answered from case.json by call id)
+
+on quote sku, qty
+  ask prices to lookup sku
+  put it into unit
+  wait 1 s                 -- deadline on the case's virtual Clock
+  return unit * qty
+end quote

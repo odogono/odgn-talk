@@ -1,0 +1,23 @@
+# PROTOTYPE Trace excerpt. Every value below is invented; the Trace format
+# is Conformance Corpus fog. The point: one canonical line per record, so
+# Cores are compared with a plain text diff.
+# versions language=1.0 costModel=1 machine=1
+step 1 clock=2026-09-28T09:00:00Z deliver orders order [{sku: "A1", qty: 3}]
+seg orders r1 start handler=order clause=1 fuel=41 alloc=96 end=send-wait pricing quote
+seg pricing r1 start handler=quote clause=1 fuel=18 alloc=24 end=call pricing/r1.c1 prices.lookup ["A1"]
+step 2 clock=2026-09-28T09:00:00Z answer pricing/r1.c1 2.50 GBP
+seg pricing r1 resume fuel=9 alloc=16 end=wait until=2026-09-28T09:00:01Z
+step 3 clock=2026-09-28T09:00:01Z
+seg pricing r1 resume fuel=12 alloc=16 end=reply 7.50 GBP
+run pricing r1 completed fuel=39 alloc=56
+seg orders r1 resume fuel=35 alloc=40 end=done
+cap orders r1.c1 log.write ["total 7.50 GBP"]
+run orders r1 completed fuel=76 alloc=136
+step 4 clock=2026-09-28T09:00:01Z deliver orders order [{sku: "B2", qty: "lots"}]
+seg orders r2 start handler=order clause=2 fuel=52 alloc=40 end=done
+cap orders r2.c1 log.write ["bad qty for B2: lots"]
+run orders r2 completed fuel=52 alloc=40
+step 5 clock=2026-09-28T09:00:02Z deliver orders spin
+seg orders r3 start handler=spin fuel=20000 alloc=19872 end=fault fuel pc=17 line=22 rollback=total
+run orders r3 limit-fault fuel at=pc17 fuel=20000
+vars orders total=7.50 GBP

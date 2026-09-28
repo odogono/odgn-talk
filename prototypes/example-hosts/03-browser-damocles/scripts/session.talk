@@ -1,0 +1,177 @@
+-- session.talk: the Damocles Scripts re-expressed, owned by the Gameplay
+-- Session object, so it sits at the top of every Message Path.
+-- Trusted, built-in. Behaviour follows the Working Authority as recorded in
+-- the mercenary repo (docs/research/damocles-pickup-responses.md,
+-- damocles-landing-messages.md, damocles-first-offer.md). Where this says
+-- more than the original's scripts could, it's marked DEPARTURE.
+--
+-- Grants:
+--   display: say (suspending: scroll in + hold, in game time), clear (suspending)
+--   dice:    draw (immediate; the Host's noise table, pointer saved by the Host)
+--   keys:    latched (immediate), forget (immediate)
+-- Host Objects: `session` (me), Damocles Instances, Bodies, `player`.
+-- Messages from the Host (its Host Callouts): taken item, landed body,
+--   deflected, offer, keypress k.
+--
+-- Game text is not in Scripts: `say` takes a string id from the payload
+-- (system-string-N, scriptN-inline-M), so no game text is reproduced here.
+
+-- Arming. In the original a 64-byte table the Host owns; nothing re-arms a
+-- trigger. Re-expressed as Script state, so it rides in the Script Snapshot.
+-- ?? DEPARTURE in ownership: native code can no longer read the arming
+--    table. Nothing in the original does, so it's safe here, but it's a
+--    choice: arming could equally stay Host state behind a `triggers` Capability.
+script variable spent = []
+
+-- The original has ONE script VM: while any trigger's script runs ("busy"),
+-- a new trigger is queued in a single pending slot (arming bit 5) or
+-- discarded. Here each Handler has its own queueing policy, so two triggers
+-- CAN interleave their lines on the Damocles Display. See NOTES.md, the
+-- "script-wide busy" strain.
+
+------------------------------------------------------------------------
+-- Pickup responses (trigger table $0543EC). The Host fires `taken` after
+-- its native take succeeded (range, takeable, capacity; failures are silent
+-- and never reach a Script).
+------------------------------------------------------------------------
+
+-- V.I.P. LIMO key, resident slot 183 → trigger $02, arming $80 (discard while busy)
+on taken item where the id of item is "object-slot-183", dropping
+  -- `the id of item` in a Guard: allowed because the id is Core-held
+  -- (Host-supplied at creation, ADR 0008), so reading it is pure.
+  if "trigger-02" is in spent then exit taken
+  put "trigger-02" after spent
+  ask display to say "script2-inline-1"
+  ask display to say "script2-inline-2"
+  ask display to say "script2-inline-3"
+  wait 4 s                       -- 200 frames at 50 Hz, game Clock
+  epilogue
+end taken
+
+-- KEY - EAGLE 9SE, slot 181 → trigger $05, arming $A0 (queue while busy)
+on taken item where the id of item is "object-slot-181", queued
+  -- ?? `, dropping` above and `, queued` here are on clauses of the SAME
+  --    message. ADR 0004 has one policy per Handler (message). The
+  --    original's policy is per trigger. Either clauses may carry their own
+  --    suffix, or each trigger needs its own message name (`takenEagleKey`),
+  --    which pushes the trigger table back into the Host.
+  if "trigger-05" is in spent then exit taken
+  put "trigger-05" after spent
+  ask display to say "script5-inline-1"
+  ask display to say "script5-inline-2"
+  ask display to say "script5-inline-3"
+  wait 10 s                      -- 500 frames
+  epilogue
+end taken
+
+-- DAMOCLES FILE, slot 151 → trigger $06. No clearing line: the row stays up.
+on taken item where the id of item is "object-slot-151", dropping
+  if "trigger-06" is in spent then exit taken
+  put "trigger-06" after spent
+  ask display to say "script6-inline-1"
+  ask display to say "script6-inline-2"
+end taken
+
+-- CASH REGISTER, slot 94 → trigger $3E. Waits before speaking.
+on taken item where the id of item is "object-slot-94", dropping
+  if "trigger-3E" is in spent then exit taken
+  put "trigger-3E" after spent
+  wait 3 s                       -- 150 frames
+  ask display to say "script62-inline-1"
+  ask display to say "script62-inline-2"
+  ask display to say "script62-inline-3"
+  epilogue
+end taken
+
+-- Any other take climbed the Message Path to here: nothing to say.
+on taken item
+end taken
+
+-- Shared epilogue $072CAE (62 scripts use it): a 50-frame blank line, then
+-- the ordinary 200-frame duration again. Busy clears when it returns.
+on epilogue
+  ask display to clear {for: 1 s}
+end epilogue
+-- ?? Calling a Handler of the same Script like a command hides the
+--    Suspension Point inside it (syntax-sketch NOTES, HTTP section). Here
+--    that's the point, but the reader can't see `epilogue` suspends.
+
+------------------------------------------------------------------------
+-- Landing messages: triggers $20–$3B, one per Body (body + $1F).
+-- The Host delivers `landed body` TO the Body. TOLOSA has its own Script
+-- (tolosa.talk); every other Body has none, so the message climbs here.
+------------------------------------------------------------------------
+
+on landed body
+  put "landing-" & the id of body into trigger
+  if trigger is in spent then exit landed
+  put trigger after spent            -- spent even when the draw skips
+  ask dice to draw
+  if it >= 40960 then exit landed    -- if.random $A000: skip about 62.5%
+  wait 2 s                           -- 100 frames
+  repeat for each line in the landingLines of body
+    -- DEPARTURE: the original's gazetteer text is inline per trigger.
+    -- Here the Body carries its string ids as a Host property.
+    ask display to say line
+  end repeat
+  epilogue
+end landed
+-- ?? `landed body` has to carry the Body as an argument, because a Handler
+--    up the Message Path can't otherwise tell which object the message was
+--    sent to. HyperTalk had `the target`. Worth adding, or always pass it?
+
+------------------------------------------------------------------------
+-- First offer: script slot $04 (entry $070650), fired from a location-table
+-- entry. Three rising offers; Y or O accepts; N or 10 s declines.
+------------------------------------------------------------------------
+
+on offer, dropping
+  if "trigger-04" is in spent then exit offer
+  put "trigger-04" after spent
+  repeat for each reward in [10000000, 15000000, 20000000]
+    set the proposedReward of session to reward   -- record $00F9 (BCD in the original)
+    tell keys to forget                           -- op $1C: clear the latched key
+    ask display to say "offer-question"
+    -- The original polls a LATCHED key byte after the message, so a key
+    -- pressed while the question scrolls still counts. `wait for` buffers
+    -- nothing (ADR 0004), so check the latch first, then wait.
+    ask keys to latched
+    put it into k
+    if k is nothing then
+      wait for
+        when keypress c where c is in ["Y", "O", "N"] then put c into k
+        after 10 s then put "timeout" into k      -- 500 frames
+      end wait
+    end if
+    if k is in ["Y", "O"] then
+      accept reward
+      exit offer
+    end if
+  end repeat
+  -- What follows the third decline isn't pinned in the research yet.
+end offer
+-- ?? `tell keys to forget` then `ask keys to latched`: both immediate, one
+--    spelled tell and one ask. Fine by ADR 0012 (`ask` = I want the result).
+-- ?? Fidelity: the original's Y/O/N/timeout checks are separate polls in a
+--    fixed order, so a key arriving mid-cycle can be missed. `wait for`
+--    can't miss it. That's a DEPARTURE the port would have to record.
+
+on accept reward
+  set the assignmentAccepted of session to true    -- flag word $7BD8 bit 0, read by native code
+  set the reward of session to reward
+  ask display to say "offer-accepted"
+  epilogue
+end accept
+
+------------------------------------------------------------------------
+-- Deflection ending $3C (queueable $A0), fired by the native Impact Clock
+-- code when DAMOCLES is turned aside.
+------------------------------------------------------------------------
+
+on deflected, queued
+  if the assignmentAccepted of session then
+    set the cash of player to the cash of player + the reward of session   -- record $00F8
+    ask display to say "president-congratulations"
+  end if
+  epilogue
+end deflected

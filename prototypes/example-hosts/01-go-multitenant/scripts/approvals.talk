@@ -1,0 +1,26 @@
+-- approvals.talk: the same tenant's approval policy. Same Script Group as
+-- invoices.talk, so `send review … and wait` between them is ordered by the
+-- spec, not by goroutine timing.
+--
+-- Grants: inbox: ask (suspending, a human answers in the tenant's web UI)
+--         log:   write (fire-and-forget)
+
+script variable autoLimit = 5000 GBP
+
+on review {ref: n, amount: a} where a <= autoLimit
+  return "approved"
+end review
+
+on review {ref: n, amount: a}
+  ask inbox to ask {question: "Approve invoice " & n & " for " & a & "?",
+                    choices: ["approve", "reject"]}
+  -- Suspends for as long as a human takes. The Host bounds that with its own
+  -- deadline and fails the call ("timeout"), because an in-memory wait of
+  -- days is the wrong tool (ADR 0005).
+  -- ?? `ask inbox to ask`: an Operation named `ask` reads badly. A Host
+  --    naming guide for Operations would help ("question", "prompt").
+  match it
+    when {choice: "approve"} then return "approved"
+    when {choice: "reject", note: why} then return {rejected: why}
+  end match
+end review
