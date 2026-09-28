@@ -12,6 +12,10 @@ _Avoid_: runtime, engine, platform
 A unit of source code, written by an end user, that a Host loads and runs.
 _Avoid_: program, plugin
 
+**Example Host**:
+A small Host kept alongside the spec to exercise the embedding API and the Conformance Corpus end to end. It is not a product.
+_Avoid_: demo, sample app, example app
+
 **Capability**:
 A Host-granted permission to perform one kind of effect. Scripts have no ambient I/O; every effect goes through a Capability.
 _Avoid_: permission, API access
@@ -41,6 +45,16 @@ _Avoid_: test suite, golden tests
 **Trace**:
 The spec-defined record of what a Script Group observably did: per Segment, its Fuel, allocation, Capability calls with their call ids, sends, outcome and fault step.
 _Avoid_: log, transcript, event log
+
+## Tooling
+
+**REPL**:
+A command-line Host where a user enters source a line at a time and sees each result straight away, against a live session. Each Core has one.
+_Avoid_: console, shell, interpreter
+
+**Playground**:
+The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
+_Avoid_: sandbox (that word means the security boundary), editor, IDE
 
 ## Handlers
 
@@ -93,6 +107,14 @@ _Avoid_: gas, steps, CPU time
 **Cost Model**:
 The versioned, normative table of how much Fuel each operation costs and how large each kind of value counts as.
 _Avoid_: pricing, cost estimate
+
+**Abstract Machine**:
+The normative stack machine that every Core's compiler targets: its instruction set, and the exact instructions each construct lowers to. Fuel is charged per instruction, code positions are instruction indices, and a Run can be preempted only between instructions. It is versioned together with the Cost Model.
+_Avoid_: bytecode, VM, IR
+
+**Fuel Slice**:
+A Host-set amount of Fuel after which a Run is preempted at the next instruction boundary, e.g. once per game tick. Fuel spent past the end of a slice is carried as debt into the next one.
+_Avoid_: quantum, time slice (unqualified), tick budget
 
 **Allocation Budget**:
 The limit on how much value a single Run may construct, counted by logical size, with frees ignored.
