@@ -67,3 +67,4 @@ A Trace case is a directory. `case.toml` holds the setup: versions, limits, Oper
   - Until the Go Core exists, the TS Core runs against itself, with and without the save/restore replays.
 - **Not in this decision:** the exact key names of every record and of `case.toml` are settled with the final spec. The [worked example](../../corpus/examples/orders-pricing/) shows the shape.
 - Narrowed by ADR 0020: `case.toml` gets `[[libraries]]` entries (`name`, `version`, `source`), and the Trace records `add library` and `replace library` Host Inputs. A Script's Disassembly Case shows a Library call by name and never pins the Library body. Libraries have Disassembly Cases of their own.
+- Narrowed by ADR 0025: a Function Value has a display form naming its Home Script, literal position and captures (`<function weather:12:3 {n: 3}>`), and it round-trips. A Host call to a Function Value is a Delivery.

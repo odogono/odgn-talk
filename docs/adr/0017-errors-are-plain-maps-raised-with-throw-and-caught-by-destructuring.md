@@ -77,3 +77,4 @@ A Script handles ordinary errors with `try … catch … finally … end try`. A
 - **Narrowed by ADR 0020:**
   - A call into a Library is a plain call like a local one, and errors unwind through Library frames using each Library's own Unwind Table.
   - A Command Call to a Handler that may suspend is written `… and wait`, and a Handler called function-style may never suspend.
+- Narrowed by ADR 0025: the catalogue gains `would suspend`, `function gone`, `wrong arity` and `not encodable`. A call to a Function Value from outside its Home Script fails as `send … and wait` does, with `send failed` and the home Run's outcome as `reason`.

@@ -14,3 +14,4 @@ Text, numbers, lists and maps have Value Semantics: no Script-created value is e
 - Values crossing the Host boundary are snapshotted going out and converted coming in. Only Host Objects cross as handles.
 - Closures (if the language has them) capture values, not variables. Loops iterate over a snapshot of their subject.
 - Script Variables are the only changeable state shared between Handlers of a Script.
+- Narrowed by ADR 0025: the language has closures, as Function Values. They capture locals by value, read-only, and read and write Script Variables live. A Function Value is plain data (Home Script, literal, captured values), and equality is structural, so it adds no identity to Script values.
