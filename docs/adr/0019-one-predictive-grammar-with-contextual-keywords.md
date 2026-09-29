@@ -114,3 +114,9 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - The Collections section is superseded. `every … where`, `… for every` and `sorted by` are removed in favour of the `list` Library's `filter`, `map`, `sortBy`, `sortWith`, `reduce` and `group`. `every match of <p> in s` stays, as a plain expression.
   - A Function Value held in a variable is called as `f(x)`, and a name that is both a variable and a function is a load error.
   - Checked by the parser prototype (#54): a Lambda head and a block Lambda body make newlines significant again at the bracket depth where they start, which narrows the line-continuation rule. `and wait` on a call is statement-only, and `name(` stays the only call form.
+- **Narrowed by ADR 0026:**
+  - A Join is `wait for all` at the end of a line, then statements, then `end wait`. It is decided on the token after `wait for`.
+  - `all` is contextual. It can't name a Handler, message or event, and stays a variable name.
+  - Inside a Join, `ask … and wait` and `send … and wait` are Join Members, and the both-ways check is unchanged.
+  - `, every time` is removed from Handler heads, and with it the `every time` decision.
+  - Checked by the parser prototype (#48): no new second-token decision and no relexes.

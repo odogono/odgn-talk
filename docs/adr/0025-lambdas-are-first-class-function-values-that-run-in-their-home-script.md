@@ -41,7 +41,7 @@ The language has Function Values. A Lambda (`given r: the wind of r > 10`, or a 
   - The loader flags a Lambda as may-suspend when its body contains a Suspension Point, and the flag is part of the value. Named functions still never suspend.
   - `f(x) and wait` is a possible Suspension Point. Calling a may-suspend value without `and wait` raises `would suspend`. `and wait` on a value that can't suspend is allowed, since the loader can't know which value a variable holds.
   - So ADR 0004's rule becomes "every *possible* Suspension Point is written in the source and known at load". A call without `and wait` never suspends.
-  - Library functions never suspend, so handing a may-suspend value, or a foreign one, to `map` or `filter` raises `would suspend` inside it. A Script that waits per element writes a `repeat for each` loop, or uses the join from #48.
+  - Library functions never suspend, so handing a may-suspend value, or a foreign one, to `map` or `filter` raises `would suspend` inside it. A Script that waits per element writes a `repeat for each` loop, or uses a Join (ADR 0026) around sends.
 - **Home Script execution:**
   - A call from the Home Script is an ordinary call in the caller's Run.
   - A call from another Script is a message to the Home Script. It goes into the Home Script's mailbox in FIFO order, and it runs there as a Run on the Home Script's Fuel, Segment and Grants. It is always a possible Suspension Point, so without `and wait` it raises `would suspend`.
@@ -70,7 +70,7 @@ The language has Function Values. A Lambda (`given r: the wind of r > 10`, or a 
 - **Left for later:**
   - The Host API's handle for a Function Value: its lifetime, and the exact Delivery shape of a Host call.
   - Whether Destructuring parameters belong to the advanced layer only.
-  - Queueing policy for foreign calls, which have no Handler Clause to carry a suffix.
+  - Queueing policy for foreign calls, which have no Handler Clause to carry a suffix. Resolved by ADR 0026: they run concurrently, the default for a clause with no suffix.
 - **Checked by the parser prototype** (#54): a reserved `given`, its parameter list and both forms parse with no second-token decision, no backtracking and no relexes. All 12 sketch files parse with Comprehensions removed. The rules it needs:
   - **Newlines:** a Lambda head and a block Lambda body make newlines significant again at the bracket depth where they start. So a block Lambda can be a call argument, a list item or a map value, and brackets opened inside its body still continue lines as usual.
   - **Expression bodies never suspend:** `wait`, `ask … and wait` and `f(x) and wait` are statements, so a Lambda that may suspend is always the block form.
@@ -79,3 +79,4 @@ The language has Function Values. A Lambda (`given r: the wind of r > 10`, or a 
   - **Small rules:** `given` in Container position is a syntax error at `given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
   - **Readability:** single-line filters, maps and folds read about as well as the Comprehensions did. `sortBy`'s `{descending: true}` reads worse than `descending`, and so does a block Lambda written inline as an argument (`end given) into gusty`). The first is a Library-shape question and the second a lint (name the Lambda first), and neither is grammar.
   - **Source:** the [prototype](https://github.com/odogono/odgn-talk/tree/prototype/lambdas-sketch/prototypes/parser-sketch) is the primary source: its `FINDINGS-54.md`, the updated `grammar.toml`, `broken.talk`, and `../syntax-sketch/12-lambdas.talk`.
+- Narrowed by ADR 0026: a local `f(x) and wait` can't be a Join Member, because it runs in the caller's Run. A foreign call runs concurrently, as a Handler Clause with no suffix does. A Join may sit in a block Lambda, which is then may-suspend.

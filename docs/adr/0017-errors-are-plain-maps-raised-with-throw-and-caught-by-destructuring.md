@@ -78,3 +78,4 @@ A Script handles ordinary errors with `try … catch … finally … end try`. A
   - A call into a Library is a plain call like a local one, and errors unwind through Library frames using each Library's own Unwind Table.
   - A Command Call to a Handler that may suspend is written `… and wait`, and a Handler called function-style may never suspend.
 - Narrowed by ADR 0025: the catalogue gains `would suspend`, `function gone`, `wrong arity` and `not encodable`. A call to a Function Value from outside its Home Script fails as `send … and wait` does, with `send failed` and the home Run's outcome as `reason`.
+- Narrowed by ADR 0026: a Join fails fast. The first member failure to arrive is raised at `end wait` as its own error map, plus `index` (its 1-based start position). The Core adds `index` only when it is missing, and `index` joins the keys a Host `Fail`'s `Data` may not use. A member inside a `try` within a Join body is a load error.
