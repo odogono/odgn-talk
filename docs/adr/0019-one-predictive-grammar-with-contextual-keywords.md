@@ -122,3 +122,12 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - Checked by the parser prototype (#48): no new second-token decision and no relexes.
 - Narrowed by ADR 0027: Lints are not checker diagnostics and are not normative. They come from tooling, never reject code, and parity doesn't cover them. `grammar.toml` carries an `advanced` tag on Advanced Constructs, which is published with the language version but outside parity.
 - Narrowed by ADR 0028: the TS Core's parser produces a lossless syntax tree and recovers after the first error, and all tooling uses it, so tooling can't disagree with the Core about the first error. The formatter's output, the LSP's features and the debugger are tooling freedom, and add no corpus case kind.
+- **Narrowed by ADR 0029:** `return` is never an operand, so `& return &` is a syntax error. A line break is the Built-in Constant `newline`, with `tab` and `quote` beside it, and text literals have no escapes and never span a line.
+- **Settled by #61:**
+  - **`ignoring case` on functions:** there is no attachment point. A function that searches text takes text or a Text Pattern, so a case-insensitive search is `offset(<"abc" ignoring case>, s)`. The attachment points stay comparisons, `match` and Text Pattern elements.
+  - **Nearest comparison:** a trailing `ignoring case` binds to the nearest comparison, so in `a is b and c is d ignoring case` it applies only to `c is d`. The `ambiguous-ignoring-case` Lint flags one after an `and`/`or` chain.
+  - **End of line:** the end-of-line token sits at the line break, after any trailing comment, or at the end of the source.
+  - **Lexer errors** are reported where their token starts, so unterminated text is reported at the opening quote.
+  - **Containers:** a Container's shape is syntax. A root that isn't a name (`put 1 into 3`, `put "Z" into character 20 of "short"`) is a syntax error at the Container's first token. What a root name refers to (a Constant, an imported function) is a checker diagnostic.
+  - **Error order:** lexer and parse errors come first, in source order, then checker diagnostics.
+  - **Inside `<…>`:** ADR 0007's anchors are two-word phrases (`text end`, `line start`, `word break`) decided on two tokens, and a bare `end` means nothing there. A Capture named with a Reserved Word (`end:`) is a syntax error at the name.

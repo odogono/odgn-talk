@@ -21,7 +21,7 @@ The seven Libraries every Core ships with the language (`text`, `list`, `map`, `
 _Avoid_: stdlib module, prelude, runtime library
 
 **Built-in**:
-A function or property that is always available without an Import, because it can't be written in the language or a Guard must be able to call it. The Cores implement it natively.
+A function, property or Constant that is always available without an Import, because it can't be written in the language or a Guard must be able to use it. The Cores implement it natively.
 _Avoid_: primitive, intrinsic, native function
 
 **Example Host**:
@@ -337,7 +337,7 @@ Somewhere a value can be put: a variable, or a Chunk Expression or key path root
 _Avoid_: slot, lvalue, reference
 
 **Constant**:
-A named value fixed when its Script or Library loads, declared with `constant`. It can never be put into.
+A named value fixed when its Script or Library loads, declared with `constant`. It can never be put into. Built-in Constants such as `pi` and `newline` are fixed by the language version instead.
 _Avoid_: static, final, script variable (a Script Variable can change)
 
 **Chunk Expression**:
