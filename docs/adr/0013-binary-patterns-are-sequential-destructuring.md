@@ -20,3 +20,4 @@ Scripts match Bytes with a Binary Pattern, a Destructuring form next to `[…]` 
 - **Syntax:** `<<` and `>>` are tokens of their own, and the language has no shift operators.
 - **Cost:** one Abstract Machine instruction per field, both when matching and when building, each charged a static base plus a per-byte term for copied or decoded fields. A failed clause test pays only for the fields it read.
 - Narrowed by ADR 0021: floats are read and written by the Built-ins `fromFloat64(b)`, `fromFloat32(b)`, `toFloat64(n)` and `toFloat32(n)`, not by pattern fields. Hex and base64 are `toHex`, `fromHex`, `toBase64` and `fromBase64` in the `bytes` Library.
+- Narrowed by ADR 0027: a pinned outer variable as a size is an Advanced Construct, and a Guard on the length the pattern read is its Beginner Surface form. Its spelling is left for later.
