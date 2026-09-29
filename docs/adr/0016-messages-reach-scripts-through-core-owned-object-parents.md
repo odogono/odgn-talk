@@ -44,3 +44,7 @@ A Host Object has at most one Owning Script (set when that Script is loaded), an
   - Imported Handlers are never message entry points, and a Library never joins a Message Path.
   - An imported name that clashes with a Handler, function, Constant, Script Variable, well-known object name or built-in is a load error.
   - Library code may not use well-known object names.
+- **Narrowed by ADR 0026:**
+  - A Handler Clause with no queueing suffix runs concurrently: a new Run starts while earlier Runs of the clause are suspended.
+  - `, every time` is removed, so `queued`, `dropping` and `replacing` only narrow the default.
+  - A Join that sends to `me` runs concurrently unless the target clause opts out.

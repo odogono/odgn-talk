@@ -168,6 +168,10 @@ _Avoid_: callback, listener, function
 One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
 _Avoid_: overload
 
+**Queueing Policy**:
+What a Handler Clause does with a message that arrives while an earlier Run of the clause is still suspended. With no suffix the new Run starts and they run concurrently. `, queued` runs them one at a time, `, dropping` ends the new Run as dropped, and `, replacing` cancels the earlier Run.
+_Avoid_: concurrency mode, lock
+
 **Guard**:
 The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds. A Guard may call Built-ins, but never a Script or Library function or a Function Value.
 _Avoid_: filter, predicate
@@ -177,8 +181,16 @@ One execution of a Handler, from the message that starts it to its end, possibly
 _Avoid_: activation, invocation, task, thread, process
 
 **Suspension Point**:
-A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, or a Function Value called with `and wait`. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
+A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, a Function Value called with `and wait`, or the end of a Join. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
 _Avoid_: await, yield point
+
+**Join**:
+A `wait for all … end wait` block. It starts every Join Member it reaches without waiting, then suspends once, at `end wait`, until all of them answer. `it` then holds their answers as a list, in the order they were started. The first failure to arrive is raised, and the members still pending are abandoned.
+_Avoid_: parallel block, gather, fan-out, Promise.all
+
+**Join Member**:
+An `ask … and wait` or `send … and wait` inside a Join. It is started where it stands and answered at the Join's `end wait`.
+_Avoid_: branch, task, future
 
 **Suspending Capability**:
 A Capability with an Operation that the Host declares may take time to answer, so calling that Operation is a Suspension Point. Every other Operation answers immediately.

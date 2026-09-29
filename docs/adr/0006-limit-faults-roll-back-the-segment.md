@@ -18,3 +18,4 @@ Every resource a Script uses is metered by a versioned, normative Cost Model, th
 - The scheduler observes the Host's Clock only at scheduler boundaries, so per-Run deadlines are deterministic given the sequence of Clock readings. The conformance corpus runs on a virtual Clock.
 - Changing a cost is a new Cost Model version, not a silent retune.
 - Narrowed by ADR 0017: ordinary errors are caught with `try`/`catch` and roll nothing back. A cancelled Run runs its `finally` blocks after the rollback, on a separate Cleanup Budget. A Limit Fault runs none.
+- Narrowed by ADR 0026: starting a Join Member past the Host's `MaxJoin` is a Limit Fault. The Segment rolls back, and the members already started are abandoned.
