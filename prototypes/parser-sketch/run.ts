@@ -1,6 +1,6 @@
 // PROTOTYPE (throwaway, issue #38). Usage, from the repo root:
 //
-//   bun prototypes/parser-sketch/run.ts                 parse the 11 sketch files, print the report
+//   bun prototypes/parser-sketch/run.ts                 parse the sketch files, print the report
 //   bun prototypes/parser-sketch/run.ts --tree [file]   also print a parse tree per file
 //   bun prototypes/parser-sketch/run.ts --broken        first-error positions for broken.talk
 //   bun prototypes/parser-sketch/run.ts --check-table   the checks a spec generator would run on grammar.toml

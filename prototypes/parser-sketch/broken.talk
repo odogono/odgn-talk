@@ -123,3 +123,58 @@ end handle
 on t
   put 3..7 m/s into comfortable
 end t
+-- case: #54: a removed Comprehension; `every` is now just a name
+on t
+  put every r in xs where r > 1 into big
+end t
+-- case: #54: a removed `sorted by`
+on t
+  put sortBy(xs, given r: r) sorted by r into ys
+end t
+-- case: #54: JS-style arrow Lambda
+on t
+  put filter(xs, (r) => r > 1) into big
+end t
+-- case: #54: a Lambda head with no `:` inside an argument list
+on t
+  put filter(xs, given r r > 1) into big
+end t
+-- case: #54: a block Lambda closed with `end` alone
+on t
+  put given r
+    return r
+  end into f
+end t
+-- case: #54: a block Lambda that is never closed
+on t
+  put given r
+    return r
+end t
+-- case: #54: a Lambda as a variable name
+on t
+  put 1 into given
+end t
+-- case: #54: `and wait` inside an expression
+on t
+  put fn(x) and wait into y
+end t
+-- case: #54: calling a call's result
+on t
+  put times(3)(14) into y
+end t
+-- case: #54: an expression Lambda body can't hold a statement
+on t
+  put given url: ask http to get url and wait into fetch
+end t
+-- case: #54: parses: the body ends at the comma, so `2` is `map`'s third argument, not part of the body
+on t
+  put map(xs, given r: r * 2, 2) into ys
+end t
+-- case: #54: parses, but `b` is a second parameter, not the next argument
+on t
+  put reduce(xs, given a, b: a + b) into total
+end t
+-- case: #54: parses, but the body is `r > 1 and ok`, not `(given r: r > 1) and ok`
+on t
+  put given r: r > 1 and ok into f
+end t

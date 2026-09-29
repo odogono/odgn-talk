@@ -1,4 +1,5 @@
-// PROTOTYPE (throwaway, issue #38): a predictive parser for the ADR 0019 grammar.
+// PROTOTYPE (throwaway, issues #38 and #54): a predictive parser for the ADR 0019
+// grammar, extended with ADR 0025's Lambdas and without Comprehensions.
 //
 // Rules this file keeps to, so that it tests the ADR's claim:
 //   * No backtracking. There is no mark/reset; a consumed token stays consumed.
@@ -60,6 +61,10 @@ export class Parser {
   prev: Token | null = null;
   brackets: string[] = []; // open brackets, innermost last
   binBuild = 0; // inside a `<< … >>` build field, where `as uint16` is a field type
+  // #54: a newline is skipped only when more brackets are open than the top of
+  // this stack. A Lambda head and a block Lambda body push the depth they start
+  // at, so their newlines count even inside `filter(xs, given r … end given)`.
+  nlBase: number[] = [0];
   site = "";
 
   constructor(src: string, public stats: Stats = newStats()) {
@@ -93,7 +98,7 @@ export class Parser {
   private lexAt(start: number, mode: Mode, before: Token | null, depth: number): Buffered {
     for (;;) {
       const tok = this.lx.lex(start, mode);
-      if (tok.t === "nl" && (depth > 0 || this.continues(before))) {
+      if (tok.t === "nl" && (depth > this.nlBase.at(-1)! || this.continues(before))) {
         start = tok.end;
         continue;
       }
@@ -412,10 +417,12 @@ export class Parser {
     const p = this.peek(0); // arguments are in operand position
     if (this.isOp(p, "(") && !p.spaceBefore) {
       this.note(t, `\`${name}(…)\` as a statement: a function call, not a Command Call`);
-      return { k: "CallStatement", call: this.postfix({ k: "Name", name, tok: t }) };
+      const call = this.postfix({ k: "Name", name, tok: t });
+      // ADR 0025: `f(x) and wait` calls a Function Value that may suspend.
+      return { k: "CallStatement", call, wait: this.andWait() };
     }
     if (!(p.t === "nl" || p.t === "eof" || this.isWord(p, "else"))) args.push(...this.exprList());
-    return { k: "Command", name, args };
+    return { k: "Command", name, args, wait: this.andWait() }; // ADR 0020: `name args and wait`
   }
 
   exprList(): Node[] {
@@ -430,6 +437,9 @@ export class Parser {
   // A Container: a name, or a Chunk Expression or key path rooted in one.
   container(): Node {
     const t = this.peek(0);
+    // #54: without this, `put 1 into given` starts a Lambda and reports its
+    // first error lines later, at whatever follows the unclosed block.
+    if (this.isWord(t, "given")) this.fail(t, "a Container (a Lambda can't be put into)");
     const e = this.chunkLevel();
     let root = e;
     while (root && root.k !== "Name") root = root.of ?? root.target ?? root.base;
@@ -676,35 +686,39 @@ export class Parser {
 
   // ---------------------------------------------------------------- expressions
 
+  // #54: ADR 0025 removes the Comprehensions (`every … where`, `… for every`,
+  // `sorted by`), so an expression is just `or`. A Lambda body is an `expr`,
+  // so it has the lowest precedence, as `for every` did.
   expr(): Node {
-    const e = this.or();
-    const t = this.peek(0, "operator");
-    if (this.isWord(t, "for") && this.isWord(this.la2("for-every"), "every")) {
-      // map Comprehension: lowest precedence, so all of `e` is the projection
-      this.next("operator");
-      this.next();
-      return { ...this.comprehensionTail(), k: "MapEvery", project: e };
-    }
-    return e;
+    return this.or();
   }
 
-  comprehensionTail(): Node {
-    const name = this.name("the element name");
-    this.expectWord("in", "operator");
-    const src = this.concat();
-    let where: Node | null = null;
-    let sort: Node | null = null;
-    if (this.isWord(this.peek(0, "operator"), "where")) { this.next("operator"); where = this.or(); }
-    if (this.isWord(this.peek(0, "operator"), "sorted") && this.isWord(this.la2("sorted-by"), "by")) {
-      this.next("operator");
-      this.next();
-      const key = this.concat();
-      let dir = "ascending";
-      const d = this.peek(0, "operator");
-      if (this.isWord(d, "ascending", "descending")) dir = this.next("operator").v;
-      sort = { k: "SortBy", key, dir };
+  // ADR 0025: `given p1, p2: expr`, or `given p1, p2` at the end of a line,
+  // then statements, then `end given`. Decided on `given`, a Reserved Word.
+  lambda(): Node {
+    this.next();
+    this.nlBase.push(this.brackets.length);
+    const params: Node[] = [];
+    const endsHead = (t: Token) => this.isOp(t, ":") || t.t === "nl" || t.t === "eof";
+    if (!endsHead(this.peek(0))) {
+      params.push(this.pattern());
+      while (this.isOp(this.peek(0, "operator"), ",")) { this.next("operator"); params.push(this.pattern()); }
     }
-    return { k: "Every", name, src, where, sort };
+    const t = this.peek(0, "operator");
+    if (this.isOp(t, ":")) {
+      this.next("operator");
+      this.nlBase.pop();
+      return { k: "Lambda", params, body: this.expr() };
+    }
+    if (t.t !== "nl") this.fail(t, "`,`, `:` or end of line after a Lambda parameter");
+    this.endOfStatement();
+    const body = this.block(["end"]);
+    this.expectWord("end");
+    const g2 = this.peek(0);
+    if (!this.isWord(g2, "given")) this.fail(g2, "`end given`");
+    this.next();
+    this.nlBase.pop();
+    return { k: "LambdaBlock", params, body };
   }
 
   or(): Node {
@@ -940,17 +954,15 @@ export class Parser {
     }
     if (w === "replace") return this.replaceBody(false);
     if (w === "not") { this.next(); return { k: "Not", e: this.unary() }; }
+    if (w === "given") return this.lambda();
     if (RESERVED.has(w)) this.fail(t, "an expression");
-    if (w === "every") {
-      const n = this.la2("every");
-      if (this.isWord(n, "match")) {
-        this.next(); this.next();
-        this.expectWord("of", "operator");
-        const pat = this.chunkLevel();
-        this.expectWord("in", "operator");
-        return { k: "EveryMatch", pat, src: this.concat(), ignoringCase: this.ignoringCase() };
-      }
-      if (this.isWord(n) && !RESERVED.has(n.v)) { this.next(); return this.comprehensionTail(); }
+    // The Match Search stays syntax (ADR 0025). Any other `every` is a name.
+    if (w === "every" && this.isWord(this.la2("every"), "match")) {
+      this.next(); this.next();
+      this.expectWord("of", "operator");
+      const pat = this.chunkLevel();
+      this.expectWord("in", "operator");
+      return { k: "EveryMatch", pat, src: this.concat(), ignoringCase: this.ignoringCase() };
     }
     if (w === "date" || w === "instant") {
       if (this.la2("date-literal", "date").t === "datetime") {

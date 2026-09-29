@@ -66,28 +66,29 @@ on summarise station, readings
     end match
   end repeat
 
-  -- filter, map, reduce
-  put every r in clean where the wind of r > 30 km/hr into windy
-  -- ALT: put the items of clean where each's wind > 30 km/hr into windy
-  -- ALT: put filter(clean, r => r's wind > 30 km/hr) into windy    -- [advanced]
-  -- ?? Some kind of collection comprehension is needed, and `where` is already
-  --    the Guard keyword. Using it here keeps one meaning: "only when this holds".
+  -- filter, map, reduce: ADR 0025 (#54) replaces the Comprehensions with
+  -- `list` Library calls that take a Lambda.
+  put filter(clean, given r: the wind of r > 30 km/hr) into windy
+  -- Was (ADR 0019): put every r in clean where the wind of r > 30 km/hr into windy
+  -- ?? #54: `filter(` puts the verb first, and `given r:` names the element
+  --    where `every r in` did. It reads as "filter clean, given r, keeping…".
 
-  put the temp of r for every r in clean into temps
-  -- ADR 0019: map is `expr for every r in xs`. Was: the temp of every r in clean
-  -- ALT: put every r's temp in clean into temps
-  -- ?? `the temp of every r in clean` (a map over the list) is lovely to read,
-  --    but it's a hard parse: is it `the temp of (every r in clean)`, and does
-  --    that distribute over the list?
+  put map(clean, given r: the temp of r) into temps
+  -- Was (ADR 0019): put the temp of r for every r in clean into temps
+
+  put reduce(temps, given total, t: total + t, 0) into sum
+  -- New: a fold with no loop. Was a `repeat for each` with an accumulator.
 
   put the average of temps into mean
   put the max of temps into warmest
   put round(mean, 1) into mean
-  put every r in clean sorted by the wind of r descending into byWind
-  -- ADR 0019. Was: sort clean by the wind of each descending
-  -- ALT: sort clean descending by wind          -- command form, rewrites `clean`
-  -- ?? `each` as an implicit name inside `by …`. HyperTalk readers will like it,
-  --    but it's yet another implicit name, like `it`.
+  put sortBy(clean, given r: the wind of r, {descending: true}) into byWind
+  -- Was (ADR 0019): put every r in clean sorted by the wind of r descending into byWind
+  -- ?? #54: `descending` was a word; now it's an options map after the key.
+  --    The Lambda body ends at the comma, so the map is `sortBy`'s argument.
+
+  put group(clean, given r: the date of the at of r) into byDay
+  -- New: the `grouped by` clause (#47) is now a function.
 
   let [top, ...others] be byWind
   put station & " on " & the date of the at of top & ":" & return into summary
