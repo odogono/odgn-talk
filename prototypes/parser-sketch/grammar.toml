@@ -59,9 +59,10 @@ match_search = { words = ["every"], position = "operand position, before `match 
 ordinals     = { words = ["first", "second", "third", "fourth", "fifth", "middle", "last", "any"], position = "after `the` before a chunk word; after `replace`" }
 lead_words   = { words = ["date", "instant", "at"], position = "operand position, before a date-shaped token; `at` after a date" }
 # After a comma in a Handler head these are modifiers, never parameter names.
-# `every time` and `during <name>` are decided on the second word.
+# `during <name>` is decided on the second word. #48 removes `, every time`:
+# a clause with no suffix runs concurrently, so it would restate the default.
 handler_head = { words = ["replacing", "dropping", "queued", "deciding"], position = "after a comma in a Handler head" }
-handler_head_2 = { words = ["every", "time", "during"], position = "`, every time` and `, during msg` in a Handler head" }
+handler_head_2 = { words = ["during"], position = "`, during msg` in a Handler head" }
 # The FOLLOW set: contextual words that may come straight after a complete
 # expression. After a chunk word (`line`, `item`, …) one of these means the
 # chunk word was a plain name, so none of them can start a chunk index.

@@ -1,6 +1,6 @@
 # Findings: does the Join hold up in the grammar and on the page? (issue #48)
 
-**Verdict: yes, with narrowing.** `wait for all ⏎ … ⏎ end wait` is decided on the one token after `wait for`. It adds no second-token decision and no relexes, and all 13 sketch files parse (the 12 from #54 plus the new `13-joins.talk`). The member rule from grilling (members keep `and wait`) needed no parser change at all. A Join needs seven load-time rules, four of them new since grilling ([§2](#2-the-load-time-rules)). Readability is good for the short Joins a Script actually writes. `… and wait` inside a block that doesn't wait on each call reads oddly in principle, but the head stays in view in every sketch Join ([§3](#3-readability-before-and-after)). One trap turned up: sending to `me`, the escape hatch for per-branch logic, depends on the target clause's queueing policy, and no ADR says what the default policy is ([§4](#4-a-trap-the-escape-hatch-and-queueing-policies)). Nothing here sends the design back to grilling.
+**Verdict: yes, with narrowing.** `wait for all ⏎ … ⏎ end wait` is decided on the one token after `wait for`. It adds no second-token decision and no relexes, and all 13 sketch files parse (the 12 from #54 plus the new `13-joins.talk`). The member rule from grilling (members keep `and wait`) needed no parser change at all. A Join needs seven load-time rules, four of them new since grilling ([§2](#2-the-load-time-rules)). Readability is good for the short Joins a Script actually writes. `… and wait` inside a block that doesn't wait on each call reads oddly in principle, but the head stays in view in every sketch Join ([§3](#3-readability-before-and-after)). One trap turned up: sending to `me`, the escape hatch for per-branch logic, depends on the target clause's queueing policy, and no ADR said what the default policy was. A follow-up grilling round settled it: a clause with no suffix runs concurrently, and `, every time` is removed ([§4](#4-a-trap-the-escape-hatch-and-queueing-policies)). Nothing else sends the design back to grilling.
 
 How this was checked: the #54 parser, extended on this branch. `peek(2)` still throws, and every second-token decision is still counted. The parse sketch now also runs a small checker, `check.ts`, for the Join's load errors. Run from the repo root:
 
@@ -61,12 +61,15 @@ What this suggests (lints, not grammar):
 
 Per-branch logic goes in a Handler reached by `send … to me and wait` (grilling Q1). Those sends start Runs of the same clause, so **the clause's queueing policy (ADR 0016) decides whether the members actually run concurrently:**
 
-- `, every time`: they run concurrently. `13-joins.talk` writes it on `allReadings` and `latestOf`.
+- no suffix (formerly `, every time`): they run concurrently.
 - `, queued`: they run one at a time. The Join still works, but serially, and each member's `MaxWait` includes its time spent queued.
 - `, dropping`: every member after the first ends `dropped`, so the Join fails fast with `send failed`, reason `dropped`.
 - `, replacing`: each new member cancels the one before, so the Join fails fast with `send failed`, reason `cancelled`.
 
-**No ADR says what a clause with no suffix does.** The syntax sketch asks "default for ticks?" and never answers it. The Join ADR should either settle that default or state the rule above, and a lint should flag a Join that sends to `me` for a message whose clauses are all `queued`, `dropping` or `replacing`.
+**No ADR said what a clause with no suffix does.** The syntax sketch asked "default for ticks?" and never answered it. **Settled in grilling (Q13, Q14):**
+- A clause with no suffix is **concurrent**: a new Run starts while earlier Runs of the clause are suspended, and they interleave at Suspension Points (ADR 0004). A clause that sends its own message to `me` and waits can't deadlock, and Joins through `me` just work.
+- **`, every time` is removed**, because it would restate the default (ADR 0019 rejects two spellings for one thing). The head modifiers now only narrow concurrency: `queued`, `dropping`, `replacing`. This branch drops it from the parser, `grammar.toml` and sketches 06, 09 and 13. `on tick, every time` is now a syntax error, and its first error lands on `time`, since `every` after a comma reads as a parameter. The `head-every-time` LL(2) site is gone.
+- A lint should still flag a Join that sends to `me` for a message whose clauses are all `queued`, `dropping` or `replacing`.
 
 ## 5. Proposed narrowing notes for the Join ADR
 
@@ -74,11 +77,10 @@ Per-branch logic goes in a Handler reached by `send … to me and wait` (grillin
 2. **Members:** `send … and wait` and `ask … and wait` reached in the body, including inside `if`, `repeat` and `match`, but not inside a Lambda. Everything else runs where it is.
 3. **Load errors in a body:** `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `pass`, `exit repeat` or `next repeat` to a loop outside the Join, a member inside a `try`, and a Join with no members in its source.
 4. **`throw` and failures to start a member** inside the body abandon the members already started, as fail-fast does.
-5. **The escape hatch depends on queueing policy** (§4). State the default for a clause with no suffix, or say that concurrency needs `, every time`.
+5. **Queueing default:** a Handler clause with no suffix runs concurrently, and `, every time` is removed (§4). The escape hatch then runs concurrently unless the target clause opts out.
 
 ## 6. Left open
 
 - **Runtime:** `MaxJoin`, abandonment, the `Call` cancellation signal and the `abandon` Trace record are Core behaviour, which a parser can't exercise.
 - **Operation modes:** the checker trusts `and wait`. Checking members against Operation Declarations is the ordinary ADR 0019 check.
-- **The default queueing policy** for a clause with no suffix (§4).
 - **Line-level Joins**, e.g. a one-line `wait for all ask …, ask …`. Not needed by any sketch, and a syntax error for now.

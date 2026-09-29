@@ -300,3 +300,7 @@ on t
     ask http to get the url of cfg and wait
   end wait
 end t
+-- case: #48: `, every time` is gone (a clause with no suffix already runs concurrently)
+on tick, every time
+  advance world
+end tick

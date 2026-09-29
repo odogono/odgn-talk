@@ -126,7 +126,7 @@ on compare stations
   end repeat
 end compare
 
-on fetchOne s, every time
+on fetchOne s
   put report(s, "2026-09-27") into the (s) of results
   -- ?? Calling this Script's own Handler like a function. Its `ask` suspends
   --    THIS Run, so a Suspension Point sits behind a call that looks

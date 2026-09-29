@@ -25,7 +25,7 @@
 --     end repeat
 --   end compare
 --
---   on fetchOne s, every time
+--   on fetchOne s
 --     put report(s, "2026-09-27") into the (s) of results
 --     if the length of results = 3 then tell log to write "all in: " & results
 --   end fetchOne
@@ -62,10 +62,13 @@ on compareAll stations, day
   -- ?? #48: `send … to me and wait` is the escape hatch for a branch body.
   --    It reads as a plain request, which is what it is, but a reader may not
   --    expect `me` to run several Runs of itself at once.
+  -- #48: `allReadings` has no queueing suffix, so its Runs run concurrently.
+  --    With `, queued` this Join would run one station at a time, and with
+  --    `, dropping` or `, replacing` it would fail fast.
   return perStation
 end compareAll
 
-on allReadings station, day, every time
+on allReadings station, day
   put "https://api.example.com/stations/" & station & "/readings?day=" & day into url
   put [] into all
   -- `all` is still a fine variable name; it only can't name a message.
@@ -134,7 +137,7 @@ on everyOutcome stations
   return filter(it, given r: r is not nothing)
 end everyOutcome
 
-on latestOf station, every time
+on latestOf station
   try
     ask http to get "https://api.example.com/stations/" & station & "/latest" and wait
     return decodeJson(the body of it as text)

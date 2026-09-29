@@ -273,10 +273,10 @@ export class Parser {
       if (!this.isOp(t, ",")) break;
       this.next("operator");
       const w = this.peek(0);
+      // #48: `, every time` is gone. A clause with no suffix already runs
+      // concurrently, so the modifiers only narrow that.
       if (this.isWord(w) && HEAD_MODIFIERS.has(w.v)) modifiers.push(this.next().v);
-      else if (this.isWord(w, "every") && this.isWord(this.la2("head-every-time"), "time")) {
-        this.next(); this.next(); modifiers.push("every time");
-      } else if (this.isWord(w, "during") && this.isWord(this.la2("head-during"))) {
+      else if (this.isWord(w, "during") && this.isWord(this.la2("head-during"))) {
         this.next(); during = this.name();
       } else if (modifiers.length || guard) this.fail(w, "a Handler modifier");
       else params.push(this.pattern());

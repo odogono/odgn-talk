@@ -38,7 +38,7 @@ end review
 
 -- Handler queueing policy: what happens when the message arrives while a Run
 -- of this Handler is still suspended.
-on tick, every time        -- run every one concurrently (default for ticks?)
+on tick                    -- no suffix: every one runs concurrently (#48)
   advance world
 end tick
 
@@ -61,7 +61,7 @@ end search
 -- ALT (suffix): on search term, replacing
 --               on keypress k, dropping
 --               on save doc, queued
---               on tick, every time
+--               on tick                  -- #48: no suffix is concurrent; `, every time` is gone
 -- ALT (block):  on search term
 --                 when busy: replace
 --                 …
