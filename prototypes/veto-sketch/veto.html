@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE: decisions and vetoes (#80)</title>
+<style>
+  :root { --accent: #5b3fd1; --ink: #1d1d24; --muted: #6b6b78; --line: #e4e2ec; --bg: #faf9fc; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); margin: 0; }
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  h3 { font-size: 15px; margin: 0 0 6px; }
+  .intro { color: var(--muted); max-width: 820px; }
+  .intro strong { color: var(--ink); }
+  .banner { background: #fff4d6; border: 1px solid #f0dc9c; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .card .sub { color: var(--muted); font-size: 13px; }
+  .kv { font-size: 13px; margin: 4px 0; }
+  .kv b { font-weight: 600; }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #efedf6; margin: 2px 4px 2px 0; }
+  .pill.open { background: #fde8c8; }
+  .pill.vetoed { background: #fbd5d5; }
+  .pill.allowed { background: #d4f1dc; }
+  .pill.undecided { background: #e6e6e6; }
+  .changed { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; margin: 0 6px 6px 0; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; margin: 0; background: none; }
+  .tabs button.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .steps li { margin-bottom: 6px; }
+  .steps li.done { color: var(--muted); }
+  .steps li.done button { opacity: .5; }
+  pre { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 12px; max-height: 320px; overflow: auto; margin: 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; background: #fff; }
+  td, th { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #f4f2f9; font-weight: 600; }
+  code { font-size: 12.5px; background: #f1eff7; padding: 0 4px; border-radius: 3px; }
+  .src { white-space: pre; font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #333; background: #f7f6fb; border-radius: 6px; padding: 6px 8px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+<div class="banner">PROTOTYPE, throwaway. It answers <a href="https://github.com/odogono/odgn-talk/issues/80">#80</a> and lives only on the <code>prototype/veto-sketch</code> branch.</div>
+<h1>Can a Script refuse what the Host is about to do?</h1>
+<p class="intro">
+A board game asks its Scripts <strong>"may this piece make this move?"</strong>, and a sign-up form asks
+<strong>"may this form be submitted?"</strong>. A Script answers by running a <code>, deciding</code> Handler that may
+<code>veto</code>. This page lets you push that model through the awkward cases: the Script is busy, the answer takes
+several Pumps, the Handler crashes, the Host gives up, a parent object also has a say, and several Scripts decide at once.
+<br><br>
+<strong>The rule being tested:</strong> the verdict is <em>sealed</em> when the Run handling the decision reaches its first
+Suspension Point, or ends without passing the message on. A <code>veto</code> seals it as vetoed. Reaching a <code>wait</code>
+or the end seals it as allowed. A crash, a Limit Fault, a cancel or a stop before the seal leaves it <em>undecided</em>, and the
+Host picks what that means. The Host only ever learns the verdict from a Pump's reports.
+</p>
+
+<h2>Guided walkthroughs</h2>
+<div class="card">
+  <div class="tabs" id="tabs"></div>
+  <div id="walk"></div>
+</div>
+
+<h2>Free play</h2>
+<div class="card" id="free"></div>
+
+<h2>What the Host sees</h2>
+<div class="cols">
+  <div>
+    <h3>Decisions</h3>
+    <div id="decisions"></div>
+  </div>
+  <div>
+    <h3>Reports from the last Pump</h3>
+    <div id="reports"></div>
+  </div>
+</div>
+
+<h2>Inside the Script Group</h2>
+<div class="kv" id="groupline"></div>
+<div class="grid" id="scripts"></div>
+
+<h2>Trace</h2>
+<pre id="trace"></pre>
+
+<h2>Handlers that don't load</h2>
+<p class="intro">The loader checks every <code>, deciding</code> Handler, so a verdict can never depend on how long a wait takes.</p>
+<div id="checks"></div>
+</main>
+
+<script>
+// ===========================================================================
+// The model. Pure: no DOM. State is plain data; the Scripts' code is static.
+// ===========================================================================
+
+// A Handler body is a list of steps standing in for real statements.
+//   work   plain code that costs Fuel
+//   set    put a value into a Script Variable
+//   vetoIf veto when a condition holds (an `if … then veto …` line)
+//   veto   unconditional veto
+//   pass   pass the message up the Message Path
+//   wait   a Suspension Point: an `ask … and wait` the Host answers later
+//   fail   an Error raised by the code (uncaught)
+const SCRIPTS = {
+  board: {
+    owner: "board",
+    vars: { frozen: false, moves: 0 },
+    handlers: {
+      beforeMove: { deciding: true, src:
+`on beforeMove m, deciding
+  if frozen then veto "The game is paused."
+  if the to of m is "i9" then veto "That square is off the board."
+  ask replay to record m and wait
+  add 1 to moves
+end beforeMove`, body: [
+        { op: "vetoIf", when: (a, v) => v.frozen, reason: "The game is paused." },
+        { op: "vetoIf", when: (a) => a.to === "i9", reason: "That square is off the board." },
+        { op: "wait", call: "ask replay to record m and wait" },
+        { op: "set", name: "moves", to: (a, v) => v.moves + 1 },
+      ] },
+      pause: { src:
+`on pause
+  put true into frozen
+  ask timer to sleep 30 s and wait
+  put false into frozen
+end pause`, body: [
+        { op: "set", name: "frozen", to: () => true },
+        { op: "wait", call: "ask timer to sleep 30 s and wait" },
+        { op: "set", name: "frozen", to: () => false },
+      ] },
+      recount: { src:
+`on recount
+  -- a long stretch of plain code: 40 Fuel
+  repeat for every p in pieces … end repeat
+end recount`, body: [ { op: "work", fuel: 40 } ] },
+    },
+  },
+  knight: {
+    owner: "knight",
+    vars: { own: ["d4", "e5"] },
+    handlers: {
+      beforeMove: { deciding: true, src:
+`on beforeMove m, deciding
+  if the to of m is in own then veto "Your own piece is on that square."
+  pass beforeMove
+end beforeMove`, body: [
+        { op: "vetoIf", when: (a, v) => v.own.includes(a.to), reason: "Your own piece is on that square." },
+        { op: "pass" },
+      ] },
+    },
+  },
+  bishop: {
+    owner: "bishop",
+    vars: {},
+    handlers: {
+      beforeMove: { deciding: true, src:
+`on beforeMove m, deciding
+  if the diagonal of m is false then veto "Bishops move diagonally."
+  -- m has no "diagonal" key: raises "no such key"
+end beforeMove`, body: [
+        { op: "fail", code: "no such key" },
+      ] },
+    },
+  },
+  email: {
+    vars: {},
+    handlers: {
+      submit: { deciding: true, src:
+`on submit f, deciding
+  if the email of f does not contain "@" then veto "Enter a real email address."
+end submit`, body: [ { op: "vetoIf", when: (a) => !a.email.includes("@"), reason: "Enter a real email address." } ] },
+    },
+  },
+  password: {
+    vars: {},
+    handlers: {
+      submit: { deciding: true, src:
+`on submit f, deciding
+  if the length of the password of f < 8 then veto "Use at least 8 characters."
+end submit`, body: [ { op: "vetoIf", when: (a) => a.password.length < 8, reason: "Use at least 8 characters." } ] },
+    },
+  },
+  terms: {
+    vars: { accepted: 0 },
+    handlers: {
+      submit: { deciding: true, src:
+`on submit f, deciding
+  if not the terms of f then veto "Accept the terms to continue."
+  add 1 to accepted
+end submit`, body: [
+        { op: "vetoIf", when: (a) => !a.terms, reason: "Accept the terms to continue." },
+        { op: "set", name: "accepted", to: (a, v) => v.accepted + 1 },
+      ] },
+    },
+  },
+  analytics: {
+    vars: { seen: 0 },
+    handlers: {
+      submit: { deciding: false, src:
+`on submit f
+  -- not deciding: it hears the submit but can't veto it
+  ask metrics to count "submit" and wait
+  add 1 to seen
+end submit`, body: [
+        { op: "wait", call: "ask metrics to count \"submit\" and wait" },
+        { op: "set", name: "seen", to: (a, v) => v.seen + 1 },
+      ] },
+    },
+  },
+};
+
+// Host Objects and their Core-held parents (ADR 0016).
+const OBJECTS = { board: { parent: null }, knight: { parent: "board" }, bishop: { parent: "board" }, pawn: { parent: "board" } };
+const FUEL_PER_RUN = 100;
+
+// ---- The load-time check ---------------------------------------------------
+// In a `, deciding` Handler, no path from the start to a `veto` or a `pass`
+// may cross a Suspension Point. `veto` needs `, deciding`. `, deciding` can't
+// be `, queued`, since the verdict would wait on another Run's wait.
+function check(h) {
+  const d = [];
+  if (h.deciding && h.policy === "queued") d.push("queued decision: a `, deciding` Handler can't be `, queued`");
+  let suspended = false;
+  h.body.forEach((s, i) => {
+    const line = `step ${i + 1}`;
+    if ((s.op === "veto" || s.op === "vetoIf") && !h.deciding) d.push(`veto outside a decision (${line}): \`veto\` needs \`, deciding\``);
+    if (h.deciding && suspended && (s.op === "veto" || s.op === "vetoIf")) d.push(`veto after a wait (${line}): the verdict is already sealed here`);
+    if (h.deciding && suspended && s.op === "pass") d.push(`pass after a wait (${line}): a parent could no longer veto`);
+    if (s.op === "wait") suspended = true;
+  });
+  return d;
+}
+
+// ---- State -----------------------------------------------------------------
+function initialState() {
+  const scripts = {};
+  for (const [name, s] of Object.entries(SCRIPTS)) {
+    scripts[name] = { vars: structuredClone(s.vars), mailbox: [], stopped: false };
+  }
+  return {
+    clock: 0, seq: { d: 0, b: 0 }, runSeq: {}, callSeq: {},
+    inputs: [],      // the Group's input queue: queued Host calls
+    scripts,
+    deliveries: {},  // id → { id, msg, args, to, decision, open, obj }
+    decisions: {},   // id → { id, msg, pending: [delivery ids], vetoes: [], undecided: [], verdict }
+    runs: {},        // id → { id, script, delivery, msg, pc, status, fuel, obj, call }
+    trace: [], lastReports: [], pumps: 0, lastState: "idle",
+  };
+}
+
+const ownerOf = (obj) => Object.keys(SCRIPTS).find((n) => SCRIPTS[n].owner === obj);
+function nextOwner(obj) {
+  // The nearest ancestor of obj (exclusive) that has an Owning Script.
+  for (let o = OBJECTS[obj].parent; o; o = OBJECTS[o].parent) { const s = ownerOf(o); if (s) return { script: s, obj: o }; }
+  return null;
+}
+function routeFrom(obj) {
+  const s = ownerOf(obj);
+  return s ? { script: s, obj } : nextOwner(obj);
+}
+const fmt = (v) => JSON.stringify(v).replace(/"(\w+)":/g, "$1: ");
+
+// ---- Queued Host calls ------------------------------------------------------
+// Each appends to the input queue and returns an id at once, as Deliver does.
+function queue(state, input) {
+  const s = structuredClone(state);
+  let id = null;
+  if (input.kind === "decide" || input.kind === "deliver") id = input.id = "d" + ++s.seq.d;
+  if (input.kind === "decide-broadcast") id = input.id = "b" + ++s.seq.b;
+  s.inputs.push(input);
+  return { state: s, id };
+}
+
+// ---- The Pump ----------------------------------------------------------------
+function pump(state, { now, fuelSlice }) {
+  const s = structuredClone(state);
+  s.pumps++;
+  const reports = [];
+  const T = (line) => s.trace.push(line);
+  T(`> pump clock=${now}${fuelSlice ? ` fuel-slice=${fuelSlice}` : ""}`);
+  s.clock = now;
+
+  // -- sealing: where every verdict is fixed --
+  function seal(did, entry) {
+    const dl = s.deliveries[did];
+    if (!dl || !dl.open) return;
+    dl.open = false;
+    const dc = s.decisions[dl.decision];
+    if (entry.verdict === "vetoed") dc.vetoes.push({ script: entry.script, run: entry.run, reason: entry.reason });
+    if (entry.verdict === "undecided") dc.undecided.push({ script: entry.script, run: entry.run, outcome: entry.outcome });
+    if (entry.verdict === "allowed") (dc.allowed ||= []).push({ script: entry.script ?? null, why: entry.why });
+    dc.pending = dc.pending.filter((x) => x !== did);
+    if (dc.pending.length === 0) settle(dc);
+  }
+  function settle(dc) {
+    dc.verdict = dc.vetoes.length ? "vetoed" : dc.undecided.length ? "undecided" : "allowed";
+    const r = { kind: "decided", [dc.broadcast ? "broadcast" : "delivery"]: dc.id, verdict: dc.verdict, vetoes: dc.vetoes, undecided: dc.undecided };
+    reports.push(r);
+    const why = dc.vetoes.map((v) => ` ${v.run} reason=${fmt(v.reason)}`).join("") + dc.undecided.map((u) => ` ${u.run ?? u.script} outcome=${u.outcome}`).join("");
+    T(`decided ${dc.id} ${dc.verdict}${why}`);
+  }
+
+  function endRun(run, outcome, end) {
+    run.status = "ended";
+    T(`run ${run.id} ${outcome}${end ? ` (${end})` : ""} fuel=${run.fuel}`);
+    reports.push({ kind: "run end", script: run.script, run: run.id, delivery: run.delivery, outcome, fuel: run.fuel });
+    if (end === "pass") return; // the open verdict climbs with the message
+    const dl = s.deliveries[run.delivery];
+    if (dl && dl.open) {
+      if (outcome === "completed") seal(run.delivery, { verdict: "allowed", script: run.script, why: end === "veto" ? "veto outside" : "ended" });
+      else seal(run.delivery, { verdict: "undecided", script: run.script, run: run.id, outcome });
+    }
+    delete s.runs[run.id];
+  }
+
+  function climb(did, fromObj) {
+    const next = nextOwner(fromObj);
+    const dl = s.deliveries[did];
+    if (!next) { unhandled(did); return; }
+    dl.obj = next.obj;
+    s.scripts[next.script].mailbox.push(did);
+    T(`climb ${did} to=${next.obj} script=${next.script}`);
+  }
+  function unhandled(did) {
+    const dl = s.deliveries[did];
+    reports.push({ kind: "unhandled", delivery: did, message: dl.msg });
+    T(`unhandled ${did} ${dl.msg}`);
+    if (dl.open) seal(did, { verdict: "allowed", why: "unhandled" });
+  }
+
+  // -- draining the input queue, in call order --
+  for (const inp of s.inputs) {
+    if (inp.kind === "decide" || inp.kind === "deliver") {
+      T(`> ${inp.kind} ${inp.id} to=${inp.to} ${inp.msg} ${fmt(inp.args ?? {})}`);
+      const dl = { id: inp.id, msg: inp.msg, args: inp.args ?? {}, to: inp.to, open: inp.kind === "decide", decision: inp.kind === "decide" ? inp.id : null, obj: inp.to };
+      s.deliveries[inp.id] = dl;
+      if (dl.decision) s.decisions[inp.id] = { id: inp.id, msg: inp.msg, pending: [inp.id], vetoes: [], undecided: [], verdict: null };
+      const r = routeFrom(inp.to);
+      if (!r) unhandled(inp.id);
+      else { dl.obj = r.obj; s.scripts[r.script].mailbox.push(inp.id); }
+    } else if (inp.kind === "decide-broadcast") {
+      const recips = Object.keys(SCRIPTS).sort().filter((n) => !s.scripts[n].stopped && SCRIPTS[n].handlers[inp.msg]);
+      const dc = { id: inp.id, broadcast: true, msg: inp.msg, pending: [], vetoes: [], undecided: [], verdict: null };
+      s.decisions[inp.id] = dc;
+      const ids = recips.map((n) => {
+        const did = "d" + ++s.seq.d;
+        s.deliveries[did] = { id: did, msg: inp.msg, args: inp.args, to: n, open: true, decision: inp.id, obj: null, broadcast: inp.id };
+        s.scripts[n].mailbox.push(did);
+        dc.pending.push(did);
+        return `${n}:${did}`;
+      });
+      T(`> decide-broadcast ${inp.id} ${inp.msg} ${fmt(inp.args)} recipients=[${ids.join(", ")}]`);
+      if (!recips.length) settle(dc);
+    } else if (inp.kind === "answer") {
+      const run = Object.values(s.runs).find((r) => r.call === inp.call);
+      T(`> answer ${inp.call}`);
+      if (run) { run.status = "ready"; run.call = null; }
+    } else if (inp.kind === "cancel-delivery") {
+      T(`> cancel-delivery ${inp.delivery}`);
+      const holder = Object.entries(s.scripts).find(([, sc]) => sc.mailbox.includes(inp.delivery));
+      if (holder) {
+        holder[1].mailbox = holder[1].mailbox.filter((x) => x !== inp.delivery);
+        reports.push({ kind: "run end", script: holder[0], delivery: inp.delivery, outcome: "cancelled", fuel: 0 });
+        T(`run - ${inp.delivery} cancelled (still in ${holder[0]}'s mailbox)`);
+        seal(inp.delivery, { verdict: "undecided", script: holder[0], outcome: "cancelled" });
+      } else {
+        const run = Object.values(s.runs).find((r) => r.delivery === inp.delivery);
+        if (run) endRun(run, "cancelled");
+      }
+    } else if (inp.kind === "stop") {
+      T(`> stop ${inp.script}`);
+      const sc = s.scripts[inp.script];
+      const runs = Object.values(s.runs).filter((r) => r.script === inp.script);
+      for (const r of runs) { seal(r.delivery, { verdict: "undecided", script: inp.script, run: r.id, outcome: "cancelled" }); delete s.runs[r.id]; }
+      for (const did of sc.mailbox) seal(did, { verdict: "undecided", script: inp.script, outcome: "cancelled" });
+      reports.push({ kind: "stop", script: inp.script, discardedRuns: runs.map((r) => r.id), droppedMessages: sc.mailbox.slice() });
+      T(`stop ${inp.script} discarded=[${runs.map((r) => r.id)}] dropped=[${sc.mailbox}]`);
+      sc.mailbox = []; sc.stopped = true;
+    }
+  }
+  s.inputs = [];
+
+  // -- running: each Script gets its own Fuel Slice this Pump --
+  const slice = {};
+  for (const n of Object.keys(s.scripts)) slice[n] = fuelSlice || Infinity;
+
+  function newRun(name, did) {
+    const n = (s.runSeq[name] = (s.runSeq[name] ?? 0) + 1);
+    const dl = s.deliveries[did];
+    const run = { id: `${name}/r${n}`, script: name, delivery: did, msg: dl.msg, pc: 0, status: "ready", fuel: 0, obj: dl.obj, call: null, seg: 0 };
+    s.runs[run.id] = run;
+    return run;
+  }
+
+  // One unit of work for a Script: finish a preempted Run, resume an answered
+  // Run, or dispatch the mailbox's head. Returns false when there's nothing.
+  function step(name) {
+    const sc = s.scripts[name];
+    if (sc.stopped) return false;
+    const mine = Object.values(s.runs).filter((r) => r.script === name);
+    const run = mine.find((r) => r.status === "preempted") ?? mine.find((r) => r.status === "ready");
+    if (run) { runSegment(run); return true; }
+    if (!sc.mailbox.length) return false;
+    const did = sc.mailbox.shift();
+    slice[name] -= 1; // dispatch Fuel
+    const dl = s.deliveries[did];
+    const h = SCRIPTS[name].handlers[dl.msg];
+    if (!h) { climb(did, dl.obj); return true; }
+    const r = newRun(name, did);
+    r.fuel += 1;
+    T(`dispatch ${did} ${dl.msg} -> ${r.id}${h.deciding ? " (deciding)" : ""}${dl.open && h.deciding ? " verdict=open" : ""}`);
+    // Only a `, deciding` clause holds the verdict open. Any other clause
+    // can't veto, so it allows at dispatch, and a later `pass` climbs as an
+    // ordinary message.
+    if (dl.open && !h.deciding) seal(did, { verdict: "allowed", script: name, why: "not deciding" });
+    runSegment(r);
+    return true;
+  }
+
+  function runSegment(run) {
+    const sc = s.scripts[run.script];
+    const h = SCRIPTS[run.script].handlers[run.msg];
+    const dl = s.deliveries[run.delivery];
+    const resumed = run.status === "preempted" ? "continue" : run.seg === 0 ? "start" : "resume";
+    run.status = "running";
+    const segFuel0 = run.fuel;
+    const segLine = (end) => T(`seg ${run.id} ${resumed} ${run.msg} fuel=${run.fuel - segFuel0} end=${end}`);
+    while (run.pc < h.body.length) {
+      if (slice[run.script] <= 0) { run.status = "preempted"; segLine("preempt"); return; }
+      const st = h.body[run.pc];
+      if (st.op === "work") {
+        // Plain code is preemptible between instructions, one Fuel at a time.
+        run.workLeft ??= st.fuel;
+        const take = Math.min(run.workLeft, slice[run.script]);
+        run.workLeft -= take; run.fuel += take; slice[run.script] -= take;
+        if (run.fuel > FUEL_PER_RUN) { segLine("limit"); endRun(run, "limit fault"); return; }
+        if (run.workLeft === 0) { run.workLeft = undefined; run.pc++; }
+        continue;
+      }
+      run.fuel += 1; slice[run.script] -= 1;
+      if (run.fuel > FUEL_PER_RUN) { segLine("limit"); endRun(run, "limit fault"); return; }
+      run.pc++;
+      if (st.op === "set") sc.vars[st.name] = st.to(dl.args, sc.vars);
+      else if (st.op === "vetoIf" || st.op === "veto") {
+        if (st.op === "veto" || st.when(dl.args, sc.vars)) {
+          segLine("veto");
+          if (dl.open) seal(run.delivery, { verdict: "vetoed", script: run.script, run: run.id, reason: st.reason });
+          else T(`note ${run.id} veto with no open decision: ends the Run`);
+          endRun(run, "completed", "veto");
+          return;
+        }
+      } else if (st.op === "pass") {
+        segLine("pass");
+        endRun(run, "completed", "pass");
+        climb(run.delivery, run.obj);
+        delete s.runs[run.id];
+        return;
+      } else if (st.op === "wait") {
+        const c = (s.callSeq[run.id] = (s.callSeq[run.id] ?? 0) + 1);
+        run.call = `${run.id}.c${c}`; run.status = "suspended"; run.seg++;
+        segLine("suspend");
+        T(`call ${run.call} ${st.call}`);
+        if (dl.open) seal(run.delivery, { verdict: "allowed", script: run.script, why: "reached a wait" });
+        return;
+      } else if (st.op === "fail") {
+        segLine("raise");
+        T(`raise ${run.id} code=${fmt(st.code)}`);
+        endRun(run, "errored");
+        return;
+      }
+    }
+    segLine("end");
+    endRun(run, "completed");
+  }
+
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const name of Object.keys(s.scripts).sort()) {
+      while (slice[name] > 0 && step(name)) progressed = true;
+    }
+  }
+  const busy = Object.values(s.runs).some((r) => r.status === "preempted") || Object.values(s.scripts).some((sc) => !sc.stopped && sc.mailbox.length);
+  s.lastState = busy ? "sliced" : "idle";
+  T(`pump end state=${s.lastState}`);
+  s.lastReports = reports;
+  return s;
+}
+
+const Model = { SCRIPTS, OBJECTS, initialState, queue, pump, check };
+</script>
+
+<script>
+// ===========================================================================
+// The page: a thin shell over the model.
+// ===========================================================================
+let state = Model.initialState();
+let prev = state;
+let lastDecision = null;
+
+const act = {
+  decide: (to, args, label) => ({ label, run: () => { const q = Model.queue(state, { kind: "decide", to, msg: "beforeMove", args }); lastDecision = q.id; return q.state; } }),
+  deliver: (to, msg, label) => ({ label, run: () => Model.queue(state, { kind: "deliver", to, msg }).state }),
+  submit: (args, label) => ({ label, run: () => { const q = Model.queue(state, { kind: "decide-broadcast", msg: "submit", args }); lastDecision = q.id; return q.state; } }),
+  pump: (label = "Pump", fuelSlice, sameClock) => ({ label, primary: true, run: () => Model.pump(state, { now: state.clock + (sameClock ? 0 : 20), fuelSlice }) }),
+  answerAll: (label = "Host answers every waiting call") => ({ label, run: () => {
+    let s = state;
+    for (const r of Object.values(state.runs)) if (r.call) s = Model.queue(s, { kind: "answer", call: r.call }).state;
+    return s;
+  } }),
+  giveUp: (label = "Host gives up on the newest decision") => ({ label, run: () => lastDecision ? Model.queue(state, { kind: "cancel-delivery", delivery: lastDecision }).state : state }),
+  stop: (script, label) => ({ label, run: () => Model.queue(state, { kind: "stop", script }).state }),
+};
+
+const FREE = [
+  ["Moves", [
+    act.decide("knight", { from: "c3", to: "e5" }, "Knight c3 → e5 (own piece there)"),
+    act.decide("knight", { from: "c3", to: "d5" }, "Knight c3 → d5"),
+    act.decide("pawn", { from: "a2", to: "i9" }, "Pawn a2 → i9 (off the board)"),
+    act.decide("pawn", { from: "a2", to: "a3" }, "Pawn a2 → a3"),
+    act.decide("bishop", { from: "c1", to: "e3" }, "Bishop c1 → e3 (buggy Script)"),
+  ]],
+  ["Board", [
+    act.deliver("board", "pause", "Pause the game"),
+    act.deliver("board", "recount", "Recount scores (40 Fuel of work)"),
+    act.stop("board", "Stop the board Script"),
+  ]],
+  ["Sign-up form", [
+    act.submit({ email: "ann@example.com", password: "correct horse", terms: true }, "Submit a good form"),
+    act.submit({ email: "ann.example.com", password: "hunter2", terms: true }, "Submit a bad email and a short password"),
+  ]],
+  ["Host", [
+    act.pump("Pump"),
+    act.pump("Pump with a 10-Fuel slice", 10),
+    act.pump("Pump again at the same Clock (10-Fuel slice)", 10, true),
+    act.answerAll(),
+    act.giveUp(),
+  ]],
+];
+
+const WALKS = [
+  { title: "The knight refuses", text: "The Host asks whether the knight may land on e5. The knight's own Script holds the first say, and one of its own pieces is there. Watch: the verdict is vetoed in the first Pump, and the board never hears about it, because a veto ends the message.",
+    steps: [act.decide("knight", { from: "c3", to: "e5" }, "Ask: may the knight move c3 → e5?"), act.pump()] },
+  { title: "Passed up, then allowed", text: "d5 is free, so the knight passes the question to its parent, the board. The board has no objection and reaches its first wait (recording the move for the replay). That seals the verdict as allowed, while the board's Run is still suspended. The Host gets its answer before the Run ends.",
+    steps: [act.decide("knight", { from: "c3", to: "d5" }, "Ask: may the knight move c3 → d5?"), act.pump(), act.answerAll("Host answers the replay call"), act.pump()] },
+  { title: "A busy board", text: "The board is paused: its pause Run has set frozen and is suspended on a 30-second timer. A decision arriving now isn't blocked by that Run. It is dispatched at once, sees frozen as true, and is vetoed. When the timer answers, the next move is allowed.",
+    steps: [act.deliver("board", "pause", "Pause the game"), act.pump(), act.decide("pawn", { from: "a2", to: "a3" }, "Ask: may the pawn move a2 → a3?"), act.pump(), act.answerAll("The 30-second timer fires"), act.pump(), act.decide("pawn", { from: "a2", to: "a3" }, "Ask again"), act.pump()] },
+  { title: "A slow answer", text: "The board is mid-way through 40 Fuel of work when a move arrives, and the game pumps with a 10-Fuel slice per tick. The decision waits its turn in the mailbox: it doesn't jump the queue and isn't answered by default. A game that must know this tick pumps again at the same Clock reading, until a decided report comes back.",
+    steps: [act.deliver("board", "recount", "Recount scores"), act.decide("pawn", { from: "a2", to: "i9" }, "Ask: may the pawn move a2 → i9?"), act.pump("Pump (10-Fuel slice)", 10), act.pump("Pump again, same Clock", 10, true), act.pump("Pump again, same Clock", 10, true), act.pump("Pump again, same Clock", 10, true), act.pump("Pump again, same Clock", 10, true)] },
+  { title: "The Host can't wait", text: "Same slow board, but this Host has a deadline. It gives up, which queues a cancel-delivery. The Delivery is still in the mailbox, so it is removed and the decision settles as undecided (cancelled). The Host applies its own rule, for instance refusing the move.",
+    steps: [act.deliver("board", "recount", "Recount scores"), act.decide("pawn", { from: "a2", to: "a3" }, "Ask: may the pawn move a2 → a3?"), act.pump("Pump (10-Fuel slice)", 10), act.giveUp("Host's deadline passes: give up"), act.pump("Pump (10-Fuel slice)", 10)] },
+  { title: "A buggy decider", text: "The bishop's Script raises an Error before it decides. The Core doesn't guess: the decision is undecided, with outcome errored, and the Host picks allow or refuse. A crash is not a veto, and it is not an allow either.",
+    steps: [act.decide("bishop", { from: "c1", to: "e3" }, "Ask: may the bishop move c1 → e3?"), act.pump()] },
+  { title: "Stopped mid-decision", text: "The board is stopped while a move is still waiting in its mailbox. The stop report lists the dropped message, and the decision settles as undecided (cancelled).",
+    steps: [act.deliver("board", "recount", "Recount scores"), act.decide("pawn", { from: "a2", to: "a3" }, "Ask: may the pawn move a2 → a3?"), act.pump("Pump (10-Fuel slice)", 10), act.stop("board", "Stop the board Script"), act.pump()] },
+  { title: "The sign-up form", text: "Submit is a decision broadcast to every Script that has a submit Handler. Each decides on its own. The form is vetoed if any of them vetoes, and the report lists every reason, in recipient order, so the page can show them all. Analytics hears the submit but can't veto it, because its Handler isn't deciding.",
+    steps: [act.submit({ email: "ann.example.com", password: "hunter2", terms: true }, "Submit a bad email and a short password"), act.pump(), act.submit({ email: "ann@example.com", password: "correct horse", terms: true }, "Submit a good form"), act.pump(), act.answerAll("Metrics answers"), act.pump()] },
+];
+
+let tab = 0, walkPos = 0;
+function doAction(a) { prev = state; state = a.run(); render(); }
+function reset() { state = Model.initialState(); prev = state; lastDecision = null; }
+
+function button(a, onClick, disabled) {
+  const b = document.createElement("button");
+  b.textContent = a.label; if (a.primary) b.className = "primary"; b.disabled = !!disabled;
+  b.onclick = onClick; return b;
+}
+
+function renderWalk() {
+  const tabs = document.getElementById("tabs"); tabs.innerHTML = "";
+  WALKS.forEach((w, i) => { const b = document.createElement("button"); b.textContent = w.title; if (i === tab) b.className = "on";
+    b.onclick = () => { tab = i; walkPos = 0; reset(); render(); }; tabs.appendChild(b); });
+  const w = WALKS[tab]; const el = document.getElementById("walk"); el.innerHTML = "";
+  const p = document.createElement("p"); p.textContent = w.text; el.appendChild(p);
+  const ol = document.createElement("ol"); ol.className = "steps";
+  w.steps.forEach((a, i) => { const li = document.createElement("li"); if (i < walkPos) li.className = "done";
+    li.appendChild(button(a, () => { walkPos = i + 1; doAction(a); }, i !== walkPos)); ol.appendChild(li); });
+  el.appendChild(ol);
+  const r = button({ label: "Start this walkthrough again" }, () => { walkPos = 0; reset(); render(); }); el.appendChild(r);
+}
+
+function renderFree() {
+  const el = document.getElementById("free"); el.innerHTML = "";
+  for (const [group, acts] of FREE) {
+    const d = document.createElement("div"); d.className = "kv"; d.innerHTML = `<b>${group}:</b> `;
+    acts.forEach((a) => d.appendChild(button(a, () => doAction(a)))); el.appendChild(d);
+  }
+  el.appendChild(button({ label: "Reset everything" }, () => { reset(); render(); }));
+}
+
+const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function describeDecision(dc) {
+  if (dc.verdict) return `<span class="pill ${dc.verdict}">${dc.verdict}</span>`;
+  const where = dc.pending.map((did) => {
+    const run = Object.values(state.runs).find((r) => r.delivery === did);
+    if (run) return `${did} being decided by ${run.id} (${run.status})`;
+    const sc = Object.entries(state.scripts).find(([, s]) => s.mailbox.includes(did));
+    return sc ? `${did} waiting in ${sc[0]}'s mailbox` : `${did} queued for the next Pump`;
+  });
+  return `<span class="pill open">open</span> ${where.join("; ")}`;
+}
+
+function render() {
+  renderWalk(); renderFree();
+  // Decisions
+  const dcs = Object.values(state.decisions);
+  const queuedOnly = state.inputs.filter((i) => i.kind === "decide" || i.kind === "decide-broadcast");
+  let html = "<table><tr><th>Decision</th><th>Question</th><th>Verdict</th><th>Why</th></tr>";
+  for (const i of queuedOnly) html += `<tr><td>${i.id}</td><td>${i.msg} ${esc(fmt(i.args))}</td><td><span class="pill open">queued</span></td><td>not drained until the next Pump</td></tr>`;
+  for (const dc of dcs.slice().reverse()) {
+    const d = state.deliveries[dc.id] ?? {};
+    const why = [...dc.vetoes.map((v) => `${v.run}: “${esc(v.reason)}”`), ...dc.undecided.map((u) => `${u.run ?? u.script}: ${u.outcome}`), ...(dc.verdict === "allowed" ? (dc.allowed ?? []).map((a) => `${a.script ?? "no Script"}: ${a.why}`) : [])];
+    const changed = !prev.decisions[dc.id] || prev.decisions[dc.id].verdict !== dc.verdict;
+    html += `<tr class="${changed ? "changed" : ""}"><td>${dc.id}</td><td>${dc.msg} ${esc(fmt(dc.broadcast ? state.deliveries[Object.keys(state.deliveries).find((k) => state.deliveries[k].decision === dc.id)]?.args : d.args))}${dc.broadcast ? " (broadcast)" : ` to ${d.to}`}</td><td>${describeDecision(dc)}</td><td>${why.join("<br>") || "–"}</td></tr>`;
+  }
+  html += "</table>";
+  document.getElementById("decisions").innerHTML = (dcs.length || queuedOnly.length) ? html : '<p class="sub">No decisions asked yet.</p>';
+  // Reports
+  document.getElementById("reports").innerHTML = state.lastReports.length
+    ? "<table><tr><th>Report</th><th>Detail</th></tr>" + state.lastReports.map((r) => `<tr><td>${r.kind}</td><td>${esc(fmt(Object.fromEntries(Object.entries(r).filter(([k]) => k !== "kind"))))}</td></tr>`).join("") + "</table>"
+    : '<p class="sub">Nothing reported yet.</p>';
+  // Group
+  document.getElementById("groupline").innerHTML = `<b>Pumps so far:</b> ${state.pumps} · <b>Clock:</b> ${state.clock} ms · <b>Last Pump ended:</b> ${state.lastState} · <b>Input queue:</b> ${state.inputs.length ? state.inputs.map((i) => i.id ?? i.kind).join(", ") : "empty"}`;
+  const grid = document.getElementById("scripts"); grid.innerHTML = "";
+  for (const [name, sc] of Object.entries(state.scripts)) {
+    const def = Model.SCRIPTS[name];
+    const runs = Object.values(state.runs).filter((r) => r.script === name);
+    const c = document.createElement("div"); c.className = "card";
+    const pv = prev.scripts[name];
+    if (JSON.stringify(pv) !== JSON.stringify(sc) || JSON.stringify(Object.values(prev.runs).filter((r) => r.script === name)) !== JSON.stringify(runs)) c.classList.add("changed");
+    c.innerHTML = `<h3>${name}${sc.stopped ? " (stopped)" : ""}</h3>
+      <div class="sub">${def.owner ? `owns ${def.owner}${Model.OBJECTS[def.owner].parent ? `, parent ${Model.OBJECTS[def.owner].parent}` : ""}` : "owns no object"}</div>
+      <div class="kv"><b>Variables:</b> ${Object.keys(sc.vars).length ? esc(fmt(sc.vars)) : "none"}</div>
+      <div class="kv"><b>Mailbox:</b> ${sc.mailbox.length ? sc.mailbox.map((d) => `<span class="pill ${state.deliveries[d].open ? "open" : ""}">${d} ${state.deliveries[d].msg}</span>`).join("") : "empty"}</div>
+      <div class="kv"><b>Runs:</b> ${runs.length ? runs.map((r) => `<span class="pill ${state.deliveries[r.delivery]?.open ? "open" : ""}">${r.id} ${r.msg}: ${r.status}${r.call ? `, waiting on ${r.call}` : ""}${state.deliveries[r.delivery]?.open ? ", verdict open" : ""}</span>`).join("") : "none"}</div>`;
+    const det = document.createElement("details"); det.innerHTML = `<summary class="sub">Handlers</summary>` + Object.values(def.handlers).map((h) => `<div class="src">${esc(h.src)}</div>`).join("");
+    c.appendChild(det); grid.appendChild(c);
+  }
+  const tr = document.getElementById("trace"); tr.textContent = state.trace.join("\n") || "(empty)"; tr.scrollTop = tr.scrollHeight;
+}
+
+// The load-time check, run over Handlers that should fail.
+const BAD = [
+  { name: "veto after a wait", src: "on beforeMove m, deciding\n  ask rules to check m and wait\n  if it is false then veto \"Not allowed.\"\nend beforeMove",
+    h: { deciding: true, body: [{ op: "wait" }, { op: "vetoIf" }] } },
+  { name: "pass after a wait", src: "on beforeMove m, deciding\n  ask log to record m and wait\n  pass beforeMove\nend beforeMove",
+    h: { deciding: true, body: [{ op: "wait" }, { op: "pass" }] } },
+  { name: "veto without , deciding", src: "on beforeMove m\n  veto \"No.\"\nend beforeMove",
+    h: { deciding: false, body: [{ op: "veto" }] } },
+  { name: "queued decision", src: "on beforeMove m, queued, deciding\n  veto \"No.\"\nend beforeMove",
+    h: { deciding: true, policy: "queued", body: [{ op: "veto" }] } },
+  { name: "loads: veto, then a wait", src: "on beforeMove m, deciding\n  if the to of m is \"i9\" then veto \"Off the board.\"\n  ask replay to record m and wait\nend beforeMove",
+    h: { deciding: true, body: [{ op: "vetoIf" }, { op: "wait" }] } },
+];
+document.getElementById("checks").innerHTML = "<table><tr><th>Handler</th><th>Loader says</th></tr>" +
+  BAD.map((b) => { const d = Model.check(b.h); return `<tr><td><div class="src">${esc(b.src)}</div></td><td>${d.length ? d.map(esc).join("<br>") : "loads"}</td></tr>`; }).join("") + "</table>";
+
+render();
+</script>
+</body>
+</html>
