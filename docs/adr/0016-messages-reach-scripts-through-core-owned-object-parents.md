@@ -48,3 +48,6 @@ A Host Object has at most one Owning Script (set when that Script is loaded), an
   - A Handler Clause with no queueing suffix runs concurrently: a new Run starts while earlier Runs of the clause are suspended.
   - `, every time` is removed, so `queued`, `dropping` and `replacing` only narrow the default.
   - A Join that sends to `me` runs concurrently unless the target clause opts out.
+- Settled by #71:
+  - **A disposed object** stays an ordinary value, with its id and equality. `send … to` it raises `object gone` with `{object}` before anything is sent. Passing it to a Capability is allowed, and the Host decides what that means. The Built-in `isDisposed(o)` tests it, and Guards may call it, so `where not isDisposed(u)` skips a dead object at dispatch. `setParent` on a disposed object is a Host error.
+  - **Disposing an owner** stops its Owning Script within the same Host Input, as `Stop` does: suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped. The stop report gives reason `owner disposed` and lists the dropped messages. A Script meant to outlive its object is given another owner.

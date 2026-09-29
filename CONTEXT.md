@@ -33,7 +33,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Standard Capability**:
-A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar` and `locale`.
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale` and `timer`.
 _Avoid_: built-in capability, system capability, core capability
 
 **Locale**:
@@ -75,6 +75,10 @@ _Avoid_: runtime, engine, interpreter (for the whole), VM
 **Script Group**:
 A set of Scripts driven by one deterministic scheduler, so the order of messages between them is fixed by the spec. A message from outside the group is an input the Host delivers.
 _Avoid_: realm, isolate, shard, cluster
+
+**Group Fingerprint**:
+A hash, defined by the spec, of everything that must match for two Script Groups to run in lockstep: the language and Cost Model versions, the code identity of each Script and Library, the Grants' Operation Declarations and the limits. It never covers state.
+_Avoid_: checksum, version hash, handshake
 
 **Pump**:
 One Host call that runs a Script Group until nothing in it is runnable or its Fuel Slices are spent, leaving it Quiescent. A Group makes progress only inside a Pump.
