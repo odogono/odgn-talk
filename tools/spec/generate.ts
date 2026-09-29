@@ -82,6 +82,11 @@ function crossCheck(d: Data) {
   const hostCodes = new Set((d["host-errors"].error ?? []).map((e: any) => e.code));
   const codes = new Set((d.errors.error ?? []).map((e: any) => e.code));
   for (const c of codes) if (hostCodes.has(c)) fail("errors.toml", `"${c}" is also a Host error code`);
+  for (const e of d.errors.error ?? []) {
+    for (const f of e.optional ?? []) {
+      if (e.fields.includes(f)) fail("errors.toml", `"${e.code}" lists "${f}" as both required and optional`);
+    }
+  }
 
   // ADR 0019 and ADR 0022: no Unit spelling may be a Reserved Word, a FOLLOW-set
   // word or a duplicate.
@@ -214,11 +219,17 @@ const VIEWS: Record<string, View> = {
 
   errors: (d, file) => {
     const errors = d.errors.error ?? [];
+    const fieldList = (e: any) => {
+      const req = e.fields.map(code).join(", ");
+      const opt = e.optional?.length ? `optional: ${e.optional.map(code).join(", ")}` : "";
+      return [req, opt].filter(Boolean).join("; ") || "none";
+    };
     const parts = [
+      `**Reserved keys:** ${d.errors.reserved.map(code).join(", ")}. The Core sets them, and a Host \`Fail\`'s \`Data\` may not use them.`,
       table(["Code", "Fields", "Raised when", "Sources"],
         errors.map((e: any) => [
           code(e.code),
-          e.fields.map(code).join(", ") || "none",
+          fieldList(e),
           prose(e.raised_when, file),
           sources(e.sources, file),
         ])),
