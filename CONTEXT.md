@@ -136,6 +136,10 @@ _Avoid_: line, cell, command, input
 A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
 
+**Host Manifest**:
+A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive and the Host Objects it may meet. Tooling reads it. The Core never does.
+_Avoid_: type definitions, SDK, d.ts, host profile
+
 **Lint**:
 A piece of advice from tooling about a Script that loads. It never rejects code, and unlike a load-time diagnostic, parity doesn't cover it.
 _Avoid_: warning (unqualified), diagnostic (unqualified)

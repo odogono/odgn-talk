@@ -121,3 +121,4 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - `, every time` is removed from Handler heads, and with it the `every time` decision.
   - Checked by the parser prototype (#48): no new second-token decision and no relexes.
 - Narrowed by ADR 0027: Lints are not checker diagnostics and are not normative. They come from tooling, never reject code, and parity doesn't cover them. `grammar.toml` carries an `advanced` tag on Advanced Constructs, which is published with the language version but outside parity.
+- Narrowed by ADR 0028: the TS Core's parser produces a lossless syntax tree and recovers after the first error, and all tooling uses it, so tooling can't disagree with the Core about the first error. The formatter's output, the LSP's features and the debugger are tooling freedom, and add no corpus case kind.
