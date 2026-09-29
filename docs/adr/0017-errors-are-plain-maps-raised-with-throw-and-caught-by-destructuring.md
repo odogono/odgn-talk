@@ -83,3 +83,4 @@ A Script handles ordinary errors with `try … catch … finally … end try`. A
   - `with` doesn't exist. It would only serve tagged results, a convention the language deliberately doesn't have, and `try` already chains steps that can fail.
   - `throw <text>` is shorthand for `throw {code: text}`, decided at run time by the value's kind. A map is thrown as it is, and anything else raises `bad throw`. It is Beginner Surface.
   - `catch "out of stock"` and `on error "timeout"` are shorthand for `{code: "…"}` heads, and a `where` Guard may follow either. Only a text literal is shorthand. A name in a head still binds.
+- Settled by #71: the catalogue gains `object gone`, with `{object}`, raised by `send … to` a disposed Host Object (ADR 0016).

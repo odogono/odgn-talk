@@ -70,3 +70,4 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
   - `as text` gives the display form, and `as civil date` and `as instant` read it. `as instant` also reads a numeric offset (`+01:00`) and converts to UTC. `as civil date` refuses text with a `Z` or an offset, raising `can't convert`.
   - The display form needs only to read back in a Trace, as a Function Value's does (ADR 0025), not in source, where `2026-09-27` would lex as subtraction.
   - The `unconvertible-literal` Lint (ADR 0027) flags a literal text given to `as civil date` or `as instant` that can't convert.
+- Settled by #71: `timer` joins `clock` and `calendar` as a Standard Capability, with `schedule` and `cancel`, both fire-and-forget. It is the durable-timer pattern of ADR 0005.
