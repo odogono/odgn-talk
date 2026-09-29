@@ -52,6 +52,10 @@ _Avoid_: method, command, endpoint
 The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget) and longest time pending. The same form serves Hosts, the Conformance Corpus and tooling.
 _Avoid_: signature, schema, spec (unqualified)
 
+**Value Encoding**:
+The spec-defined, lossless JSON form of a value, with `$` tags for kinds that plain JSON can't hold (`{"$quantity": ["2.50", "GBP"]}`). The language-neutral message layer and Host storage use it. Scripts can't reach it, and the Conformance Corpus uses the display form instead.
+_Avoid_: wire format, serialisation, tagged JSON
+
 **Grant**:
 A Capability made available to one Script at load, limited to a set of its Operations and carrying the Host's own binding data. The loader checks every Capability call against the Script's Grants.
 _Avoid_: permission, token, entitlement
