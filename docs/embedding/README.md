@@ -5,12 +5,12 @@
 ## The shape
 
 - **`Core`** is process-wide. It holds the compile cache, so a Script or Library with the same code identity compiles once. It defines Capabilities and Object Kinds, compiles Libraries, and makes and restores Groups.
-- **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint. Host Objects are made per Group, since parents and disposal belong to it.
-- **`Script`** is a handle for calls addressed to one Script: reload, extend, stop, cancel a Run, revoke a Grant, counters, and deliver or request to the Script itself.
+- **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, decide, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint. Host Objects are made per Group, since parents and disposal belong to it.
+- **`Script`** is a handle for calls addressed to one Script: reload, extend, stop, cancel a Run, revoke a Grant, counters, and deliver, request or decide to the Script itself.
 
 ## Threads and the input queue
 
-- **Queued calls:** `Deliver`, `Request`, `Broadcast`, `Call`, `SetParent`, `Dispose`, `Stop`, `CancelRun`, `Revoke`, `Answer` and `Fail`, and cancelling a `Request` or `Call` through its context or signal. They are safe from any goroutine. Each appends to the Group's input queue, calls `OnReady` and returns at once, with a delivery id where it has one.
+- **Queued calls:** `Deliver`, `Request`, `Broadcast`, `Decide`, `DecideBroadcast`, `Call`, `SetParent`, `Dispose`, `Stop`, `CancelRun`, `Revoke`, `Answer` and `Fail`, and cancelling a `Request`, `Decide` or `Call` through its context or signal. They are safe from any goroutine. Each appends to the Group's input queue, calls `OnReady` and returns at once, with a delivery id where it has one.
 - **Draining:** the next Pump takes its Clock reading, then drains the queue in call order and records each input in the Trace there. A Pump never sees an input arrive halfway through.
 - **Stop and cancel:** `Stop` and `CancelRun` land at the latest at the running Pump's next Host crossing (an Operation or property call) or at its end. A native Core may act on them sooner, between instructions. Scripts and replay parity can't tell the difference, since the Trace records where each one landed. Everything else waits for the next Pump.
 - **Cancelling a Request:** cancelling its context or signal queues `cancel-delivery`. It cancels the Run the Delivery started. A Delivery still in the mailbox is removed instead, and reported as a `run end` with outcome `cancelled` and no run or Handler.
@@ -29,6 +29,7 @@
   - `stop`
   - `unhandled`
   - `call failed`, which carries the Host-side detail of a `host error` the Script saw
+  - `decided`, carrying a Decision's Verdict (below)
 
 ## Function Values
 
@@ -39,6 +40,19 @@
 - **Taking one as an argument:** an Operation that accepts a Function Value declares the `function` Shape.
 - **Not durable:** Host storage can't encode it, and a Host-held handle doesn't survive save and restore. Only the message layer carries it, as a reference form (below). A callback that must survive a save should be an ordinary message, as the `timer` Capability's are.
 
+## Decisions
+
+A Decision asks Scripts whether something may happen, such as a game move or a form submit, and gets back a Verdict ([ADR 0031](../adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), #80).
+
+- **The calls:** `group.Decide(ctx, to, m)`, `script.Decide(ctx, m)` and `group.DecideBroadcast(ctx, m)` are queued, like `Request`. They return an id and a `Deciding` future that settles with a `Decided`.
+- **The Verdict:** `allowed`, `vetoed` or `undecided`. `Decided` also lists every veto as `{script, run, reason}`, in recipient order, and every undecided recipient as `{script, run, outcome}`.
+- **When it settles:** at the end of the first Segment of the first `, deciding` Run that the Decision reaches. The Pump that seals it returns a `decided` report. Usually that is the Pump that drains it. Behind a Fuel Slice or a mailbox backlog it takes more, and a Host that must know now pumps again at the same Clock reading.
+- **Undecided** means the deciding Run errored, hit a Limit Fault, was cancelled, dropped or stopped before it sealed. The Core never guesses allow or refuse, so the Host chooses.
+- **Deadlines are the Host's:** cancelling the context or signal before the seal queues `cancel-delivery`, and the Decision settles as undecided, `cancelled`. Cancelling after the seal does nothing, so `defer cancel()` is safe.
+- **Broadcast:** it settles once every recipient has sealed. It is vetoed if any recipient vetoed, undecided if none did but one was undecided, and allowed otherwise, including when there are no recipients.
+- **Reports alongside it:** the deciding Run still gets its own `run end`, often later than the `decided` report, since an allowed Run may go on. A Decision that reaches the end of its Message Path is allowed, and `unhandled` is reported as usual.
+- **Not durable:** like `Pending`, the future doesn't survive a restore. The `decided` report still arrives with the same id.
+
 ## The message layer
 
 The language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir over WASI or a sidecar. [The message-layer research](../research/message-layer.md) (#73) has the full message set. These rules are fixed:
@@ -47,6 +61,7 @@ The language-neutral form of this interface, for a Host that isn't Go or TS, suc
 - **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, a property `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host. So a WASI build needs no reentrant imports, and a sidecar carries the same messages.
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox. It counts as received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Charging:** each Operation call carries the Fuel the Run has left after the declared cost. `Charge` fails exactly when that can't cover it, so the Host can charge locally.
+- **Decisions:** `decide` takes `to` or `script`, `message` and optional `broadcast: true`, and replies with its id. The `decided` report rides in the `pump` reply.
 - **Abandoned calls:** the `pump` reply lists the call ids abandoned during the Pump, so a Host can cancel its own work.
 - **Function Values** cross as `{"$function": [home, display, token]}`. The token holds the value's own data and its Group, so nothing needs releasing. The Core checks `wrong group` when it reads the token, and `function gone` when the queue is drained. Host storage refuses the tag.
 - **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's own handles carry their Group, and its glue code raises `wrong group` before sending.
@@ -58,7 +73,6 @@ Helpers built only on this interface, versioned with each Core and not normative
 
 - **Drivers:** `talk/driver` in Go (a worker pool, a run queue and a timer per Group) and `autoDrive(group)` from `@odgn/talk/driver` in TS. Game Hosts pump by hand.
 - **Other helpers:** `Must*` value constructors for literals in Host code, Trace file sinks, and the corpus runner.
-- **Not in v1:** decision-mode dispatch has no Host call. The language keeps ADR 0004's `veto` rule for later.
 - **Left to the TS Core:** the debugger's pause hook (ADR 0028).
 
 ## Host error catalogue

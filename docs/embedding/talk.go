@@ -615,6 +615,25 @@ type Pending struct { /* opaque */
 func (p *Pending) Done() <-chan struct{}
 func (p *Pending) Result() (Value, *ScriptError) // `send failed` with its reason when the Run didn't complete
 
+// Decide asks whether something may happen (ADR 0031). It routes like
+// Deliver, and the first `, deciding` Handler Clause it reaches holds the
+// Verdict until the end of that Run's first Segment. Any goroutine.
+// Cancelling ctx before the Verdict is sealed queues cancel-delivery and
+// settles it Undecided with outcome Cancelled. Cancelling after does nothing.
+func (g *Group) Decide(ctx context.Context, to *Object, m Message) (DeliveryID, *Deciding, error)
+
+// DecideBroadcast asks every Script that wants m when the queue is drained,
+// and settles once each recipient has sealed. Any goroutine.
+func (g *Group) DecideBroadcast(ctx context.Context, m Message) (BroadcastID, *Deciding, error)
+
+// Deciding settles when a Pump seals the Verdict, often before the deciding
+// Run ends.
+type Deciding struct { /* opaque */
+}
+
+func (d *Deciding) Done() <-chan struct{}
+func (d *Deciding) Decided() *Decided
+
 type PumpOptions struct {
 	FuelSlice int64 // per Script, per Pump; overrun is carried as debt. 0: no slicing
 	FuelCap   int64 // across the Group, for fairness between Groups. 0: no cap
@@ -683,6 +702,7 @@ func (s *Script) Revoke(grantName string)
 // Deliver and Request address the Script rather than an object.
 func (s *Script) Deliver(m Message) (DeliveryID, error)
 func (s *Script) Request(ctx context.Context, m Message) (DeliveryID, *Pending, error)
+func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, error)
 
 type Counters struct {
 	FuelTotal       int64 // since load, including faulted Segments; carried over a Reload
@@ -697,7 +717,7 @@ type Counters struct {
 // Reports (ADR 0015)
 // ---------------------------------------------------------------------------
 
-// Report is one of *RunEnd, *Stop, *Unhandled or *CallFailed. Hosts switch
+// Report is one of *RunEnd, *Stop, *Unhandled, *CallFailed or *Decided. Hosts switch
 // on its type.
 type Report interface{ isReport() }
 
@@ -755,6 +775,36 @@ type CallFailed struct {
 	Call      CallID
 	Operation OperationRef
 	Detail    string
+}
+
+// Decided is a Decision's Verdict, returned by the Pump that sealed it
+// (ADR 0031). Vetoes and Undecided are in recipient order.
+type Decided struct {
+	Delivery  DeliveryID  // empty for a Broadcast Decision
+	Broadcast BroadcastID // empty unless it was DecideBroadcast's
+	Verdict   Verdict
+	Vetoes    []Veto
+	Undecided []UndecidedBy
+}
+
+type Verdict int
+
+const (
+	Allowed   Verdict = iota
+	Vetoed            // some Run reached `veto`
+	Undecided         // a deciding Run failed, was cancelled, dropped or stopped before sealing; the Host chooses
+)
+
+type Veto struct {
+	Script string
+	Run    RunID
+	Reason Value // Nothing for a bare `veto`
+}
+
+type UndecidedBy struct {
+	Script  string
+	Run     RunID // empty for a Delivery that never started
+	Outcome Outcome
 }
 
 type Location struct {

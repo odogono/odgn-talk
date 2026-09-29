@@ -362,6 +362,17 @@ export interface Message {
 /** Settles when a Pump ends the Run it started. Rejects with ScriptError `send failed`. */
 export interface Requested { id: string; result: Promise<Value> }
 
+/** Settles, never rejects, when a Pump seals the Verdict: often before the Run ends. */
+export interface Deciding { id: string; decided: Promise<Decided> }
+export type Verdict = "allowed" | "vetoed" | "undecided";
+export interface Decided {
+  delivery?: string;
+  broadcast?: string;
+  verdict: Verdict;
+  vetoes: { script: string; run: string; reason: Value }[]; // recipient order
+  undecided: { script: string; run?: string; outcome: Outcome }[];
+}
+
 export interface PumpOptions {
   fuelSlice?: number; // per Script, per Pump
   fuelCap?: number;   // across the Group
@@ -396,6 +407,14 @@ export interface Group {
    */
   request(to: HostObject, m: Message, o?: { signal?: AbortSignal }): Requested;
   broadcast(m: Message): string; // the broadcast id
+  /**
+   * Queued. Asks whether something may happen (ADR 0031). Aborting the signal
+   * before the Verdict is sealed queues cancel-delivery and settles it
+   * "undecided"; aborting after does nothing.
+   */
+  decide(to: HostObject, m: Message, o?: { signal?: AbortSignal }): Deciding;
+  /** Queued. Settles once every recipient has sealed. */
+  decideBroadcast(m: Message, o?: { signal?: AbortSignal }): Deciding;
   /** Queued. A Host call of a Function Value, shaped like request. */
   call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
   /** Worker. Synchronous. now is epoch nanoseconds; earlier than the last Pump's throws. */
@@ -429,6 +448,7 @@ export interface Script {
   revoke(grantName: string): void;
   deliver(m: Message): string;
   request(m: Message, o?: { signal?: AbortSignal }): Requested;
+  decide(m: Message, o?: { signal?: AbortSignal }): Deciding;
 }
 
 // ---------------------------------------------------------------------------
@@ -466,7 +486,8 @@ export type Report =
       pendingCalls: string[];
     }
   | { kind: "unhandled"; delivery: string; message: Message; target?: HostObject }
-  | { kind: "call failed"; script: string; call: string; operation: OperationRef; detail: string };
+  | { kind: "call failed"; script: string; call: string; operation: OperationRef; detail: string }
+  | ({ kind: "decided" } & Decided);
 
 // ---------------------------------------------------------------------------
 // Save and restore (ADR 0008)

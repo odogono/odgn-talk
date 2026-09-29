@@ -92,6 +92,14 @@ _Avoid_: tick, step, run (a Run is something else)
 One message the Host hands to a Script Group from outside, identified by a delivery id that the Run it starts reports.
 _Avoid_: event (unqualified), request, dispatch
 
+**Decision**:
+A Delivery by which the Host asks Scripts whether something may happen, such as a game move or a form submit, answered by a Verdict. Only a Handler Clause marked `, deciding` can `veto` it.
+_Avoid_: decision-mode event, before-event, hook, query
+
+**Verdict**:
+The answer to a Decision: allowed, vetoed (with a reason from each veto) or undecided, when the deciding Run failed or was stopped before it answered. It is sealed at the end of the deciding Run's first Segment, so it never waits on a Suspension Point.
+_Avoid_: result, response, outcome (a Run has an outcome)
+
 ## Conformance
 
 **Conformance Corpus**:
