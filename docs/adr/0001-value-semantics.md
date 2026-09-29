@@ -15,3 +15,4 @@ Text, numbers, lists and maps have Value Semantics: no Script-created value is e
 - Closures (if the language has them) capture values, not variables. Loops iterate over a snapshot of their subject.
 - Script Variables are the only changeable state shared between Handlers of a Script.
 - Narrowed by ADR 0025: the language has closures, as Function Values. They capture locals by value, read-only, and read and write Script Variables live. A Function Value is plain data (Home Script, literal, captured values), and equality is structural, so it adds no identity to Script values.
+- Narrowed by ADR 0030: "converted coming in" means a Host builds every value through a named constructor on one opaque, tagged `Value` type per Core, whose rule the spec states. Input the value model can't hold is refused at the Host API, and nothing is clamped, rounded or replaced.
