@@ -13,3 +13,4 @@ Values never change kind by themselves. `"007" + 1` is an error, `"007" = "7.0"`
 - `=` never errors: values of different kinds, or of different Unit Kinds, are simply unequal. `<` is partial and raises an error outside comparable kinds.
 - `is a` tests only the current kind. A separately named test covers "could this convert".
 - There are no global switches (`strictUnits`, `numberFormat`) that change how values behave.
+- Settled by #66: lists are ordered by `<` lexicographically, element by element, and a list that is a prefix of another comes first. The first unequal pair of elements decides, and if that pair can't be ordered the usual `<` error is raised. Maps stay unordered. So a list key sorts by several keys (`sortBy(rs, given r: [the city of r, the temp of r])`), and `min` and `max` work over lists of lists.
