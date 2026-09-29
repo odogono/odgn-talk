@@ -83,3 +83,4 @@ We chose this because a join can't be stdlib: Libraries can't `send` and Built-i
   - `MaxJoin`'s default, and the exact key names of the `abandon` record, settled with the embedding API and the final spec.
   - A deadline for the whole Join.
 - Settled by #69: a Handler leaves early with a bare `return` (ADR 0019), which is already a load error inside a Join. There is no `exit` for the enclosing Handler.
+- Settled by #79: a call that fails with `timeout` is abandoned too, with its own `abandon` record, so the Host can stop the work.

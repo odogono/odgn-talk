@@ -10,8 +10,9 @@
 // Threads: TS has one, but the input-queue rules of talk.go still hold.
 // Calls marked "queued" append to the Group's input queue and return at once.
 // The next Pump drains the queue in call order, right after it takes its
-// Clock reading. A running Pump also checks for stop and cancelRun between
-// instructions. A worker call (load, reload, extend, addLibrary,
+// Clock reading. stop and cancelRun land at the latest at the running Pump's
+// next Host crossing (an Operation or property call) or its end, and may land
+// sooner, between instructions. A worker call (load, reload, extend, addLibrary,
 // replaceLibrary, pump, save, settle) made from inside the Group's own Pump,
 // from an Operation function say, throws HostError "reentrant call".
 
@@ -182,7 +183,7 @@ export interface ImmediateOp<B> extends OpBase {
  */
 export interface SuspendingOp<B> extends OpBase {
   mode: "suspending";
-  maxPendingMs?: number; // otherwise the Script's maxWaitMs
+  maxPendingMs?: number; // whole milliseconds; otherwise the Script's maxWaitMs
   start?(call: Call<B>, ...args: Value[]): void;
   run?(call: Call<B>, ...args: Value[]): Promise<Value>;
 }
@@ -205,7 +206,7 @@ export interface Call<B> {
   readonly scriptName: string;
   readonly binding: B;
   readonly now: bigint;        // the Pump's Clock reading
-  readonly signal: AbortSignal; // aborted when the call is abandoned
+  readonly signal: AbortSignal; // aborted when the call is abandoned, including by a timeout
   /** Legal only while starting. Throws LimitReached. */
   charge(fuel: number): void;
   /** Queued. Ignored once the Run has ended. */
@@ -281,7 +282,7 @@ export interface Limits {
   persistentState: number; // Script-wide; never overridden per Delivery
   callDepth: number;
   mailboxDepth: number;
-  maxWaitMs: number;
+  maxWaitMs: number; // whole milliseconds; a fraction throws "invalid value"
   maxJoin: number;
   cleanupBudget: number;
 }
@@ -389,6 +390,10 @@ export interface Group {
   dispose(o: HostObject): void;
   /** Queued. Returns the delivery id. Throws MailboxFull or HostError. */
   deliver(to: HostObject, m: Message): string;
+  /**
+   * Queued. Aborting signal queues cancel-delivery: it cancels the Run, or
+   * removes a Delivery still in the mailbox with a "cancelled" run end.
+   */
   request(to: HostObject, m: Message, o?: { signal?: AbortSignal }): Requested;
   broadcast(m: Message): string; // the broadcast id
   /** Queued. A Host call of a Function Value, shaped like request. */
@@ -418,7 +423,7 @@ export interface Script {
   reload(source: string, carry: CarryOver): Report[];
   /** Worker. A reused name throws HostError "name reused". */
   extend(source: string): void;
-  /** Queued. stop and cancelRun are also checked between instructions. */
+  /** Queued. stop and cancelRun land by the running Pump's next Host crossing. */
   stop(reason: string): void;
   cancelRun(runId: string): void;
   revoke(grantName: string): void;
@@ -440,10 +445,10 @@ export type Report =
   | {
       kind: "run end";
       script: string;
-      run: string;
+      run?: string; // absent for a Delivery cancelled before it started
       delivery?: string;
       broadcast?: string;
-      handler: string;
+      handler?: string; // absent with run
       outcome: Outcome;
       result?: Value;
       error?: ScriptError;
