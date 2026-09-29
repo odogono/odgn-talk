@@ -81,8 +81,9 @@ var ErrMailboxFull error
 
 // ScriptError is an ordinary, catchable Error inside the Script (ADR 0017).
 // An Operation fails with one. The Script sees Code as `code`, Message as
-// `message` and Data's entries as further fields. A catalogue code, or a Data
-// key that clashes with a reserved field, becomes `host error` instead.
+// `message` and Data's entries as further fields. A catalogue code the
+// Operation doesn't declare, a code outside a declared list, or a Data key
+// that clashes with a reserved key (errors.toml) becomes `host error` instead.
 type ScriptError struct {
 	Code    string
 	Message string
@@ -268,8 +269,10 @@ type Cost struct {
 	Alloc int64
 }
 
-// ErrorDecl declares an error code an Operation may fail with, for tooling
-// (ADR 0028). The Core doesn't check Fail against it.
+// ErrorDecl declares an error code an Operation may fail with. When an
+// Operation lists any, the Core enforces the list: a Fail with any other code
+// is `host error` (ADRs 0017, 0033). Tooling offers `catch` completions from it
+// (ADR 0028).
 type ErrorDecl struct {
 	Code   string
 	Fields []Field
@@ -343,7 +346,10 @@ type Costs map[string]Cost
 func (c *Core) ClockCapability(costs Costs) (*CapabilityDef, error)
 
 // calendar: the binding is the default IANA zone. zone is "" when the call
-// names none. An unknown zone fails with `unknown zone`.
+// names none. An unknown zone fails with ScriptError `unknown zone` and Data
+// {zone}, and ToInstant with "reject" in a gap or overlap fails with
+// `ambiguous time` and Data {civil, zone}. These declarations list both codes,
+// and the Core checks the fields (ADR 0033).
 type CalendarImpl interface {
 	Today(c *Call, zone string) (Value, error)
 	Now(c *Call, zone string) (Value, error)
@@ -356,7 +362,9 @@ type CalendarImpl interface {
 func (c *Core) CalendarCapability(impl CalendarImpl, costs Costs) (*CapabilityDef, error)
 
 // locale: the binding is the default BCP 47 tag. tag is "" when the call
-// names none, and opts is Nothing when it passes no options map.
+// names none, and opts is Nothing when it passes no options map. The Core
+// raises `bad locale` for a tag that isn't well-formed BCP 47 before these
+// run.
 type LocaleImpl interface {
 	Compare(c *Call, a, b, opts Value, tag string) (Value, error)
 	Rank(c *Call, texts, opts Value, tag string) (Value, error)
@@ -732,7 +740,6 @@ const (
 	Cancelled
 	Unhandled
 	Dropped
-	HostErrored // the Run ended on an uncaught `host error`
 )
 
 type RunEnd struct {
@@ -743,7 +750,7 @@ type RunEnd struct {
 	Handler   string
 	Outcome   Outcome
 	Result    Value        // Completed
-	Error     *ScriptError // Errored, HostErrored
+	Error     *ScriptError // Errored
 	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "cleanup"
 	At        Location
 	Fuel      int64

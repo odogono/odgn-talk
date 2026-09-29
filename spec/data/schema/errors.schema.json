@@ -5,6 +5,15 @@
   "description": "The error-code catalogue: every Error Code the Core raises inside a Script.",
   "type": "object",
   "properties": {
+    "reserved": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-zA-Z]*$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
     "error": {
       "type": "array",
       "items": {
@@ -20,6 +29,15 @@
               "type": "string",
               "pattern": "^[a-z][a-zA-Z]*$"
             },
+            "uniqueItems": true
+          },
+          "optional": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z]*$"
+            },
+            "minItems": 1,
             "uniqueItems": true
           },
           "raised_when": {
@@ -55,6 +73,7 @@
     }
   },
   "required": [
+    "reserved",
     "error"
   ],
   "additionalProperties": false

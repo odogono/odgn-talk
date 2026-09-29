@@ -49,7 +49,8 @@ export declare class MailboxFull extends Error {}
 
 /**
  * An ordinary, catchable Error inside the Script (ADR 0017). A catalogue
- * code, or a data key that clashes with a reserved field, becomes
+ * code the Operation doesn't declare, a code outside a declared list, or a
+ * data key that clashes with a reserved key (errors.toml) becomes
  * `host error` instead.
  */
 export declare class ScriptError extends Error {
@@ -164,6 +165,7 @@ export declare const shape: {
 // ---------------------------------------------------------------------------
 
 export interface Cost { fuel: number; alloc?: number }
+/** When an Operation lists any, the Core enforces the list (ADRs 0017, 0033). */
 export interface ErrorDecl { code: string; fields?: Record<string, FieldShape> }
 
 interface OpBase {
@@ -222,6 +224,10 @@ export interface Call<B> {
 /** Per-call costs, keyed by Operation name. A missing one throws. */
 export type Costs = Record<string, Cost>;
 
+/**
+ * Throw ScriptError `unknown zone` {zone} for an unknown zone, and
+ * `ambiguous time` {civil, zone} from toInstant with "reject" (ADR 0033).
+ */
 export interface CalendarImpl {
   today(call: Call<string>, zone?: string): Value;
   now(call: Call<string>, zone?: string): Value;
@@ -230,6 +236,7 @@ export interface CalendarImpl {
   offset(call: Call<string>, instant: Value, zone?: string): Value;
   zone(call: Call<string>, zone?: string): Value;
 }
+/** The Core raises `bad locale` for a malformed tag before these run. */
 export interface LocaleImpl {
   compare(call: Call<string>, a: Value, b: Value, opts: Value, tag?: string): Value;
   rank(call: Call<string>, texts: Value, opts: Value, tag?: string): Value;
@@ -458,7 +465,7 @@ export interface Script {
 
 export type Outcome =
   | "completed" | "errored" | "limit fault" | "cancelled"
-  | "unhandled" | "dropped" | "host error";
+  | "unhandled" | "dropped";
 
 export interface Location { unit: string; line: number; col: number; handler: string; pc: number }
 
