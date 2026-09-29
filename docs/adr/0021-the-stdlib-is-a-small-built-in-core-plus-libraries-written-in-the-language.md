@@ -95,10 +95,11 @@ A function is a Built-in only if it can't be written in the language: it needs t
 - **Left for later:**
   - The Unit Catalogue's contents, the normal form of compound Units and the printed form of Quantities. Resolved by ADR 0022.
   - Dates and time zones: the format tokens, the field functions and the zone-bound Capability's Operations. Resolved by ADR 0023.
-  - The `locale` Capability's Operations and how a locale is named.
+  - The `locale` Capability's Operations and how a locale is named. Resolved by ADR 0024.
   - The `grouped by` clause.
   - A join over concurrent Runs.
   - Each Library's full function list and each Built-in's Cost Model rate, written with the final spec.
 - **Source:** the [stdlib sketch](https://github.com/odogono/odgn-talk/tree/prototype/stdlib-sketch/prototypes/stdlib-sketch) writes a few Scripts against these Libraries and Built-ins.
 - Narrowed by ADR 0022: only ten currencies are Units (`USD`, `EUR`, `GBP`, `JPY`, `CHF`, `CNY`, `CAD`, `AUD`, `INR`, `SEK`), each its own Unit Kind, and other currencies are plain numbers. The `units` Library's absolute-temperature functions are `celsiusToFahrenheit`, `fahrenheitToCelsius`, `celsiusToKelvin`, `kelvinToCelsius`, `fahrenheitToKelvin` and `kelvinToFahrenheit`.
 - Narrowed by ADR 0023: the date field Built-ins are `year`, `month`, `day`, `hour`, `minute`, `second`, `nanosecond`, `weekday`, `dayOfYear`, `isoWeek`, `isoWeekYear` and `hasTime`, over Civil Dates only, and fixed-offset conversion is built in (`toCivil`, `toInstant`). Named zones come from the `calendar` Standard Capability, and `now` from `clock`. `date` builds, formats and parses with brace templates (`"{day:2}/{month:2}/{year}"`).
+- Narrowed by ADR 0024: `locale` offers `compare`, `rank`, `upper`, `lower`, `numberSymbols`, `monthNames`, `dayNames` and `tag`, all immediate, with a Grant-bound BCP 47 tag that any call can override and that falls back by lookup to the root locale. Sorting by Collation goes through `rank` and a Comprehension. There is no locale-aware number Operation: `text` gains `formatNumber` and `parseNumber`, written in the language over `numberSymbols`.
