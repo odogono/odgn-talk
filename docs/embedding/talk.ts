@@ -1,0 +1,509 @@
+// The TS Core's embedding interface: declarations only, never compiled.
+//
+// This file mirrors talk.go call for call. The differences are idiom only
+// (ADR 0015): exceptions instead of error values, an optional
+// Promise-returning `run` beside `start`/`answer`, AbortSignal instead of
+// context, bigint epoch nanoseconds instead of time.Time, and maps built from
+// Map or record() instead of pairs. None of them can be observed by a Script.
+// README.md holds the Host error catalogue and the Operation naming guide.
+//
+// Threads: TS has one, but the input-queue rules of talk.go still hold.
+// Calls marked "queued" append to the Group's input queue and return at once.
+// The next Pump drains the queue in call order, right after it takes its
+// Clock reading. A running Pump also checks for stop and cancelRun between
+// instructions. A worker call (load, reload, extend, addLibrary,
+// replaceLibrary, pump, save, settle) made from inside the Group's own Pump,
+// from an Operation function say, throws HostError "reentrant call".
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export interface Diagnostic {
+  code: string;    // from the diagnostic catalogue
+  message: string; // wording: not covered by parity
+  unit: string;    // the Script or Library the diagnostic is in
+  line: number;
+  col: number;
+}
+
+/** Rejects source: a Script, an Entry for extend Script, or a Library. */
+export declare class LoadError extends Error {
+  readonly diagnostics: Diagnostic[];
+}
+
+export type HostErrorCode =
+  | "clock backwards" | "parent cycle" | "duplicate object id" | "name reused"
+  | "not quiescent" | "reentrant call" | "wrong group" | "library mismatch"
+  | "reserved name" | "not adoptable" | "invalid value";
+
+/** Host misuse, refused at the call that made it (README.md). */
+export declare class HostError extends Error {
+  readonly code: HostErrorCode;
+}
+
+/** Load shedding, not a bug. */
+export declare class MailboxFull extends Error {}
+
+/**
+ * An ordinary, catchable Error inside the Script (ADR 0017). A catalogue
+ * code, or a data key that clashes with a reserved field, becomes
+ * `host error` instead.
+ */
+export declare class ScriptError extends Error {
+  constructor(code: string, message: string, data?: Value);
+  readonly code: string;
+  readonly data: Value; // a map, or nothing
+}
+
+/** Thrown by call.charge; let it propagate without doing the work. */
+export declare class LimitReached extends Error {}
+
+// ---------------------------------------------------------------------------
+// Values (ADR 0030)
+// ---------------------------------------------------------------------------
+
+/**
+ * One immutable Script value or Host Object handle, built only through the
+ * constructors below. Input the value model can't hold throws HostError
+ * "invalid value". `null` and `undefined` are never accepted.
+ */
+export declare class Value {
+  private readonly brand: "Value";
+  readonly kind: Kind;
+  asBool(): boolean | undefined;
+  asText(): string | undefined; // always NFC
+  asDecimal(): Decimal | undefined;
+  asQuantity(): { number: Decimal; unit: string } | undefined;
+  asCivilDate(): DateFields | undefined;
+  asInstant(): bigint | undefined; // epoch nanoseconds
+  asBytes(): Uint8Array | undefined; // a copy
+  asObject(): HostObject | undefined;
+  readonly length: number; // list length; 0 for anything else
+  index(i: number): Value; // 1-based; nothing past the end
+  get(key: string): Value;
+  entries(): [string, Value][]; // insertion order
+  /** A Text Pattern's canonical source, for display. */
+  patternSource(): string | undefined;
+  /**
+   * A Function Value's Home Script (ADR 0025), its only read. It is bound to
+   * its Group, and doesn't survive save and restore on the Host side.
+   */
+  homeScript(): string | undefined;
+  toString(): string; // the display form (ADR 0018)
+  equals(other: Value): boolean;
+}
+
+export type Kind =
+  | "nothing" | "boolean" | "number" | "quantity" | "text" | "bytes"
+  | "list" | "map" | "instant" | "civil date" | "pattern" | "function" | "object";
+
+export declare class Decimal {
+  toString(): string;                  // canonical, trailing zeros kept
+  toBigInt(): bigint;                  // throws unless an integer
+  toNumberLossy(): number;             // nearest, ties to even; too large throws
+}
+
+export interface DateFields {
+  year: number; month: number; day: number;
+  hour?: number; minute?: number; second?: number; nanosecond?: number;
+}
+
+export declare const nothing: Value;
+export declare function bool(b: boolean): Value;
+export declare function text(s: string): Value;    // a lone surrogate throws; NFC applied, uncharged
+export declare function num(n: number | bigint): Value; // shortest round-trip; NaN, ±Infinity, >34 digits throw
+export declare function dec(s: string): Value;     // the `as number` grammar
+export declare function quantity(n: Decimal, unit: string): Value;
+export declare function civilDate(f: DateFields | string): Value; // fields, or the `as civil date` grammar
+export declare function instant(epochNanos: bigint): Value;       // JS Date is never accepted
+export declare function bytes(b: Uint8Array): Value;              // copied in
+export declare function list(...vs: Value[]): Value;
+/** Insertion order. A duplicate key after NFC throws. */
+export declare function map(m: Map<string, Value> | Iterable<[string, Value]>): Value;
+/** Literal records in Host code. Throws on integer-like keys, which JS reorders. */
+export declare function record(o: Record<string, Value>): Value;
+
+// ---------------------------------------------------------------------------
+// JSON and the Value Encoding (ADRs 0021, 0030)
+// ---------------------------------------------------------------------------
+
+export declare function decodeJson(s: string): Value; // numbers read from text, never JSON.parse
+export declare function encodeJson(v: Value): string;
+export declare function encodeValue(v: Value): string; // a Function Value throws
+export declare function decodeValue(
+  s: string,
+  resolve: (kind: string, id: string) => HostObject | undefined,
+): Value;
+
+// ---------------------------------------------------------------------------
+// Shapes (ADRs 0015, 0030)
+// ---------------------------------------------------------------------------
+
+export declare class Shape { private readonly brand: "Shape" }
+export type FieldShape = Shape | { shape: Shape; optional: true };
+
+export declare const shape: {
+  any: Shape; nothing: Shape; bool: Shape; number: Shape; text: Shape;
+  bytes: Shape; instant: Shape; civilDate: Shape; pattern: Shape;
+  function: Shape; // a Function Value; any data Shape refuses one with `not encodable`
+  quantityOf(unit: string): Shape;
+  quantityKind(kind: string): Shape;
+  listOf(s: Shape): Shape;
+  map(fields: Record<string, FieldShape>): Shape; // closed
+  openMap(fields: Record<string, FieldShape>): Shape;
+  object(kind: ObjectKind): Shape;
+  oneOf(...ss: Shape[]): Shape;
+  optional(s: Shape): Shape;
+};
+
+// ---------------------------------------------------------------------------
+// Capabilities and Operations (ADRs 0012, 0015)
+// ---------------------------------------------------------------------------
+
+export interface Cost { fuel: number; alloc?: number }
+export interface ErrorDecl { code: string; fields?: Record<string, FieldShape> }
+
+interface OpBase {
+  args?: Shape[];
+  result?: Shape;
+  cost: Cost;
+  errors?: ErrorDecl[];
+}
+export interface ImmediateOp<B> extends OpBase {
+  mode: "immediate";
+  /** Return a Value, or throw ScriptError, LimitReached, or anything else as `host error`. */
+  do(call: Call<B>, ...args: Value[]): Value;
+}
+/**
+ * Exactly one of `start` and `run`. `run` is Promise sugar: the Core answers
+ * or fails when it settles. After a restore a `run` call can be answered,
+ * failed or reissued, but adopting one throws "not adoptable".
+ */
+export interface SuspendingOp<B> extends OpBase {
+  mode: "suspending";
+  maxPendingMs?: number; // otherwise the Script's maxWaitMs
+  start?(call: Call<B>, ...args: Value[]): void;
+  run?(call: Call<B>, ...args: Value[]): Promise<Value>;
+}
+export interface FireOp<B> extends OpBase {
+  mode: "fire-and-forget";
+  fire(call: Call<B>, ...args: Value[]): void;
+}
+export type Operation<B> = ImmediateOp<B> | SuspendingOp<B> | FireOp<B>;
+
+/** Declarations are ordered by name, whatever order the record is in. */
+export interface CapabilityDef<B> {
+  readonly name: string;
+  /** A reusable template. Each load binds it to one Script. */
+  grant(ops: string[] | "all", binding: B): Grant<B>;
+}
+export interface Grant<B> { readonly binding: B }
+
+export interface Call<B> {
+  readonly id: string;         // unique within the Group ("pricing/r1.c1")
+  readonly scriptName: string;
+  readonly binding: B;
+  readonly now: bigint;        // the Pump's Clock reading
+  readonly signal: AbortSignal; // aborted when the call is abandoned
+  /** Legal only while starting. Throws LimitReached. */
+  charge(fuel: number): void;
+  /** Queued. Ignored once the Run has ended. */
+  answer(v: Value, lateCost?: { fuel: number }): void;
+  fail(e: ScriptError): void;
+}
+
+// ---------------------------------------------------------------------------
+// Standard Capabilities (ADRs 0023, 0024; #71)
+// ---------------------------------------------------------------------------
+
+/** Per-call costs, keyed by Operation name. A missing one throws. */
+export type Costs = Record<string, Cost>;
+
+export interface CalendarImpl {
+  today(call: Call<string>, zone?: string): Value;
+  now(call: Call<string>, zone?: string): Value;
+  toCivil(call: Call<string>, instant: Value, zone?: string): Value;
+  toInstant(call: Call<string>, civil: Value, disambiguation: string, zone?: string): Value;
+  offset(call: Call<string>, instant: Value, zone?: string): Value;
+  zone(call: Call<string>, zone?: string): Value;
+}
+export interface LocaleImpl {
+  compare(call: Call<string>, a: Value, b: Value, opts: Value, tag?: string): Value;
+  rank(call: Call<string>, texts: Value, opts: Value, tag?: string): Value;
+  upper(call: Call<string>, s: Value, tag?: string): Value;
+  lower(call: Call<string>, s: Value, tag?: string): Value;
+  numberSymbols(call: Call<string>, tag?: string): Value;
+  monthNames(call: Call<string>, opts: Value, tag?: string): Value;
+  dayNames(call: Call<string>, opts: Value, tag?: string): Value;
+  tag(call: Call<string>, tag?: string): Value;
+}
+export interface TimerImpl {
+  schedule(call: Call<unknown>, name: string, at: Value, message: string, args: Value): void;
+  cancel(call: Call<unknown>, name: string): void;
+}
+
+// ---------------------------------------------------------------------------
+// Host Objects (ADRs 0012, 0016)
+// ---------------------------------------------------------------------------
+
+export interface PropDef<N> {
+  shape?: Shape;
+  get(o: HostObject<N>): Value;
+  /** Omit for read-only. Throw ScriptError to refuse. */
+  set?(o: HostObject<N>, v: Value): void;
+  getCost?: Cost;
+  setCost?: Cost;
+}
+export interface ObjectKindDef<N> {
+  name: string;
+  props: Record<string, PropDef<N>>;
+  /** For the Host Manifest only. setParent doesn't check it. */
+  parentKinds?: string[];
+}
+export interface ObjectKind<N = unknown> { readonly name: string }
+
+/** A Group-scoped handle to something the Host owns. */
+export interface HostObject<N = unknown> {
+  readonly id: string;
+  readonly kind: ObjectKind<N>;
+  readonly native: N;
+  readonly value: Value;
+}
+
+// ---------------------------------------------------------------------------
+// Limits (ADRs 0006, 0015, 0026; #71)
+// ---------------------------------------------------------------------------
+
+export interface Limits {
+  fuelPerRun: number;
+  allocPerRun: number;
+  persistentState: number; // Script-wide; never overridden per Delivery
+  callDepth: number;
+  mailboxDepth: number;
+  maxWaitMs: number;
+  maxJoin: number;
+  cleanupBudget: number;
+}
+export declare const defaultLimits: Readonly<Limits>;
+
+/** Tightens per-Run limits for one Delivery. Loosening throws "invalid value". */
+export type LimitOverride = Partial<Pick<Limits, "fuelPerRun" | "allocPerRun" | "maxWaitMs" | "maxJoin">>;
+
+// ---------------------------------------------------------------------------
+// Core
+// ---------------------------------------------------------------------------
+
+export interface Versions {
+  language: string;
+  costModel: string;
+  unicode: string;
+  core: string; // "ts/0.1.0": informational
+  saveFormat: string;
+}
+export declare const coreVersions: Versions;
+
+export interface GroupOptions {
+  name: string;
+  /** Called when a queued Host Input makes the Group runnable. Don't pump inside it. */
+  onReady?(): void;
+  trace?: (line: string) => void;
+}
+
+export interface LibrarySource { name: string; version: string; source: string }
+export interface OperationRef { capability: string; operation: string }
+
+export interface Library {
+  readonly name: string;
+  readonly version: string;
+  readonly source: string;
+  readonly identity: Uint8Array; // 32 bytes
+  readonly imports: readonly Library[];
+  readonly needs: readonly OperationRef[];
+}
+
+/** Process-wide: the compile cache, and Capability and Object Kind definitions. */
+export interface Core {
+  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>): CapabilityDef<B>;
+  defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
+  clockCapability(costs: Costs): CapabilityDef<void>;
+  calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone
+  localeCapability(impl: LocaleImpl, costs: Costs): CapabilityDef<string>;     // binding: default tag
+  timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
+  /** Throws LoadError. `imports` holds every Library its `use` lines name. */
+  compileLibrary(src: LibrarySource, imports?: Library[]): Library;
+  newGroup(o: GroupOptions): Group;
+  restore(save: Uint8Array, o: RestoreOptions): { group: Group; result: RestoreResult };
+}
+export declare function createCore(): Core;
+
+// ---------------------------------------------------------------------------
+// Group
+// ---------------------------------------------------------------------------
+
+export interface LoadOptions {
+  name: string;
+  source: string;
+  /** Keyed by the name the Script uses. */
+  grants: Record<string, Grant<any>>;
+  grantsAsUsed?: boolean;
+  owner?: HostObject;
+  objects?: Record<string, HostObject>;
+  limits?: Partial<Limits>;
+}
+
+export interface Message {
+  name: string;
+  args?: Value[];
+  limits?: LimitOverride;
+}
+
+/** Settles when a Pump ends the Run it started. Rejects with ScriptError `send failed`. */
+export interface Requested { id: string; result: Promise<Value> }
+
+export interface PumpOptions {
+  fuelSlice?: number; // per Script, per Pump
+  fuelCap?: number;   // across the Group
+}
+export interface PumpResult {
+  state: "idle" | "sliced" | "stopped";
+  nextDeadline?: bigint;
+  fuelUsed: number;
+  reports: Report[];
+}
+
+export type CarryOver = "reset variables" | "carry variables";
+
+export interface Group {
+  readonly name: string;
+  script(name: string): Script | undefined;
+  /** Worker. Throws LoadError or HostError. */
+  load(o: LoadOptions): Script;
+  /** Worker, Host Input. */
+  addLibrary(l: Library): void;
+  /** Worker, one atomic Host Input. Recompiles dependents and stop-and-reloads importers. */
+  replaceLibrary(l: Library, carry: CarryOver): Report[];
+  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N>;
+  /** Queued. */
+  setParent(o: HostObject, parent: HostObject | undefined): void;
+  dispose(o: HostObject): void;
+  /** Queued. Returns the delivery id. Throws MailboxFull or HostError. */
+  deliver(to: HostObject, m: Message): string;
+  request(to: HostObject, m: Message, o?: { signal?: AbortSignal }): Requested;
+  broadcast(m: Message): string; // the broadcast id
+  /** Queued. A Host call of a Function Value, shaped like request. */
+  call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
+  /** Worker. Synchronous. now is epoch nanoseconds; earlier than the last Pump's throws. */
+  pump(now: bigint, o?: PumpOptions): PumpResult;
+  save(): Uint8Array;
+  fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
+  /** Worker, before the first Pump after a restore. */
+  settle(callId: string, s: Settlement): void;
+}
+
+// ---------------------------------------------------------------------------
+// Script
+// ---------------------------------------------------------------------------
+
+export interface Counters {
+  fuelTotal: number; allocTotal: number; runs: number; faults: number;
+  persistentState: number; mailboxLen: number;
+}
+
+export interface Script {
+  readonly name: string;
+  grants(): Record<string, string[]>;
+  counters(): Counters;
+  /** Worker. Throws LoadError. */
+  reload(source: string, carry: CarryOver): Report[];
+  /** Worker. A reused name throws HostError "name reused". */
+  extend(source: string): void;
+  /** Queued. stop and cancelRun are also checked between instructions. */
+  stop(reason: string): void;
+  cancelRun(runId: string): void;
+  revoke(grantName: string): void;
+  deliver(m: Message): string;
+  request(m: Message, o?: { signal?: AbortSignal }): Requested;
+}
+
+// ---------------------------------------------------------------------------
+// Reports (ADR 0015)
+// ---------------------------------------------------------------------------
+
+export type Outcome =
+  | "completed" | "errored" | "limit fault" | "cancelled"
+  | "unhandled" | "dropped" | "host error";
+
+export interface Location { unit: string; line: number; col: number; handler: string; pc: number }
+
+export type Report =
+  | {
+      kind: "run end";
+      script: string;
+      run: string;
+      delivery?: string;
+      broadcast?: string;
+      handler: string;
+      outcome: Outcome;
+      result?: Value;
+      error?: ScriptError;
+      limit?: "fuel" | "alloc" | "persistent" | "depth" | "cleanup";
+      at?: Location;
+      fuel: number;
+      alloc: number;
+    }
+  | {
+      kind: "stop";
+      script: string;
+      reason: string; // the Host's, or "owner disposed"
+      discardedRuns: string[];
+      droppedMessages: string[];
+      pendingCalls: string[];
+    }
+  | { kind: "unhandled"; delivery: string; message: Message; target?: HostObject }
+  | { kind: "call failed"; script: string; call: string; operation: OperationRef; detail: string };
+
+// ---------------------------------------------------------------------------
+// Save and restore (ADR 0008)
+// ---------------------------------------------------------------------------
+
+export interface RestoreOptions extends GroupOptions {
+  libraries: Library[];
+  grants(script: string, name: string): Grant<any> | undefined;
+  /** An id it can't resolve restores as a disposed Host Object. */
+  resolve(kind: string, id: string): { native: unknown } | undefined;
+  onMismatch: "reject" | "variables only";
+}
+export interface PendingCall { id: string; script: string; operation: OperationRef; args: Value[] }
+export interface RestoreResult {
+  variablesOnly: boolean;
+  pending: PendingCall[]; // unsettled at the first Pump fails as `call lost`
+  discardedRuns: string[];
+  disposed: string[];
+}
+export type Settlement =
+  | { answer: Value }
+  | { fail: ScriptError }
+  | { reissue: true }
+  | { adopt: true };
+
+// ---------------------------------------------------------------------------
+// Host Manifest (ADR 0028)
+// ---------------------------------------------------------------------------
+
+export interface MessageDecl {
+  name: string;
+  args?: Shape[];
+  receivers?: ObjectKind[];
+}
+export interface ManifestSpec {
+  kind: string;
+  version: string;
+  grants: Record<string, Grant<any>>;
+  libraries?: Library[];
+  messages?: MessageDecl[];
+  objectKinds?: ObjectKind[];
+  objects?: Record<string, ObjectKind>;
+}
+/** Deterministic JSON. A pure function of the definitions; never includes bindings. */
+export declare function exportManifest(m: ManifestSpec): string;
