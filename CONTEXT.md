@@ -305,8 +305,20 @@ A number together with its Unit, e.g. `5 kg`. The Unit is part of the value, so 
 _Avoid_: measurement, unit value, tagged number
 
 **Unit Kind**:
-The family of Units that convert into one another, e.g. mass (`kg`, `lb`) or duration (`s`, `min`).
+The family of Units that convert into one another because they measure the same thing, e.g. mass (`kg`, `lb`) or volume (`L`, `m^3`). Exact and calendar durations are separate Kinds, and each currency is a Kind of its own.
 _Avoid_: dimension, unit type
+
+**Base Unit**:
+The one Unit of each Unit Kind that the others are defined against, and that equality and conversion go through, e.g. `m`, `kg` or `s`.
+_Avoid_: SI unit, canonical unit
+
+**Compound Unit**:
+A Unit built from other Units by multiplying, dividing and raising to a power, e.g. `mi/hr`, `m^2` or `kg*m/s^2`.
+_Avoid_: derived unit, unit expression
+
+**Calendar Unit**:
+A Unit of duration (month, year) whose length depends on the date it is added to, so it never converts to exact time and is never part of a Compound Unit.
+_Avoid_: nominal duration
 
 **Unit Catalogue**:
 The fixed table of every Unit, with its Unit Kind and exact conversion factor, that a language version pins. Neither Hosts nor Scripts can add to it.

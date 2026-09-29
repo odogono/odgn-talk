@@ -106,3 +106,6 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - The built-in property list is `length`, `keys`, `values`, `items`, `lines`, `words`, `characters`, `bytes` and `code points`. Every other function, Script functions included, is called `f(x, y)`, which settles `the f of x`.
   - A Guard may call Built-ins but never a Script or Library function.
   - Grouping becomes a `grouped by` Comprehension clause, left to a follow-up.
+- **Narrowed by ADR 0022:**
+  - A Compound Unit joins factors with an unspaced `*`, has at most one `/`, and takes only positive exponents (`kg*m/s^2`, `1/s`). `s^-1` is a syntax error, and a spaced `*` is multiplication.
+  - The Unit Catalogue lives in `units.toml`, and `grammar.toml`'s `[units]` points to it.
