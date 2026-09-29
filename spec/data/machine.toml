@@ -1,0 +1,21 @@
+# The Abstract Machine's instruction set.
+#
+# A stack machine with numbered local slots. Every construct lowers to an exact
+# instruction sequence, and each instruction is one language-level operation
+# (ADR 0010). This file holds opcodes, operand kinds, stack effects,
+# Suspension-Point flags, Cost Model keys and error codes.
+#
+# Schema: schema/machine.schema.json. Shown in chapter 8 (region `machine`).
+# Owned by the chapter 8 task, which fills the instructions and extends the
+# schema.
+#
+#   [[instruction]]
+#     name      the opcode's name in the canonical disassembly, e.g. "chunk-get"
+#     operands  the operand kinds, in order
+#     pops      how many values it pops from the operand stack
+#     pushes    how many values it pushes
+#     suspends  whether it is a Suspension Point
+#     cost      the Cost Model key in costs.toml
+#     errors    the Error Codes it can raise, from errors.toml
+
+instruction = []

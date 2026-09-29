@@ -4,8 +4,8 @@
 // idiom (ADR 0015): errors as values here and exceptions there, Start/Answer
 // here and an optional Promise-returning run there, and maps built from pairs
 // here and from Map or record() there. None of the differences can be observed
-// by a Script. Bodies are elided. README.md holds the Host error catalogue and
-// the Operation naming guide.
+// by a Script. Bodies are elided. Chapter 9 of the spec (09-embedding.md)
+// holds the Host error catalogue and the Operation naming guide.
 //
 // Shape in one breath:
 //
@@ -50,7 +50,7 @@ type Diagnostic struct {
 }
 
 // HostError is Host misuse, refused at the call that made it. Its Code comes
-// from the Host error catalogue (README.md), so both Cores refuse the same
+// from the Host error catalogue (09-embedding.md), so both Cores refuse the same
 // misuse with the same code.
 type HostError struct {
 	Code   HostErrorCode
@@ -892,7 +892,7 @@ type MessageDecl struct {
 	Receivers []*ObjectKind // the kinds of object it is delivered to; empty for a Script-addressed message
 }
 
-// ExportManifest writes the Host Manifest as deterministic JSON (README.md).
+// ExportManifest writes the Host Manifest as deterministic JSON (09-embedding.md).
 // It is a pure function of the definitions, not of a live Group, and it never
 // includes Grant bindings.
 func ExportManifest(m ManifestSpec) ([]byte, error)

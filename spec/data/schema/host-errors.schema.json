@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/host-errors.schema.json",
+  "title": "host-errors",
+  "description": "The Host error catalogue.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z']+( [a-z']+)*$"
+          },
+          "raised_when": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "raised_when"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "additionalProperties": false
+}

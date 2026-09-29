@@ -1,0 +1,91 @@
+# The resource limits a Host sets, and the default limit profile.
+#
+# A Host sets limits per Script at load, and zero fields take the defaults.
+# Some limits can also be tightened for one Delivery, but never loosened: a
+# loosening override is the Host error `invalid value` (ADRs 0006, 0015, 0026,
+# #71). Exceeding a limit is a Limit Fault.
+#
+# Schema: schema/limits.schema.json. Shown in chapter 6 (region `limits`).
+# Owned by the chapter 6 task, which sets every default.
+#
+# [[limit]]
+#   name         its name in the Spec
+#   go           its field in talk.go's Limits
+#   ts           its field in talk.ts's Limits
+#   measure      what it counts
+#   per          what it applies to: "run", "script", "join" or "wait"
+#   overridable  whether a Delivery's LimitOverride can tighten it
+#   default      optional until set: its value in the default limit profile
+#   sources      the ADRs and issues that settle it
+
+[[limit]]
+name = "Fuel per Run"
+go = "FuelPerRun"
+ts = "fuelPerRun"
+measure = "Fuel"
+per = "run"
+overridable = true
+sources = ["ADR 0006", "#71"]
+
+[[limit]]
+name = "Allocation Budget"
+go = "AllocPerRun"
+ts = "allocPerRun"
+measure = "logical size"
+per = "run"
+overridable = true
+sources = ["ADR 0006", "#71"]
+
+[[limit]]
+name = "Persistent State"
+go = "PersistentState"
+ts = "persistentState"
+measure = "logical size"
+per = "script"
+overridable = false
+sources = ["ADR 0006", "ADR 0010", "#71"]
+
+[[limit]]
+name = "call depth"
+go = "CallDepth"
+ts = "callDepth"
+measure = "frames"
+per = "run"
+overridable = false
+sources = ["ADR 0020", "#71"]
+
+[[limit]]
+name = "mailbox depth"
+go = "MailboxDepth"
+ts = "mailboxDepth"
+measure = "messages"
+per = "script"
+overridable = false
+sources = ["ADR 0017", "#71"]
+
+[[limit]]
+name = "MaxWait"
+go = "MaxWait"
+ts = "maxWaitMs"
+measure = "whole milliseconds"
+per = "wait"
+overridable = true
+sources = ["ADR 0015", "#71"]
+
+[[limit]]
+name = "MaxJoin"
+go = "MaxJoin"
+ts = "maxJoin"
+measure = "Join Members"
+per = "join"
+overridable = true
+sources = ["ADR 0026", "#71"]
+
+[[limit]]
+name = "Cleanup Budget"
+go = "CleanupBudget"
+ts = "cleanupBudget"
+measure = "Fuel"
+per = "run"
+overridable = false
+sources = ["ADR 0017"]

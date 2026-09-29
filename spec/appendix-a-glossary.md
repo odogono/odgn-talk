@@ -1,6 +1,8 @@
-# odgn-talk
+# Appendix A: Glossary
 
-A HyperTalk-descended scripting language, embeddable in Go servers, Bun servers and browsers, for running untrusted end-user scripts in a sandbox.
+> **Note.** This appendix is informative, and generated from [`CONTEXT.md`](../CONTEXT.md), which is its source. Edit `CONTEXT.md`, then run `bun run spec:gen`. The chapters hold the rules, and a term here only says what the chapters mean by it.
+
+<!-- generated: glossary -->
 
 ## Embedding
 
@@ -427,3 +429,5 @@ _Avoid_: timestamp, date (unqualified)
 **Civil Date**:
 A calendar date with an optional time of day, and no time zone attached, e.g. `2026-09-27`. A date-only Civil Date is never equal to one with a time of day, and can't be ordered against it.
 _Avoid_: local date, naive date, date (unqualified)
+
+<!-- end -->

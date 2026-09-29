@@ -5,7 +5,8 @@
 // Promise-returning `run` beside `start`/`answer`, AbortSignal instead of
 // context, bigint epoch nanoseconds instead of time.Time, and maps built from
 // Map or record() instead of pairs. None of them can be observed by a Script.
-// README.md holds the Host error catalogue and the Operation naming guide.
+// Chapter 9 of the spec (09-embedding.md) holds the Host error catalogue and
+// the Operation naming guide.
 //
 // Threads: TS has one, but the input-queue rules of talk.go still hold.
 // Calls marked "queued" append to the Group's input queue and return at once.
@@ -38,7 +39,7 @@ export type HostErrorCode =
   | "not quiescent" | "reentrant call" | "wrong group" | "library mismatch"
   | "reserved name" | "not adoptable" | "invalid value";
 
-/** Host misuse, refused at the call that made it (README.md). */
+/** Host misuse, refused at the call that made it (09-embedding.md). */
 export declare class HostError extends Error {
   readonly code: HostErrorCode;
 }

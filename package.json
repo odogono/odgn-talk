@@ -1,0 +1,13 @@
+{
+  "name": "odgn-talk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spec:gen": "bun tools/spec/generate.ts",
+    "spec:check": "bun tools/spec/generate.ts --check"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "ajv": "^8"
+  }
+}

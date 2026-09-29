@@ -64,7 +64,7 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - **Lockstep:** the Core exposes the Group Fingerprint (ADR 0009).
   - **Libraries:** an added Library reports the Operations it uses as a `needs` list (ADR 0020).
   - **Disposal:** disposing an object that owns a Script stops that Script (ADR 0016), reported with reason `owner disposed`.
-- Settled by #72: the final signatures are [`talk.go`](../embedding/talk.go) and [`talk.ts`](../embedding/talk.ts), with the shared rules in [the embedding interface](../embedding/README.md).
+- Settled by #72: the final signatures are [`talk.go`](../../spec/embedding/talk.go) and [`talk.ts`](../../spec/embedding/talk.ts), with the shared rules in [the embedding interface](../../spec/09-embedding.md).
   - **Clock:** there is no Clock interface. `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it.
   - **Input queue:** the calls that are safe from any thread append to the Group's input queue and return at once. The next Pump drains the queue in call order right after it takes its Clock reading, and that is where the Trace records them. A running Pump also checks `Stop` and `CancelRun` between instructions. `SetParent`, `Dispose`, `Revoke` and a Host call of a Function Value are queued too.
   - **Reports:** there is no `Reports` callback. A Pump returns its reports as one ordered list (`run end`, `stop`, `unhandled` and `call failed`), and `Reload` and `ReplaceLibrary` return theirs.
@@ -81,5 +81,5 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - **Timeouts abandon:** a call failed with `timeout` is also abandoned, so its context or signal fires.
   - **Charging:** `Charge` fails exactly when the Run's Fuel left after the declared cost can't cover it.
   - **Durations:** `maxPending` and `MaxWait` are whole milliseconds, in the Host Manifest, the Group Fingerprint and both Cores.
-  - **The message layer:** one message per embedding call, and every exchange is started by the Host. Operation and property calls come back as interim replies to `pump`. A queued call held in the Host's outbox during a Pump is received when the Core reads it. See [the embedding interface](../embedding/README.md#the-message-layer).
+  - **The message layer:** one message per embedding call, and every exchange is started by the Host. Operation and property calls come back as interim replies to `pump`. A queued call held in the Host's outbox during a Pump is received when the Core reads it. See [the embedding interface](../../spec/09-embedding.md#the-message-layer).
 - Narrowed by [ADR 0031](0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md) (#80): `Decide`, `Script.Decide` and `DecideBroadcast` are queued calls shaped like `Request`, and their future settles with a Verdict (`allowed`, `vetoed` or `undecided`). A new report kind, `decided`, is returned by the Pump that seals the Verdict. There is no Core deadline: a Host that can't wait cancels, which settles the Decision as undecided. Cancelling after the seal does nothing.

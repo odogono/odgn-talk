@@ -1,0 +1,15 @@
+# The pinned Unicode version, and the Unicode Character Database files used.
+#
+# Each Core generates its segmentation, NFC, case-folding and class tables from
+# these files at build time. A file whose hash doesn't match fails the build.
+# Upgrading Unicode is a language version bump (ADR 0011).
+#
+# Schema: schema/unicode.schema.json. Shown in chapter 1 (region `unicode`).
+# Owned by the chapter 1 task, which pins the version.
+#
+#   version   optional until pinned: the Unicode version, e.g. "16.0.0"
+#   [[file]]
+#     path    the file's path in the UCD, e.g. "auxiliary/GraphemeBreakProperty.txt"
+#     sha256  the file's SHA-256 hash, as lowercase hex
+
+file = []

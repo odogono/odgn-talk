@@ -1,0 +1,161 @@
+# The error-code catalogue: every Error Code the Core raises inside a Script.
+#
+# Catalogue codes are reserved for the Core (ADR 0017). Parity covers the code
+# and the catalogue fields exactly, not the `message` wording. Host misuse has
+# its own catalogue, host-errors.toml.
+#
+# Schema: schema/errors.schema.json. Shown in chapter 6 (region `errors`).
+# Owned by the chapter 6 task, which writes the template messages, names the
+# codes the ADRs leave unnamed (division by zero, a dimension mismatch, a bad
+# `as` target, …) and resolves every `open` note.
+#
+# [[error]]
+#   code         the code, lowercase words separated by spaces
+#   fields       the code-specific keys, besides `code`, `message` and `at`
+#   raised_when  one sentence: what raises it
+#   sources      the ADRs ("ADR 0017") and issues ("#72") that settle it
+#   message      optional: the template message
+#   open         optional: what's still unsettled about it
+
+[[error]]
+code = "bad throw"
+fields = []
+raised_when = "`throw` is given something that isn't a map with a text `code`, or text"
+sources = ["ADR 0017", "#61"]
+
+[[error]]
+code = "no match"
+fields = []
+raised_when = "A Destructuring test fails in `let` or in a Lambda's parameters, or a binary text decode fails"
+sources = ["ADR 0010", "ADR 0013", "ADR 0017", "ADR 0025"]
+
+[[error]]
+code = "send failed"
+fields = ["reason", "error"]
+raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `error` is present only when `reason` is `errored`"
+sources = ["ADR 0015", "ADR 0017", "ADR 0025", "ADR 0026", "ADR 0031"]
+open = "ADR 0017 lists the reasons as Run outcomes plus `stopped`, but the embedding interface and ADR 0025 also use `function gone`"
+
+[[error]]
+code = "mailbox full"
+fields = ["to"]
+raised_when = "A `send` finds the receiver's mailbox full; it is raised at the `send`, even one that doesn't wait"
+sources = ["ADR 0017", "ADR 0026"]
+
+[[error]]
+code = "capability revoked"
+fields = ["capability", "operation"]
+raised_when = "A call goes through a revoked Grant"
+sources = ["ADR 0015", "ADR 0017"]
+
+[[error]]
+code = "wrong kind"
+fields = ["expected", "got", "value"]
+raised_when = "An operand or argument has the wrong kind, e.g. a Text Pattern search on a value that isn't text"
+sources = ["ADR 0015", "ADR 0017", "ADR 0023", "ADR 0024", "ADR 0030"]
+open = "ADRs 0015 and 0030 give the fields as `operation`, `argument` and `expected` for a Capability argument that breaks its Shape"
+
+[[error]]
+code = "can't convert"
+fields = ["to", "value"]
+raised_when = "A conversion fails, e.g. `\"lots\" as number`, or a parse such as `parseDate` doesn't match"
+sources = ["ADR 0017", "ADR 0021", "ADR 0023", "ADR 0024"]
+open = "ADRs 0023 and 0024 give the fields as `value`, `format` and `at`, with `at` as a position in the input rather than the source position"
+
+[[error]]
+code = "host error"
+fields = ["capability", "operation"]
+raised_when = "A Host function fails with something other than a Script error, a `Fail` misuses a reserved code or key, or a result breaks its Shape; it carries no Host detail"
+sources = ["ADR 0015", "ADR 0017", "ADR 0030"]
+open = "ADR 0015 and the embedding interface also use `host error` as a Run outcome, where ADR 0017 says an uncaught error ends the Run as `errored`"
+
+[[error]]
+code = "timeout"
+fields = ["capability", "operation", "after"]
+raised_when = "A suspending call runs past its `maxPending` or the Script's `MaxWait`, and is abandoned"
+sources = ["ADR 0015", "ADR 0017"]
+
+[[error]]
+code = "would suspend"
+fields = []
+raised_when = "A Function Value that may suspend is called without `and wait`, or handed to a Library function such as `map`"
+sources = ["ADR 0017", "ADR 0020", "ADR 0025"]
+
+[[error]]
+code = "function gone"
+fields = []
+raised_when = "A stale Function Value is called, after a variables-only restore or a Library replace"
+sources = ["ADR 0008", "ADR 0017", "ADR 0025"]
+
+[[error]]
+code = "wrong arity"
+fields = []
+raised_when = "A Lambda is called with the wrong number of arguments"
+sources = ["ADR 0017", "ADR 0025"]
+
+[[error]]
+code = "not encodable"
+fields = ["kind", "at"]
+raised_when = "JSON encoding, or a data-Shaped Capability argument, meets a value plain data can't hold, such as a Quantity or Bytes"
+sources = ["ADR 0017", "ADR 0021", "ADR 0025"]
+open = "`at` is a position inside the encoded value here, not the source position ADR 0017 gives it"
+
+[[error]]
+code = "out of domain"
+fields = ["function", "value"]
+raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, or a bad sort direction"
+sources = ["ADR 0002", "ADR 0021", "ADR 0025"]
+open = "The fields are stated only for math functions"
+
+[[error]]
+code = "out of range"
+fields = ["field", "value"]
+raised_when = "A date falls outside 0001–9999, or a date field isn't an in-range integer"
+sources = ["ADR 0023"]
+
+[[error]]
+code = "can't decode"
+fields = ["format", "at"]
+raised_when = "`decodeJson` is given invalid JSON"
+sources = ["ADR 0021"]
+open = "`at` is a position in the input here, not the source position ADR 0017 gives it"
+
+[[error]]
+code = "unknown zone"
+fields = ["zone"]
+raised_when = "A `calendar` Operation is given an unknown IANA zone"
+sources = ["ADR 0023"]
+open = "It comes from a Standard Capability the Host implements, and ADR 0017 turns a Host `Fail` with a catalogue code into `host error`; who raises it is unstated"
+
+[[error]]
+code = "ambiguous time"
+fields = ["civil", "zone"]
+raised_when = "`toInstant` with `\"reject\"` meets a DST gap or overlap"
+sources = ["ADR 0023"]
+open = "As for `unknown zone`: who raises it is unstated"
+
+[[error]]
+code = "bad locale"
+fields = ["locale"]
+raised_when = "A `locale` call names a tag that isn't well-formed BCP 47"
+sources = ["ADR 0024"]
+open = "As for `unknown zone`: who raises it is unstated"
+
+[[error]]
+code = "object gone"
+fields = ["object"]
+raised_when = "A `send … to` reaches a disposed Host Object"
+sources = ["ADR 0016", "ADR 0017", "#71"]
+open = "The embedding interface also raises it for reading or setting a disposed object's property, which no ADR states"
+
+[[error]]
+code = "read only"
+fields = []
+raised_when = "A `set` targets a read-only Host Object property whose kind isn't known at load"
+sources = ["ADR 0016", "ADR 0017", "#72"]
+
+[[error]]
+code = "call lost"
+fields = []
+raised_when = "A restored pending call is still unsettled at the first Pump"
+sources = ["ADR 0008", "ADR 0017", "#72"]

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/costs.schema.json",
+  "title": "costs",
+  "description": "The Cost Model.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rate": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "base": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "per": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "fuel": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "per",
+                "fuel"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "key",
+          "base"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "rate"
+  ],
+  "additionalProperties": false
+}

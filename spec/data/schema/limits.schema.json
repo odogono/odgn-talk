@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/limits.schema.json",
+  "title": "limits",
+  "description": "The resource limits and the default limit profile.",
+  "type": "object",
+  "properties": {
+    "limit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "go": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z]*$"
+          },
+          "ts": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z]*$"
+          },
+          "measure": {
+            "type": "string",
+            "minLength": 1
+          },
+          "per": {
+            "enum": [
+              "run",
+              "script",
+              "join",
+              "wait"
+            ]
+          },
+          "overridable": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(ADR [0-9]{4}|#[0-9]+)$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "go",
+          "ts",
+          "measure",
+          "per",
+          "overridable",
+          "sources"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "limit"
+  ],
+  "additionalProperties": false
+}

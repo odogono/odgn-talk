@@ -1,0 +1,289 @@
+# The Unit Catalogue: every Unit, with its Unit Kind and exact factor.
+#
+# A language version pins it, and neither Hosts nor Scripts can add to it
+# (ADR 0022). Every Unit is an exact factor times a product of base dimensions:
+# length, mass, time, temperature, and one per currency. Calendar Units are a
+# Unit Kind of their own, outside the dimension system, and never appear in a
+# Compound Unit. The order of [[kind]] entries is the Kind order that a
+# Compound Unit's factors print in.
+#
+# Schema: schema/units.schema.json. Shown in chapter 3 (regions `units.kinds`
+# and `units.units`). Owned by the chapter 3 task.
+#
+# [[kind]]
+#   name       the Unit Kind's name
+#   base       its Base Unit
+#   dimension  its product of base dimensions, e.g. "length^3"; absent for
+#              calendar duration
+#   factor     optional: the Base Unit's exact factor to the Base Units of its
+#              dimension, when it isn't a single base dimension ("0.001" for L)
+#   calendar   optional: true for the Calendar Unit Kind
+#
+# [[unit]]
+#   name    its one canonical spelling
+#   plural  optional: the plural of a word Unit; both forms are accepted
+#   kind    its Unit Kind
+#   factor  its exact factor to the Kind's Base Unit, as a decimal string
+#   ratio   instead of factor: [numerator, denominator]; conversion multiplies
+#           by the numerator, then divides by the denominator (only degF)
+
+[[kind]]
+name = "mass"
+base = "kg"
+dimension = "mass"
+
+[[kind]]
+name = "length"
+base = "m"
+dimension = "length"
+
+[[kind]]
+name = "volume"
+base = "L"
+dimension = "length^3"
+factor = "0.001"
+
+[[kind]]
+name = "exact duration"
+base = "s"
+dimension = "time"
+
+[[kind]]
+name = "calendar duration"
+base = "month"
+calendar = true
+
+[[kind]]
+name = "temperature difference"
+base = "degC"
+dimension = "temperature"
+
+[[kind]]
+name = "USD"
+base = "USD"
+dimension = "USD"
+
+[[kind]]
+name = "EUR"
+base = "EUR"
+dimension = "EUR"
+
+[[kind]]
+name = "GBP"
+base = "GBP"
+dimension = "GBP"
+
+[[kind]]
+name = "JPY"
+base = "JPY"
+dimension = "JPY"
+
+[[kind]]
+name = "CHF"
+base = "CHF"
+dimension = "CHF"
+
+[[kind]]
+name = "CNY"
+base = "CNY"
+dimension = "CNY"
+
+[[kind]]
+name = "CAD"
+base = "CAD"
+dimension = "CAD"
+
+[[kind]]
+name = "AUD"
+base = "AUD"
+dimension = "AUD"
+
+[[kind]]
+name = "INR"
+base = "INR"
+dimension = "INR"
+
+[[kind]]
+name = "SEK"
+base = "SEK"
+dimension = "SEK"
+
+[[unit]]
+name = "mg"
+kind = "mass"
+factor = "0.000001"
+
+[[unit]]
+name = "g"
+kind = "mass"
+factor = "0.001"
+
+[[unit]]
+name = "kg"
+kind = "mass"
+factor = "1"
+
+[[unit]]
+name = "lb"
+kind = "mass"
+factor = "0.45359237"
+
+[[unit]]
+name = "oz"
+kind = "mass"
+factor = "0.028349523125"
+
+[[unit]]
+name = "mm"
+kind = "length"
+factor = "0.001"
+
+[[unit]]
+name = "cm"
+kind = "length"
+factor = "0.01"
+
+[[unit]]
+name = "m"
+kind = "length"
+factor = "1"
+
+[[unit]]
+name = "km"
+kind = "length"
+factor = "1000"
+
+[[unit]]
+name = "inch"
+plural = "inches"
+kind = "length"
+factor = "0.0254"
+
+[[unit]]
+name = "ft"
+kind = "length"
+factor = "0.3048"
+
+[[unit]]
+name = "yd"
+kind = "length"
+factor = "0.9144"
+
+[[unit]]
+name = "mi"
+kind = "length"
+factor = "1609.344"
+
+[[unit]]
+name = "mL"
+kind = "volume"
+factor = "0.001"
+
+[[unit]]
+name = "L"
+kind = "volume"
+factor = "1"
+
+[[unit]]
+name = "ms"
+kind = "exact duration"
+factor = "0.001"
+
+[[unit]]
+name = "s"
+kind = "exact duration"
+factor = "1"
+
+[[unit]]
+name = "min"
+kind = "exact duration"
+factor = "60"
+
+[[unit]]
+name = "hr"
+kind = "exact duration"
+factor = "3600"
+
+[[unit]]
+name = "day"
+plural = "days"
+kind = "exact duration"
+factor = "86400"
+
+[[unit]]
+name = "week"
+plural = "weeks"
+kind = "exact duration"
+factor = "604800"
+
+[[unit]]
+name = "month"
+plural = "months"
+kind = "calendar duration"
+factor = "1"
+
+[[unit]]
+name = "year"
+plural = "years"
+kind = "calendar duration"
+factor = "12"
+
+[[unit]]
+name = "degC"
+kind = "temperature difference"
+factor = "1"
+
+[[unit]]
+name = "degF"
+kind = "temperature difference"
+ratio = [5, 9]
+
+[[unit]]
+name = "USD"
+kind = "USD"
+factor = "1"
+
+[[unit]]
+name = "EUR"
+kind = "EUR"
+factor = "1"
+
+[[unit]]
+name = "GBP"
+kind = "GBP"
+factor = "1"
+
+[[unit]]
+name = "JPY"
+kind = "JPY"
+factor = "1"
+
+[[unit]]
+name = "CHF"
+kind = "CHF"
+factor = "1"
+
+[[unit]]
+name = "CNY"
+kind = "CNY"
+factor = "1"
+
+[[unit]]
+name = "CAD"
+kind = "CAD"
+factor = "1"
+
+[[unit]]
+name = "AUD"
+kind = "AUD"
+factor = "1"
+
+[[unit]]
+name = "INR"
+kind = "INR"
+factor = "1"
+
+[[unit]]
+name = "SEK"
+kind = "SEK"
+factor = "1"

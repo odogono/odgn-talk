@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/version.schema.json",
+  "title": "version",
+  "description": "The language version.",
+  "type": "object",
+  "properties": {
+    "language": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(-[a-z0-9.]+)?$"
+    }
+  },
+  "required": [
+    "language"
+  ],
+  "additionalProperties": false
+}
