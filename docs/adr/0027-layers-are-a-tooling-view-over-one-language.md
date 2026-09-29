@@ -80,3 +80,6 @@ The language has two layers, the Beginner Surface and the Advanced Constructs, b
   - Each Lint's wording and the `long-join-body` threshold, written with the tooling.
   - The LSP, formatter and debugger design, in #1's tooling fog.
 - Narrowed by ADR 0028: a fourteenth Lint, `unknown-message` (hint / hint), flags a Handler for a message the Host Manifest doesn't declare. The Lint engine is part of the one TS tooling stack.
+- **Settled by #61:**
+  - Its first two "Left for later" items are resolved. The pinned size is spelled `^n bytes` (ADR 0013). `with` doesn't exist, and `throw "code"` is a Beginner Surface shorthand (ADR 0017).
+  - The catalogue gains two Lints. `ambiguous-ignoring-case` (warning / hint) flags a trailing `ignoring case` after an `and`/`or` chain, since it binds only to the nearest comparison (ADR 0019). `shadows-builtin` (warning / hint) flags a Script name that shadows a Built-in Constant (ADR 0029).

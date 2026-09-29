@@ -15,3 +15,4 @@ Text Patterns compile to our own IR and run on one linear-time matcher (a Pike V
 - Typed Elements and `as <kind>` convert after the match, and the matcher never goes back to try another split. `as` is therefore allowed only where the conversion can be proven to succeed at load time.
 - Adding lookaround or an escape hatch later is backwards compatible. Adding a backtracking engine would not be.
 - Narrowed by ADR 0027: `lazily` is an Advanced Construct, tagged in `grammar.toml`. It loads and runs like any other construct, and a `beginner` Lint Profile flags it.
+- Settled by #61: inside `<…>` the anchors are two-word phrases (`text start`, `text end`, `line start`, `line end`, `word break`), decided on two tokens. `end` on its own means nothing there, even though it is a Reserved Word elsewhere.

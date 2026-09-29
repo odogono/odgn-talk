@@ -79,3 +79,7 @@ A Script handles ordinary errors with `try … catch … finally … end try`. A
   - A Command Call to a Handler that may suspend is written `… and wait`, and a Handler called function-style may never suspend.
 - Narrowed by ADR 0025: the catalogue gains `would suspend`, `function gone`, `wrong arity` and `not encodable`. A call to a Function Value from outside its Home Script fails as `send … and wait` does, with `send failed` and the home Run's outcome as `reason`.
 - Narrowed by ADR 0026: a Join fails fast. The first member failure to arrive is raised at `end wait` as its own error map, plus `index` (its 1-based start position). The Core adds `index` only when it is missing, and `index` joins the keys a Host `Fail`'s `Data` may not use. A member inside a `try` within a Join body is a load error.
+- **Settled by #61:**
+  - `with` doesn't exist. It would only serve tagged results, a convention the language deliberately doesn't have, and `try` already chains steps that can fail.
+  - `throw <text>` is shorthand for `throw {code: text}`, decided at run time by the value's kind. A map is thrown as it is, and anything else raises `bad throw`. It is Beginner Surface.
+  - `catch "out of stock"` and `on error "timeout"` are shorthand for `{code: "…"}` heads, and a `where` Guard may follow either. Only a text literal is shorthand. A name in a head still binds.

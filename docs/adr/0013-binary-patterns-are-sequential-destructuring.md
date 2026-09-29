@@ -21,3 +21,7 @@ Scripts match Bytes with a Binary Pattern, a Destructuring form next to `[…]` 
 - **Cost:** one Abstract Machine instruction per field, both when matching and when building, each charged a static base plus a per-byte term for copied or decoded fields. A failed clause test pays only for the fields it read.
 - Narrowed by ADR 0021: floats are read and written by the Built-ins `fromFloat64(b)`, `fromFloat32(b)`, `toFloat64(n)` and `toFloat32(n)`, not by pattern fields. Hex and base64 are `toHex`, `fromHex`, `toBase64` and `fromBase64` in the `bytes` Library.
 - Narrowed by ADR 0027: a pinned outer variable as a size is an Advanced Construct, and a Guard on the length the pattern read is its Beginner Surface form. Its spelling is left for later.
+- **Settled by #61:**
+  - A pinned outer variable as a size is written `^n bytes`, and `^` is also allowed inside a parenthesised size (`(^n * 2) bytes`), matching `{order: ^orderId}`.
+  - A bare size name that isn't bound earlier in the pattern is a load error that suggests `^n`, so adding an earlier field can never silently change a size.
+  - Its Beginner Surface forms are a Guard on the length when the field is last (`<< hdr: 4 bytes, body: ...rest >> where the length of body = n`), and otherwise `...rest` followed by the chunk `bytes 1..n of rest`.
