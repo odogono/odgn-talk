@@ -40,7 +40,7 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
   - Each `calendar` Operation takes an optional trailing IANA zone id, and otherwise uses the zone the Grant binds. An unknown zone raises `unknown zone` with `{zone}`.
   - `toInstant` also takes an optional disambiguation: `"compatible"` (the default: a time in a gap moves forward by the gap's length, and a time in an overlap takes the earlier Instant), `"earlier"`, `"later"` or `"reject"`. `"reject"` raises `ambiguous time` with `{civil, zone}`.
   - Operation names aren't stdlib names, so `calendar`'s `offset` doesn't clash with the `offset` Built-in.
-  - `locale` (#46) is the third Standard Capability.
+  - `locale` is the third Standard Capability (ADR 0024).
 - **The `date` Library:** narrows ADR 0021.
   - Construction: `makeDate(y, m, d)`, `makeDateTime(y, m, d, h, mi)` with optional `s` and `ns`, and `atTime(d, h, mi)`, which adds a time to a date-only value. They are written in the language over `as civil date`.
   - A field that isn't an integer in its range raises `out of range` with `{field, value}`, and is never normalised.
@@ -63,4 +63,5 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
 - **Left for later:**
   - The literal syntax and the printed form of Civil Dates and Instants.
   - The Cost Model rates for the date Built-ins.
-  - The `locale` Operations for month and day names (#46).
+  - The `locale` Operations for month and day names. Resolved by ADR 0024.
+- Narrowed by ADR 0024: `monthNames` gives 12 names, January first, and `dayNames` gives 7, Monday first, matching `weekday(d)`. Both take `width` and `form` options. `formatDate`'s tokens stay numeric, and there is no locale date pattern.

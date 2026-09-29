@@ -36,6 +36,14 @@ _Avoid_: permission, API access
 A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar` and `locale`.
 _Avoid_: built-in capability, system capability, core capability
 
+**Locale**:
+A BCP 47 tag naming the conventions of a language and region, e.g. `"de-CH"`, which the Host resolves to the nearest one it supports.
+_Avoid_: language, culture
+
+**Collation**:
+A Locale's ordering of text, as opposed to the code-point order the language uses everywhere else.
+_Avoid_: alphabetical order, sort order (unqualified)
+
 **Operation**:
 One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command, endpoint
