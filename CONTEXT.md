@@ -170,6 +170,10 @@ _Avoid_: include, require
 A `given` expression that makes a Function Value, e.g. `given r: the wind of r > 10`, or a `given r … end given` block.
 _Avoid_: anonymous function, block, arrow function, closure
 
+**Match**:
+The plain map one Text Pattern match gives: `{text, range, captures, ranges}`, where `captures` and `ranges` are keyed by Capture name. The Match Search gives a list of them.
+_Avoid_: match object, match data, result (unqualified)
+
 **Match Search**:
 An `every match of <p> in s` expression, giving the list of every match of a Text Pattern in a text.
 _Avoid_: find all, global match, comprehension
