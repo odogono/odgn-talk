@@ -82,7 +82,7 @@ positions = ["straight after `wait for` (a Join)"]
 
 [[contextual]]
 word = "as"
-positions = ["after an operand (a conversion)", "after a pattern (binding the whole value)", "after the imported name in `use`", "after a Text Pattern element", "after the value of a Binary Pattern build field"]
+positions = ["after an operand (a conversion)", "after a pattern (binding the whole value)", "after the Library name in `use`, before the new name", "after a Text Pattern element", "after the value of a Binary Pattern build field"]
 
 [[contextual]]
 word = "before"

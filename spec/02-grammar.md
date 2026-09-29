@@ -12,7 +12,7 @@ The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), a
 
 - **The EBNF** is that of [the W3C XML Recommendation](https://www.w3.org/TR/xml/#sec-notation), as [chapter 0](00-introduction.md#notations) says.
 - **Tokens** come from [chapter 1](01-lexical-structure.md#tokens): `Word`, `Name`, `Number`, `Text`, `Unit` and `NL`, plus `CallOpen` (a `(` straight after a Name), `PatternOpen` and `PatternClose` (the `<` and `>` of a Text Pattern) and `BinaryOpen` (`<<` in operand position).
-- **A quoted word** such as `'put'` matches a Word with that spelling. If it is a Reserved Word, it is only ever that keyword. Otherwise it is a contextual keyword, which has its meaning only where a production quotes it, and is an ordinary Name everywhere else.
+- **A quoted word** such as `'put'` matches a Word with that spelling. If it is a Reserved Word, it is only ever that Reserved Word. Otherwise it is a contextual keyword, which has its meaning only where a production quotes it, and is an ordinary Name everywhere else.
 - **Overlaps:** where a contextual keyword could also be read as a Name, a [two-token decision](#two-token-decisions) picks the reading.
 - **Comments** in a production state a rule that the notation can't, such as "the Name after `end` is the Handler's name".
 
@@ -29,7 +29,7 @@ The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), a
 A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 
 - **Block structure:** `end`, `else`, `when`, `catch`, `finally` and `after` end or continue a block at the start of a statement, and `then` ends a condition. None of them can be a Handler name.
-- **Statement keywords:** if `add` were contextual, `add 1 to x` and a Command Call `add 1` would differ only at `to`, arbitrarily far in. The same holds for every statement keyword.
+- **The words that start statements:** if `add` were contextual, `add 1 to x` and a Command Call `add 1` would differ only at `to`, arbitrarily far in. The same holds for every word that starts a statement, except `next`: `next repeat` is decided on its two tokens, so `next` stays contextual.
 - **`given`** starts a Lambda, decided on its first token.
 - **`in`** makes `x is in r` (membership) a decision on one token, not three. **`wait`** makes `… and wait` a decision on two. **`the`, `of`, `is`, `not`, `and` and `or`** are the expression words.
 - **`to`, `into`, `be`, `then` and `where`** aren't needed to parse valid source. They are reserved because they put first errors on the right token: `put 1 + into x` fails at `into`, not at `x`.
@@ -46,7 +46,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `a` | after `is` or `is not`, before a kind; after `can be`; before a kind in a Text Pattern (a Typed Element) |
 | `all` | straight after `wait for` (a Join) |
 | `an` | as `a` |
-| `as` | after an operand (a conversion); after a pattern (binding the whole value); after the imported name in `use`; after a Text Pattern element; after the value of a Binary Pattern build field |
+| `as` | after an operand (a conversion); after a pattern (binding the whole value); after the Library name in `use`, before the new name; after a Text Pattern element; after the value of a Binary Pattern build field |
 | `before` | after the value in `put` |
 | `begins` | operator position, before `with` |
 | `by` | after the Container in `multiply` and `divide`; after `delimited` |
@@ -139,8 +139,8 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [chapter 12](12-sessions-and-tooling.md)). It is decided on its first token, with no second parse:
 
 - A word that starts a declaration (`on`, `function`, `private`, `use` or `constant`, and `script` before `variable`) starts one.
-- Any other Reserved Word starts a statement.
-- Any other Name starts a Command Call only if the Session Script has a Handler by that name. Otherwise the Entry is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
+- A Reserved Word that starts a statement (`put`, `if`, `wait`, …) starts one, and so does `next` before `repeat`.
+- Any other Name starts a Command Call only if the Session Script has a Handler by that name. Anything else, including an Entry that starts with `the`, `not`, `given` or a constant, is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
 
 ## Handlers
 
@@ -223,7 +223,8 @@ ExpressionList ::= Expression ( ',' Expression )*
 
 <!-- end -->
 
-- **Every statement keyword is reserved,** so a statement that starts with a Name is a Command Call or a call statement.
+- **Every word that starts a statement is reserved,** except `next`, so a statement that starts with any other Name is a Command Call or a call statement.
+- **`say`:** the grammar reads `say x` as an ordinary Command Call. [Chapter 12](12-sessions-and-tooling.md) makes it short for `tell console to write x`.
 - **Command Calls:** a Name, then its arguments, if the next token can start an expression. So `greet "Ann"` passes one argument, `blink and wait` passes none, and `n - 1` passes `-1` to a Handler `n`.
 - **Call statements:** a Name straight followed by `(`, with no space, is a call (`refresh()`), not a Command Call. With a space, `(` groups an argument, so `say (1 + 2) & "!"` passes one argument.
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
@@ -232,7 +233,7 @@ ExpressionList ::= Expression ( ',' Expression )*
 - **`put ...`** splices a list, and so takes only `after` or `before`.
 - **`return` and `veto`** take an expression if one starts next. `return` is never an operand ([chapter 1](01-lexical-structure.md#text-literals)).
 - **`pass`** names the message it passes. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
-- **`replace`:** at the start of a statement, `replace <p> in c with e` rewrites the Container `c`. In operand position, the same words give the new text. There, `c` and `e` are each an expression at the level of `&`, so `put replace <"-"> in s with "+" & x into t` replaces with `"+" & x`, and `into` ends the expression, since it isn't an operator. `replace first` replaces only the first match.
+- **`replace`:** at the start of a statement, `replace <p> in c with e` rewrites the Container `c`. In operand position, the same words give the new text. There, `c` is any expression but a Lambda, and `e` an expression at the level of `&`, so `put replace <"-"> in s with "+" & x into t` replaces with `"+" & x`, and `into` ends the expression, since it isn't an operator. `replace first` replaces only the first match.
 
 ## Blocks
 
@@ -261,7 +262,7 @@ Timeout        ::= 'or' Expression
 
 - **One-line `if`:** `if … then` followed by a statement on the same line is the one-line form, and its `else` must be on that line too. Each branch is one `Inline` statement: not an `if`, `repeat`, `match`, `try`, Join or block `wait for`.
 - **Block `if`:** `if … then` at the end of a line opens a block, closed by `end if`. An `else if … then` or `else` ends its line too.
-- **`repeat`:** `forever` straight after `repeat` is always the keyword. A count is any expression before `times`.
+- **`repeat`:** `forever` straight after `repeat` always means a loop with no end, and never a count. A count is any expression before `times`.
 - **`match`:** each `when` has one pattern, then an optional Guard. `when contains <…>` searches rather than matching the whole value. At most one `else` comes last. A branch body is an `Inline` statement on the same line, or a block.
 - **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). `from` takes a postfix-level operand, so the `or` there is the timeout. At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
 - **`try`:** `catch` clauses are Destructuring heads with optional Guards, tried top to bottom ([chapter 6](06-errors-and-limits.md)).
@@ -382,7 +383,7 @@ The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix |
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
-ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Concat 'with' Concat
+ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
 Map            ::= '{' ( MapKey Expression ( ',' MapKey Expression )* )? '}'
@@ -444,7 +445,7 @@ The Built-in property names, which `the <name> of x` reads instead of a key:
 > put every match of <digits> in "a1 b22" into hits
 > ```
 
-## Patterns
+## Destructuring
 
 <!-- generated: ebnf.patterns -->
 
@@ -461,8 +462,8 @@ Literal        ::= Text | '-'? Number Unit? | 'true' | 'false' | 'nothing'
 
 <!-- end -->
 
-- **Where patterns go:** Handler heads, `let`, `match … when`, `catch`, `repeat for each`, Lambda parameters and `wait for` events.
-- **A Name binds,** and `_` matches anything without binding. In a map pattern, a Name alone is short for `{name: name}`.
+- **Where Destructuring goes:** Handler heads, `let`, `match … when`, `catch`, `repeat for each`, Lambda parameters and `wait for` events.
+- **A Name binds,** and `_` matches anything without binding. In a map, a Name alone is short for `{name: name}`.
 - **`as name`** after a pattern binds the whole value it matched.
 - **Literals** match by `=`: a Text, a Number with an optional sign and Unit, `true`, `false` and `nothing`. A text literal in a `catch` or `on error` head is short for `{code: "…"}` ([chapter 6](06-errors-and-limits.md)).
 - **The pin** `^name` compares with an existing variable instead of binding.
@@ -613,7 +614,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 
 - **Only the first syntax error is normative:** its code and its position. The parse stops there.
 - **Its position** is the first token that can't continue the parse. A lexical error is reported where its token starts, and `not a container` at the Container's first token.
-- **Error order:** lexical and parse errors come first, then checker diagnostics in source order. Since the parse stops at the first syntax error, source with one has no checker diagnostics.
+- **Error order:** lexical and parse errors come first, then load-time diagnostics in source order. Since the parse stops at the first syntax error, source with one has no other load-time diagnostics.
 
 > **Example.** In `put 5 into` followed by a comment, the error is at the end of the line, after the comment. In `if count > then say "x"`, it is at `then`. In `put <"a", bogus> into x`, it is at `bogus`.
 

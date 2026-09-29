@@ -1,6 +1,6 @@
 # Grammar check
 
-A predictive parser that follows [Spec chapters 1 and 2](../../spec/02-grammar.md), kept to check that the grammar stays parseable with two tokens of lookahead and no backtracking, as the #38 parser prototype did. It reads its word lists from [`grammar.toml`](../../spec/data/grammar.toml) and [`units.toml`](../../spec/data/units.toml). It isn't normative, and it isn't a Core: it builds a tree, and doesn't check, lower or run anything (ADR 0028).
+A predictive parser that follows [Spec chapters 1 and 2](../../spec/02-grammar.md), kept to check that the grammar stays parseable with two tokens of lookahead and no backtracking, as the [#38](https://github.com/odogono/odgn-talk/issues/38) parser prototype did. It reads the lists that drift from [`grammar.toml`](../../spec/data/grammar.toml) and [`units.toml`](../../spec/data/units.toml). It isn't normative, and it isn't a Core: it builds a tree, and doesn't check, lower or run anything ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ```sh
 bun run grammar:check                                  # what CI runs

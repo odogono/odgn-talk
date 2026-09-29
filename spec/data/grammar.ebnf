@@ -152,7 +152,7 @@ The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix |
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
-ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Concat 'with' Concat
+ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
 Map            ::= '{' ( MapKey Expression ( ',' MapKey Expression )* )? '}'

@@ -48,7 +48,7 @@ const COMPARISONS = new Set(["=", "<>", "<", ">", "<=", ">="]);
 // The operand-starting Reserved Words.
 const OPERAND_WORDS = new Set(["the", "not", "true", "false", "nothing", "it", "me", "given", "replace"]);
 // Words that end a line in operator position and so continue it.
-const CONTINUING_WORDS = new Set(["and", "or", "is", "mod", "div", "contains", "matches"]);
+const CONTINUING_WORDS = new Set(["and", "or", "is", "mod", "div", "contains", "matches", "with", "be"]);
 
 export interface Stats {
   sites: Map<string, number>;
@@ -762,7 +762,7 @@ export class Parser {
     }
     const pat = this.chunkLevel();
     this.expectWord("in", "operator");
-    const target = statement ? this.container() : this.concat();
+    const target = statement ? this.container() : this.or();
     this.expectWord("with", "operator");
     const value = statement ? this.expr() : this.concat();
     return { k: "Replace", first, pat, target, value };
@@ -866,7 +866,7 @@ export class Parser {
       } else node = { k: "is", neg, l, r: this.concat() };
     } else if (this.isWord(t, "can") && this.isWord(this.la2("can-be", "operator"), "be")) {
       this.next("operator");
-      this.next();
+      this.next("operator");
       if (this.atWord("a", "an")) this.next();
       node = { k: "can be", l, kind: this.kind() };
     } else if (this.isWord(t, "contains", "matches")) {
@@ -874,7 +874,7 @@ export class Parser {
       node = { k: t.v, l, r: this.concat() };
     } else if (this.isWord(t, "begins", "ends") && this.isWord(this.la2("begins-with", "operator"), "with")) {
       this.next("operator");
-      this.next();
+      this.next("operator");
       node = { k: `${t.v} with`, l, r: this.concat() };
     }
     if (!node) return l;

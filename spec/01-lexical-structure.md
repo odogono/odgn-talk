@@ -66,7 +66,7 @@ BinaryOpen     ::= '<<'  /* in operand position */
 
 - **Longest match:** a token is the longest run of characters that forms one, so `...` is never `..` then `.`, and `<=` is never `<` then `=`.
 - **Space and comments:** spaces and tabs separate tokens and are otherwise ignored. A comment runs from `--` to the end of its line, anywhere outside a text literal, so `5--3` is `5`. There are no block comments.
-- **Words:** a Word is an ASCII letter or `_`, then letters, digits and `_`. Words are case-sensitive, and every Reserved Word is lowercase, so `Put` is a name. A Name is a Word that isn't a Reserved Word ([chapter 2](02-grammar.md#reserved-words)). `_` alone is not a Name: it is the wildcard of Destructuring and of Binary Pattern fields.
+- **Words:** a Word is an ASCII letter or `_`, then letters, digits and `_`. Words are case-sensitive, and every Reserved Word is lowercase, so `Put` is a Name. A Name is a Word that isn't a Reserved Word ([chapter 2](02-grammar.md#reserved-words)). `_` alone is not a Name: it is the wildcard of Destructuring and of Binary Pattern fields.
 - **Numbers:** a Number is decimal digits with an optional fraction (`42`, `2.50`), or `0x` and hexadecimal digits (`0x0D`), which is an integer. A Number has no sign, since `-` is an operator, no exponent and no leading `.`. Its digits are kept as written, so `2.50` keeps its trailing zero ([chapter 3](03-values.md)).
 - **Punctuators:** the symbols in `Punctuator`. `'s` is a `'` followed by `s` that isn't followed by another Word character. Any other `'` is a `bad character`.
 - **Anything else:** a character outside a text literal or comment that starts no token is a `bad character`, reported where it stands. So is any non-ASCII character there, such as the `ï` of `put naïve into x`.
@@ -91,7 +91,7 @@ BinaryOpen     ::= '<<'  /* in operand position */
 ## Lines
 
 - **A line break ends a statement,** unless its line continues. There is no continuation character.
-- **A line continues** past its line break while a bracket is open: `(`, `[`, `{`, the `<` of a Text Pattern or a `<<`. It also continues when its last token is a comma, or a binary operator in operator position: a symbol operator such as `+`, `&`, `=` or `..`, or one of `and`, `or`, `is`, `mod`, `div`, `contains` and `matches`.
+- **A line continues** past its line break while a bracket is open: `(`, `[`, `{`, the `<` of a Text Pattern or a `<<`. It also continues when its last token is a comma, or a binary operator in operator position: a symbol operator such as `+`, `&`, `=` or `..`, or one of `and`, `or`, `is`, `mod`, `div`, `contains` and `matches`. The second word of a two-word operator counts too: the `with` of `begins with` and `ends with`, and the `be` of `can be`. So does a `with` or `be` elsewhere in operator position, as in `replace … with` and `let … be`, since an expression must follow.
 - **Lambdas:** a Lambda head, and the body of a block Lambda, make line breaks count again at the bracket depth where they start. So a block Lambda can be a call argument, a list item or a map value, and a bracket opened inside its body still continues lines as usual.
 - **The end of the source** ends the last line, as a line break would.
 - **Where a line ends:** the end-of-line token sits at the line break, after any trailing comment, or at the end of the source. An error reported "at the end of the line" is reported there.
@@ -152,12 +152,8 @@ UnitName       ::= [A-Za-z]+  /* a Unit's name or plural in units.toml; a Calend
 
 ## Lexical errors
 
-A lexical error is a syntax error ([chapter 2](02-grammar.md#syntax-errors)). It is reported where its token starts, and the parse stops there.
-
-- `bad character`: a character outside text and comments that starts no token.
-- `unterminated text`: a text literal with no closing quote on its line, reported at the opening quote.
-- `bad unit`: a Unit whose factors, `/` or exponents break the rules above.
+A lexical error is a syntax error, with one of the codes in [chapter 2](02-grammar.md#syntax-errors): `bad character`, `unterminated text` or `bad unit`. It is reported where its token starts, and the parse stops there.
 
 ## Outside parity
 
-_None._ How a Core represents tokens is its own business, but every token boundary and position above is normative.
+_None._

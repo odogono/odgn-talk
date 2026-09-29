@@ -94,11 +94,11 @@ async function loadEbnf(): Promise<Section[]> {
 const adrFiles = readdirSync(ADRS).filter((f) => /^\d{4}-.*\.md$/.test(f));
 const adrFile = (n: string) => adrFiles.find((f) => f.startsWith(`${n}-`));
 
-// Every word that has a meaning only in some positions: the contextual
-// keywords, and the words of grammar.toml's other lists.
-function contextualWords(d: Data): Set<string> {
+// Every word or phrase that has a meaning only in some positions: the
+// contextual keywords, and the entries of grammar.toml's other lists.
+function contextualPhrases(d: Data): string[] {
   const g = d.grammar;
-  const phrases: string[] = [
+  return [
     ...(g.contextual ?? []).map((c: any) => c.word),
     ...(g.follow ?? []),
     ...(g.ordinals ?? []),
@@ -107,8 +107,9 @@ function contextualWords(d: Data): Set<string> {
     ...Object.values(g.text_patterns ?? {}).flat() as string[],
     ...Object.values(g.binary_patterns ?? {}).flat() as string[],
   ];
-  return new Set(phrases.flatMap((s) => s.split(" ")));
 }
+
+const contextualWords = (d: Data) => new Set(contextualPhrases(d).flatMap((s) => s.split(" ")));
 
 // grammar.ebnf: every nonterminal is defined once and used, every quoted word
 // is a Reserved Word or a contextual keyword, and every Reserved Word is used.
@@ -180,14 +181,7 @@ function crossCheck(d: Data) {
   const contextual = (d.grammar.contextual ?? []).map((c: any) => c.word);
   for (const w of duplicates(contextual)) fail("grammar.toml", `contextual keyword "${w}" is listed twice`);
   // A phrase is decided on its first word, so only that word must not be reserved.
-  const g = d.grammar;
-  const deciding: string[] = [
-    ...contextual, ...(g.follow ?? []), ...(g.ordinals ?? []),
-    ...[...(g.properties ?? []), ...(g.chunk ?? []).flatMap((c: any) => [c.singular, c.plural]),
-      ...Object.values(g.text_patterns ?? {}).flat() as string[],
-      ...Object.values(g.binary_patterns ?? {}).flat() as string[]].map((s) => s.split(" ")[0]!),
-  ];
-  for (const w of new Set(deciding)) {
+  for (const w of new Set(contextualPhrases(d).map((s) => s.split(" ")[0]!))) {
     if (reserved.has(w)) fail("grammar.toml", `"${w}" is both reserved and contextual`);
   }
   for (const w of follow) if (!contextual.includes(w)) fail("grammar.toml", `FOLLOW-set word "${w}" has no [[contextual]] entry`);

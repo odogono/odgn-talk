@@ -417,3 +417,16 @@ end t
 on t
   put << x as km/hr >> into b
 end t
+-- case: parses: the text of an expression `replace` is any expression but a Lambda
+-- expect: parses
+on t
+  put replace <"a"> in a = b with c into t
+end t
+-- case: parses: a line ending in the second word of a two-word operator continues
+-- expect: parses
+on t
+  if s begins with
+      "x" then say s
+  if s can be
+      a number then say s
+end t
