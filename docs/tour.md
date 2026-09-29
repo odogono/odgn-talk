@@ -1,6 +1,6 @@
 # Learn odgn-talk in Y minutes
 
-> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour describes the language as the [ADRs](adr/) decide it. Each section heading names the ADRs it rests on, and where the tour and an ADR disagree, the ADR wins. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`CONTEXT.md`](../CONTEXT.md). Anything still undecided is left out and listed at the end.
+> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour describes the language as the [ADRs](adr/) decide it. Each section heading names the ADRs it rests on, and where the tour and an ADR disagree, the ADR wins. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`CONTEXT.md`](../CONTEXT.md). Anything still undecided is left out.
 
 odgn-talk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go servers, Bun servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
@@ -284,7 +284,7 @@ on checkout
   say "Tax is " & tax(100, 0.2)     -- "Tax is 20.0"
 end checkout
 
--- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026) ------------------------
+-- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026, 0031) ------------------
 
 -- Every Script is an actor with one FIFO mailbox. It never executes two Runs
 -- at the same instant, but a new Run may start while another is suspended.
@@ -345,6 +345,19 @@ on confirm
   wait for click from okButton or 30 s
   if it is nothing then say "timed out"   -- `it`: the message, or Nothing
 end confirm
+
+-- A Decision is the Host asking "may this happen?". A `, deciding` Handler
+-- answers it: `veto` refuses, with a reason, and ends the Run. Reaching the
+-- first `wait`, or the end, allows. So every `veto` (and `pass`) must come
+-- before any `wait`; the loader checks.
+on beforeMove m, deciding
+  if the to of m is in ownSquares then veto "Your own piece is there."
+  pass beforeMove                   -- let the board decide too
+end beforeMove
+on beforeMove m, deciding           -- in the board's Script
+  if paused then veto "The game is paused."
+  ask replay to record m and wait   -- the move is allowed from here on
+end beforeMove
 
 -- 10. Libraries (ADR 0020, 0021, 0022, 0023) ----------------------------------
 
@@ -591,11 +604,6 @@ on firstBytes data, n
   end match
 end firstBytes
 -- Beginner Surface form: `when << ...rest >>`, then `bytes 1..n of rest`.
-
--- 18. Still open (see issue #63) ----------------------------------------------
-
--- Not designed yet, so not in this tour:
---   `, deciding` and `veto`
 ```
 
 ## Further reading
