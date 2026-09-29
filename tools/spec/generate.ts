@@ -5,9 +5,10 @@
 //   bun tools/spec/generate.ts --check  validate, and fail if any region is stale
 //
 // A region is `<!-- generated: name -->…<!-- end -->` in any Markdown file under
-// spec/. Its name picks a view below. Both modes also validate each Data File
-// against its schema, run the cross-file checks and check every relative link in
-// the repo's Markdown files.
+// spec/. Its name picks a view below, and `ebnf.<section>` shows a section of
+// grammar.ebnf. Both modes also validate each Data File against its schema, run
+// the cross-file checks, check grammar.ebnf against grammar.toml and check every
+// relative link in the repo's Markdown files.
 
 import Ajv2020 from "ajv/dist/2020";
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -69,8 +70,80 @@ function duplicates(values: string[]): string[] {
   return [...new Set(values.filter((v) => seen.has(v) || !seen.add(v)))];
 }
 
+// grammar.ebnf, split into the sections its `/* ## name */` lines start.
+type Production = { name: string; rhs: string };
+type Section = { name: string; text: string; productions: Production[] };
+
+async function loadEbnf(): Promise<Section[]> {
+  const text = await Bun.file(join(DATA, "grammar.ebnf")).text();
+  const parts = text.split(/^\/\* ## ([a-z-]+) \*\/\n/m);
+  const sections: Section[] = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const body = parts[i + 1]!.trim();
+    const productions: Production[] = [];
+    for (const chunk of body.split(/\n(?=[A-Za-z]\w*\s*::=)/)) {
+      const m = /^([A-Za-z]\w*)\s*::=([\s\S]*)$/.exec(chunk.trim());
+      if (m) productions.push({ name: m[1]!, rhs: m[2]! });
+    }
+    sections.push({ name: parts[i]!, text: body, productions });
+  }
+  if (!sections.length) problems.push("spec/data/grammar.ebnf: no `/* ## name */` sections");
+  return sections;
+}
+
 const adrFiles = readdirSync(ADRS).filter((f) => /^\d{4}-.*\.md$/.test(f));
 const adrFile = (n: string) => adrFiles.find((f) => f.startsWith(`${n}-`));
+
+// Every word or phrase that has a meaning only in some positions: the
+// contextual keywords, and the entries of grammar.toml's other lists.
+function contextualPhrases(d: Data): string[] {
+  const g = d.grammar;
+  return [
+    ...(g.contextual ?? []).map((c: any) => c.word),
+    ...(g.follow ?? []),
+    ...(g.ordinals ?? []),
+    ...(g.properties ?? []),
+    ...(g.chunk ?? []).flatMap((c: any) => [c.singular, c.plural]),
+    ...Object.values(g.text_patterns ?? {}).flat() as string[],
+    ...Object.values(g.binary_patterns ?? {}).flat() as string[],
+  ];
+}
+
+const contextualWords = (d: Data) => new Set(contextualPhrases(d).flatMap((s) => s.split(" ")));
+
+// grammar.ebnf: every nonterminal is defined once and used, every quoted word
+// is a Reserved Word or a contextual keyword, and every Reserved Word is used.
+const EBNF_ROOTS = new Set(["Source", "Entry", "Token", "Comment", "Space"]);
+const LEXICAL_SECTIONS = new Set(["tokens", "units"]);
+
+function ebnfCheck(d: Data, sections: Section[]) {
+  const fail = (msg: string) => problems.push(`spec/data/grammar.ebnf: ${msg}`);
+  const all = sections.flatMap((s) => s.productions.map((p) => ({ ...p, section: s.name })));
+  for (const n of duplicates(all.map((p) => p.name))) fail(`${n} is defined twice`);
+  for (const s of duplicates(sections.map((s) => s.name))) fail(`section "${s}" appears twice`);
+  const defined = new Set(all.map((p) => p.name));
+  const used = new Set<string>();
+  const quoted = new Set<string>();
+  for (const p of all) {
+    const rhs = p.rhs.replace(/\/\*[\s\S]*?\*\//g, " ");
+    for (const m of rhs.matchAll(/'([^']*)'|"([^"]*)"/g)) {
+      const w = m[1] ?? m[2]!;
+      if (/^[a-z]+$/.test(w) && !LEXICAL_SECTIONS.has(p.section)) quoted.add(w);
+    }
+    const bare = rhs.replace(/'[^']*'|"[^"]*"|\[[^\]]*\]|#x[0-9A-Fa-f]+/g, " ");
+    for (const m of bare.matchAll(/\b[A-Z][A-Za-z]*\b/g)) {
+      used.add(m[0]);
+      if (!defined.has(m[0])) fail(`${p.name} uses ${m[0]}, which isn't defined`);
+    }
+  }
+  for (const n of defined) if (!used.has(n) && !EBNF_ROOTS.has(n)) fail(`${n} is defined but never used`);
+  const reserved = new Set<string>(d.grammar.reserved ?? []);
+  const contextual = contextualWords(d);
+  for (const w of quoted) {
+    if (!reserved.has(w) && !contextual.has(w)) fail(`'${w}' is neither a Reserved Word nor a contextual keyword in grammar.toml`);
+  }
+  for (const w of reserved) if (!quoted.has(w)) fail(`the Reserved Word "${w}" appears in no production`);
+}
 
 function crossCheck(d: Data) {
   const fail = (file: string, msg: string) => problems.push(`spec/data/${file}: ${msg}`);
@@ -110,9 +183,18 @@ function crossCheck(d: Data) {
     if (!base || base.kind !== k.name) fail("units.toml", `Kind "${k.name}" has Base Unit "${k.base}", which isn't one of its Units`);
     else if (base.factor !== "1") fail("units.toml", `Base Unit "${k.base}" must have factor "1"`);
   }
-  for (const w of duplicates(d.grammar.reserved ?? [])) fail("grammar.toml", `"${w}" is reserved twice`);
-  for (const c of d.grammar.contextual ?? []) {
-    if (reserved.has(c.word)) fail("grammar.toml", `"${c.word}" is both reserved and contextual`);
+  const contextual = (d.grammar.contextual ?? []).map((c: any) => c.word);
+  for (const w of duplicates(contextual)) fail("grammar.toml", `contextual keyword "${w}" is listed twice`);
+  // A phrase is decided on its first word, so only that word must not be reserved.
+  for (const w of new Set(contextualPhrases(d).map((s) => s.split(" ")[0]!))) {
+    if (reserved.has(w)) fail("grammar.toml", `"${w}" is both reserved and contextual`);
+  }
+  for (const w of follow) if (!contextual.includes(w)) fail("grammar.toml", `FOLLOW-set word "${w}" has no [[contextual]] entry`);
+  for (const [list, key] of [["decision", "name"], ["syntax_error", "code"]] as const) {
+    for (const v of duplicates((d.grammar[list] ?? []).map((e: any) => e[key]))) fail("grammar.toml", `${list} "${v}" is listed twice`);
+  }
+  for (const e of d.grammar.syntax_error ?? []) {
+    if (codes.has(e.code) || hostCodes.has(e.code)) fail("grammar.toml", `syntax error "${e.code}" is also in errors.toml or host-errors.toml`);
   }
 
   for (const f of ["name", "go", "ts"]) {
@@ -150,6 +232,7 @@ type View = (d: Data, file: string) => string;
 
 const cell = (s: unknown) => String(s ?? "").replaceAll("|", "\\|");
 const code = (s: string) => `\`${s}\``;
+const words = (ws: string[]) => ws.map(code).join(", ");
 const todo = (chapter: string) => `_To be written in ${chapter}._`;
 
 function table(head: string[], rows: unknown[][]): string {
@@ -180,23 +263,63 @@ const VIEWS: Record<string, View> = {
   version: (d) =>
     `This is language **${d.version.language}**, with Cost Model **${d.costs.version}**.`,
 
-  grammar: (d) => {
-    if (!d.grammar.reserved?.length) return todo("chapter 2");
-    const words = (ws: string[]) => ws.map(code).join(", ");
-    const parts = [`**Reserved Words:** ${words(d.grammar.reserved)}.`];
-    if (d.grammar.follow?.length) parts.push(`**The FOLLOW set:** ${words(d.grammar.follow)}.`);
-    if (d.grammar.contextual?.length) {
-      parts.push(table(["Contextual keyword", "Positions"],
-        d.grammar.contextual.map((c: any) => [code(c.word), c.positions.join(", ")])));
-    }
-    return parts.join("\n\n");
+  "grammar.reserved": (d) => words([...d.grammar.reserved].sort()),
+
+  "grammar.contextual": (d) =>
+    table(["Contextual keyword", "Positions"],
+      [...d.grammar.contextual].sort((a: any, b: any) => a.word.localeCompare(b.word))
+        .map((c: any) => [code(c.word), c.positions.join("; ")])),
+
+  "grammar.follow": (d) => words(d.grammar.follow),
+
+  "grammar.chunks": (d) =>
+    table(["Chunk kind", "Plural"], d.grammar.chunk.map((c: any) => [code(c.singular), code(c.plural)])),
+
+  "grammar.ordinals": (d) => words(d.grammar.ordinals),
+
+  "grammar.properties": (d) => words(d.grammar.properties),
+
+  "grammar.text-patterns": (d) => {
+    const t = d.grammar.text_patterns;
+    return [
+      `- **Keywords:** ${words(t.keywords)}.`,
+      `- **Classes:** ${words(t.classes)}.`,
+      `- **Anchors:** ${words(t.anchors)}.`,
+      `- **Repetitions:** ${words(t.phrases)}.`,
+    ].join("\n");
   },
+
+  "grammar.binary-patterns": (d) => {
+    const b = d.grammar.binary_patterns;
+    return [
+      `- **Integer types:** ${words(b.integer_types)}.`,
+      `- **Size units:** ${words(b.size_units)}.`,
+      `- **Byte orders:** ${words(b.byte_orders)}.`,
+    ].join("\n");
+  },
+
+  "grammar.operators": (d) =>
+    table(["Level", "Associativity", "Operators"],
+      d.grammar.operator.map((o: any) => [o.level, o.assoc, o.ops.map(code).join(", ")])),
+
+  "grammar.modifiers": (d) =>
+    table(["Modifier", "Attaches to"], d.grammar.modifier.map((m: any) => [code(m.name), m.attaches])),
+
+  "grammar.decisions": (d) =>
+    table(["Decision", "Rule"], d.grammar.decision.map((x: any) => [code(x.name), x.rule])),
+
+  "grammar.advanced": (d) =>
+    table(["Advanced Construct", "Written", "Beginner Surface form"],
+      d.grammar.advanced.map((a: any) => [a.construct, a.written, a.beginner])),
+
+  "grammar.syntax-errors": (d) =>
+    table(["Code", "Raised when"], d.grammar.syntax_error.map((e: any) => [code(e.code), e.raised_when])),
 
   unicode: (d) => {
     if (!d.unicode.version) return todo("chapter 1");
     return [
       `The pinned Unicode version is **${d.unicode.version}**.`,
-      table(["UCD file", "SHA-256"], d.unicode.file.map((f: any) => [code(f.path), code(f.sha256)])),
+      table(["UCD file", "Used for", "SHA-256"], d.unicode.file.map((f: any) => [code(f.path), f.use, code(f.sha256)])),
     ].join("\n\n");
   },
 
@@ -414,7 +537,10 @@ async function checkLinks(regenerated: Map<string, string>) {
 // ---------------------------------------------------------------------------
 
 const data = await loadData();
+const ebnf = await loadEbnf();
+for (const s of ebnf) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n```";
 crossCheck(data);
+ebnfCheck(data, ebnf);
 const regenerated = await fillRegions(data);
 await checkLinks(regenerated);
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/grammar.schema.json",
   "title": "grammar",
-  "description": "Reserved Words, contextual keywords and the FOLLOW set.",
+  "description": "Reserved Words, contextual keywords, the FOLLOW set and the other lists the parsers read.",
   "type": "object",
   "properties": {
     "reserved": {
@@ -11,6 +11,34 @@
         "type": "string",
         "pattern": "^[a-z]+$"
       },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "follow": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "ordinals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+( [a-z]+)*$"
+      },
+      "minItems": 1,
       "uniqueItems": true
     },
     "contextual": {
@@ -36,14 +64,252 @@
           "positions"
         ],
         "additionalProperties": false
-      }
+      },
+      "minItems": 1,
+      "uniqueItems": true
     },
-    "follow": {
+    "chunk": {
       "type": "array",
       "items": {
-        "type": "string",
-        "pattern": "^[a-z]+$"
+        "type": "object",
+        "properties": {
+          "singular": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "plural": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          }
+        },
+        "required": [
+          "singular",
+          "plural"
+        ],
+        "additionalProperties": false
       },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "text_patterns": {
+      "type": "object",
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "phrases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "keywords",
+        "classes",
+        "anchors",
+        "phrases"
+      ],
+      "additionalProperties": false
+    },
+    "binary_patterns": {
+      "type": "object",
+      "properties": {
+        "integer_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^u?int[0-9]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "size_units": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "byte_orders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "integer_types",
+        "size_units",
+        "byte_orders"
+      ],
+      "additionalProperties": false
+    },
+    "operator": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "assoc": {
+            "enum": [
+              "left",
+              "right",
+              "none",
+              "prefix",
+              "postfix"
+            ]
+          },
+          "ops": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "level",
+          "assoc",
+          "ops"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "modifier": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "attaches": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "attaches"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "decision": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+(-[a-z]+)*$"
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "rule"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "advanced": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "construct": {
+            "type": "string",
+            "minLength": 1
+          },
+          "written": {
+            "type": "string",
+            "minLength": 1
+          },
+          "beginner": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "construct",
+          "written",
+          "beginner"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "syntax_error": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z]+( [a-z]+)*$"
+          },
+          "raised_when": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "raised_when"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
       "uniqueItems": true
     },
     "units": {
@@ -59,11 +325,21 @@
       "additionalProperties": false
     }
   },
+  "additionalProperties": false,
   "required": [
     "reserved",
-    "contextual",
     "follow",
+    "ordinals",
+    "properties",
+    "contextual",
+    "chunk",
+    "text_patterns",
+    "binary_patterns",
+    "operator",
+    "modifier",
+    "decision",
+    "advanced",
+    "syntax_error",
     "units"
-  ],
-  "additionalProperties": false
+  ]
 }

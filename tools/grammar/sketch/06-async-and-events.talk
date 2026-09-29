@@ -1,0 +1,131 @@
+-- 06: async, events and concurrency (ADR 0004)
+-- No `await` anywhere. Suspension Points: `wait`, `wait for`, `send … and wait`,
+-- and Suspending Capabilities.
+
+-- Fire and forget: goes in the receiver's mailbox, returns immediately.
+on submit order
+  send review with order to approvals
+  -- ALT: send review(order) to approvals
+  -- ALT: send "review" with order to approvals   -- HyperTalk sends a text message
+  -- ?? `with` for arguments reads well for one argument. For several:
+  send review with order, "urgent" to approvals
+  --    …the comma-list ending in `to approvals` is hard to scan.
+end submit
+
+-- (Each section below is a separate take on a Handler, not a set of clauses.)
+
+-- Request/reply: suspends until the receiver's Run replies; the reply is `it`.
+on submit order
+  send review with order to approvals and wait
+  if it is "approved" then ship order
+  -- ALT: put (send review with order to approvals and wait) into verdict
+  -- ALT: ask approvals to review order                -- `ask` = send-and-wait
+  -- ?? `it` again. HyperTalk readers expect it; but after a suspension, other
+  --    Runs have executed, so `it` must be per-Run (it is: no shared state).
+end submit
+
+-- The receiving side
+on review order
+  if the amount of order > 1000 then
+    reply "needs a human"
+  else
+    reply "approved"
+  end if
+  -- ALT: return "approved"          -- `return` doubles as the reply
+  -- ?? `reply` vs `return`: with `return`, every Handler is a potential
+  --    responder, which is simpler. `reply` would let a Run reply and keep going.
+end review
+
+-- Handler queueing policy: what happens when the message arrives while a Run
+-- of this Handler is still suspended.
+on tick                    -- no suffix: every one runs concurrently (#48)
+  advance world
+end tick
+
+on save doc, queued        -- one at a time, FIFO
+  ask storage to save doc and wait
+end save
+
+on keypress k, dropping    -- ignore arrivals while one is in flight
+  handleKey k
+end keypress
+
+on search term, replacing  -- cancel the in-flight Run, start the new one
+  send query with term to index and wait
+  showResults it
+end search
+-- ADR 0019 / NOTES: the suffix forms below were agreed; the prefix forms
+-- (`on every tick`, `on replace search term`) are gone.
+-- ?? Prefix modifiers collide with commands: `on replace search term` looks like
+--    a Handler for a message called `replace`. `drop` and `queue` too.
+-- ALT (suffix): on search term, replacing
+--               on keypress k, dropping
+--               on save doc, queued
+--               on tick                  -- #48: no suffix is concurrent; `, every time` is gone
+-- ALT (block):  on search term
+--                 when busy: replace
+--                 …
+-- The suffix `-ing` form reads best to me and dodges the collision.
+
+-- wait
+on blink
+  show light
+  wait 500 ms
+  hide light
+  -- (`wait until <condition>` dropped: use `wait for` an event.)
+end blink
+
+-- wait for: a one-shot subscription with an optional timeout.
+on checkout order
+  send pay with order to payments
+  wait for paid {order: ^orderId} or 2 min
+  -- ?? which branch fired? Options:
+  if it is nothing then cancel order                 -- `it` = event, or Nothing on timeout
+  -- ALT: if the wait timed out then cancel order
+end checkout
+
+-- Block form: mirrors `match`, and the branch is explicit.
+on checkout order
+  put the id of order into orderId
+  send pay with order to payments
+  wait for
+    when paid {order: ^orderId, amount: a} where a = the total of order then
+      ship order
+    when failed {order: ^orderId, reason: r} then
+      send refused with r to customer
+    after 2 min then
+      cancel order
+  end wait
+  -- This reads best of the three. `after <duration>` as the timeout branch.
+  -- ?? Pin (`^orderId`) is advanced, but this is the most common use of it.
+  --    The beginner spelling: `when paid {order: o} where o = orderId`.
+end checkout
+
+-- One-line form, for the common case
+on greet
+  wait for click from okButton or 30 s
+  -- `from` takes a postfix-level operand, so the `or` is the timeout, not a
+  -- boolean `okButton or 30 s`.
+end greet
+
+-- Delegation: pass the message along the Message Path
+on keypress k
+  if k is "escape" then
+    close dialog
+  else
+    pass keypress
+  end if
+  -- was: `if … then close dialog` with `else pass keypress` on the next line.
+  --    ADR 0019's single-line form keeps `else` on the same line.
+end keypress
+
+-- Decision-mode events: the Host asks "may this happen?" and the Script can veto.
+on beforeClose door, deciding
+  if the state of door is "locked" then veto "The door is locked."
+  if the target is not me then pass beforeClose  -- `the target`: the object it was sent to
+  -- no `wait` allowed before this point (load-time error, ADR 0004)
+end beforeClose
+-- ALT: on closing door … veto
+-- ALT: on close door, deciding       -- decision mode as a suffix, like `replacing`
+-- ?? `before close` as a two-word message name breaks "handler names are one
+--    word". `beforeClose` or `closing`?

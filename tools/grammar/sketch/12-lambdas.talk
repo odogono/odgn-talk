@@ -1,0 +1,116 @@
+-- 12: Lambdas and Function Values (ADR 0025, prototype #54).
+-- The Host granted `http` (suspending), `log`, `locale` and `timers`.
+-- Every `list` Library function here (`filter`, `map`, `reduce`, `group`,
+-- `sortBy`, `sortWith`, `any`) is written in the language, imported with `use`.
+
+-- A Script Variable can hold a Function Value from the start.
+script variable double = given n: n * 2
+script variable handlers = {}
+
+function isWindy r
+  return the wind of r > 30 km/hr
+end isWindy
+
+on basics readings
+  -- a named function as a value: its bare name
+  put filter(readings, isWindy) into windy
+
+  -- Destructuring parameters
+  put map(readings, given {temp: t, wind: w}: t & "°, " & w) into labels
+  put filter(labels, given s: s contains "km") into withWind
+
+  -- two parameters, and a Lambda that isn't the last argument
+  put reduce(readings, given worst, r: max(worst, the wind of r), 0 km/hr) into peak
+  put sortWith(readings, given a, b: the temp of a < the temp of b) into byTemp
+
+  -- a Lambda can return a Lambda
+  put given k: given x: x * k into times
+  put times(3) into triple
+  put triple(14) into answer
+  -- ?? #54: `times(3)(14)` doesn't parse: a call needs a name before `(`.
+
+  -- the Match Search, composed with the Library
+  put every match of <n: digits> in "a1 b22 c333" into hits
+  put map(hits, given m: the n of m as number) into numbers
+
+  -- calling a Function Value held in a variable
+  put double(21) into d
+  if any(numbers, given n: n > 100) then tell log to write "big"
+end basics
+
+-- Sorting by Collation (ADR 0024), without `sorted by`
+on byName people
+  ask locale to rank map(people, given p: the name of p)
+  put it into ranks
+  return sortBy(people, given p: the (the name of p) of ranks)
+end byName
+
+-- Stored callbacks: registered by name, called later
+on register name, fn
+  put fn into the (name) of handlers
+end register
+
+on fire name, payload
+  put the (name) of handlers into fn
+  if fn is nothing then return nothing
+  fn(payload) and wait
+  -- ADR 0025: `and wait`, because `fn` may suspend, or live in another Script.
+  -- The result is in `it`, as with `ask … and wait`.
+  tell log to write name & " → " & it
+end fire
+
+-- A block Lambda may suspend. As a Put value, `end given` is followed by `into`.
+on setup
+  put given url
+    ask http to get url and wait
+    return the status of it
+  end given into statusOf
+  register "status", statusOf
+
+  -- a block Lambda inline, as an argument
+  register "greet", given who
+    tell log to write "hello " & who
+    return who
+  end given
+
+  fire "status", "https://api.example.com/health" and wait   -- `fire` may suspend (ADR 0020)
+end setup
+
+-- A zero-parameter Lambda: a thunk. Suspending ones are always the block form,
+-- because `ask … and wait` is a statement and an expression body can't hold it.
+on later
+  put given: 42 into answer
+  put given
+    wait 2 s
+    return 42
+  end given into slowAnswer
+  slowAnswer() and wait
+end later
+
+-- Handing a Function Value to the Host: a Host call is a Delivery to this
+-- Script (its Home Script), which runs it as a Run.
+on startTicking
+  tell timers to every 5 s, given tick
+    add 1 to the count of tick
+    tell log to write "tick " & the count of tick
+  end given
+  -- ?? #54: `timers`'s `every` as an Operation name reads like the old
+  --    Comprehension word, but after `tell X to` it's always an Operation.
+end startTicking
+
+-- Sending a Function Value to another Script. The receiver's call is a
+-- message back here, so the receiver must `and wait`.
+on share other
+  send useThis with given x: x + 1 to other
+end share
+
+-- A multi-line inline block Lambda, the hardest layout to read
+on windyDays readings
+  put filter(readings, given r
+    if the gust of r is nothing then return false
+    return the gust of r > 50 km/hr
+  end given) into gusty
+  -- ?? #54: it parses, but `end given) into gusty` is ugly. Naming it first
+  --    (`put given r … end given into isGusty`) reads better.
+  return group(gusty, given r: the date of the at of r)
+end windyDays

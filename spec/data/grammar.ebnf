@@ -1,7 +1,198 @@
-(* The grammar's productions, in W3C-style EBNF (ADR 0019, ADR 0032).
+/* The grammar's productions, in the EBNF notation of the W3C XML
+   Recommendation (ADR 0019, ADR 0032).
 
    Parsing is predictive, with a fixed lookahead of two tokens and no
-   backtracking. Reserved Words, contextual keywords and the FOLLOW set are in
-   grammar.toml, and Unit spellings in units.toml.
+   backtracking. A quoted word such as 'put' matches a Word token with that
+   spelling. The Reserved Words, the contextual keywords, the FOLLOW set and
+   the other word lists are in grammar.toml, and the Unit spellings are in
+   units.toml. A comment on a production states a rule the notation can't.
 
-   Owned by the chapter 2 task, which writes the productions. *)
+   Each section below is shown in a chapter through a generated region
+   named after it: `ebnf.tokens` for the `tokens` section, and so on.
+   tools/grammar/ checks the grammar against the syntax sketch, the docs and
+   the corpus. */
+
+/* ## tokens */
+
+Token          ::= Word | Number | Text | Unit | Punctuator | LineBreak
+Word           ::= [A-Za-z_] [A-Za-z0-9_]*
+Name           ::= Word  /* not a Reserved Word, and not `_` alone */
+Number         ::= [0-9]+ ( '.' [0-9]+ )? | '0x' [0-9A-Fa-f]+
+Text           ::= '"' [^"#xA#xD]* '"'
+Punctuator     ::= '...' | '..' | '&' | '=' | '<>' | '<=' | '>=' | '<<' | '>>'
+                 | '<' | '>' | '+' | '-' | '*' | '/' | '^' | '(' | ')' | '['
+                 | ']' | '{' | '}' | ',' | ':' | "'s"
+LineBreak      ::= #xD #xA | #xA | #xD
+Comment        ::= '--' [^#xA#xD]*
+Space          ::= ( #x20 | #x9 )+
+NL             ::= LineBreak  /* one that ends its line; the end of the source is one too */
+CallOpen       ::= '('  /* straight after a Name, with nothing between */
+PatternOpen    ::= '<'  /* in operand position, or inside a Text Pattern */
+PatternClose   ::= '>'  /* inside a Text Pattern, always one character */
+BinaryOpen     ::= '<<'  /* in operand position */
+
+/* ## units */
+
+Unit           ::= ( '1/' UnitFactor | UnitFactor ) ( ( '*' | '/' ) UnitFactor )*
+                   /* straight after a Number, or after `as`; at most one `/` */
+UnitFactor     ::= UnitName ( '^' [1-9] [0-9]* )?
+UnitName       ::= [A-Za-z]+  /* a Unit's name or plural in units.toml; a Calendar Unit stands alone */
+
+/* ## source */
+
+Source         ::= NL* ( Declaration NL* )*
+Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable | Use
+ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
+Constant       ::= 'constant' Name '=' Expression NL
+Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
+Function       ::= 'function' Name ( Name ( ',' Name )* )? NL Block 'end' Name NL
+                   /* the Name after `end` is the function's name */
+Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
+                   /* at a Session prompt only; decided on its first token */
+
+/* ## handlers */
+
+Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name NL
+                   /* the Name after `end` is the Handler's name */
+HandlerHead    ::= ( Pattern ( ',' Pattern )* )? Guard? ( ',' Suffix )*
+Suffix         ::= 'queued' | 'dropping' | 'replacing' | 'deciding' | 'during' Name
+Guard          ::= 'where' Expression
+MessageName    ::= Name  /* not `all` */
+
+/* ## statements */
+
+Block          ::= ( Statement? NL )*
+Statement      ::= If | Repeat | Match | Try | Wait | Simple
+Inline         ::= Simple | 'wait' ( 'for' Event Timeout? | Expression )
+Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
+                 | Send | Ask | Tell | Return | Veto | Pass | Exit | Next | Throw
+                 | Replace | CallStatement | CommandCall
+Put            ::= 'put' ( Expression ( 'into' | 'after' | 'before' )
+                         | '...' Expression ( 'after' | 'before' ) ) Container
+Let            ::= 'let' Pattern 'be' Expression
+Set            ::= 'set' Container 'to' Expression
+Add            ::= 'add' Expression 'to' Container
+Subtract       ::= 'subtract' Expression 'from' Container
+Multiply       ::= 'multiply' Container 'by' Expression
+Divide         ::= 'divide' Container 'by' Expression
+Delete         ::= 'delete' Container
+Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
+Send           ::= 'send' MessageName ( 'with' ExpressionList )? 'to' Expression AndWait?
+Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
+Tell           ::= 'tell' Expression 'to' Word ExpressionList?
+AndWait        ::= 'and' 'wait'
+Return         ::= 'return' Expression?
+Veto           ::= 'veto' Expression?
+Pass           ::= 'pass' MessageName
+Exit           ::= 'exit' 'repeat'
+Next           ::= 'next' 'repeat'
+Throw          ::= 'throw' Expression
+Replace        ::= 'replace' 'first'? ChunkLevel 'in' Container 'with' Expression
+CallStatement  ::= Call AndWait?
+CommandCall    ::= Name ExpressionList? AndWait?
+ExpressionList ::= Expression ( ',' Expression )*
+
+/* ## blocks */
+
+If             ::= 'if' Expression 'then'
+                   ( Inline ( 'else' Inline )?
+                   | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if' )
+Repeat         ::= 'repeat' ( 'for' 'each' Pattern 'in' Expression | 'while' Expression
+                            | 'until' Expression | 'forever' | Expression 'times' )
+                   NL Block 'end' 'repeat'
+Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'
+When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
+Body           ::= Inline NL | NL Block
+Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'
+Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
+Join           ::= 'all' NL Block 'end' 'wait'
+WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'
+WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
+Event          ::= MessageName ( Pattern ( ',' Pattern )* )? ( 'from' ChunkLevel )?
+Timeout        ::= 'or' Expression
+
+/* ## expressions */
+
+Expression     ::= Lambda | Or
+Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given' )
+Or             ::= And ( 'or' And )*
+And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
+Not            ::= 'not' Not | Comparison
+Comparison     ::= Concat ( Comparator IgnoringCase? )?
+Comparator     ::= ( '=' | '<>' | '<' | '>' | '<=' | '>=' | 'contains' | 'matches'
+                   | 'begins' 'with' | 'ends' 'with' ) Concat
+                 | 'is' 'not'? ( 'in' Concat | Article Kind | 'empty' | Concat )
+                 | 'can' 'be' Article? Kind
+Article        ::= 'a' | 'an'
+IgnoringCase   ::= 'ignoring' 'case'
+Concat         ::= Range ( '&' Range )*
+Range          ::= Additive ( '..' Additive )?
+Additive       ::= Multiplicative ( ( '+' | '-' ) Multiplicative )*
+Multiplicative ::= Power ( ( '*' | '/' | 'mod' | 'div' ) Power )*
+Power          ::= Unary ( '^' Power )?
+Unary          ::= '-' Unary | Conversion
+Conversion     ::= ChunkLevel ( 'as' ( Unit | Kind ) )*
+                   /* inside a BuildField, `as` before an integer type ends the value */
+Kind           ::= 'civil' 'date' | Name
+
+/* ## operands */
+
+ChunkLevel     ::= Postfix ( 'delimited' 'by' Postfix )?
+                   /* `delimited by` only after a Chunk Expression or a plural chunk property */
+Postfix        ::= Primary ( "'s" Key )*
+Key            ::= 'code' 'points' | Word
+Primary        ::= Number Unit? | Text | TextPattern | BinaryBuild | '(' Expression ')'
+                 | List | Map | 'true' | 'false' | 'nothing' | 'it' | 'me'
+                 | The | ReplaceExpression | MatchSearch | Chunk | Call | Name
+Call           ::= Name CallOpen ExpressionList? ')'
+Chunk          ::= ChunkWord Range 'of' Postfix
+ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
+The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
+                         | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
+                   /* the Name after an Ordinal is a chunk kind's singular */
+Ordinal        ::= Name  /* one of grammar.toml's ordinals */
+MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
+ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
+List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
+ListItem       ::= '...'? Expression
+Map            ::= '{' ( MapKey Expression ( ',' MapKey Expression )* )? '}'
+MapKey         ::= ( Word | Text ) ':'
+
+/* ## patterns */
+
+Pattern        ::= PatternPrimary ( 'as' Name )?
+PatternPrimary ::= ListPattern | MapPattern | TextPattern | BinaryPattern | Pin | Literal | '_' | Name
+ListPattern    ::= '[' ( ListPatternItem ( ',' ListPatternItem )* )? ']'
+ListPatternItem ::= '...' Name? | Pattern
+MapPattern     ::= '{' ( MapPatternEntry ( ',' MapPatternEntry )* )? '}'
+MapPatternEntry ::= MapKey Pattern | Name
+Pin            ::= '^' Name
+Literal        ::= Text | '-'? Number Unit? | 'true' | 'false' | 'nothing'
+
+/* ## text-patterns */
+
+TextPattern    ::= PatternOpen ( Alternation ( ',' Alternation )* )? PatternClose
+Alternation    ::= Element ( 'or' Element )*
+Element        ::= Atom ( 'as' Kind | 'lazily' | 'ignoring' 'case' )*
+Atom           ::= Text | Number Atom | TextPattern | '(' Expression ')' | Capture
+                 | Anchor | PatternClass | Repetition | Article Kind | PatternKeyword
+Capture        ::= Name ':' Alternation
+Anchor         ::= ( 'text' | 'line' ) ( 'start' | 'end' ) | 'word' 'break'
+PatternClass   ::= ( 'uppercase' | 'lowercase' ) ( 'letter' | 'letters' )
+Repetition     ::= ( 'one' | 'zero' ) 'or' 'more' 'of' Atom | 'optional' Atom
+PatternKeyword ::= Name  /* one of grammar.toml's Text Pattern keywords */
+
+/* ## binary-patterns */
+
+BinaryPattern  ::= BinaryOpen ( Field ( ',' Field )* )? '>>'
+Field          ::= '...' Name? AsText? | Number | Text | ( Name | '_' ) ':' FieldType
+                   /* the Name after `...` isn't `as` */
+FieldType      ::= IntegerType ByteOrder? | Size SizeUnit AsText?
+IntegerType    ::= Name  /* one of grammar.toml's integer types */
+ByteOrder      ::= 'little' | 'big'
+Size           ::= Number | Pin | Name | '(' Expression ')'
+                   /* inside the parentheses, a Pin is also a Primary */
+SizeUnit       ::= 'byte' | 'bytes' | 'bit' | 'bits'
+AsText         ::= 'as' 'text'
+BinaryBuild    ::= BinaryOpen ( BuildField ( ',' BuildField )* )? '>>'
+BuildField     ::= Concat ( 'as' FieldType )?

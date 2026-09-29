@@ -1,0 +1,211 @@
+-- 09: fetch data over HTTP and work on it.
+-- The Host granted `http` (suspending, limited to api.example.com) and `log`.
+-- Uses `ask X to …` for Capability calls. That spelling is still open (see 07).
+--
+-- GET https://api.example.com/stations/LHR/readings?day=2026-09-27 returns:
+--   { "station": "LHR",
+--     "readings": [
+--       {"at": "2026-09-27T00:00:00Z", "temp_c": 11.2, "wind_kph": 14, "gust_kph": null},
+--       {"at": "2026-09-27T01:00:00Z", "temp_c": 10.8, "wind_kph": 31, "gust_kph": 52},
+--       … ],
+--     "next": "https://api.example.com/stations/LHR/readings?day=2026-09-27&page=2" }
+
+use decodeJson from json
+use average from list
+
+on report station, day
+  put "https://api.example.com/stations/" & station & "/readings?day=" & day into url
+  ask http to get url and wait                   -- Suspension Point
+  -- ALT: put http.get(url) into response
+  -- ALT: get url from http                      -- HyperTalk's `get`, result in `it`
+
+  -- The response is plain data (a map), not a Host Object:
+  --   {status: 200, headers: {…}, body: <bytes>}
+  let {status: code, body: raw} be it
+  if code is not 200 then
+    tell log to write "fetch failed: " & code
+    return nothing
+    -- ?? What about an http error, or the Capability being revoked? That's
+    --    error-handling fog; this sketch only covers the status code.
+  end if
+
+  put decodeJson(raw as text) into data
+  -- was: put raw as text as json into data
+  -- ALT: put parse json (raw as text) into data
+  -- ALT: ask http to get json url               -- the Capability does the decoding
+  -- ?? `as json` looks like a conversion, but JSON is a format, not a value kind.
+  --    ADR 0003 bans `as list`/`as object` that run text as code. JSON parsing
+  --    isn't that, but maybe `as` should stay for value kinds only and JSON
+  --    should be a stdlib function (`json of …`).
+  -- ?? JSON to Script values: object → map, array → list, number → decimal
+  --    (exact if it fits in 34 digits?), null → Nothing. Can a list hold Nothing?
+  --    Here it has to: `"gust_kph": null`.
+
+  -- Destructure the shape we expect. A missing key means no match, so this is
+  -- also validation.
+  match data
+    when {station: s, readings: rs} where rs is a list then
+      summarise s, rs
+    else
+      tell log to write "unexpected shape"
+  end match
+end report
+
+on summarise station, readings
+  -- turn raw JSON records into typed values
+  put [] into clean
+  repeat for each r in readings
+    match r
+      when {at: a, temp_c: t, wind_kph: w} where t is a number and w is a number then
+        put {at: a as instant, temp: t, wind: w as km/hr} after clean
+        -- `temp` stays a plain number: the core only has temperature
+        -- DIFFERENCES as Units (issue #8). Absolute °C is a stdlib concern.
+        -- ?? `put … after clean` appends to a list. Reads well, and it's the
+        --    same word as the text chunk write (`put "!" after …`).
+        -- ALT: add {…} to clean                    -- `add` is arithmetic
+        -- ALT: append {…} to clean
+      else
+        tell log to write "skipping bad reading: " & r
+    end match
+  end repeat
+
+  -- filter, map, reduce: ADR 0025 (#54) replaces the Comprehensions with
+  -- `list` Library calls that take a Lambda.
+  put filter(clean, given r: the wind of r > 30 km/hr) into windy
+  -- Was (ADR 0019): put every r in clean where the wind of r > 30 km/hr into windy
+  -- ?? #54: `filter(` puts the verb first, and `given r:` names the element
+  --    where `every r in` did. It reads as "filter clean, given r, keeping…".
+
+  put map(clean, given r: the temp of r) into temps
+  -- Was (ADR 0019): put the temp of r for every r in clean into temps
+
+  put reduce(temps, given total, t: total + t, 0) into sum
+  -- New: a fold with no loop. Was a `repeat for each` with an accumulator.
+
+  put average(temps) into mean
+  put max(temps) into warmest
+  put round(mean, 1) into mean
+  put sortBy(clean, given r: the wind of r, {descending: true}) into byWind
+  -- Was (ADR 0019): put every r in clean sorted by the wind of r descending into byWind
+  -- ?? #54: `descending` was a word; now it's an options map after the key.
+  --    The Lambda body ends at the comma, so the map is `sortBy`'s argument.
+
+  put group(clean, given r: the date of the at of r) into byDay
+  -- New: the `grouped by` clause (#47) is now a function.
+
+  let [top, ...others] be byWind
+  put station & " on " & the date of the at of top & ":" & newline into summary
+  -- ?? `the date of the at of top`: key names that are also words (`at`, `date`)
+  --    read terribly. `top's at` is no better. JSON keys like `wind-kph` or
+  --    `"feels like"` would need `the "wind-kph" of r`.
+  put "  mean " & mean & ", warmest " & warmest & newline after summary
+  put "  windiest " & the wind of top & " at " & the at of top & newline after summary
+  put "  " & the length of windy & " windy hours" after summary
+  tell log to write summary
+  return {station: station, mean: mean, windy: the length of windy}
+end summarise
+
+-- Paging: follow `next` until it's missing.
+on allReadings station, day
+  put "https://api.example.com/stations/" & station & "/readings?day=" & day into url
+  put [] into all
+  repeat while url is not nothing
+    ask http to get url and wait
+    put decodeJson(it's body as text) into page
+    put ...the readings of page after all
+    -- ADR 0019: `put ys after xs` appends one element; `...ys` splices.
+    put the next of page into url                -- missing key → Nothing → loop ends
+  end repeat
+  return all
+end allReadings
+
+-- Several stations at once. One Run can only wait for one thing, so going
+-- concurrent means one Run per station (ADR 0004):
+script variable results = {}
+
+on compare stations
+  repeat for each s in stations
+    send fetchOne with s to me
+  end repeat
+end compare
+
+on fetchOne s
+  put report(s, "2026-09-27") into the (s) of results
+  -- ?? Calling this Script's own Handler like a function. Its `ask` suspends
+  --    THIS Run, so a Suspension Point sits behind a call that looks
+  --    immediate. The loader can see it; can a reader?
+  -- ?? A computed key: `the (s) of results` vs `results[s]`. There's no good
+  --    English spelling for a key held in a variable.
+  if the length of results = 3 then tell log to write "all in: " & results
+  -- ?? Fine for a demo. A real "join" wants `send … and wait` to several
+  --    targets, or Script-level bookkeeping like this. Worth a question in
+  --    the stdlib/host fog.
+end fetchOne
+
+------------------------------------------------------------------------
+-- HTTP methods. With `tell X to …` / `ask X …` and no Host-defined syntax,
+-- a Capability call is:   ask <capability> to <operation> <arguments>
+-- The operation name is a word the Host declares. The arguments are
+-- ordinary values, positional, and usually one map.
+------------------------------------------------------------------------
+
+on methods base, token
+  put {authorization: "Bearer " & token} into auth
+
+  -- 1. One operation per method, with a map of options
+  ask http to get base & "/orders", {headers: auth} and wait
+  ask http to post base & "/orders", {json: {sku: "A1", qty: 2}, headers: auth} and wait
+  ask http to put base & "/orders/7", {json: {qty: 3}, headers: auth} and wait
+  ask http to patch base & "/orders/7", {json: {qty: 4}} and wait
+  ask http to delete base & "/orders/7" and wait
+  ask http to head base & "/health" and wait
+  -- ?? `put` and `delete` are also language commands. The rule has to be: after
+  --    `ask X to` / `tell X to`, the next word is ALWAYS an operation name,
+  --    keyword or not. The grammar can do that; a reader skimming may not.
+  -- ?? `base & "/orders", {…}`: the comma-separated arguments need `&` to bind
+  --    tighter than `,`. That's fine, but a URL built inline is noisy. A local
+  --    variable reads better.
+
+  -- 2. One generic operation, where the method is data
+  ask http to request {method: "PATCH", url: base & "/orders/7", json: {qty: 4}} and wait
+  -- For an unusual method, or where the method is computed. The Host can offer both.
+
+  -- Every method gets the same response shape, so one match handles them all
+  match it
+    when {status: s, body: b} where s is in 200..299 then tell log to write "ok " & s
+    when {status: 404} then tell log to write "gone"
+    when {status: s} then tell log to write "failed " & s
+  end match
+end methods
+
+-- Why method names as operation words (1) beat `{method: "DELETE"}` (2):
+-- Capabilities are static grants fixed at load (ADR 0006). If the operation
+-- is a literal word, the loader can check it against the grant. A Host can
+-- grant `http` with only `get` and `head`, and
+--     ask http to delete url
+-- is a LOAD-TIME error ("this Script may only get and head with http"). A
+-- method held in text can only be checked at run time, when the call is made.
+-- The per-operation grant is also where the Host declares each operation's
+-- cost and whether it suspends.
+-- ?? `request` with a computed method has to be checked at run time. Maybe it
+--    is only granted when the Host allows every method.
+
+-- Bodies: the option name says the encoding, so nothing is guessed
+on uploads url, photo
+  ask http to post url, {json: {a: 1}} and wait               -- JSON-encoded, sets Content-Type
+  ask http to post url, {form: {name: "Ann"}} and wait        -- form-urlencoded
+  ask http to post url, {text: "hello"} and wait              -- text/plain, UTF-8
+  ask http to put url, {bytes: photo, type: "image/png"} and wait
+  -- ?? Headers are a map with text keys, and those keys are case-sensitive
+  --    (ADR 0011). HTTP headers aren't. The Host should normalise them
+  --    (lowercase) both ways, and the docs have to say so.
+end uploads
+
+-- `tell` is for fire-and-forget operations that don't suspend and return nothing:
+on ping url
+  tell http to post url, {json: {alive: true}}
+  -- ?? Does `tell` on a Suspending Capability mean "start it, and don't wait"?
+  --    Then the result and any failure go nowhere, unless the Host delivers a
+  --    completion event to the Script later. Probably `tell` is only allowed on
+  --    operations the Host declares as fire-and-forget.
+end ping

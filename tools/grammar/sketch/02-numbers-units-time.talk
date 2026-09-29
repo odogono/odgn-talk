@@ -1,0 +1,100 @@
+-- 02: numbers, Quantities, ranges and time (ADR 0002, 0003)
+
+on numbers
+  put 0.1 + 0.2 into x          -- 0.3, exactly
+  put 2.50 * 3 into y           -- 7.50 (trailing zeros are kept)
+  if 1.0 = 1 then say "equal by value"
+
+  put 10 / 3 into third
+  put round(third, 2) into shown              -- 3.33
+  -- ADR 0019: built-in operations are functions unless an ADR adds syntax.
+  -- ALT: put third rounded to 2 places into shown
+  -- was: put round third to 2 places into shown
+  -- ?? `round third to 2 places` is lovely as a command-style expression, but
+  --    `put round x to 2 places into y` has two prepositions fighting (`to`, `into`).
+  put round(third, 2) into third              -- was the command form `round third to 2 places`
+  -- ALT: round third to the nearest 0.05
+
+  if third is an integer then say "whole"     -- a test on the value, not a kind
+end numbers
+
+on quantities
+  put 5 kg into bag
+  put bag + 250 g into heavier                -- 5.25 kg: result takes the LEFT unit
+  put 500 mi / 4 hr into speed                -- 125 mi/hr
+  put 60 mi/hr into limit
+  if speed > limit then say "too fast"
+
+  put speed as km/hr into metric              -- 201.168 km/hr, exact
+  -- ALT: put speed in km/hr into metric
+  -- ?? `in` would be lovely here, but it is also a preposition (`repeat for each x in`,
+  --    `replace … in`, `contains … in`), so `as` it is. `as` already means "convert".
+
+  put 9.81 m/s^2 into g
+  put 2 L * 2 L into area                     -- 4 L^2
+  put 4 yd / 2 ft into ratio                  -- 6, plain number
+
+  put 3 as kg into w                          -- give a plain number a unit
+  -- 5 kg + 3 is an error: "can't add a number to a Quantity; did you mean 3 kg?"
+
+  -- ?? Unit suffixes vs names: `5 m` (metres) and `5 min` read fine, but a
+  --    variable called `m` or `s` then can't follow a number: `put 5 s into s`.
+  --    Maybe units after a number are always units, and variables are never.
+  put 30 s into timeout
+  put 2 min + 30 s into total                 -- 2.5 min
+end quantities
+
+on ranges
+  put 1..10 into r
+  -- DECIDED: ranges are `..` everywhere (`to` is taken by `add x to y`, `round x to`).
+  -- ?? `..` (range) sits next to `...` (rest in Destructuring): `[a, ...rest]`
+  --    vs `1..5`. One dot apart. Fine for the grammar, easy to misread.
+  put 3 m/s..7 m/s into comfortable          -- a Quantity range
+  -- ?? `3..7 m/s` parses as `3..(7 m/s)`: only a literal takes a suffix.
+  if speed is in comfortable then say "ok"
+  -- ALT: if speed is between 3 m/s and 7 m/s then …
+  -- ALT: if comfortable contains speed then …
+  repeat for each n in 1..5
+    say n
+  end repeat
+  put items 2..4 of "a,b,c,d,e" into mid      -- "b,c,d"
+end ranges
+
+on dates
+  -- There are no date literals (#69): build dates, or convert text.
+  put makeDate(2026, 9, 27) into launch                -- Civil Date
+  put "2026-09-27T14:30:00" as civil date into meeting -- Civil Date with time of day
+  put "2026-09-28T09:00:00Z" as instant into stamp     -- Instant, offset required
+
+  put launch + 1 month into renewal           -- calendar duration; clamps to month end
+  put stamp + 90 min into later               -- exact duration
+  -- stamp + 1 month is an error: calendar duration on an Instant.
+  put renewal - launch into gap               -- 30 days (Civil - Civil)
+  if later > stamp then say "time moves forward"
+  -- `now` is a Capability, not a keyword:
+  ask clock to now                            -- immediate Operation: no `and wait`
+  put it into t
+  -- was: put the time from clock into t
+end dates
+
+-- "Could it convert?" vs "is it already?"
+on checking input
+  -- input = "42"
+  if input is a number then say "never: input is text"
+  if input can be a number then put input as number into n
+  -- ALT: if input is numeric then …
+  -- ?? `is numeric` is the HyperTalk/SenseTalk word, but ADR 0003 said `is a` tests
+  --    the kind only, and `is numeric` looks like the same kind of test. `can be a
+  --    number` says "conversion" out loud, and extends: `can be a date`, `can be kg`.
+
+  -- Nothing vs empty
+  put the nickname of person into nick        -- missing key: Nothing
+  if nick is nothing then say "no nickname"
+  if "" is empty then say "empty text"
+  if [] is empty then say "empty list"
+  -- "" is nothing  → false
+  -- nothing is empty → false
+  -- ?? Beginners will write `if nick is empty` for a missing key and get false.
+  --    Candidate for the beginner lint: "did you mean `is nothing`?"
+  -- ALT: if nick is missing then …   -- reads better for map keys only
+end checking

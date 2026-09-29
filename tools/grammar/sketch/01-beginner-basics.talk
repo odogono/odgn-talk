@@ -1,0 +1,99 @@
+-- 01: beginner basics
+-- Target reader: someone who has never programmed.
+
+script variable visits = 0
+-- ALT: script variable visits starts at 0
+-- ?? `=` is equality everywhere else (ADR 0003). Using it for an initial value
+--    here is the one place it means "assign". `starts at` avoids that but is wordy.
+
+on greet name
+  add 1 to visits
+  put "Hello, " & name & "! Visit number " & visits into message
+  -- `&` converts any value to text, so `visits` (a number) needs no `as text`.
+  say message
+end greet
+
+-- `put … into` makes a local on first use (HyperTalk style). `let` is for
+-- binding by Destructuring, and also works on a plain name.
+on basics
+  put 3 into count
+  let total be 0
+  let [first, second, ...rest] be [10, 20, 30, 40]
+  -- ?? Two ways to make a local (`put … into x` and `let x be …`). Keep both?
+  --    Beginners get `put`; `let` exists because `put [a, b] into …` would read
+  --    as putting *into* a list literal.
+
+  -- lists and maps
+  put ["apples", "pears", "figs"] into fruit
+  put {name: "Ann", age: 34} into person
+  put 35 into the age of person
+  -- ALT: put 35 into person's age
+  -- ALT: put 35 into person.age                 -- [advanced]?
+  put "plums" into item 4 of fruit
+  -- ?? `item` means "comma-separated part of text" AND "element of a list".
+  --    Same word, decided by the kind of `fruit` at run time. Nice, but see NOTES.
+
+  add 5 to total
+  subtract 2 from count
+  multiply total by 3
+
+  -- loops
+  repeat for each f in fruit
+    say f
+  end repeat
+
+  repeat for each i in 1..3
+  -- (HyperTalk's `repeat with i from 1 to 3` dropped: one range spelling, `..`)
+    say i & ": " & item i of fruit
+  end repeat
+
+  repeat 3 times
+    say "hip hip"
+  end repeat
+
+  repeat while count > 0
+    subtract 1 from count
+  end repeat
+
+  -- conditions must be booleans (no truthiness)
+  if count = 0 then say "done"
+
+  if the length of fruit > 3 then
+    say "lots of fruit"
+  else
+    say "not much fruit"
+  end if
+
+  -- `if fruit then …` is an error: a list is not a boolean.
+  if fruit is not empty then say "we have fruit"
+end basics
+
+-- Arithmetic on text needs an explicit conversion (ADR 0003).
+on addUp csvLine
+  -- ?? Handler names are one word (`addUp`, not `add up`): otherwise the grammar
+  --    can't tell where the name ends and the parameters begin.
+  -- csvLine = "3, 4, 5"
+  put 0 into sum
+  repeat for each part in the items of csvLine
+    add part as number to sum
+    -- ?? `add part as number to sum` parses as `add (part as number) to sum`
+    --    only if `as` binds tighter than the `to` of `add`. Fine here, but:
+  end repeat
+
+  put item 2 of line 3 of report as number * 2 into doubled
+  -- ADR 0019: `as` binds tighter than every binary operator and looser than
+  --    chunk `of`, so this is ((item 2 of line 3 of report) as number) * 2.
+  -- ALT: put number(item 2 of line 3 of report) * 2 into doubled
+  -- ALT: put the number in item 2 of line 3 of report ...   -- `in` collides with units
+  return sum
+end addUp
+
+-- Functions: always called with parentheses (ADR 0021).
+function tax amount, rate
+  return amount * rate
+end tax
+
+on checkout
+  put tax(100, 0.2) into t
+  say "Tax is " & t
+end checkout
