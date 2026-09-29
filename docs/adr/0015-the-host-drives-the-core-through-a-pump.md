@@ -75,3 +75,10 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - **Standard Capabilities:** the Core builds them from a Host implementation and costs (`ClockCapability` and so on), so their declarations can't be changed.
   - **Drivers:** `talk.Driver` moves to a `talk/driver` helper package. TS's `newGroup({ drive: "auto" })` becomes `autoDrive(group)` from `@odgn/talk/driver`. Neither is Core interface.
   - **Removed:** `ParityCompatible` goes, and the Group Fingerprint is the one lockstep check.
+- Settled by #79 (from the #73 research):
+  - **Stop timing:** `Stop` and `CancelRun` land at the latest at the running Pump's next Host crossing (an Operation or property call) or its end. A native Core may act sooner. The Trace records where each landed, so parity is unaffected.
+  - **Cancelling a Request:** a new queued Host Input, `cancel-delivery`, is what a Request's or Call's context or signal maps to. It cancels the Run the Delivery started. A Delivery still in the mailbox is removed and reported as `run end`, outcome `cancelled`, with no run or Handler.
+  - **Timeouts abandon:** a call failed with `timeout` is also abandoned, so its context or signal fires.
+  - **Charging:** `Charge` fails exactly when the Run's Fuel left after the declared cost can't cover it.
+  - **Durations:** `maxPending` and `MaxWait` are whole milliseconds, in the Host Manifest, the Group Fingerprint and both Cores.
+  - **The message layer:** one message per embedding call, and every exchange is started by the Host. Operation and property calls come back as interim replies to `pump`. A queued call held in the Host's outbox during a Pump is received when the Core reads it. See [the embedding interface](../embedding/README.md#the-message-layer).

@@ -15,8 +15,9 @@
 // Everything it does to a Group is a Host Input, recorded in the Trace. Calls
 // marked "any goroutine" append to the Group's input queue and return at once.
 // The next Pump drains the queue in call order, right after it takes its
-// Clock reading. A running Pump also checks for Stop and CancelRun between
-// instructions. Calls marked "worker" must come from the one goroutine that
+// Clock reading. Stop and CancelRun land at the latest at the running Pump's
+// next Host crossing (an Operation or property call) or its end; a native
+// Core may act on them sooner, between instructions. Calls marked "worker" must come from the one goroutine that
 // pumps the Group. Two worker calls made at once are undefined. A worker call
 // made from inside the Group's own Pump (from an Operation function, say) is
 // the Host error "reentrant call".
@@ -282,7 +283,7 @@ type Operation struct {
 	Result     Shape
 	Cost       Cost
 	Mode       Mode
-	MaxPending time.Duration // Suspending only; 0 means the Script's MaxWait
+	MaxPending time.Duration // Suspending only, whole milliseconds; 0 means the Script's MaxWait
 	Errors     []ErrorDecl
 
 	Do    func(c *Call, args []Value) (Value, error) // Immediate: a *ScriptError, ErrLimit, or anything else as `host error`
@@ -314,7 +315,7 @@ func (c *Call) ID() CallID               // unique within the Group ("pricing/r1
 func (c *Call) ScriptName() string       // for Host bookkeeping; no Group calls through it
 func (c *Call) Binding() any             // the Grant's binding
 func (c *Call) Now() time.Time           // the Pump's Clock reading; never read the Host's own time
-func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop)
+func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop, a timeout)
 
 // Charge draws Fuel in proportion to work, before doing it. It is legal only
 // while the Operation is starting.
@@ -426,7 +427,7 @@ type Limits struct {
 	PersistentState int64 // Script-wide; never overridden per Delivery
 	CallDepth       int
 	MailboxDepth    int
-	MaxWait         time.Duration
+	MaxWait         time.Duration // whole milliseconds; anything finer is "invalid value"
 	MaxJoin         int
 	CleanupBudget   int64
 }
@@ -440,7 +441,7 @@ func DefaultLimits() Limits
 type LimitOverride struct {
 	FuelPerRun  int64
 	AllocPerRun int64
-	MaxWait     time.Duration
+	MaxWait     time.Duration // whole milliseconds
 	MaxJoin     int
 }
 
@@ -590,8 +591,10 @@ type BroadcastID string
 // disposal is queued too.
 func (g *Group) Deliver(to *Object, m Message) (DeliveryID, error)
 
-// Request is `send … and wait` from outside. Cancelling ctx cancels the Run
-// it started. Any goroutine.
+// Request is `send … and wait` from outside. Any goroutine. Cancelling ctx
+// queues the Host Input cancel-delivery: it cancels the Run the Delivery
+// started, or, if the Delivery is still in the mailbox, removes it and
+// reports a RunEnd with outcome Cancelled and no Run or Handler.
 func (g *Group) Request(ctx context.Context, to *Object, m Message) (DeliveryID, *Pending, error)
 
 // Broadcast reaches only the Scripts that want the message when the queue is
@@ -666,9 +669,9 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error)
 // A reused one is "name reused", and the Host reloads instead.
 func (s *Script) Extend(source string) error
 
-// Stop, CancelRun and Revoke are any-goroutine Host Inputs. A running Pump
-// checks Stop and CancelRun between instructions. Everything else waits for
-// the next Pump.
+// Stop, CancelRun and Revoke are any-goroutine Host Inputs. Stop and
+// CancelRun land at the latest at the running Pump's next Host crossing or its
+// end. Everything else waits for the next Pump.
 func (s *Script) Stop(reason string)
 func (s *Script) CancelRun(id RunID)
 
@@ -714,7 +717,7 @@ const (
 
 type RunEnd struct {
 	Script    string
-	Run       RunID
+	Run       RunID       // empty for a Delivery cancelled before it started
 	Delivery  DeliveryID  // empty for a Run started by another Script's send
 	Broadcast BroadcastID // empty unless the Delivery was a Broadcast's
 	Handler   string

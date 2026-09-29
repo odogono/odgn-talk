@@ -10,9 +10,11 @@
 
 ## Threads and the input queue
 
-- **Queued calls:** `Deliver`, `Request`, `Broadcast`, `Call`, `SetParent`, `Dispose`, `Stop`, `CancelRun`, `Revoke`, `Answer` and `Fail`. They are safe from any goroutine. Each appends to the Group's input queue, calls `OnReady` and returns at once, with a delivery id where it has one.
+- **Queued calls:** `Deliver`, `Request`, `Broadcast`, `Call`, `SetParent`, `Dispose`, `Stop`, `CancelRun`, `Revoke`, `Answer` and `Fail`, and cancelling a `Request` or `Call` through its context or signal. They are safe from any goroutine. Each appends to the Group's input queue, calls `OnReady` and returns at once, with a delivery id where it has one.
 - **Draining:** the next Pump takes its Clock reading, then drains the queue in call order and records each input in the Trace there. A Pump never sees an input arrive halfway through.
-- **Stop and cancel:** a running Pump also checks for `Stop` and `CancelRun` between instructions. Everything else waits for the next Pump.
+- **Stop and cancel:** `Stop` and `CancelRun` land at the latest at the running Pump's next Host crossing (an Operation or property call) or at its end. A native Core may act on them sooner, between instructions. Scripts and replay parity can't tell the difference, since the Trace records where each one landed. Everything else waits for the next Pump.
+- **Cancelling a Request:** cancelling its context or signal queues `cancel-delivery`. It cancels the Run the Delivery started. A Delivery still in the mailbox is removed instead, and reported as a `run end` with outcome `cancelled` and no run or Handler.
+- **Durations:** `MaxPending` and `MaxWait` are whole milliseconds. Go refuses a finer `time.Duration`, and TS a fraction, as `invalid value`.
 - **Synchronous errors:** a queued call returns an error only for facts known at the call, such as a full mailbox, a value from another Group, or a limit override that loosens. Anything else is known only when the queue is drained, and comes back as a report.
 - **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Settle`, `Fingerprint` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
 - **Reentry:** a worker call made from inside the Group's own Pump, from an Operation function say, is the Host error `reentrant call` in both Cores.
@@ -35,7 +37,20 @@
 - **Calling it:** `group.Call` has the shape of `Request`. It is a Delivery to the Home Script, recorded in the Trace as `call <display form>(args)`.
 - **Staleness:** checked when the queue is drained. A stale value rejects with `send failed`, reason `function gone`, and nothing runs.
 - **Taking one as an argument:** an Operation that accepts a Function Value declares the `function` Shape.
-- **Not durable:** it isn't in the Value Encoding, and a Host-held handle doesn't survive save and restore. A callback that must survive a save should be an ordinary message, as the `timer` Capability's are.
+- **Not durable:** Host storage can't encode it, and a Host-held handle doesn't survive save and restore. Only the message layer carries it, as a reference form (below). A callback that must survive a save should be an ordinary message, as the `timer` Capability's are.
+
+## The message layer
+
+The language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir over WASI or a sidecar. [The message-layer research](../research/message-layer.md) (#73) has the full message set. These rules are fixed:
+
+- **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use the Value Encoding (ADR 0030), and declarations use the Host Manifest's data model.
+- **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, a property `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host. So a WASI build needs no reentrant imports, and a sidecar carries the same messages.
+- **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox. It counts as received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
+- **Charging:** each Operation call carries the Fuel the Run has left after the declared cost. `Charge` fails exactly when that can't cover it, so the Host can charge locally.
+- **Abandoned calls:** the `pump` reply lists the call ids abandoned during the Pump, so a Host can cancel its own work.
+- **Function Values** cross as `{"$function": [home, display, token]}`. The token holds the value's own data and its Group, so nothing needs releasing. The Core checks `wrong group` when it reads the token, and `function gone` when the queue is drained. Host storage refuses the tag.
+- **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's own handles carry their Group, and its glue code raises `wrong group` before sending.
+- **Not in parity:** framing, protocol errors and the message layer's field names, which are settled with the final spec.
 
 ## What stays out
 

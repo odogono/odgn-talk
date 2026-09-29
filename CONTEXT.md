@@ -56,6 +56,10 @@ _Avoid_: signature, schema, spec (unqualified)
 The spec-defined, lossless JSON form of a value, with `$` tags for kinds that plain JSON can't hold (`{"$quantity": ["2.50", "GBP"]}`). The language-neutral message layer and Host storage use it. Scripts can't reach it, and the Conformance Corpus uses the display form instead.
 _Avoid_: wire format, serialisation, tagged JSON
 
+**Message Layer**:
+The language-neutral form of the embedding interface: one JSON message per embedding call, with values in the Value Encoding, for a Host that isn't Go or TS, over WASI or a sidecar. The Host starts every exchange, and the Core never calls the Host.
+_Avoid_: protocol, wire format, RPC
+
 **Grant**:
 A Capability made available to one Script at load, limited to a set of its Operations and carrying the Host's own binding data. The loader checks every Capability call against the Script's Grants.
 _Avoid_: permission, token, entitlement
