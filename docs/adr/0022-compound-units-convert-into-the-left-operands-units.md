@@ -66,3 +66,4 @@ Every Unit in the Unit Catalogue is an exact factor times a product of base dime
   - The Cost Model rates for conversion.
   - Whether conversion drops the trailing zeros a factor introduces. Under ADR 0002 alone, `5 kg + 250 g` gives `5.250 kg`, where the syntax sketch expected `5.25 kg`.
   - Lexer changes in the parser prototype: accept `*` and a leading `1/`, and reject `^-n`.
+- Narrowed by ADR 0023: Instant − Instant and date-time − date-time give `s`, date-only − date-only gives `days`, and mixing a date-only value with a date-time raises `wrong kind`.

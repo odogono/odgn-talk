@@ -32,6 +32,10 @@ _Avoid_: demo, sample app, example app
 A Host-granted permission to perform one kind of effect. Scripts have no ambient I/O; every effect goes through a Capability.
 _Avoid_: permission, API access
 
+**Standard Capability**:
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar` and `locale`.
+_Avoid_: built-in capability, system capability, core capability
+
 **Operation**:
 One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command, endpoint
@@ -235,7 +239,7 @@ The small, Host-set Fuel allowance on which a cancelled Run's `finally` blocks r
 _Avoid_: grace period, finaliser budget
 
 **Clock**:
-The Host-supplied source of time that the scheduler reads to fire waits and deadlines. The core has no clock of its own.
+The Host-supplied source of time that the scheduler reads to fire waits and deadlines. The core has no clock of its own. A Script reads it only through the `clock` Standard Capability.
 _Avoid_: timer, system time
 
 ## Errors
@@ -333,5 +337,5 @@ A point on the global timeline, independent of any time zone.
 _Avoid_: timestamp, date (unqualified)
 
 **Civil Date**:
-A calendar date, or date and time of day, with no time zone attached, e.g. `2026-09-27`.
+A calendar date with an optional time of day, and no time zone attached, e.g. `2026-09-27`. A date-only Civil Date is never equal to one with a time of day, and can't be ordered against it.
 _Avoid_: local date, naive date, date (unqualified)
