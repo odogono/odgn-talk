@@ -27,7 +27,7 @@ The language has Function Values. A Lambda (`given r: the wind of r > 10`, or a 
 - **Syntax:** supersedes ADR 0019's Collections section.
   - The expression form is `given p1, p2: expr`. The body extends with the lowest precedence, as `for every` did, so a Lambda in an argument list ends at the next top-level comma or `)`.
   - The block form is `given p1, p2` at the end of a line, then statements, then `end given`. Parameters run up to the `:` or the end of the line, so a Lambda inside an argument list uses the `:` form.
-  - `given` is a Reserved Word, so a Lambda is decided on its first token. The parser prototype must confirm that the parameter list and both forms stay within two tokens of lookahead.
+  - `given` is a Reserved Word, so a Lambda is decided on its first token.
   - Each parameter is a Destructuring pattern (`given {wind: w}: w > 10`), with one clause only. A failed test raises `no match`, as in `let`, and a wrong number of arguments raises `wrong arity`.
   - A Script or Library function's bare name is a Function Value (`map(xs, double)`). A Function Value held in a variable is called as `f(x)`. A name that is both a variable and a function is a load error, like an import clash (ADR 0020). Handlers are never values: they are message entry points with Handler Clauses.
   - `x is a function` is a Built-in kind test, so Guards can use it.
@@ -70,5 +70,12 @@ The language has Function Values. A Lambda (`given r: the wind of r > 10`, or a 
 - **Left for later:**
   - The Host API's handle for a Function Value: its lifetime, and the exact Delivery shape of a Host call.
   - Whether Destructuring parameters belong to the advanced layer only.
-  - The proof that `given` stays within two tokens of lookahead, in the parser prototype.
   - Queueing policy for foreign calls, which have no Handler Clause to carry a suffix.
+- **Checked by the parser prototype** (#54): a reserved `given`, its parameter list and both forms parse with no second-token decision, no backtracking and no relexes. All 12 sketch files parse with Comprehensions removed. The rules it needs:
+  - **Newlines:** a Lambda head and a block Lambda body make newlines significant again at the bracket depth where they start. So a block Lambda can be a call argument, a list item or a map value, and brackets opened inside its body still continue lines as usual.
+  - **Expression bodies never suspend:** `wait`, `ask … and wait` and `f(x) and wait` are statements, so a Lambda that may suspend is always the block form.
+  - **`and wait` is statement-only:** a call that may suspend is the statement `f(x) and wait`, and its result is left in `it`, as with `ask`. `put f(x) and wait into y` is a syntax error at `and`.
+  - **Calls need a name:** `name(` is the only call form, so `times(3)(14)` is a syntax error at the second `(`. A Function Value held in a key, or returned by a call, goes into a variable first.
+  - **Small rules:** `given` in Container position is a syntax error at `given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
+  - **Readability:** single-line filters, maps and folds read about as well as the Comprehensions did. `sortBy`'s `{descending: true}` reads worse than `descending`, and so does a block Lambda written inline as an argument (`end given) into gusty`). The first is a Library-shape question and the second a lint (name the Lambda first), and neither is grammar.
+  - **Source:** the [prototype](https://github.com/odogono/odgn-talk/tree/prototype/lambdas-sketch/prototypes/parser-sketch) is the primary source: its `FINDINGS-54.md`, the updated `grammar.toml`, `broken.talk`, and `../syntax-sketch/12-lambdas.talk`.
