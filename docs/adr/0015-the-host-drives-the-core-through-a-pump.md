@@ -64,3 +64,14 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - **Lockstep:** the Core exposes the Group Fingerprint (ADR 0009).
   - **Libraries:** an added Library reports the Operations it uses as a `needs` list (ADR 0020).
   - **Disposal:** disposing an object that owns a Script stops that Script (ADR 0016), reported with reason `owner disposed`.
+- Settled by #72: the final signatures are [`talk.go`](../embedding/talk.go) and [`talk.ts`](../embedding/talk.ts), with the shared rules in [the embedding interface](../embedding/README.md).
+  - **Clock:** there is no Clock interface. `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it.
+  - **Input queue:** the calls that are safe from any thread append to the Group's input queue and return at once. The next Pump drains the queue in call order right after it takes its Clock reading, and that is where the Trace records them. A running Pump also checks `Stop` and `CancelRun` between instructions. `SetParent`, `Dispose`, `Revoke` and a Host call of a Function Value are queued too.
+  - **Reports:** there is no `Reports` callback. A Pump returns its reports as one ordered list (`run end`, `stop`, `unhandled` and `call failed`), and `Reload` and `ReplaceLibrary` return theirs.
+  - **Reentry:** a worker call (`Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Settle`) made inside the Group's own Pump is the Host error `reentrant call`. Concurrent worker calls from two goroutines are undefined in Go.
+  - **Errors:** the four kinds, the same in both Cores, are `LoadError` with diagnostics, `HostError` with a code from the new Host error catalogue, `MailboxFull`, and, on the Operation side, `ScriptError` and the limit signal.
+  - **Grants:** revoking is `script.Revoke(name)`, a queued Host Input, and a Grant value is a reusable template that each Load binds. `GrantsAsUsed` gives "what the Script uses, from this allowlist".
+  - **Late cost:** it travels as `AnswerWithCost` in Go and `answer(v, {fuel})` in TS.
+  - **Standard Capabilities:** the Core builds them from a Host implementation and costs (`ClockCapability` and so on), so their declarations can't be changed.
+  - **Drivers:** `talk.Driver` moves to a `talk/driver` helper package. TS's `newGroup({ drive: "auto" })` becomes `autoDrive(group)` from `@odgn/talk/driver`. Neither is Core interface.
+  - **Removed:** `ParityCompatible` goes, and the Group Fingerprint is the one lockstep check.

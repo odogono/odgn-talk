@@ -1,0 +1,845 @@
+// The Go Core's embedding interface: declarations only, never compiled.
+//
+// This file and talk.ts are the handoff interface (#72). They differ only in
+// idiom (ADR 0015): errors as values here and exceptions there, Start/Answer
+// here and an optional Promise-returning run there, and maps built from pairs
+// here and from Map or record() there. None of the differences can be observed
+// by a Script. Bodies are elided. README.md holds the Host error catalogue and
+// the Operation naming guide.
+//
+// Shape in one breath:
+//
+//	Core ── NewGroup / Restore ──> Group ── Load ──> Script
+//
+// A Host defines Capabilities and Object Kinds once per process, on the Core.
+// Everything it does to a Group is a Host Input, recorded in the Trace. Calls
+// marked "any goroutine" append to the Group's input queue and return at once.
+// The next Pump drains the queue in call order, right after it takes its
+// Clock reading. A running Pump also checks for Stop and CancelRun between
+// instructions. Calls marked "worker" must come from the one goroutine that
+// pumps the Group. Two worker calls made at once are undefined. A worker call
+// made from inside the Group's own Pump (from an Operation function, say) is
+// the Host error "reentrant call".
+package talk
+
+import (
+	"context"
+	"time"
+)
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+// LoadError rejects source: a Script, an Entry for extend Script, or a
+// Library. Its Diagnostics are the spec's load-time errors, and parity covers
+// their codes and locations.
+type LoadError struct {
+	Diagnostics []Diagnostic
+}
+
+func (e *LoadError) Error() string
+
+type Diagnostic struct {
+	Code    string // from the diagnostic catalogue
+	Message string // wording: not covered by parity
+	Unit    string // the Script or Library the diagnostic is in
+	Line    int
+	Col     int
+}
+
+// HostError is Host misuse, refused at the call that made it. Its Code comes
+// from the Host error catalogue (README.md), so both Cores refuse the same
+// misuse with the same code.
+type HostError struct {
+	Code   HostErrorCode
+	Detail string // wording: not covered by parity
+}
+
+func (e *HostError) Error() string
+
+type HostErrorCode string
+
+const (
+	ClockBackwards    HostErrorCode = "clock backwards"
+	ParentCycle       HostErrorCode = "parent cycle"
+	DuplicateObjectID HostErrorCode = "duplicate object id"
+	NameReused        HostErrorCode = "name reused"
+	NotQuiescent      HostErrorCode = "not quiescent"
+	ReentrantCall     HostErrorCode = "reentrant call"
+	WrongGroup        HostErrorCode = "wrong group"
+	LibraryMismatch   HostErrorCode = "library mismatch"
+	ReservedName      HostErrorCode = "reserved name"
+	NotAdoptable      HostErrorCode = "not adoptable"
+	InvalidValue      HostErrorCode = "invalid value"
+)
+
+// ErrMailboxFull is load shedding, not a bug: the Host decides whether to
+// drop, retry or answer 503.
+var ErrMailboxFull error
+
+// ScriptError is an ordinary, catchable Error inside the Script (ADR 0017).
+// An Operation fails with one. The Script sees Code as `code`, Message as
+// `message` and Data's entries as further fields. A catalogue code, or a Data
+// key that clashes with a reserved field, becomes `host error` instead.
+type ScriptError struct {
+	Code    string
+	Message string
+	Data    Value // a map, or Nothing
+}
+
+func (e *ScriptError) Error() string
+
+// ErrLimit is returned by Call.Charge when the Run can't cover the charge. The
+// Operation stops, does no work and returns it. The Core turns it into a Limit
+// Fault at the call.
+var ErrLimit error
+
+// ---------------------------------------------------------------------------
+// Values (ADR 0030)
+// ---------------------------------------------------------------------------
+
+// Value is one immutable Script value or Host Object handle. It is built only
+// through the constructors below and read only through its accessors. Every
+// constructor that can be given input the value model can't hold returns a
+// HostError "invalid value". Nothing is clamped, rounded or replaced.
+type Value struct { /* opaque */
+}
+
+var Nothing Value
+
+func Bool(b bool) Value
+func Text(s string) (Value, error) // invalid UTF-8 is refused; NFC is applied, uncharged
+func Int(i int64) Value
+func Uint(u uint64) Value
+func FromFloat(f float64) (Value, error)             // shortest round-trip digits; NaN and ±Inf are refused; -0.0 enters as 0
+func Dec(s string) (Value, error)                    // the `as number` grammar; more than 34 significant digits is refused
+func Quantity(n Decimal, unit string) (Value, error) // unit as spelled in a Script ("kg", "GBP"); normalised (ADR 0022)
+func CivilDate(f DateFields) (Value, error)
+func ParseCivilDate(s string) (Value, error) // the `as civil date` grammar
+func Instant(seconds int64, nanos int32) (Value, error)
+func InstantFromTime(t time.Time) Value // drops the monotonic reading and the zone
+func Bytes(b []byte) Value              // copied in
+func List(vs ...Value) Value
+
+// Map builds a map from pairs, in the order given. A duplicate key, compared
+// after NFC, is refused.
+func Map(pairs ...Pair) (Value, error)
+
+type Pair struct {
+	Key string
+	Val Value
+}
+
+func KV(k string, v Value) Pair
+
+type DateFields struct {
+	Year, Month, Day     int
+	HasTime              bool
+	Hour, Minute, Second int
+	Nanosecond           int
+}
+
+type Kind int
+
+const (
+	KindNothing Kind = iota
+	KindBool
+	KindNumber
+	KindQuantity
+	KindText
+	KindBytes
+	KindList
+	KindMap
+	KindInstant
+	KindCivilDate
+	KindPattern
+	KindFunction
+	KindObject
+)
+
+func (v Value) Kind() Kind
+func (v Value) AsBool() (bool, bool)
+func (v Value) AsText() (string, bool) // always NFC
+func (v Value) AsDec() (Decimal, bool)
+func (v Value) AsQuantity() (Decimal, string, bool) // number and canonical unit
+func (v Value) AsCivilDate() (DateFields, bool)
+func (v Value) AsInstant() (seconds int64, nanos int32, ok bool)
+func (v Value) AsBytes() ([]byte, bool) // a copy
+func (v Value) AsObject() (*Object, bool)
+func (v Value) Len() int          // list length; 0 for anything else
+func (v Value) Index(i int) Value // 1-based; Nothing past the end
+func (v Value) Get(key string) Value
+func (v Value) Entries() []Pair // insertion order
+
+// PatternSource gives a Text Pattern's canonical source, for display. A Host
+// can't build a pattern, only pass one back unchanged.
+func (v Value) PatternSource() (string, bool)
+
+// HomeScript names a Function Value's Home Script (ADR 0025). It is the only
+// read a Function Value has. A Host can't build one, and it is bound to the
+// Group it came from: passing it into any other Group is "wrong group". It
+// doesn't survive save and restore on the Host side.
+func (v Value) HomeScript() (string, bool)
+
+func (v Value) String() string // the display form (ADR 0018)
+func (v Value) Equal(w Value) bool
+
+// Decimal is the Core's own number. There is no coefficient/exponent API; a
+// Host that wants a decimal library passes it String().
+type Decimal struct { /* opaque */
+}
+
+func (d Decimal) String() string        // canonical, trailing zeros kept
+func (d Decimal) Int64() (int64, error) // fails unless an integer that fits
+func (d Decimal) Uint64() (uint64, error)
+func (d Decimal) Float64Lossy() (float64, error) // nearest, ties to even; too large fails
+
+// ---------------------------------------------------------------------------
+// JSON and the Value Encoding (ADRs 0021, 0030)
+// ---------------------------------------------------------------------------
+
+// DecodeJSON and EncodeJSON are ADR 0021's plain JSON rule, the same one the
+// `json` Library uses. Numbers are read from their text, never via float64.
+func DecodeJSON(b []byte) (Value, error)
+func EncodeJSON(v Value) ([]byte, error)
+
+// EncodeValue writes the Value Encoding deterministically. A Function Value
+// can't be encoded. DecodeValue asks resolve for each {"$object": [kind, id]}.
+func EncodeValue(v Value) ([]byte, error)
+func DecodeValue(b []byte, resolve func(kind, id string) (*Object, bool)) (Value, error)
+
+// ---------------------------------------------------------------------------
+// Shapes (ADRs 0015, 0030)
+// ---------------------------------------------------------------------------
+
+// A Shape is checked at load for arity, closed-map literal keys and the kind
+// of each literal argument. At run time an argument that breaks its Shape
+// raises `wrong kind` before the Host function runs, and a result that breaks
+// its Shape ends the call as `host error`.
+type Shape struct { /* opaque */
+}
+
+var (
+	AnyShape       Shape
+	NothingShape   Shape
+	BoolShape      Shape
+	NumberShape    Shape
+	TextShape      Shape
+	BytesShape     Shape
+	InstantShape   Shape
+	CivilDateShape Shape
+	PatternShape   Shape
+	FunctionShape  Shape // a Function Value; any data Shape refuses one with `not encodable`
+)
+
+func QuantityOf(unit string) Shape   // exactly this Unit
+func QuantityKind(kind string) Shape // any Unit of this Unit Kind ("mass", "GBP")
+func ListOf(s Shape) Shape
+func MapShape(fields ...Field) Shape // closed
+func OpenMap(fields ...Field) Shape
+func ObjectShape(kind *ObjectKind) Shape
+func OneOf(ss ...Shape) Shape
+func Optional(s Shape) Shape // may be Nothing, or missing when trailing
+
+type Field struct {
+	Key      string
+	Shape    Shape
+	Optional bool
+}
+
+// ---------------------------------------------------------------------------
+// Capabilities and Operations (ADRs 0012, 0015)
+// ---------------------------------------------------------------------------
+
+type Mode int
+
+const (
+	Immediate Mode = iota
+	Suspending
+	FireAndForget
+)
+
+// Cost is charged before the Operation's Go code runs. A Run that can't cover
+// it faults at the call.
+type Cost struct {
+	Fuel  int64
+	Alloc int64
+}
+
+// ErrorDecl declares an error code an Operation may fail with, for tooling
+// (ADR 0028). The Core doesn't check Fail against it.
+type ErrorDecl struct {
+	Code   string
+	Fields []Field
+}
+
+// Operation is one Operation Declaration paired with the Host function that
+// implements it. Exactly one of Do, Start and Fire is set, matching Mode.
+type Operation struct {
+	Name       string // a literal word; `ask`, `tell`, `send` and `wait` are refused
+	Args       []Shape
+	Result     Shape
+	Cost       Cost
+	Mode       Mode
+	MaxPending time.Duration // Suspending only; 0 means the Script's MaxWait
+	Errors     []ErrorDecl
+
+	Do    func(c *Call, args []Value) (Value, error) // Immediate: a *ScriptError, ErrLimit, or anything else as `host error`
+	Start func(c *Call, args []Value) error          // Suspending: answer later through c
+	Fire  func(c *Call, args []Value) error          // FireAndForget: runs at the call, in order; only its result is dropped
+}
+
+// CapabilityDef is defined once per process and reused by every Grant.
+// Declarations are ordered by name, whatever order Ops is in.
+type CapabilityDef struct { /* opaque */
+}
+
+func (d *CapabilityDef) Name() string
+
+// Grant is a reusable template: a subset of Operations plus Host-private
+// binding data (a tenant, allowed origins) that every Call reads. Each Load
+// binds it to one Script under the name the Script uses.
+type Grant struct { /* opaque */
+}
+
+func (d *CapabilityDef) Grant(ops []string, binding any) (*Grant, error) // an unknown Operation is refused
+func (d *CapabilityDef) GrantAll(binding any) *Grant
+
+// Call is what an Operation's Host function receives.
+type Call struct { /* opaque */
+}
+
+func (c *Call) ID() CallID               // unique within the Group ("pricing/r1.c1")
+func (c *Call) ScriptName() string       // for Host bookkeeping; no Group calls through it
+func (c *Call) Binding() any             // the Grant's binding
+func (c *Call) Now() time.Time           // the Pump's Clock reading; never read the Host's own time
+func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop)
+
+// Charge draws Fuel in proportion to work, before doing it. It is legal only
+// while the Operation is starting.
+func (c *Call) Charge(fuel int64) error
+
+// Answer, AnswerWithCost and Fail settle a Suspending call. They are safe from
+// any goroutine and queue a Host Input. An answer to a call whose Run has
+// ended is ignored. AnswerWithCost carries a cost known only now, charged when
+// the Run resumes, where it can fault.
+func (c *Call) Answer(v Value)
+func (c *Call) AnswerWithCost(v Value, fuel int64)
+func (c *Call) Fail(e *ScriptError)
+
+type CallID string
+
+// ---------------------------------------------------------------------------
+// Standard Capabilities (ADRs 0023, 0024; #71)
+// ---------------------------------------------------------------------------
+
+// The spec fixes these Operation Declarations. The Host supplies the answers
+// and the per-call costs, keyed by Operation name. A missing cost is refused.
+type Costs map[string]Cost
+
+// clock: `now`, answered from Call.Now(). There is nothing to implement.
+func (c *Core) ClockCapability(costs Costs) (*CapabilityDef, error)
+
+// calendar: the binding is the default IANA zone. zone is "" when the call
+// names none. An unknown zone fails with `unknown zone`.
+type CalendarImpl interface {
+	Today(c *Call, zone string) (Value, error)
+	Now(c *Call, zone string) (Value, error)
+	ToCivil(c *Call, instant Value, zone string) (Value, error)
+	ToInstant(c *Call, civil Value, disambiguation string, zone string) (Value, error)
+	Offset(c *Call, instant Value, zone string) (Value, error)
+	Zone(c *Call, zone string) (Value, error)
+}
+
+func (c *Core) CalendarCapability(impl CalendarImpl, costs Costs) (*CapabilityDef, error)
+
+// locale: the binding is the default BCP 47 tag. tag is "" when the call
+// names none, and opts is Nothing when it passes no options map.
+type LocaleImpl interface {
+	Compare(c *Call, a, b, opts Value, tag string) (Value, error)
+	Rank(c *Call, texts, opts Value, tag string) (Value, error)
+	Upper(c *Call, s Value, tag string) (Value, error)
+	Lower(c *Call, s Value, tag string) (Value, error)
+	NumberSymbols(c *Call, tag string) (Value, error)
+	MonthNames(c *Call, opts Value, tag string) (Value, error)
+	DayNames(c *Call, opts Value, tag string) (Value, error)
+	Tag(c *Call, tag string) (Value, error)
+}
+
+func (c *Core) LocaleCapability(impl LocaleImpl, costs Costs) (*CapabilityDef, error)
+
+// timer: both Operations are fire-and-forget. The Host stores timers durably,
+// by Script and name, and when one is due it calls Script.Deliver itself.
+type TimerImpl interface {
+	Schedule(c *Call, name string, at Value, message string, args Value) error
+	Cancel(c *Call, name string) error
+}
+
+func (c *Core) TimerCapability(impl TimerImpl, costs Costs) (*CapabilityDef, error)
+
+// ---------------------------------------------------------------------------
+// Host Objects (ADRs 0012, 0016)
+// ---------------------------------------------------------------------------
+
+// Prop is a Host Object property. Get and Set run inside the Run, like an
+// immediate Operation, and their costs are charged the same way. Set nil
+// makes the property read-only: a `set` is a load error where the kind is
+// known at load, and `read only` at run time otherwise. Reading or setting a
+// property of a disposed object raises `object gone`.
+type Prop struct {
+	Name    string
+	Shape   Shape
+	Get     func(o *Object) (Value, error)
+	Set     func(o *Object, v Value) error
+	GetCost Cost
+	SetCost Cost
+}
+
+type ObjectKindDef struct {
+	Name  string
+	Props []Prop
+	// ParentKinds lists the kinds that may be this kind's parent, for the
+	// Host Manifest only. SetParent doesn't check it.
+	ParentKinds []string
+}
+
+type ObjectKind struct { /* opaque */
+}
+
+// Object is a Group-scoped handle to something the Host owns.
+type Object struct { /* opaque */
+}
+
+func (o *Object) ID() string // the stable id the Host supplied (ADR 0008)
+func (o *Object) Kind() *ObjectKind
+func (o *Object) Native() any
+func (o *Object) Value() Value
+
+// ---------------------------------------------------------------------------
+// Limits (ADRs 0006, 0015, 0026; #71)
+// ---------------------------------------------------------------------------
+
+type Limits struct {
+	FuelPerRun      int64
+	AllocPerRun     int64
+	PersistentState int64 // Script-wide; never overridden per Delivery
+	CallDepth       int
+	MailboxDepth    int
+	MaxWait         time.Duration
+	MaxJoin         int
+	CleanupBudget   int64
+}
+
+// DefaultLimits is the spec's default limit profile. Zero fields in
+// LoadOptions.Limits take these values.
+func DefaultLimits() Limits
+
+// LimitOverride tightens a Script's per-Run limits for one Delivery. A field
+// that would loosen a limit is "invalid value". Zero fields don't override.
+type LimitOverride struct {
+	FuelPerRun  int64
+	AllocPerRun int64
+	MaxWait     time.Duration
+	MaxJoin     int
+}
+
+// ---------------------------------------------------------------------------
+// Core
+// ---------------------------------------------------------------------------
+
+// Core is process-wide. It holds the compile cache, so Scripts and Libraries
+// with the same code identity compile once, and it defines Capabilities and
+// Object Kinds. All its methods are safe from any goroutine.
+type Core struct { /* opaque */
+}
+
+func New() *Core
+
+func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error)
+func (c *Core) DefineObjectKind(k ObjectKindDef) (*ObjectKind, error)
+
+type Versions struct {
+	Language   string // "1.0"
+	CostModel  string // versioned with the Abstract Machine
+	Unicode    string
+	Core       string // "go/0.1.0": informational
+	SaveFormat string // same-core only (ADR 0008)
+}
+
+func CoreVersions() Versions
+
+type GroupOptions struct {
+	Name string
+	// OnReady is called, from any goroutine, when a queued Host Input makes
+	// the Group runnable. The Host puts the Group on its run queue. It must
+	// not pump from inside the callback.
+	OnReady func()
+	Trace   TraceSink // nil: no Trace is recorded
+}
+
+func (c *Core) NewGroup(o GroupOptions) *Group
+
+// TraceSink receives the Trace one canonical line at a time (ADR 0018).
+type TraceSink interface{ Record(line string) }
+
+// ---------------------------------------------------------------------------
+// Libraries (ADR 0020; #71)
+// ---------------------------------------------------------------------------
+
+type LibrarySource struct {
+	Name    string
+	Version string // the Host's own label
+	Source  string
+}
+
+// CompileLibrary parses and checks a Library once per process. imports must
+// hold every Library its `use` lines name. A missing one, or a cycle, is a
+// LoadError.
+func (c *Core) CompileLibrary(src LibrarySource, imports []*Library) (*Library, error)
+
+type Library struct { /* opaque */
+}
+
+func (l *Library) Name() string
+func (l *Library) Version() string
+func (l *Library) Source() string
+func (l *Library) Identity() [32]byte
+func (l *Library) Imports() []*Library
+func (l *Library) Needs() []OperationRef // every Operation it uses, through its imports too
+
+type OperationRef struct {
+	Capability string
+	Operation  string
+}
+
+// ---------------------------------------------------------------------------
+// Group
+// ---------------------------------------------------------------------------
+
+// Group is one Script Group. It is single-threaded: worker calls come from
+// the goroutine that pumps it. Groups pump in parallel.
+type Group struct { /* opaque */
+}
+
+func (g *Group) Name() string
+func (g *Group) Script(name string) *Script // nil if none
+
+type LoadOptions struct {
+	Name   string
+	Source string
+	// Grants maps the name the Script uses to a Grant, so one Capability can
+	// be granted twice under two names with different bindings.
+	Grants map[string]*Grant
+	// GrantsAsUsed keeps only the granted Operations that the Script and its
+	// Libraries use, and makes no unused Grant visible to it.
+	GrantsAsUsed bool
+	Owner        *Object            // the Script becomes its Owning Script
+	Objects      map[string]*Object // well-known objects, bound by name
+	Limits       Limits
+}
+
+// Load is a worker call. The Script's imports resolve against the Libraries
+// already added to the Group.
+func (g *Group) Load(o LoadOptions) (*Script, error)
+
+// AddLibrary is a worker call and a Host Input. It fails with "name reused"
+// if the Group holds that name, "reserved name" for a stdlib name, and
+// "library mismatch" if the Group holds a different identity for one of the
+// Library's imports.
+func (g *Group) AddLibrary(l *Library) error
+
+// ReplaceLibrary is a worker call and one Host Input. The Core recompiles
+// every Library that imports it, from the source it already holds, and then
+// stop-and-reloads every importing Script. It is atomic: if any of them fails
+// to check, nothing changes and the LoadError holds every diagnostic.
+func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error)
+
+type CarryOver int
+
+const (
+	ResetVariables CarryOver = iota
+	CarryVariables
+)
+
+// Object makes a handle for a Host-owned thing, the first time it crosses
+// into this Group. A duplicate id within the kind is "duplicate object id".
+// Any goroutine.
+func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
+
+// SetParent and Dispose are any-goroutine calls, queued as Host Inputs.
+// Their errors ("parent cycle", setParent on a disposed object) are reported
+// as HostErrors when they are known at the call, and otherwise go into the
+// next Pump's reports.
+func (g *Group) SetParent(o, parent *Object) error // parent nil ends the chain
+func (g *Group) Dispose(o *Object) error
+
+// Message is what a Delivery carries. Handler and message names are one word.
+type Message struct {
+	Name   string
+	Args   []Value
+	Limits *LimitOverride
+}
+
+type DeliveryID string
+type BroadcastID string
+
+// Deliver routes by object to its Owning Script, or the nearest ancestor that
+// has one (ADR 0016). Any goroutine. The only errors are ErrMailboxFull,
+// "wrong group" and "invalid value". A disposed target is reported, since
+// disposal is queued too.
+func (g *Group) Deliver(to *Object, m Message) (DeliveryID, error)
+
+// Request is `send … and wait` from outside. Cancelling ctx cancels the Run
+// it started. Any goroutine.
+func (g *Group) Request(ctx context.Context, to *Object, m Message) (DeliveryID, *Pending, error)
+
+// Broadcast reaches only the Scripts that want the message when the queue is
+// drained. Each recipient's `run end` report carries its own Delivery id and
+// this broadcast id. Any goroutine.
+func (g *Group) Broadcast(m Message) (BroadcastID, error)
+
+// Call calls a Function Value from the Host: a Delivery to its Home Script,
+// shaped exactly like Request. Staleness is checked when the queue is
+// drained, and a stale value rejects the Pending with `send failed`, reason
+// `function gone`, before anything runs. Any goroutine.
+func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitOverride) (DeliveryID, *Pending, error)
+
+// Pending settles when a Pump ends the Run it started.
+type Pending struct { /* opaque */
+}
+
+func (p *Pending) Done() <-chan struct{}
+func (p *Pending) Result() (Value, *ScriptError) // `send failed` with its reason when the Run didn't complete
+
+type PumpOptions struct {
+	FuelSlice int64 // per Script, per Pump; overrun is carried as debt. 0: no slicing
+	FuelCap   int64 // across the Group, for fairness between Groups. 0: no cap
+}
+
+// Pump is a worker call. It takes now as its one Clock reading (the
+// monotonic reading and zone are ignored), drains the input queue, fires due
+// waits and runs Runs until nothing is runnable or a slice is spent. The
+// Group is Quiescent when it returns. A reading earlier than the previous
+// Pump's is "clock backwards". A game pauses by not pumping, and freezes time
+// by passing the same now.
+func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error)
+
+type PumpResult struct {
+	State        GroupState
+	NextDeadline time.Time // zero if nothing is waiting on time
+	FuelUsed     int64
+	Reports      []Report // in the order they happened
+}
+
+type GroupState int
+
+const (
+	Idle   GroupState = iota // nothing runnable until an input or a deadline
+	Sliced                   // a slice or the cap ran out with work left
+	Stopped
+)
+
+// Save is a worker call, legal between Pumps.
+func (g *Group) Save() ([]byte, error)
+
+// Fingerprint is the Group Fingerprint (ADR 0009), the one lockstep check.
+// A worker call, between Pumps.
+func (g *Group) Fingerprint() [32]byte
+
+// ---------------------------------------------------------------------------
+// Script
+// ---------------------------------------------------------------------------
+
+type Script struct { /* opaque */
+}
+
+func (s *Script) Name() string
+func (s *Script) Grants() map[string][]string // the Operations kept for each granted name
+func (s *Script) Counters() Counters          // worker, between Pumps
+
+// Reload is stop-and-reload (ADR 0005), a worker call. It returns the
+// reports for the Runs it discarded.
+func (s *Script) Reload(source string, carry CarryOver) ([]Report, error)
+
+// Extend is extend Script (ADR 0014), a worker call. It adds only new names.
+// A reused one is "name reused", and the Host reloads instead.
+func (s *Script) Extend(source string) error
+
+// Stop, CancelRun and Revoke are any-goroutine Host Inputs. A running Pump
+// checks Stop and CancelRun between instructions. Everything else waits for
+// the next Pump.
+func (s *Script) Stop(reason string)
+func (s *Script) CancelRun(id RunID)
+
+// Revoke makes later calls through the named Grant fail with `capability
+// revoked` until the next Reload, and load errors after it. In-flight calls
+// are left to the Host.
+func (s *Script) Revoke(grantName string)
+
+// Deliver and Request address the Script rather than an object.
+func (s *Script) Deliver(m Message) (DeliveryID, error)
+func (s *Script) Request(ctx context.Context, m Message) (DeliveryID, *Pending, error)
+
+type Counters struct {
+	FuelTotal       int64 // since load, including faulted Segments; carried over a Reload
+	AllocTotal      int64
+	Runs            int64
+	Faults          int64
+	PersistentState int64 // current
+	MailboxLen      int
+}
+
+// ---------------------------------------------------------------------------
+// Reports (ADR 0015)
+// ---------------------------------------------------------------------------
+
+// Report is one of *RunEnd, *Stop, *Unhandled or *CallFailed. Hosts switch
+// on its type.
+type Report interface{ isReport() }
+
+type RunID string
+
+type Outcome int
+
+const (
+	Completed Outcome = iota
+	Errored
+	LimitFault
+	Cancelled
+	Unhandled
+	Dropped
+	HostErrored // the Run ended on an uncaught `host error`
+)
+
+type RunEnd struct {
+	Script    string
+	Run       RunID
+	Delivery  DeliveryID  // empty for a Run started by another Script's send
+	Broadcast BroadcastID // empty unless the Delivery was a Broadcast's
+	Handler   string
+	Outcome   Outcome
+	Result    Value        // Completed
+	Error     *ScriptError // Errored, HostErrored
+	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "cleanup"
+	At        Location
+	Fuel      int64
+	Alloc     int64
+}
+
+type Stop struct {
+	Script          string
+	Reason          string // the Host's reason, or "owner disposed"
+	DiscardedRuns   []RunID
+	DroppedMessages []DeliveryID
+	PendingCalls    []CallID // their Contexts are cancelled
+}
+
+// Unhandled is a message that reached the end of its Message Path, or a
+// Delivery to an object with no Owning Script on its path. A Broadcast is
+// never reported as unhandled.
+type Unhandled struct {
+	Delivery DeliveryID
+	Message  Message
+	Target   *Object // nil for a message addressed to a Script
+}
+
+// CallFailed carries the Host-side detail of a call the Script saw as `host
+// error`: a result that broke its Shape, a catalogue code in a Fail, or a Host
+// function returning an error that isn't a ScriptError or ErrLimit.
+type CallFailed struct {
+	Script    string
+	Call      CallID
+	Operation OperationRef
+	Detail    string
+}
+
+type Location struct {
+	Unit    string // Script or Library
+	Line    int
+	Col     int
+	Handler string
+	PC      int // instruction index (ADR 0010)
+}
+
+// ---------------------------------------------------------------------------
+// Save and restore (ADR 0008)
+// ---------------------------------------------------------------------------
+
+type RestoreOptions struct {
+	Name      string
+	OnReady   func()
+	Trace     TraceSink
+	Libraries []*Library // compiled Libraries matching the saved identities
+	// Grants re-binds each Script's Grants by Script and name. Resolve turns
+	// a stable id into a live object; an id it can't resolve restores as a
+	// disposed Host Object.
+	Grants   func(script, name string) *Grant
+	Resolve  func(kind, id string) (native any, ok bool)
+	Mismatch MismatchPolicy
+}
+
+type MismatchPolicy int
+
+const (
+	RejectMismatch MismatchPolicy = iota
+	VariablesOnly
+)
+
+// Restore is safe from any goroutine; the Group it returns has not been
+// pumped. The first Pump reads a Clock at or after the saved reading.
+func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
+
+type RestoreResult struct {
+	VariablesOnly bool
+	Pending       []PendingCall // each must be settled before the first Pump
+	DiscardedRuns []RunID
+	Disposed      []string // object ids that didn't resolve
+}
+
+type PendingCall struct {
+	ID        CallID
+	Script    string
+	Operation OperationRef
+	Args      []Value
+}
+
+// Settle settles one restored call, a worker call before the first Pump. A
+// call still unsettled at the first Pump fails as `call lost`.
+func (g *Group) Settle(id CallID, s Settlement) error
+
+// Settlement is exactly one of these.
+type Settlement struct {
+	Answer  *Value
+	Fail    *ScriptError
+	Reissue bool // run Start again; its per-call cost is not charged twice
+	Adopt   bool // the Host still has it and will answer under the same id; costs nothing
+}
+
+// ---------------------------------------------------------------------------
+// Host Manifest (ADR 0028)
+// ---------------------------------------------------------------------------
+
+// ManifestSpec describes one kind of Script for tooling. It uses the same
+// Grants and object types as LoadOptions, so one Host config builds both.
+type ManifestSpec struct {
+	Kind        string // "tenant rule", "game NPC"
+	Version     string // the Host's own manifest version
+	Grants      map[string]*Grant
+	Libraries   []*Library
+	Messages    []MessageDecl
+	ObjectKinds []*ObjectKind
+	Objects     map[string]*ObjectKind // well-known names bound at load
+}
+
+// MessageDecl is tooling-only: the Core never checks a Delivery against it.
+type MessageDecl struct {
+	Name      string
+	Args      []Shape
+	Receivers []*ObjectKind // the kinds of object it is delivered to; empty for a Script-addressed message
+}
+
+// ExportManifest writes the Host Manifest as deterministic JSON (README.md).
+// It is a pure function of the definitions, not of a live Group, and it never
+// includes Grant bindings.
+func ExportManifest(m ManifestSpec) ([]byte, error)
