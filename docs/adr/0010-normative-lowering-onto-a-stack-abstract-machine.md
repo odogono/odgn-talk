@@ -50,3 +50,4 @@ This refines ADR 0009's "normative abstract instruction set". The spec defines a
   - One TS/Bun generator emits the tables, cost functions, disassembler and assembler into both Cores, and the instruction tables into the spec.
 - Narrowed by ADR 0015: a Fuel Slice belongs to a Script, per Pump, and overrun debt is carried per Script.
 - Narrowed by ADR 0017: raising, catching and unwinding lower to `throw`, `rethrow` and `end-cleanup` over a normative Unwind Table per code unit. Guard regions are `guard` entries in that table.
+- Narrowed by ADR 0025: `make-closure` also copies a Lambda's may-suspend flag. `call-value` calls a Function Value that can't suspend, and `call-value-wait` is a Suspension Point instruction for a local call that may suspend or a call sent to another Home Script. Filter, map and sort are `list` Library calls, not instruction loops.

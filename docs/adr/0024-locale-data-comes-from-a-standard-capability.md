@@ -54,3 +54,4 @@
   - Formatting currency Quantities in a locale.
   - Whole-date formatting in a locale's own pattern.
   - Title case.
+- Narrowed by ADR 0025: Comprehensions are removed, so a Script sorts records by Collation with `sortBy(rs, given r: the (the name of r) of ranks)`. `rank` stays, since `sortWith` over `compare` would put one `locale` call per comparison in the Trace.

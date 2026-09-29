@@ -109,3 +109,7 @@ The grammar is written once, in a normative notation. The parts most likely to d
 - **Narrowed by ADR 0022:**
   - A Compound Unit joins factors with an unspaced `*`, has at most one `/`, and takes only positive exponents (`kg*m/s^2`, `1/s`). `s^-1` is a syntax error, and a spaced `*` is multiplication.
   - The Unit Catalogue lives in `units.toml`, and `grammar.toml`'s `[units]` points to it.
+- **Superseded in part by ADR 0025:**
+  - The rejected option "filter and map as functions with lambdas" is reversed. A Lambda is `given r: expr`, or a `given r … end given` block, and `given` is reserved.
+  - The Collections section is superseded. `every … where`, `… for every` and `sorted by` are removed in favour of the `list` Library's `filter`, `map`, `sortBy`, `sortWith`, `reduce` and `group`. `every match of <p> in s` stays, as a plain expression.
+  - A Function Value held in a variable is called as `f(x)`, and a name that is both a variable and a function is a load error.

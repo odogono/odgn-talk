@@ -150,9 +150,13 @@ _Avoid_: procedure call, invocation, message send (a `send` is something else)
 A `use … from …` line naming the definitions a Script or Library takes from a Library, e.g. `use pad, trim from text`. Only the names it lists are brought in.
 _Avoid_: include, require
 
-**Comprehension**:
-An `every` expression that builds a new list from another one, filtering it (`every r in xs where …`), mapping it (`… for every r in xs`) or sorting it (`sorted by …`), with the element bound to an explicit name.
-_Avoid_: query, list expression, filter/map (unqualified)
+**Lambda**:
+A `given` expression that makes a Function Value, e.g. `given r: the wind of r > 10`, or a `given r … end given` block.
+_Avoid_: anonymous function, block, arrow function, closure
+
+**Match Search**:
+An `every match of <p> in s` expression, giving the list of every match of a Text Pattern in a text.
+_Avoid_: find all, global match, comprehension
 
 ## Handlers
 
@@ -165,7 +169,7 @@ One of several Handlers for the same message, chosen by Destructuring the messag
 _Avoid_: overload
 
 **Guard**:
-The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds. A Guard may call Built-ins, but never a Script or Library function.
+The `where` condition on a Handler Clause or match branch. The clause is selected only when the condition holds. A Guard may call Built-ins, but never a Script or Library function or a Function Value.
 _Avoid_: filter, predicate
 
 **Run**:
@@ -173,7 +177,7 @@ One execution of a Handler, from the message that starts it to its end, possibly
 _Avoid_: activation, invocation, task, thread, process
 
 **Suspension Point**:
-A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, or a call to a Handler that may reach one. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
+A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, or a Function Value called with `and wait`. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
 _Avoid_: await, yield point
 
 **Suspending Capability**:
@@ -287,6 +291,14 @@ _Avoid_: bitstring, binary match, byte pattern, Text Pattern on bytes
 **Value Semantics**:
 The rule that no Script-created value (text, number, list, map) is ever both shared and changeable: changing a value through one name is never visible through another.
 _Avoid_: immutability, copy-on-write (those are ways to implement it)
+
+**Function Value**:
+A value that can be called: made by a Lambda or by naming a Script or Library function, and holding its Home Script, its code and the values it captured.
+_Avoid_: closure, callback, function object, lambda (that's the literal)
+
+**Home Script**:
+The Script a Function Value was made in, and the only one it ever runs in: a call from anywhere else is a message to it.
+_Avoid_: owner, origin, owning script (that's for Host Objects)
 
 **Container**:
 Somewhere a value can be put: a variable, or a Chunk Expression or key path rooted in one. Putting into a Container rebinds its root variable.
