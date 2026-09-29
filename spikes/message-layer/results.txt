@@ -1,0 +1,83 @@
+# bun host.js (Bun 1.4.2, Go 1.27.1, GOOS=wasip1 -buildmode=c-shared)
+## 1 export blocks on a channel
+threw Unreachable code should not be executed (evaluating 'f(e)')
+fd2: fatal error: all goroutines are asleep - deadlock!
+fd2: 
+fd2: goroutine 1 [chan receive]:
+fd2: main.blockChan()
+
+## 1b instance after that
+returned 7
+fd2: fatal error: all goroutines are asleep - deadlock!
+fd2: 
+fd2: goroutine 1 [chan receive]:
+fd2: main.blockChan()
+
+## 2 goroutine started by an export, between exports
+returned {"afterSpawn":0,"nextExport":0,"afterYield5":5,"after":5}
+
+
+## 4 synchronous import (immediate Operation)
+returned 13
+
+
+## 4b reentrant export from inside an import
+returned 41
+
+
+## 5 goroutine-per-Run parked across exports
+returned {"state":1,"result":42}
+
+
+## 6 plain-data Run: pump, answer, pump
+returned {"firstPump":1,"pumpAgainNoInput":1,"afterAnswer":-42}
+emit {"call":"r1.c1","op":"fetch"}
+
+## 7 frame through linear memory
+returned "{\"ok\":{\"m\":\"deliver\"}}"
+
+
+# elixir wasmex_check.exs (Elixir 1.20.4, OTP 29, Wasmex 0.15.1)
+import ran in #PID<0.197.0>, GenServer #PID<0.197.0>
+## 4 synchronous import
+{{:ok, ~c"\r"}, [per_export_us: 18.7765, per_export_plus_import_us: 40.795]}
+
+## 4b reentrant export from inside an import
+{:ok, ~c")"}
+
+emit {"call":"r1.c1","op":"fetch"}
+## 6 plain-data Run
+{1, -42}
+
+## 1 export blocks on a channel
+{{:error, "Error during function excecution (wasm trap: wasm `unreachable` instruction executed): error while executing at wasm backtrace:\n    0: 0x120831 - <unknown>!runtime.abort\n    1: 0x10dc4c - <unknown>!runtime.fatalthrow.func1\n    2: 0x12071f - <unknown>!runtime.systemstack\n    3:  0x9b63d - <unknown>!runtime.fatalthrow\n    4:  0x9ab10 - <unknown>!runtime.fatal\n    5:  0xc04c1 - <unknown>!runtime.checkdead\n    6:  0xc3cc9 - <unknown>!runtime.mput\n    7:  0xace21 - <unknown>!runtime.stopm\n    8:  0xb1a34 - <unknown>!runtime.findRunnable\n    9:  0xb51e8 - <unknown>!runtime.schedule\n   10:  0xb5f37 - <unknown>!runtime.park_m\n   11: 0x1206b3 - <unknown>!runtime.mcall\n   12: 0x119e7c - <unknown>!runtime.gopark\n   13:  0xc36d5 - <unknown>!runtime.updateMaxProcsGoroutine\n   14: 0x120b57 - <unknown>!wasm_pc_f_loop_export\n   15: 0x12419a - <unknown>!block_chan"}, true}
+
+# elixir wasmex_bench.exs, three runs
+inner timeout=:infinity: 17.2 µs per call
+inner timeout=5000: 19.3 µs per call
+call_op timeout=:infinity: 35.7 µs per call
+inner timeout=:infinity: 21.4 µs per call
+inner timeout=5000: 19.9 µs per call
+call_op timeout=:infinity: 38.8 µs per call
+inner timeout=:infinity: 18.8 µs per call
+inner timeout=5000: 19.5 µs per call
+call_op timeout=:infinity: 36.9 µs per call
+# bun bench.js
+inner: 0.009 µs per call (Bun)
+call_op: 0.015 µs per call (Bun)
+# elixir port_bench.exs, two runs
+port round trip: 7.3 µs
+sidecar killed: port reports exit_status 137, BEAM alive
+port round trip: 6.8 µs
+sidecar killed: port reports exit_status 137, BEAM alive
+# elixir wasmex_timeout.exs
+spin with a 200 ms timeout: {:exit,
+ {:timeout,
+  {GenServer, :call, [#PID<0.197.0>, {:call_function, "spin", [], 200}, 200]}}}
+GenServer alive: true
+next call: {:ok, ~c"("}
+call that enters the scheduler: {:ok, [0]}
+# elixir wasmex_frame.exs, five runs (first two: 357.9 and 80.8 µs)
+frame round trip: 141.9 µs
+frame round trip: 132.8 µs
+frame round trip: 213.4 µs
