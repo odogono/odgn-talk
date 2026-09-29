@@ -136,6 +136,14 @@ _Avoid_: line, cell, command, input
 A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
 
+**Lint**:
+A piece of advice from tooling about a Script that loads. It never rejects code, and unlike a load-time diagnostic, parity doesn't cover it.
+_Avoid_: warning (unqualified), diagnostic (unqualified)
+
+**Lint Profile**:
+A named set of Lint levels, `beginner` or `standard`. The Host picks the default and a user may override it.
+_Avoid_: layer, level, mode
+
 ## Syntax
 
 **Reserved Word**:
@@ -157,6 +165,14 @@ _Avoid_: anonymous function, block, arrow function, closure
 **Match Search**:
 An `every match of <p> in s` expression, giving the list of every match of a Text Pattern in a text.
 _Avoid_: find all, global match, comprehension
+
+**Beginner Surface**:
+Every construct of the language that isn't an Advanced Construct. A beginner never needs anything outside it to do something ordinary.
+_Avoid_: beginner mode, subset, level
+
+**Advanced Construct**:
+A construct tagged advanced because a Beginner Surface form does the same ordinary job and a beginner reading it couldn't guess what it means, e.g. the pin in `{order: ^orderId}`. It loads and runs like any other.
+_Avoid_: advanced mode, extension, expert feature
 
 ## Handlers
 

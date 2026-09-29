@@ -120,3 +120,4 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - Inside a Join, `ask … and wait` and `send … and wait` are Join Members, and the both-ways check is unchanged.
   - `, every time` is removed from Handler heads, and with it the `every time` decision.
   - Checked by the parser prototype (#48): no new second-token decision and no relexes.
+- Narrowed by ADR 0027: Lints are not checker diagnostics and are not normative. They come from tooling, never reject code, and parity doesn't cover them. `grammar.toml` carries an `advanced` tag on Advanced Constructs, which is published with the language version but outside parity.

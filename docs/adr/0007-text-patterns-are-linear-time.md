@@ -14,3 +14,4 @@ Text Patterns compile to our own IR and run on one linear-time matcher (a Pike V
 - A Capture inside a repetition is a load-time error, because the matcher keeps one slot per Capture. Scripts use `every match` instead.
 - Typed Elements and `as <kind>` convert after the match, and the matcher never goes back to try another split. `as` is therefore allowed only where the conversion can be proven to succeed at load time.
 - Adding lookaround or an escape hatch later is backwards compatible. Adding a backtracking engine would not be.
+- Narrowed by ADR 0027: `lazily` is an Advanced Construct, tagged in `grammar.toml`. It loads and runs like any other construct, and a `beginner` Lint Profile flags it.
