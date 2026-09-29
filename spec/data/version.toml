@@ -1,0 +1,12 @@
+# The language version: the Spec's version.
+#
+# The language version pins the grammar, the Unicode version, the catalogues,
+# the display form and the Trace grammar (ADR 0018). The Cost Model has its own
+# version, in costs.toml. Language 1.0 is declared once both Cores pass the seed
+# corpus and Cost Model 1 has been calibrated against them (ADR 0032).
+#
+# Schema: schema/version.schema.json. Shown in chapter 0 (region `version`).
+#
+#   language  the language version, e.g. "1.0-rc"
+
+language = "1.0-rc"

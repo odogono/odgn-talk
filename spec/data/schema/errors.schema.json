@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/errors.schema.json",
+  "title": "errors",
+  "description": "The error-code catalogue: every Error Code the Core raises inside a Script.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z']+( [a-z']+)*$"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z]*$"
+            },
+            "uniqueItems": true
+          },
+          "raised_when": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(ADR [0-9]{4}|#[0-9]+)$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "open": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "fields",
+          "raised_when",
+          "sources"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "additionalProperties": false
+}

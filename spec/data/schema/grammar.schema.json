@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/grammar.schema.json",
+  "title": "grammar",
+  "description": "Reserved Words, contextual keywords and the FOLLOW set.",
+  "type": "object",
+  "properties": {
+    "reserved": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+$"
+      },
+      "uniqueItems": true
+    },
+    "contextual": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "word",
+          "positions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "follow": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]+$"
+      },
+      "uniqueItems": true
+    },
+    "units": {
+      "type": "object",
+      "properties": {
+        "catalogue": {
+          "const": "units.toml"
+        }
+      },
+      "required": [
+        "catalogue"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "reserved",
+    "contextual",
+    "follow",
+    "units"
+  ],
+  "additionalProperties": false
+}

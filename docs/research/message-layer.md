@@ -1,10 +1,10 @@
 # Message layer and suspension under `wasip1`, for an Elixir Host
 
-Answers [#73](https://github.com/odogono/odgn-talk/issues/73), part of [#1](https://github.com/odogono/odgn-talk/issues/1). It proposes a message set that maps one-to-one onto the embedding interface settled in [#72](https://github.com/odogono/odgn-talk/issues/72) ([`talk.go`](../embedding/talk.go), [`talk.ts`](../embedding/talk.ts)). It also checks how the Go Core suspends a Run under `wasip1`, and compares WASI and a sidecar for an Elixir Host. The throwaway checks live in [`spikes/message-layer/`](../../spikes/message-layer/), and their raw output is in [`results.txt`](../../spikes/message-layer/results.txt).
+Answers [#73](https://github.com/odogono/odgn-talk/issues/73), part of [#1](https://github.com/odogono/odgn-talk/issues/1). It proposes a message set that maps one-to-one onto the embedding interface settled in [#72](https://github.com/odogono/odgn-talk/issues/72) ([`talk.go`](../../spec/embedding/talk.go), [`talk.ts`](../../spec/embedding/talk.ts)). It also checks how the Go Core suspends a Run under `wasip1`, and compares WASI and a sidecar for an Elixir Host. The throwaway checks live in [`spikes/message-layer/`](../../spikes/message-layer/), and their raw output is in [`results.txt`](../../spikes/message-layer/results.txt).
 
 ## Summary
 
-- **Suspension needs no blocking export.** `Operation.Start` returns straight away, and the Host answers later through `Call.Answer`, which is a queued Host Input ([`talk.go:289`](../embedding/talk.go), [`talk.go:323-329`](../embedding/talk.go)). So a Run on a Suspending Capability parks as plain data inside the Core (ADR 0004, 0005, 0008). The `pump` export then returns Quiescent with the pending call reported, and a later `answer` message is drained by the next `pump`. The spike ran exactly this under Go 1.27.1 `wasip1`, in both Bun and Wasmex. The Pump design already answers the issue's premise. Asyncify, JSPI and stack switching aren't needed.
+- **Suspension needs no blocking export.** `Operation.Start` returns straight away, and the Host answers later through `Call.Answer`, which is a queued Host Input ([`talk.go:289`](../../spec/embedding/talk.go), [`talk.go:323-329`](../../spec/embedding/talk.go)). So a Run on a Suspending Capability parks as plain data inside the Core (ADR 0004, 0005, 0008). The `pump` export then returns Quiescent with the pending call reported, and a later `answer` message is drained by the next `pump`. The spike ran exactly this under Go 1.27.1 `wasip1`, in both Bun and Wasmex. The Pump design already answers the issue's premise. Asyncify, JSPI and stack switching aren't needed.
 - **What standard Go really can't do** under `wasip1`:
   - **Wait for the Host inside an export.** If the export's goroutine blocks and nothing else can run, the runtime exits with `fatal error: all goroutines are asleep - deadlock!` and traps. The instance is then lost.
   - **Run goroutines between exports.** Goroutines are paused until the next export call enters Go.
@@ -61,11 +61,11 @@ What the spike saw, identically in Bun and in Wasmex:
 
 The interface was built so that no Core call waits for the Host:
 
-- **The Core owns no threads or timers.** A Pump runs until nothing is runnable, then returns Quiescent (ADR 0015, [`talk.go:620-626`](../embedding/talk.go)).
-- **A suspending Operation is started, not awaited.** `Start func(c *Call, args []Value) error` returns at once, and the Host answers later through `c` ([`talk.go:289`](../embedding/talk.go)). TS's Promise-returning `run` is sugar over `start`/`answer` on the Host side ([`talk.ts:178-188`](../embedding/talk.ts)).
-- **Answers are inputs.** `Answer`, `AnswerWithCost` and `Fail` append to the input queue, and the next Pump drains them ([`talk.go:323-329`](../embedding/talk.go), [README](../embedding/README.md#threads-and-the-input-queue)).
+- **The Core owns no threads or timers.** A Pump runs until nothing is runnable, then returns Quiescent (ADR 0015, [`talk.go:620-626`](../../spec/embedding/talk.go)).
+- **A suspending Operation is started, not awaited.** `Start func(c *Call, args []Value) error` returns at once, and the Host answers later through `c` ([`talk.go:289`](../../spec/embedding/talk.go)). TS's Promise-returning `run` is sugar over `start`/`answer` on the Host side ([`talk.ts:178-188`](../../spec/embedding/talk.ts)).
+- **Answers are inputs.** `Answer`, `AnswerWithCost` and `Fail` append to the input queue, and the next Pump drains them ([`talk.go:323-329`](../../spec/embedding/talk.go), [README](../../spec/09-embedding.md#threads-and-the-input-queue)).
 - **Runs are already plain data.** Heap frames and a run loop that can return (ADR 0004), plain-data Run state (ADR 0005, ADR 0008), and preemption only between instructions (ADR 0010) are what save-anywhere already needs. A Join's several pending calls are just several entries in that data (ADR 0026).
-- **Futures are Host-side.** `Pending.Done()` is the only blocking thing in talk.go ([`talk.go:612`](../embedding/talk.go)), and it settles from a `run end` report. A binding builds it from the reports, so it never crosses.
+- **Futures are Host-side.** `Pending.Done()` is the only blocking thing in talk.go ([`talk.go:612`](../../spec/embedding/talk.go)), and it settles from a `run end` report. A binding builds it from the reports, so it never crosses.
 
 So a Run that calls `fetch` goes through this sequence. The `pump` export runs until it reaches the call. The Core charges the declared cost, assigns `pricing/r1.c1`, and calls `Start` (as `op`, below). `Start` returns, the Run parks as data, and the Pump carries on with other Runs until the Group is Quiescent. `pump` then returns. Later the Host sends `answer pricing/r1.c1`, and the next `pump` drains it and resumes the Run. Nothing waits inside Wasm. The go-wasm spike's open question ("whether a Go core can suspend a Run across a Host promise without keeping all interpreter state explicit") is moot, because ADRs 0004, 0005 and 0008 require the state to be explicit anyway.
 
@@ -121,7 +121,7 @@ Every Go callback that talk.go runs during a Pump, and what it becomes across th
 - **Interim replies:** a reply to `pump` or `restore` may instead be `{"ref": n, "need": {…}}` (`op`, `prop` or `resolve`). The Host must answer with the matching `*-result` message, under the same `ref`, before anything else for that Group. Any worker message sent then is `reentrant call`.
 - **Payloads:**
   - Every Script value, marked (V) in the table, is in the Value Encoding (ADR 0030).
-  - Operation Declarations, Shapes and `ErrorDecl`s use the Host Manifest's data model ([README](../embedding/README.md#the-host-manifest-format)).
+  - Operation Declarations, Shapes and `ErrorDecl`s use the Host Manifest's data model ([README](../../spec/09-embedding.md#the-host-manifest-format)).
   - `now` and `nextDeadline` use the `$instant` text form.
   - Byte blobs (saves, identities, fingerprints) are `{"$bytes": …}`.
   - Other integers are plain JSON integers, and must stay below 2⁵³.

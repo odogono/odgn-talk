@@ -1,0 +1,56 @@
+# The Host error catalogue: every code a HostError can carry.
+#
+# Host misuse is refused at the call that made it, as a HostError with one of
+# these codes. Parity covers the code, not the detail text. None of these codes
+# is ever raised inside a Script (errors.toml holds those).
+#
+# Schema: schema/host-errors.schema.json. Shown in chapter 9 (region
+# `host-errors`). Owned by the chapter 9 task.
+#
+# [[error]]
+#   code         the code, lowercase words separated by spaces
+#   raised_when  one sentence: the misuse that raises it
+
+[[error]]
+code = "clock backwards"
+raised_when = "A Pump, or the first Pump after a restore, reads a Clock earlier than the last one"
+
+[[error]]
+code = "parent cycle"
+raised_when = "`setParent` would make a cycle"
+
+[[error]]
+code = "duplicate object id"
+raised_when = "A Host Object id is reused within its kind in one Group"
+
+[[error]]
+code = "name reused"
+raised_when = "extend Script reuses a name, or a Library name is added twice"
+
+[[error]]
+code = "not quiescent"
+raised_when = "A save is attempted during a Pump"
+
+[[error]]
+code = "reentrant call"
+raised_when = "A worker call is made from inside the Group's own Pump"
+
+[[error]]
+code = "wrong group"
+raised_when = "A Function Value or Host Object is passed into a Group it doesn't belong to"
+
+[[error]]
+code = "library mismatch"
+raised_when = "A Library's imports have different identities in the Group"
+
+[[error]]
+code = "reserved name"
+raised_when = "A Host registers a Library under a stdlib name"
+
+[[error]]
+code = "not adoptable"
+raised_when = "A TS `run` call is settled by adopt after a restore"
+
+[[error]]
+code = "invalid value"
+raised_when = "Input the value model can't hold (ADR 0030), a malformed declaration, or a limit override that loosens"

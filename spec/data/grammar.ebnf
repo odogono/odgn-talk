@@ -1,0 +1,7 @@
+(* The grammar's productions, in W3C-style EBNF (ADR 0019, ADR 0032).
+
+   Parsing is predictive, with a fixed lookahead of two tokens and no
+   backtracking. Reserved Words, contextual keywords and the FOLLOW set are in
+   grammar.toml, and Unit spellings in units.toml.
+
+   Owned by the chapter 2 task, which writes the productions. *)

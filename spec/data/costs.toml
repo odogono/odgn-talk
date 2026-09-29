@@ -1,0 +1,19 @@
+# The Cost Model: the Fuel and allocation each instruction is charged.
+#
+# Each instruction's charge is a static base plus per-unit terms over measures
+# of its operands and result, applied whole at that instruction (ADR 0010).
+# Changing a cost is a new Cost Model version (ADR 0006). The Abstract Machine is
+# versioned with it. Cost Model 0 is provisional. Cost Model 1 is calibrated
+# against both Cores after handoff (ADR 0032, Appendix C).
+#
+# Schema: schema/costs.schema.json. Shown in chapter 8 (region `costs`). Owned
+# by the chapter 8 task, which adds the rates and extends the schema.
+#
+#   version   the Cost Model version, an integer
+#   [[rate]]  one per Cost Model key named in machine.toml
+#     key     the Cost Model key
+#     base    the static Fuel charged
+#     terms   optional: per-unit terms, e.g. { per = "character", fuel = 1 }
+
+version = 0
+rate = []

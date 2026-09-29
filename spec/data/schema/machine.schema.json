@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/machine.schema.json",
+  "title": "machine",
+  "description": "The Abstract Machine's instruction set.",
+  "type": "object",
+  "properties": {
+    "instruction": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z]+(-[a-z]+)*$"
+          },
+          "operands": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "pops": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pushes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "suspends": {
+            "type": "boolean"
+          },
+          "cost": {
+            "type": "string",
+            "minLength": 1
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z']+( [a-z']+)*$"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "operands",
+          "pops",
+          "pushes",
+          "suspends",
+          "cost"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "instruction"
+  ],
+  "additionalProperties": false
+}

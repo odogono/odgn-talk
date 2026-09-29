@@ -1,0 +1,24 @@
+# The parts of the grammar most likely to drift (ADR 0019).
+#
+# The productions are in grammar.ebnf. This file holds the lists that both
+# Cores' parsers and the generator's checks read. Unit spellings come from
+# units.toml, and no Unit name or plural may be a Reserved Word or a word in the
+# FOLLOW set.
+#
+# Schema: schema/grammar.schema.json. Shown in chapter 2 (region `grammar`).
+# Owned by the chapter 2 task, which fills the lists and adds operators,
+# precedence, modifier attachment and the built-in property names.
+#
+#   reserved    every Reserved Word
+#   contextual  the contextual keywords, each with the positions that give it a
+#               meaning: { word = "line", positions = ["chunk kind"] }
+#   follow      the words in the FOLLOW set
+#   [units]
+#     catalogue  the Data File that holds the Unit Catalogue
+
+reserved = []
+contextual = []
+follow = []
+
+[units]
+catalogue = "units.toml"

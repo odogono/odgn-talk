@@ -1,6 +1,10 @@
-# The embedding interface
+# 9. Embedding
 
-[`talk.go`](talk.go) and [`talk.ts`](talk.ts) are the final embedding interface for the two Cores, settled in [#72](https://github.com/odogono/odgn-talk/issues/72). They are declarations only and are never compiled. The two files have the same calls and differ only in idiom (ADR 0015). This page holds the rules they share, the Host error catalogue, the Host Manifest format and the Operation naming guide.
+_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md).
+
+> **Note.** Draft, moved from `docs/embedding/README.md`. The chapter 9 task finishes it.
+
+[`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts) are the final embedding interface for the two Cores, settled in [#72](https://github.com/odogono/odgn-talk/issues/72). They are declarations only and are never compiled. The two files have the same calls and differ only in idiom ([ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md)). This chapter holds the rules they share, the Host error catalogue, the Host Manifest format and the Operation naming guide.
 
 ## The shape
 
@@ -42,7 +46,7 @@
 
 ## Decisions
 
-A Decision asks Scripts whether something may happen, such as a game move or a form submit, and gets back a Verdict ([ADR 0031](../adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), #80).
+A Decision asks Scripts whether something may happen, such as a game move or a form submit, and gets back a Verdict ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), #80).
 
 - **The calls:** `group.Decide(ctx, to, m)`, `script.Decide(ctx, m)` and `group.DecideBroadcast(ctx, m)` are queued, like `Request`. They return an id and a `Deciding` future that settles with a `Decided`.
 - **The Verdict:** `allowed`, `vetoed` or `undecided`. `Decided` also lists every veto as `{script, run, reason}`, in recipient order, and every undecided recipient as `{script, run, outcome}`.
@@ -55,9 +59,9 @@ A Decision asks Scripts whether something may happen, such as a game move or a f
 
 ## The message layer
 
-The language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir over WASI or a sidecar. [The message-layer research](../research/message-layer.md) (#73) has the full message set. These rules are fixed:
+The language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir over WASI or a sidecar. [The message-layer research](../docs/research/message-layer.md) (#73) has the full message set. These rules are fixed:
 
-- **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use the Value Encoding (ADR 0030), and declarations use the Host Manifest's data model.
+- **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use the Value Encoding ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), and declarations use the Host Manifest's data model.
 - **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, a property `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host. So a WASI build needs no reentrant imports, and a sidecar carries the same messages.
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox. It counts as received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Charging:** each Operation call carries the Fuel the Run has left after the declared cost. `Charge` fails exactly when that can't cover it, so the Host can charge locally.
@@ -73,11 +77,13 @@ Helpers built only on this interface, versioned with each Core and not normative
 
 - **Drivers:** `talk/driver` in Go (a worker pool, a run queue and a timer per Group) and `autoDrive(group)` from `@odgn/talk/driver` in TS. Game Hosts pump by hand.
 - **Other helpers:** `Must*` value constructors for literals in Host code, Trace file sinks, and the corpus runner.
-- **Left to the TS Core:** the debugger's pause hook (ADR 0028).
+- **Left to the TS Core:** the debugger's pause hook ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ## Host error catalogue
 
 Host misuse is refused at the call that made it, as a `HostError` with one of these codes. Parity covers the code, not the detail text.
+
+<!-- generated: host-errors -->
 
 | Code | Raised when |
 | --- | --- |
@@ -91,7 +97,9 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `library mismatch` | A Library's imports have different identities in the Group |
 | `reserved name` | A Host registers a Library under a stdlib name |
 | `not adoptable` | A TS `run` call is settled by adopt after a restore |
-| `invalid value` | Input the value model can't hold (ADR 0030), a malformed declaration, or a limit override that loosens |
+| `invalid value` | Input the value model can't hold ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), a malformed declaration, or a limit override that loosens |
+
+<!-- end -->
 
 A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load shedding, not a bug.
 
@@ -118,10 +126,14 @@ A call reads `ask <capability> to <operation> <arguments>`, so the Operation's n
 3. Never repeat the Capability's name in the Operation's (`tell log to log`). Use `write`, `note` or `record` instead.
 4. Prefer one word. Use camelCase only when one word would be ambiguous (`lookUp`, `numberSymbols`).
 5. Name an immediate Operation for its result (`lookUp`, `count`, `tag`) and a suspending one for its action (`fetch`, `charge`, `submit`).
-6. An Operation name may be a keyword elsewhere (`put`, `delete`, ADR 0012) or a stdlib name. Operation names are their own namespace, so `locale`'s `upper` doesn't clash with the `upper` Built-in (ADR 0024).
+6. An Operation name may be a keyword elsewhere (`put`, `delete`, [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)) or a stdlib name. Operation names are their own namespace, so `locale`'s `upper` doesn't clash with the `upper` Built-in ([ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
 
 `DefineCapability` refuses `ask`, `tell`, `send` and `wait` as Operation names, since they read badly on every Host. The rest of the guide is advice.
 
 ## Host conventions
 
-Non-normative (ADR 0030): HTTP header names are lowercase. A repeated header's values are joined with `, `, except `set-cookie`, which is a list of text.
+Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)): HTTP header names are lowercase. A repeated header's values are joined with `, `, except `set-cookie`, which is a list of text.
+
+## Outside parity
+
+_None yet._ The chapter 9 task moves [What stays out](#what-stays-out) here.

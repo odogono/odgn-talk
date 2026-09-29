@@ -1,6 +1,6 @@
 # Learn odgn-talk in Y minutes
 
-> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour describes the language as the [ADRs](adr/) decide it. Each section heading names the ADRs it rests on, and where the tour and an ADR disagree, the ADR wins. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`CONTEXT.md`](../CONTEXT.md). Anything still undecided is left out.
+> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour is an informative introduction. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Each section heading names the [ADRs](adr/) behind it. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`CONTEXT.md`](../CONTEXT.md). Anything still undecided is left out.
 
 odgn-talk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go servers, Bun servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
