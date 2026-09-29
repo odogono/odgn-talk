@@ -79,3 +79,4 @@ The language has two layers, the Beginner Surface and the Advanced Constructs, b
   - Whether `with` over tagged results and a `throw "code"` shorthand exist at all (ADR 0017). Being Advanced can't justify adding a construct.
   - Each Lint's wording and the `long-join-body` threshold, written with the tooling.
   - The LSP, formatter and debugger design, in #1's tooling fog.
+- Narrowed by ADR 0028: a fourteenth Lint, `unknown-message` (hint / hint), flags a Handler for a message the Host Manifest doesn't declare. The Lint engine is part of the one TS tooling stack.
