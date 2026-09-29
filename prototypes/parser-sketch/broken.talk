@@ -178,3 +178,125 @@ end t
 on t
   put given r: r > 1 and ok into f
 end t
+-- case: #48: something after `wait for all` on the same line
+on t
+  wait for all ask http to get u and wait
+end t
+-- case: #48: a Join closed with `end all`
+on t
+  wait for all
+    ask http to get u and wait
+  end all
+end t
+-- case: #48: a Join that is never closed
+on t
+  wait for all
+    ask http to get u and wait
+end t
+-- case: #48: a Handler named `all`
+on all
+  tell log to write "hi"
+end all
+-- case: #48: a message named `all`
+on t
+  send all to hub
+end t
+-- case: #48: waiting for an event named `all` in the block form
+on t
+  wait for
+    when all then tell log to write "hi"
+  end wait
+end t
+-- case: #48: parses: `all` is still a variable name
+on t
+  put [] into all
+  put 1 after all
+end t
+-- case: #48: a `wait` inside a Join
+on t
+  wait for all
+    ask http to get a and wait
+    wait 1 s
+  end wait
+end t
+-- case: #48: a `wait for` inside a Join
+on t
+  wait for all
+    ask http to get a and wait
+    wait for paid or 2 min
+  end wait
+end t
+-- case: #48: a Join inside a Join
+on t
+  wait for all
+    ask http to get a and wait
+    wait for all
+      ask http to get b and wait
+    end wait
+  end wait
+end t
+-- case: #48: a Command Call that may suspend, inside a Join
+on t
+  wait for all
+    fetchOne "LHR" and wait
+  end wait
+end t
+-- case: #48: a Function Value called with `and wait`, inside a Join
+on t
+  wait for all
+    refresh() and wait
+  end wait
+end t
+-- case: #48: a Join Member inside `try`
+on t
+  wait for all
+    try
+      ask http to get a and wait
+    catch e
+      tell log to write "failed"
+    end try
+  end wait
+end t
+-- case: #48: `return` inside a Join
+on t
+  wait for all
+    ask http to get a and wait
+    if done then return nothing
+  end wait
+end t
+-- case: #48: `exit repeat` leaving a Join
+on t
+  repeat for each u in urls
+    wait for all
+      ask http to get u and wait
+      exit repeat
+    end wait
+  end repeat
+end t
+-- case: #48: parses: `exit repeat` from a loop inside the Join
+on t
+  wait for all
+    repeat for each u in urls
+      if u is "" then exit repeat
+      ask http to get u and wait
+    end repeat
+  end wait
+end t
+-- case: #48: a Join with no members
+on t
+  wait for all
+    ask http to get a
+    send ping to hub
+  end wait
+end t
+-- case: #48: parses: a Join around a `try` that holds no member
+on t
+  wait for all
+    try
+      put decodeJson(raw) into cfg
+    catch e
+      put {} into cfg
+    end try
+    ask http to get the url of cfg and wait
+  end wait
+end t

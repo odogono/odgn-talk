@@ -1,5 +1,6 @@
-// PROTOTYPE (throwaway, issues #38 and #54): a predictive parser for the ADR 0019
-// grammar, extended with ADR 0025's Lambdas and without Comprehensions.
+// PROTOTYPE (throwaway, issues #38, #54 and #48): a predictive parser for the
+// ADR 0019 grammar, extended with ADR 0025's Lambdas, without Comprehensions,
+// and with #48's Join (`wait for all … end wait`).
 //
 // Rules this file keeps to, so that it tests the ADR's claim:
 //   * No backtracking. There is no mark/reset; a consumed token stays consumed.
@@ -201,6 +202,13 @@ export class Parser {
     if (t.t !== "word" || RESERVED.has(t.v)) this.fail(t, what);
     return this.next().v;
   }
+  // #48: a Handler, message or event name. `all` is excluded, because
+  // `wait for all` starts a Join.
+  messageName(what: string): string {
+    const t = this.peek(0);
+    if (this.isWord(t, ...g.contextual.join_words.words)) this.fail(t, `${what} (\`${t.v}\` can't name a message: \`wait for ${t.v}\` starts a Join)`);
+    return this.name(what);
+  }
   anyWord(what: string): string {
     const t = this.peek(0);
     if (t.t !== "word") this.fail(t, what);
@@ -248,7 +256,7 @@ export class Parser {
   handler(): Node {
     this.next();
     const nameTok = this.peek(0);
-    const name = this.name("a Handler name");
+    const name = this.messageName("a Handler name");
     const params: Node[] = [];
     const modifiers: string[] = [];
     let guard: Node | null = null;
@@ -331,7 +339,16 @@ export class Parser {
     return [this.statement()];
   }
 
+  // #48: every statement node carries its first token, so the checker
+  // (check.ts) can place its diagnostics.
   statement(): Node {
+    const t = this.peek(0);
+    const n = this.statementBody();
+    n.tok ??= t;
+    return n;
+  }
+
+  statementBody(): Node {
     const t = this.peek(0);
     if (t.t !== "word") this.fail(t, "a statement");
     switch (t.v) {
@@ -449,7 +466,7 @@ export class Parser {
 
   send(): Node {
     this.next();
-    const msg = this.name("a message name");
+    const msg = this.messageName("a message name");
     let args: Node[] = [];
     if (this.atWord("with")) {
       this.next();
@@ -488,6 +505,19 @@ export class Parser {
     this.next();
     if (!this.atWord("for")) return { k: "Wait", duration: this.expr() };
     this.next();
+    // #48: `wait for all ⏎ … ⏎ end wait` is a Join, decided on the one token
+    // after `wait for`. `all` is never a message name (see messageName), so
+    // this can't be a `wait for` on a message called `all`.
+    if (this.atWord("all")) {
+      this.next();
+      const t = this.peek(0, "operator");
+      if (t.t !== "nl") this.fail(t, "end of line after `wait for all` (a Join's calls go on the lines below)");
+      this.endOfStatement();
+      const body = this.block(["end"]);
+      this.expectWord("end");
+      this.expectWord("wait");
+      return { k: "Join", body };
+    }
     if (this.atEnd()) {
       this.endOfStatement();
       const branches: Node[] = [];
@@ -525,7 +555,7 @@ export class Parser {
 
   // `paid {order: ^orderId}`, `click from okButton`
   event(): Node {
-    const name = this.name("an event name");
+    const name = this.messageName("an event name");
     const pats: Node[] = [];
     let from: Node | null = null;
     const stop = () => {

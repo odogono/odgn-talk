@@ -1,0 +1,166 @@
+-- 13: Joins, several requests from one Run (issue #48, prototype).
+-- The Host granted `http` (`get` is suspending), `pricing` (`quote` is
+-- suspending), `log` and `clock`. `pricing` could as well be another Script.
+--
+-- A Join is `wait for all ⏎ … ⏎ end wait`. Every `send … and wait` and
+-- `ask … and wait` its body reaches is started without waiting, and `end wait`
+-- is the one Suspension Point. `it` is then the list of answers, in the order
+-- the calls were started. The first failure to arrive is raised, with `index`
+-- added, and the calls still pending are abandoned.
+-- `decodeJson`, `map` and `filter` come from the `json` and `list` Libraries,
+-- imported with `use` (the parser sketch doesn't parse `use` lines).
+
+------------------------------------------------------------------------
+-- 1. The 09 sketch's `compare`, before and after.
+------------------------------------------------------------------------
+
+-- Before (09-http-fetch.talk): one Run per station, with a Script Variable
+-- to count results, and nobody to hand them back to.
+--
+--   script variable results = {}
+--
+--   on compare stations
+--     repeat for each s in stations
+--       send fetchOne with s to me
+--     end repeat
+--   end compare
+--
+--   on fetchOne s, every time
+--     put report(s, "2026-09-27") into the (s) of results
+--     if the length of results = 3 then tell log to write "all in: " & results
+--   end fetchOne
+
+-- After: one Run, one Suspension Point, and the answers come back in order.
+on compare stations, day
+  wait for all
+    repeat for each s in stations
+      ask http to get "https://api.example.com/stations/" & s & "/latest?day=" & day and wait
+    end repeat
+  end wait
+  -- it = [response for stations[1], response for stations[2], …]
+  put map(it, given r: decodeJson(the body of r as text)) into latest
+  -- ?? #48: each `ask … and wait` reads as if it waits right there. Only the
+  --    `wait for all` three lines up says it doesn't. In a short Join that's
+  --    fine; in a long body the head scrolls away.
+  tell log to write "all in: " & the length of latest
+  return latest
+end compare
+
+------------------------------------------------------------------------
+-- 2. A branch with logic of its own: paging goes in a Handler, reached by a
+--    send to `me`. That send is the Join Member, and each one starts a new
+--    Run of this Script (ADR 0004).
+------------------------------------------------------------------------
+
+on compareAll stations, day
+  wait for all
+    repeat for each s in stations
+      send allReadings with s, day to me and wait
+    end repeat
+  end wait
+  put it into perStation
+  -- ?? #48: `send … to me and wait` is the escape hatch for a branch body.
+  --    It reads as a plain request, which is what it is, but a reader may not
+  --    expect `me` to run several Runs of itself at once.
+  return perStation
+end compareAll
+
+on allReadings station, day, every time
+  put "https://api.example.com/stations/" & station & "/readings?day=" & day into url
+  put [] into all
+  -- `all` is still a fine variable name; it only can't name a message.
+  repeat while url is not nothing
+    ask http to get url and wait
+    put decodeJson(the body of it as text) into page
+    put ...the readings of page after all
+    put the next of page into url
+  end repeat
+  return {station: station, readings: all}
+end allReadings
+
+------------------------------------------------------------------------
+-- 3. Different calls in one Join, and code between them that can't suspend.
+------------------------------------------------------------------------
+
+on checkout basket
+  put the sku of basket into sku
+  wait for all
+    ask pricing to quote {sku: sku, qty: the qty of basket} and wait
+    ask http to get "https://stock.example.com/" & sku and wait
+    tell log to write "quoting " & sku
+    -- not a member: `tell` is fire-and-forget, and runs right here
+    if the coupon of basket is not nothing then
+      send validate with the coupon of basket to coupons and wait
+    end if
+  end wait
+  -- it has two or three items, depending on the coupon
+  let [price, stock, ...rest] be it
+  -- ?? #48: a conditional member makes the result's length depend on the
+  --    data, so Destructuring needs a rest. Readable, but easy to get wrong.
+  if rest is empty then return {price: price, stock: stock}
+  return {price: price, stock: stock, coupon: item 1 of rest}
+end checkout
+
+------------------------------------------------------------------------
+-- 4. Failure: fail fast. A `try` goes around the whole Join, never around
+--    one member (a load error: see broken.talk).
+------------------------------------------------------------------------
+
+on latestOrNothing stations
+  try
+    wait for all
+      repeat for each s in stations
+        ask http to get "https://api.example.com/stations/" & s & "/latest" and wait
+      end repeat
+    end wait
+    return it
+  catch {code: "timeout", index: i}
+    tell log to write "station " & item i of stations & " timed out"
+    return nothing
+  catch {code: c, index: i}
+    tell log to write "station " & item i of stations & " failed: " & c
+    return nothing
+  end try
+end latestOrNothing
+
+-- Every outcome, not just the first failure: each member is a send to a
+-- Handler that catches, so no member ever fails.
+on everyOutcome stations
+  wait for all
+    repeat for each s in stations
+      send latestOf with s to me and wait
+    end repeat
+  end wait
+  return filter(it, given r: r is not nothing)
+end everyOutcome
+
+on latestOf station, every time
+  try
+    ask http to get "https://api.example.com/stations/" & station & "/latest" and wait
+    return decodeJson(the body of it as text)
+  catch e
+    return nothing
+  end try
+end latestOf
+
+------------------------------------------------------------------------
+-- 5. A Join in a stored callback: a block Lambda that may suspend (ADR 0025).
+------------------------------------------------------------------------
+
+script variable refresh = nothing
+
+on setup urls
+  put given
+    wait for all
+      repeat for each u in urls
+        ask http to get u and wait
+      end repeat
+    end wait
+    return the length of it
+  end given into refresh
+end setup
+
+on tick
+  refresh() and wait
+  tell log to write "refreshed " & it
+end tick

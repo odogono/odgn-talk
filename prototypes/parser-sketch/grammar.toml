@@ -1,5 +1,6 @@
-# PROTOTYPE (throwaway, issues #38 and #54): first draft of the ADR 0019 grammar
-# table, updated on the #54 branch for ADR 0025 (Lambdas, no Comprehensions).
+# PROTOTYPE (throwaway, issues #38, #54 and #48): first draft of the ADR 0019
+# grammar table, updated on the #54 branch for ADR 0025 (Lambdas, no
+# Comprehensions) and on the #48 branch for the Join.
 #
 # The parser in this folder reads every list below, so the draft is exercised,
 # not just written down. `bun prototypes/parser-sketch/run.ts --check-table`
@@ -72,6 +73,10 @@ count_form   = { words = ["number"], position = "`the number of <chunks> in e`" 
 match_iter   = { words = ["contains"], position = "`when contains <…>`" }
 kinds        = { words = ["number", "integer", "text", "list", "map", "bytes", "date", "instant", "boolean", "pattern", "quantity"], position = "after `as`, `is a`, `can be a`" }
 target       = { words = ["target"], position = "`the target`" }
+# #48: `wait for all` starts a Join, decided on the one token after `wait for`.
+# So `all` can't be a Handler, message or event name; it stays usable as a
+# variable (`put all into x`).
+join_words   = { words = ["all"], position = "straight after `wait for`; never a Handler, message or event name" }
 
 [operators]
 # Lowest to highest. `assoc` is left, right or none (comparisons don't chain).
@@ -103,7 +108,7 @@ as              = { attaches = "postfix, above every binary operator, below chun
 ignoring_case   = { attaches = "the nearest comparison or match operator, a `match` statement, a Text Pattern element" }
 delimited_by    = { attaches = "the outermost Chunk Expression of an `of` chain" }
 lazily          = { attaches = "a Text Pattern element" }
-and_wait        = { attaches = "`send … to t`, `ask X to op args`, a Command Call, and a call statement `f(x)` (ADR 0025); `and` followed by `wait` ends the expression" }
+and_wait        = { attaches = "`send … to t`, `ask X to op args`, a Command Call, and a call statement `f(x)` (ADR 0025); `and` followed by `wait` ends the expression. Inside a Join (#48), `send … and wait` and `ask … and wait` start a Join Member instead of waiting" }
 little_big      = { attaches = "a Binary Pattern integer field" }
 
 [properties]

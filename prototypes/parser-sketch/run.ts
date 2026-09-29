@@ -1,4 +1,4 @@
-// PROTOTYPE (throwaway, issue #38). Usage, from the repo root:
+// PROTOTYPE (throwaway, issues #38, #54 and #48). Usage, from the repo root:
 //
 //   bun prototypes/parser-sketch/run.ts                 parse the sketch files, print the report
 //   bun prototypes/parser-sketch/run.ts --tree [file]   also print a parse tree per file
@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import g from "./grammar.toml";
+import { check } from "./check";
 import { newStats, parse, type Node, type Stats } from "./parser";
 
 const here = import.meta.dir;
@@ -41,7 +42,7 @@ const BLOCK_KEYS = new Set(["body", "then", "else", "finally"]);
 function stmt(n: Node, depth: number, out: string[]) {
   const pad = "  ".repeat(depth);
   const blocks = Object.entries(n).filter(([k, v]) => BLOCK_KEYS.has(k) && Array.isArray(v));
-  const nested = n.k === "Match" || n.k === "WaitForBlock" || n.k === "Try";
+  const nested = n.k === "Match" || n.k === "WaitForBlock" || n.k === "Try" || n.k === "Join";
   if (!blocks.length && !nested) {
     out.push(pad + expr(n));
     return;
@@ -79,8 +80,12 @@ function report(files: string[], showTree: boolean) {
     const stats = newStats();
     const { ast, error } = parse(readFileSync(f, "utf8"), stats);
     const name = basename(f);
+    const diags = ast ? check(ast) : [];
     if (error) console.log(`✗ ${name}  ${error.tok.line}:${error.tok.col}  ${error.message}`);
-    else {
+    else if (diags.length) {
+      console.log(`✗ ${name}  parses, but the checker (#48) reports:`);
+      for (const d of diags) console.log(`    ${d.line}:${d.col}  ${d.msg}`);
+    } else {
       ok++;
       console.log(`✓ ${name}  ${ast!.length} top-level definitions`);
     }
@@ -90,7 +95,7 @@ function report(files: string[], showTree: boolean) {
     for (const r of stats.relexes) total.relexes.push({ ...r, site: `${name} ${r.site}` });
     for (const n of stats.notes) total.notes.push({ ...n, msg: `${name}:${n.line}:${n.col}  ${n.msg}` });
   }
-  console.log(`\n${ok}/${files.length} files parse.\n`);
+  console.log(`\n${ok}/${files.length} files parse and pass the Join checks.\n`);
 
   console.log("Decisions that needed the second token (LL(2) sites), by count:");
   for (const [s, n] of [...total.sites].sort((a, b) => b[1] - a[1])) {
@@ -113,9 +118,18 @@ function broken() {
     const nl = c.indexOf("\n");
     const label = c.slice(0, nl);
     const body = c.slice(nl + 1);
-    const { error, stats } = parse(body);
+    const { ast, error, stats } = parse(body);
     console.log(`── ${label}`);
     const lines = body.replace(/\n+$/, "").split("\n");
+    const diags = ast ? check(ast) : [];
+    if (!error && diags.length) {
+      // #48: parses, but a checker diagnostic (a load error) applies.
+      lines.forEach((l, i) => {
+        console.log("   " + l);
+        for (const d of diags) if (d.line === i + 1) console.log("   " + " ".repeat(d.col - 1) + "^ " + `${d.line}:${d.col} load error: ${d.msg}`);
+      });
+      continue;
+    }
     if (!error) {
       console.log(lines.map((l) => "   " + l).join("\n"));
       console.log("   → parses (no syntax error)" + (stats.notes.length ? `; note: ${stats.notes.map((n) => n.msg).join("; ")}` : ""));
