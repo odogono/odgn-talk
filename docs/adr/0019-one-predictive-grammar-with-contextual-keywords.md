@@ -113,3 +113,4 @@ The grammar is written once, in a normative notation. The parts most likely to d
   - The rejected option "filter and map as functions with lambdas" is reversed. A Lambda is `given r: expr`, or a `given r … end given` block, and `given` is reserved.
   - The Collections section is superseded. `every … where`, `… for every` and `sorted by` are removed in favour of the `list` Library's `filter`, `map`, `sortBy`, `sortWith`, `reduce` and `group`. `every match of <p> in s` stays, as a plain expression.
   - A Function Value held in a variable is called as `f(x)`, and a name that is both a variable and a function is a load error.
+  - Checked by the parser prototype (#54): a Lambda head and a block Lambda body make newlines significant again at the bracket depth where they start, which narrows the line-continuation rule. `and wait` on a call is statement-only, and `name(` stays the only call form.
