@@ -133,6 +133,7 @@ on comparisonTour input
   if 1 = "1" then say "never"
 
   -- `1 < "1"`, though, is an error: `<` only orders values that compare.
+  if [1, "b"] < [2, "a"] then say "lists order element by element"
   -- `is a` tests the kind a value has now. `can be a` asks if it would convert.
   if input is a number then say "a number already"
   if input can be a number then put input as number into n
@@ -349,7 +350,7 @@ end confirm
 -- code runs inside the caller's Run. An Import names exactly what it brings in.
 -- The Standard Library is seven Libraries written in the language itself:
 use pad, split, join from text     -- also: padLeft, repeated, …
-use average, filter, map, reduce, sortBy from list
+use average, filter, map, reduce, sortBy, any, partition from list
 use merge from map
 use toHex from bytes
 use decodeJson from json
@@ -485,6 +486,10 @@ on lambdasTour readings
   put map(readings, given {temp: t}: t) into temps  -- params can Destructure
   put reduce(readings, given worst, r: max([worst, the wind of r]), 0 km/hr) into peak
   put sortBy(readings, given r: the temp of r) into coolestFirst
+  put sortBy(readings, given r: the temp of r, "descending") into warmestFirst
+  put sortBy(readings, given r: [the city of r, the temp of r]) into byCity
+  if any(readings, isWindy) then say "windy somewhere"
+  let [gusty, calm] be partition(readings, isWindy)
   put given k: given x: x * k into multiplier
   put multiplier(3) into triple
   put triple(14) into fortyTwo      -- `multiplier(3)(14)` is a syntax error
@@ -585,7 +590,7 @@ end firstBytes
 --   literal syntax for Civil Dates and Instants (use makeDate for now)
 --   the shape of a match result, and `the match of`
 --   how to exit the enclosing Handler
---   `any`, `all` and `count` over lists; `the number of words in s`
+--   `the number of words in s`
 --   `, deciding` and `veto`
 ```
 
