@@ -196,6 +196,7 @@ on chunksTour
   put word -1 of s into tail2       -- "fox": negative counts from the end
   put the length of s into len      -- 19 Characters
   put the words of s into ws        -- ["The", "quick", "brown", "fox"]
+  put the length of the words of s into wordCount   -- 4
   put "a,b,c" into row
   put item 2 of row into b          -- "b": items are comma-separated...
   put item 2 of "a;b;c" delimited by ";" into b2   -- ...unless you say
@@ -237,6 +238,7 @@ end unitsTour
 -- A Handler runs when its message reaches the Script. Its Run lasts from
 -- that message to its end.
 on greet name
+  if name is empty then return      -- a bare `return` leaves early
   add 1 to visits
   say welcome & ", " & name & "! Visit number " & visits
 end greet
@@ -349,7 +351,7 @@ end confirm
 -- A Library is shared code the Host supplies, with no state of its own. Its
 -- code runs inside the caller's Run. An Import names exactly what it brings in.
 -- The Standard Library is seven Libraries written in the language itself:
-use pad, split, join from text     -- also: padLeft, repeated, …
+use pad, split, join, format from text   -- also: padLeft, repeated, …
 use average, filter, map, reduce, sortBy, any, partition from list
 use merge from map
 use toHex from bytes
@@ -368,10 +370,14 @@ on librariesTour body
   put decodeJson(body) into data    -- JSON null becomes Nothing
   put toHex(<<0x0D, 0x0A>>) into hex
   put celsiusToFahrenheit(20) into f               -- 68
+  -- There is no interpolation syntax. `format` fills a template from a map:
+  put format("{who} has {n} items", {who: "Ann", n: 3}) into summary
 
   -- Civil Dates, built with the `date` Library:
   put makeDate(2026, 9, 27) into launch            -- a Civil Date: no time zone
   put launch + 1 month into nextMonth              -- 27 October 2026
+  put "2026-09-27" as civil date into sameDay      -- no date literal: convert text
+  put launch as text into iso                      -- "2026-09-27"
   put formatDate(launch, "{day:2}/{month:2}/{year}") into shown  -- a template: "27/09/2026"
 
   -- Built-ins are always there, without an Import:
@@ -465,6 +471,9 @@ on patternsTour msg
   -- A Match Search gives a list with one match per hit:
   put every match of <digits> in "a1 b22 c333" into hits
   put the length of hits into hitCount                 -- 3
+  -- Each match is a map: {text, range, captures, ranges}.
+  put the text of item 2 of hits into middle           -- "22"
+  put the range of item 2 of hits into span           -- 5..6
 
   -- Matching runs in linear time: no backreferences, no lookaround, and
   -- repetition is greedy.
@@ -586,11 +595,6 @@ end firstBytes
 -- 18. Still open (see issue #63) ----------------------------------------------
 
 -- Not designed yet, so not in this tour:
---   text interpolation
---   literal syntax for Civil Dates and Instants (use makeDate for now)
---   the shape of a match result, and `the match of`
---   how to exit the enclosing Handler
---   `the number of words in s`
 --   `, deciding` and `veto`
 ```
 
