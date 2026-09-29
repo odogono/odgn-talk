@@ -1,0 +1,140 @@
+-- 11: error handling, three candidate styles side by side.
+-- This is still map fog ("Error handling"); nothing is decided. Fixed points:
+--   * Limit Faults are outside the error model: they can't be caught, and the
+--     Segment rolls back (ADR 0006).
+--   * An error inside a Guard skips the clause (issue #4).
+--   * Ordinary errors the sandbox contract already names: `send` to a full
+--     mailbox, calling a revoked Capability, and a failed `send … and wait`.
+--   * Plus the ordinary ones: `"007" + 1`, `5 kg + 3 m`, divide by zero,
+--     `"lots" as number`, writing character 20 of "short", Text Pattern search
+--     on a value that isn't text.
+--
+use decodeJson from json
+
+-- Error value sketch: plain data, so it can be matched and Destructured.
+--   {code: "not a number", message: "…", at: {line: 12, handler: "addUp"}, value: "lots"}
+-- ?? code as text ("not a number") or a symbol-ish name (not_a_number)?
+
+------------------------------------------------------------------------
+-- A. try / catch (SenseTalk, _hyperscript)
+------------------------------------------------------------------------
+
+on addUp csvLine
+  put 0 into sum
+  repeat for each part in the items of csvLine
+    try
+      add part as number to sum
+    catch {code: "not a number", value: v}
+      tell log to write "skipping " & v
+    catch e
+      throw e                                  -- ALT: rethrow
+    end try
+  end repeat
+  return sum
+end addUp
+-- Catch clauses are Destructuring heads, the same machinery as Handler Clauses.
+-- That's the best thing about this style here.
+
+on fetchOrFallback url
+  try
+    ask http to get url and wait
+    return decodeJson(it's body as text)
+  catch {code: "capability revoked"}
+    return nothing
+  catch {code: "http", status: s} where s >= 500
+    wait 1 s
+    ask http to get url and wait               -- one retry
+    return decodeJson(it's body as text)
+  end try
+end fetchOrFallback
+
+-- Raising your own
+on withdraw amount
+  if amount > balance then
+    throw {code: "insufficient funds", balance: balance, wanted: amount}
+    -- ALT: fail "insufficient funds" with {balance: balance}
+  end if
+  subtract amount from balance
+end withdraw
+
+-- ?? Rollback: a caught error does NOT roll back Script Variable changes made
+--    before it inside the `try` (only Limit Faults roll back a Segment).
+--    Is that obvious to a reader? `subtract … from balance` then an error
+--    later in the same `try` leaves balance changed.
+
+------------------------------------------------------------------------
+-- B. Tagged results (Elixir {:ok, v} / {:error, e})
+------------------------------------------------------------------------
+
+on parseQty text
+  if text can be a number then return {ok: text as number}
+  return {error: "not a number", value: text}
+end parseQty
+
+on addUpB csvLine
+  put 0 into sum
+  repeat for each part in the items of csvLine
+    match parseQty(part)
+      when {ok: n} then add n to sum
+      when {error: why} then tell log to write "skipping " & part & ": " & why
+    end match
+  end repeat
+  return sum
+end addUpB
+
+-- ADR 0017: tagged results are only a Script convention, Capabilities raise,
+-- and `with` is deferred, so `fetchB` and `loadConfig` are gone.
+
+------------------------------------------------------------------------
+-- C. Let it crash (Erlang): an error ends the Run; the Host (or a Script-level
+--    handler) is told. No try in the language at all.
+------------------------------------------------------------------------
+
+on handle {type: "invoice", amount: a}
+  add a as number to total                     -- "lots" → this Run ends here
+  send booked with a to ledgerWatcher
+end handle
+
+-- A Script-level handler that sees any Run that ended in an error
+on error {code: c, message: m, at: loc}, during msg
+  -- was `at: where`: `where` is reserved (the Guard word), so it can't be a name.
+  tell log to write "handling " & the name of msg & " failed: " & m
+  send alert with {code: c, message: m} to ops
+  -- ?? Runs after the failed Run ends, as a new Run with its own budgets.
+  --    Can't resume, can't retry in place. Changes before the error stand
+  --    (again: only Limit Faults roll back).
+end error
+-- ALT: on failed msg because e
+
+-- How the error reaches a `send … and wait` sender (applies to all three):
+on submit order
+  send review with order to approvals and wait
+  -- A: the receiver's error is thrown here, as {code: "remote error", reason: …}
+  -- B: `it` is {error: {code: "remote error", reason: …}}
+  -- C: this Run ends too, and the sender's `on error` gets it. ?? Cascading
+  --    crashes across Scripts is the Erlang model without Erlang's supervisors.
+end submit
+
+------------------------------------------------------------------------
+-- Cleanup when a Run is cancelled (a `, replacing` Handler, Stop Script)
+------------------------------------------------------------------------
+
+on search term, replacing
+  show spinner
+  send query with term to index and wait
+  showResults it
+finally
+  hide spinner
+  -- ?? Runs on normal end, on error, and on cancellation by `replacing`.
+  --    Must be bounded (its own small Fuel budget, no Suspension Points) so
+  --    it can't weaken Stop Script. On a Limit Fault? Probably not at all.
+end search
+-- ALT: `on cancel … end cancel` inside the Handler
+-- ALT: `ensure` (Ruby) / `always`
+
+------------------------------------------------------------------------
+-- My lean: A for the beginner layer, with catch clauses as Destructuring
+-- heads and error values as plain maps; C's `on error` as the Script-level
+-- backstop for anything uncaught; B left as a stdlib convention (Capabilities
+-- could offer both), with `with` as an advanced-layer maybe.
+------------------------------------------------------------------------

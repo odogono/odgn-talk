@@ -1,0 +1,87 @@
+-- 04: Handlers, Handler Clauses, Guards, Destructuring (issue #4)
+-- The reference flavour first, unchanged:
+
+on handle {type: "invoice", amount: a} as inv where a > 1000
+  send review with inv to approvals
+end handle
+
+on handle {type: "invoice"} as inv
+  file inv
+end handle
+
+-- ?? `it` here means "the whole message argument". In HyperTalk `it` is the
+--    result of the last `get`/`ask`/`answer`. We'd now have two meanings.
+--    Options: keep `it` for the argument only when the head is a pattern;
+--    or bind the whole with `as`:
+on handle {type: "refund"} as refund
+  send review with refund to approvals
+  -- ?? `send refund to approvals` parses too, but it sends a message NAMED
+  --    `refund` with no argument: the word after `send` is always the message.
+end handle
+-- ALT: on handle refund = {type: "refund"}    -- Elixir order; `=` reads as a test
+
+-- Clauses are tried top to bottom; the first match runs.
+on handle {type: "invoice", lines: []}
+  -- ?? This clause can never run: the one above it (`{type: "invoice"}`) already
+  --    matches. Lint: "unreachable clause".
+end handle
+
+-- A final catch-all. With no catch-all, an unmatched message follows the
+-- Message Path (ADR 0004).
+on handle other
+  pass handle
+  -- ALT: pass                             -- the message name is implied
+end handle
+
+-- Several arguments: each is its own pattern.
+on move [x, y], speed where speed > 0 m/s
+  put x & "," & y into position
+end move
+
+-- Kind tests go in the Guard (the grammar has no kind test inside a pattern)
+on price {amount: a, currency: c} where a is a number and c is a text
+  say a & " " & c
+end price
+-- ALT: on price {amount: a: number, currency: c: text}   -- too many colons
+-- ALT: on price {amount: number a, currency: text c}
+
+-- Quantity Kind in a Guard
+on travel d where d is a length
+  -- ?? `is a length` tests the Unit Kind. Is `length` a Unit Kind name or the
+  --    `length` function? Probably need `is a distance`, or `has unit kind length`.
+end travel
+
+-- Pin: match against an existing variable instead of binding a new name.
+-- [advanced]
+on reply {id: ^pending, answer: a}
+  put a into result
+end reply
+-- ALT: on reply {id: the value of pending, answer: a}
+-- ALT: on reply {id: pending, answer: a} where id = pending   -- beginner-friendly, no pin
+-- ?? Without the pin, `{id: pending}` BINDS `pending` (names in patterns always bind,
+--    issue #4). That is the classic Elixir trap. The beginner lint should warn when
+--    a pattern name shadows a Script Variable.
+
+-- Nested Destructuring and lists
+on order {customer: {name: n}, items: [first, ...rest]}
+  say n & " ordered " & (the length of rest + 1) & " things"
+end order
+
+-- `match` is the same machinery inside a Handler
+on classify v
+  match v
+    when [] then return "empty list"
+    when [x] then return "one: " & x
+    when [x, y, ...] then return "starts " & x & ", " & y
+    when {kind: k} where k is not "secret" then return "a " & k
+    when n where n is a number and n < 0 then return "negative"
+    else return "something else"
+  end match
+end classify
+-- ALT: `otherwise` instead of `else` in match
+
+-- Guards are pure and total: an error in a Guard just skips the clause.
+on score {points: p} where p as number > 10
+  -- `p as number` failing (p = "lots") skips this clause rather than raising.
+  -- ?? Is that surprising? It matches issue #4, but it hides typos.
+end score

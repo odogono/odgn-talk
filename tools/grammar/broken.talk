@@ -1,0 +1,419 @@
+-- Deliberately broken, and deliberately surprising, sources (#38, #54, #48).
+-- Each `-- case:` is parsed on its own, and its `-- expect:` line gives the
+-- first syntax error, as `<code> at <line>:<col>`, or `parses`. Lines count
+-- from the line after `-- expect:`. `bun tools/grammar/check.ts` checks them.
+-- case: a Container missing at the end of the line
+-- expect: unexpected token at 2:13
+on t
+  put 5 into
+end t
+-- case: the end of line sits at the line break, after a trailing comment
+-- expect: unexpected token at 2:51
+on t
+  put 5 into        -- the newline token sits here
+end t
+-- case: an operator with no right operand
+-- expect: unexpected token at 2:11
+on t
+  put 1 + into x
+end t
+-- case: a comparison with no right operand
+-- expect: unexpected token at 2:14
+on t
+  if count > then say "x"
+end t
+-- case: `<<` in operator position (there are no shift operators)
+-- expect: unexpected token at 2:9
+on t
+  put a << b into c
+end t
+-- case: `...` in operator position (the longest match, never `..` then `.`)
+-- expect: unexpected token at 2:8
+on t
+  put 1...3 into r
+end t
+-- case: keyword-shaped Command Call arguments
+-- expect: unexpected token at 2:13
+on t
+  log error rest
+end t
+-- case: `ask` with no Operation name
+-- expect: unexpected token at 2:14
+on t
+  ask http to
+end t
+-- case: a bare word in a Text Pattern that is neither a keyword nor a Capture
+-- expect: unexpected token at 2:13
+on t
+  put <"a", bogus> into x
+end t
+-- case: a Capture with nothing to capture
+-- expect: unexpected token at 2:16
+on t
+  put <"a", b: > into x
+end t
+-- case: a Capture named with a Reserved Word
+-- expect: unexpected token at 2:13
+on t
+  put <"a", end: word> into x
+end t
+-- case: unterminated text, reported at the opening quote
+-- expect: unterminated text at 2:7
+on t
+  put "abc into x
+end t
+-- case: a character the language doesn't use
+-- expect: bad character at 2:9
+on t
+  put 5 # 3 into x
+end t
+-- case: a letter outside ASCII, outside text
+-- expect: bad character at 2:9
+on t
+  put naïve into x
+end t
+-- case: `end` with the wrong Handler name
+-- expect: unexpected token at 3:5
+on greet
+  say "hi"
+end greeet
+-- case: `end repeat` missing: the error is at the name after `end`, not at `end`
+-- expect: unexpected token at 4:5
+on t
+  repeat for each x in xs
+    say x
+end t
+-- case: an open list swallows the newline, so the error lands on the next line
+-- expect: unexpected token at 3:7
+on t
+  put [1, 2,
+  say x
+end t
+-- case: a trailing `and` continues the line, into `and wait`
+-- expect: unexpected token at 3:8
+on t
+  send m to x and
+  wait 1 s
+end t
+-- case: `line` as a variable, minus 1: the chunk reading wins
+-- expect: unexpected token at 3:16
+on t
+  put 5 into line
+  put line - 1 into x
+end t
+-- case: a chunk with no index
+-- expect: unexpected token at 2:12
+on t
+  put item of x into y
+end t
+-- case: two Unit words
+-- expect: unexpected token at 2:11
+on t
+  put 5 s s into x
+end t
+-- case: a Unit factor that isn't in the Unit Catalogue
+-- expect: bad unit at 2:9
+on t
+  put 2 m*width into area
+end t
+-- case: a negative exponent
+-- expect: bad unit at 2:9
+on t
+  put 5 s^-1 into rate
+end t
+-- case: two `/` in a Compound Unit
+-- expect: bad unit at 2:9
+on t
+  put 5 m/s/s into a
+end t
+-- case: a Calendar Unit in a Compound Unit
+-- expect: bad unit at 2:10
+on t
+  put 12 USD/month into rent
+end t
+-- case: parses: a spaced `/` divides
+-- expect: parses
+on t
+  put 500 mi / 4 hr into speed
+  put 5 1/s into rate
+  put speed as km/hr into metric
+end t
+-- case: `where` starting a continuation line
+-- expect: unexpected token at 2:5
+on handle {type: "invoice", amount: a}
+    where a > 1000
+  say a
+end handle
+-- case: `else` on the line after a single-line `if`
+-- expect: unexpected token at 3:3
+on keypress k
+  if k is "escape" then close dialog
+  else pass keypress
+end keypress
+-- case: a single-line `if` can't hold a block
+-- expect: unexpected token at 2:13
+on t
+  if x then repeat 3 times
+    beep
+  end repeat
+end t
+-- case: `else if` in a block `if` ends its line
+-- expect: unexpected token at 4:18
+on t
+  if x then
+    beep
+  else if y then beep
+  end if
+end t
+-- case: a literal is not a Container
+-- expect: not a container at 2:16
+on t
+  put "Z" into character 20 of "short"
+end t
+-- case: a number is not a Container
+-- expect: not a container at 2:14
+on t
+  put 1 into 3
+end t
+-- case: `send it`: the message name can't be a Reserved Word
+-- expect: unexpected token at 2:8
+on t
+  send it to approvals
+end t
+-- case: `as` with no kind
+-- expect: unexpected token at 2:12
+on t
+  put x as into y
+end t
+-- case: `return` is never an operand (ADR 0029)
+-- expect: unexpected token at 2:13
+on t
+  put "a" & return & "b" into s
+end t
+-- case: `pass` needs the message name
+-- expect: unexpected token at 2:7
+on t
+  pass
+end t
+-- case: `exit` only ever takes `repeat` (#69)
+-- expect: unexpected token at 2:8
+on t
+  exit t
+end t
+-- case: `repeat` needs a head
+-- expect: unexpected token at 2:9
+on t
+  repeat
+    beep
+  end repeat
+end t
+-- case: no `the number of … in` (#69)
+-- expect: unexpected token at 2:27
+on t
+  put the number of words in s into n
+end t
+-- case: no date literals (#69)
+-- expect: unexpected token at 2:12
+on t
+  put date 2026-09-27 into launch
+end t
+-- case: no kind test inside a pattern
+-- expect: unexpected token at 1:21
+on price {amount: a is a number}
+  say a
+end price
+-- case: `as` renames a single imported name only
+-- expect: unexpected token at 1:25
+use pad, trim from text as tidy
+-- case: `private` goes before a definition
+-- expect: unexpected token at 1:9
+private script variable x
+-- case: a statement at top level
+-- expect: unexpected token at 1:1
+put 1 into x
+-- case: spread goes after or before
+-- expect: unexpected token at 2:13
+on t
+  put ...xs into ys
+end t
+-- case: parses, but `n - 1` is a Command Call to a Handler `n` with argument -1
+-- expect: parses
+on t
+  n - 1
+end t
+-- case: parses, but `a` is a variable here, so this is equality, not a kind test
+-- expect: parses
+on t
+  if x is a then say "same as a"
+end t
+-- case: parses, but `( … )` splices the boolean expression `letter or digit`
+-- expect: parses
+on t
+  put <one or more of (letter or digit)> into ident
+end t
+-- case: parses, but `send refund` sends a message called `refund`
+-- expect: parses
+on handle {type: "refund"} as refund
+  send refund to approvals
+end handle
+-- case: parses, but `3..7 m/s` is `3..(7 m/s)`
+-- expect: parses
+on t
+  put 3..7 m/s into comfortable
+end t
+-- case: parses: a Reserved Word can be a key, and `the` reads it back
+-- expect: parses
+on t
+  put {to: "Ann", from: "Bob"} into m
+  if the to of m is "Ann" then say m's from
+end t
+-- case: a removed Comprehension: `every` is now just a name
+-- expect: unexpected token at 2:13
+on t
+  put every r in xs where r > 1 into big
+end t
+-- case: a removed `sorted by`
+-- expect: unexpected token at 2:30
+on t
+  put sortBy(xs, given r: r) sorted by r into ys
+end t
+-- case: a JS-style arrow Lambda
+-- expect: unexpected token at 2:23
+on t
+  put filter(xs, (r) => r > 1) into big
+end t
+-- case: a Lambda head with no `:` inside an argument list
+-- expect: unexpected token at 2:26
+on t
+  put filter(xs, given r r > 1) into big
+end t
+-- case: a block Lambda closed with `end` alone
+-- expect: unexpected token at 4:7
+on t
+  put given r
+    return r
+  end into f
+end t
+-- case: a block Lambda that is never closed
+-- expect: unexpected token at 4:5
+on t
+  put given r
+    return r
+end t
+-- case: a Lambda as a variable name
+-- expect: unexpected token at 2:14
+on t
+  put 1 into given
+end t
+-- case: `and wait` inside an expression
+-- expect: unexpected token at 2:13
+on t
+  put fn(x) and wait into y
+end t
+-- case: calling a call's result
+-- expect: unexpected token at 2:15
+on t
+  put times(3)(14) into y
+end t
+-- case: an expression Lambda body can't hold a statement
+-- expect: unexpected token at 2:18
+on t
+  put given url: ask http to get url and wait into fetch
+end t
+-- case: parses: the body ends at the comma, so `2` is `map`'s third argument
+-- expect: parses
+on t
+  put map(xs, given r: r * 2, 2) into ys
+end t
+-- case: parses, but `b` is a second parameter, not the next argument
+-- expect: parses
+on t
+  put reduce(xs, given a, b: a + b) into total
+end t
+-- case: parses, but the body is `r > 1 and ok`, not `(given r: r > 1) and ok`
+-- expect: parses
+on t
+  put given r: r > 1 and ok into f
+end t
+-- case: something after `wait for all` on the same line
+-- expect: unexpected token at 2:16
+on t
+  wait for all ask http to get u and wait
+end t
+-- case: a Join closed with `end all`
+-- expect: unexpected token at 4:7
+on t
+  wait for all
+    ask http to get u and wait
+  end all
+end t
+-- case: a Join that is never closed
+-- expect: unexpected token at 4:5
+on t
+  wait for all
+    ask http to get u and wait
+end t
+-- case: a Join in a single-line `if`
+-- expect: unexpected token at 2:22
+on t
+  if x then wait for all
+end t
+-- case: a Handler named `all`
+-- expect: unexpected token at 1:4
+on all
+  tell log to write "hi"
+end all
+-- case: a message named `all`
+-- expect: unexpected token at 2:8
+on t
+  send all to hub
+end t
+-- case: waiting for an event named `all` in the block form
+-- expect: unexpected token at 3:10
+on t
+  wait for
+    when all then tell log to write "hi"
+  end wait
+end t
+-- case: parses: `all` is still a variable name
+-- expect: parses
+on t
+  put [] into all
+  put 1 after all
+end t
+-- case: `, every time` is gone (a clause with no suffix already runs concurrently)
+-- expect: unexpected token at 1:10
+on tick, every time
+  advance world
+end tick
+-- case: a parameter after a suffix
+-- expect: unexpected token at 1:25
+on search term, queued, page
+  beep
+end search
+-- case: parses: suffixes combine, in either order
+-- expect: parses
+on beforeMove m, dropping, deciding
+  if the to of m is in own then veto "Your own piece is on that square."
+  pass beforeMove
+end beforeMove
+-- case: parses: a chunk word as a variable, before `<`
+-- expect: parses
+on t
+  put 3 into line
+  if line < 3 then say line
+end t
+-- case: parses: contextual words as variables, before `<`
+-- expect: parses
+on t
+  if every < 3 then say every
+  if code < 3 then say code
+  if the target < x then say x
+  if x's code < 3 then say x
+  put x as civil < 3 into z
+end t
+-- case: parses: a Compound Unit after `as` in a build value
+-- expect: parses
+on t
+  put << x as km/hr >> into b
+end t

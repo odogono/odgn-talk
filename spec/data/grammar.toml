@@ -5,20 +5,483 @@
 # units.toml, and no Unit name or plural may be a Reserved Word or a word in the
 # FOLLOW set.
 #
-# Schema: schema/grammar.schema.json. Shown in chapter 2 (region `grammar`).
-# Owned by the chapter 2 task, which fills the lists and adds operators,
-# precedence, modifier attachment and the built-in property names.
+# Schema: schema/grammar.schema.json. Shown in chapter 2 (regions `grammar.*`).
+# tools/grammar/ parses with these lists, and fails on a [[decision]] it never
+# takes or one it takes that isn't listed.
 #
-#   reserved    every Reserved Word
-#   contextual  the contextual keywords, each with the positions that give it a
-#               meaning: { word = "line", positions = ["chunk kind"] }
-#   follow      the words in the FOLLOW set
+#   reserved     every Reserved Word
+#   follow       the FOLLOW set: the contextual words that may come straight
+#                after a complete expression, so none of them starts a chunk index
+#   ordinals     the words that name a chunk by position after `the`
+#   properties   the Built-in property names, read with `the <name> of x`
+#   [[contextual]]
+#     word       a contextual keyword outside the lists below
+#     positions  the positions that give it a meaning
+#   [[chunk]]    a chunk kind: its singular and plural spellings
+#   [text_patterns]
+#     keywords   the single-word elements
+#     classes    the two-word elements, decided on their second word
+#     anchors    the zero-width anchors, each two words
+#     phrases    the repetition phrases, decided on their first word
+#   [binary_patterns]
+#     integer_types, size_units, byte_orders
+#   [[operator]] one precedence level, lowest first
+#     level, assoc (left, right, none, prefix or postfix), ops
+#   [[modifier]] a trailing modifier and the construct it attaches to
+#   [[decision]] a parse decision that reads the second token
+#     name, rule
+#   [[advanced]] an Advanced Construct (ADR 0027)
+#     construct, written, beginner (its Beginner Surface form)
+#   [[syntax_error]]
+#     code, raised_when
 #   [units]
 #     catalogue  the Data File that holds the Unit Catalogue
 
-reserved = []
-contextual = []
-follow = []
+reserved = [
+  # Block structure. Each of these ends or continues a block at the start of a
+  # statement, or ends a condition, so none can be a Handler name.
+  "after", "catch", "else", "end", "finally", "for", "function", "given", "if",
+  "match", "on", "repeat", "then", "try", "until", "when", "where", "while",
+  # Statement keywords. If one were contextual, `add 1 to x` and a Command Call
+  # `add 1` would differ only at `to`, arbitrarily far in.
+  "add", "ask", "delete", "divide", "exit", "let", "multiply", "pass", "put",
+  "replace", "return", "send", "set", "subtract", "tell", "throw", "veto",
+  "wait",
+  # Separators and expression words.
+  "and", "be", "in", "into", "is", "not", "of", "or", "the", "to",
+  # Constants.
+  "false", "it", "me", "nothing", "true",
+]
+
+follow = [
+  "as", "before", "begins", "by", "can", "contains", "delimited", "div", "ends",
+  "from", "ignoring", "matches", "mod", "times", "with",
+]
+
+ordinals = [
+  "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+  "ninth", "tenth", "last",
+]
+
+properties = [
+  "length", "keys", "values", "items", "lines", "words", "characters", "bytes",
+  "code points",
+]
+
+[[contextual]]
+word = "a"
+positions = ["after `is` or `is not`, before a kind", "after `can be`", "before a kind in a Text Pattern (a Typed Element)"]
+
+[[contextual]]
+word = "an"
+positions = ["as `a`"]
+
+[[contextual]]
+word = "all"
+positions = ["straight after `wait for` (a Join)"]
+
+[[contextual]]
+word = "as"
+positions = ["after an operand (a conversion)", "after a pattern (binding the whole value)", "after the imported name in `use`", "after a Text Pattern element", "after the value of a Binary Pattern build field"]
+
+[[contextual]]
+word = "before"
+positions = ["after the value in `put`"]
+
+[[contextual]]
+word = "begins"
+positions = ["operator position, before `with`"]
+
+[[contextual]]
+word = "by"
+positions = ["after the Container in `multiply` and `divide`", "after `delimited`"]
+
+[[contextual]]
+word = "can"
+positions = ["operator position, before `be`"]
+
+[[contextual]]
+word = "case"
+positions = ["after `ignoring`"]
+
+[[contextual]]
+word = "civil"
+positions = ["before `date` in a kind"]
+
+[[contextual]]
+word = "constant"
+positions = ["at the start of a top-level declaration"]
+
+[[contextual]]
+word = "contains"
+positions = ["operator position", "after `when`, before `<`"]
+
+[[contextual]]
+word = "date"
+positions = ["after `civil`, in a kind"]
+
+[[contextual]]
+word = "deciding"
+positions = ["after a comma in a Handler head"]
+
+[[contextual]]
+word = "delimited"
+positions = ["after a Chunk Expression, before `by`"]
+
+[[contextual]]
+word = "div"
+positions = ["operator position"]
+
+[[contextual]]
+word = "dropping"
+positions = ["after a comma in a Handler head"]
+
+[[contextual]]
+word = "during"
+positions = ["after a comma in a Handler head, before a name"]
+
+[[contextual]]
+word = "each"
+positions = ["after `repeat for`"]
+
+[[contextual]]
+word = "empty"
+positions = ["after `is` or `is not`"]
+
+[[contextual]]
+word = "ends"
+positions = ["operator position, before `with`"]
+
+[[contextual]]
+word = "every"
+positions = ["operand position, before `match` (the Match Search)"]
+
+[[contextual]]
+word = "forever"
+positions = ["straight after `repeat`"]
+
+[[contextual]]
+word = "from"
+positions = ["after the value in `subtract`", "after the event in `wait for`", "after the imported names in `use`"]
+
+[[contextual]]
+word = "ignoring"
+positions = ["after a comparison, a `match` subject or a Text Pattern element, before `case`"]
+
+[[contextual]]
+word = "lazily"
+positions = ["after a Text Pattern element"]
+
+[[contextual]]
+word = "matches"
+positions = ["operator position"]
+
+[[contextual]]
+word = "mod"
+positions = ["operator position"]
+
+[[contextual]]
+word = "next"
+positions = ["at the start of a statement, before `repeat`"]
+
+[[contextual]]
+word = "private"
+positions = ["at the start of a top-level declaration, before `on`, `function` or `constant`"]
+
+[[contextual]]
+word = "queued"
+positions = ["after a comma in a Handler head"]
+
+[[contextual]]
+word = "replacing"
+positions = ["after a comma in a Handler head"]
+
+[[contextual]]
+word = "script"
+positions = ["at the start of a top-level declaration, before `variable`"]
+
+[[contextual]]
+word = "target"
+positions = ["after `the`, when `of` doesn't follow"]
+
+[[contextual]]
+word = "times"
+positions = ["after the count in `repeat`"]
+
+[[contextual]]
+word = "use"
+positions = ["at the start of a top-level declaration"]
+
+[[contextual]]
+word = "variable"
+positions = ["after `script` at the start of a top-level declaration"]
+
+[[contextual]]
+word = "with"
+positions = ["after the message name in `send`", "after the Container in `replace`", "after `begins` or `ends`"]
+
+[[chunk]]
+singular = "character"
+plural = "characters"
+
+[[chunk]]
+singular = "word"
+plural = "words"
+
+[[chunk]]
+singular = "line"
+plural = "lines"
+
+[[chunk]]
+singular = "item"
+plural = "items"
+
+[[chunk]]
+singular = "byte"
+plural = "bytes"
+
+[[chunk]]
+singular = "code point"
+plural = "code points"
+
+[text_patterns]
+keywords = [
+  "character", "characters", "digit", "digits", "letter", "letters",
+  "punctuation", "space", "spaces", "text", "whitespace", "word", "words",
+]
+classes = ["lowercase letter", "lowercase letters", "uppercase letter", "uppercase letters"]
+anchors = ["line end", "line start", "text end", "text start", "word break"]
+phrases = ["one or more of", "optional", "zero or more of"]
+
+[binary_patterns]
+integer_types = ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
+size_units = ["bit", "bits", "byte", "bytes"]
+byte_orders = ["big", "little"]
+
+[[operator]]
+level = 1
+assoc = "left"
+ops = ["or"]
+
+[[operator]]
+level = 2
+assoc = "left"
+ops = ["and"]
+
+[[operator]]
+level = 3
+assoc = "prefix"
+ops = ["not"]
+
+[[operator]]
+level = 4
+assoc = "none"
+ops = [
+  "=", "<>", "<", ">", "<=", ">=", "is", "is not", "is in", "is not in",
+  "is a", "is not a", "is empty", "is not empty", "can be", "contains",
+  "begins with", "ends with", "matches",
+]
+
+[[operator]]
+level = 5
+assoc = "left"
+ops = ["&"]
+
+[[operator]]
+level = 6
+assoc = "none"
+ops = [".."]
+
+[[operator]]
+level = 7
+assoc = "left"
+ops = ["+", "-"]
+
+[[operator]]
+level = 8
+assoc = "left"
+ops = ["*", "/", "mod", "div"]
+
+[[operator]]
+level = 9
+assoc = "right"
+ops = ["^"]
+
+[[operator]]
+level = 10
+assoc = "prefix"
+ops = ["-"]
+
+[[operator]]
+level = 11
+assoc = "postfix"
+ops = ["as"]
+
+[[operator]]
+level = 12
+assoc = "postfix"
+ops = ["of", "'s", "f(…)"]
+
+[[modifier]]
+name = "as"
+attaches = "the operand before it, as a postfix operator above every binary operator and below chunk `of`, `'s` and calls"
+
+[[modifier]]
+name = "ignoring case"
+attaches = "the nearest comparison before it, a `match` subject, or a Text Pattern element"
+
+[[modifier]]
+name = "delimited by"
+attaches = "the outermost Chunk Expression of an `of` chain"
+
+[[modifier]]
+name = "lazily"
+attaches = "a Text Pattern element"
+
+[[modifier]]
+name = "and wait"
+attaches = "a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement"
+
+[[modifier]]
+name = "little, big"
+attaches = "an integer field of a Binary Pattern or build"
+
+[[decision]]
+name = "and-wait"
+rule = "`and` followed by `wait` ends the expression before it, and is never a boolean `and`"
+
+[[decision]]
+name = "as-in-build"
+rule = "inside `<< >>`, `as` followed by an integer type ends the value and gives the field type"
+
+[[decision]]
+name = "begins-with"
+rule = "`begins` or `ends` followed by `with` is the operator; otherwise the word ends the expression"
+
+[[decision]]
+name = "binary-field"
+rule = "in a Binary Pattern, a word followed by `:` names a field"
+
+[[decision]]
+name = "can-be"
+rule = "`can` followed by `be` is the kind test; otherwise the word ends the expression"
+
+[[decision]]
+name = "capture"
+rule = "in a Text Pattern, a word followed by `:` is a Capture"
+
+[[decision]]
+name = "chunk-word"
+rule = "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name"
+
+[[decision]]
+name = "code-point"
+rule = "`code` followed by `point` or `points` is the chunk kind"
+
+[[decision]]
+name = "delimited-by"
+rule = "`delimited` followed by `by` is the modifier"
+
+[[decision]]
+name = "during"
+rule = "after a comma in a Handler head, `during` followed by a word is the modifier"
+
+[[decision]]
+name = "every-match"
+rule = "`every` followed by `match` starts a Match Search; otherwise `every` is a name"
+
+[[decision]]
+name = "ignoring-case"
+rule = "`ignoring` followed by `case` is the modifier"
+
+[[decision]]
+name = "is-a"
+rule = "after `is` or `is not`, `a` or `an` followed by a word that isn't reserved starts a kind test; otherwise it is a name"
+
+[[decision]]
+name = "kind"
+rule = "`civil` followed by `date` is the kind `civil date`"
+
+[[decision]]
+name = "map-key"
+rule = "in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}`"
+
+[[decision]]
+name = "next-repeat"
+rule = "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call"
+
+[[decision]]
+name = "ordinal"
+rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key"
+
+[[decision]]
+name = "pattern-anchor"
+rule = "in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor"
+
+[[decision]]
+name = "replace-first"
+rule = "after `replace`, `first` followed by anything but `in` means only the first match"
+
+[[decision]]
+name = "script-variable"
+rule = "at top level, `script` followed by `variable` starts a Script Variable"
+
+[[decision]]
+name = "target"
+rule = "after `the`, `target` not followed by `of` is `the target`"
+
+[[decision]]
+name = "wait-from"
+rule = "in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns"
+
+[[decision]]
+name = "when-contains"
+rule = "after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name"
+
+[[advanced]]
+construct = "The pin"
+written = "`^name` in a pattern, e.g. `{order: ^orderId}`"
+beginner = "`{order: o} where o = orderId`"
+
+[[advanced]]
+construct = "A pinned Binary Pattern size"
+written = "`^n bytes`, or `^` inside a parenthesised size"
+beginner = "a Guard on the length the pattern read, or `...rest` and then `bytes 1..n of rest`"
+
+[[advanced]]
+construct = "The `code point` chunk"
+written = "`code point 1 of s`, `code points 2..3 of s`"
+beginner = "Characters"
+
+[[advanced]]
+construct = "The `code points` property"
+written = "`the code points of s`"
+beginner = "Characters"
+
+[[advanced]]
+construct = "`lazily`"
+written = "after a Text Pattern element, e.g. `text lazily`"
+beginner = "a narrower element"
+
+[[syntax_error]]
+code = "bad character"
+raised_when = "A character outside a text literal or comment starts no token"
+
+[[syntax_error]]
+code = "unterminated text"
+raised_when = "A text literal has no closing quote before the end of its line; reported at the opening quote"
+
+[[syntax_error]]
+code = "bad unit"
+raised_when = "A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, or has a malformed or negative exponent"
+
+[[syntax_error]]
+code = "unexpected token"
+raised_when = "A token can't continue the parse, including the end of a line or of the source"
+
+[[syntax_error]]
+code = "not a container"
+raised_when = "A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token"
 
 [units]
 catalogue = "units.toml"

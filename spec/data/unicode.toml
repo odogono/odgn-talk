@@ -5,11 +5,61 @@
 # Upgrading Unicode is a language version bump (ADR 0011).
 #
 # Schema: schema/unicode.schema.json. Shown in chapter 1 (region `unicode`).
-# Owned by the chapter 1 task, which pins the version.
 #
-#   version   optional until pinned: the Unicode version, e.g. "16.0.0"
+#   version   the Unicode version, e.g. "16.0.0"
 #   [[file]]
-#     path    the file's path in the UCD, e.g. "auxiliary/GraphemeBreakProperty.txt"
+#     path    the file's path in the UCD, under https://www.unicode.org/Public/<version>/ucd/
 #     sha256  the file's SHA-256 hash, as lowercase hex
+#     use     what the Cores take from it
 
-file = []
+version = "18.0.0"
+
+[[file]]
+path = "UnicodeData.txt"
+sha256 = "0736451de439ae7baf1425136617da495e09ee5afbe6e394374db7009ea08950"
+use = "General Categories, for Text Pattern classes; canonical decompositions and combining classes, for NFC; simple case mappings"
+
+[[file]]
+path = "CompositionExclusions.txt"
+sha256 = "c759b100e9ae8960ae6b50fc5765950a7581fd9f30d4ef95f68f25a6d97e818e"
+use = "the composition exclusions, for NFC"
+
+[[file]]
+path = "CaseFolding.txt"
+sha256 = "a004797658a457bec4dc11683e39f69249ea3b595b752dbea6721c4c9f587b0d"
+use = "simple case folding (statuses C and S), for `ignoring case`"
+
+[[file]]
+path = "SpecialCasing.txt"
+sha256 = "8538dea57c184f1ef3783885ea79677b10f6efa06423717157e63712f14d1ad2"
+use = "the unconditional full case mappings, for the `upper` and `lower` Built-ins"
+
+[[file]]
+path = "PropList.txt"
+sha256 = "f438f532e8737bb8a2702126cdf9c4af5e357c58c7acf9d9eb2fc7c1a1d955d6"
+use = "White_Space, for `word` and the `word break` anchor"
+
+[[file]]
+path = "DerivedCoreProperties.txt"
+sha256 = "09c928886a178fcafd93c29e4bd59073a058e5a100b716d425cb563ab50f68c9"
+use = "Indic_Conjunct_Break, for Character boundaries"
+
+[[file]]
+path = "auxiliary/GraphemeBreakProperty.txt"
+sha256 = "0839dcb79e4ac639ecd538b1abf7c9d22e3f9dd265b7e182d33627aa4d75b45a"
+use = "Grapheme_Cluster_Break, for Character boundaries"
+
+[[file]]
+path = "emoji/emoji-data.txt"
+sha256 = "80d00f8e616a0ef27fd6b8de3b758c06383b5d917e2977709578e68baf733bf1"
+use = "Extended_Pictographic, for Character boundaries"
+
+[[file]]
+path = "auxiliary/GraphemeBreakTest.txt"
+sha256 = "b0cf047ee94485bbdc846de2b902f5f8a815f6b674f9d04223cddadd91c9df31"
+use = "test data only: each Core's Character boundaries must pass it"
+
+[[file]]
+path = "NormalizationTest.txt"
+sha256 = "25a50d816764b04abfb4a646d3eb2b2a803284c3873d9a06757b94fe4513dde3"
+use = "test data only: each Core's NFC must pass it"

@@ -35,8 +35,8 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 | File | Holds | Shown in |
 | --- | --- | --- |
 | [`version.toml`](data/version.toml) | The language version | [0](00-introduction.md) |
-| [`grammar.ebnf`](data/grammar.ebnf) | The grammar's productions | [2](02-grammar.md) |
-| [`grammar.toml`](data/grammar.toml) | Reserved Words, contextual keywords and the FOLLOW set | [2](02-grammar.md) |
+| [`grammar.ebnf`](data/grammar.ebnf) | The grammar's productions | [1](01-lexical-structure.md), [2](02-grammar.md) |
+| [`grammar.toml`](data/grammar.toml) | Reserved Words, contextual keywords, the FOLLOW set, precedence, modifiers, two-token decisions and syntax error codes | [2](02-grammar.md) |
 | [`unicode.toml`](data/unicode.toml) | The Unicode version and the hash of each UCD file used | [1](01-lexical-structure.md) |
 | [`units.toml`](data/units.toml) | The Unit Catalogue | [3](03-values.md) |
 | [`errors.toml`](data/errors.toml) | The error-code catalogue | [6](06-errors-and-limits.md) |
@@ -45,4 +45,4 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 | [`costs.toml`](data/costs.toml) | The Cost Model | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`host-errors.toml`](data/host-errors.toml) | The Host error catalogue | [9](09-embedding.md) |
 
-Each has a schema in [`data/schema/`](data/schema/). Run `bun install`, then `bun run spec:gen` after editing a Data File or `CONTEXT.md`.
+Each has a schema in [`data/schema/`](data/schema/), except `grammar.ebnf`, which the generator checks against `grammar.toml`. Run `bun install`, then `bun run spec:gen` after editing a Data File or `CONTEXT.md`, and `bun run grammar:check` after changing the grammar.
