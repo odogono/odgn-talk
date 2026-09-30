@@ -41,6 +41,14 @@
             "type": "integer",
             "minimum": 1
           },
+          "minimum": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "exceeded": {
+            "type": "string",
+            "minLength": 1
+          },
           "sources": {
             "type": "array",
             "items": {
@@ -58,6 +66,9 @@
           "measure",
           "per",
           "overridable",
+          "default",
+          "minimum",
+          "exceeded",
           "sources"
         ],
         "additionalProperties": false

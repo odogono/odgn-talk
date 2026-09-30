@@ -39,8 +39,8 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 | [`grammar.toml`](data/grammar.toml) | Reserved Words, contextual keywords, the FOLLOW set, precedence, modifiers, two-token decisions and syntax error codes | [2](02-grammar.md) |
 | [`unicode.toml`](data/unicode.toml) | The Unicode version and the hash of each UCD file used | [1](01-lexical-structure.md) |
 | [`units.toml`](data/units.toml) | The Unit Catalogue | [3](03-values.md) |
-| [`errors.toml`](data/errors.toml) | The error-code catalogue | [6](06-errors-and-limits.md) |
-| [`limits.toml`](data/limits.toml) | The limits and the default limit profile | [6](06-errors-and-limits.md) |
+| [`errors.toml`](data/errors.toml) | The error-code catalogue, with template messages | [6](06-errors-and-limits.md) |
+| [`limits.toml`](data/limits.toml) | The limits, the default limit profile and the conformance minimums | [6](06-errors-and-limits.md) |
 | [`machine.toml`](data/machine.toml) | The Abstract Machine's instruction set | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`costs.toml`](data/costs.toml) | The Cost Model | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`host-errors.toml`](data/host-errors.toml) | The Host error catalogue | [9](09-embedding.md) |
