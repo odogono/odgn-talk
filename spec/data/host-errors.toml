@@ -28,10 +28,6 @@ code = "name reused"
 raised_when = "extend Script reuses a name, or a Library name is added twice"
 
 [[error]]
-code = "not quiescent"
-raised_when = "A save is attempted during a Pump"
-
-[[error]]
 code = "reentrant call"
 raised_when = "A worker call is made from inside the Group's own Pump"
 
@@ -54,3 +50,19 @@ raised_when = "A TS `run` call is settled by adopt after a restore"
 [[error]]
 code = "invalid value"
 raised_when = "Input the value model can't hold (ADR 0030), a malformed declaration, or a limit override that loosens"
+
+[[error]]
+code = "invalid save"
+raised_when = "`Restore` is given bytes this Core can't read: another Core family's save, a save format it no longer reads, or corrupt bytes"
+
+[[error]]
+code = "save mismatch"
+raised_when = "A save's versions, Libraries or Grants don't match, and the Host's policy is to reject"
+
+[[error]]
+code = "unknown call"
+raised_when = "`Settle` names a call id that isn't pending, one already settled, or comes after the first Pump"
+
+[[error]]
+code = "state too large"
+raised_when = "The Script Variables a Reload or a variables-only restore carries over would exceed the Persistent State cap"

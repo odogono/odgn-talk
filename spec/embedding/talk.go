@@ -66,13 +66,16 @@ const (
 	ParentCycle       HostErrorCode = "parent cycle"
 	DuplicateObjectID HostErrorCode = "duplicate object id"
 	NameReused        HostErrorCode = "name reused"
-	NotQuiescent      HostErrorCode = "not quiescent"
 	ReentrantCall     HostErrorCode = "reentrant call"
 	WrongGroup        HostErrorCode = "wrong group"
 	LibraryMismatch   HostErrorCode = "library mismatch"
 	ReservedName      HostErrorCode = "reserved name"
 	NotAdoptable      HostErrorCode = "not adoptable"
 	InvalidValue      HostErrorCode = "invalid value"
+	InvalidSave       HostErrorCode = "invalid save"
+	SaveMismatch      HostErrorCode = "save mismatch"
+	UnknownCall       HostErrorCode = "unknown call"
+	StateTooLarge     HostErrorCode = "state too large"
 )
 
 // ErrMailboxFull is load shedding, not a bug: the Host decides whether to
@@ -862,19 +865,26 @@ type RestoreResult struct {
 	VariablesOnly bool
 	Pending       []PendingCall // each must be settled before the first Pump
 	DiscardedRuns []RunID
-	Disposed      []string // object ids that didn't resolve
+	Disposed      []ObjectRef // the Host Objects that didn't resolve
+	// A variables-only restore also lists what it discarded (10-save-and-restore.md).
+	DroppedMessages []DeliveryID
+	AbandonedCalls  []CallID
 }
+
+type ObjectRef struct{ Kind, ID string }
 
 type PendingCall struct {
 	ID        CallID
 	Script    string
+	Grant     string // the granted name the call went through
 	Operation OperationRef
 	Args      []Value
 }
 
 // Settle settles one restored call, a worker call before the first Pump. A
-// call still unsettled at the first Pump fails as `call lost`.
-func (g *Group) Settle(id CallID, s Settlement) error
+// call still unsettled at the first Pump fails as `call lost`. For adopt it
+// returns the Call the Host answers or fails through, and nil otherwise.
+func (g *Group) Settle(id CallID, s Settlement) (*Call, error)
 
 // Settlement is exactly one of these.
 type Settlement struct {

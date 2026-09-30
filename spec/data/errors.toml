@@ -204,6 +204,6 @@ message = "That property is read-only"
 [[error]]
 code = "call lost"
 fields = []
-raised_when = "A restored wait can't be kept: a pending call is still unsettled at the first Pump, or a `send … and wait` partner is outside the restored set"
+raised_when = "A restored wait can't be kept: a pending call is still unsettled at the first Pump"
 sources = ["ADR 0008", "ADR 0017", "ADR 0033", "#72"]
 message = "The call was lost in a restore"

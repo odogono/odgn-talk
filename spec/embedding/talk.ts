@@ -36,8 +36,9 @@ export declare class LoadError extends Error {
 
 export type HostErrorCode =
   | "clock backwards" | "parent cycle" | "duplicate object id" | "name reused"
-  | "not quiescent" | "reentrant call" | "wrong group" | "library mismatch"
-  | "reserved name" | "not adoptable" | "invalid value";
+  | "reentrant call" | "wrong group" | "library mismatch"
+  | "reserved name" | "not adoptable" | "invalid value"
+  | "invalid save" | "save mismatch" | "unknown call" | "state too large";
 
 /** Host misuse, refused at the call that made it (09-embedding.md). */
 export declare class HostError extends Error {
@@ -434,7 +435,8 @@ export interface Group {
   save(): Uint8Array;
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, before the first Pump after a restore. */
-  settle(callId: string, s: Settlement): void;
+  /** For adopt, returns the Call the Host answers or fails through. */
+  settle(callId: string, s: Settlement): Call<any> | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -512,12 +514,15 @@ export interface RestoreOptions extends GroupOptions {
   resolve(kind: string, id: string): { native: unknown } | undefined;
   onMismatch: "reject" | "variables only";
 }
-export interface PendingCall { id: string; script: string; operation: OperationRef; args: Value[] }
+export interface PendingCall { id: string; script: string; grant: string; operation: OperationRef; args: Value[] }
 export interface RestoreResult {
   variablesOnly: boolean;
   pending: PendingCall[]; // unsettled at the first Pump fails as `call lost`
   discardedRuns: string[];
-  disposed: string[];
+  disposed: [kind: string, id: string][]; // the Host Objects that didn't resolve
+  // A variables-only restore also lists what it discarded (10-save-and-restore.md).
+  droppedMessages: string[];
+  abandonedCalls: string[];
 }
 export type Settlement =
   | { answer: Value }
