@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/diagnostics.schema.json",
+  "title": "diagnostics",
+  "description": "The load-time diagnostic catalogue: every code the loader gives a unit it rejects, after the parse.",
+  "type": "object",
+  "properties": {
+    "diagnostic": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z']+( [a-z']+)*$"
+          },
+          "raised_when": {
+            "type": "string",
+            "minLength": 1
+          },
+          "at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(ADR [0-9]{4}|#[0-9]+)$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "code",
+          "raised_when",
+          "at",
+          "sources"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "diagnostic"
+  ],
+  "additionalProperties": false
+}

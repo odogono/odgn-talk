@@ -17,9 +17,13 @@
 # 1000002. The cleanup ends there, before the write, so no `call` record is
 # written, and the report adds `cleanup failed` with the limit.
 #
-# This pins the reading that cancelling a suspended Run charges nothing
-# before its `finally` block, and that the cleanup's Fuel is in its `seg`
-# and `run` figures. Allocation and state figures are estimates.
+# Cancelling charges no `unwind`, so the cleanup's first instruction is the
+# first charge, and the cleanup's Fuel is in the Stretch's `seg` figure as
+# well as the `run` figure, though the Cleanup Budget pays for it (chapter
+# 6, Cancellation and Stop). Each suspended Run becomes ready when it is
+# cancelled, and its cleanup runs in `holder`'s turns, r1's first. The
+# allocation is `iterate-times`'s 24 and the concat's text, 16 + 14. The
+# state figures are estimates.
 # Unblessed: the output lines are written by hand, not by bless.
 
 > load holder
@@ -36,11 +40,11 @@ pumped state=idle fuel=30 next=2026-09-28T09:01:00Z
 > cancel-run holder/r2
 > pump clock=2026-09-28T09:00:01Z
 call holder/r1.c1 op=log.write args=["cleaned 249994"]
-seg holder/r1 resume fuel=1000000 alloc=5999934 state=184 end=cancel
-run holder/r1 outcome=cancelled delivery=d1 handler=hold fuel=1000015 alloc=5999934
+seg holder/r1 resume fuel=1000000 alloc=54 state=184 end=cancel
+run holder/r1 outcome=cancelled delivery=d1 handler=hold fuel=1000015 alloc=54
 cleanup-failed holder/r2 limit=cleanup
-seg holder/r2 resume fuel=999992 alloc=5999958 state=0 end=cancel
-run holder/r2 outcome=cancelled delivery=d2 handler=hold fuel=1000007 alloc=5999958
+seg holder/r2 resume fuel=999992 alloc=54 state=0 end=cancel
+run holder/r2 outcome=cancelled delivery=d2 handler=hold fuel=1000007 alloc=54
 pumped state=idle fuel=1999992
 
 > vars

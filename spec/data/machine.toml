@@ -879,7 +879,7 @@ pops = 1
 pushes = 2
 jumps = 1
 suspends = false
-cost = "iterate"
+cost = "next"
 does = "Pushes the replacement's next Match, or jumps to the label when there are none"
 
 [[instruction]]
@@ -1238,7 +1238,7 @@ pops = 1
 pushes = 2
 jumps = 1
 suspends = false
-cost = "iterate"
+cost = "next"
 does = "Pushes the iterator's next item above it, or jumps to the label, leaving the iterator, when there are none"
 
 # ---------------------------------------------------------------------------

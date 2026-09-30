@@ -36,6 +36,18 @@
         "required": ["key", "fuel"],
         "additionalProperties": false
       }
+    },
+    "change": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "issue": { "type": "string", "pattern": "^#[0-9]+$" },
+          "change": { "type": "string", "minLength": 1 }
+        },
+        "required": ["issue", "change"],
+        "additionalProperties": false
+      }
     }
   },
   "required": ["version", "measure", "subject", "size", "rate"],

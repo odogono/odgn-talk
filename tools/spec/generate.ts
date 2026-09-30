@@ -33,6 +33,7 @@ const DATA_FILES = [
   "unicode",
   "units",
   "errors",
+  "diagnostics",
   "limits",
   "machine",
   "costs",
@@ -254,6 +255,14 @@ function crossCheck(d: Data) {
   for (const e of d.grammar.syntax_error ?? []) {
     if (codes.has(e.code) || hostCodes.has(e.code)) fail("grammar.toml", `syntax error "${e.code}" is also in errors.toml or host-errors.toml`);
   }
+  // A load-time diagnostic's code is its own, so a Host can tell it from a
+  // syntax error, a run-time error and a Host error by the code alone.
+  const syntaxCodes = new Set((d.grammar.syntax_error ?? []).map((e: any) => e.code));
+  const diagCodes = (d.diagnostics.diagnostic ?? []).map((e: any) => e.code);
+  for (const c of duplicates(diagCodes)) fail("diagnostics.toml", `code "${c}" is listed twice`);
+  for (const c of diagCodes) {
+    if (codes.has(c) || hostCodes.has(c) || syntaxCodes.has(c)) fail("diagnostics.toml", `"${c}" is also in errors.toml, host-errors.toml or grammar.toml`);
+  }
 
   for (const f of ["name", "go", "ts"]) {
     for (const v of duplicates((d.limits.limit ?? []).map((l: any) => l[f]))) {
@@ -283,7 +292,7 @@ function crossCheck(d: Data) {
 
   costsCheck(d, fail);
 
-  for (const [name, list] of [["errors.toml", d.errors.error], ["limits.toml", d.limits.limit]] as const) {
+  for (const [name, list] of [["errors.toml", d.errors.error], ["diagnostics.toml", d.diagnostics.diagnostic], ["limits.toml", d.limits.limit]] as const) {
     for (const entry of list ?? []) {
       for (const s of entry.sources ?? []) {
         const m = /^ADR (\d{4})$/.exec(s);
@@ -471,6 +480,10 @@ const VIEWS: Record<string, View> = {
   "grammar.syntax-errors": (d) =>
     table(["Code", "Raised when"], d.grammar.syntax_error.map((e: any) => [code(e.code), e.raised_when])),
 
+  diagnostics: (d, file) =>
+    table(["Code", "Raised when", "Reported at", "Sources"],
+      (d.diagnostics.diagnostic ?? []).map((e: any) => [code(e.code), prose(e.raised_when, file), e.at, sources(e.sources, file)])),
+
   unicode: (d) => {
     if (!d.unicode.version) return todo("chapter 1");
     return [
@@ -555,6 +568,9 @@ const VIEWS: Record<string, View> = {
   "costs.measures": (d) =>
     [table(["Measure", "Counts"], Object.entries(d.costs.measure ?? {}).map(([k, v]) => [code(k), v as string])),
      table(["Subject", "Is"], Object.entries(d.costs.subject ?? {}).map(([k, v]) => [code(k), v as string]))].join("\n\n"),
+
+  "costs.changes": (d, file) =>
+    table(["Issue", "Change"], (d.costs.change ?? []).map((c: any) => [sources([c.issue], file), prose(c.change, file)])),
 
   "costs.sizes": (d) =>
     table(["Of", "Logical size"], (d.costs.size ?? []).map((s: any) => [s.of, code(s.size)])),

@@ -4,7 +4,7 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0003](../docs/
 
 This chapter says what each expression computes and what each statement does. [Chapter 2](02-grammar.md) has their syntax, and [chapter 3](03-values.md) the values they work on. Handler dispatch, messages and waiting are in [chapter 5](05-handlers-messages-and-scheduling.md), and how an error unwinds is in [chapter 6](06-errors-and-limits.md).
 
-A load error, here as in every chapter, is a checker diagnostic: the Script or Library doesn't load, and parity covers the diagnostic ([ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md)).
+A load error, here as in every chapter, is a checker diagnostic: the Script or Library doesn't load, and parity covers the diagnostic ([ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md)). Its code is in [the catalogue](02-grammar.md#load-time-diagnostics).
 
 ## Names
 

@@ -6,10 +6,10 @@
 # diagnostic is pinned, and the Script is left unchanged.
 # Unblessed: the output lines are written by hand, not by bless.
 #
-# The Spec gives no code for this diagnostic, and no position for it. This
-# case writes the code "pattern too large", at the literal's `<`. The
-# oversized literal is in a Reload's source, rather than a Script that
-# fails its first Load, so the Group still holds the Script at `> vars`.
+# The diagnostic is `pattern too large`, at the literal's opening `<`
+# (chapter 2, Load-time diagnostics). The oversized literal is in a Reload's
+# source, rather than a Script that fails its first Load, so the Group
+# still holds the Script at `> vars`.
 
 > load sized
 
