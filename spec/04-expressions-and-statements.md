@@ -26,12 +26,14 @@ A Name in an expression or a Container refers to the first of these that has it:
 3. a Constant, the Script's own or imported
 4. a function, the Script's own or imported, whose bare name is a Function Value ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md))
 5. a well-known Host Object name, bound by the Host at load ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md))
-6. a Built-in Constant: `pi`, `newline`, `tab` or `quote`
+6. a Built-in Constant, such as `pi` or `newline`, or a Built-in function
 
-A Name that is none of these is a load error. So is the bare name of a Handler or a Built-in function, since neither is a value.
+A Name that is none of these is a load error. So is the bare name of a Handler or a Built-in function, since neither is a value. `name(…)` calls what `name` resolves to, so a variable that shadows a Built-in function is called instead of it.
 
-- **No two meanings:** a variable (a local, parameter, Capture or Script Variable) that has the name of a function the Script can call, its own, imported or Built-in, is a load error. So is a parameter, pattern binding or Capture that has the name of a Script Variable, a Constant or a well-known object. Import clashes are [chapter 7](07-libraries-and-the-standard-library.md)'s.
-- **Built-in Constants may be shadowed:** a Script's own variable, parameter, Capture or Constant may take the name of a Built-in Constant. The Script's name wins inside that Script ([ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md)).
+- **No two meanings:** a variable (a local, parameter, Capture or Script Variable) that has the name of one of the Script's own or imported functions is a load error. So is a parameter, pattern binding or Capture that has the name of a Script Variable, a Constant or a well-known object. Import clashes are [chapter 7](07-libraries-and-the-standard-library.md)'s.
+- **Built-ins may be shadowed:** a Script's own variable, parameter, Capture or Constant may take the name of a Built-in Constant or a Built-in function. The Script's name wins inside that Script, so a Built-in added in a later language version never stops an existing Script from loading ([ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)).
+
+> **Note.** A local's scope is its whole body, so `put day(d) into day` makes `day` a local throughout, and `day(d)` then calls it and raises `wrong kind`. The `shadows-builtin` Lint warns about every shadowed Built-in ([chapter 12](12-sessions-and-tooling.md)).
 - **Other positions:** a message name after `on`, `send` or `pass`, a Grant name after `ask` or `tell`, and an Operation name after `to` aren't resolved this way ([chapter 5](05-handlers-messages-and-scheduling.md)). `me` and `the target` are also chapter 5's.
 
 ### Constants and Script Variables
@@ -483,7 +485,7 @@ A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch
 
 - **When:** it is evaluated after its pattern matches, with the pattern's names bound.
 - **What it may use:** literals, operators, conversions, Chunk Expressions, keys and Built-in properties, Text Patterns, Built-in functions and Built-in Constants. It may read the pattern's names, the body's locals, Script Variables and a Host Object's `id`, and compare Host Objects by identity.
-- **What it may not use:** a call to anything but a Built-in, including a Script or Library function, a Handler and a Function Value, a Lambda, and a Host Object property other than `id`. Any of these is a load error. So a Guard never runs Script code, never calls the Host and never suspends.
+- **What it may not use:** a call to anything but a Built-in, including a Script or Library function, a Handler and a Function Value (a call through a name that shadows a Built-in is one), a Lambda, and a Host Object property other than `id`. Any of these is a load error. So a Guard never runs Script code, never calls the Host and never suspends.
 - **Its result:** the clause is chosen only when the Guard gives `true`. `false` skips it. So does any other value and any error, which is never raised into the Run. `try`, `on error` and the Run's report don't see it, and the Trace records the skip.
 
 > **Example.**
