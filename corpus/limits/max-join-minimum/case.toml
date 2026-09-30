@@ -1,0 +1,21 @@
+# max-join-minimum: MaxJoin at its conformance minimum, 256 Join Members
+# (chapter 5, Joins; chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["number"]
+result = "number"
+
+[[scripts]]
+name = "fanout"
+source = "fanout.talk"
+grants = { feed = { ops = ["fetch"] } }
+limits = { maxJoin = 256 }

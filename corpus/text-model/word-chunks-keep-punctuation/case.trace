@@ -1,0 +1,18 @@
+# word-chunks-keep-punctuation: pins that a `word` is a longest run of
+# Characters that aren't White_Space, so punctuation stays in the word it
+# touches (chapter 4, Chunk kinds; ADR 0011). `word 1 of "cat, dog"` is
+# "cat,". A range of words keeps the white space between them, and runs of
+# white space at either end make no empty words. A tab and U+00A0 NO-BREAK
+# SPACE are White_Space and divide words; a hyphen and a comma with no space
+# after it don't. Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load words
+> deliver d1 to=words message=go
+> pump clock=2026-09-30T09:00:00Z
+seg words/r1 start delivery=d1 handler=go clause=1 fuel=152 alloc=128 state=96 end=return
+run words/r1 outcome=completed delivery=d1 handler=go fuel=152 alloc=128
+pumped state=idle fuel=152
+
+> vars
+vars words firstWord="cat," secondWord="dog" lastWord="dog." both="cat,  dog." joinedCount=1 hyphened="well-known" afterTab="b" afterNbsp="b"

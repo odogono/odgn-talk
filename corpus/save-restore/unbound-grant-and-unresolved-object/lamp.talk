@@ -1,0 +1,19 @@
+-- lamp.talk: part of the unbound-grant-and-unresolved-object case.
+-- Grants come from case.toml: log: write (fire-and-forget). Its
+-- well-known object bulb is a light with a read-only `state`.
+
+script variable seen = []
+
+on poke
+  try
+    tell log to write "poke"
+    put "wrote" after seen
+  catch {code: c}
+    put c after seen
+  end try
+  try
+    put the state of bulb after seen
+  catch {code: c}
+    put c after seen
+  end try
+end poke

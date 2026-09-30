@@ -1,0 +1,54 @@
+# settle-reissue-and-adopt: pins settling pending calls after a restore by
+# `reissue` and by `adopt`, and that a settled call keeps its saved deadline.
+#
+# - `reissue` runs the Operation's Start again, with the saved arguments and
+#   under the same call id, when the first Pump drains it: a `call` record
+#   with that id, and no second charge of the declared cost (100), so that
+#   Pump uses no Fuel.
+# - `adopt` costs nothing and writes nothing. The Host answers the call later
+#   with an ordinary `answer` under the same call id.
+# - Both calls keep their saved MaxWait deadline, 10:00:30 (30 s after the
+#   Pump they started in), not 30 s after the restore or the reissue. So the
+#   reissued call, still unanswered, times out at 10:00:30.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load shop
+
+> deliver d1 to=shop message=check args=["A1"]
+> deliver d2 to=shop message=check args=["B2"]
+> pump clock=2026-09-30T10:00:00Z
+call shop/r1.c1 op=stock.check args=["A1"]
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=240 end=ask-wait
+call shop/r2.c1 op=stock.check args=["B2"]
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=464 end=ask-wait
+pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
+
+> save s1
+> restore from=s1 mode=full pending=[shop/r1.c1, shop/r2.c1]
+
+# The reissue crosses to the Host again as the first Pump drains it. Neither
+# call is answered yet, so nothing runs, and the next deadline is still the
+# saved one.
+> settle shop/r1.c1 how=reissue
+> settle shop/r2.c1 how=adopt
+> pump clock=2026-09-30T10:00:05Z
+call shop/r1.c1 op=stock.check args=["A1"]
+pumped state=idle fuel=0 next=2026-09-30T10:00:30Z
+
+# The adopted call is answered like any other. The reissued one isn't, and at
+# 10:00:31 its saved deadline has passed: the answer is drained at step 2,
+# before the timer fires at step 3, so shop/r2 runs first, then shop/r1
+# raises `timeout` at the `ask … and wait` and its call is abandoned.
+> answer shop/r2.c1 value=7
+> pump clock=2026-09-30T10:00:31Z
+seg shop/r2 resume fuel=24 alloc=88 state=312 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=139 alloc=88
+raise shop/r1 code="timeout" at=shop:5 pos=9:5
+abandon shop/r1.c1
+seg shop/r1 resume fuel=62 alloc=240 state=128 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=177 alloc=240
+pumped state=idle fuel=86
+
+> vars
+vars shop results=[["B2", 7], ["A1", "timeout"]]

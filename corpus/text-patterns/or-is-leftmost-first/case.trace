@@ -1,0 +1,21 @@
+# or-is-leftmost-first: `a or b` prefers `a`, so a search takes the first
+# alternative that matches at the leftmost start, not the longest.
+# `<"a" or "ab">` finds "a" twice in "ab abc", and `<"ab" or "a">` finds
+# "ab" twice. A whole-text match still takes the most preferred way that
+# matches all of the text, so "ab" matches `<"a" or "ab">` (spec chapter 4,
+# Matching; ADR 0007). The matches and the boolean are pinned. Fuel,
+# allocation and state are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+
+# Steps: 22 for the first Match Search, 20 for the second, and 5 for the
+# whole-text match, which stops at its first match.
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=82 alloc=994 state=1002 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=82 alloc=994
+pumped state=idle fuel=82
+
+> vars
+vars search short=[{text: "a", range: 1..1, captures: {}, ranges: {}}, {text: "a", range: 4..4, captures: {}, ranges: {}}] long=[{text: "ab", range: 1..2, captures: {}, ranges: {}}, {text: "ab", range: 4..5, captures: {}, ranges: {}}] whole=true

@@ -1,0 +1,32 @@
+# unbound-grant-and-unresolved-object: restoring when the Host no longer
+# re-binds a Grant, and no longer resolves a Host Object (spec chapter 10,
+# "Restoring", steps 3 and 5).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 20 }
+
+[[objectKinds]]
+name = "light"
+parentKinds = []
+props = [{ name = "state", shape = "text", readOnly = true, getCost = { fuel = 5 } }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"' }
+
+[[scripts]]
+name = "lamp"
+source = "lamp.talk"
+grants = { log = { ops = ["write"] } }
+objects = { bulb = { kind = "light", id = "bulb-1" } }

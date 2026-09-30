@@ -1,0 +1,40 @@
+# persistent-state-minimum: the Persistent State cap at its conformance
+# minimum, 67108864, which every Core must honour exactly. `hoard` has one
+# Script Variable and nothing else it keeps between Runs, so at a Run's end
+# its Persistent State is size(big) = 16 + the UTF-8 length of `big`.
+#
+# `fill` puts 67108848 "x"s in `big`: state 16 + 67108848 = 67108864, the cap
+# exactly, so it completes. `grow` appends one more: 67108865, measured at
+# its Segment's end, the `return` at hoard:38 (source 21:1). That faults, and
+# the rollback puts `big` back. `clear` then empties it, so the closing
+# `vars` is short.
+#
+# Pinned here: the state at the cap, the fault and its instruction, and the
+# rollback. Fuel and allocation figures are estimates (`fill`'s are summed
+# over its 22 passes from Cost Model 0's rates).
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load hoard
+
+> deliver d1 to=hoard message=fill
+> pump clock=2026-09-28T09:00:00Z
+seg hoard/r1 start delivery=d1 handler=fill clause=1 fuel=16777650 alloc=134219328 state=67108864 end=return
+run hoard/r1 outcome=completed delivery=d1 handler=fill fuel=16777650 alloc=134219328
+pumped state=idle fuel=16777650
+
+# One byte over the cap: a Limit Fault at the Segment's end.
+> deliver d2 to=hoard message=grow
+> pump clock=2026-09-28T09:00:01Z
+fault hoard/r2 limit=persistent at=hoard:38 pos=21:1 rollback=[big]
+seg hoard/r2 start delivery=d2 handler=grow clause=1 fuel=4194320 alloc=25 state=67108864 end=fault
+run hoard/r2 outcome=limit-fault delivery=d2 handler=grow limit=persistent fuel=4194320 alloc=25
+pumped state=idle fuel=4194320
+
+> deliver d3 to=hoard message=clear
+> pump clock=2026-09-28T09:00:02Z
+seg hoard/r3 start delivery=d3 handler=clear clause=1 fuel=10 alloc=0 state=16 end=return
+run hoard/r3 outcome=completed delivery=d3 handler=clear fuel=10 alloc=0
+pumped state=idle fuel=10
+
+> vars
+vars hoard big=""

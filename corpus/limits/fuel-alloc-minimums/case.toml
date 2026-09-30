@@ -1,0 +1,14 @@
+# fuel-alloc-minimums: Fuel per Run and the Allocation Budget at their
+# conformance minimums, and per-Delivery overrides that tighten them but may
+# not loosen them (chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "ticker"
+source = "ticker.talk"
+limits = { fuelPerRun = 1000000000, allocPerRun = 268435456 }

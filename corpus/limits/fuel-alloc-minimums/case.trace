@@ -1,0 +1,39 @@
+# fuel-alloc-minimums: `ticker` loads with Fuel per Run and the Allocation
+# Budget at their conformance minimums, 1000000000 and 268435456, which every
+# Core must honour. Running a Run out of a billion Fuel isn't tractable, so
+# this case shows the values accepted, at load and as a Delivery's override
+# equal to them, with a small Run inside them. The exhaustion points
+# themselves are pinned at small limits in fuel-exhaustion-point and
+# alloc-exhaustion-point.
+#
+# An override may only tighten. One past the Script's limit, by 1, loosens
+# it, so the Host call is refused at the call with `invalid value`: it gets
+# no delivery id and changes nothing. Refused inputs are written at the call,
+# and accepted Deliveries when the Pump drains them, so the refused ones come
+# first here, as a Core writes them.
+#
+# The last Delivery tightens Fuel to 10. `tick` is dispatch 4, const 1,
+# store 1, load-var 1, load 1, then `add` (4) at ticker:8, source 6:3, which
+# would make 12, so it faults having spent 8. `ticks` isn't written yet, so
+# there is no rollback. The first Run's 17 Fuel is exact too.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load ticker
+
+> deliver to=ticker message=tick limits={fuelPerRun: 1000000001}
+refused code="invalid value"
+> deliver to=ticker message=tick limits={allocPerRun: 268435457}
+refused code="invalid value"
+
+> deliver d1 to=ticker message=tick limits={fuelPerRun: 1000000000, allocPerRun: 268435456}
+> deliver d2 to=ticker message=tick limits={fuelPerRun: 10}
+> pump clock=2026-09-28T09:00:00Z
+seg ticker/r1 start delivery=d1 handler=tick clause=1 fuel=17 alloc=16 state=16 end=return
+run ticker/r1 outcome=completed delivery=d1 handler=tick fuel=17 alloc=16
+fault ticker/r2 limit=fuel at=ticker:8 pos=6:3
+seg ticker/r2 start delivery=d2 handler=tick clause=1 fuel=8 alloc=0 state=16 end=fault
+run ticker/r2 outcome=limit-fault delivery=d2 handler=tick limit=fuel fuel=8 alloc=0
+pumped state=idle fuel=25
+
+> vars
+vars ticker ticks=1

@@ -1,0 +1,5 @@
+-- sized.talk: the pattern-size-literal-limit case (spec chapter 6, Limits).
+-- Loaded with patternSize = 50: `49 digits` is 49 `class digit` and a
+-- `match`, a program of exactly 50, so it loads.
+
+script variable p = <49 digits>

@@ -1,0 +1,8 @@
+-- sink.talk: the receiving half of the mailbox-depth case, loaded with a
+-- mailbox depth of 2.
+
+script variable got = []
+
+on note n
+  put n after got
+end note

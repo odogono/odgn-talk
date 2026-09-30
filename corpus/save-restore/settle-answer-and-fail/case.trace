@@ -1,0 +1,46 @@
+# settle-answer-and-fail: pins settling two pending calls after a restore, one
+# by `answer` and one by `fail`, and that a settlement after the first Pump is
+# refused with `unknown call`.
+#
+# - The restore returns both calls as pending, in call id order.
+# - The settlements are queued Host Inputs, drained at step 2 of the first
+#   Pump in the order they were made, so shop/r1 is ready before shop/r2.
+# - An answer settles as `Answer` would, and a failure raises its code at the
+#   `ask … and wait` (shop:5, pos 9:5), as `Fail` would.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load shop
+
+# Two Runs, each suspended on its own call. Each call's MaxWait (30 s, the
+# default) is the next deadline.
+> deliver d1 to=shop message=check args=["A1"]
+> deliver d2 to=shop message=check args=["B2"]
+> pump clock=2026-09-30T10:00:00Z
+call shop/r1.c1 op=stock.check args=["A1"]
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=240 end=ask-wait
+call shop/r2.c1 op=stock.check args=["B2"]
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=464 end=ask-wait
+pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
+
+> save s1
+> restore from=s1 mode=full pending=[shop/r1.c1, shop/r2.c1]
+
+# Settled in this order, before the first Pump.
+> settle shop/r1.c1 how=answer value=12
+> settle shop/r2.c1 how=fail error={code: "out of stock"}
+> pump clock=2026-09-30T10:00:05Z
+seg shop/r1 resume fuel=24 alloc=88 state=312 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=139 alloc=88
+raise shop/r2 code="out of stock" at=shop:5 pos=9:5
+seg shop/r2 resume fuel=62 alloc=240 state=128 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=177 alloc=240
+pumped state=idle fuel=86
+
+# The first Pump has run, so a settlement now is Host misuse, and changes
+# nothing.
+> settle shop/r1.c1 how=answer value=13
+refused code="unknown call"
+
+> vars
+vars shop results=[["A1", 12], ["B2", "out of stock"]]

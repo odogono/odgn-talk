@@ -1,0 +1,30 @@
+# pattern-size-made-at-run-time: a Text Pattern made at run time, by
+# splicing, compiles at its `make-pattern`, and one over the Script's
+# patternSize is a Limit Fault there, with limit `pattern` (spec chapter 6,
+# Limits; chapter 8, Compiling). With patternSize 50, splicing the
+# 30-instruction `<29 digits>` after "x" gives 31 instructions and is made,
+# and splicing it twice gives 59 and faults. The fault, its instruction and
+# the rollback of `status` are pinned. Fuel, allocation and state are
+# estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load maker
+
+# The spliced pattern is a nested group in the canonical source.
+> deliver d1 to=maker message=small
+> pump clock=2026-09-30T09:00:00Z
+seg maker/r1 start delivery=d1 handler=small clause=1 fuel=92 alloc=264 state=540 end=return
+run maker/r1 outcome=completed delivery=d1 handler=small fuel=92 alloc=264
+pumped state=idle fuel=92
+
+# `status` was written earlier in the Segment, so the rollback restores it.
+# `made` is never written, and keeps the pattern from d1.
+> deliver d2 to=maker message=big
+> pump clock=2026-09-30T09:00:01Z
+fault maker/r2 limit=pattern at=maker:18 pos=18:7 rollback=[status]
+seg maker/r2 start delivery=d2 handler=big clause=1 fuel=9 alloc=0 state=540 end=fault
+run maker/r2 outcome=limit-fault delivery=d2 handler=big limit=pattern fuel=9 alloc=0
+pumped state=idle fuel=9
+
+> vars
+vars maker unit=<29 digits> status="idle" made=<"x", <29 digits>>

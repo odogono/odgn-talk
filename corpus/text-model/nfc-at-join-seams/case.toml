@@ -1,0 +1,13 @@
+# nfc-at-join-seams: joins and chunk writes are normalised again, so a mark at a seam composes.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "seams"
+source = "seams.talk"

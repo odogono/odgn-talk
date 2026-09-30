@@ -1,0 +1,30 @@
+# undecided-when-dropped: the first Decision is allowed when its Run
+# suspends, and that Run hasn't ended when the second Decision is dispatched
+# to the same `, dropping, deciding` clause. The new Run ends at dispatch,
+# `dropped`, so the Script chose not to give a Verdict, and the Decision is
+# undecided with that outcome. As for any undecided Verdict, its `decided`
+# follows the Run's `run` record. Fuel, allocation and state figures are
+# estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load board
+
+> decide d1 to=board message=beforeMove args=[{from: "a2", to: "a3"}]
+> decide d2 to=board message=beforeMove args=[{from: "b2", to: "b3"}]
+> pump clock=2026-09-30T10:00:00Z
+call board/r1.c1 op=replay.record args=[{from: "a2", to: "a3"}]
+seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=74 alloc=0 state=452 end=ask-wait
+decided d1 verdict=allowed
+seg board/r2 start delivery=d2 handler=beforeMove clause=1 fuel=4 alloc=0 state=346 end=dropped
+run board/r2 outcome=dropped delivery=d2 handler=beforeMove fuel=4 alloc=0
+decided d2 verdict=undecided undecided=[{script: "board", run: "board/r2", outcome: "dropped"}]
+pumped state=idle fuel=78
+
+> answer board/r1.c1 value=1
+> pump clock=2026-09-30T10:00:01Z
+seg board/r1 resume fuel=15 alloc=32 state=16 end=return
+run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=89 alloc=32
+pumped state=idle fuel=15
+
+> vars
+vars board moves=1

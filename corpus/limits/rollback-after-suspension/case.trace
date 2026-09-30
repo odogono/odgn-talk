@@ -1,0 +1,44 @@
+# rollback-after-suspension: Segment rollback (ADR 0006). `first` writes `a`
+# in its first Segment and suspends, which ends that Segment for good. While
+# it waits, `second` sets `c` to 5. Its second Segment writes `b` and `c` and
+# runs out of Fuel. The rollback restores `b` and `c` to their bindings when
+# that Segment began (0 and 5, not the Run's 0 and 0), and keeps `a`.
+#
+# The Fuel of `first` (keeper.talk), limit 100:
+#   first Segment: dispatch 4, 0008 const 1, 0009 store-var 2, 0010 const 1,
+#     0011 wait 10                                                     18
+#   second Segment: 0012 const 1, 0013 store-var 2, 0014 const 1,
+#     0015 store-var 2                                           6, so 24
+#   then `repeat forever` with an empty body is 0016 `jump 0016`, 1 each.
+# 76 jumps make 100 exactly, and the 77th would make 101, so the Run faults
+# at keeper:16, source 14:3, having spent 100, 82 of it in the second
+# Segment. `second` is dispatch 4, const 1, store-var 2, const 1, return 2.
+#
+# Pinned here: the fault's instruction, the rollback list and the Script
+# Variables. Allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load keeper
+
+> deliver d1 to=keeper message=first
+> pump clock=2026-09-28T09:00:00Z
+seg keeper/r1 start delivery=d1 handler=first clause=1 fuel=18 alloc=0 state=224 end=wait until=2026-09-28T09:00:01Z
+pumped state=idle fuel=18 next=2026-09-28T09:00:01Z
+
+# Another Run of the Script, between the two Segments of the first.
+> deliver d2 to=keeper message=second
+> pump clock=2026-09-28T09:00:00.5Z
+seg keeper/r2 start delivery=d2 handler=second clause=1 fuel=10 alloc=0 state=224 end=return
+run keeper/r2 outcome=completed delivery=d2 handler=second fuel=10 alloc=0
+pumped state=idle fuel=10 next=2026-09-28T09:00:01Z
+
+# The wait fires, and the second Segment faults. `b` goes back to 0 and `c`
+# to 5. `a` was written in a Segment that already ended, so it stays 1.
+> pump clock=2026-09-28T09:00:01Z
+fault keeper/r1 limit=fuel at=keeper:16 pos=14:3 rollback=[b, c]
+seg keeper/r1 resume fuel=82 alloc=0 state=48 end=fault
+run keeper/r1 outcome=limit-fault delivery=d1 handler=first limit=fuel fuel=100 alloc=0
+pumped state=idle fuel=82
+
+> vars
+vars keeper a=1 b=0 c=5

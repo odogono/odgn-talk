@@ -1,0 +1,13 @@
+# undecided-on-an-error: a deciding Run that errors before its seal leaves
+# the Decision undecided, with outcome `errored` (ADR 0031). Its figures are
+# estimates, so it isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "bishop"
+source = "bishop.talk"

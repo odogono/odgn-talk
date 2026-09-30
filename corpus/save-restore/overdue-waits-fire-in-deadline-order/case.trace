@@ -1,0 +1,47 @@
+# overdue-waits-fire-in-deadline-order: pins the Clock rule of a restore.
+#
+# - The first Pump after a restore must read a Clock at or after the saved
+#   reading (10:00:00), or it is the Host error `clock backwards`, refused at
+#   the call and changing nothing.
+# - Restored with a later Clock, every overdue `wait` fires in that Pump, in
+#   deadline order, and of equal deadlines in the order the waits began. The
+#   waits began in the order a, b, c, d, with deadlines 30 s, 10 s, 20 s and
+#   10 s on, so they fire b, d, c, a. They are all one Script's, so they run
+#   in the order they became ready, and `fired` records it.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load sleeper
+
+> deliver d1 to=sleeper message=nap args=["a", 30 s]
+> deliver d2 to=sleeper message=nap args=["b", 10 s]
+> deliver d3 to=sleeper message=nap args=["c", 20 s]
+> deliver d4 to=sleeper message=nap args=["d", 10 s]
+> pump clock=2026-09-30T10:00:00Z
+seg sleeper/r1 start delivery=d1 handler=nap clause=1 fuel=15 alloc=0 state=200 end=wait until=2026-09-30T10:00:30Z
+seg sleeper/r2 start delivery=d2 handler=nap clause=1 fuel=15 alloc=0 state=384 end=wait until=2026-09-30T10:00:10Z
+seg sleeper/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=568 end=wait until=2026-09-30T10:00:20Z
+seg sleeper/r4 start delivery=d4 handler=nap clause=1 fuel=15 alloc=0 state=752 end=wait until=2026-09-30T10:00:10Z
+pumped state=idle fuel=60 next=2026-09-30T10:00:10Z
+
+> save s1
+> restore from=s1 mode=full
+
+# Earlier than the saved reading: refused, and the Group is unchanged.
+> pump clock=2026-09-30T09:59:59Z
+refused code="clock backwards"
+
+# A minute on, all four are overdue.
+> pump clock=2026-09-30T10:01:00Z
+seg sleeper/r2 resume fuel=10 alloc=48 state=616 end=return
+run sleeper/r2 outcome=completed delivery=d2 handler=nap fuel=25 alloc=48
+seg sleeper/r4 resume fuel=10 alloc=48 state=488 end=return
+run sleeper/r4 outcome=completed delivery=d4 handler=nap fuel=25 alloc=48
+seg sleeper/r3 resume fuel=10 alloc=48 state=360 end=return
+run sleeper/r3 outcome=completed delivery=d3 handler=nap fuel=25 alloc=48
+seg sleeper/r1 resume fuel=10 alloc=48 state=232 end=return
+run sleeper/r1 outcome=completed delivery=d1 handler=nap fuel=25 alloc=48
+pumped state=idle fuel=40
+
+> vars
+vars sleeper fired=["b", "d", "c", "a"]

@@ -1,0 +1,13 @@
+# alloc-exhaustion-point: a Run faults on its Allocation Budget at a pinned
+# instruction, under a per-Delivery override that tightens the budget
+# (chapter 6, chapter 8 Charging).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "grower"
+source = "grower.talk"

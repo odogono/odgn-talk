@@ -1,0 +1,11 @@
+-- deep.talk: the call-depth-minimum case. `dive n` is one frame, and
+-- `down(n)` adds n + 1 more, so a Run of `dive n` is n + 2 frames deep.
+
+function down n
+  if n = 0 then return 0
+  return down(n - 1) + 1
+end down
+
+on dive n
+  return down(n)
+end dive

@@ -1,0 +1,23 @@
+# unsettled-call-is-lost: a pending call the Host doesn't settle after a
+# restore fails with `call lost` in the first Pump, before any timer fires
+# (spec chapter 10, "Settling pending calls").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 100 }
+maxPending = 10000
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { stock = { ops = ["check"] } }

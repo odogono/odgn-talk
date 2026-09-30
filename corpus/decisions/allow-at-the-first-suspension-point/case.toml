@@ -1,0 +1,23 @@
+# allow-at-the-first-suspension-point: a deciding Run that reaches its first
+# Suspension Point without vetoing allows the Decision there, and goes on
+# after the seal. A `veto` in a Run that holds no open Verdict just ends it,
+# with a `note` (ADR 0031). Its figures are estimates, so it isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "replay"
+name = "record"
+mode = "suspending"
+args = ["any"]
+result = "number"
+cost = { fuel = 50 }
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { replay = { ops = ["record"] } }

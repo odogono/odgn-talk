@@ -1,0 +1,12 @@
+# wait-zero-next-pump: `wait 0 s` never resumes in the Pump that started it
+# (chapter 5, Waiting).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "napper"
+source = "napper.talk"

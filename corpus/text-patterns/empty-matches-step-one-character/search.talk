@@ -1,0 +1,8 @@
+-- search.talk: the empty-matches-step-one-character case (spec chapter 4,
+-- Matches). `optional "x"` finds no "x" in "ab", so every match is empty.
+
+script variable hits = nothing
+
+on go
+  put every match of <optional "x"> in "ab" into hits
+end go

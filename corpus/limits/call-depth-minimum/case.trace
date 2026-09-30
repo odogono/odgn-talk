@@ -1,0 +1,33 @@
+# call-depth-minimum: call depth at its conformance minimum, 1000, which every
+# Core must honour exactly. Call depth counts the frames on the Run's stack,
+# its Handler's included. A Run of `dive n` has the `dive` frame, then
+# `down(n)` down to `down(0)`: n + 2 frames.
+#
+# `dive 998` reaches exactly 1000 frames and completes. `dive 999` would need
+# 1001: `down(1)`, the 1000th frame, faults at its recursive call, the `call`
+# at deep:11, source 6:10, before `down(0)` is pushed.
+#
+# Fuel (deep.talk, estimated with `equal` at 2): `dive` is dispatch 4, load 1,
+# call 8, return 2; each `down` above 0 is 11 before its call, the call 8,
+# and 7 after; `down(0)` is 8. So `dive n` is 23 + 26n: 25971 for 998. The
+# faulting Run spends 13 + 998 * 19 + 11 = 18986. Allocation figures (16 for
+# each `subtract` and `add` result) and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load deep
+
+> deliver d1 to=deep message=dive args=[998]
+> pump clock=2026-09-28T09:00:00Z
+seg deep/r1 start delivery=d1 handler=dive clause=1 fuel=25971 alloc=31936 state=0 end=return
+run deep/r1 outcome=completed delivery=d1 handler=dive value=998 fuel=25971 alloc=31936
+pumped state=idle fuel=25971
+
+> deliver d2 to=deep message=dive args=[999]
+> pump clock=2026-09-28T09:00:01Z
+fault deep/r2 limit=depth at=deep:11 pos=6:10
+seg deep/r2 start delivery=d2 handler=dive clause=1 fuel=18986 alloc=15984 state=0 end=fault
+run deep/r2 outcome=limit-fault delivery=d2 handler=dive limit=depth fuel=18986 alloc=15984
+pumped state=idle fuel=18986
+
+> vars
+vars deep

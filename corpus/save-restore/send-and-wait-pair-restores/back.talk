@@ -1,0 +1,7 @@
+-- back.talk: the other half of the send-and-wait-pair-restores case. It is
+-- in a `wait` when the Group is saved, owing front its reply.
+
+on quote sku
+  wait 5 s
+  return sku & ": 3 left"
+end quote

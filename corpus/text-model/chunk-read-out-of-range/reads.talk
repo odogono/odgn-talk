@@ -1,0 +1,25 @@
+-- reads.talk: the chunk-read-out-of-range case. Reading text past its end,
+-- at index 0 or over a reversed range gives empty text, and never raises
+-- (chapter 4, Reading).
+
+script variable pastEnd
+script variable wordZero
+script variable itemPastEnd
+script variable beforeStart
+script variable reversed
+script variable overhang
+script variable wholeRangePast
+script variable listPastEnd
+script variable listRangePast
+
+on go
+  put character 10 of "abc" into pastEnd                      -- ""
+  put word 0 of "one two" into wordZero                       -- ""
+  put item 3 of "a,b" into itemPastEnd                        -- ""
+  put character -4 of "abc" into beforeStart                  -- ""
+  put characters 3..2 of "abc" into reversed                  -- ""
+  put characters 2..10 of "abc" into overhang                 -- "bc"
+  put characters 5..10 of "abc" into wholeRangePast           -- ""
+  put item 3 of ["a", "b"] into listPastEnd                   -- nothing
+  put items 3..4 of ["a", "b"] into listRangePast             -- []
+end go

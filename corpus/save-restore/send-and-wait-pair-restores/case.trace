@@ -1,0 +1,38 @@
+# send-and-wait-pair-restores: pins that a `send … and wait` pair inside the
+# saved Group restores with both ends together.
+#
+# - front/r1 waits on its send, front/r1.c1, and back/r1, which owes it the
+#   reply, is in a `wait` when the Group is saved.
+# - A send that waits has a call id, but it isn't a pending Capability call,
+#   so the restore returns nothing to settle, and nothing is `call lost`.
+# - After the restore, back/r1's overdue `wait` fires, its result goes to
+#   front/r1 as the reply, and front/r1 resumes with it in `it`, in the same
+#   Pump.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load front
+> load back
+
+> deliver d1 to=front message=order args=["A1"]
+> pump clock=2026-09-30T10:00:00Z
+send front/r1.c1 to=back message=quote args=["A1"] wait=yes
+seg front/r1 start delivery=d1 handler=order clause=1 fuel=27 alloc=56 state=200 end=send-wait
+seg back/r1 start from=front/r1.c1 handler=quote clause=1 fuel=16 alloc=0 state=176 end=wait until=2026-09-30T10:00:05Z
+pumped state=idle fuel=43 next=2026-09-30T10:00:05Z
+
+# Saved with both ends waiting.
+> save s1
+> restore from=s1 mode=full
+
+# back's wait is overdue at 10:00:06, well inside front's MaxWait (10:00:30).
+> pump clock=2026-09-30T10:00:06Z
+seg back/r1 resume fuel=10 alloc=32 state=0 end=return
+run back/r1 outcome=completed handler=quote value="A1: 3 left" fuel=26 alloc=32
+seg front/r1 resume fuel=6 alloc=0 state=48 end=return
+run front/r1 outcome=completed delivery=d1 handler=order fuel=33 alloc=56
+pumped state=idle fuel=16
+
+> vars
+vars front reply="A1: 3 left"
+vars back

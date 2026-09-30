@@ -1,0 +1,7 @@
+-- ticker.talk: the fuel-alloc-minimums case.
+
+script variable ticks = 0
+
+on tick
+  add 1 to ticks
+end tick

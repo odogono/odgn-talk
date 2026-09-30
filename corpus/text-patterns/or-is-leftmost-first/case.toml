@@ -1,0 +1,12 @@
+# or-is-leftmost-first: a Text Pattern case (spec chapters 4 and 8). It isn't
+# blessed, and its figures are estimates unless case.trace pins one.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "search"
+source = "search.talk"

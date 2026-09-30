@@ -1,0 +1,13 @@
+-- knight.talk: the knight piece's Script, part of the veto-ends-the-decision
+-- case (ADR 0031). It has the first say on its own moves.
+
+script variable own = ["d4", "e5"]
+script variable checked = 0
+
+on beforeMove m, deciding
+  if the to of m is the from of m then veto
+  if the to of m is in own then veto "Your own piece is on that square."
+  pass beforeMove
+finally
+  add 1 to checked               -- runs on veto too, as on return
+end beforeMove

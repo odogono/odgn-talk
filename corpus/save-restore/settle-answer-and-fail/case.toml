@@ -1,0 +1,22 @@
+# settle-answer-and-fail: pending calls saved with the Group, and settled after the restore
+# (spec chapter 10, "Settling pending calls").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 100 }
+errors = [{ code = "out of stock", fields = [] }]
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { stock = { ops = ["check"] } }

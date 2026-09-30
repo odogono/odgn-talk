@@ -1,0 +1,40 @@
+# unbound-grant-and-unresolved-object: pins what a restore does with the
+# Host's side it can't get back.
+#
+# - A Grant the Host's `Grants` function doesn't return (`unbound`) restores
+#   as revoked. It still binds its name, so lamp still loads and the restore
+#   is full, but a call through it raises `capability revoked` at the `tell`
+#   (lamp:5, pos 9:5). The call never reaches a Host function, so it has no
+#   call id and no `call` record.
+# - A Host Object the Host's `Resolve` function refuses restores as disposed,
+#   and is listed in `disposed`. It is still an ordinary value, but reading
+#   its property raises `object gone` (lamp:30, pos 15:9), with no `prop`
+#   record, since nothing crosses to the Host.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load lamp
+
+# Before the save, both work.
+> deliver d1 to=lamp message=poke
+> pump clock=2026-09-30T10:00:00Z
+call lamp/r1.c1 op=log.write args=["poke"]
+prop lamp/r1 object=<object light "bulb-1"> name=state op=get value="off"
+seg lamp/r1 start delivery=d1 handler=poke clause=1 fuel=76 alloc=112 state=64 end=return
+run lamp/r1 outcome=completed delivery=d1 handler=poke fuel=76 alloc=112
+pumped state=idle fuel=76
+
+> save s1
+> restore from=s1 unbound=[lamp.log] mode=full disposed=[<object light "bulb-1">]
+
+# After it, neither does, and lamp catches both errors.
+> deliver d2 to=lamp message=poke
+> pump clock=2026-09-30T10:00:01Z
+raise lamp/r2 code="capability revoked" at=lamp:5 pos=9:5
+raise lamp/r2 code="object gone" at=lamp:30 pos=15:9
+seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=98 alloc=384 state=184 end=return
+run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=98 alloc=384
+pumped state=idle fuel=98
+
+> vars
+vars lamp seen=["wrote", "off", "capability revoked", "object gone"]

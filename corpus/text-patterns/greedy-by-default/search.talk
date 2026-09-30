@@ -1,0 +1,8 @@
+-- search.talk: the greedy-by-default case (spec chapter 4, Matching;
+-- ADR 0007). `text` prefers to match more, so it runs to the last ">".
+
+script variable hits = nothing
+
+on go
+  put every match of <"<", text, ">"> in "<a> <b>" into hits
+end go

@@ -1,0 +1,34 @@
+# veto-ends-the-decision: a `veto` seals the Verdict as vetoed at the end of
+# the first Segment, with its reason, and ends the Run as `completed`, with
+# the `finally` block run. The veto ends the message too, so the board, the
+# knight's parent, never hears the move. A bare `veto` gives the reason
+# Nothing. Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load board
+> load knight
+> set-parent object=<object piece "knight"> parent=<object board "board">
+
+# One of the knight's own pieces is on e5. The seal comes at the end of the
+# `seg`, so `decided` follows it, and the Run's `run end` follows that.
+> decide d1 to=<object piece "knight"> message=beforeMove args=[{from: "c3", to: "e5"}]
+> pump clock=2026-09-30T10:00:00Z
+seg knight/r1 start delivery=d1 handler=beforeMove clause=1 fuel=38 alloc=16 state=84 end=veto value="Your own piece is on that square."
+decided d1 verdict=vetoed vetoes=[{script: "knight", run: "knight/r1", reason: "Your own piece is on that square."}]
+run knight/r1 outcome=completed delivery=d1 handler=beforeMove fuel=38 alloc=16
+pumped state=idle fuel=38
+
+# A move to the square it stands on hits the bare `veto`, whose reason is
+# Nothing.
+> decide d2 to=<object piece "knight"> message=beforeMove args=[{from: "c3", to: "c3"}]
+> pump clock=2026-09-30T10:00:01Z
+seg knight/r2 start delivery=d2 handler=beforeMove clause=1 fuel=30 alloc=16 state=84 end=veto value=nothing
+decided d2 verdict=vetoed vetoes=[{script: "knight", run: "knight/r2", reason: nothing}]
+run knight/r2 outcome=completed delivery=d2 handler=beforeMove fuel=30 alloc=16
+pumped state=idle fuel=30
+
+# `checked` counts both `finally` blocks, and the board's `asked` is
+# untouched.
+> vars
+vars board asked=0
+vars knight own=["d4", "e5"] checked=2

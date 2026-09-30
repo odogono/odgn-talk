@@ -1,0 +1,13 @@
+# chunk-read-out-of-range: reads past the end, at 0, before the start or reversed give empty text, never an error.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "reads"
+source = "reads.talk"

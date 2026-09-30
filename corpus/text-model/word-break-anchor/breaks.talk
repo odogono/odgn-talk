@@ -1,0 +1,22 @@
+-- breaks.talk: the word-break-anchor case. `word break` sits between a
+-- White_Space Character or either end and a Character that isn't White_Space,
+-- so punctuation is part of the word on either side of it (chapter 4,
+-- Elements; chapter 8, Text Pattern programs).
+
+script variable breaks
+script variable wordTexts
+script variable tBreak
+script variable commaBreak
+
+on go
+  put [] into breaks
+  repeat for each m in every match of <word break> in "cat, dog"
+    put the range of m after breaks
+  end repeat
+  put [] into wordTexts
+  repeat for each m in every match of <word> in "cat, dog"
+    put the text of m after wordTexts
+  end repeat
+  put "cat, dog" contains <"t", word break> into tBreak       -- false
+  put "cat, dog" contains <",", word break> into commaBreak   -- true
+end go

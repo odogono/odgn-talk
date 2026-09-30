@@ -1,0 +1,17 @@
+# host-text-joins-in-nfc: pins that text from the Host arrives as NFC and
+# that joining two Host texts normalises the seam (chapter 3, Text; ADR
+# 0030). The Request's second argument is a lone U+0301, which is already
+# NFC and one Character, so it is written literally. Joined after "e", it
+# composes to U+00E9, one Character, which is the Request's result. Fuel,
+# allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load joiner
+> request d1 to=joiner message=join args=["e", "́"]
+> pump clock=2026-09-30T09:00:00Z
+seg joiner/r1 start delivery=d1 handler=join clause=1 fuel=38 alloc=24 state=24 end=return
+run joiner/r1 outcome=completed delivery=d1 handler=join value="é" fuel=38 alloc=24
+pumped state=idle fuel=38
+
+> vars
+vars joiner markLength=1 joinedLength=1

@@ -1,0 +1,11 @@
+-- analytics.talk: part of the broadcast-decision-reports-every-veto case
+-- (ADR 0031). Grants come from case.toml: metrics: count (fire-and-forget)
+-- Its clause isn't `, deciding`, so it hears every submit but allows it at
+-- dispatch.
+
+script variable seen = 0
+
+on submit f
+  tell metrics to count "submit"
+  add 1 to seen
+end submit

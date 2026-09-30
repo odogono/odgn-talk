@@ -1,0 +1,13 @@
+# word-break-anchor: the `word break` anchor agrees with `word`: punctuation is inside the word.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "breaks"
+source = "breaks.talk"

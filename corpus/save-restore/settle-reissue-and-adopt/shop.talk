@@ -1,0 +1,14 @@
+-- shop.talk: part of the settle-reissue-and-adopt case.
+-- Grants come from case.toml: stock: check (suspending, and pending when
+-- the Group is saved)
+
+script variable results = []
+
+on check sku
+  try
+    ask stock to check sku and wait
+    put [sku, it] after results
+  catch {code: c}
+    put [sku, c] after results
+  end try
+end check

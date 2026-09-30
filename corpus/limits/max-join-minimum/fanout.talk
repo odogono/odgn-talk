@@ -1,0 +1,11 @@
+-- fanout.talk: the max-join-minimum case. Grants come from case.toml:
+-- feed: fetch (suspending)
+
+on fan k
+  wait for all
+    repeat for each i in 1..k
+      ask feed to fetch i and wait
+    end repeat
+  end wait
+  return it
+end fan

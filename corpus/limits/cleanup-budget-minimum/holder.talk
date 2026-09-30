@@ -1,0 +1,13 @@
+-- holder.talk: the cleanup-budget-minimum case. Grants come from case.toml:
+-- log: write. A Run waits, and is cancelled while it waits, so its `finally`
+-- block runs on the Cleanup Budget: k empty passes, then one write.
+
+on hold k
+  try
+    wait 1 min
+  finally
+    repeat k times
+    end repeat
+    tell log to write "cleaned " & k
+  end try
+end hold

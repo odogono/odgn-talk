@@ -1,0 +1,44 @@
+# fuel-exhaustion-point: the exact exhaustion point of Fuel per Run under Cost
+# Model 0. A Run may spend its limit exactly, and faults at the first
+# instruction whose whole charge would take it past, before that instruction
+# does anything. The fault rolls back the Segment's writes to `count`.
+#
+# The Fuel of `bump k` (counter.talk, `bun tools/machine/check.ts --dis`):
+#   dispatch, one clause tried                     clause         4
+#   0004 load k                                     slot           1
+#   0005 iterate-times                              iterate        2
+#   each pass: 0006 next 2, 0007 pop 1, 0008 const 1, 0009 store 1,
+#     0010 load-var 1, 0011 load 1, 0012 add 4 (3 + digits/8, with at most
+#     8 digits), 0013 store-var 2, 0014 jump 1                     14
+#   the end: 0006 next 2, 0015 pop 1, 0016 const 1, 0017 return 2   6
+# so 13 + 14k. With k = 70 that is 993, the limit, exactly.
+#
+# With k = 71: 4 + 1 + 2 + 14 * 70 = 987 before the 71st pass. Then next 989,
+# pop 990, const 991, store 992, load-var 993, and `load` at 0011 would make
+# 994. So the Run faults at counter:11, source 8:5, having spent 993.
+#
+# Pinned here: the fault's instruction and position, the rollback, and both
+# Runs' Fuel. Allocation and state figures are estimates (each `next` is
+# counted at the `iterate` rate's 24, as costs.toml gives it).
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load counter
+
+# 70 passes: 993 Fuel, exactly the limit, so the Run completes.
+> deliver d1 to=counter message=bump args=[70]
+> pump clock=2026-09-28T09:00:00Z
+seg counter/r1 start delivery=d1 handler=bump clause=1 fuel=993 alloc=2848 state=16 end=return
+run counter/r1 outcome=completed delivery=d1 handler=bump fuel=993 alloc=2848
+pumped state=idle fuel=993
+
+# 71 passes: the 71st pass faults at its `load`, and `count` goes back from
+# 140 to 70, its binding when the Segment began.
+> deliver d2 to=counter message=bump args=[71]
+> pump clock=2026-09-28T09:00:01Z
+fault counter/r2 limit=fuel at=counter:11 pos=8:5 rollback=[count]
+seg counter/r2 start delivery=d2 handler=bump clause=1 fuel=993 alloc=2848 state=16 end=fault
+run counter/r2 outcome=limit-fault delivery=d2 handler=bump limit=fuel fuel=993 alloc=2848
+pumped state=idle fuel=993
+
+> vars
+vars counter count=70

@@ -1,0 +1,10 @@
+-- knight.talk: the knight piece's Script, part of the pass-up-the-message-path
+-- case (ADR 0031). It vetoes only its own squares, and hands the rest of the
+-- Verdict up to the board with `pass`.
+
+script variable own = ["d4", "e5"]
+
+on beforeMove m, deciding
+  if the to of m is in own then veto "Your own piece is on that square."
+  pass beforeMove                  -- let the board have its say
+end beforeMove

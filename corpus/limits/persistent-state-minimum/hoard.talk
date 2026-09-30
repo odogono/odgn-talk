@@ -1,0 +1,25 @@
+-- hoard.talk: the persistent-state-minimum case. `big` is the Script's only
+-- Script Variable, so between Runs its Persistent State is size(big), that
+-- is 16 + the UTF-8 length of the text in it.
+
+script variable big = ""
+
+-- Builds 16 * (2^22 - 1) = 67108848 "x"s: `s` doubles from 16 Characters,
+-- and `acc` takes each size of `s` once.
+on fill
+  put "xxxxxxxxxxxxxxxx" into s
+  put "" into acc
+  repeat 22 times
+    put s after acc
+    put s after s
+  end repeat
+  put acc into big
+end fill
+
+on grow
+  put "x" after big
+end grow
+
+on clear
+  put "" into big
+end clear

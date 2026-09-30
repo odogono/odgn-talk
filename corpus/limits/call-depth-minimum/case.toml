@@ -1,0 +1,13 @@
+# call-depth-minimum: call depth at its conformance minimum, 1000 frames
+# (chapter 6, Limits; chapter 8, Calls).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "deep"
+source = "deep.talk"
+limits = { callDepth = 1000 }

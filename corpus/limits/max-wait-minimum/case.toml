@@ -1,0 +1,30 @@
+# max-wait-minimum: MaxWait at its conformance minimum, 2147483647 ms, times
+# out a suspending call to the millisecond on the virtual Clock (chapter 6,
+# Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+# Ordered by name within their Capability. `fetch` has no maxPending, so the
+# Script's MaxWait bounds it.
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+
+[[operations]]
+capability = "slow"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "text"
+
+[[scripts]]
+name = "waiter"
+source = "waiter.talk"
+grants = { log = { ops = ["write"] }, slow = { ops = ["fetch"] } }
+limits = { maxWaitMs = 2147483647 }

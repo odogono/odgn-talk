@@ -1,0 +1,19 @@
+-- maker.talk: the pattern-size-made-at-run-time case (spec chapter 6,
+-- Limits; chapter 8, Compiling). Loaded with patternSize = 50. `unit` is a
+-- literal of 30 instructions, so it loads. Splicing it compiles at run time,
+-- at `make-pattern`.
+
+script variable unit = <29 digits>
+script variable status = "idle"
+script variable made = nothing
+
+-- 1 + 29 + 1 = 31 instructions: made.
+on small
+  put <"x", (unit)> into made
+end small
+
+-- 29 + 29 + 1 = 59 instructions: over the limit, a Limit Fault.
+on big
+  put "started" into status
+  put <(unit), (unit)> into made
+end big

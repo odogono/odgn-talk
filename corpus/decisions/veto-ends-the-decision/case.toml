@@ -1,0 +1,36 @@
+# veto-ends-the-decision: a `veto` in the first `, deciding` clause seals the
+# Decision as vetoed, ends the Run as `completed` after its `finally`, and
+# ends the message, so the parent's Script never hears it (ADR 0031). Its
+# figures are estimates, so it isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "board"
+parentKinds = []
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "board"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "board" }
+
+[[scripts]]
+name = "knight"
+source = "knight.talk"
+owner = { kind = "piece", id = "knight" }

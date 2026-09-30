@@ -1,0 +1,21 @@
+-- keeper.talk: the rollback-after-suspension case (ADR 0006).
+
+script variable a = 0
+script variable b = 0
+script variable c = 0
+
+-- Its first Segment writes `a` and suspends. Its second writes `b` and `c`,
+-- then spins until its Fuel runs out.
+on first
+  put 1 into a
+  wait 1 s
+  put 2 into b
+  put 99 into c
+  repeat forever
+  end repeat
+end first
+
+-- Runs while `first` is suspended, between its two Segments.
+on second
+  put 5 into c
+end second

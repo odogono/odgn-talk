@@ -1,0 +1,29 @@
+-- seams.talk: the nfc-at-join-seams case. Every join or edit of text is
+-- normalised again, so a combining mark that lands next to a base at a seam
+-- composes with it (chapter 3, Text; chapter 4, Operators and Writing
+-- chunks).
+
+script variable tail
+script variable tailLength
+script variable joined
+script variable joinedLength
+script variable isComposed
+script variable cafe
+script variable cafeLength
+script variable edited
+script variable editedLength
+
+on go
+  put fromCodePoint(769) into acute                           -- U+0301
+  put acute & "x" into tail               -- a lone mark is a Character
+  put the length of tail into tailLength                      -- 2
+  put "e" & tail into joined              -- U+00E9, then x
+  put the length of joined into joinedLength                  -- 2
+  put joined = fromCodePoint(233) & "x" into isComposed       -- true
+  put "cafe" into cafe
+  put acute after cafe                    -- "café", composed
+  put the length of cafe into cafeLength                      -- 4
+  put "ez" into edited
+  put acute into character 2 of edited    -- e then U+0301: one Character
+  put the length of edited into editedLength                  -- 1
+end go

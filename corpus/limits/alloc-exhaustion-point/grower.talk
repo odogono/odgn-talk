@@ -1,0 +1,9 @@
+-- grower.talk: the alloc-exhaustion-point case. Each pass appends one
+-- Character to a local, and the append is the loop's only allocation.
+
+on grow
+  put "" into junk
+  repeat forever
+    put "x" after junk
+  end repeat
+end grow

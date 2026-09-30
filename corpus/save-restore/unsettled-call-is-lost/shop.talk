@@ -1,0 +1,19 @@
+-- shop.talk: part of the unsettled-call-is-lost case.
+-- Grants come from case.toml: stock: check (suspending, with a maxPending
+-- of 10 s, and pending when the Group is saved)
+
+script variable results = []
+
+on check sku
+  try
+    ask stock to check sku and wait
+    put [sku, it] after results
+  catch {code: c}
+    put [sku, c] after results
+  end try
+end check
+
+on nap
+  wait 5 s
+  put ["nap", "woke"] after results
+end nap

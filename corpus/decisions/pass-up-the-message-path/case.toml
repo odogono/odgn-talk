@@ -1,0 +1,41 @@
+# pass-up-the-message-path: `pass` in a `, deciding` clause hands the open
+# Verdict up the Message Path, and the parent object's Script holds it
+# (ADR 0016, ADR 0031). Its figures are estimates, so it isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "board"
+parentKinds = []
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "board"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+# The pawn has no Owning Script, so a Decision addressed to it goes straight
+# to its nearest ancestor that has one.
+[[objects]]
+kind = "piece"
+id = "pawn"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "board" }
+
+[[scripts]]
+name = "knight"
+source = "knight.talk"
+owner = { kind = "piece", id = "knight" }

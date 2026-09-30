@@ -1,0 +1,8 @@
+-- board.talk: the board's Script, the knight's parent on the Message Path.
+-- In this case it never hears a move, since a veto ends the Decision.
+
+script variable asked = 0
+
+on beforeMove m, deciding
+  add 1 to asked
+end beforeMove

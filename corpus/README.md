@@ -1,0 +1,37 @@
+# The Conformance Corpus
+
+The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). Their formats are in [chapter 11](../spec/11-the-trace-and-conformance.md) of the Spec.
+
+| Directory | What its cases pin |
+| --- | --- |
+| [`examples/`](examples/) | worked examples of the format |
+| [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, and overdue `wait`s after a restore ([chapter 10](../spec/10-save-and-restore.md)) |
+| [`limits/`](limits/) | exhaustion points, Segment rollback, virtual-Clock deadlines, and each counted limit at its conformance minimum ([chapter 6](../spec/06-errors-and-limits.md)) |
+| [`text-patterns/`](text-patterns/) | successive searches past empty matches, leftmost-first `or`, greedy defaults, matching Fuel, and pattern size and repetition limits ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs)) |
+| [`text-model/`](text-model/) | whole-Character boundaries, NFC at join seams, `word` and `word break` on punctuation, chunk padding on writes, and out-of-range reads ([chapter 3](../spec/03-values.md)) |
+| [`decisions/`](decisions/) | Decisions and their Verdicts ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
+
+## The seed cases are unblessed
+
+No Core exists yet, so no case here has been blessed. Each `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
+
+```text
+# Unblessed: the output lines are written by hand, not by bless.
+```
+
+- **What a case pins** (its records, their order, its ids, values, error codes, instructions and source positions) is worked out from the Spec, and is what a Core is checked against.
+- **Fuel, allocation and Persistent State figures** are estimates, except where a case says in a comment that it pins one and shows how it is worked out from Cost Model 0.
+- **Code identities** are left out of `load` and `add-library` lines, which an author may do, and bless fills them in.
+- **Instruction indices** in `at=` come from `bun tools/machine/check.ts --dis <file>`, which isn't normative. Blessing checks them against a Core.
+
+A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
+
+## Checking
+
+```sh
+bun run corpus:check          # what CI runs: every case reads as chapter 11 says
+bun run grammar:check         # every .talk file here parses
+bun run machine:check         # and lowers
+```
+
+[`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

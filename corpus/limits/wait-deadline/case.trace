@@ -1,0 +1,36 @@
+# wait-deadline: `wait d` sets its deadline to the Clock reading of the Pump
+# it ran in, plus d. It fires at the first later Pump whose reading is at or
+# past the deadline: not before it, exactly at it, and late past it. A Pump
+# that fires nothing still reports the next deadline in `next`. The second
+# wait's deadline counts from the Pump it ran in, not from the first
+# deadline, so a late Pump pushes it on.
+#
+# Fuel (napper.talk): the first Segment is dispatch 4, const 1, wait 10; the
+# second const 1, wait 10; the third const 1, return 2. Allocation and state
+# figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load napper
+
+> deliver d1 to=napper message=nap
+> pump clock=2026-09-28T09:00:00Z
+seg napper/r1 start delivery=d1 handler=nap clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-28T09:00:02Z
+pumped state=idle fuel=15 next=2026-09-28T09:00:02Z
+
+# Before the deadline: nothing fires, and nothing runs.
+> pump clock=2026-09-28T09:00:01.999Z
+pumped state=idle fuel=0 next=2026-09-28T09:00:02Z
+
+# At the deadline: it fires. The second wait counts from this reading.
+> pump clock=2026-09-28T09:00:02Z
+seg napper/r1 resume fuel=11 alloc=0 state=176 end=wait until=2026-09-28T09:00:04Z
+pumped state=idle fuel=11 next=2026-09-28T09:00:04Z
+
+# Past the deadline: a late Pump fires it too.
+> pump clock=2026-09-28T09:00:10Z
+seg napper/r1 resume fuel=3 alloc=0 state=0 end=return
+run napper/r1 outcome=completed delivery=d1 handler=nap value="woke" fuel=29 alloc=0
+pumped state=idle fuel=3
+
+> vars
+vars napper

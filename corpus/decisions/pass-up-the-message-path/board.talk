@@ -1,0 +1,11 @@
+-- board.talk: the board's Script, the parent of every piece on the Message
+-- Path. It holds the Verdict a piece passes up, and the Verdict of a piece
+-- with no Script of its own.
+
+script variable blocked = ["f6"]
+script variable allowed = 0
+
+on beforeMove m, deciding
+  if the to of m is in blocked then veto "That square is blocked."
+  add 1 to allowed                 -- ending without a veto allows
+end beforeMove

@@ -1,0 +1,17 @@
+# chunk-read-out-of-range: pins that reading text out of range gives empty
+# text and never raises: past the end, at index 0, before the start and over
+# a reversed range (chapter 4, Reading). A range that runs past the end gives
+# the Characters it does cover. A list read out of range gives Nothing for
+# one item and an empty list for a range. No `raise` record is written.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load reads
+> deliver d1 to=reads message=go
+> pump clock=2026-09-30T09:00:00Z
+seg reads/r1 start delivery=d1 handler=go clause=1 fuel=96 alloc=48 state=84 end=return
+run reads/r1 outcome=completed delivery=d1 handler=go fuel=96 alloc=48
+pumped state=idle fuel=96
+
+> vars
+vars reads pastEnd="" wordZero="" itemPastEnd="" beforeStart="" reversed="" overhang="bc" wholeRangePast="" listPastEnd=nothing listRangePast=[]

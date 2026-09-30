@@ -1,0 +1,12 @@
+-- waiter.talk: the max-wait-minimum case. Grants come from case.toml:
+-- slow: fetch (suspending, with no maxPending of its own), log: write
+
+on fetch key
+  try
+    ask slow to fetch key and wait
+  catch {code: "timeout", after: a}
+    tell log to write "gave up after " & a
+    return "timed out"
+  end try
+  return it
+end fetch
