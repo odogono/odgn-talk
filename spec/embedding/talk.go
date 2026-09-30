@@ -114,8 +114,8 @@ func Bool(b bool) Value
 func Text(s string) (Value, error) // invalid UTF-8 is refused; NFC is applied, uncharged
 func Int(i int64) Value
 func Uint(u uint64) Value
-func FromFloat(f float64) (Value, error)             // shortest round-trip digits; NaN and ±Inf are refused; -0.0 enters as 0
-func Dec(s string) (Value, error)                    // the `as number` grammar; more than 34 significant digits is refused
+func FromFloat(f float64) (Value, error)             // shortest round-trip digits; NaN, ±Inf and |f| >= 1e34 are refused; -0.0 enters as 0
+func Dec(s string) (Value, error)                    // the `as number` grammar; more than 34 significant digits or |n| >= 1e34 is refused
 func Quantity(n Decimal, unit string) (Value, error) // unit as spelled in a Script ("kg", "GBP"); normalised (ADR 0022)
 func CivilDate(f DateFields) (Value, error)
 func ParseCivilDate(s string) (Value, error) // the `as civil date` grammar
@@ -123,6 +123,10 @@ func Instant(seconds int64, nanos int32) (Value, error)
 func InstantFromTime(t time.Time) Value // drops the monotonic reading and the zone
 func Bytes(b []byte) Value              // copied in
 func List(vs ...Value) Value
+
+// Range builds a range from two numbers, or two Quantities of one dimension,
+// kept as given (ADR 0034). Any other pair is refused.
+func Range(from, to Value) (Value, error)
 
 // Map builds a map from pairs, in the order given. A duplicate key, compared
 // after NFC, is refused.
@@ -153,6 +157,7 @@ const (
 	KindBytes
 	KindList
 	KindMap
+	KindRange
 	KindInstant
 	KindCivilDate
 	KindPattern
@@ -169,6 +174,7 @@ func (v Value) AsCivilDate() (DateFields, bool)
 func (v Value) AsInstant() (seconds int64, nanos int32, ok bool)
 func (v Value) AsBytes() ([]byte, bool) // a copy
 func (v Value) AsObject() (*Object, bool)
+func (v Value) AsRange() (from, to Value, ok bool)
 func (v Value) Len() int          // list length; 0 for anything else
 func (v Value) Index(i int) Value // 1-based; Nothing past the end
 func (v Value) Get(key string) Value
@@ -230,6 +236,7 @@ var (
 	TextShape      Shape
 	BytesShape     Shape
 	InstantShape   Shape
+	RangeShape     Shape
 	CivilDateShape Shape
 	PatternShape   Shape
 	FunctionShape  Shape // a Function Value; any data Shape refuses one with `not encodable`

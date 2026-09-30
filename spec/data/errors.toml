@@ -70,8 +70,8 @@ message = "Expected {expected}, but got {got}: {value}"
 code = "can't convert"
 fields = ["value", "to"]
 optional = ["format", "offset"]
-raised_when = "A conversion fails, e.g. `\"lots\" as number` or a bad `as` target, or a parse such as `parseDate` doesn't match; a parse adds `offset`, and `parseDate` adds its template as `format`"
-sources = ["ADR 0017", "ADR 0021", "ADR 0022", "ADR 0023", "ADR 0024", "ADR 0033"]
+raised_when = "A conversion fails, e.g. `\"lots\" as number` or a bad `as` target, a parse such as `parseDate` doesn't match, or a spliced Text Pattern clashes with the one it is spliced into; a parse adds `offset`, and `parseDate` adds its template as `format`"
+sources = ["ADR 0017", "ADR 0021", "ADR 0022", "ADR 0023", "ADR 0024", "ADR 0033", "#89"]
 message = "Can't convert {value} to {to}"
 
 [[error]]
@@ -91,15 +91,15 @@ message = "Division by zero"
 [[error]]
 code = "overflow"
 fields = ["operator"]
-raised_when = "An arithmetic result's exponent is outside the decimal range; `operator` is the operator or function, e.g. `\"*\"` or `\"exp\"`"
-sources = ["ADR 0002", "ADR 0033"]
-message = "The result of {operator} is outside the decimal range"
+raised_when = "An arithmetic result is 10^34 or more in magnitude; `operator` is the operator or function, e.g. `\"*\"` or `\"exp\"`"
+sources = ["ADR 0002", "ADR 0033", "ADR 0034"]
+message = "The result of {operator} is too large"
 
 [[error]]
 code = "incompatible units"
 fields = ["left", "right"]
-raised_when = "An operation combines Quantities of different dimensions or Unit Kinds, e.g. `1 month + 1 day`, or adds to a date-only value an exact duration that isn't a whole number of days; the fields are the two Units' display forms"
-sources = ["ADR 0022", "ADR 0023", "ADR 0033"]
+raised_when = "An operation combines Quantities of different dimensions or Unit Kinds, e.g. `1 month + 1 day` or a range from `1 m` to `2 kg`, adds a calendar duration to an Instant, or adds to a date-only value an exact duration that isn't a whole number of days, or to a Civil Date a calendar duration that isn't a whole number of months; the fields are the two Units' display forms"
+sources = ["ADR 0022", "ADR 0023", "ADR 0033", "ADR 0034", "#89"]
 message = "Can't combine {left} with {right}"
 
 [[error]]
@@ -155,8 +155,8 @@ message = "{value} is outside the domain of {function}"
 [[error]]
 code = "out of range"
 fields = ["field", "value"]
-raised_when = "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character` or `word` write past the end, at index 0 or over a reversed range, or a Binary Pattern build value too large for its segment"
-sources = ["ADR 0011", "ADR 0013", "ADR 0023", "ADR 0033"]
+raised_when = "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, or a Binary Pattern build value too large for its segment"
+sources = ["ADR 0011", "ADR 0013", "ADR 0023", "ADR 0033", "#89"]
 message = "{value} is out of range for {field}"
 
 [[error]]

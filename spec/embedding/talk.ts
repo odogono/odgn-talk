@@ -82,6 +82,7 @@ export declare class Value {
   asInstant(): bigint | undefined; // epoch nanoseconds
   asBytes(): Uint8Array | undefined; // a copy
   asObject(): HostObject | undefined;
+  asRange(): { from: Value; to: Value } | undefined;
   readonly length: number; // list length; 0 for anything else
   index(i: number): Value; // 1-based; nothing past the end
   get(key: string): Value;
@@ -99,7 +100,7 @@ export declare class Value {
 
 export type Kind =
   | "nothing" | "boolean" | "number" | "quantity" | "text" | "bytes"
-  | "list" | "map" | "instant" | "civil date" | "pattern" | "function" | "object";
+  | "list" | "map" | "range" | "instant" | "civil date" | "pattern" | "function" | "object";
 
 export declare class Decimal {
   toString(): string;                  // canonical, trailing zeros kept
@@ -115,13 +116,15 @@ export interface DateFields {
 export declare const nothing: Value;
 export declare function bool(b: boolean): Value;
 export declare function text(s: string): Value;    // a lone surrogate throws; NFC applied, uncharged
-export declare function num(n: number | bigint): Value; // shortest round-trip; NaN, ±Infinity, >34 digits throw
+export declare function num(n: number | bigint): Value; // shortest round-trip; NaN, ±Infinity, >34 digits, |n| >= 1e34 throw
 export declare function dec(s: string): Value;     // the `as number` grammar
 export declare function quantity(n: Decimal, unit: string): Value;
 export declare function civilDate(f: DateFields | string): Value; // fields, or the `as civil date` grammar
 export declare function instant(epochNanos: bigint): Value;       // JS Date is never accepted
 export declare function bytes(b: Uint8Array): Value;              // copied in
 export declare function list(...vs: Value[]): Value;
+/** Two numbers, or two Quantities of one dimension, kept as given (ADR 0034). */
+export declare function range(from: Value, to: Value): Value;
 /** Insertion order. A duplicate key after NFC throws. */
 export declare function map(m: Map<string, Value> | Iterable<[string, Value]>): Value;
 /** Literal records in Host code. Throws on integer-like keys, which JS reorders. */
@@ -148,7 +151,7 @@ export type FieldShape = Shape | { shape: Shape; optional: true };
 
 export declare const shape: {
   any: Shape; nothing: Shape; bool: Shape; number: Shape; text: Shape;
-  bytes: Shape; instant: Shape; civilDate: Shape; pattern: Shape;
+  bytes: Shape; instant: Shape; civilDate: Shape; range: Shape; pattern: Shape;
   function: Shape; // a Function Value; any data Shape refuses one with `not encodable`
   quantityOf(unit: string): Shape;
   quantityKind(kind: string): Shape;

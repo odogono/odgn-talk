@@ -224,7 +224,7 @@ on unitsTour
   -- `5 kg + 3` and `5 kg + 2 m` are errors.
   put 2 m * 3 ft into area          -- 1.8288 m^2, in the left operand's Units
   put 4 yd / 2 ft into ratio        -- 6: no Units left, a plain number
-  put 100 EUR * 1.1 USD/EUR into price   -- 110 USD: rates are values
+  put 100 EUR * 1.1 USD/EUR into price   -- 110.0 USD: rates are values
   put 9 degF as degC into warmer    -- 5: temperatures are differences
 
   -- Exact durations: ms, s, min, hr, day, week. Calendar Units: month, year.
