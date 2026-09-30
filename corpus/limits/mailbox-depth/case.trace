@@ -1,9 +1,10 @@
 # mailbox-depth: `sink` loads with a mailbox depth of 2. `sender` sends it
 # three messages in one Segment, so `sink` takes no turn in between: the
 # first two wait in its mailbox, and the third finds it full and raises
-# `mailbox full` at the `send` (sender:10, source 8:7). Nothing is sent, so
-# no `send` record is written for it. The `catch` logs it, and `sink` then
-# handles the two that arrived, in order.
+# `mailbox full` at the `send` (sender:10, source 11:7). Nothing is sent, so
+# no `send` record is written for it. The `catch` keeps its `to`, which is
+# the receiver's name as text, since a Script isn't a value, and logs it.
+# `sink` then handles the two that arrived, in order.
 #
 # The conformance minimum, 10000, isn't exercised directly: every message a
 # Script sends is a `send` record, so filling a mailbox of 10000 would take
@@ -18,9 +19,9 @@
 > pump clock=2026-09-28T09:00:00Z
 send sender/r1 to=sink message=note args=[1]
 send sender/r1 to=sink message=note args=[2]
-raise sender/r1 code="mailbox full" at=sender:10 pos=8:7
+raise sender/r1 code="mailbox full" at=sender:10 pos=11:7
 call sender/r1.c1 op=log.write args=["full at 3"]
-seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=141 alloc=282 state=0 end=return
+seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=141 alloc=282 state=72 end=return
 run sender/r1 outcome=completed delivery=d1 handler=flood fuel=141 alloc=282
 # `sink` has its turns once `sender` has none left, loaded order first.
 seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=12 alloc=24 state=88 end=return
@@ -30,5 +31,5 @@ run sink/r2 outcome=completed handler=note fuel=12 alloc=24
 pumped state=idle fuel=165
 
 > vars
-vars sender
+vars sender fullTo="sink"
 vars sink got=[1, 2]

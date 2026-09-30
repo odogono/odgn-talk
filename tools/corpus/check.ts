@@ -343,6 +343,29 @@ function checkTrace(dir: string, scripts: Set<string>, libraries: Set<string>) {
     problems.push(`${where}: ends with vars for ${tail.join(", ") || "nothing"}, not for ${loadedOnce.join(", ")} in load order`);
 }
 
+// Each line of a case.encoding pairs a value in the display form with the
+// JSON bytes of its Value Encoding (trace.ebnf's EncodingLine).
+function checkEncoding(dir: string) {
+  const where = relative(ROOT, join(dir, "case.encoding"));
+  const text = readFileSync(join(dir, "case.encoding"), "utf8");
+  if (!text.endsWith("\n")) problems.push(`${where}: doesn't end with a line break`);
+  const lines = text.split("\n");
+  lines.pop();
+  lines.forEach((line, n) => {
+    const at = `${where}:${n + 1}`;
+    if (line === "" || line.startsWith("#")) return;
+    try {
+      const r = new Reader(line);
+      r.value();
+      r.eat(" => ");
+      JSON.parse(line.slice(r.i));
+    } catch (e) {
+      if (!(e instanceof Bad) && !(e instanceof SyntaxError)) throw e;
+      problems.push(`${at}: ${e.message}: ${line}`);
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Checking case.toml
 // ---------------------------------------------------------------------------
@@ -396,6 +419,10 @@ function checkCase(dir: string) {
     else checkTrace(dir, scripts, libraries);
   }
   if (setup.kind === "transcript" && !existsSync(join(dir, "session.transcript"))) problems.push(`${where}: session.transcript is missing`);
+  if (setup.kind === "encoding") {
+    if (!existsSync(join(dir, "case.encoding"))) problems.push(`${where}: case.encoding is missing`);
+    else checkEncoding(dir);
+  }
 }
 
 function cases(dir: string): string[] {

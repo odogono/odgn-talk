@@ -1,0 +1,6 @@
+-- shop.talk: the fail-error-map case. Grants come from case.toml: stock:
+-- check (suspending). Nothing catches the failure, so the Run errors.
+
+on check sku
+  ask stock to check sku and wait
+end check

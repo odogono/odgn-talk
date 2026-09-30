@@ -2,8 +2,9 @@
 # Host's side it can't get back.
 #
 # - A Grant the Host's `Grants` function doesn't return (`unbound`) restores
-#   as revoked. It still binds its name, so lamp still loads and the restore
-#   is full, but a call through it raises `capability revoked` at the `tell`
+#   as revoked. It still binds its name, so lamp still loads, and it counts
+#   in the Group Fingerprint with its saved declarations, so the restore is
+#   full. But a call through it raises `capability revoked` at the `tell`
 #   (lamp:5, pos 9:5). The call never reaches a Host function, so it has no
 #   call id and no `call` record.
 # - A Host Object the Host's `Resolve` function refuses restores as disposed,

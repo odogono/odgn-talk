@@ -1,9 +1,11 @@
 # variables-only-restore: pins a variables-only restore.
 #
-# - The mismatch: the save holds fmt's old code identity. Once fmt is
-#   replaced, the runner gives the restore only the Libraries the Host now
-#   holds, so a Library the save needs isn't given, and with
-#   `mismatch=variables-only` the restore is variables-only, not refused.
+# - The mismatch: the save holds fmt's old code identity. The runner passes
+#   the version of each Library it compiled last, which after the
+#   `replace-library` is the new fmt, so a Library the save needs isn't
+#   given, and with `mismatch=variables-only` the restore is variables-only,
+#   not refused. `save-restore/withheld-library` sets up a mismatch without a
+#   `replace-library`.
 # - Discarded and reported in the `restore` line, as a `stop` report's are:
 #   the suspended Run shop/r1 in `discarded`, the Delivery d2 still in the
 #   mailbox in `dropped`, and shop/r1's pending call in `abandoned`. Nothing

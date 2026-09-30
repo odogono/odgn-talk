@@ -1,0 +1,22 @@
+# fail-error-map: the whole error map a Host `Fail` raises, and its key order
+# (spec chapter 6, Errors and "Errors from Capabilities").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "check"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 100 }
+errors = [{ code = "out of stock", fields = [{ key = "left", shape = "number" }, { key = "due", shape = "text", optional = true }] }]
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { stock = { ops = ["check"] } }

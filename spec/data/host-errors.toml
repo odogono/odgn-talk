@@ -61,7 +61,7 @@ raised_when = "A save's versions, Libraries or Grants don't match, and the Host'
 
 [[error]]
 code = "unknown call"
-raised_when = "`Settle` names a call id that isn't pending, one already settled, or comes after the first Pump"
+raised_when = "`Settle` names a call id that isn't pending or one already settled, or is made once the first Pump has started"
 
 [[error]]
 code = "state too large"

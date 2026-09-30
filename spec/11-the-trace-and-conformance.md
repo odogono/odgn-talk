@@ -31,7 +31,8 @@ Text literals have no escapes ([ADR 0029](../docs/adr/0029-text-literals-have-no
 - **A `"`** is `quote`, **an LF** is `newline`, and **a tab** is `tab`.
 - **Hidden code points** are `fromCodePoint(n)`, with `n` in decimal: U+0000 to U+001F other than LF and tab, U+007F to U+009F, U+061C, U+200E, U+200F, U+2028 to U+202E, U+2066 to U+2069 and U+FEFF. So a Trace line never breaks, and no bidirectional control reorders it.
 - **Empty text** is `""`.
-- **Pieces are split at code points,** not Characters, and reading joins them the same way. Joining pieces of an NFC text gives that text back, so reading changes nothing. Text an author writes in a Trace is read as NFC, as a Host's is ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)).
+- **Pieces are split at code points,** not Characters, and reading joins them the same way. Joining pieces of an NFC text gives that text back, so reading changes nothing.
+- **Reading gives code points,** as written. A runner builds the value through the Host's constructors, which normalise text to NFC, as they do a Host's ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)). So a Trace Case writes its Host texts in NFC, since the Core writes each Host Input back in the display form of the value it built, and a [Value Encoding case](#value-encoding-cases) is where a text that isn't NFC is shown being normalised.
 
 > **Example.** `"say " & quote & "hi" & quote`, `"a" & newline & "b"`, `"C:\new"` and `fromCodePoint(13) & newline`.
 
@@ -214,7 +215,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `set-parent` |  | `object`, `parent` | sets a Host Object's parent |
 | `dispose` |  | `object` | disposes a Host Object |
 | `save` | `save` |  | saves the Group |
-| `restore` |  | `from`\*, `mismatch`?, `unbound`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
+| `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
 
 <!-- end -->
@@ -278,6 +279,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `restore` | `from` | `id` | the save it restores |
 | `restore` | `mismatch` | `word` | the Host's policy for a mismatch, when it isn't to reject: `variables-only` |
 | `restore` | `unbound` | `ids` | the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked |
+| `restore` | `withheld` | `ids` | the Libraries the Host doesn't pass, by name, so a save that needs one is a mismatch |
 | `restore` | `fingerprint` | `hex` | the save's Group Fingerprint |
 | `restore` | `mode` | `word` | the kind of restore: `full`, `variables-only` |
 | `restore` | `pending` | `ids` | the pending calls, for the Host to settle |
@@ -290,6 +292,7 @@ A record is written when what it records happens, so a Trace is in the order the
 
 - **Sources:** `load` and `add-library` take their source and options from `case.toml`, and the Core writes the code identity, so a replay can check it has the same source. `reload`, `extend` and `replace-library` carry their source, since a setup can't know it in advance. The stdlib Libraries need neither a `[[libraries]]` entry nor an `add-library` line.
 - **`restore`** restores the save named by `from`, or else the latest one. The Host's side of it is in the line: `mismatch`, `unbound` and `disposed` are what the runner passes as its policy, leaves out of its `Grants` function and refuses in its `Resolve` function ([chapter 10](10-save-and-restore.md#restoring)).
+- **The Libraries a restore is passed:** for each Library name, the runner passes the version it compiled last, from `case.toml` or the latest `replace-library`, except the ones `withheld` names. So a restore after a `replace-library` isn't given the replaced version, and a `withheld` Library the save needs is a mismatch too.
 - **Answers to Standard Capabilities** come as Stubs or `answer` lines, like any other Capability's. `clock`'s `now` needs neither, since its answer is the Pump's Clock reading.
 - **`vars`** is `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)).
 
@@ -575,8 +578,8 @@ Every Trace Case is also run a second way, to check that save then restore is un
 
 - **Between each pair of Pumps,** after each `pumped` record, the runner saves the Group and restores it, on the same Core, with a `RejectMismatch` policy, every Grant re-bound and every Host Object resolved. It settles each pending call by adopting it, and goes on replaying into the restored Group.
 - **The same Trace:** the Trace must equal the case's, once the `save`, `restore` and adopting `settle` lines are left out.
-- **Futures don't survive:** a Host-held Function Value, and the context or signal that cancels a Delivery, belong to the old Group. So the runner skips the save and restore at any point where a later `call-value` or `cancel-delivery` line needs one made before it.
-- **Hand-written cases** cover what this can't reach: settling by answer, fail and reissue, variables-only restores, and restoring with Grants or Host Objects the Host no longer has ([chapter 10](10-save-and-restore.md)).
+- **Futures don't survive:** a Host-held Function Value, the context or signal that cancels a Delivery, and the `Call` of a call that isn't pending, belong to the old Group ([chapter 9](09-embedding.md#capabilities)). So the runner skips the save and restore at any point where a later `call-value`, `cancel-delivery`, `answer` or `fail` line needs one made before it, such as an `answer` to a call that had already timed out.
+- **Hand-written cases** cover what this can't reach: settling by answer, fail and reissue, variables-only restores, and restoring with Grants, Libraries or Host Objects the Host no longer has ([chapter 10](10-save-and-restore.md)).
 
 ## Other case kinds
 
@@ -602,7 +605,7 @@ EncodingLine   ::= Value ' => ' [^#xA]+ | '#' [^#xA]* | ''
 
 <!-- end -->
 
-- **The runner** reads each value, encodes it with `EncodeValue`, and compares the bytes.
+- **The runner** reads each value, builds it through the Host's constructors, encodes it with `EncodeValue`, and compares the bytes. So a text that isn't NFC is normalised as a Host's is, and a case shows it by its NFC bytes.
 - **Function Values** are left out, since Host storage refuses them.
 
 > **Example.**
