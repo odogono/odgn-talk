@@ -224,14 +224,14 @@ name = "toFloat64"
 group = "floats"
 call = "toFloat64(n, order = \"big\")"
 gives = "The 8 Bytes of the binary64 float nearest `n`, ties to even"
-errors = ["out of domain", "can't convert"]
+errors = ["out of domain"]
 
 [[builtin]]
 name = "toFloat32"
 group = "floats"
 call = "toFloat32(n, order = \"big\")"
 gives = "The 4 Bytes of the binary32 float nearest `n`, ties to even"
-errors = ["out of domain", "can't convert"]
+errors = ["out of domain"]
 
 [[builtin]]
 name = "year"

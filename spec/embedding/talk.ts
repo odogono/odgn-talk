@@ -105,7 +105,7 @@ export type Kind =
 export declare class Decimal {
   toString(): string;                  // canonical, trailing zeros kept
   toBigInt(): bigint;                  // throws unless an integer
-  toNumberLossy(): number;             // nearest, ties to even; too large throws
+  toNumberLossy(): number;             // nearest, ties to even; every number fits (ADR 0034)
 }
 
 export interface DateFields {

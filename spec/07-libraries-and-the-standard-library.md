@@ -1,6 +1,6 @@
 # 7. Libraries and the Standard Library
 
-_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md).
+_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md).
 
 Scripts share code through Libraries: stateless units of source that the Host registers on a Script Group, and whose code runs in the caller's Run. The Standard Library is two tiers. The Built-ins are a small set of functions and Constants that the Cores implement natively and that are always available. The seven stdlib Libraries are written in the language and imported like any other Library. The Standard Capabilities are Capabilities whose Operation Declarations this chapter fixes, and whose answers each Host supplies.
 
@@ -60,10 +60,8 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 
 ### Names and clashes
 
-- **Clashes are load errors.** An imported name, after any rename, that clashes with a local Handler, function, Constant, Script Variable, well-known object name or Built-in function is a load error, and so are two Imports of the same name.
-- **Built-in functions** can't be redefined: a Script or Library that defines a Handler, function or Constant with a Built-in function's name gets a load error.
-- **Built-in Constants** may be shadowed. A Script's own variable, parameter, Capture or Constant may take the name of a Built-in Constant, and the Script's name wins inside it ([ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md)).
-- **Variables and functions:** a name that is both a variable and a function in the same scope is a load error ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).
+- **Clashes are load errors.** An imported name, after any rename, that clashes with a local Handler, function, Constant, Script Variable or well-known object name is a load error, and so are two Imports of the same name.
+- **Built-ins may be shadowed.** An Import, or a Script's or Library's own Handler, function or Constant, may take the name of a Built-in function or Built-in Constant, and the Script's name wins inside it. So a Built-in added in a later language version never stops a Script or Library from loading ([ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)). How the other names of a body resolve, and which of them may shadow a Built-in, is in [chapter 4](04-expressions-and-statements.md#resolving-a-name).
 - **Resolution:** a Command Call resolves to a local Handler, then an imported one, and only then climbs the Message Path ([chapter 5](05-handlers-messages-and-scheduling.md#calling-a-handler-by-name)). Since clashes are errors, the order never breaks a tie.
 - **Never entry points:** an imported Handler never runs for a message, and a Library never joins a Message Path.
 
@@ -113,7 +111,8 @@ These hold for every Built-in function and every stdlib export, unless its own e
 
 - **Kinds:** an argument of the wrong kind raises `wrong kind`, with `{expected, got, value}`, before any work is done. The tables below don't list it.
 - **Out of domain:** an argument of the right kind that the function can't take raises `out of domain`, with `function` its name and `value` the argument. Where two arguments are at fault together, `value` is the list of both.
-- **Integers:** a count, width or position must be an integer, and one that isn't raises `out of domain`.
+- **Integers:** a count, width or position must be an integer, and a number that isn't raises `wrong kind` with `expected` `"integer"`, as everywhere ([chapter 3](03-values.md#integers)). An integer outside what the function takes, such as a negative width, raises `out of domain`.
+- **Lists:** an argument that must be a list takes a list only. An integer range isn't one, so a Script passes `the items of r`.
 - **Positions** are 1-based Character positions, as everywhere in text ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)).
 - **White space** is a Character whose first scalar has the Unicode White_Space property, the same test that divides `word`s.
 - **Text out** is always NFC.
@@ -130,18 +129,13 @@ These hold for every Built-in function and every stdlib export, unless its own e
 
 - **What qualifies:** a function is a Built-in only if it can't be written in the language, because it needs the pinned Unicode tables, the Text Pattern engine, decimal internals or the representation of a value kind, or if a Guard must be able to call it. Speed alone never makes a function built in ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)).
 - **Ambient:** every Built-in is available without an Import.
-- **Guards** may call every Built-in, and no other function ([chapter 5](05-handlers-messages-and-scheduling.md#handlers-and-dispatch)).
+- **Guards** may call every Built-in, and no other function ([chapter 5](05-handlers-messages-and-scheduling.md#handlers-and-dispatch)). A call through a name that shadows a Built-in isn't a call to the Built-in, so a Guard can't make it ([chapter 4](04-expressions-and-statements.md#guards)).
 - **Leaves:** a Built-in never suspends, never calls a Capability and never calls Script code. Each call is one instruction, charged by its Cost Model entry: a static base plus per-unit terms over its operands and result ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)).
 - **Unicode:** the pinned Unicode tables are reached only through Built-ins, chunks, Text Pattern classes and `ignoring case`. There is no raw property lookup.
 
 ### Properties
 
-The Built-in properties are read with `the <name> of x`, and their names are listed in [chapter 2](02-grammar.md#operands). They apply to these kinds, and any other kind raises `wrong kind`:
-
-- **`length`:** of text, its number of Characters. Of a list, its number of items. Of a map, its number of entries. Of Bytes, its number of bytes.
-- **`keys` and `values`:** of a map, the list of its keys, or of its values, in the map's order.
-- **`characters`, `words`, `lines`, `items` and `code points`:** of text, the list of its chunks of that kind, each as text, split as [chapter 4](04-expressions-and-statements.md) says for chunks. `delimited by` applies to `items` and `lines`.
-- **`bytes`:** of Bytes, the list of its bytes, each a number from 0 to 255.
+The Built-in properties are read with `the <name> of x`. Their names are listed in [chapter 2](02-grammar.md#operands), and what each gives, and of which kinds, is in [chapter 4](04-expressions-and-statements.md#keys-and-properties).
 
 ### Values
 
@@ -160,7 +154,7 @@ The Built-in properties are read with `the <name> of x`, and their names are lis
 
 <!-- end -->
 
-- **`min` and `max`** compare with `<`, so they take numbers, Quantities of one dimension, texts in code-point order, or lists ([ADR 0003](../docs/adr/0003-no-implicit-coercion.md)). The result is the item itself, with its own Unit. An empty list raises `out of domain`, and two items that can't be compared raise `can't compare`.
+- **`min` and `max`** compare with `<`, so they take any items that `<` orders against each other ([chapter 3](03-values.md#ordering)). The result is the item itself, with its own Unit. An empty list raises `out of domain`, and two items that can't be compared raise `can't compare`.
 - **`codePoint(c)`** takes a text of exactly one code point. Any other text raises `out of domain`.
 - **`fromCodePoint(n)`** takes an integer from 0 to 1114111 that isn't a surrogate (55296 to 57343). Anything else raises `out of domain`. The result is normalised to NFC, so a few code points come back as a different one.
 - **`upper` and `lower`** use Unicode full default case mapping, with no Locale, so the length can change (`upper("ß")` is `"SS"`). Locale case mapping is the `locale` Capability's ([below](#standard-capabilities)).
@@ -199,9 +193,9 @@ The Built-in properties are read with `the <name> of x`, and their names are lis
   - `places` is an integer, 0 or more, and the result has exactly that many digits after the point, so `round(3, 2)` is `3.00`.
   - `mode` is one of `"half up"`, `"half even"`, `"up"`, `"down"`, `"floor"` and `"ceiling"`, and any other text raises `out of domain`. The names are those of the General Decimal Arithmetic: `"half up"` rounds a tie away from zero, `"up"` rounds away from zero and `"down"` toward it.
   - So by default `round(2.5)` is `3` and `round(-2.5)` is `-3`, while `round(2.5, 0, "half even")` is `2`.
-- **Correctly rounded:** `sqrt`, `exp`, `ln`, `log10`, `power` and the trigonometric functions give the exact mathematical value rounded half-even to 34 significant digits, then with any trailing zeros after the point dropped. So both Cores agree by definition, and `sqrt(4)` is `2` and `exp(0)` is `1`.
+- **Correctly rounded:** `sqrt`, `exp`, `ln`, `log10`, `power` and the trigonometric functions give the exact mathematical value rounded half-even to 34 significant digits, or at exponent −6176 if that keeps fewer digits, then with any trailing zeros after the point dropped ([chapter 3](03-values.md#arithmetic)). So both Cores agree by definition, and `sqrt(4)` is `2` and `exp(0)` is `1`. The one exception is `power(x, y)` for an integer `y`, which is `x ^ y`, so `power(2.50, 2)` is `6.2500`.
 - **Domains:** `sqrt` of a negative number, `ln` or `log10` of a number at or below 0, `asin` or `acos` outside -1 to 1, `atan2(0, 0)`, and `power` of a negative number to a non-integer raise `out of domain`. `power(0, y)` for a negative `y` raises `division by zero`, and `power(0, 0)` is `1`.
-- **Overflow:** a result whose exponent is outside the decimal range raises `overflow`, with `operator` the function's name, as in `exp(100000)`.
+- **Overflow:** a result of 10^34 or more in magnitude raises `overflow`, with `operator` the function's name, as in `exp(100)` or `round(x, places)` when `x` has too many integer digits to keep `places` digits after the point. A result too small to keep rounds, and never raises.
 - **Angles** are in radians.
 
 ### Floats
@@ -212,16 +206,16 @@ The Built-in properties are read with `the <name> of x`, and their names are lis
 | --- | --- | --- |
 | `fromFloat64(b, order = "big")` | The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal | `out of domain`, `can't convert` |
 | `fromFloat32(b, order = "big")` | The number an IEEE 754 binary32 float in the 4 Bytes `b` holds, as its shortest round-trip decimal | `out of domain`, `can't convert` |
-| `toFloat64(n, order = "big")` | The 8 Bytes of the binary64 float nearest `n`, ties to even | `out of domain`, `can't convert` |
-| `toFloat32(n, order = "big")` | The 4 Bytes of the binary32 float nearest `n`, ties to even | `out of domain`, `can't convert` |
+| `toFloat64(n, order = "big")` | The 8 Bytes of the binary64 float nearest `n`, ties to even | `out of domain` |
+| `toFloat32(n, order = "big")` | The 4 Bytes of the binary32 float nearest `n`, ties to even | `out of domain` |
 
 <!-- end -->
 
 Floats come into and go out of the language only through these four ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)).
 
 - **Byte order:** `order` is `"big"` or `"little"`, and any other text raises `out of domain`.
-- **Reading:** `fromFloat64` needs exactly 8 Bytes and `fromFloat32` exactly 4, and any other length raises `out of domain`. The result is the shortest decimal that rounds to the same float, at most 17 or 9 significant digits, the same rule as the Host's float-to-decimal conversion. So a binary32 reading of 0.1 is `0.1`. Negative zero gives `0`. NaN and ±Infinity raise `can't convert`, with `to` `"number"`.
-- **Writing:** `toFloat64` and `toFloat32` round to the nearest float, ties to even. A value too large for the float raises `can't convert`, with `to` `"float64"` or `"float32"`, and a value too small rounds to zero or a subnormal as IEEE 754 says.
+- **Reading:** `fromFloat64` needs exactly 8 Bytes and `fromFloat32` exactly 4, and any other length raises `out of domain`. The result is the shortest decimal that rounds to the same float, at most 17 or 9 significant digits, the same rule as the Host's float-to-decimal conversion. So a binary32 reading of 0.1 is `0.1`. Negative zero gives `0`. NaN, ±Infinity and a value of 10^34 or more in magnitude raise `can't convert`, with `to` `"number"`, as the Host's conversion refuses them ([ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)).
+- **Writing:** `toFloat64` and `toFloat32` round to the nearest float, ties to even. Every number is below the largest float32, so neither ever overflows, and a value too small rounds to zero or a subnormal as IEEE 754 says.
 
 > **Example.**
 >
@@ -259,7 +253,7 @@ Floats come into and go out of the language only through these four ([ADR 0021](
 - **Fixed offsets:** `offset` in `toCivil` and `toInstant` is an exact duration Quantity that is a whole number of minutes and less than 24 hr in magnitude. UTC is `0 s`. Any other offset raises `out of domain`.
 - **`toInstant(c, offset)`** takes a date-time, and a date-only value raises `out of domain`.
 - **Range:** a result outside 0001-01-01 to 9999-12-31 raises `out of range`, with `field` `"year"`.
-- **Names:** `day`, `month` and `year` are also Units, and `second` an ordinal, but a Unit is only a suffix straight after a numeric literal and an ordinal only follows `the`, so `day(d)` and `second(d)` are calls.
+- **Names:** `day`, `month`, `year` and `min` are also Units, and `second` an ordinal, but a Unit is only a suffix straight after a numeric literal and an ordinal only follows `the`, so `day(d)` and `second(d)` are calls.
 
 > **Rationale.** A time field of a date-only value raises `out of domain` rather than `wrong kind`, because a date-only value and a date-time share the kind name `civil date`, and `wrong kind` would name the same kind twice ([ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md)).
 
@@ -338,7 +332,7 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 - **`parseNumber(t, symbols)`:**
   - It accepts exactly what `formatNumber` could write for some `places`, and the same without any group separators: an optional `minus`, at least one digit, and optionally `decimal` followed by at least one digit. There is no exponent, no plus sign and no white space.
   - The result keeps its digits, so `"2,50"` in a Locale with a `,` decimal gives `2.50`.
-  - A mismatch, or a number with more than 34 significant digits, raises `can't convert`, with `{value, to: "number", offset}` and `offset` the position of the first Character that doesn't fit.
+  - A mismatch, or a number past the [number limits](03-values.md#reading-numbers), raises `can't convert`, with `{value, to: "number", offset}` and `offset` the position of the first Character that doesn't fit.
 
 > **Example.**
 >
@@ -503,16 +497,16 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 - **Decoding, `decodeJson(t)`:**
   - `t` is one JSON value as RFC 8259 defines it, with optional JSON white space (space, tab, LF, CR) before and after.
-  - A number is read exactly, keeping its digits and exponent, so `2.50` decodes to `2.50`, and `-0` to `0`. A number with more than 34 significant digits, or outside the decimal range, is invalid. Numbers are never read through a float.
+  - A number is read exactly, keeping its digits, so `2.50` decodes to `2.50`, and `-0` to `0`. A JSON exponent is applied, and a positive result exponent is rescaled to 0, so `1e5` decodes to `100000` and `2.50e1` to `25.0`. A number past the [number limits](03-values.md#reading-numbers) is invalid. Numbers are never read through a float.
   - A string's escapes are decoded, and a `\u` surrogate pair gives one scalar. A lone surrogate, or an unescaped control character, is invalid.
   - Two members of one object whose names are equal after NFC are invalid.
-  - `decodeJson` never produces a Quantity, Civil Date, Instant or Bytes.
+  - `decodeJson` never produces a Quantity, range, Civil Date, Instant or Bytes.
   - Invalid JSON raises `can't decode`, with `{format: "json", offset}`, where `offset` is the position of the first Character that can't continue valid JSON, or one past the end.
 - **Encoding, `encodeJson(v)`:**
   - The output is compact, with no white space between tokens.
   - Nothing is `null`. A number is written in its canonical form, so trailing zeros survive. A list is an array. A map is an object, in the map's order.
   - A text is a JSON string. `"` and `\` are written `\"` and `\\`. U+0008, U+0009, U+000A, U+000C and U+000D are written `\b`, `\t`, `\n`, `\f` and `\r`, and the other characters below U+0020 as `\u00` and two lowercase hex digits. Every other character is written as itself.
-  - A Quantity, Civil Date, Instant, Bytes, Text Pattern, Host Object or Function Value raises `not encodable`, with `{kind, path}`: `kind` is its kind name, and `path` the list of keys and 1-based indices that leads to it from `v`, for the first such value in depth-first order. There is no object form for them. A Script converts first: `q as text` gives `"5 kg"`, `q / 1 kg` a plain number, and `formatDate` a date.
+  - A Quantity, range, Civil Date, Instant, Bytes, Text Pattern, Host Object or Function Value raises `not encodable`, with `{kind, path}`: `kind` is its kind name, and `path` the list of keys and 1-based indices that leads to it from `v`, for the first such value in depth-first order. There is no object form for them. A Script converts first: `q as text` gives `"5 kg"`, `q / 1 kg` a plain number, and `formatDate` a date.
 
 > **Example.** `encodeJson({name: "Ann", scores: [2.50, nothing]})` gives the text `{"name":"Ann","scores":[2.50,null]}`, and `decodeJson` of that text gives the map back. `encodeJson({total: 5 kg})` raises `not encodable` with `kind` `"quantity"` and `path` `["total"]`.
 
@@ -540,8 +534,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 - **`atTime(d, h, mi, s = 0, ns = 0)`** adds a time of day to a date-only value. A date-time raises `out of domain`, and a Script that wants to replace a time writes `atTime(dateOnly(d), …)`.
 - **`isLeapYear(y)`** takes any integer, by the proleptic Gregorian rule.
 - **`splitDuration(d)`** takes an exact duration Quantity and gives plain numbers: whole `days`, `hours` from 0 to 23 and `minutes` from 0 to 59, with the fraction kept in `seconds`, which is less than 60. A negative duration gives the parts of its magnitude, each negated. A Quantity of another Unit Kind raises `incompatible units`.
-- **`monthsBetween(a, b)`** takes two date-only values or two date-times, and mixing them raises `can't compare`. When `a` is at or before `b`, it is the greatest `n` for which `a + n months` is at or before `b`, with month arithmetic clamping the day as [chapter 4](04-expressions-and-statements.md) says. When `b` is earlier, it is minus `monthsBetween(b, a)`. So from 2026-01-31 to 2026-02-28 is `1`.
-- **`epoch`** is the Instant `1970-01-01T00:00:00Z`. A Unix timestamp `n` is `epoch + n s`, and back again is `(i - epoch) as s`.
+- **`monthsBetween(a, b)`** takes two date-only values or two date-times, and mixing them raises `can't compare`. When `a` is at or before `b`, it is the greatest `n` for which `a + n months` is at or before `b`, with month arithmetic clamping the day as [chapter 3](03-values.md#date-arithmetic) says. When `b` is earlier, it is minus `monthsBetween(b, a)`. So from 2026-01-31 to 2026-02-28 is `1`.
+- **`epoch`** is the Instant `1970-01-01T00:00:00Z`. A Unix timestamp `n` is `epoch + n s`, and back again is `(i - epoch) / 1 s`.
 
 ### Templates
 
