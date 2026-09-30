@@ -1,0 +1,19 @@
+-- board.talk: part of the undecided-on-cancel-delivery case (ADR 0031).
+-- Grants come from case.toml: replay: record (suspending, answered by a
+-- `> answer` line in case.trace)
+
+script variable total = 0
+script variable moves = 0
+
+on recount
+  put 0 into total
+  repeat 100 times                 -- a long first Segment, cut by the Fuel Slice
+    add 1 to total
+  end repeat
+end recount
+
+on beforeMove m, deciding
+  if the to of m is "i9" then veto "That square is off the board."
+  ask replay to record m and wait
+  add 1 to moves
+end beforeMove

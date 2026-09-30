@@ -1,0 +1,48 @@
+# variables-only-restore: pins a variables-only restore.
+#
+# - The mismatch: the save holds fmt's old code identity. Once fmt is
+#   replaced, the runner gives the restore only the Libraries the Host now
+#   holds, so a Library the save needs isn't given, and with
+#   `mismatch=variables-only` the restore is variables-only, not refused.
+# - Discarded and reported in the `restore` line, as a `stop` report's are:
+#   the suspended Run shop/r1 in `discarded`, the Delivery d2 still in the
+#   mailbox in `dropped`, and shop/r1's pending call in `abandoned`. Nothing
+#   is pending, so nothing is settled, and no discarded Run has a `run`.
+# - Kept: the Script Variables (`orders` and `last`, as shop/r1's first
+#   Segment left them) and the id counters, so the next Delivery is d3 and
+#   the next Run shop/r2. The Script is rebuilt from its saved source against
+#   the new fmt, so `label` now gives "No. C3".
+# The first Pump's Fuel Slice is there only to leave d2 in the mailbox:
+# shop/r1's first stretch overruns it at the `ask`, which alone costs more
+# than 50, so shop takes no more turns in that Pump.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> add-library fmt
+> load shop
+
+> deliver d1 to=shop message=order args=["A1"]
+> deliver d2 to=shop message=order args=["B2"]
+> pump clock=2026-09-30T10:00:00Z fuel-slice=50
+call shop/r1.c1 op=stock.check args=["A1"]
+seg shop/r1 start delivery=d1 handler=order clause=1 fuel=141 alloc=56 state=312 end=ask-wait
+pumped state=sliced fuel=141 next=2026-09-30T10:00:30Z
+
+> save s1
+
+# Replacing fmt stop-and-reloads shop in this Group. The restore below
+# replaces this Group, so this only changes which Libraries the Host holds.
+> replace-library fmt carry=yes source="function label sku" & newline & "  return " & quote & "No. " & quote & " & sku" & newline & "end label" & newline
+stopped shop reason="reload" discarded=[shop/r1] dropped=[d2] abandoned=[shop/r1.c1]
+
+> restore from=s1 mismatch=variables-only mode=variables-only discarded=[shop/r1] dropped=[d2] abandoned=[shop/r1.c1]
+
+# The ids go on from the save's counters, and `orders` from its saved 1.
+> deliver d3 to=shop message=order args=["C3"]
+> pump clock=2026-09-30T10:00:01Z
+call shop/r2.c1 op=stock.check args=["C3"]
+seg shop/r2 start delivery=d3 handler=order clause=1 fuel=141 alloc=56 state=312 end=ask-wait
+pumped state=idle fuel=141 next=2026-09-30T10:00:31Z
+
+> vars
+vars shop orders=2 last="No. C3"

@@ -1,0 +1,21 @@
+# empty-matches-step-one-character: when every match is empty, the Match
+# Search finds one at each position, stepping one Character past each empty
+# match it discards. `optional "x"` over "ab" gives an empty match before
+# each Character and one at the end, ranges 1..0, 2..1 and 3..2 (spec
+# chapter 4, Matches; chapter 8, Running). The matches and ranges are
+# pinned. Fuel, allocation and state are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+
+# Six searches of 2 steps each, 12 steps: a kept empty match at 0, 1 and 2,
+# each followed by a search from the same position whose empty match is
+# discarded, moving the next search one Character on.
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=733 state=733 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=733
+pumped state=idle fuel=29
+
+> vars
+vars search hits=[{text: "", range: 1..0, captures: {}, ranges: {}}, {text: "", range: 2..1, captures: {}, ranges: {}}, {text: "", range: 3..2, captures: {}, ranges: {}}]

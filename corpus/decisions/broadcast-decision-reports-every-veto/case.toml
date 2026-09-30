@@ -1,0 +1,35 @@
+# broadcast-decision-reports-every-veto: a sign-up form's submit, broadcast
+# as a Decision to its field validators (ADR 0031). Its figures are
+# estimates, so it isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "metrics"
+name = "count"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+
+# Recipients are taken in load order, which is the order of the `load` lines
+# in case.trace.
+[[scripts]]
+name = "analytics"
+source = "analytics.talk"
+grants = { metrics = { ops = ["count"] } }
+
+[[scripts]]
+name = "email"
+source = "email.talk"
+
+[[scripts]]
+name = "password"
+source = "password.talk"
+
+[[scripts]]
+name = "terms"
+source = "terms.talk"

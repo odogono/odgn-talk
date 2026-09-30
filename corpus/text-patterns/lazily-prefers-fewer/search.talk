@@ -1,0 +1,9 @@
+-- search.talk: the lazily-prefers-fewer case (spec chapter 4, Elements;
+-- chapter 8, Compiling). `text lazily` prefers to match less, so it stops at
+-- the first ">".
+
+script variable hits = nothing
+
+on go
+  put every match of <"<", text lazily, ">"> in "<a> <b>" into hits
+end go

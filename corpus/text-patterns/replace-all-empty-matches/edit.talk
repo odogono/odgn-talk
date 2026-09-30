@@ -1,0 +1,8 @@
+-- edit.talk: the replace-all-empty-matches case (spec chapter 4, `replace`).
+-- `replace` finds its matches as the Match Search does, empty ones included.
+
+script variable result = nothing
+
+on go
+  put replace <zero or more of "-"> in "a-b" with "+" into result
+end go

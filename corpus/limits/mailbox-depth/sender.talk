@@ -1,0 +1,13 @@
+-- sender.talk: the mailbox-depth case. Grants come from case.toml: log: write
+-- Sends three messages to `sink` in one Segment, so `sink` has no turn to
+-- dispatch any of them before the third.
+
+on flood
+  repeat for each n in 1..3
+    try
+      send note with n to sink
+    catch "mailbox full"
+      tell log to write "full at " & n
+    end try
+  end repeat
+end flood

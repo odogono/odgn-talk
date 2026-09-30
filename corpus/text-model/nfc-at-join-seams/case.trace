@@ -1,0 +1,21 @@
+# nfc-at-join-seams: pins that the result of `&`, `put … after` and a chunk
+# write is normalised to NFC again, so a combining mark that lands next to a
+# base at the seam composes with it and the Character count drops (chapter 3,
+# Text; chapter 4, Operators and Writing chunks). U+0301 then "x" is 2
+# Characters, since a lone mark at the start is a Character of its own; "e"
+# joined before it gives U+00E9 then "x", 2 Characters, not 3. Writing U+0301
+# over the "z" of "ez" leaves one Character. Fuel, allocation and state
+# figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load seams
+> deliver d1 to=seams message=go
+> pump clock=2026-09-30T09:00:00Z
+seg seams/r1 start delivery=d1 handler=go clause=1 fuel=158 alloc=176 state=104 end=return
+run seams/r1 outcome=completed delivery=d1 handler=go fuel=158 alloc=176
+pumped state=idle fuel=158
+
+# tail starts with a bare U+0301, written literally inside the quotes.
+# joined, cafe and edited hold the composed U+00E9.
+> vars
+vars seams tail="́x" tailLength=2 joined="éx" joinedLength=2 isComposed=true cafe="café" cafeLength=4 edited="é" editedLength=1

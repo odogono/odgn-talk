@@ -1,0 +1,9 @@
+-- sleeper.talk: part of the overdue-waits-fire-in-deadline-order case. Each
+-- Run notes its tag when its wait fires, so `fired` is the firing order.
+
+script variable fired = []
+
+on nap tag, d
+  wait d
+  put tag after fired
+end nap

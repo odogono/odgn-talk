@@ -1,0 +1,24 @@
+-- words.talk: the word-chunks-keep-punctuation case. A word is a longest run
+-- of Characters that aren't White_Space, so punctuation stays in the word
+-- next to it (chapter 4, Chunk kinds).
+
+script variable firstWord
+script variable secondWord
+script variable lastWord
+script variable both
+script variable joinedCount
+script variable hyphened
+script variable afterTab
+script variable afterNbsp
+
+on go
+  put word 1 of "cat, dog" into firstWord                       -- "cat,"
+  put word 2 of "cat, dog" into secondWord                      -- "dog"
+  put "  cat,  dog.  " into s
+  put word -1 of s into lastWord                                -- "dog."
+  put words 1..2 of s into both                               -- "cat,  dog."
+  put the length of the words of "cat,dog" into joinedCount   -- 1
+  put word 1 of "well-known fact" into hyphened               -- "well-known"
+  put word 2 of ("a" & tab & "b") into afterTab               -- "b"
+  put word 2 of ("a" & fromCodePoint(160) & "b") into afterNbsp  -- "b"
+end go

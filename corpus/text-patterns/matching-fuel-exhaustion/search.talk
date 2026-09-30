@@ -1,0 +1,9 @@
+-- search.talk: the matching-fuel-exhaustion case (spec chapter 8, Running
+-- and the Cost Model). The Match Search's `steps` are charged as Fuel at
+-- `match-all`, and three Deliveries bracket that charge exactly.
+
+script variable hits = nothing
+
+on go
+  put every match of <"$", digits> in "$895" into hits
+end go

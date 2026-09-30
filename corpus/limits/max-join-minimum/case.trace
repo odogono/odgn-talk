@@ -1,0 +1,541 @@
+# max-join-minimum: `MaxJoin` at its conformance minimum, 256, which every
+# Core must honour exactly. `fan 257` starts one Join Member per pass, each a
+# `call` record with the next call id. The first 256 start. Starting the
+# 257th would pass the limit, so the Run faults at its `join-ask`
+# (fanout:10, source 7:7) before the call reaches its Host function, and it
+# gets no call id. The fault abandons the 256 pending members, one `abandon`
+# record each in start order, after the `fault` record.
+#
+# The case doesn't answer 256 members to show a full Join completing: that
+# the 256th member starts without a fault is what pins the minimum.
+# Fuel (estimated: dispatch 4, join-start 10, const 1, load 1, range 2,
+# iterate 2, then 14 per member, then next, store and load for the 257th),
+# allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load fanout
+
+> deliver d1 to=fanout message=fan args=[257]
+> pump clock=2026-09-28T09:00:00Z
+# The 256 members that start, c1 to c256, each pending.
+call fanout/r1.c1 op=feed.fetch args=[1]
+call fanout/r1.c2 op=feed.fetch args=[2]
+call fanout/r1.c3 op=feed.fetch args=[3]
+call fanout/r1.c4 op=feed.fetch args=[4]
+call fanout/r1.c5 op=feed.fetch args=[5]
+call fanout/r1.c6 op=feed.fetch args=[6]
+call fanout/r1.c7 op=feed.fetch args=[7]
+call fanout/r1.c8 op=feed.fetch args=[8]
+call fanout/r1.c9 op=feed.fetch args=[9]
+call fanout/r1.c10 op=feed.fetch args=[10]
+call fanout/r1.c11 op=feed.fetch args=[11]
+call fanout/r1.c12 op=feed.fetch args=[12]
+call fanout/r1.c13 op=feed.fetch args=[13]
+call fanout/r1.c14 op=feed.fetch args=[14]
+call fanout/r1.c15 op=feed.fetch args=[15]
+call fanout/r1.c16 op=feed.fetch args=[16]
+call fanout/r1.c17 op=feed.fetch args=[17]
+call fanout/r1.c18 op=feed.fetch args=[18]
+call fanout/r1.c19 op=feed.fetch args=[19]
+call fanout/r1.c20 op=feed.fetch args=[20]
+call fanout/r1.c21 op=feed.fetch args=[21]
+call fanout/r1.c22 op=feed.fetch args=[22]
+call fanout/r1.c23 op=feed.fetch args=[23]
+call fanout/r1.c24 op=feed.fetch args=[24]
+call fanout/r1.c25 op=feed.fetch args=[25]
+call fanout/r1.c26 op=feed.fetch args=[26]
+call fanout/r1.c27 op=feed.fetch args=[27]
+call fanout/r1.c28 op=feed.fetch args=[28]
+call fanout/r1.c29 op=feed.fetch args=[29]
+call fanout/r1.c30 op=feed.fetch args=[30]
+call fanout/r1.c31 op=feed.fetch args=[31]
+call fanout/r1.c32 op=feed.fetch args=[32]
+call fanout/r1.c33 op=feed.fetch args=[33]
+call fanout/r1.c34 op=feed.fetch args=[34]
+call fanout/r1.c35 op=feed.fetch args=[35]
+call fanout/r1.c36 op=feed.fetch args=[36]
+call fanout/r1.c37 op=feed.fetch args=[37]
+call fanout/r1.c38 op=feed.fetch args=[38]
+call fanout/r1.c39 op=feed.fetch args=[39]
+call fanout/r1.c40 op=feed.fetch args=[40]
+call fanout/r1.c41 op=feed.fetch args=[41]
+call fanout/r1.c42 op=feed.fetch args=[42]
+call fanout/r1.c43 op=feed.fetch args=[43]
+call fanout/r1.c44 op=feed.fetch args=[44]
+call fanout/r1.c45 op=feed.fetch args=[45]
+call fanout/r1.c46 op=feed.fetch args=[46]
+call fanout/r1.c47 op=feed.fetch args=[47]
+call fanout/r1.c48 op=feed.fetch args=[48]
+call fanout/r1.c49 op=feed.fetch args=[49]
+call fanout/r1.c50 op=feed.fetch args=[50]
+call fanout/r1.c51 op=feed.fetch args=[51]
+call fanout/r1.c52 op=feed.fetch args=[52]
+call fanout/r1.c53 op=feed.fetch args=[53]
+call fanout/r1.c54 op=feed.fetch args=[54]
+call fanout/r1.c55 op=feed.fetch args=[55]
+call fanout/r1.c56 op=feed.fetch args=[56]
+call fanout/r1.c57 op=feed.fetch args=[57]
+call fanout/r1.c58 op=feed.fetch args=[58]
+call fanout/r1.c59 op=feed.fetch args=[59]
+call fanout/r1.c60 op=feed.fetch args=[60]
+call fanout/r1.c61 op=feed.fetch args=[61]
+call fanout/r1.c62 op=feed.fetch args=[62]
+call fanout/r1.c63 op=feed.fetch args=[63]
+call fanout/r1.c64 op=feed.fetch args=[64]
+call fanout/r1.c65 op=feed.fetch args=[65]
+call fanout/r1.c66 op=feed.fetch args=[66]
+call fanout/r1.c67 op=feed.fetch args=[67]
+call fanout/r1.c68 op=feed.fetch args=[68]
+call fanout/r1.c69 op=feed.fetch args=[69]
+call fanout/r1.c70 op=feed.fetch args=[70]
+call fanout/r1.c71 op=feed.fetch args=[71]
+call fanout/r1.c72 op=feed.fetch args=[72]
+call fanout/r1.c73 op=feed.fetch args=[73]
+call fanout/r1.c74 op=feed.fetch args=[74]
+call fanout/r1.c75 op=feed.fetch args=[75]
+call fanout/r1.c76 op=feed.fetch args=[76]
+call fanout/r1.c77 op=feed.fetch args=[77]
+call fanout/r1.c78 op=feed.fetch args=[78]
+call fanout/r1.c79 op=feed.fetch args=[79]
+call fanout/r1.c80 op=feed.fetch args=[80]
+call fanout/r1.c81 op=feed.fetch args=[81]
+call fanout/r1.c82 op=feed.fetch args=[82]
+call fanout/r1.c83 op=feed.fetch args=[83]
+call fanout/r1.c84 op=feed.fetch args=[84]
+call fanout/r1.c85 op=feed.fetch args=[85]
+call fanout/r1.c86 op=feed.fetch args=[86]
+call fanout/r1.c87 op=feed.fetch args=[87]
+call fanout/r1.c88 op=feed.fetch args=[88]
+call fanout/r1.c89 op=feed.fetch args=[89]
+call fanout/r1.c90 op=feed.fetch args=[90]
+call fanout/r1.c91 op=feed.fetch args=[91]
+call fanout/r1.c92 op=feed.fetch args=[92]
+call fanout/r1.c93 op=feed.fetch args=[93]
+call fanout/r1.c94 op=feed.fetch args=[94]
+call fanout/r1.c95 op=feed.fetch args=[95]
+call fanout/r1.c96 op=feed.fetch args=[96]
+call fanout/r1.c97 op=feed.fetch args=[97]
+call fanout/r1.c98 op=feed.fetch args=[98]
+call fanout/r1.c99 op=feed.fetch args=[99]
+call fanout/r1.c100 op=feed.fetch args=[100]
+call fanout/r1.c101 op=feed.fetch args=[101]
+call fanout/r1.c102 op=feed.fetch args=[102]
+call fanout/r1.c103 op=feed.fetch args=[103]
+call fanout/r1.c104 op=feed.fetch args=[104]
+call fanout/r1.c105 op=feed.fetch args=[105]
+call fanout/r1.c106 op=feed.fetch args=[106]
+call fanout/r1.c107 op=feed.fetch args=[107]
+call fanout/r1.c108 op=feed.fetch args=[108]
+call fanout/r1.c109 op=feed.fetch args=[109]
+call fanout/r1.c110 op=feed.fetch args=[110]
+call fanout/r1.c111 op=feed.fetch args=[111]
+call fanout/r1.c112 op=feed.fetch args=[112]
+call fanout/r1.c113 op=feed.fetch args=[113]
+call fanout/r1.c114 op=feed.fetch args=[114]
+call fanout/r1.c115 op=feed.fetch args=[115]
+call fanout/r1.c116 op=feed.fetch args=[116]
+call fanout/r1.c117 op=feed.fetch args=[117]
+call fanout/r1.c118 op=feed.fetch args=[118]
+call fanout/r1.c119 op=feed.fetch args=[119]
+call fanout/r1.c120 op=feed.fetch args=[120]
+call fanout/r1.c121 op=feed.fetch args=[121]
+call fanout/r1.c122 op=feed.fetch args=[122]
+call fanout/r1.c123 op=feed.fetch args=[123]
+call fanout/r1.c124 op=feed.fetch args=[124]
+call fanout/r1.c125 op=feed.fetch args=[125]
+call fanout/r1.c126 op=feed.fetch args=[126]
+call fanout/r1.c127 op=feed.fetch args=[127]
+call fanout/r1.c128 op=feed.fetch args=[128]
+call fanout/r1.c129 op=feed.fetch args=[129]
+call fanout/r1.c130 op=feed.fetch args=[130]
+call fanout/r1.c131 op=feed.fetch args=[131]
+call fanout/r1.c132 op=feed.fetch args=[132]
+call fanout/r1.c133 op=feed.fetch args=[133]
+call fanout/r1.c134 op=feed.fetch args=[134]
+call fanout/r1.c135 op=feed.fetch args=[135]
+call fanout/r1.c136 op=feed.fetch args=[136]
+call fanout/r1.c137 op=feed.fetch args=[137]
+call fanout/r1.c138 op=feed.fetch args=[138]
+call fanout/r1.c139 op=feed.fetch args=[139]
+call fanout/r1.c140 op=feed.fetch args=[140]
+call fanout/r1.c141 op=feed.fetch args=[141]
+call fanout/r1.c142 op=feed.fetch args=[142]
+call fanout/r1.c143 op=feed.fetch args=[143]
+call fanout/r1.c144 op=feed.fetch args=[144]
+call fanout/r1.c145 op=feed.fetch args=[145]
+call fanout/r1.c146 op=feed.fetch args=[146]
+call fanout/r1.c147 op=feed.fetch args=[147]
+call fanout/r1.c148 op=feed.fetch args=[148]
+call fanout/r1.c149 op=feed.fetch args=[149]
+call fanout/r1.c150 op=feed.fetch args=[150]
+call fanout/r1.c151 op=feed.fetch args=[151]
+call fanout/r1.c152 op=feed.fetch args=[152]
+call fanout/r1.c153 op=feed.fetch args=[153]
+call fanout/r1.c154 op=feed.fetch args=[154]
+call fanout/r1.c155 op=feed.fetch args=[155]
+call fanout/r1.c156 op=feed.fetch args=[156]
+call fanout/r1.c157 op=feed.fetch args=[157]
+call fanout/r1.c158 op=feed.fetch args=[158]
+call fanout/r1.c159 op=feed.fetch args=[159]
+call fanout/r1.c160 op=feed.fetch args=[160]
+call fanout/r1.c161 op=feed.fetch args=[161]
+call fanout/r1.c162 op=feed.fetch args=[162]
+call fanout/r1.c163 op=feed.fetch args=[163]
+call fanout/r1.c164 op=feed.fetch args=[164]
+call fanout/r1.c165 op=feed.fetch args=[165]
+call fanout/r1.c166 op=feed.fetch args=[166]
+call fanout/r1.c167 op=feed.fetch args=[167]
+call fanout/r1.c168 op=feed.fetch args=[168]
+call fanout/r1.c169 op=feed.fetch args=[169]
+call fanout/r1.c170 op=feed.fetch args=[170]
+call fanout/r1.c171 op=feed.fetch args=[171]
+call fanout/r1.c172 op=feed.fetch args=[172]
+call fanout/r1.c173 op=feed.fetch args=[173]
+call fanout/r1.c174 op=feed.fetch args=[174]
+call fanout/r1.c175 op=feed.fetch args=[175]
+call fanout/r1.c176 op=feed.fetch args=[176]
+call fanout/r1.c177 op=feed.fetch args=[177]
+call fanout/r1.c178 op=feed.fetch args=[178]
+call fanout/r1.c179 op=feed.fetch args=[179]
+call fanout/r1.c180 op=feed.fetch args=[180]
+call fanout/r1.c181 op=feed.fetch args=[181]
+call fanout/r1.c182 op=feed.fetch args=[182]
+call fanout/r1.c183 op=feed.fetch args=[183]
+call fanout/r1.c184 op=feed.fetch args=[184]
+call fanout/r1.c185 op=feed.fetch args=[185]
+call fanout/r1.c186 op=feed.fetch args=[186]
+call fanout/r1.c187 op=feed.fetch args=[187]
+call fanout/r1.c188 op=feed.fetch args=[188]
+call fanout/r1.c189 op=feed.fetch args=[189]
+call fanout/r1.c190 op=feed.fetch args=[190]
+call fanout/r1.c191 op=feed.fetch args=[191]
+call fanout/r1.c192 op=feed.fetch args=[192]
+call fanout/r1.c193 op=feed.fetch args=[193]
+call fanout/r1.c194 op=feed.fetch args=[194]
+call fanout/r1.c195 op=feed.fetch args=[195]
+call fanout/r1.c196 op=feed.fetch args=[196]
+call fanout/r1.c197 op=feed.fetch args=[197]
+call fanout/r1.c198 op=feed.fetch args=[198]
+call fanout/r1.c199 op=feed.fetch args=[199]
+call fanout/r1.c200 op=feed.fetch args=[200]
+call fanout/r1.c201 op=feed.fetch args=[201]
+call fanout/r1.c202 op=feed.fetch args=[202]
+call fanout/r1.c203 op=feed.fetch args=[203]
+call fanout/r1.c204 op=feed.fetch args=[204]
+call fanout/r1.c205 op=feed.fetch args=[205]
+call fanout/r1.c206 op=feed.fetch args=[206]
+call fanout/r1.c207 op=feed.fetch args=[207]
+call fanout/r1.c208 op=feed.fetch args=[208]
+call fanout/r1.c209 op=feed.fetch args=[209]
+call fanout/r1.c210 op=feed.fetch args=[210]
+call fanout/r1.c211 op=feed.fetch args=[211]
+call fanout/r1.c212 op=feed.fetch args=[212]
+call fanout/r1.c213 op=feed.fetch args=[213]
+call fanout/r1.c214 op=feed.fetch args=[214]
+call fanout/r1.c215 op=feed.fetch args=[215]
+call fanout/r1.c216 op=feed.fetch args=[216]
+call fanout/r1.c217 op=feed.fetch args=[217]
+call fanout/r1.c218 op=feed.fetch args=[218]
+call fanout/r1.c219 op=feed.fetch args=[219]
+call fanout/r1.c220 op=feed.fetch args=[220]
+call fanout/r1.c221 op=feed.fetch args=[221]
+call fanout/r1.c222 op=feed.fetch args=[222]
+call fanout/r1.c223 op=feed.fetch args=[223]
+call fanout/r1.c224 op=feed.fetch args=[224]
+call fanout/r1.c225 op=feed.fetch args=[225]
+call fanout/r1.c226 op=feed.fetch args=[226]
+call fanout/r1.c227 op=feed.fetch args=[227]
+call fanout/r1.c228 op=feed.fetch args=[228]
+call fanout/r1.c229 op=feed.fetch args=[229]
+call fanout/r1.c230 op=feed.fetch args=[230]
+call fanout/r1.c231 op=feed.fetch args=[231]
+call fanout/r1.c232 op=feed.fetch args=[232]
+call fanout/r1.c233 op=feed.fetch args=[233]
+call fanout/r1.c234 op=feed.fetch args=[234]
+call fanout/r1.c235 op=feed.fetch args=[235]
+call fanout/r1.c236 op=feed.fetch args=[236]
+call fanout/r1.c237 op=feed.fetch args=[237]
+call fanout/r1.c238 op=feed.fetch args=[238]
+call fanout/r1.c239 op=feed.fetch args=[239]
+call fanout/r1.c240 op=feed.fetch args=[240]
+call fanout/r1.c241 op=feed.fetch args=[241]
+call fanout/r1.c242 op=feed.fetch args=[242]
+call fanout/r1.c243 op=feed.fetch args=[243]
+call fanout/r1.c244 op=feed.fetch args=[244]
+call fanout/r1.c245 op=feed.fetch args=[245]
+call fanout/r1.c246 op=feed.fetch args=[246]
+call fanout/r1.c247 op=feed.fetch args=[247]
+call fanout/r1.c248 op=feed.fetch args=[248]
+call fanout/r1.c249 op=feed.fetch args=[249]
+call fanout/r1.c250 op=feed.fetch args=[250]
+call fanout/r1.c251 op=feed.fetch args=[251]
+call fanout/r1.c252 op=feed.fetch args=[252]
+call fanout/r1.c253 op=feed.fetch args=[253]
+call fanout/r1.c254 op=feed.fetch args=[254]
+call fanout/r1.c255 op=feed.fetch args=[255]
+call fanout/r1.c256 op=feed.fetch args=[256]
+# The 257th would pass MaxJoin: a Limit Fault, and every pending member is
+# abandoned.
+fault fanout/r1 limit=join at=fanout:10 pos=7:7
+abandon fanout/r1.c1
+abandon fanout/r1.c2
+abandon fanout/r1.c3
+abandon fanout/r1.c4
+abandon fanout/r1.c5
+abandon fanout/r1.c6
+abandon fanout/r1.c7
+abandon fanout/r1.c8
+abandon fanout/r1.c9
+abandon fanout/r1.c10
+abandon fanout/r1.c11
+abandon fanout/r1.c12
+abandon fanout/r1.c13
+abandon fanout/r1.c14
+abandon fanout/r1.c15
+abandon fanout/r1.c16
+abandon fanout/r1.c17
+abandon fanout/r1.c18
+abandon fanout/r1.c19
+abandon fanout/r1.c20
+abandon fanout/r1.c21
+abandon fanout/r1.c22
+abandon fanout/r1.c23
+abandon fanout/r1.c24
+abandon fanout/r1.c25
+abandon fanout/r1.c26
+abandon fanout/r1.c27
+abandon fanout/r1.c28
+abandon fanout/r1.c29
+abandon fanout/r1.c30
+abandon fanout/r1.c31
+abandon fanout/r1.c32
+abandon fanout/r1.c33
+abandon fanout/r1.c34
+abandon fanout/r1.c35
+abandon fanout/r1.c36
+abandon fanout/r1.c37
+abandon fanout/r1.c38
+abandon fanout/r1.c39
+abandon fanout/r1.c40
+abandon fanout/r1.c41
+abandon fanout/r1.c42
+abandon fanout/r1.c43
+abandon fanout/r1.c44
+abandon fanout/r1.c45
+abandon fanout/r1.c46
+abandon fanout/r1.c47
+abandon fanout/r1.c48
+abandon fanout/r1.c49
+abandon fanout/r1.c50
+abandon fanout/r1.c51
+abandon fanout/r1.c52
+abandon fanout/r1.c53
+abandon fanout/r1.c54
+abandon fanout/r1.c55
+abandon fanout/r1.c56
+abandon fanout/r1.c57
+abandon fanout/r1.c58
+abandon fanout/r1.c59
+abandon fanout/r1.c60
+abandon fanout/r1.c61
+abandon fanout/r1.c62
+abandon fanout/r1.c63
+abandon fanout/r1.c64
+abandon fanout/r1.c65
+abandon fanout/r1.c66
+abandon fanout/r1.c67
+abandon fanout/r1.c68
+abandon fanout/r1.c69
+abandon fanout/r1.c70
+abandon fanout/r1.c71
+abandon fanout/r1.c72
+abandon fanout/r1.c73
+abandon fanout/r1.c74
+abandon fanout/r1.c75
+abandon fanout/r1.c76
+abandon fanout/r1.c77
+abandon fanout/r1.c78
+abandon fanout/r1.c79
+abandon fanout/r1.c80
+abandon fanout/r1.c81
+abandon fanout/r1.c82
+abandon fanout/r1.c83
+abandon fanout/r1.c84
+abandon fanout/r1.c85
+abandon fanout/r1.c86
+abandon fanout/r1.c87
+abandon fanout/r1.c88
+abandon fanout/r1.c89
+abandon fanout/r1.c90
+abandon fanout/r1.c91
+abandon fanout/r1.c92
+abandon fanout/r1.c93
+abandon fanout/r1.c94
+abandon fanout/r1.c95
+abandon fanout/r1.c96
+abandon fanout/r1.c97
+abandon fanout/r1.c98
+abandon fanout/r1.c99
+abandon fanout/r1.c100
+abandon fanout/r1.c101
+abandon fanout/r1.c102
+abandon fanout/r1.c103
+abandon fanout/r1.c104
+abandon fanout/r1.c105
+abandon fanout/r1.c106
+abandon fanout/r1.c107
+abandon fanout/r1.c108
+abandon fanout/r1.c109
+abandon fanout/r1.c110
+abandon fanout/r1.c111
+abandon fanout/r1.c112
+abandon fanout/r1.c113
+abandon fanout/r1.c114
+abandon fanout/r1.c115
+abandon fanout/r1.c116
+abandon fanout/r1.c117
+abandon fanout/r1.c118
+abandon fanout/r1.c119
+abandon fanout/r1.c120
+abandon fanout/r1.c121
+abandon fanout/r1.c122
+abandon fanout/r1.c123
+abandon fanout/r1.c124
+abandon fanout/r1.c125
+abandon fanout/r1.c126
+abandon fanout/r1.c127
+abandon fanout/r1.c128
+abandon fanout/r1.c129
+abandon fanout/r1.c130
+abandon fanout/r1.c131
+abandon fanout/r1.c132
+abandon fanout/r1.c133
+abandon fanout/r1.c134
+abandon fanout/r1.c135
+abandon fanout/r1.c136
+abandon fanout/r1.c137
+abandon fanout/r1.c138
+abandon fanout/r1.c139
+abandon fanout/r1.c140
+abandon fanout/r1.c141
+abandon fanout/r1.c142
+abandon fanout/r1.c143
+abandon fanout/r1.c144
+abandon fanout/r1.c145
+abandon fanout/r1.c146
+abandon fanout/r1.c147
+abandon fanout/r1.c148
+abandon fanout/r1.c149
+abandon fanout/r1.c150
+abandon fanout/r1.c151
+abandon fanout/r1.c152
+abandon fanout/r1.c153
+abandon fanout/r1.c154
+abandon fanout/r1.c155
+abandon fanout/r1.c156
+abandon fanout/r1.c157
+abandon fanout/r1.c158
+abandon fanout/r1.c159
+abandon fanout/r1.c160
+abandon fanout/r1.c161
+abandon fanout/r1.c162
+abandon fanout/r1.c163
+abandon fanout/r1.c164
+abandon fanout/r1.c165
+abandon fanout/r1.c166
+abandon fanout/r1.c167
+abandon fanout/r1.c168
+abandon fanout/r1.c169
+abandon fanout/r1.c170
+abandon fanout/r1.c171
+abandon fanout/r1.c172
+abandon fanout/r1.c173
+abandon fanout/r1.c174
+abandon fanout/r1.c175
+abandon fanout/r1.c176
+abandon fanout/r1.c177
+abandon fanout/r1.c178
+abandon fanout/r1.c179
+abandon fanout/r1.c180
+abandon fanout/r1.c181
+abandon fanout/r1.c182
+abandon fanout/r1.c183
+abandon fanout/r1.c184
+abandon fanout/r1.c185
+abandon fanout/r1.c186
+abandon fanout/r1.c187
+abandon fanout/r1.c188
+abandon fanout/r1.c189
+abandon fanout/r1.c190
+abandon fanout/r1.c191
+abandon fanout/r1.c192
+abandon fanout/r1.c193
+abandon fanout/r1.c194
+abandon fanout/r1.c195
+abandon fanout/r1.c196
+abandon fanout/r1.c197
+abandon fanout/r1.c198
+abandon fanout/r1.c199
+abandon fanout/r1.c200
+abandon fanout/r1.c201
+abandon fanout/r1.c202
+abandon fanout/r1.c203
+abandon fanout/r1.c204
+abandon fanout/r1.c205
+abandon fanout/r1.c206
+abandon fanout/r1.c207
+abandon fanout/r1.c208
+abandon fanout/r1.c209
+abandon fanout/r1.c210
+abandon fanout/r1.c211
+abandon fanout/r1.c212
+abandon fanout/r1.c213
+abandon fanout/r1.c214
+abandon fanout/r1.c215
+abandon fanout/r1.c216
+abandon fanout/r1.c217
+abandon fanout/r1.c218
+abandon fanout/r1.c219
+abandon fanout/r1.c220
+abandon fanout/r1.c221
+abandon fanout/r1.c222
+abandon fanout/r1.c223
+abandon fanout/r1.c224
+abandon fanout/r1.c225
+abandon fanout/r1.c226
+abandon fanout/r1.c227
+abandon fanout/r1.c228
+abandon fanout/r1.c229
+abandon fanout/r1.c230
+abandon fanout/r1.c231
+abandon fanout/r1.c232
+abandon fanout/r1.c233
+abandon fanout/r1.c234
+abandon fanout/r1.c235
+abandon fanout/r1.c236
+abandon fanout/r1.c237
+abandon fanout/r1.c238
+abandon fanout/r1.c239
+abandon fanout/r1.c240
+abandon fanout/r1.c241
+abandon fanout/r1.c242
+abandon fanout/r1.c243
+abandon fanout/r1.c244
+abandon fanout/r1.c245
+abandon fanout/r1.c246
+abandon fanout/r1.c247
+abandon fanout/r1.c248
+abandon fanout/r1.c249
+abandon fanout/r1.c250
+abandon fanout/r1.c251
+abandon fanout/r1.c252
+abandon fanout/r1.c253
+abandon fanout/r1.c254
+abandon fanout/r1.c255
+abandon fanout/r1.c256
+seg fanout/r1 start delivery=d1 handler=fan clause=1 fuel=3608 alloc=6240 state=0 end=fault
+run fanout/r1 outcome=limit-fault delivery=d1 handler=fan limit=join fuel=3608 alloc=6240
+pumped state=idle fuel=3608
+
+> vars
+vars fanout

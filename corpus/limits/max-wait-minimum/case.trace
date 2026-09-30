@@ -1,0 +1,41 @@
+# max-wait-minimum: `MaxWait` at its conformance minimum, 2147483647 ms, which
+# every Core must honour exactly. The call starts in the Pump read at
+# 2026-09-28T09:00:00Z, so its deadline is that reading plus 2147483647 ms:
+# 2026-10-23T05:31:23.647Z. A Pump 1 ms before it fires nothing, and the Pump
+# at it fails the call with `timeout`, whose `after` is the limit in ms. The
+# call is abandoned, and its answer, when it comes, is ignored with a note.
+#
+# `timeout` is raised at the `ask-wait` (waiter:3, source 6:5) and caught.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load waiter
+
+> deliver d1 to=waiter message=fetch args=["k1"]
+> pump clock=2026-09-28T09:00:00Z
+call waiter/r1.c1 op=slow.fetch args=["k1"]
+seg waiter/r1 start delivery=d1 handler=fetch clause=1 fuel=15 alloc=0 state=312 end=ask-wait
+pumped state=idle fuel=15 next=2026-10-23T05:31:23.647Z
+
+# 1 ms before the deadline: nothing fires.
+> pump clock=2026-10-23T05:31:23.646Z
+pumped state=idle fuel=0 next=2026-10-23T05:31:23.647Z
+
+# At the deadline: the call times out and is abandoned, and the `catch`
+# reads `after`.
+> pump clock=2026-10-23T05:31:23.647Z
+raise waiter/r1 code="timeout" at=waiter:3 pos=6:5
+abandon waiter/r1.c1
+call waiter/r1.c2 op=log.write args=["gave up after 2147483647 ms"]
+seg waiter/r1 resume fuel=42 alloc=147 state=0 end=return
+run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=57 alloc=147
+pumped state=idle fuel=42
+
+# The answer arrives after the call was abandoned.
+> answer waiter/r1.c1 value="late"
+> pump clock=2026-10-23T05:31:24Z
+note waiter/r1.c1 kind=late-answer
+pumped state=idle fuel=0
+
+> vars
+vars waiter

@@ -1,0 +1,22 @@
+# replace-all-empty-matches: `replace` finds its matches as the Match Search
+# does, so a pattern that can match empty text replaces the empty match
+# before "a", the "-", and the empty match at the end, but not the empty
+# match straight after the "-", where the last match ended. "a-b" becomes
+# "+a+b+", not the "+a++b+" some regex engines give (spec chapter 4,
+# `replace` and Matches). The result is pinned. Fuel, allocation and state
+# are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load edit
+
+# Matches, with positions 0 to 3 between the Characters of "a-b": empty at
+# 0, "-" from 1 to 2, the empty match at 2 discarded, and empty at 3. 14
+# steps at `replace-start`.
+> deliver d1 to=edit message=go
+> pump clock=2026-09-30T09:00:00Z
+seg edit/r1 start delivery=d1 handler=go clause=1 fuel=58 alloc=934 state=21 end=return
+run edit/r1 outcome=completed delivery=d1 handler=go fuel=58 alloc=934
+pumped state=idle fuel=58
+
+> vars
+vars edit result="+a+b+"

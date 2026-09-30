@@ -1,0 +1,14 @@
+# overdue-waits-fire-in-deadline-order: waits whose deadlines pass while the
+# Group is saved fire in the first Pump after the restore, in deadline order,
+# and of equal deadlines in the order they began (spec chapter 10, "The
+# Clock"; chapter 5, "A Pump").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "sleeper"
+source = "sleeper.talk"

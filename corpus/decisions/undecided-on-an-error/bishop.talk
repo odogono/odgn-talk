@@ -1,0 +1,13 @@
+-- bishop.talk: a buggy decider, part of the undecided-on-an-error case
+-- (ADR 0031). A move along a rank has no ranks to divide by.
+
+script variable faults = 0
+
+on beforeMove m, deciding
+  put the files of m / the ranks of m into slope
+  if slope is not 1 and slope is not -1 then veto "Bishops move diagonally."
+end beforeMove
+
+on error e
+  add 1 to faults                  -- a new Run, which decides nothing
+end error

@@ -1,0 +1,11 @@
+-- search.talk: the lazily-stays-on-its-element case (spec chapter 8,
+-- Compiling). `lazily` swaps only the splits of its element's own
+-- repetition, never those inside a nested `<…>`.
+
+script variable outer = nothing
+script variable plain = nothing
+
+on go
+  put every match of <"#", one or more of <digits> lazily> in "#123" into outer
+  put every match of <"#", digits lazily> in "#123" into plain
+end go

@@ -1,0 +1,11 @@
+-- board.talk: part of the undecided-when-dropped case (ADR 0031). Grants
+-- come from case.toml: replay: record (suspending, answered by a
+-- `> answer` line in case.trace)
+
+script variable moves = 0
+
+on beforeMove m, dropping, deciding
+  if the to of m is "i9" then veto "That square is off the board."
+  ask replay to record m and wait  -- allowed from here on, but not yet ended
+  add 1 to moves
+end beforeMove

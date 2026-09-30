@@ -1,0 +1,14 @@
+# fuel-exhaustion-point: a Run that spends exactly its Fuel per Run completes,
+# and one that needs more faults at a pinned instruction (chapter 6, chapter 8
+# Charging).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "counter"
+source = "counter.talk"
+limits = { fuelPerRun = 993 }

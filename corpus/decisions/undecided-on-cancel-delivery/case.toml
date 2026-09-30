@@ -1,0 +1,23 @@
+# undecided-on-cancel-delivery: a Host that can't wait cancels a Decision
+# before its seal, which leaves it undecided, `cancelled`, and a cancel after
+# the seal does nothing (ADR 0031, #79). Its figures are estimates, so it
+# isn't blessed.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "replay"
+name = "record"
+mode = "suspending"
+args = ["any"]
+result = "number"
+cost = { fuel = 50 }
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { replay = { ops = ["record"] } }

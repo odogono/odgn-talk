@@ -1,0 +1,18 @@
+# greedy-by-default: `text` prefers to match more, with no `lazily`, so
+# `<"<", text, ">">` over "<a> <b>" gives one match running to the last ">"
+# (spec chapter 4, Matching; ADR 0007). The lazily-prefers-fewer case is its
+# pair. The match is pinned. Fuel, allocation and state are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+
+# 21 steps: 20 for the search that finds "<a> <b>", and 1 for the one from
+# the end, which finds nothing.
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=38 alloc=262 state=262 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=38 alloc=262
+pumped state=idle fuel=38
+
+> vars
+vars search hits=[{text: "<a> <b>", range: 1..7, captures: {}, ranges: {}}]

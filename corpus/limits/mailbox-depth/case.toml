@@ -1,0 +1,25 @@
+# mailbox-depth: a Script's `send` to a mailbox holding its mailbox depth of
+# messages raises `mailbox full`, and nothing is sent (chapter 5, Sending;
+# chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+
+[[scripts]]
+name = "sender"
+source = "sender.talk"
+grants = { log = { ops = ["write"] } }
+
+[[scripts]]
+name = "sink"
+source = "sink.talk"
+limits = { mailboxDepth = 2 }

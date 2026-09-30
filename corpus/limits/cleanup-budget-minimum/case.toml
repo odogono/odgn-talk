@@ -1,0 +1,20 @@
+# cleanup-budget-minimum: the Cleanup Budget at its conformance minimum,
+# 1000000 Fuel, spent exactly and passed (chapter 6, Cancellation and Stop).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+
+[[scripts]]
+name = "holder"
+source = "holder.talk"
+grants = { log = { ops = ["write"] } }
+limits = { cleanupBudget = 1000000 }

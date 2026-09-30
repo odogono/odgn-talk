@@ -1,0 +1,11 @@
+-- counter.talk: part of the preempted-run-keeps-segment-base case.
+-- `spin` writes a Script Variable, then loops until its Fuel runs out, so
+-- a Fuel Slice cuts it mid-Segment and a later Limit Fault rolls it back.
+
+script variable n = 0
+
+on spin
+  add 1 to n
+  repeat forever
+  end repeat
+end spin

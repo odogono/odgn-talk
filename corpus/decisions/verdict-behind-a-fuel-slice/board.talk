@@ -1,0 +1,13 @@
+-- board.talk: part of the verdict-behind-a-fuel-slice case (ADR 0031). Its
+-- deciding clause walks a bishop's path square by square, which is more
+-- Fuel than one Fuel Slice.
+
+script variable occupied = ["e5", "h8"]
+script variable moves = 0
+
+on beforeMove m, deciding
+  repeat for each sq in the path of m
+    if sq is in occupied then veto "The path is blocked at " & sq & "."
+  end repeat
+  add 1 to moves
+end beforeMove

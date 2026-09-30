@@ -1,0 +1,58 @@
+# matching-fuel-exhaustion: matching Fuel is charged at the instruction
+# that matches, as `6 + steps` for `match-all`, so a Run whose limit can't
+# cover the steps faults at `match-all` itself (spec chapter 8, Running and
+# Charging; chapter 6, Limit Faults). This case pins the Fuel through
+# `match-all`, and so its steps, by bracketing it with two limits.
+# Unblessed: the output lines are written by hand, not by bless.
+#
+# The working, from Cost Model 0 and `bun tools/machine/check.ts --dis`:
+#
+#   `<"$", digits>` is 0 char "$", 1 class digit, 2 split 1 3, 3 match.
+#   The first search over "$895" takes 10 steps (chapter 8's own example)
+#   and gives "$895". The next starts at 4, where it ended: the seed at
+#   `char "$"` is 1 step, and nothing matches, so the Match Search ends.
+#   steps = 10 + 1 = 11.
+#
+#   dispatch, the `clause` rate           4     4
+#   search:4  const <"$", digits>         1     5
+#   search:5  const "$895"                1     6
+#   search:6  match-all, 6 + steps       17    23
+#   search:7  store-var hits              2    25
+#   search:8  const nothing               1    26
+#   search:9  return                      2    28
+#
+# So with fuelPerRun 22 the Run faults at `match-all`, and with 23 it
+# covers `match-all` exactly and faults at the `store-var` after it. The
+# figures on the fault lines follow the worked example, which writes a
+# faulting Run's Fuel as its limit. The allocation and state figures are
+# estimates.
+
+> load search
+
+# 6 Fuel used, and `match-all` needs 17 more: 23 is past 22.
+> deliver d1 to=search message=go limits={fuelPerRun: 22}
+> pump clock=2026-09-30T09:00:00Z
+fault search/r1 limit=fuel at=search:6 pos=8:7
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=22 alloc=0 state=8 end=fault
+run search/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=22 alloc=0
+pumped state=idle fuel=22
+
+# `match-all` brings the Run to exactly 23, which isn't past the limit.
+# The `store-var` would bring it to 25, so the Run faults there, before
+# `hits` is written, and nothing is rolled back.
+> deliver d2 to=search message=go limits={fuelPerRun: 23}
+> pump clock=2026-09-30T09:00:01Z
+fault search/r2 limit=fuel at=search:7 pos=8:51
+seg search/r2 start delivery=d2 handler=go clause=1 fuel=23 alloc=259 state=8 end=fault
+run search/r2 outcome=limit-fault delivery=d2 handler=go limit=fuel fuel=23 alloc=259
+pumped state=idle fuel=23
+
+# Under the Script's own fuelPerRun of 1000 the Run completes, using 28.
+> deliver d3 to=search message=go
+> pump clock=2026-09-30T09:00:02Z
+seg search/r3 start delivery=d3 handler=go clause=1 fuel=28 alloc=259 state=259 end=return
+run search/r3 outcome=completed delivery=d3 handler=go fuel=28 alloc=259
+pumped state=idle fuel=28
+
+> vars
+vars search hits=[{text: "$895", range: 1..4, captures: {}, ranges: {}}]

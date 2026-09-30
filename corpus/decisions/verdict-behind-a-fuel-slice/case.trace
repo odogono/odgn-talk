@@ -1,0 +1,52 @@
+# verdict-behind-a-fuel-slice: the Host pumps with a 20-Fuel slice, and the
+# board's deciding clause needs 67 Fuel to reach its `veto`. Preemption isn't
+# suspension, so the first Segment goes on across four Pumps, each written as
+# `preempt`, and there is no Core deadline and no default answer: `decided`
+# comes only when the Segment ends. A Host that must know now pumps again at
+# the same Clock reading, as here, and each Pump makes progress.
+#
+# The Fuel, from Cost Model 0 (costs.toml), for d1's path b2, c3, d4, e5 and
+# `occupied` ["e5", "h8"]:
+#   dispatch: `clause` 4, then load 1, get-key 3, iterate 2 = 10
+#   each square not in `occupied`: next 2, store 1, load 1, load-var 1,
+#     member 2 + 2 items compared, branch-false 1, jump 1 = 11
+#   e5, the first item of `occupied`: next 2, store 1, load 1, load-var 1,
+#     member 2 + 1, branch-false 1, const 1, load 1, concat 3 + 25/16 = 5,
+#     const 1, concat 3 + 26/16 = 5, veto 2 = 24
+#   in all 10 + 3 * 11 + 24 = 67.
+# A slice is spent when the stretch's Fuel reaches it, and the Run is
+# preempted before its next instruction:
+#   Pump 1: 10 + 10 (b2 up to its branch-false) = 20, before b2's jump.
+#   Pump 2: jump 1, c3 11, then d4 up to its member 9 = 21, before d4's
+#     branch-false. The overrun of 1 is debt, so Pump 3's slice is 19.
+#   Pump 3: d4's branch-false 1 and jump 1, then e5 up to its first concat
+#     and the const after it 17 = 19, before the second concat.
+#   Pump 4: concat 5, veto 2 = 7, and the Segment ends at the veto.
+# Allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load board
+
+> decide d1 to=board message=beforeMove args=[{from: "a1", to: "e5", path: ["b2", "c3", "d4", "e5"]}]
+> pump clock=2026-09-30T10:00:00Z fuel-slice=20
+preempt board/r1 by=slice fuel=20 alloc=48
+pumped state=sliced fuel=20
+
+# Still open: the Host pumps again at the same Clock reading.
+> pump clock=2026-09-30T10:00:00Z fuel-slice=20
+preempt board/r1 by=slice fuel=21 alloc=48
+pumped state=sliced fuel=21
+
+> pump clock=2026-09-30T10:00:00Z fuel-slice=20
+preempt board/r1 by=slice fuel=19 alloc=24
+pumped state=sliced fuel=19
+
+# The Segment ends at the veto, which seals the Verdict in this fourth Pump.
+> pump clock=2026-09-30T10:00:00Z fuel-slice=20
+seg board/r1 continue fuel=7 alloc=83 state=84 end=veto value="The path is blocked at e5."
+decided d1 verdict=vetoed vetoes=[{script: "board", run: "board/r1", reason: "The path is blocked at e5."}]
+run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=67 alloc=203
+pumped state=idle fuel=7
+
+> vars
+vars board occupied=["e5", "h8"] moves=0

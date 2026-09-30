@@ -1,0 +1,9 @@
+-- front.talk: part of the send-and-wait-pair-restores case. It waits on
+-- back across the save.
+
+script variable reply = nothing
+
+on order sku
+  send quote with sku to back and wait
+  put it into reply
+end order

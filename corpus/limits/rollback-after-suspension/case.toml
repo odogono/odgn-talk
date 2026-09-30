@@ -1,0 +1,13 @@
+# rollback-after-suspension: a Limit Fault rolls back only its own Segment,
+# to the bindings at that Segment's start, not the Run's (ADR 0006).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "keeper"
+source = "keeper.talk"
+limits = { fuelPerRun = 100 }

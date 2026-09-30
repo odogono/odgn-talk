@@ -1,0 +1,27 @@
+# empty-match-skipped-after-match: the Match Search skips an empty match
+# where the last match ended, even when the last match wasn't empty, and
+# steps one Character on. So `zero or more of "a"` over "baab" gives three
+# matches, not the four a regex engine that allows an empty match straight
+# after a non-empty one would give (spec chapter 4, Matches; chapter 8,
+# Running). The matches and ranges are pinned. Fuel, allocation and state
+# are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+
+# Searches, with positions 0 to 4 between the Characters of "baab":
+#   from 0: empty at 0, range 1..0, kept (there is no last match)      2 steps
+#   from 0: empty at 0 again, where the last ended: discarded          2 steps
+#   from 1: "aa", 1 to 3, range 2..3, kept                             6 steps
+#   from 3: empty at 3, where "aa" ended: discarded                    2 steps
+#   from 4: empty at 4, range 5..4, kept (the last ended at 3)         2 steps
+#   from 4: empty at 4 again: discarded, and 5 is past the end         2 steps
+# 16 steps in all.
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=33 alloc=735 state=735 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=33 alloc=735
+pumped state=idle fuel=33
+
+> vars
+vars search hits=[{text: "", range: 1..0, captures: {}, ranges: {}}, {text: "aa", range: 2..3, captures: {}, ranges: {}}, {text: "", range: 5..4, captures: {}, ranges: {}}]

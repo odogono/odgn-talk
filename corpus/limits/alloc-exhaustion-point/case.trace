@@ -1,0 +1,32 @@
+# alloc-exhaustion-point: the exact exhaustion point of the Allocation Budget
+# under Cost Model 0, set by a Delivery's limit override. The Script loads
+# with the default budget, and the override tightens it to 100 for one Run.
+#
+# In `grow` (grower.talk), `const` and `store` allocate nothing, and the loop
+# is a `repeat forever`, so it has no `next`. The only allocation is the
+# `append` at 0008, charged `8 + size(input)` with input the value appended:
+# 8 + size("x") = 8 + (16 + 1) = 25. Four appends make 100, the budget
+# exactly. The fifth would make 125, so the Run faults at grower:8, source
+# 7:5, before the append, having allocated 100.
+#
+# Its Fuel, fixed by the same count: dispatch 4, 0002 const 1, 0003 store 1,
+# then each pass const 1, store 1, load 1, load 1, append 4 (3 + at most 16
+# Characters / 16), store 1, jump 1 = 10. Four passes make 46, and the
+# fifth's const, store, load and load make 50 before the faulting append.
+#
+# Pinned here: the fault's instruction, position and limit, and the Run's
+# allocation. The Fuel figure pins the reading that the faulting
+# instruction's charge isn't counted.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load grower
+
+> deliver d1 to=grower message=grow limits={allocPerRun: 100}
+> pump clock=2026-09-28T09:00:00Z
+fault grower/r1 limit=alloc at=grower:8 pos=7:5
+seg grower/r1 start delivery=d1 handler=grow clause=1 fuel=50 alloc=100 state=0 end=fault
+run grower/r1 outcome=limit-fault delivery=d1 handler=grow limit=alloc fuel=50 alloc=100
+pumped state=idle fuel=50
+
+> vars
+vars grower

@@ -1,0 +1,50 @@
+# undecided-on-cancel-delivery: the board is part-way through a long
+# `recount` when a Decision arrives. A preempted Run holds up its Script's
+# mailbox until its Segment ends, so the Decision waits there, and the Host
+# gives up on it with `cancel-delivery`. A Decision still in the mailbox is
+# removed, reported as a `run end` with no Run or Handler, and settles as
+# undecided, `cancelled`, with `run` left out of its entry. Then a Decision
+# that is allowed at its first Suspension Point is cancelled after its seal,
+# which does nothing: its Run goes on and completes. Fuel, allocation and
+# state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load board
+
+# The recount's first stretch spends the board's 100-Fuel slice, and d2
+# stays in the mailbox behind it.
+> deliver d1 to=board message=recount
+> decide d2 to=board message=beforeMove args=[{from: "a2", to: "a3"}]
+> pump clock=2026-09-30T10:00:00Z fuel-slice=100
+preempt board/r1 by=slice fuel=101 alloc=120
+pumped state=sliced fuel=101
+
+# The Host's deadline passes before the seal. The cancel is drained before
+# any turn runs, so the Decision never starts a Run.
+> cancel-delivery d2
+> pump clock=2026-09-30T10:00:01Z
+run outcome=cancelled delivery=d2 fuel=0 alloc=0
+decided d2 verdict=undecided undecided=[{script: "board", outcome: "cancelled"}]
+seg board/r1 continue fuel=1315 alloc=1504 state=32 end=return
+run board/r1 outcome=completed delivery=d1 handler=recount fuel=1416 alloc=1624
+pumped state=idle fuel=1315
+
+# d3 is allowed when its Run suspends at `ask replay to record m and wait`.
+> decide d3 to=board message=beforeMove args=[{from: "a2", to: "a4"}]
+> pump clock=2026-09-30T10:00:02Z
+call board/r2.c1 op=replay.record args=[{from: "a2", to: "a4"}]
+seg board/r2 start delivery=d3 handler=beforeMove clause=1 fuel=74 alloc=0 state=362 end=ask-wait
+decided d3 verdict=allowed
+pumped state=idle fuel=74
+
+# Cancelling after the seal does nothing, so the allowed Run isn't cancelled
+# and nothing is written for the cancel. The answer then resumes the Run.
+> cancel-delivery d3
+> answer board/r2.c1 value=1
+> pump clock=2026-09-30T10:00:03Z
+seg board/r2 resume fuel=15 alloc=32 state=32 end=return
+run board/r2 outcome=completed delivery=d3 handler=beforeMove fuel=89 alloc=32
+pumped state=idle fuel=15
+
+> vars
+vars board total=100 moves=1

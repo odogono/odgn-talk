@@ -1,0 +1,13 @@
+-- patterns.talk: the pattern-size-minimum case. `<99999 digits>` compiles to
+-- 99999 `class digit` and a `match`: 100000 instructions, loaded as a
+-- constant. The spliced patterns are compiled at their `make-pattern`.
+
+on build extra
+  put <99999 digits> into p
+  if extra then
+    put <(p), digit> into q
+  else
+    put <(p)> into q
+  end if
+  return "built"
+end build

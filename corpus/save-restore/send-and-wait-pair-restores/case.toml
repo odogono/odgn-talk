@@ -1,0 +1,17 @@
+# send-and-wait-pair-restores: a `send … and wait` between two Scripts of
+# the Group, saved while both ends wait, restores intact (spec chapter 10,
+# "Across Scripts").
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "front"
+source = "front.talk"
+
+[[scripts]]
+name = "back"
+source = "back.talk"

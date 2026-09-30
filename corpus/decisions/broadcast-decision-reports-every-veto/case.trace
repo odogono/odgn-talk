@@ -1,0 +1,58 @@
+# broadcast-decision-reports-every-veto: a Broadcast Decision goes to every
+# Script with a Handler for the message, each recipient in load order with
+# its own Delivery id under one broadcast id. It settles once every
+# recipient has sealed, and it is vetoed if any recipient vetoed, with every
+# veto listed in recipient order, so the form can show both reasons at once.
+# Analytics's clause isn't `, deciding`, so it allows at dispatch. The terms
+# validator is the last to seal, so `decided` follows its `seg`. A Broadcast
+# Decision that no Script wants has no recipients, and is allowed as it is
+# drained. Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load analytics
+> load email
+> load password
+> load terms
+
+# A bad email and a short password: two vetoes, and one allow from terms.
+> decide-broadcast b1 message=submit args=[{email: "ann.example.com", password: "hunter2", terms: true}] recipients=[analytics:d1, email:d2, password:d3, terms:d4]
+> pump clock=2026-09-30T10:00:00Z
+call analytics/r1.c1 op=metrics.count args=["submit"]
+seg analytics/r1 start delivery=d1 broadcast=b1 handler=submit clause=1 fuel=33 alloc=16 state=16 end=return
+run analytics/r1 outcome=completed delivery=d1 broadcast=b1 handler=submit fuel=33 alloc=16
+seg email/r1 start delivery=d2 broadcast=b1 handler=submit clause=1 fuel=36 alloc=0 state=0 end=veto value="Enter a real email address."
+run email/r1 outcome=completed delivery=d2 broadcast=b1 handler=submit fuel=36 alloc=0
+seg password/r1 start delivery=d3 broadcast=b1 handler=submit clause=1 fuel=19 alloc=16 state=0 end=veto value="Use at least 8 characters."
+run password/r1 outcome=completed delivery=d3 broadcast=b1 handler=submit fuel=19 alloc=16
+seg terms/r1 start delivery=d4 broadcast=b1 handler=submit clause=1 fuel=24 alloc=16 state=16 end=return
+decided b1 verdict=vetoed vetoes=[{script: "email", run: "email/r1", reason: "Enter a real email address."}, {script: "password", run: "password/r1", reason: "Use at least 8 characters."}]
+run terms/r1 outcome=completed delivery=d4 broadcast=b1 handler=submit fuel=24 alloc=16
+pumped state=idle fuel=112
+
+# A good form: every recipient allows, so the Broadcast Decision is allowed.
+> decide-broadcast b2 message=submit args=[{email: "ann@example.com", password: "correct horse", terms: true}] recipients=[analytics:d5, email:d6, password:d7, terms:d8]
+> pump clock=2026-09-30T10:00:01Z
+call analytics/r2.c1 op=metrics.count args=["submit"]
+seg analytics/r2 start delivery=d5 broadcast=b2 handler=submit clause=1 fuel=33 alloc=16 state=16 end=return
+run analytics/r2 outcome=completed delivery=d5 broadcast=b2 handler=submit fuel=33 alloc=16
+seg email/r2 start delivery=d6 broadcast=b2 handler=submit clause=1 fuel=36 alloc=0 state=0 end=return
+run email/r2 outcome=completed delivery=d6 broadcast=b2 handler=submit fuel=36 alloc=0
+seg password/r2 start delivery=d7 broadcast=b2 handler=submit clause=1 fuel=19 alloc=16 state=0 end=return
+run password/r2 outcome=completed delivery=d7 broadcast=b2 handler=submit fuel=19 alloc=16
+seg terms/r2 start delivery=d8 broadcast=b2 handler=submit clause=1 fuel=24 alloc=16 state=16 end=return
+decided b2 verdict=allowed
+run terms/r2 outcome=completed delivery=d8 broadcast=b2 handler=submit fuel=24 alloc=16
+pumped state=idle fuel=112
+
+# No Script wants `reset`, so there are no recipients and no Delivery ids,
+# and the Decision is allowed when it is drained.
+> decide-broadcast b3 message=reset
+> pump clock=2026-09-30T10:00:02Z
+decided b3 verdict=allowed
+pumped state=idle fuel=0
+
+> vars
+vars analytics seen=2
+vars email
+vars password
+vars terms accepted=2

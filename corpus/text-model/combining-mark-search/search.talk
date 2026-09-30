@@ -1,0 +1,29 @@
+-- search.talk: the combining-mark-search case. A search for a base letter
+-- never matches inside a Character that carries a combining mark, whether
+-- NFC composes the pair or not (chapter 3, Text; ADR 0011).
+
+script variable eAcute
+script variable qAcute
+script variable eHasE
+script variable qHasQ
+script variable qPattern
+script variable qBegins
+script variable qAt
+script variable qAcuteAt
+script variable ePoints
+script variable qPoints
+
+on go
+  put fromCodePoint(769) into acute                           -- U+0301
+  put "e" & acute into eAcute             -- NFC composes it: U+00E9
+  put "q" & acute into qAcute             -- nothing to compose: 2 code points
+  put "x" & qAcute & "y" into subject
+  put eAcute contains "e" into eHasE                          -- false
+  put subject contains "q" into qHasQ                         -- false
+  put subject contains <"q"> into qPattern                    -- false
+  put qAcute begins with "q" into qBegins                     -- false
+  put offset("q", subject) into qAt                           -- 0
+  put offset(qAcute, subject) into qAcuteAt                   -- 2
+  put the length of the code points of eAcute into ePoints    -- 1
+  put the length of the code points of qAcute into qPoints    -- 2
+end go

@@ -1,0 +1,16 @@
+-- board.talk: part of the allow-at-the-first-suspension-point case
+-- (ADR 0031). Grants come from case.toml: replay: record (suspending,
+-- answered by a `> answer` line in case.trace)
+
+script variable frozen = false
+script variable moves = 0
+
+on beforeMove m, deciding
+  if frozen then veto "The game is paused."
+  ask replay to record m and wait  -- the first Suspension Point: allowed from here on
+  add 1 to moves
+end beforeMove
+
+on pause
+  put true into frozen
+end pause

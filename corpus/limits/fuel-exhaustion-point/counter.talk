@@ -1,0 +1,10 @@
+-- counter.talk: the fuel-exhaustion-point case. `bump k` adds 1 to `count`
+-- k times, so its Fuel is a closed formula in k (worked out in case.trace).
+
+script variable count = 0
+
+on bump k
+  repeat k times
+    add 1 to count
+  end repeat
+end bump

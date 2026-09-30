@@ -1,0 +1,6 @@
+-- email.talk: the email field's validator, part of the
+-- broadcast-decision-reports-every-veto case (ADR 0031).
+
+on submit f, deciding
+  if not the email of f contains "@" then veto "Enter a real email address."
+end submit

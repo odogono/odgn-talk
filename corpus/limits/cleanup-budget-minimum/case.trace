@@ -1,0 +1,47 @@
+# cleanup-budget-minimum: the Cleanup Budget at its conformance minimum,
+# 1000000, which every Core must honour exactly. Two Runs of `hold` wait, and
+# both are cancelled while they wait, so nothing is rolled back and each
+# runs its `finally` block on the Cleanup Budget, not its Fuel per Run.
+#
+# The cleanup copy (holder.talk, 0015..0025, which the `finally` entry over
+# the `wait` targets) costs, for k passes:
+#   0015 load 1, 0016 iterate-times 2, each pass 0017 next 2, 0018 pop 1,
+#   0019 jump 1 (4), the last 0017 next 2, 0020 pop 1, 0021 const 1,
+#   0022 load 1, 0023 concat 4 (3 + 14 scalars / 16), 0024 tell 10 (10 + a
+#   declared 0), 0025 end-cleanup 2
+# so 24 + 4k. With k = 249994 that is 1000000, the budget exactly: the write
+# is made and the Run ends `cancelled` cleanly.
+#
+# With k = 249995 the loop ends at 3 + 4 * 249995 + 3 = 999986, then const
+# 999987, load 999988 and concat 999992, and the `tell` at 0024 would make
+# 1000002. The cleanup ends there, before the write, so no `call` record is
+# written, and the report adds `cleanup failed` with the limit.
+#
+# This pins the reading that cancelling a suspended Run charges nothing
+# before its `finally` block, and that the cleanup's Fuel is in its `seg`
+# and `run` figures. Allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load holder
+
+> deliver d1 to=holder message=hold args=[249994]
+> deliver d2 to=holder message=hold args=[249995]
+> pump clock=2026-09-28T09:00:00Z
+seg holder/r1 start delivery=d1 handler=hold clause=1 fuel=15 alloc=0 state=184 end=wait until=2026-09-28T09:01:00Z
+seg holder/r2 start delivery=d2 handler=hold clause=1 fuel=15 alloc=0 state=368 end=wait until=2026-09-28T09:01:00Z
+pumped state=idle fuel=30 next=2026-09-28T09:01:00Z
+
+# Both are cancelled before their waits fire.
+> cancel-run holder/r1
+> cancel-run holder/r2
+> pump clock=2026-09-28T09:00:01Z
+call holder/r1.c1 op=log.write args=["cleaned 249994"]
+seg holder/r1 resume fuel=1000000 alloc=5999934 state=184 end=cancel
+run holder/r1 outcome=cancelled delivery=d1 handler=hold fuel=1000015 alloc=5999934
+cleanup-failed holder/r2 limit=cleanup
+seg holder/r2 resume fuel=999992 alloc=5999958 state=0 end=cancel
+run holder/r2 outcome=cancelled delivery=d2 handler=hold fuel=1000007 alloc=5999958
+pumped state=idle fuel=1999992
+
+> vars
+vars holder

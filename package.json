@@ -6,7 +6,8 @@
     "spec:gen": "bun tools/spec/generate.ts",
     "spec:check": "bun tools/spec/generate.ts --check",
     "grammar:check": "bun tools/grammar/check.ts",
-    "machine:check": "bun tools/machine/check.ts"
+    "machine:check": "bun tools/machine/check.ts",
+    "corpus:check": "bun tools/corpus/check.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

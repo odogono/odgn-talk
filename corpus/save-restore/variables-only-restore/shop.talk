@@ -1,0 +1,14 @@
+-- shop.talk: part of the variables-only-restore case. It imports `label`
+-- from the Library fmt, which is replaced after the save, so the save no
+-- longer matches. Grants come from case.toml: stock: check (suspending)
+
+use label from fmt
+
+script variable orders = 0
+script variable last = ""
+
+on order sku
+  add 1 to orders
+  put label(sku) into last
+  ask stock to check sku and wait
+end order

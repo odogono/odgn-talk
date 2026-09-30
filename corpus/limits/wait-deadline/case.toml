@@ -1,0 +1,12 @@
+# wait-deadline: a `wait` deadline on the virtual Clock, with Pumps before,
+# at and after it (chapter 5, Waiting and A Pump).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "napper"
+source = "napper.talk"

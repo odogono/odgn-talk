@@ -1,0 +1,20 @@
+# combining-mark-search: pins that a search for a base letter doesn't match
+# inside a Character that carries a combining mark (chapter 3, Text; chapter
+# 4, Operators). "e" & U+0301 composes to U+00E9 under NFC, so it holds no
+# "e" at all. "q" & U+0301 has no composed form and stays two code points in
+# one Character, so only the whole-Character rule keeps "q" from matching it,
+# for `contains` with text and with a Text Pattern, for `begins with`, and for
+# `offset`. Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=141 alloc=168 state=88 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=141 alloc=168
+pumped state=idle fuel=141
+
+# eAcute is U+00E9 and qAcute is q, U+0301, both in NFC and written
+# literally, since a combining mark isn't hidden.
+> vars
+vars search eAcute="é" qAcute="q́" eHasE=false qHasQ=false qPattern=false qBegins=false qAt=0 qAcuteAt=2 ePoints=1 qPoints=2

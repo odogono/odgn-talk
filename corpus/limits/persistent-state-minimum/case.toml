@@ -1,0 +1,15 @@
+# persistent-state-minimum: the Persistent State cap at its conformance
+# minimum, 67108864, reached exactly and passed by one (chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+# `fill` spends about 16.8 million Fuel and allocates about 134 million, past
+# the defaults, so the Script takes both at their conformance minimums.
+[[scripts]]
+name = "hoard"
+source = "hoard.talk"
+limits = { persistentState = 67108864, fuelPerRun = 1000000000, allocPerRun = 268435456 }

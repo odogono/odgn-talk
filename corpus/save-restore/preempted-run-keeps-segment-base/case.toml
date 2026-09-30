@@ -1,0 +1,15 @@
+# preempted-run-keeps-segment-base: a Run a Fuel Slice cuts mid-Segment is
+# saved mid-Segment with its segment base, restored, and continued, and its
+# later Limit Fault still rolls back the write it made before the save
+# (spec chapter 10, "Saving"; ADR 0006, ADR 0008).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "counter"
+source = "counter.talk"
+limits = { fuelPerRun = 1000 }

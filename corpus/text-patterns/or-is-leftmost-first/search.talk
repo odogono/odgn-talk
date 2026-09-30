@@ -1,0 +1,12 @@
+-- search.talk: the or-is-leftmost-first case (spec chapter 4, Matching;
+-- ADR 0007). `a or b` prefers `a`, even when `b` would match more.
+
+script variable short = nothing
+script variable long = nothing
+script variable whole = nothing
+
+on go
+  put every match of <"a" or "ab"> in "ab abc" into short
+  put every match of <"ab" or "a"> in "ab abc" into long
+  put "ab" matches <"a" or "ab"> into whole
+end go

@@ -1,0 +1,34 @@
+# pattern-size-minimum: Text Pattern size at its conformance minimum, 100000,
+# which every Core must honour exactly. Program sizes (chapter 8, Compiling):
+#   <99999 digits>   99999 copies of `class digit`, then `match`   100000
+#   <(p)>            p's elements' code, then `match`              100000
+#   <(p), digit>     p's elements' code, `class digit`, `match`    100001
+# So the literal loads, since a literal over the limit would be a load error,
+# and the Script loads with no `diag`. `<(p)>` is made at run time at the
+# limit exactly. `<(p), digit>` is one over it, a Limit Fault at its
+# `make-pattern` (patterns:7, source 8:9).
+#
+# Fuel of the first Run: dispatch 4, const 1, store 1, load 1, branch-false
+# 1, load 1, make-pattern 20 + 2 * 100000, store 1, const 1, return 2, which
+# is 200033, and its allocation is size(result) = 16 + 8 * 100000 = 800016.
+# The second faults after 9 Fuel. Only the fault is pinned. The figures are
+# estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load patterns
+
+> deliver d1 to=patterns message=build args=[false]
+> pump clock=2026-09-28T09:00:00Z
+seg patterns/r1 start delivery=d1 handler=build clause=1 fuel=200033 alloc=800016 state=0 end=return
+run patterns/r1 outcome=completed delivery=d1 handler=build value="built" fuel=200033 alloc=800016
+pumped state=idle fuel=200033
+
+> deliver d2 to=patterns message=build args=[true]
+> pump clock=2026-09-28T09:00:01Z
+fault patterns/r2 limit=pattern at=patterns:7 pos=8:9
+seg patterns/r2 start delivery=d2 handler=build clause=1 fuel=9 alloc=0 state=0 end=fault
+run patterns/r2 outcome=limit-fault delivery=d2 handler=build limit=pattern fuel=9 alloc=0
+pumped state=idle fuel=9
+
+> vars
+vars patterns

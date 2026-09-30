@@ -1,0 +1,13 @@
+# zwj-sequence-search: a search never matches part of an emoji ZWJ sequence.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "search"
+source = "search.talk"

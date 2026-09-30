@@ -1,0 +1,47 @@
+# unsettled-call-is-lost: pins what happens to a pending call left unsettled
+# after a restore.
+#
+# - After the settlements are drained (step 2 of the first Pump), every call
+#   still unsettled fails in its Script with `call lost`, in call id order,
+#   before any timer fires at step 3.
+# - So shop/r2.c1 is `call lost`, not `timeout`, although its maxPending
+#   deadline (10:00:10) has also passed by the first Pump (10:00:20).
+# - The order Runs become ready in is the order they run in: shop/r1 (its
+#   settlement), shop/r2 (`call lost`), then shop/r3 (its overdue `wait`).
+# `call lost` is raised at the `ask … and wait` (shop:5, pos 9:5), and is an
+# ordinary error the Script catches.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load shop
+
+# Two pending calls, each with a maxPending deadline of 10:00:10, and a Run
+# in a 5 s `wait`.
+> deliver d1 to=shop message=check args=["A1"]
+> deliver d2 to=shop message=check args=["B2"]
+> deliver d3 to=shop message=nap
+> pump clock=2026-09-30T10:00:00Z
+call shop/r1.c1 op=stock.check args=["A1"]
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=240 end=ask-wait
+call shop/r2.c1 op=stock.check args=["B2"]
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=464 end=ask-wait
+seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=640 end=wait until=2026-09-30T10:00:05Z
+pumped state=idle fuel=245 next=2026-09-30T10:00:05Z
+
+> save s1
+> restore from=s1 mode=full pending=[shop/r1.c1, shop/r2.c1]
+
+# Only shop/r1.c1 is settled. Every deadline has passed by 10:00:20.
+> settle shop/r1.c1 how=answer value=12
+> pump clock=2026-09-30T10:00:20Z
+seg shop/r1 resume fuel=24 alloc=88 state=488 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=139 alloc=88
+raise shop/r2 code="call lost" at=shop:5 pos=9:5
+seg shop/r2 resume fuel=62 alloc=240 state=304 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=177 alloc=240
+seg shop/r3 resume fuel=24 alloc=128 state=384 end=return
+run shop/r3 outcome=completed delivery=d3 handler=nap fuel=39 alloc=128
+pumped state=idle fuel=110
+
+> vars
+vars shop results=[["A1", 12], ["B2", "call lost"], ["nap", "woke"]]

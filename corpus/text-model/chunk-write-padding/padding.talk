@@ -1,0 +1,22 @@
+-- padding.talk: the chunk-write-padding case. Writing an item or a line past
+-- the end first pads the text with delimiters, or with newline, up to that
+-- index (chapter 4, Writing chunks).
+
+script variable row
+script variable trailing
+script variable fromEmpty
+script variable semis
+script variable lined
+
+on go
+  put "a,b" into row
+  put "e" into item 4 of row                              -- "a,b,,e"
+  put "a,b," into trailing                -- still 2 items
+  put "e" into item 4 of trailing                             -- "a,b,,e"
+  put "" into fromEmpty                   -- no items
+  put "e" into item 2 of fromEmpty                            -- ",e"
+  put "a" into semis
+  put "c" into item 3 of semis delimited by ";"               -- "a;;c"
+  put "x" into lined
+  put "z" into line 3 of lined          -- x, newline, newline, z
+end go

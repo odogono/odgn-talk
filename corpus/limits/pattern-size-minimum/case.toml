@@ -1,0 +1,13 @@
+# pattern-size-minimum: Text Pattern size at its conformance minimum, 100000
+# program instructions (chapter 6, Limits; chapter 8, Text Pattern programs).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "patterns"
+source = "patterns.talk"
+limits = { patternSize = 100000 }

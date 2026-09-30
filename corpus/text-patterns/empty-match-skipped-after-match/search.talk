@@ -1,0 +1,9 @@
+-- search.talk: the empty-match-skipped-after-match case (spec chapter 4,
+-- Matches; chapter 8, Running). `zero or more of "a"` can match empty text,
+-- so the Match Search has to step past empty matches.
+
+script variable hits = nothing
+
+on go
+  put every match of <zero or more of "a"> in "baab" into hits
+end go

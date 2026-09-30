@@ -1,0 +1,13 @@
+# combining-mark-search: a search for a base letter never matches inside a Character with a combining mark.
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "search"
+source = "search.talk"

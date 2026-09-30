@@ -1,0 +1,7 @@
+-- napper.talk: the wait-deadline case. Two waits, each on the virtual Clock.
+
+on nap
+  wait 2 s
+  wait 2 s
+  return "woke"
+end nap

@@ -1,0 +1,27 @@
+-- search.talk: the zwj-sequence-search case. A search never matches part of
+-- an emoji ZWJ sequence, since the whole sequence is one Character (chapter
+-- 3, Text; ADR 0011).
+
+script variable subject
+script variable size
+script variable hasGirl
+script variable hasWoman
+script variable hasFamily
+script variable patternGirl
+script variable girlAt
+script variable familyAt
+
+on go
+  put fromCodePoint(128105) into woman                        -- U+1F469
+  put fromCodePoint(8205) into zwj                            -- U+200D
+  put fromCodePoint(128103) into girl                         -- U+1F467
+  put woman & zwj & woman & zwj & girl into family            -- one Character
+  put "a" & family & "b" into subject
+  put the length of subject into size                         -- 3
+  put subject contains girl into hasGirl                      -- false
+  put subject contains woman into hasWoman                    -- false
+  put subject contains family into hasFamily                  -- true
+  put subject contains <(girl)> into patternGirl              -- false
+  put offset(girl, subject) into girlAt                       -- 0
+  put offset(family, subject) into familyAt                   -- 2
+end go

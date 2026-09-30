@@ -1,0 +1,24 @@
+# lazily-stays-on-its-element: `lazily` swaps only the splits of its
+# element's own repetition, and doesn't reach the elements inside a nested
+# `<…>`. In `one or more of <digits> lazily` the outer repetition prefers
+# one pass, but the `digits` inside stays greedy, so it matches "#123".
+# `digits lazily`, whose own repetition is lazy, matches "#1" (spec chapter
+# 8, Compiling). The matches are pinned. Fuel, allocation and state are
+# estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load search
+
+# The first program is 0 char "#", 1 class digit, 2 split 1 3 (the greedy
+# `digits`), 3 split 4 1 (the lazy outer repetition), 4 match. After each
+# digit the thread list is [class digit, match], so the greedy thread comes
+# first, and the match at the end is the one kept. 11 steps, and 9 for the
+# second Match Search.
+> deliver d1 to=search message=go
+> pump clock=2026-09-30T09:00:00Z
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=47 alloc=516 state=516 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=47 alloc=516
+pumped state=idle fuel=47
+
+> vars
+vars search outer=[{text: "#123", range: 1..4, captures: {}, ranges: {}}] plain=[{text: "#1", range: 1..2, captures: {}, ranges: {}}]

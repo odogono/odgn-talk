@@ -1,0 +1,5 @@
+-- fmt.talk: the Library the variables-only-restore case replaces.
+
+function label sku
+  return "#" & sku
+end label

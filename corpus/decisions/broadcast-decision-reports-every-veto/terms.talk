@@ -1,0 +1,9 @@
+-- terms.talk: the terms checkbox's validator, part of the
+-- broadcast-decision-reports-every-veto case (ADR 0031).
+
+script variable accepted = 0
+
+on submit f, deciding
+  if not the terms of f then veto "Accept the terms to continue."
+  add 1 to accepted
+end submit

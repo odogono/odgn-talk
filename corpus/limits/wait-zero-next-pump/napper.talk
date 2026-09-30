@@ -1,0 +1,6 @@
+-- napper.talk: the wait-zero-next-pump case.
+
+on blink
+  wait 0 s
+  return "blinked"
+end blink

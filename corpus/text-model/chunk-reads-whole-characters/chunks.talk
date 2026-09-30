@@ -1,0 +1,31 @@
+-- chunks.talk: the chunk-reads-whole-characters case. Chunk reads and Text
+-- Pattern elements count whole Characters, never code points (chapter 3,
+-- Text; chapter 4, Chunk Expressions).
+
+script variable size
+script variable points
+script variable second
+script variable third
+script variable middle
+script variable nextToLast
+script variable split
+script variable oneCharacter
+script variable matchCount
+
+on go
+  put fromCodePoint(128105) into woman                        -- U+1F469
+  put fromCodePoint(8205) into zwj                            -- U+200D
+  put woman & zwj & woman & zwj & fromCodePoint(128103) into family
+  put "q" & fromCodePoint(769) into qAcute                    -- q, U+0301
+  put "a" & family & qAcute & "b" into s
+  put the length of s into size                               -- 4
+  put the length of the code points of s into points          -- 9
+  put character 2 of s into second                            -- the family
+  put character 3 of s into third                             -- q, U+0301
+  put characters 2..3 of s into middle
+  put character -2 of s into nextToLast                       -- q, U+0301
+  put the characters of s into split
+  put family matches <character> into oneCharacter            -- true
+  put every match of <character> in s into found
+  put the length of found into matchCount                     -- 4
+end go

@@ -1,0 +1,40 @@
+-- writes.talk: the chunk-write-out-of-range case. Writing a character or a
+-- word past the end, and writing any chunk at index 0, before the start or
+-- over a reversed range, raises `out of range` and leaves the root as it was
+-- (chapter 4, Writing chunks; chapter 6).
+
+script variable s
+script variable pastEnd
+script variable wordPastEnd
+script variable itemZero
+script variable beforeStart
+script variable reversed
+
+on go
+  put "abc" into s
+  try
+    put "x" into character 4 of s
+  catch {code: c, field: f, value: v}
+    put [c, f, v] into pastEnd
+  end try
+  try
+    put "x" into word 2 of s
+  catch {code: c, field: f, value: v}
+    put [c, f, v] into wordPastEnd
+  end try
+  try
+    put "x" into item 0 of s
+  catch {code: c, field: f, value: v}
+    put [c, f, v] into itemZero
+  end try
+  try
+    put "x" into character -4 of s
+  catch {code: c, field: f, value: v}
+    put [c, f, v] into beforeStart
+  end try
+  try
+    put "x" into characters 3..2 of s
+  catch {code: c, field: f, value: v}
+    put [c, f, v] into reversed
+  end try
+end go

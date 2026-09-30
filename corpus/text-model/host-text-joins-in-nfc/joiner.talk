@@ -1,0 +1,13 @@
+-- joiner.talk: the host-text-joins-in-nfc case. Text from the Host is NFC,
+-- and joining two Host texts at a seam normalises the result (chapter 3,
+-- Text; ADR 0030).
+
+script variable markLength
+script variable joinedLength
+
+on join base, mark
+  put the length of mark into markLength                      -- 1
+  put base & mark into joined
+  put the length of joined into joinedLength                  -- 1
+  return joined                                               -- U+00E9
+end join
