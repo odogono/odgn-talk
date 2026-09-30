@@ -1,16 +1,14 @@
-# orders-pricing: SKETCH of a Trace Case (ADR 0018), rewritten from the #24
-# parity prototype. Key names are illustrative until the final spec.
+# orders-pricing: a worked example of a Trace Case (spec chapter 11). Its
+# figures are invented until Cost Model 1, so it isn't blessed.
+
+kind = "trace"
 
 [versions]
-language = "1.0"
-cost-model = "1"            # also pins the Abstract Machine (ADR 0010)
+language = "1.0-rc"
+costModel = "0"
 
-[limits]
-fuel-per-run = 20000
-alloc-per-run = 65536
-persistent-state = 16384
-
-# Operation Declarations, as data (ADR 0015). Ordered by name.
+# Operation Declarations, in the Host Manifest's data model. Ordered by name
+# within their Capability.
 [[operations]]
 capability = "log"
 name = "write"
@@ -23,22 +21,26 @@ capability = "prices"
 name = "lookup"
 mode = "suspending"
 args = ["text"]
-result = "quantity"
+result = { unitKind = "GBP" }
 cost = { fuel = 100 }
 
 [[scripts]]
 name = "orders"
 source = "orders.talk"
-grants = { log = ["write"] }
+grants = { log = { ops = ["write"] } }
+limits = { fuelPerRun = 20000 }
 
 [[scripts]]
 name = "pricing"
 source = "pricing.talk"
-grants = { prices = ["lookup"] }
+grants = { prices = { ops = ["lookup"] } }
 
-# Host Objects (ADR 0016) would be declared like this. This case needs none.
+# Host Objects would be declared like this, and parented by `> set-parent`
+# lines in case.trace. This case needs none.
+# [[objectKinds]]
+# name = "item"
+# parentKinds = ["room"]
+#
 # [[objects]]
-# id = "object-slot-183"
 # kind = "item"
-# parent = "room-4"
-# owner = "pickup"          # its Owning Script, if any
+# id = "object-slot-183"

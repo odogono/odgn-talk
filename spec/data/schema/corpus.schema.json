@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/corpus.schema.json",
+  "title": "corpus",
+  "description": "The Conformance Corpus's formats: the Trace's records, and the keys of case.toml.",
+  "type": "object",
+  "$defs": {
+    "word": { "type": "string", "pattern": "^[a-z][a-z-]*$" },
+    "sentence": { "type": "string", "minLength": 1 }
+  },
+  "properties": {
+    "type": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/sentence" },
+      "minProperties": 1
+    },
+    "record": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "$ref": "#/$defs/word" },
+          "input": { "type": "boolean" },
+          "ids": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z]+\\??$" }
+          },
+          "is": { "$ref": "#/$defs/sentence" },
+          "key": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "$ref": "#/$defs/word" },
+                "type": { "type": "string" },
+                "optional": { "const": true },
+                "filled": { "const": true },
+                "words": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/word" },
+                  "minItems": 1,
+                  "uniqueItems": true
+                },
+                "is": { "$ref": "#/$defs/sentence" }
+              },
+              "required": ["key", "type", "is"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["name", "input", "ids", "is"],
+        "additionalProperties": false
+      }
+    },
+    "end": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "word": { "$ref": "#/$defs/word" }, "is": { "$ref": "#/$defs/sentence" } },
+        "required": ["word", "is"],
+        "additionalProperties": false
+      }
+    },
+    "note": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "word": { "$ref": "#/$defs/word" }, "is": { "$ref": "#/$defs/sentence" } },
+        "required": ["word", "is"],
+        "additionalProperties": false
+      }
+    },
+    "setup": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "table": { "type": "string", "pattern": "^([a-z][A-Za-z]*)?$" },
+          "key": { "type": "string", "pattern": "^[a-z][A-Za-z]*$" },
+          "is": { "$ref": "#/$defs/sentence" },
+          "kinds": {
+            "type": "array",
+            "items": { "enum": ["trace", "disassembly", "transcript", "encoding"] },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": ["table", "key", "is", "kinds"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["type", "record", "end", "note", "setup"],
+  "additionalProperties": false
+}

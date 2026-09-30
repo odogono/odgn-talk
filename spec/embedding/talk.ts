@@ -14,7 +14,7 @@
 // Clock reading. stop and cancelRun land at the latest at the running Pump's
 // next Host crossing (an Operation or property call) or its end, and may land
 // sooner, between instructions. A worker call (load, reload, extend, addLibrary,
-// replaceLibrary, pump, save, settle) made from inside the Group's own Pump,
+// replaceLibrary, pump, save, settle, inspect) made from inside the Group's own Pump,
 // from an Operation function say, throws HostError "reentrant call".
 
 // ---------------------------------------------------------------------------
@@ -434,9 +434,34 @@ export interface Group {
   pump(now: bigint, o?: PumpOptions): PumpResult;
   save(): Uint8Array;
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
+  /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
+  inspect(): Inspection;
   /** Worker, before the first Pump after a restore. */
   /** For adopt, returns the Call the Host answers or fails through. */
   settle(callId: string, s: Settlement): Call<any> | undefined;
+}
+
+export interface Inspection {
+  scripts: ScriptView[]; // in load order
+}
+export interface ScriptView {
+  name: string;
+  vars: [string, Value][]; // its Script Variables, in declaration order
+  runs: RunView[];         // every Run that hasn't ended, in the order they started
+  mailbox: MessageView[];  // in mailbox order
+}
+export interface RunView {
+  id: string;
+  status: "ready" | "suspended" | "parked" | "preempted";
+  handler: string;   // its Handler, or the display form of the Function Value it runs
+  wait?: string;     // suspended: the `seg` end reason it suspended at (chapter 11)
+  until?: bigint;    // suspended: its deadline, if it has one
+  calls?: string[];  // suspended: the calls, replies or Join Members it waits for
+}
+export interface MessageView {
+  delivery?: string; // absent for a message a Script sent
+  from?: string;     // for a message a Script sent, the call or Run that sent it
+  message: Message;
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +511,7 @@ export type Report =
       outcome: Outcome;
       result?: Value;
       error?: ScriptError;
-      limit?: "fuel" | "alloc" | "persistent" | "depth" | "cleanup";
+      limit?: "fuel" | "alloc" | "persistent" | "depth" | "pattern" | "join" | "cleanup";
       at?: Location;
       fuel: number;
       alloc: number;

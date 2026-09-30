@@ -1,0 +1,103 @@
+# The Session Commands: the `:`-prefixed instructions to a REPL or Playground
+# session itself (ADR 0014). They aren't part of the language, and no Script
+# can issue one. A Session Transcript records each one, so both REPLs must
+# accept the same commands and print the same output (chapter 12).
+#
+# Schema: schema/session.schema.json. Shown in chapter 12 (region
+# `session.commands`).
+#
+# [[command]]
+#   name         the command, with its `:`
+#   usage        how it is written; [ … ] marks an optional part, and | a choice
+#   does         one sentence: what it does
+#   before       true if it is allowed only before the session starts
+#   recorded     false if a Session Transcript leaves it out
+
+[[command]]
+name = ":grant"
+usage = ":grant <name> <capability>"
+does = "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`"
+before = true
+
+[[command]]
+name = ":mock"
+usage = ":mock <capability>.<operation> <mode>"
+does = "Defines a mock Operation, with any arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget`"
+before = true
+
+[[command]]
+name = ":stub"
+usage = ":stub <capability>.<operation> <value> | :stub <capability>.<operation> fail <error>"
+does = "Queues the result of the next call of a mock immediate Operation, or an error map to fail it with"
+
+[[command]]
+name = ":answer"
+usage = ":answer <call> <value>"
+does = "Answers a pending call of a mock suspending Operation"
+
+[[command]]
+name = ":fail"
+usage = ":fail <call> <error>"
+does = "Fails a pending call of a mock suspending Operation with an error map"
+
+[[command]]
+name = ":clock"
+usage = ":clock [real | virtual [<instant>] | advance <duration>]"
+does = "Shows the Clock, switches it between real and virtual, or advances a virtual Clock by an exact duration and pumps"
+
+[[command]]
+name = ":limits"
+usage = ":limits [<limit> <value> | reset]"
+does = "Shows the limits later Entries run with, tightens one of the limits a Delivery may override, or clears every override"
+
+[[command]]
+name = ":cancel"
+usage = ":cancel [<run>]"
+does = "Cancels a Run, by default the latest Entry's Run if it hasn't ended"
+
+[[command]]
+name = ":runs"
+usage = ":runs"
+does = "Lists every Run that hasn't ended"
+
+[[command]]
+name = ":mailbox"
+usage = ":mailbox"
+does = "Lists every message waiting in the Session Script's mailbox"
+
+[[command]]
+name = ":vars"
+usage = ":vars"
+does = "Lists the Session Script's Script Variables and their values"
+
+[[command]]
+name = ":save"
+usage = ":save [<name>]"
+does = "Saves the session under `<name>`, or `default`, in the Host's memory"
+
+[[command]]
+name = ":restore"
+usage = ":restore [<name>]"
+does = "Restores the session saved under `<name>`, or `default`"
+
+[[command]]
+name = ":library"
+usage = ":library add <name> <path> | :library replace <name> <path>"
+does = "Adds a user Library from a file, or replaces one, carrying Script Variables over"
+
+[[command]]
+name = ":export"
+usage = ":export [<directory>]"
+does = "Shows the Session Script's source, or writes it and each user Library to a directory as `.talk` files"
+
+[[command]]
+name = ":help"
+usage = ":help [<command>]"
+does = "Shows help"
+recorded = false
+
+[[command]]
+name = ":quit"
+usage = ":quit"
+does = "Ends the session"
+recorded = false

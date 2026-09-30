@@ -7,7 +7,7 @@ A Host embeds a Core through one interface, declared in [`talk.go`](embedding/ta
 ## The shape
 
 - **`Core`** is process-wide. It holds the compile cache, so a Script or Library with the same code identity compiles once. It defines Capabilities and Object Kinds, compiles Libraries, and makes and restores Groups.
-- **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, decide, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint. Host Objects are made per Group, since parents and disposal belong to it.
+- **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, decide, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint and an Inspection. Host Objects are made per Group, since parents and disposal belong to it.
 - **`Script`** is a handle for calls addressed to one Script: reload, extend, stop, cancel a Run, revoke a Grant, counters, and deliver, request or decide to the Script itself.
 
 ## Threads and the input queue
@@ -18,7 +18,7 @@ A Host embeds a Core through one interface, declared in [`talk.go`](embedding/ta
 - **Cancelling a Request:** cancelling its context or signal queues `cancel-delivery`. It cancels the Run the Delivery started. A Delivery still in the mailbox is removed instead, and reported as a `run end` with outcome `cancelled` and no run or Handler.
 - **Durations:** `MaxPending` and `MaxWait` are whole milliseconds. Go refuses a finer `time.Duration`, and TS a fraction, as `invalid value`.
 - **Synchronous errors:** a queued call returns an error only for facts known at the call, such as a full mailbox, a value from another Group, or a limit override that loosens. Anything else is known only when the queue is drained, and comes back as a report.
-- **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Settle`, `Fingerprint` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
+- **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Settle`, `Fingerprint`, `Inspect` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
 - **Reentry:** a worker call made from inside the Group's own Pump, from an Operation function say, is the Host error `reentrant call` in both Cores.
 - **Operation functions:** these are the only Host code that runs inside a Pump, along with property `Get` and `Set`. They may make queued calls.
 
@@ -59,7 +59,7 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
 ### JSON and the Value Encoding
 
 - **Plain JSON:** `DecodeJSON` and `EncodeJSON` follow the JSON mapping of [chapter 7](07-libraries-and-the-standard-library.md#the-json-mapping), the rule the `json` Library follows. Numbers are read from their text, never through a float.
-- **The Value Encoding** is the lossless JSON form of every kind that can be encoded, for Host storage and the message layer. The same value always gives the same bytes.
+- **The Value Encoding** is the lossless JSON form of every kind that can be encoded, for Host storage and the message layer. The same value always gives the same bytes: UTF-8 JSON with no white space, with strings escaped as [the Group Fingerprint's](#the-pump-and-the-group-fingerprint) are, and a JSON number written as its canonical text.
   - Booleans are JSON booleans, text is a JSON string, Nothing is `null`, and a list is an array.
   - A number with no fraction digits in its canonical text (so `3`, but not `3.0`) and a magnitude below 2⁵³ is a JSON number, and every other number is `{"$dec": "<canonical text>"}`. So trailing zeros survive.
   - A map is a JSON object, in order. A map with any key starting with `$` is `{"$map": [[key, value], …]}`, so a key never reads as a tag.
@@ -85,7 +85,7 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
   - **Suspending:** `Start` runs at the call and returns at once, and the Host answers later with `Answer`, `AnswerWithCost` or `Fail`, from any thread.
   - **Fire-and-forget:** `Fire` runs at the call, in order, and its result is dropped. Only these can be called with `tell`.
 - **Grants:** a Grant is a set of a Capability's Operations with the Host's own binding data, which each call reads. `Load` binds Grants by the name the Script uses, so one Capability can be granted twice under two names with different bindings. With `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use.
-- **Standard Capabilities:** `clock`, `calendar`, `locale` and `timer` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). The Host supplies the implementation and a cost for each Operation.
+- **Standard Capabilities:** `clock`, `calendar`, `locale`, `timer` and `console` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). The Host supplies the implementation and a cost for each Operation.
 - **The call:** a Host function gets a `Call`, which gives the call id, the Script's name, the Grant's binding, the Pump's Clock reading, and a context or signal that is cancelled when the call is abandoned. It never reads the Host's own time.
 - **Charging:**
   - The declared cost is charged before the Host function runs, and a Run that can't cover it has a Limit Fault at the call.
@@ -128,12 +128,13 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
   - `libraries` is each Library's `[name, identity]`, ordered by name.
   - `scripts` is each Script's `{"name", "identity", "grants", "limits"}`, ordered by name. `grants` maps each granted name to its Capability's name and its Operation Declarations, in the Host Manifest's data model, ordered by name. `limits` maps each limit's `ts` name in [`limits.toml`](data/limits.toml) to the value the Script has after defaults, durations in whole milliseconds, ordered as in `limits.toml`.
   - Identities are lowercase hexadecimal. The Fingerprint never covers state, so two Groups in lockstep compare it once, before they start.
+- **`Inspect()`** reads the Group without changing it, between Pumps: each Script's Script Variables in declaration order, its Runs that haven't ended, with their status, Handler and what each suspended one waits for, and the messages in its mailbox. It charges nothing, and is the Host Input `vars` in the Trace ([chapter 11](11-the-trace-and-conformance.md)). A REPL's `:vars`, `:runs` and `:mailbox` render it ([chapter 12](12-sessions-and-tooling.md)).
 
 ## Function Values
 
 - **What the Host holds:** a Function Value is an ordinary `Value` of kind `function`. The Host can read only its Home Script and its display form, and it can't build one.
 - **Bound to its Group:** passing it into another Group is `wrong group`. It lives as long as the Host holds it, and nothing needs releasing.
-- **Calling it:** `group.Call` has the shape of `Request`. It is a Delivery to the Home Script, recorded in the Trace as `call <display form>(args)`.
+- **Calling it:** `group.Call` has the shape of `Request`. It is a Delivery to the Home Script, recorded in the Trace as a `call-value` Host Input ([chapter 11](11-the-trace-and-conformance.md#host-inputs)).
 - **Staleness:** checked when the queue is drained. A stale value rejects with `send failed`, reason `function gone`, and nothing runs.
 - **Taking one as an argument:** an Operation that accepts a Function Value declares the `function` Shape.
 - **Not durable:** Host storage can't encode it, and a Host-held handle doesn't survive save and restore. Only the message layer carries it, as a reference form (below). A callback that must survive a save should be an ordinary message, as the `timer` Capability's are.
@@ -162,7 +163,7 @@ The message layer is the language-neutral form of this interface, for a Host tha
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox, and it is received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Stops land at a crossing:** `stop` and `cancel-run` land at the latest at the running Pump's next `op` or `prop`, or at its end. The Trace records where.
 - **Charging:** each `op` carries the Fuel the Run has left after the declared cost. The Host's `Charge` subtracts from it locally and fails exactly when it would go below 0, and its reply carries the total `charged`.
-- **Ids** are the Core's: delivery ids, run ids and call ids are assigned as in `talk.go`. Handles for Grants, Libraries (by identity), Groups and Scripts (by name), and Host Objects (`[kind, id]`) are the Host's.
+- **Ids** are the Core's: delivery ids, run ids and call ids are assigned as [chapter 11](11-the-trace-and-conformance.md#ids) says. Handles for Grants, Libraries (by identity), Groups and Scripts (by name), and Host Objects (`[kind, id]`) are the Host's.
 - **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's glue code raises `wrong group` before it sends another Group's object.
 - **Function Values** cross as `{"$function": [home, display, token]}`. The token is opaque, and holds the value's own data and its Group, so nothing needs releasing. The Core checks `wrong group` when it reads a token, and `function gone` when the queue is drained. Host storage refuses the tag.
 - **Never crossing:** Grant bindings, native objects, `OnReady` and futures stay on the Host's side.
@@ -195,6 +196,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `op` (interim) | `call`, `script`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, `fuelLeft` | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
 | `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
+| `inspect` | – | `scripts`: `[{name, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls` | `Restore` |
 | `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans | `Grants`, `Resolve` |
 | `settle` | `call`, `settlement`: `{answer (V)}`, `{fail}`, `{reissue}` or `{adopt}` | – | `Settle`; an adopted call is answered with `answer` or `fail` |

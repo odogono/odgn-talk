@@ -1,0 +1,1360 @@
+# The Conformance Corpus's formats: the Trace's records, and the keys of a
+# case's case.toml.
+#
+# A Trace is one record per line (chapter 11). A Host Input line starts with
+# `> `, and a Core output line has no prefix. Each record is its name, its ids
+# in order, then its keys in the order listed here, each as key=value. A key
+# that isn't optional is always written; an optional one only when it applies.
+# The language version pins this file (ADR 0018).
+#
+# Schema: schema/corpus.schema.json. Shown in chapter 11 (regions `corpus.*`).
+#
+# [type]         each key type: what its value is written as
+#
+# [[record]]     one Trace record
+#   name         its name
+#   input        true for a Host Input, written after `> `
+#   ids          its ids, in order; a trailing ? marks one that may be absent
+#   is           one sentence: what the record says
+#   [[record.key]]
+#     key        the key
+#     type       one of [type]
+#     optional   true if it is written only when it applies
+#     filled     true if an author may leave it out of a Host Input line, and
+#                bless fills it in
+#     words      for type word: the words it may be
+#     is         one sentence: what its value is
+#
+# [[end]]        a `seg` end reason: the word, and when a Segment ends so
+# [[note]]       a `note` kind: the word, and when the Core notes it
+#
+# [[setup]]      one key of case.toml
+#   table        the table it is in, or "" for a top-level key
+#   key          the key
+#   is           one sentence: what it holds
+#   kinds        the case kinds that use it
+
+[type]
+id = "an id, such as `d4`, `orders/r2` or `orders/r2.c1` ([Ids](#ids))"
+ids = "a list of ids, `[orders/r2, orders/r3]`"
+word = "one of the words the key lists"
+count = "a non-negative integer, in canonical text"
+value = "a value, in the display form"
+instant = "an Instant, in the display form"
+target = "a Script's name, or a Host Object in the display form"
+at = "a code position: a code unit's name, `:`, and an instruction index, `orders:17`"
+pos = "a source position: a line, `:`, and a column, `22:5`"
+hex = "lowercase hexadecimal"
+
+[[record]]
+name = "load"
+input = true
+ids = ["script"]
+is = "loads the Script that case.toml names, with its source, Grants, owner, well-known objects and limits"
+
+[[record.key]]
+key = "identity"
+type = "hex"
+filled = true
+is = "the Script's code identity"
+
+[[record]]
+name = "reload"
+input = true
+ids = ["script"]
+is = "reloads the Script from the source given"
+
+[[record.key]]
+key = "carry"
+type = "word"
+words = ["yes", "no"]
+is = "whether Script Variables carry over"
+
+[[record.key]]
+key = "source"
+type = "value"
+is = "the new source, as text"
+
+[[record.key]]
+key = "identity"
+type = "hex"
+filled = true
+is = "the new source's code identity"
+
+[[record]]
+name = "extend"
+input = true
+ids = ["script"]
+is = "extends the Script with an Entry"
+
+[[record.key]]
+key = "source"
+type = "value"
+is = "the Entry's source, as text"
+
+[[record.key]]
+key = "identity"
+type = "hex"
+filled = true
+is = "the extended Script's new code identity"
+
+[[record]]
+name = "add-library"
+input = true
+ids = ["library"]
+is = "adds the Library that case.toml names"
+
+[[record.key]]
+key = "identity"
+type = "hex"
+filled = true
+is = "the Library's code identity"
+
+[[record]]
+name = "replace-library"
+input = true
+ids = ["library"]
+is = "replaces the Library with the source given"
+
+[[record.key]]
+key = "carry"
+type = "word"
+words = ["yes", "no"]
+is = "whether the reloaded Scripts' Script Variables carry over"
+
+[[record.key]]
+key = "source"
+type = "value"
+is = "the new source, as text"
+
+[[record.key]]
+key = "identity"
+type = "hex"
+filled = true
+is = "the new source's code identity"
+
+[[record]]
+name = "pump"
+input = true
+ids = []
+is = "a Pump, with its one Clock reading"
+
+[[record.key]]
+key = "clock"
+type = "instant"
+is = "the Clock reading"
+
+[[record.key]]
+key = "fuel-slice"
+type = "count"
+optional = true
+is = "the Fuel Slice"
+
+[[record.key]]
+key = "fuel-cap"
+type = "count"
+optional = true
+is = "the Group's Fuel cap"
+
+[[record]]
+name = "deliver"
+input = true
+ids = ["delivery"]
+is = "a Delivery"
+
+[[record.key]]
+key = "to"
+type = "target"
+is = "the object or Script it is addressed to"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override, a map from each limit's `ts` name to its value"
+
+[[record]]
+name = "request"
+input = true
+ids = ["delivery"]
+is = "a Request: a Delivery whose result the Host waits for"
+
+[[record.key]]
+key = "to"
+type = "target"
+is = "the object or Script it is addressed to"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override, a map from each limit's `ts` name to its value"
+
+[[record]]
+name = "broadcast"
+input = true
+ids = ["broadcast"]
+is = "a Broadcast"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override, a map from each limit's `ts` name to its value"
+
+[[record.key]]
+key = "recipients"
+type = "ids"
+filled = true
+is = "each recipient, as `<script>:<delivery id>`, in recipient order"
+
+[[record]]
+name = "call-value"
+input = true
+ids = ["delivery"]
+is = "a Host call of a Function Value"
+
+[[record.key]]
+key = "fn"
+type = "value"
+is = "the Function Value"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override"
+
+[[record]]
+name = "decide"
+input = true
+ids = ["delivery"]
+is = "a Decision"
+
+[[record.key]]
+key = "to"
+type = "target"
+is = "the object or Script it is addressed to"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override, a map from each limit's `ts` name to its value"
+
+[[record]]
+name = "decide-broadcast"
+input = true
+ids = ["broadcast"]
+is = "a Broadcast Decision"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "limits"
+type = "value"
+optional = true
+is = "its limit override, a map from each limit's `ts` name to its value"
+
+[[record.key]]
+key = "recipients"
+type = "ids"
+filled = true
+is = "each recipient, as `<script>:<delivery id>`, in recipient order"
+
+[[record]]
+name = "cancel-delivery"
+input = true
+ids = ["delivery"]
+is = "cancels a Request, Decision or Host call, by its delivery id or broadcast id"
+
+[[record]]
+name = "answer"
+input = true
+ids = ["call"]
+is = "answers a suspending call"
+
+[[record.key]]
+key = "value"
+type = "value"
+is = "the answer"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+optional = true
+is = "a cost known only now, charged when the Run resumes"
+
+[[record]]
+name = "fail"
+input = true
+ids = ["call"]
+is = "fails a suspending call"
+
+[[record.key]]
+key = "error"
+type = "value"
+is = "the error: a map with `code`, and optionally `message` and the `Data` entries"
+
+[[record]]
+name = "settle"
+input = true
+ids = ["call"]
+is = "settles a pending call after a restore"
+
+[[record.key]]
+key = "how"
+type = "word"
+words = ["answer", "fail", "reissue", "adopt"]
+is = "the settlement"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "the answer, for `answer`"
+
+[[record.key]]
+key = "error"
+type = "value"
+optional = true
+is = "the error, for `fail`"
+
+[[record]]
+name = "stub"
+input = true
+ids = ["operation"]
+is = "queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, and any call's charge; the runner writes it, and the Core never sees it"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "the result"
+
+[[record.key]]
+key = "error"
+type = "value"
+optional = true
+is = "an error to fail with instead, as for `fail`, or `{}` to fail with an error that isn't a Script error"
+
+[[record.key]]
+key = "charge"
+type = "count"
+optional = true
+is = "the Fuel the Host function draws with `Charge`"
+
+[[record]]
+name = "cancel-run"
+input = true
+ids = ["run"]
+is = "cancels a Run"
+
+[[record.key]]
+key = "pc"
+type = "count"
+optional = true
+is = "for one that landed early, the instruction it landed before"
+
+[[record]]
+name = "stop"
+input = true
+ids = ["script"]
+is = "stops a Script"
+
+[[record.key]]
+key = "reason"
+type = "value"
+is = "the Host's reason, as text"
+
+[[record.key]]
+key = "pc"
+type = "count"
+optional = true
+is = "for one that landed early, the instruction it landed before"
+
+[[record]]
+name = "revoke"
+input = true
+ids = ["script"]
+is = "revokes one of the Script's Grants"
+
+[[record.key]]
+key = "grant"
+type = "id"
+is = "the granted name"
+
+[[record]]
+name = "set-parent"
+input = true
+ids = []
+is = "sets a Host Object's parent"
+
+[[record.key]]
+key = "object"
+type = "value"
+is = "the object"
+
+[[record.key]]
+key = "parent"
+type = "value"
+is = "its new parent, or `nothing`"
+
+[[record]]
+name = "dispose"
+input = true
+ids = []
+is = "disposes a Host Object"
+
+[[record.key]]
+key = "object"
+type = "value"
+is = "the object"
+
+[[record]]
+name = "save"
+input = true
+ids = ["save"]
+is = "saves the Group"
+
+[[record]]
+name = "restore"
+input = true
+ids = []
+is = "restores a Group from a save"
+
+[[record.key]]
+key = "from"
+type = "id"
+filled = true
+is = "the save it restores"
+
+[[record.key]]
+key = "mismatch"
+type = "word"
+optional = true
+words = ["variables-only"]
+is = "the Host's policy for a mismatch, when it isn't to reject"
+
+[[record.key]]
+key = "unbound"
+type = "ids"
+optional = true
+is = "the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked"
+
+[[record.key]]
+key = "fingerprint"
+type = "hex"
+filled = true
+is = "the save's Group Fingerprint"
+
+[[record.key]]
+key = "mode"
+type = "word"
+filled = true
+words = ["full", "variables-only"]
+is = "the kind of restore"
+
+[[record.key]]
+key = "pending"
+type = "ids"
+optional = true
+filled = true
+is = "the pending calls, for the Host to settle"
+
+[[record.key]]
+key = "disposed"
+type = "value"
+optional = true
+is = "the Host Objects the Host doesn't resolve, a list, which restore as disposed"
+
+[[record.key]]
+key = "discarded"
+type = "ids"
+optional = true
+filled = true
+is = "for a variables-only restore, the discarded Runs"
+
+[[record.key]]
+key = "dropped"
+type = "ids"
+optional = true
+filled = true
+is = "for a variables-only restore, the dropped Deliveries"
+
+[[record.key]]
+key = "abandoned"
+type = "ids"
+optional = true
+filled = true
+is = "for a variables-only restore, the abandoned calls"
+
+[[record]]
+name = "vars"
+input = true
+ids = []
+is = "inspects the Group, which writes a `vars` record for each Script"
+
+[[record]]
+name = "seg"
+input = false
+ids = ["run", "how"]
+is = "a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue`"
+
+[[record.key]]
+key = "delivery"
+type = "id"
+optional = true
+is = "for a start, its Delivery"
+
+[[record.key]]
+key = "broadcast"
+type = "id"
+optional = true
+is = "for a start, its Broadcast"
+
+[[record.key]]
+key = "from"
+type = "id"
+optional = true
+is = "for a start, the call or Run that sent its message"
+
+[[record.key]]
+key = "handler"
+type = "id"
+optional = true
+is = "for a start, the Handler dispatched to"
+
+[[record.key]]
+key = "clause"
+type = "count"
+optional = true
+is = "for a start, the clause that matched"
+
+[[record.key]]
+key = "fn"
+type = "value"
+optional = true
+is = "for a start by a Function Value call, the Function Value"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "the Fuel the stretch used"
+
+[[record.key]]
+key = "alloc"
+type = "count"
+is = "the allocation the stretch made"
+
+[[record.key]]
+key = "state"
+type = "count"
+is = "the Script's Persistent State at the Segment's end"
+
+[[record.key]]
+key = "end"
+type = "word"
+is = "why the stretch ended ([End reasons](#end-reasons))"
+
+[[record.key]]
+key = "until"
+type = "instant"
+optional = true
+is = "the deadline it waits for, if it has one"
+
+[[record.key]]
+key = "n"
+type = "count"
+optional = true
+is = "for `join-end`, the number of members"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "for `veto`, the reason"
+
+[[record]]
+name = "preempt"
+input = false
+ids = ["run"]
+is = "a stretch of a Run that a Fuel Slice or the Fuel cap preempted"
+
+[[record.key]]
+key = "by"
+type = "word"
+words = ["slice", "cap"]
+is = "what preempted it"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "the Fuel the stretch used"
+
+[[record.key]]
+key = "alloc"
+type = "count"
+is = "the allocation the stretch made"
+
+[[record]]
+name = "call"
+input = false
+ids = ["call"]
+is = "a Capability call"
+
+[[record.key]]
+key = "op"
+type = "id"
+is = "the Operation, as `<granted name>.<operation>`"
+
+[[record.key]]
+key = "args"
+type = "value"
+is = "its arguments, a list"
+
+[[record.key]]
+key = "result"
+type = "value"
+optional = true
+is = "for an immediate call that succeeded, the Host's result"
+
+[[record.key]]
+key = "error"
+type = "value"
+optional = true
+is = "for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error"
+
+[[record.key]]
+key = "charged"
+type = "count"
+optional = true
+is = "the Fuel `Charge` drew"
+
+[[record]]
+name = "prop"
+input = false
+ids = ["run"]
+is = "a Host Object property call"
+
+[[record.key]]
+key = "object"
+type = "value"
+is = "the object"
+
+[[record.key]]
+key = "name"
+type = "id"
+is = "the property"
+
+[[record.key]]
+key = "op"
+type = "word"
+words = ["get", "set"]
+is = "a read or a write"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "the value read or written"
+
+[[record.key]]
+key = "error"
+type = "value"
+optional = true
+is = "for a call that failed, the Host's error, as for `call`"
+
+[[record]]
+name = "send"
+input = false
+ids = ["from"]
+is = "a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run"
+
+[[record.key]]
+key = "to"
+type = "target"
+is = "the receiver"
+
+[[record.key]]
+key = "message"
+type = "id"
+optional = true
+is = "the message's name, for a message"
+
+[[record.key]]
+key = "fn"
+type = "value"
+optional = true
+is = "the Function Value, for a call to one in another Script"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "wait"
+type = "word"
+optional = true
+words = ["yes", "join"]
+is = "whether the sender waits, and `join` for a Join Member"
+
+[[record]]
+name = "raise"
+input = false
+ids = ["run"]
+is = "an error raised, whether or not it is caught"
+
+[[record.key]]
+key = "code"
+type = "value"
+is = "its code, as text"
+
+[[record.key]]
+key = "at"
+type = "at"
+is = "the raising instruction"
+
+[[record.key]]
+key = "pos"
+type = "pos"
+is = "its source position"
+
+[[record]]
+name = "guard-skip"
+input = false
+ids = ["run"]
+is = "a clause or branch skipped because its test raised an error or its Guard gave something other than a boolean"
+
+[[record.key]]
+key = "at"
+type = "at"
+is = "the instruction that raised or branched"
+
+[[record.key]]
+key = "pos"
+type = "pos"
+is = "its source position"
+
+[[record.key]]
+key = "code"
+type = "value"
+optional = true
+is = "the error's code, as text"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "the value that wasn't a boolean"
+
+[[record]]
+name = "abandon"
+input = false
+ids = ["call"]
+is = "a call or Join Member abandoned"
+
+[[record]]
+name = "fault"
+input = false
+ids = ["run"]
+is = "a Limit Fault"
+
+[[record.key]]
+key = "limit"
+type = "word"
+words = ["fuel", "alloc", "persistent", "depth", "pattern", "join"]
+is = "the limit exceeded"
+
+[[record.key]]
+key = "at"
+type = "at"
+is = "the faulting instruction"
+
+[[record.key]]
+key = "pos"
+type = "pos"
+is = "its source position"
+
+[[record.key]]
+key = "rollback"
+type = "ids"
+optional = true
+is = "the Script Variables the rollback restored, in declaration order"
+
+[[record]]
+name = "cleanup-failed"
+input = false
+ids = ["run"]
+is = "a cancelled Run's cleanup that failed"
+
+[[record.key]]
+key = "code"
+type = "value"
+optional = true
+is = "the error that ended it, as text"
+
+[[record.key]]
+key = "limit"
+type = "word"
+optional = true
+words = ["cleanup", "alloc", "persistent", "depth", "pattern", "join"]
+is = "or the limit that ended it"
+
+[[record]]
+name = "note"
+input = false
+ids = ["subject"]
+is = "something the Core noted, about a Run, a call or a Delivery"
+
+[[record.key]]
+key = "kind"
+type = "word"
+is = "what it noted ([Notes](#notes))"
+
+[[record]]
+name = "run"
+input = false
+ids = ["run?"]
+is = "a `run end` report; the id is absent for a Delivery cancelled before it started"
+
+[[record.key]]
+key = "outcome"
+type = "word"
+words = ["completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"]
+is = "its outcome"
+
+[[record.key]]
+key = "delivery"
+type = "id"
+optional = true
+is = "its Delivery"
+
+[[record.key]]
+key = "broadcast"
+type = "id"
+optional = true
+is = "its Broadcast"
+
+[[record.key]]
+key = "handler"
+type = "id"
+optional = true
+is = "its Handler"
+
+[[record.key]]
+key = "fn"
+type = "value"
+optional = true
+is = "for a Run started by a Function Value call, the Function Value"
+
+[[record.key]]
+key = "value"
+type = "value"
+optional = true
+is = "for `completed`, its result"
+
+[[record.key]]
+key = "error"
+type = "value"
+optional = true
+is = "for `errored`, the error map"
+
+[[record.key]]
+key = "limit"
+type = "word"
+optional = true
+words = ["fuel", "alloc", "persistent", "depth", "pattern", "join"]
+is = "for `limit-fault`, the limit"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "the Fuel it used over its life"
+
+[[record.key]]
+key = "alloc"
+type = "count"
+is = "the allocation it made over its life"
+
+[[record]]
+name = "stopped"
+input = false
+ids = ["script"]
+is = "a `stop` report"
+
+[[record.key]]
+key = "reason"
+type = "value"
+is = "the Host's reason, or `\"owner disposed\"` or `\"reload\"`"
+
+[[record.key]]
+key = "discarded"
+type = "ids"
+optional = true
+is = "the Runs discarded"
+
+[[record.key]]
+key = "dropped"
+type = "ids"
+optional = true
+is = "the Deliveries dropped from its mailbox"
+
+[[record.key]]
+key = "abandoned"
+type = "ids"
+optional = true
+is = "the pending calls abandoned"
+
+[[record]]
+name = "unhandled"
+input = false
+ids = ["delivery?"]
+is = "an `unhandled` report; the id is absent for a message a Script sent"
+
+[[record.key]]
+key = "message"
+type = "id"
+is = "the message's name"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "its arguments, a list"
+
+[[record.key]]
+key = "target"
+type = "value"
+optional = true
+is = "the object it was addressed to"
+
+[[record]]
+name = "call-failed"
+input = false
+ids = ["call"]
+is = "a `call failed` report, whose detail is left out"
+
+[[record.key]]
+key = "op"
+type = "id"
+is = "the Operation, as `<granted name>.<operation>`"
+
+[[record]]
+name = "decided"
+input = false
+ids = ["delivery"]
+is = "a `decided` report, by the Decision's delivery id or broadcast id"
+
+[[record.key]]
+key = "verdict"
+type = "word"
+words = ["allowed", "vetoed", "undecided"]
+is = "its Verdict"
+
+[[record.key]]
+key = "vetoes"
+type = "value"
+optional = true
+is = "each veto, as a map `{script, run, reason}`, in recipient order"
+
+[[record.key]]
+key = "undecided"
+type = "value"
+optional = true
+is = "each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started"
+
+[[record]]
+name = "diag"
+input = false
+ids = ["unit"]
+is = "a load-time diagnostic, or the first syntax error"
+
+[[record.key]]
+key = "code"
+type = "value"
+is = "its code, as text"
+
+[[record.key]]
+key = "pos"
+type = "pos"
+is = "its position"
+
+[[record]]
+name = "vars"
+input = false
+ids = ["script"]
+is = "a Script's Script Variables, each as `<name>=<value>`, in declaration order"
+
+[[record]]
+name = "pumped"
+input = false
+ids = []
+is = "the end of a Pump"
+
+[[record.key]]
+key = "state"
+type = "word"
+words = ["idle", "sliced", "stopped"]
+is = "the Group's state"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "the Fuel the Pump used"
+
+[[record.key]]
+key = "next"
+type = "instant"
+optional = true
+is = "the next deadline, if anything waits on time"
+
+[[record]]
+name = "refused"
+input = false
+ids = []
+is = "the Host Input before it was refused at the call, and changed nothing"
+
+[[record.key]]
+key = "code"
+type = "value"
+is = "the Host error's code, or `\"mailbox full\"`, as text"
+
+[[end]]
+word = "return"
+is = "the Run completed: it reached `return` or the end of its body"
+
+[[end]]
+word = "pass"
+is = "the Run completed with `pass`"
+
+[[end]]
+word = "veto"
+is = "the Run completed with `veto`"
+
+[[end]]
+word = "error"
+is = "the Run ended with an uncaught error"
+
+[[end]]
+word = "fault"
+is = "the Run had a Limit Fault"
+
+[[end]]
+word = "cancel"
+is = "the Run was cancelled"
+
+[[end]]
+word = "stop"
+is = "the Run was discarded by Stop Script, a Reload or disposing its Script's owner"
+
+[[end]]
+word = "unhandled"
+is = "no Handler Clause matched"
+
+[[end]]
+word = "dropped"
+is = "a `, dropping` clause dropped the Run"
+
+[[end]]
+word = "park"
+is = "a `, queued` clause parked the Run"
+
+[[end]]
+word = "ask-wait"
+is = "the Run suspended at a suspending Operation call"
+
+[[end]]
+word = "send-wait"
+is = "the Run suspended at `send … and wait`"
+
+[[end]]
+word = "send-up-wait"
+is = "the Run suspended at a Command Call sent up the Message Path with `and wait`"
+
+[[end]]
+word = "call-value-wait"
+is = "the Run suspended at a call to a Function Value in another Script"
+
+[[end]]
+word = "wait"
+is = "the Run suspended at `wait`"
+
+[[end]]
+word = "wait-for"
+is = "the Run suspended at `wait for`"
+
+[[end]]
+word = "wait-for-any"
+is = "the Run suspended at a block `wait for`"
+
+[[end]]
+word = "join-end"
+is = "the Run suspended at a Join's `end wait`"
+
+[[note]]
+word = "late-answer"
+is = "an answer or failure arrived for a call that was abandoned, or whose Run has ended, and was ignored; the subject is the call"
+
+[[note]]
+word = "no-verdict"
+is = "a Run that holds no open Verdict reached `veto`; the subject is the Run"
+
+[[note]]
+word = "climb-full"
+is = "a message climbing its Message Path found the next mailbox full, and is reported as `unhandled`; the subject is the Run that passed it or ended `unhandled`"
+
+[[note]]
+word = "error-dropped"
+is = "an `error` message found its Script's mailbox full, and was dropped; the subject is the Run that errored"
+
+[[note]]
+word = "function-gone"
+is = "a Host call named a stale Function Value, and nothing ran; the subject is the Delivery"
+
+[[setup]]
+table = ""
+key = "kind"
+is = "the case kind: `trace`, `disassembly`, `transcript` or `encoding`"
+kinds = ["trace", "disassembly", "transcript", "encoding"]
+
+[[setup]]
+table = "versions"
+key = "language"
+is = "the language version the case is blessed for"
+kinds = ["trace", "disassembly", "transcript", "encoding"]
+
+[[setup]]
+table = "versions"
+key = "costModel"
+is = "the Cost Model version the case is blessed for"
+kinds = ["trace", "disassembly", "transcript", "encoding"]
+
+[[setup]]
+table = "operations"
+key = "capability"
+is = "the Capability the Operation Declaration belongs to"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "name"
+is = "the Operation's name"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "mode"
+is = "`immediate`, `suspending` or `fire-and-forget`"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "args"
+is = "the argument Shapes, a list"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "result"
+is = "the result Shape; absent for a fire-and-forget Operation"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "cost"
+is = "the declared cost, `{fuel, alloc}`, each 0 if absent"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "maxPending"
+is = "for a suspending Operation, its `maxPending` in whole milliseconds; absent means the Script's `MaxWait`"
+kinds = ["trace"]
+
+[[setup]]
+table = "operations"
+key = "errors"
+is = "the declared error codes, each `{code, fields}`, where `fields` are `{key, shape, optional}`"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "standard"
+key = "capability"
+is = "a Standard Capability the case uses"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "standard"
+key = "costs"
+is = "the cost of each of its Operations, a table from Operation name to `{fuel, alloc}`"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "objectKinds"
+key = "name"
+is = "an Object Kind's name"
+kinds = ["trace", "encoding"]
+
+[[setup]]
+table = "objectKinds"
+key = "parentKinds"
+is = "the kinds its objects' parents may have"
+kinds = ["trace", "encoding"]
+
+[[setup]]
+table = "objectKinds"
+key = "props"
+is = "its properties, each `{name, shape, readOnly, getCost, setCost}`"
+kinds = ["trace"]
+
+[[setup]]
+table = "objects"
+key = "kind"
+is = "a Host Object's kind"
+kinds = ["trace", "encoding"]
+
+[[setup]]
+table = "objects"
+key = "id"
+is = "its stable id"
+kinds = ["trace", "encoding"]
+
+[[setup]]
+table = "objects"
+key = "props"
+is = "the values its properties start with, a table from property name to a value in the display form, as text"
+kinds = ["trace"]
+
+[[setup]]
+table = "libraries"
+key = "name"
+is = "a user Library's name"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "libraries"
+key = "version"
+is = "its version, as text"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "libraries"
+key = "source"
+is = "the file that holds its source"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "scripts"
+key = "name"
+is = "a Script's name"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "scripts"
+key = "source"
+is = "the file that holds its source"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "scripts"
+key = "grants"
+is = "its Grants: a table from each granted name to `{capability, ops}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "scripts"
+key = "grantsAsUsed"
+is = "`true` to keep only the granted Operations the Script uses"
+kinds = ["trace"]
+
+[[setup]]
+table = "scripts"
+key = "owner"
+is = "the Host Object it owns, as `{kind, id}`"
+kinds = ["trace"]
+
+[[setup]]
+table = "scripts"
+key = "objects"
+is = "its well-known objects, a table from name to `{kind, id}`"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "scripts"
+key = "limits"
+is = "its limits, a table from each limit's `ts` name to its value; absent limits take their defaults"
+kinds = ["trace"]
+
+[[setup]]
+table = "disassembly"
+key = "unit"
+is = "the Script or Library whose disassembly the case pins"
+kinds = ["disassembly"]
+
+[[setup]]
+table = "disassembly"
+key = "expected"
+is = "the file that holds its expected canonical disassembly"
+kinds = ["disassembly"]
