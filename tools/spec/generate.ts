@@ -159,6 +159,10 @@ function crossCheck(d: Data) {
     for (const f of e.optional ?? []) {
       if (e.fields.includes(f)) fail("errors.toml", `"${e.code}" lists "${f}" as both required and optional`);
     }
+    // A template may name only the fields every raise carries.
+    for (const m of (e.message ?? "").matchAll(/\{([^}]*)\}/g)) {
+      if (!e.fields.includes(m[1])) fail("errors.toml", `the message of "${e.code}" uses {${m[1]}}, which isn't one of its fields`);
+    }
   }
 
   // ADR 0019 and ADR 0022: no Unit spelling may be a Reserved Word, a FOLLOW-set
@@ -202,6 +206,9 @@ function crossCheck(d: Data) {
       fail("limits.toml", `${f} "${v}" is listed twice`);
     }
   }
+  for (const l of d.limits.limit ?? []) {
+    if (l.default > l.minimum) fail("limits.toml", `"${l.name}" has a default above its conformance minimum`);
+  }
 
   const rates = new Set((d.costs.rate ?? []).map((r: any) => r.key));
   for (const n of duplicates((d.machine.instruction ?? []).map((i: any) => i.name))) {
@@ -233,6 +240,7 @@ type View = (d: Data, file: string) => string;
 const cell = (s: unknown) => String(s ?? "").replaceAll("|", "\\|");
 const code = (s: string) => `\`${s}\``;
 const words = (ws: string[]) => ws.map(code).join(", ");
+const thousands = (n: number) => String(n).replace(/\B(?=(\d{3})+$)/g, ",");
 const todo = (chapter: string) => `_To be written in ${chapter}._`;
 
 function table(head: string[], rows: unknown[][]): string {
@@ -364,8 +372,11 @@ const VIEWS: Record<string, View> = {
     return parts.join("\n\n");
   },
 
+  "errors.messages": (d) =>
+    table(["Code", "Message"], (d.errors.error ?? []).map((e: any) => [code(e.code), e.message])),
+
   limits: (d, file) =>
-    table(["Limit", "Go", "TS", "Counts", "Per", "Tightened per Delivery", "Default", "Sources"],
+    table(["Limit", "Go", "TS", "Counts", "Per", "Tightened per Delivery", "Default", "Minimum", "When exceeded", "Sources"],
       d.limits.limit.map((l: any) => [
         l.name,
         code(l.go),
@@ -373,7 +384,9 @@ const VIEWS: Record<string, View> = {
         l.measure,
         l.per,
         l.overridable ? "yes" : "no",
-        l.default ?? "not yet set",
+        thousands(l.default),
+        thousands(l.minimum),
+        l.exceeded,
         sources(l.sources, file),
       ])),
 

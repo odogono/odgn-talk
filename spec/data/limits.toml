@@ -3,10 +3,13 @@
 # A Host sets limits per Script at load, and zero fields take the defaults.
 # Some limits can also be tightened for one Delivery, but never loosened: a
 # loosening override is the Host error `invalid value` (ADRs 0006, 0015, 0026,
-# #71). Exceeding a limit is a Limit Fault.
+# #71). What exceeding each limit does is in `exceeded`.
+#
+# Every Core honours any value from 1 up to a limit's conformance minimum
+# exactly. A Core may honour larger values too, and refuses a value it can't
+# honour as `invalid value`. Conformance cases stay within the minimums.
 #
 # Schema: schema/limits.schema.json. Shown in chapter 6 (region `limits`).
-# Owned by the chapter 6 task, which sets every default.
 #
 # [[limit]]
 #   name         its name in the Spec
@@ -15,7 +18,9 @@
 #   measure      what it counts
 #   per          what it applies to: "run", "script", "join" or "wait"
 #   overridable  whether a Delivery's LimitOverride can tighten it
-#   default      optional until set: its value in the default limit profile
+#   default      its value in the default limit profile
+#   minimum      its conformance minimum, no less than the default
+#   exceeded     what exceeding it does
 #   sources      the ADRs and issues that settle it
 
 [[limit]]
@@ -25,6 +30,9 @@ ts = "fuelPerRun"
 measure = "Fuel"
 per = "run"
 overridable = true
+default = 10_000_000
+minimum = 1_000_000_000
+exceeded = "a Limit Fault"
 sources = ["ADR 0006", "#71"]
 
 [[limit]]
@@ -34,6 +42,9 @@ ts = "allocPerRun"
 measure = "logical size"
 per = "run"
 overridable = true
+default = 16_777_216
+minimum = 268_435_456
+exceeded = "a Limit Fault"
 sources = ["ADR 0006", "#71"]
 
 [[limit]]
@@ -43,6 +54,9 @@ ts = "persistentState"
 measure = "logical size"
 per = "script"
 overridable = false
+default = 1_048_576
+minimum = 67_108_864
+exceeded = "a Limit Fault, measured at each Segment end"
 sources = ["ADR 0006", "ADR 0010", "#71"]
 
 [[limit]]
@@ -52,6 +66,9 @@ ts = "callDepth"
 measure = "frames"
 per = "run"
 overridable = false
+default = 200
+minimum = 1_000
+exceeded = "a Limit Fault, at the call"
 sources = ["ADR 0020", "#71"]
 
 [[limit]]
@@ -61,6 +78,9 @@ ts = "mailboxDepth"
 measure = "messages"
 per = "script"
 overridable = false
+default = 1_000
+minimum = 10_000
+exceeded = "`mailbox full` at a Script's `send`; `MailboxFull` at a Host call"
 sources = ["ADR 0017", "#71"]
 
 [[limit]]
@@ -70,7 +90,10 @@ ts = "maxWaitMs"
 measure = "whole milliseconds"
 per = "wait"
 overridable = true
-sources = ["ADR 0015", "#71"]
+default = 30_000
+minimum = 2_147_483_647
+exceeded = "`timeout`, and the call is abandoned"
+sources = ["ADR 0015", "ADR 0026", "#71"]
 
 [[limit]]
 name = "MaxJoin"
@@ -79,6 +102,9 @@ ts = "maxJoin"
 measure = "Join Members"
 per = "join"
 overridable = true
+default = 16
+minimum = 256
+exceeded = "a Limit Fault, at the member that would pass it"
 sources = ["ADR 0026", "#71"]
 
 [[limit]]
@@ -88,4 +114,7 @@ ts = "cleanupBudget"
 measure = "Fuel"
 per = "run"
 overridable = false
+default = 10_000
+minimum = 1_000_000
+exceeded = "the remaining cleanup ends, and the report says `cleanup failed`"
 sources = ["ADR 0017"]

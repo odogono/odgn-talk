@@ -5,8 +5,7 @@
 # Parity covers the code and the catalogue fields exactly, not the `message`
 # wording. Host misuse has its own catalogue, host-errors.toml.
 #
-# Schema: schema/errors.schema.json. Shown in chapter 6 (region `errors`).
-# Owned by the chapter 6 task, which writes the template messages.
+# Schema: schema/errors.schema.json. Shown in chapter 6 (regions `errors` and `errors.messages`).
 #
 # reserved       the keys a Host `Fail`'s `Data` may not use; the Core sets them
 #
@@ -17,7 +16,8 @@
 #   optional     optional: code-specific keys only some raises carry
 #   raised_when  one sentence: what raises it
 #   sources      the ADRs ("ADR 0017") and issues ("#72") that settle it
-#   message      optional: the template message
+#   message      the template message: English wording in which `{field}`
+#                stands for that field's value in the display form
 #   open         optional: what's still unsettled about it
 
 reserved = ["code", "message", "at", "capability", "operation", "index", "during"]
@@ -27,12 +27,14 @@ code = "bad throw"
 fields = []
 raised_when = "`throw` is given something that isn't a map with a text `code`, or text"
 sources = ["ADR 0017", "#61"]
+message = "Only a map with a text `code`, or a text, can be thrown"
 
 [[error]]
 code = "no match"
 fields = []
 raised_when = "A Destructuring test fails in `let` or in a Lambda's parameters, or a binary text decode fails"
 sources = ["ADR 0010", "ADR 0013", "ADR 0017", "ADR 0025"]
+message = "The value doesn't match the pattern"
 
 [[error]]
 code = "send failed"
@@ -40,18 +42,21 @@ fields = ["reason"]
 optional = ["error"]
 raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored`"
 sources = ["ADR 0015", "ADR 0017", "ADR 0025", "ADR 0026", "ADR 0031", "ADR 0033"]
+message = "No answer came: the receiver's Run ended {reason}"
 
 [[error]]
 code = "mailbox full"
 fields = ["to"]
 raised_when = "A `send` finds the receiver's mailbox full; it is raised at the `send`, even one that doesn't wait"
 sources = ["ADR 0017", "ADR 0026"]
+message = "The mailbox of {to} is full"
 
 [[error]]
 code = "capability revoked"
 fields = ["capability", "operation"]
 raised_when = "A call goes through a revoked Grant"
 sources = ["ADR 0015", "ADR 0017"]
+message = "The Grant for {capability} is revoked, so {operation} can't be called"
 
 [[error]]
 code = "wrong kind"
@@ -59,6 +64,7 @@ fields = ["expected", "got", "value"]
 optional = ["capability", "operation", "argument", "path"]
 raised_when = "An operand or argument has the wrong kind, e.g. `\"007\" + 1`, `if 0` or a Text Pattern search on a value that isn't text; for a Capability argument that breaks its Shape, the fields describe the first node that doesn't match, `argument` is its 1-based position and `path` locates the node inside it"
 sources = ["ADR 0003", "ADR 0015", "ADR 0017", "ADR 0023", "ADR 0024", "ADR 0030", "ADR 0033"]
+message = "Expected {expected}, but got {got}: {value}"
 
 [[error]]
 code = "can't convert"
@@ -66,117 +72,138 @@ fields = ["value", "to"]
 optional = ["format", "offset"]
 raised_when = "A conversion fails, e.g. `\"lots\" as number` or a bad `as` target, or a parse such as `parseDate` doesn't match; a parse adds `offset`, and `parseDate` adds its template as `format`"
 sources = ["ADR 0017", "ADR 0021", "ADR 0022", "ADR 0023", "ADR 0024", "ADR 0033"]
+message = "Can't convert {value} to {to}"
 
 [[error]]
 code = "can't compare"
 fields = ["left", "right"]
 raised_when = "`<` or a sort orders two values of kinds that can't be compared, e.g. a text and a number, or a date-only value and a date-time; the fields are the two operands"
 sources = ["ADR 0003", "ADR 0023", "ADR 0033"]
+message = "Can't compare {left} with {right}"
 
 [[error]]
 code = "division by zero"
 fields = []
 raised_when = "A number is divided by zero"
 sources = ["ADR 0002", "ADR 0033"]
+message = "Division by zero"
 
 [[error]]
 code = "overflow"
 fields = ["operator"]
 raised_when = "An arithmetic result's exponent is outside the decimal range; `operator` is the operator or function, e.g. `\"*\"` or `\"exp\"`"
 sources = ["ADR 0002", "ADR 0033"]
+message = "The result of {operator} is outside the decimal range"
 
 [[error]]
 code = "incompatible units"
 fields = ["left", "right"]
 raised_when = "An operation combines Quantities of different dimensions or Unit Kinds, e.g. `1 month + 1 day`, or adds to a date-only value an exact duration that isn't a whole number of days; the fields are the two Units' display forms"
 sources = ["ADR 0022", "ADR 0023", "ADR 0033"]
+message = "Can't combine {left} with {right}"
 
 [[error]]
 code = "host error"
 fields = ["capability", "operation"]
 raised_when = "A Host function fails with something other than a Script error, a `Fail` misuses a reserved code or key or uses a code its Operation doesn't declare, or a result breaks its Shape; it carries no Host detail"
 sources = ["ADR 0015", "ADR 0017", "ADR 0030", "ADR 0033"]
+message = "{capability} failed while doing {operation}"
 
 [[error]]
 code = "timeout"
-fields = ["capability", "operation", "after"]
-raised_when = "A suspending call runs past its `maxPending` or the Script's `MaxWait`, and is abandoned"
-sources = ["ADR 0015", "ADR 0017"]
+fields = ["after"]
+optional = ["capability", "operation"]
+raised_when = "A suspending Operation call runs past its `maxPending` or the Script's `MaxWait`, or a `send … and wait` or a call to a Function Value in another Script runs past `MaxWait`, and is abandoned; `after` is the limit that ran out, in `ms`, and a Capability call adds `capability` and `operation`"
+sources = ["ADR 0015", "ADR 0017", "ADR 0026"]
+message = "No answer came within {after}"
 
 [[error]]
 code = "would suspend"
 fields = []
 raised_when = "A Function Value that may suspend is called without `and wait`, or handed to a Library function such as `map`"
 sources = ["ADR 0017", "ADR 0020", "ADR 0025"]
+message = "This function may wait, so call it with `and wait`"
 
 [[error]]
 code = "function gone"
 fields = []
 raised_when = "A stale Function Value is called, after a variables-only restore or a Library replace"
 sources = ["ADR 0008", "ADR 0017", "ADR 0025"]
+message = "The function no longer exists"
 
 [[error]]
 code = "wrong arity"
 fields = []
 raised_when = "A Lambda is called with the wrong number of arguments"
 sources = ["ADR 0017", "ADR 0025"]
+message = "The function was called with the wrong number of arguments"
 
 [[error]]
 code = "not encodable"
 fields = ["kind", "path"]
 raised_when = "JSON encoding, or a data-Shaped Capability argument, meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded"
 sources = ["ADR 0017", "ADR 0021", "ADR 0025", "ADR 0033"]
+message = "A {kind} can't be encoded as plain data"
 
 [[error]]
 code = "out of domain"
 fields = ["function", "value"]
 raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, or a bad sort direction; `value` is the argument, the missing key or the direction"
 sources = ["ADR 0002", "ADR 0021", "ADR 0025", "ADR 0033"]
+message = "{value} is outside the domain of {function}"
 
 [[error]]
 code = "out of range"
 fields = ["field", "value"]
 raised_when = "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character` or `word` write past the end, at index 0 or over a reversed range, or a Binary Pattern build value too large for its segment"
 sources = ["ADR 0011", "ADR 0013", "ADR 0023", "ADR 0033"]
+message = "{value} is out of range for {field}"
 
 [[error]]
 code = "can't decode"
 fields = ["format", "offset"]
 raised_when = "`decodeJson` is given invalid JSON"
 sources = ["ADR 0021", "ADR 0033"]
+message = "Invalid {format} at Character {offset}"
 
 [[error]]
 code = "unknown zone"
 fields = ["zone"]
 raised_when = "A `calendar` Operation is given an unknown IANA zone; the Host fails with it"
 sources = ["ADR 0023", "ADR 0033"]
+message = "Unknown time zone {zone}"
 
 [[error]]
 code = "ambiguous time"
 fields = ["civil", "zone"]
 raised_when = "`toInstant` with `\"reject\"` meets a DST gap or overlap; the Host fails with it"
 sources = ["ADR 0023", "ADR 0033"]
+message = "{civil} is ambiguous, or doesn't exist, in {zone}"
 
 [[error]]
 code = "bad locale"
 fields = ["locale"]
 raised_when = "A `locale` call names a tag that isn't well-formed BCP 47; the Core checks before the Host function runs"
 sources = ["ADR 0024", "ADR 0033"]
+message = "{locale} isn't a well-formed locale tag"
 
 [[error]]
 code = "object gone"
 fields = ["object"]
 raised_when = "A `send … to` reaches a disposed Host Object, or a property of one is read or set"
 sources = ["ADR 0016", "ADR 0017", "ADR 0033", "#71"]
+message = "{object} has been disposed"
 
 [[error]]
 code = "read only"
 fields = []
 raised_when = "A `set` targets a read-only Host Object property whose kind isn't known at load"
 sources = ["ADR 0016", "ADR 0017", "#72"]
+message = "That property is read-only"
 
 [[error]]
 code = "call lost"
 fields = []
 raised_when = "A restored wait can't be kept: a pending call is still unsettled at the first Pump, or a `send … and wait` partner is outside the restored set"
 sources = ["ADR 0008", "ADR 0017", "ADR 0033", "#72"]
+message = "The call was lost in a restore"
