@@ -233,7 +233,7 @@ end isDigit
 private function invalid t, i
   put the length of t + 1 into at
   if i <= the length of the code points of t then put the length of (code points 1..i of t) into at
-  throw {code: "can't decode", format: "json", offset: at, message: "Invalid " & shown("json") & " at Character " & shown(at)}
+  throw {code: "can't decode", format: "json", offset: at}
 end invalid
 
 -- Encoding -------------------------------------------------------------------
@@ -263,7 +263,7 @@ private function encodeValue v, path
     return "{" & join(parts, ",") & "}"
   end if
   put kindOf(v) into kind
-  throw {code: "not encodable", kind: kind, path: path, message: "A " & shown(kind) & " can't be encoded as plain data"}
+  throw {code: "not encodable", kind: kind, path: path}
 end encodeValue
 
 private function encodeString s
@@ -295,7 +295,8 @@ private function indexIn xs, value
 end indexIn
 
 -- The helpers below are the same in every stdlib Library. They raise the
--- catalogue errors of chapter 6, with the catalogue's message templates.
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
 
 private function kindOf v
   if v is nothing then return "nothing"
@@ -314,18 +315,13 @@ private function kindOf v
   return "object"
 end kindOf
 
-private function shown v
-  if v is a text then return quote & v & quote
-  return "" & v
-end shown
-
 private function wrongKind expected, v
   put kindOf(v) into got
-  throw {code: "wrong kind", expected: expected, got: got, value: v, message: "Expected " & shown(expected) & ", but got " & shown(got) & ": " & shown(v)}
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
 end wrongKind
 
 private function outOfDomain fn, v
-  throw {code: "out of domain", function: fn, value: v, message: shown(v) & " is outside the domain of " & shown(fn)}
+  throw {code: "out of domain", function: fn, value: v}
 end outOfDomain
 
 private function needText v

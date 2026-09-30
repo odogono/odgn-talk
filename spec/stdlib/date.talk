@@ -256,7 +256,7 @@ private function splitAt t, separator
 end splitAt
 
 private function noMatch t, template, at
-  throw {code: "can't convert", value: t, to: "civil date", format: template, offset: at, message: "Can't convert " & shown(t) & " to " & shown("civil date")}
+  throw {code: "can't convert", value: t, to: "civil date", format: template, offset: at}
 end noMatch
 
 -- Durations ------------------------------------------------------------------
@@ -269,7 +269,7 @@ function splitDuration d
     put characters 1..(offset(" ", written) - 1) of written as number into k
     if k <> 0 then put (d / abs(k)) as text into written
     put characters (offset(" ", written) + 1)..-1 of written into unit
-    throw {code: "incompatible units", left: unit, right: "s", message: "Can't combine " & shown(unit) & " with " & shown("s")}
+    throw {code: "incompatible units", left: unit, right: "s"}
   end if
   put d / 1 s into total
   put abs(total) into rest
@@ -287,7 +287,7 @@ function monthsBetween a, b
   needCivil(a)
   needCivil(b)
   if hasTime(a) <> hasTime(b) then
-    throw {code: "can't compare", left: a, right: b, message: "Can't compare " & shown(a) & " with " & shown(b)}
+    throw {code: "can't compare", left: a, right: b}
   end if
   if b < a then return -monthsBetween(b, a)
   put (year(b) - year(a)) * 12 + month(b) - month(a) into n
@@ -302,11 +302,12 @@ private function needCivil v
 end needCivil
 
 private function outOfRange name, v
-  throw {code: "out of range", field: name, value: v, message: shown(v) & " is out of range for " & shown(name)}
+  throw {code: "out of range", field: name, value: v}
 end outOfRange
 
 -- The helpers below are the same in every stdlib Library. They raise the
--- catalogue errors of chapter 6, with the catalogue's message templates.
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
 
 private function kindOf v
   if v is nothing then return "nothing"
@@ -325,18 +326,13 @@ private function kindOf v
   return "object"
 end kindOf
 
-private function shown v
-  if v is a text then return quote & v & quote
-  return "" & v
-end shown
-
 private function wrongKind expected, v
   put kindOf(v) into got
-  throw {code: "wrong kind", expected: expected, got: got, value: v, message: "Expected " & shown(expected) & ", but got " & shown(got) & ": " & shown(v)}
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
 end wrongKind
 
 private function outOfDomain fn, v
-  throw {code: "out of domain", function: fn, value: v, message: shown(v) & " is outside the domain of " & shown(fn)}
+  throw {code: "out of domain", function: fn, value: v}
 end outOfDomain
 
 private function needText v

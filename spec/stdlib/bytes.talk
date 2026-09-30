@@ -350,19 +350,20 @@ private function needBytes v
 end needBytes
 
 private function badEncoding t, fmt, at
-  throw {code: "can't convert", value: t, to: "bytes", format: fmt, offset: at, message: "Can't convert " & shown(t) & " to " & shown("bytes")}
+  throw {code: "can't convert", value: t, to: "bytes", format: fmt, offset: at}
 end badEncoding
 
 private function badText b, encoding
-  throw {code: "can't convert", value: b, to: "text", format: encoding, message: "Can't convert " & shown(b) & " to " & shown("text")}
+  throw {code: "can't convert", value: b, to: "text", format: encoding}
 end badText
 
 private function unencodable t, encoding
-  throw {code: "can't convert", value: t, to: "bytes", format: encoding, message: "Can't convert " & shown(t) & " to " & shown("bytes")}
+  throw {code: "can't convert", value: t, to: "bytes", format: encoding}
 end unencodable
 
 -- The helpers below are the same in every stdlib Library. They raise the
--- catalogue errors of chapter 6, with the catalogue's message templates.
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
 
 private function kindOf v
   if v is nothing then return "nothing"
@@ -381,18 +382,13 @@ private function kindOf v
   return "object"
 end kindOf
 
-private function shown v
-  if v is a text then return quote & v & quote
-  return "" & v
-end shown
-
 private function wrongKind expected, v
   put kindOf(v) into got
-  throw {code: "wrong kind", expected: expected, got: got, value: v, message: "Expected " & shown(expected) & ", but got " & shown(got) & ": " & shown(v)}
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
 end wrongKind
 
 private function outOfDomain fn, v
-  throw {code: "out of domain", function: fn, value: v, message: shown(v) & " is outside the domain of " & shown(fn)}
+  throw {code: "out of domain", function: fn, value: v}
 end outOfDomain
 
 private function needText v

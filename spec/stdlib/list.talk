@@ -278,7 +278,8 @@ function indexOf xs, value
 end indexOf
 
 -- The helpers below are the same in every stdlib Library. They raise the
--- catalogue errors of chapter 6, with the catalogue's message templates.
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
 
 private function kindOf v
   if v is nothing then return "nothing"
@@ -297,18 +298,13 @@ private function kindOf v
   return "object"
 end kindOf
 
-private function shown v
-  if v is a text then return quote & v & quote
-  return "" & v
-end shown
-
 private function wrongKind expected, v
   put kindOf(v) into got
-  throw {code: "wrong kind", expected: expected, got: got, value: v, message: "Expected " & shown(expected) & ", but got " & shown(got) & ": " & shown(v)}
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
 end wrongKind
 
 private function outOfDomain fn, v
-  throw {code: "out of domain", function: fn, value: v, message: shown(v) & " is outside the domain of " & shown(fn)}
+  throw {code: "out of domain", function: fn, value: v}
 end outOfDomain
 
 private function needText v
