@@ -1,6 +1,6 @@
 # 2. Grammar
 
-_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md).
+_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md).
 
 The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), and one set of word lists, in [`grammar.toml`](data/grammar.toml). This chapter shows both and states the rules they can't. What each construct means is in the chapters that follow.
 
@@ -106,8 +106,10 @@ Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
-Function       ::= 'function' Name ( Name ( ',' Name )* )? NL Block 'end' Name NL
+Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name NL
                    /* the Name after `end` is the function's name */
+Parameter      ::= Name ( '=' Expression )?
+                   /* a default; only trailing parameters may have one */
 Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
                    /* at a Session prompt only; decided on its first token */
 ```
@@ -116,10 +118,11 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 
 - **Top level:** a Script or Library is a sequence of declarations, and a top-level line can only start one. A statement at top level is a syntax error at its first token.
 - **Declarations are decided on their first token,** except `script variable`, which is decided on two. `use`, `constant`, `private`, `script` and `variable` are contextual, since a top-level line can't start anything else.
-- **`=`** in a Script Variable or Constant means "starts as". It is equality everywhere else.
+- **`=`** in a Script Variable or Constant means "starts as", and in a function's parameters "defaults to". It is equality everywhere else.
 - **`use … as`** renames a single imported name (`use trim from text as tidy`). After two or more names, `as` is a syntax error.
 - **`private`** goes before a Handler, a function or a Constant. It is a load error in a Script ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Functions** take a list of names, with no Destructuring. The Name after `end` must be the function's name.
+- **Defaults:** `name = expression` gives a parameter a default, which a call may leave off ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)). The default runs to the next top-level comma or the end of the line. Only trailing parameters may have one, and what a default may use is a load rule ([chapter 7](07-libraries-and-the-standard-library.md#defaults)).
 
 > **Example.**
 >
@@ -129,7 +132,7 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 > script variable visits = 0
 > constant welcome = "Hello"
 >
-> function tax amount, rate
+> function tax amount, rate = 0.2
 >   return amount * rate
 > end tax
 > ```

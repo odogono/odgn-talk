@@ -37,6 +37,7 @@ const DATA_FILES = [
   "machine",
   "costs",
   "host-errors",
+  "stdlib",
 ] as const;
 type DataName = (typeof DATA_FILES)[number];
 type Data = Record<DataName, any>;
@@ -228,6 +229,59 @@ function crossCheck(d: Data) {
         if (m && !adrFile(m[1]!)) fail(name, `${s} doesn't exist`);
       }
     }
+  }
+}
+
+// stdlib.toml (ADRs 0021 and 0035): every stdlib name is unique across the
+// Built-ins and the seven Libraries and isn't a Reserved Word or a Built-in
+// property, each function's defaults come last, and every Error Code and
+// Capability it names exists.
+const BUILTIN_GROUPS = ["values", "numbers", "floats", "dates", "constants"] as const;
+const isFunction = (e: any) => e.call.startsWith(`${e.name}(`);
+
+function stdlibCheck(d: Data) {
+  const fail = (msg: string) => problems.push(`spec/data/stdlib.toml: ${msg}`);
+  const s = d.stdlib;
+  const codes = new Set((d.errors.error ?? []).map((e: any) => e.code));
+  const reserved = new Set(d.grammar.reserved ?? []);
+  const properties = new Set(d.grammar.properties ?? []);
+  const entries = [...(s.builtin ?? []), ...(s.export ?? [])];
+  for (const n of duplicates(entries.map((e: any) => e.name))) fail(`"${n}" is named twice across the Built-ins and the Libraries`);
+  for (const e of entries) {
+    if (reserved.has(e.name)) fail(`"${e.name}" is a Reserved Word`);
+    if (properties.has(e.name)) fail(`"${e.name}" is a Built-in property`);
+    for (const c of e.errors ?? []) if (!codes.has(c)) fail(`"${e.name}" raises "${c}", which isn't in errors.toml`);
+    const isConstant = e.group === "constants" || (e.library && !isFunction(e));
+    if (isConstant) continue;
+    const m = new RegExp(`^${e.name}\\((.*)\\)$`).exec(e.call);
+    if (!m) {
+      fail(`the call of "${e.name}" isn't \`${e.name}(…)\``);
+      continue;
+    }
+    let optional = false;
+    for (const p of m[1] ? m[1].split(/, (?=[a-z]\w* = |[a-z]\w*(?:,|$))/) : []) {
+      const pm = /^([a-z]\w*)( = .+)?$/.exec(p);
+      if (!pm) fail(`"${e.name}" has a malformed parameter "${p}"`);
+      else if (pm[2]) optional = true;
+      else if (optional) fail(`"${e.name}" has the parameter "${pm[1]}" without a default after one with a default`);
+    }
+  }
+  for (const e of s.export ?? []) {
+    if (!s.libraries.includes(e.library)) fail(`"${e.name}" is in "${e.library}", which isn't a stdlib Library`);
+  }
+  for (const lib of s.libraries) {
+    if (reserved.has(lib)) fail(`the Library name "${lib}" is a Reserved Word`);
+    if (!(s.export ?? []).some((e: any) => e.library === lib)) fail(`the Library "${lib}" exports nothing`);
+  }
+  for (const n of duplicates((s.encoding ?? []).map((e: any) => e.name))) fail(`encoding "${n}" is listed twice`);
+  const ops = (s.operation ?? []).map((o: any) => `${o.capability} ${o.name}`);
+  for (const o of duplicates(ops)) fail(`Operation "${o}" is listed twice`);
+  for (const o of s.operation ?? []) {
+    if (!s.capabilities.includes(o.capability)) fail(`Operation "${o.name}" is on "${o.capability}", which isn't a Standard Capability`);
+    for (const c of o.errors ?? []) if (!codes.has(c)) fail(`Operation "${o.capability} ${o.name}" names "${c}", which isn't in errors.toml`);
+  }
+  for (const c of s.capabilities) {
+    if (!(s.operation ?? []).some((o: any) => o.capability === c)) fail(`the Standard Capability "${c}" has no Operations`);
   }
 }
 
@@ -435,6 +489,40 @@ const VIEWS: Record<string, View> = {
 
 const glossarySource = await Bun.file(join(ROOT, "CONTEXT.md")).text();
 
+// Chapter 7: one region per Built-in group, stdlib Library and Standard Capability.
+function stdlibViews(d: Data) {
+  const s = d.stdlib;
+  const raises = (e: any) => (e.errors ?? []).map(code).join(", ");
+  for (const g of BUILTIN_GROUPS) {
+    const rows = (s.builtin ?? []).filter((b: any) => b.group === g);
+    VIEWS[`stdlib.builtins.${g}`] = () =>
+      g === "constants"
+        ? table(["Constant", "Value", "Is"], rows.map((b: any) => [code(b.name), code(b.call), b.gives]))
+        : table(["Built-in", "Gives", "Also raises"], rows.map((b: any) => [code(b.call), b.gives, raises(b)]));
+  }
+  for (const lib of s.libraries ?? []) {
+    VIEWS[`stdlib.${lib}`] = () =>
+      table(["Export", "Gives", "Also raises"],
+        (s.export ?? []).filter((e: any) => e.library === lib).map((e: any) => [
+          isFunction(e) ? code(e.call) : `${code(e.name)} = ${code(e.call)}`,
+          e.gives,
+          raises(e),
+        ]));
+  }
+  VIEWS["stdlib.encodings"] = () =>
+    table(["Encoding", "Bytes"], (s.encoding ?? []).map((e: any) => [code(`"${e.name}"`), e.bytes]));
+  for (const c of s.capabilities ?? []) {
+    VIEWS[`stdlib.capability.${c}`] = () =>
+      table(["Operation", "Mode", "Gives", "Errors"],
+        (s.operation ?? []).filter((o: any) => o.capability === c).map((o: any) => [
+          code(o.call),
+          o.mode,
+          o.gives,
+          raises(o),
+        ]));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Regions
 // ---------------------------------------------------------------------------
@@ -554,7 +642,9 @@ async function checkLinks(regenerated: Map<string, string>) {
 const data = await loadData();
 const ebnf = await loadEbnf();
 for (const s of ebnf) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n```";
+stdlibViews(data);
 crossCheck(data);
+stdlibCheck(data);
 ebnfCheck(data, ebnf);
 const regenerated = await fillRegions(data);
 await checkLinks(regenerated);

@@ -201,7 +201,7 @@ type Decimal struct { /* opaque */
 func (d Decimal) String() string        // canonical, trailing zeros kept
 func (d Decimal) Int64() (int64, error) // fails unless an integer that fits
 func (d Decimal) Uint64() (uint64, error)
-func (d Decimal) Float64Lossy() (float64, error) // nearest, ties to even; too large fails
+func (d Decimal) Float64Lossy() float64 // nearest, ties to even; every number fits (ADR 0034)
 
 // ---------------------------------------------------------------------------
 // JSON and the Value Encoding (ADRs 0021, 0030)

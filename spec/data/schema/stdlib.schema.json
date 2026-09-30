@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/stdlib.schema.json",
+  "title": "stdlib",
+  "description": "The Standard Library: the Built-ins, the stdlib Libraries' exports, the text encodings and the Standard Capabilities' Operations.",
+  "type": "object",
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*$" },
+    "sentence": { "type": "string", "minLength": 1 },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z']+( [a-z']+)*$" },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "properties": {
+    "libraries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/name" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/name" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "builtin": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "$ref": "#/$defs/name" },
+          "group": { "enum": ["values", "numbers", "floats", "dates", "constants"] },
+          "call": { "$ref": "#/$defs/sentence" },
+          "gives": { "$ref": "#/$defs/sentence" },
+          "errors": { "$ref": "#/$defs/errors" }
+        },
+        "required": ["name", "group", "call", "gives"],
+        "additionalProperties": false
+      }
+    },
+    "export": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "library": { "$ref": "#/$defs/name" },
+          "name": { "$ref": "#/$defs/name" },
+          "call": { "$ref": "#/$defs/sentence" },
+          "gives": { "$ref": "#/$defs/sentence" },
+          "errors": { "$ref": "#/$defs/errors" }
+        },
+        "required": ["library", "name", "call", "gives"],
+        "additionalProperties": false
+      }
+    },
+    "encoding": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "bytes": { "$ref": "#/$defs/sentence" }
+        },
+        "required": ["name", "bytes"],
+        "additionalProperties": false
+      }
+    },
+    "operation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capability": { "$ref": "#/$defs/name" },
+          "name": { "$ref": "#/$defs/name" },
+          "mode": { "enum": ["immediate", "suspending", "fire-and-forget"] },
+          "call": { "$ref": "#/$defs/sentence" },
+          "gives": { "$ref": "#/$defs/sentence" },
+          "errors": { "$ref": "#/$defs/errors" }
+        },
+        "required": ["capability", "name", "mode", "call", "gives"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["libraries", "capabilities", "builtin", "export", "encoding", "operation"],
+  "additionalProperties": false
+}

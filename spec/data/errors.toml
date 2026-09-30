@@ -134,8 +134,8 @@ message = "The function no longer exists"
 [[error]]
 code = "wrong arity"
 fields = []
-raised_when = "A Lambda is called with the wrong number of arguments"
-sources = ["ADR 0017", "ADR 0025"]
+raised_when = "A Function Value is called with too few or too many arguments: a Lambda's count, or outside a named function's range from its required parameters to all of them"
+sources = ["ADR 0017", "ADR 0025", "ADR 0035"]
 message = "The function was called with the wrong number of arguments"
 
 [[error]]
@@ -148,7 +148,7 @@ message = "A {kind} can't be encoded as plain data"
 [[error]]
 code = "out of domain"
 fields = ["function", "value"]
-raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, or a bad sort direction; `value` is the argument, the missing key or the direction"
+raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, or a Standard Capability option word that isn't listed; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name"
 sources = ["ADR 0002", "ADR 0021", "ADR 0025", "ADR 0033"]
 message = "{value} is outside the domain of {function}"
 
