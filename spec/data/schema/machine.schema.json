@@ -4,61 +4,46 @@
   "title": "machine",
   "description": "The Abstract Machine's instruction set.",
   "type": "object",
+  "$defs": {
+    "effect": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^[a-z]+( \\+ [0-9]+)?$" }
+      ]
+    }
+  },
   "properties": {
+    "operand": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "instruction": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "pattern": "^[a-z]+(-[a-z]+)*$"
+          "name": { "type": "string", "pattern": "^[a-z]+(-[a-z]+)*$" },
+          "group": {
+            "enum": ["values", "control", "operators", "access", "building", "calls", "patterns", "loops", "errors", "effects"]
           },
-          "operands": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "pops": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "pushes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "suspends": {
-            "type": "boolean"
-          },
-          "cost": {
-            "type": "string",
-            "minLength": 1
-          },
+          "operands": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "pops": { "$ref": "#/$defs/effect" },
+          "pushes": { "$ref": "#/$defs/effect" },
+          "jumps": { "type": "integer", "minimum": 0 },
+          "suspends": { "type": "boolean" },
+          "cost": { "type": "string", "minLength": 1 },
           "errors": {
             "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z']+( [a-z']+)*$"
-            },
+            "items": { "type": "string", "pattern": "^[a-z']+( [a-z']+)*$" },
             "uniqueItems": true
-          }
+          },
+          "does": { "type": "string", "minLength": 1 }
         },
-        "required": [
-          "name",
-          "operands",
-          "pops",
-          "pushes",
-          "suspends",
-          "cost"
-        ],
+        "required": ["name", "group", "operands", "pops", "pushes", "suspends", "cost", "does"],
         "additionalProperties": false
       }
     }
   },
-  "required": [
-    "instruction"
-  ],
+  "required": ["operand", "instruction"],
   "additionalProperties": false
 }

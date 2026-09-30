@@ -1,0 +1,30 @@
+-- Constructs the stdlib, the sketch and the corpus don't reach, so that
+-- `bun run machine:check` lowers every instruction in machine.toml at least
+-- once. Not normative (ADR 0028).
+
+use map from list
+
+on coverage door, k, row, packet
+  set the (k) of door to "open"
+  refresh and wait
+  put [1, 2] into xs
+  put ...xs before xs
+  put map into mapper
+  if row ends with "x" then say "ends"
+  put {a: 1, b: 2} into m
+  delete the a of m
+  delete the (k) of m
+  put "z" into item 2 of row delimited by ";"
+  delete item 1 of row delimited by ";"
+  put << 1 as 4 bits, 2 as 4 bits >> into b
+  match packet
+    when << hi: 4 bits, lo: 4 bits >> then say hi & lo
+  end match
+end coverage
+
+on deleting m, k, x
+  delete the b of the (k) of m
+  delete the b of the a of m
+  delete word 1 of line 5 of x
+  delete item 1 of item 2 of x delimited by ";"
+end deleting

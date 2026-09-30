@@ -171,6 +171,16 @@ export class Parser {
     throw new SyntaxError(t, "unexpected token", `expected ${expected}, found ${got}`);
   }
 
+  // Stamps a node with the position of the token its construct starts at,
+  // or its operator's, for the source map (chapter 8).
+  at<N extends Node>(t: Token, n: N): N {
+    if (n.line === undefined) {
+      n.line = t.line;
+      n.col = t.col;
+    }
+    return n;
+  }
+
   isWord(t: Token, ...ws: string[]) {
     return t.t === "word" && (ws.length === 0 || ws.includes(t.v));
   }
@@ -340,10 +350,10 @@ export class Parser {
       this.endOfStatement();
       fin = this.block(["end"]);
     }
-    this.expectWord("end");
+    const end = this.expectWord("end");
     this.endName(name, on);
     this.endOfStatement();
-    return { k: "Handler", name, params, guard, suffixes, during, body, finally: fin };
+    return { k: "Handler", name, params, guard, suffixes, during, body, finally: fin, line: on.line, col: on.col, end: { line: end.line, col: end.col } };
   }
 
   func(): Node {
@@ -369,10 +379,10 @@ export class Parser {
     }
     this.endOfStatement();
     const body = this.block(["end"]);
-    this.expectWord("end");
+    const end = this.expectWord("end");
     this.endName(name, fn);
     this.endOfStatement();
-    return { k: "Function", name, params, body };
+    return { k: "Function", name, params, body, line: fn.line, col: fn.col, end: { line: end.line, col: end.col } };
   }
 
   // ---------------------------------------------------------------- statements
@@ -402,11 +412,11 @@ export class Parser {
 
   statement(): Node {
     const t = this.peek(0);
-    if (this.isWord(t, "if")) return this.ifStatement();
-    if (this.isWord(t, "repeat")) return this.repeat();
-    if (this.isWord(t, "match")) return this.match();
-    if (this.isWord(t, "try")) return this.tryStatement();
-    if (this.isWord(t, "wait")) return this.wait(true);
+    if (this.isWord(t, "if")) return this.at(t, this.ifStatement());
+    if (this.isWord(t, "repeat")) return this.at(t, this.repeat());
+    if (this.isWord(t, "match")) return this.at(t, this.match());
+    if (this.isWord(t, "try")) return this.at(t, this.tryStatement());
+    if (this.isWord(t, "wait")) return this.at(t, this.wait(true));
     return this.simpleStatement();
   }
 
@@ -414,6 +424,10 @@ export class Parser {
   // and the block forms of `wait for`.
   simpleStatement(): Node {
     const t = this.peek(0);
+    return this.at(t, this.simpleStatementAt(t));
+  }
+
+  simpleStatementAt(t: Token): Node {
     if (t.t !== "word") this.fail(t, "a statement");
     switch (t.v) {
       case "put": {
@@ -709,7 +723,7 @@ export class Parser {
       this.skipNL();
       const t = this.peek(0);
       if (this.isWord(t, "when") && !sawElse) {
-        this.next();
+        const wt = this.next();
         let search = false;
         if (this.atWord("contains") && this.la2("when-contains").t === "patopen") {
           this.next();
@@ -722,7 +736,7 @@ export class Parser {
           guard = this.expr();
         }
         this.expectWord("then", "operator");
-        branches.push({ k: "When", search, pat, guard, body: this.body(["when", "else", "end"]) });
+        branches.push({ k: "When", search, pat, guard, body: this.body(["when", "else", "end"]), line: wt.line, col: wt.col });
       } else if (this.isWord(t, "else") && !sawElse) {
         this.next();
         sawElse = true;
@@ -741,7 +755,7 @@ export class Parser {
     const body = this.block(["catch", "finally", "end"]);
     const catches: Node[] = [];
     while (this.atWord("catch")) {
-      this.next();
+      const ct = this.next();
       const pat = this.pattern();
       let guard: Node | null = null;
       if (this.atOperatorWord("where")) {
@@ -749,7 +763,7 @@ export class Parser {
         guard = this.expr();
       }
       this.endOfStatement();
-      catches.push({ k: "Catch", pat, guard, body: this.block(["catch", "finally", "end"]) });
+      catches.push({ k: "Catch", pat, guard, body: this.block(["catch", "finally", "end"]), line: ct.line, col: ct.col });
     }
     let fin: Node[] | null = null;
     if (this.atWord("finally")) {
@@ -798,6 +812,10 @@ export class Parser {
   // statements, then `end given`.
   lambda(): Node {
     const at = this.next();
+    return this.at(at, this.lambdaAt(at));
+  }
+
+  lambdaAt(at: Token): Node {
     this.nlBase.push(this.brackets.length);
     const params: Node[] = [];
     const t0 = this.peek(0);
@@ -817,17 +835,17 @@ export class Parser {
     if (t.t !== "nl") this.fail(t, "`,`, `:` or end of line after a Lambda parameter");
     this.endOfStatement();
     const body = this.block(["end"]);
-    this.expectWord("end");
+    const end = this.expectWord("end");
     this.endName("given", at);
     this.nlBase.pop();
-    return { k: "LambdaBlock", params, body };
+    return { k: "LambdaBlock", params, body, end: { line: end.line, col: end.col } };
   }
 
   or(): Node {
     let l = this.and();
     while (this.atOperatorWord("or")) {
-      this.next("operator");
-      l = { k: "or", l, r: this.and() };
+      const op = this.next("operator");
+      l = this.at(op, { k: "or", l, r: this.and() });
     }
     return l;
   }
@@ -835,16 +853,16 @@ export class Parser {
   and(): Node {
     let l = this.not();
     while (this.atOperatorWord("and") && !this.isWord(this.la2("and-wait"), "wait")) {
-      this.next("operator");
-      l = { k: "and", l, r: this.not() };
+      const op = this.next("operator");
+      l = this.at(op, { k: "and", l, r: this.not() });
     }
     return l;
   }
 
   not(): Node {
     if (this.atWord("not")) {
-      this.next();
-      return { k: "not", e: this.not() };
+      const op = this.next();
+      return this.at(op, { k: "not", e: this.not() });
     }
     return this.comparison();
   }
@@ -888,6 +906,7 @@ export class Parser {
       node = { k: `${t.v} with`, l, r: this.concat() };
     }
     if (!node) return l;
+    this.at(t, node);
     if (this.ignoringCase()) node.ignoringCase = true;
     return node;
   }
@@ -895,8 +914,8 @@ export class Parser {
   concat(): Node {
     let l = this.range();
     while (this.isOp(this.peek(0, "operator"), "&")) {
-      this.next("operator");
-      l = { k: "&", l, r: this.range() };
+      const op = this.next("operator");
+      l = this.at(op, { k: "&", l, r: this.range() });
     }
     return l;
   }
@@ -904,8 +923,8 @@ export class Parser {
   range(): Node {
     const l = this.additive();
     if (this.isOp(this.peek(0, "operator"), "..")) {
-      this.next("operator");
-      return { k: "..", l, r: this.additive() };
+      const op = this.next("operator");
+      return this.at(op, { k: "..", l, r: this.additive() });
     }
     return l;
   }
@@ -916,7 +935,7 @@ export class Parser {
       const t = this.peek(0, "operator");
       if (!this.isOp(t, "+", "-")) return l;
       this.next("operator");
-      l = { k: t.v, l, r: this.multiplicative() };
+      l = this.at(t, { k: t.v, l, r: this.multiplicative() });
     }
   }
 
@@ -926,23 +945,23 @@ export class Parser {
       const t = this.peek(0, "operator");
       if (!(this.isOp(t, "*", "/") || this.isWord(t, "mod", "div"))) return l;
       this.next("operator");
-      l = { k: t.v, l, r: this.power() };
+      l = this.at(t, { k: t.v, l, r: this.power() });
     }
   }
 
   power(): Node {
     const l = this.unary();
     if (this.isOp(this.peek(0, "operator"), "^")) {
-      this.next("operator");
-      return { k: "^", l, r: this.power() };
+      const op = this.next("operator");
+      return this.at(op, { k: "^", l, r: this.power() });
     }
     return l;
   }
 
   unary(): Node {
     if (this.isOp(this.peek(0), "-")) {
-      this.next();
-      return { k: "neg", e: this.unary() };
+      const op = this.next();
+      return this.at(op, { k: "neg", e: this.unary() });
     }
     return this.conversion();
   }
@@ -952,10 +971,15 @@ export class Parser {
     let e = this.chunkLevel();
     for (;;) {
       if (!this.atOperatorWord("as")) return e;
-      if (this.build && INT_TYPES.has(this.la2("as-in-build", "type").v)) return e;
-      this.next("operator");
+      if (this.build) {
+        // A field type starts with an integer type, or a size: no kind starts
+        // with a number, `(` or `^`.
+        const n = this.la2("as-in-build", "type");
+        if (INT_TYPES.has(n.v) || n.t === "num" || this.isOp(n, "(", "^")) return e;
+      }
+      const op = this.next("operator");
       const t = this.peek(0, "type");
-      e = { k: "as", e, type: t.t === "unit" || t.t === "error" ? this.next("type").v : this.kind() };
+      e = this.at(op, { k: "as", e, type: t.t === "unit" || t.t === "error" ? this.next("type").v : this.kind() });
     }
   }
 
@@ -994,8 +1018,9 @@ export class Parser {
 
   postfix(e: Node): Node {
     while (this.isOp(this.peek(0, "operator"), "'s")) {
-      this.next("operator");
-      e = { k: "Key", key: this.propertyOrKey("a key after `'s`"), base: e };
+      const op = this.next("operator");
+      const key = this.propertyOrKey("a key after `'s`");
+      e = this.at(op, { k: PROPERTIES.has(key) ? "Property" : "Key", key, base: e });
     }
     return e;
   }
@@ -1040,6 +1065,10 @@ export class Parser {
 
   primary(): Node {
     const t = this.peek(0);
+    return this.at(t, this.primaryAt(t));
+  }
+
+  primaryAt(t: Token): Node {
     switch (t.t) {
       case "num": {
         this.next();
@@ -1201,7 +1230,8 @@ export class Parser {
   // ---------------------------------------------------------------- Destructuring
 
   pattern(): Node {
-    let p = this.patternPrimary();
+    const t = this.peek(0);
+    let p = this.at(t, this.patternPrimary());
     if (this.atOperatorWord("as")) {
       this.next("operator");
       p = { k: "BindAs", p, name: this.name("a name after `as`") };
@@ -1349,7 +1379,7 @@ export class Parser {
       if (!this.isName(t)) this.fail(t, "a Capture name (a Reserved Word can't name one)");
       this.next("pattern");
       this.next("pattern");
-      return { k: "Capture", name: t.v, e: this.patAlt() };
+      return { k: "Capture", name: t.v, e: this.patAlt(), line: t.line, col: t.col };
     }
     if (ANCHORS.has(t.v) && this.isWord(n) && ANCHORS.get(t.v)!.has(n.v)) {
       this.site = "pattern-anchor";
@@ -1403,6 +1433,10 @@ export class Parser {
 
   binaryField(): Node {
     const t = this.peek(0);
+    return this.at(t, this.binaryFieldAt(t));
+  }
+
+  binaryFieldAt(t: Token): Node {
     if (this.isOp(t, "...")) {
       this.next();
       const n = this.peek(0, "operator");
