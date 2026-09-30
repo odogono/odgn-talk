@@ -513,7 +513,9 @@ function rebaseLinks(text: string, from: string, to: string): string {
 function anchors(text: string): Set<string> {
   const seen = new Map<string, number>();
   const out = new Set<string>();
-  for (const m of stripCode(text).matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
+  // Only fenced blocks: GitHub keeps the text of inline code in an anchor.
+  const unfenced = text.replace(/^(```|~~~)[\s\S]*?^\1/gm, "");
+  for (const m of unfenced.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
     const base = m[1]!
       .replace(/<[^>]+>/g, "")
       .toLowerCase()

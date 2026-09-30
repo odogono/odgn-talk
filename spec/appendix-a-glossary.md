@@ -345,7 +345,7 @@ A named part of a Text Pattern, written `name: element`, whose matched text is b
 _Avoid_: group, capture group, submatch
 
 **Typed Element**:
-A Text Pattern element that both matches a literal of some kind and converts it to that kind, e.g. `a number` or `a date`, so the Capture holding it binds a Number or Civil Date rather than text.
+A Text Pattern element that both matches a literal of some kind and converts it to that kind, so the Capture holding it binds that kind rather than text. The only one is `a number`.
 _Avoid_: typed capture, converter
 
 **Destructuring**:
@@ -417,6 +417,10 @@ _Avoid_: nominal duration
 **Unit Catalogue**:
 The fixed table of every Unit, with its Unit Kind and exact conversion factor, that a language version pins. Neither Hosts nor Scripts can add to it.
 _Avoid_: unit registry, unit table, units list
+
+**Range**:
+A value made with `..` from two numbers, or two Quantities of one dimension, e.g. `1..10` or `3 m/s..7 m/s`, that `is in` tests and `repeat for each` walks. Chunk indexes and a Match's position are ranges.
+_Avoid_: interval, span, slice
 
 **Nothing**:
 The single value meaning "no value here", distinct from empty text, an empty list or an empty map.
