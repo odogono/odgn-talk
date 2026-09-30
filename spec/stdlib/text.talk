@@ -1,0 +1,383 @@
+-- The `text` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+
+-- Padding and trimming -------------------------------------------------------
+
+function pad t, width, fill = " "
+  needText(t)
+  needInteger(width)
+  needText(fill)
+  if width < 0 then outOfDomain("pad", width)
+  if the length of fill <> 1 then outOfDomain("pad", fill)
+  if the length of t >= width then return t
+  return t & repeated(fill, width - the length of t)
+end pad
+
+function padLeft t, width, fill = " "
+  needText(t)
+  needInteger(width)
+  needText(fill)
+  if width < 0 then outOfDomain("padLeft", width)
+  if the length of fill <> 1 then outOfDomain("padLeft", fill)
+  if the length of t >= width then return t
+  return repeated(fill, width - the length of t) & t
+end padLeft
+
+function trim t
+  needText(t)
+  return trimEnd(trimStart(t))
+end trim
+
+function trimStart t
+  needText(t)
+  put the characters of t into cs
+  repeat for each i in 1..(the length of cs)
+    if not (item i of cs matches <whitespace>) then return characters i..-1 of t
+  end repeat
+  return ""
+end trimStart
+
+function trimEnd t
+  needText(t)
+  put the characters of t into cs
+  put the length of cs into i
+  repeat while i > 0
+    if not (item i of cs matches <whitespace>) then return characters 1..i of t
+    subtract 1 from i
+  end repeat
+  return ""
+end trimEnd
+
+-- Splitting and joining ------------------------------------------------------
+
+function split t, separator
+  needText(t)
+  if separator is a text then
+    if separator is empty then outOfDomain("split", separator)
+    put every match of <(separator)> in t into found
+  else if separator is a pattern then
+    put every match of separator in t into found
+  else
+    wrongKind("text or pattern", separator)
+  end if
+  put [] into pieces
+  put 1 into pos
+  repeat for each m in found
+    if the text of m is not empty then
+      put startOf(m) into start
+      put characters pos..(start - 1) of t after pieces
+      put start + the length of the text of m into pos
+    end if
+  end repeat
+  put characters pos..-1 of t after pieces
+  return pieces
+end split
+
+function join xs, separator = ""
+  needList(xs)
+  needText(separator)
+  put [] into parts
+  repeat for each x in xs
+    if parts is not empty then put separator after parts
+    put "" & x after parts
+  end repeat
+  return joined(parts)
+end join
+
+function repeated t, n
+  needText(t)
+  needInteger(n)
+  if n < 0 then outOfDomain("repeated", n)
+  put [] into parts
+  repeat n times
+    put t after parts
+  end repeat
+  return joined(parts)
+end repeated
+
+-- Searching ------------------------------------------------------------------
+
+function lastOffset needle, t
+  if needle is a text then
+    put <(needle)> into p
+  else if needle is a pattern then
+    put needle into p
+  else
+    wrongKind("text or pattern", needle)
+  end if
+  needText(t)
+  put every match of p in t into found
+  if found is empty then return 0
+  return startOf(item -1 of found)
+end lastOffset
+
+-- Templates ------------------------------------------------------------------
+
+function format template, values
+  needText(template)
+  needMap(values)
+  put the characters of template into cs
+  put the length of cs into n
+  put [] into parts
+  put 1 into i
+  repeat while i <= n
+    put item i of cs into c
+    if c = "{" and i < n and item (i + 1) of cs = "{" then
+      put "{" after parts
+      add 2 to i
+    else if c = "{" then
+      put i + 1 into j
+      repeat while j <= n and item j of cs <> "}"
+        add 1 to j
+      end repeat
+      if j > n then outOfDomain("format", template)
+      put characters (i + 1)..(j - 1) of template into name
+      if name is not in the keys of values then outOfDomain("format", name)
+      put "" & the (name) of values after parts
+      put j + 1 into i
+    else if c = "}" and i < n and item (i + 1) of cs = "}" then
+      put "}" after parts
+      add 2 to i
+    else if c = "}" then
+      outOfDomain("format", template)
+    else
+      put c after parts
+      add 1 to i
+    end if
+  end repeat
+  return joined(parts)
+end format
+
+-- Numbers in a Locale --------------------------------------------------------
+
+function formatNumber n, symbols, places = nothing
+  needNumber(n)
+  needMap(symbols)
+  if places is not nothing then needInteger(places)
+  checkSymbols(symbols, "formatNumber")
+  if places is not nothing and places < 0 then outOfDomain("formatNumber", places)
+  if places is not nothing then put round(n, places) into n
+  put n as text into written
+  put "" into sign
+  if n < 0 then
+    put the minus of symbols into sign
+    put characters 2..-1 of written into written
+  end if
+  put split(written, ".") into halves
+  put localDigits(grouped(item 1 of halves, symbols), symbols) into whole
+  if the length of halves = 1 then return sign & whole
+  return sign & whole & the decimal of symbols & localDigits(item 2 of halves, symbols)
+end formatNumber
+
+function parseNumber t, symbols
+  needText(t)
+  needMap(symbols)
+  checkSymbols(symbols, "parseNumber")
+  put the length of t into n
+  put 1 into i
+  put "" into sign
+  if startsWith(t, i, the minus of symbols) then
+    put "-" into sign
+    add the length of the minus of symbols to i
+  end if
+  -- The integer part: digits, and group separators with where each one stands.
+  put "" into whole
+  put [] into spots
+  put [] into groups
+  repeat while i <= n
+    put digitAt(t, i, symbols) into d
+    if d is not nothing then
+      put item 1 of d after whole
+      put i after spots
+      add item 2 of d to i
+    else if whole is not empty and startsWith(t, i, the group of symbols) then
+      put [the length of whole, i] after groups
+      add the length of the group of symbols to i
+    else
+      exit repeat
+    end if
+  end repeat
+  if whole is empty then cantParse(t, i)
+  if groups is not empty then checkGrouping(t, whole, spots, groups, symbols)
+  -- The fraction: the decimal separator, then at least one digit.
+  put "" into fraction
+  if i <= n and startsWith(t, i, the decimal of symbols) then
+    add the length of the decimal of symbols to i
+    repeat while i <= n
+      put digitAt(t, i, symbols) into d
+      if d is nothing then exit repeat
+      put item 1 of d after fraction
+      add item 2 of d to i
+    end repeat
+    if fraction is empty then cantParse(t, i)
+  end if
+  if i <= n then cantParse(t, i)
+  put sign & whole into ascii
+  if fraction is not empty then put "." & fraction after ascii
+  if not (ascii can be a number) then cantParse(t, 1)
+  return ascii as number
+end parseNumber
+
+-- Every key of `numberSymbols`, with the kind it must have (chapter 7).
+private function checkSymbols symbols, fn
+  repeat for each k in ["decimal", "group", "minus"]
+    put the (k) of symbols into v
+    if v is not a text or v is empty then outOfDomain(fn, symbols)
+  end repeat
+  put the digits of symbols into ds
+  if ds is not a list or the length of ds <> 10 then outOfDomain(fn, symbols)
+  repeat for each v in ds
+    if v is not a text or v is empty then outOfDomain(fn, symbols)
+  end repeat
+  repeat for each k in ["primaryGroup", "secondaryGroup", "minGrouping"]
+    put the (k) of symbols into v
+    if v is not a number or v is not an integer then outOfDomain(fn, symbols)
+    if v < 1 then outOfDomain(fn, symbols)
+  end repeat
+end checkSymbols
+
+-- The ASCII digits `whole`, with a "," wherever the Locale groups them.
+private function grouped whole, symbols
+  put the primaryGroup of symbols into primary
+  put the secondaryGroup of symbols into secondary
+  put the length of whole into len
+  if len < primary + the minGrouping of symbols then return whole
+  put [characters (len - primary + 1)..len of whole] into parts
+  put len - primary into left
+  repeat while left > secondary
+    put characters (left - secondary + 1)..left of whole before parts
+    subtract secondary from left
+  end repeat
+  put characters 1..left of whole before parts
+  return join(parts, ",")
+end grouped
+
+-- Writes ASCII digits, "." and "," with the Locale's digits and separators.
+private function localDigits ascii, symbols
+  put [] into parts
+  repeat for each c in the characters of ascii
+    if c = "," then
+      put the group of symbols after parts
+    else if c = "." then
+      put the decimal of symbols after parts
+    else
+      put item (c as number + 1) of the digits of symbols after parts
+    end if
+  end repeat
+  return joined(parts)
+end localDigits
+
+-- The Locale digit at Character `i` of `t`, as [ASCII digit, its length], or Nothing.
+private function digitAt t, i, symbols
+  put 0 into k
+  repeat for each d in the digits of symbols
+    if startsWith(t, i, d) then return [k as text, the length of d]
+    add 1 to k
+  end repeat
+  return nothing
+end digitAt
+
+-- A group separator may stand only where `formatNumber` would put one, and
+-- then every one it would put must be there. `spots` holds where each digit
+-- starts, and each group is [digits before it, where it starts].
+private function checkGrouping t, whole, spots, groups, symbols
+  put [] into wanted
+  put 0 into before
+  repeat for each piece in items 1..-2 of split(grouped(whole, symbols), ",")
+    add the length of piece to before
+    put before after wanted
+  end repeat
+  put 1 into k
+  repeat while k <= the length of groups or k <= the length of wanted
+    put item k of groups into g
+    put item k of wanted into w
+    if g is nothing then cantParse(t, item (w + 1) of spots)
+    if w is nothing then cantParse(t, item 2 of g)
+    if item 1 of g < w then cantParse(t, item 2 of g)
+    if item 1 of g > w then cantParse(t, item (w + 1) of spots)
+    add 1 to k
+  end repeat
+end checkGrouping
+
+private function startsWith t, i, prefix
+  put i + the length of prefix - 1 into last
+  if last > the length of t then return false
+  return characters i..last of t = prefix
+end startsWith
+
+private function cantParse t, at
+  throw {code: "can't convert", value: t, to: "number", offset: at}
+end cantParse
+
+-- Helpers --------------------------------------------------------------------
+
+-- Where a match starts. An empty match's range is p..p-1, which has no
+-- items, so its first end is read with `rangeStart` (ADR 0036).
+private function startOf m
+  return rangeStart(the range of m)
+end startOf
+
+-- Joins a list of texts, halving so each Character is copied about log n times.
+private function joined parts
+  put the length of parts into n
+  if n = 0 then return ""
+  if n = 1 then return item 1 of parts
+  put n div 2 into half
+  return joined(items 1..half of parts) & joined(items (half + 1)..n of parts)
+end joined
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

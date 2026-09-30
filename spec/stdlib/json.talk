@@ -1,0 +1,350 @@
+-- The `json` Library: the JSON mapping of chapter 7, which each Core's
+-- Host-side codec follows too. This source is normative Spec text (ADR 0021).
+--
+-- Decoding reads the text's code points rather than its Characters, since a
+-- combining mark after a quote would join it into one Character, and reports
+-- positions in Characters, as chapter 7 says.
+
+use join, repeated from text
+
+-- Decoding -------------------------------------------------------------------
+
+function decodeJson t
+  needText(t)
+  put the code points of t into cps
+  let [v, j] be readValue(cps, skipSpace(cps, 1), t)
+  put skipSpace(cps, j) into j
+  if j <= the length of cps then invalid(t, j)
+  return v
+end decodeJson
+
+-- Each reader takes the code point to start at, and gives [value, where it ended + 1].
+private function readValue cps, i, t
+  if i > the length of cps then invalid(t, i)
+  put item i of cps into c
+  if c = "{" then return readObject(cps, i, t)
+  if c = "[" then return readArray(cps, i, t)
+  if c = quote then return readString(cps, i, t)
+  if c = "-" or isDigit(c) then return readNumber(cps, i, t)
+  if c = "t" then return [true, literalEnd(cps, i, "true", t)]
+  if c = "f" then return [false, literalEnd(cps, i, "false", t)]
+  if c = "n" then return [nothing, literalEnd(cps, i, "null", t)]
+  invalid(t, i)
+end readValue
+
+private function readArray cps, i, t
+  put the length of cps into n
+  put [] into xs
+  put skipSpace(cps, i + 1) into j
+  if j <= n and item j of cps = "]" then return [xs, j + 1]
+  repeat forever
+    let [v, k] be readValue(cps, j, t)
+    put v after xs
+    put skipSpace(cps, k) into j
+    if j > n then invalid(t, j)
+    if item j of cps = "]" then return [xs, j + 1]
+    if item j of cps <> "," then invalid(t, j)
+    put skipSpace(cps, j + 1) into j
+  end repeat
+end readArray
+
+private function readObject cps, i, t
+  put the length of cps into n
+  put {} into m
+  put {} into seen
+  put skipSpace(cps, i + 1) into j
+  if j <= n and item j of cps = "}" then return [m, j + 1]
+  repeat forever
+    if j > n then invalid(t, j)
+    if item j of cps <> quote then invalid(t, j)
+    let [name, k] be readString(cps, j, t)
+    if the (name) of seen is true then invalid(t, j)
+    put true into the (name) of seen
+    put skipSpace(cps, k) into j
+    if j > n then invalid(t, j)
+    if item j of cps <> ":" then invalid(t, j)
+    let [v, k] be readValue(cps, skipSpace(cps, j + 1), t)
+    put v into the (name) of m
+    put skipSpace(cps, k) into j
+    if j > n then invalid(t, j)
+    if item j of cps = "}" then return [m, j + 1]
+    if item j of cps <> "," then invalid(t, j)
+    put skipSpace(cps, j + 1) into j
+  end repeat
+end readObject
+
+private function readString cps, i, t
+  put the length of cps into n
+  put [] into parts
+  put i + 1 into j
+  repeat forever
+    if j > n then invalid(t, j)
+    put item j of cps into c
+    if c = quote then return [join(parts), j + 1]
+    if codePoint(c) < 0x20 then invalid(t, j)
+    if c = "\" then
+      if j = n then invalid(t, j + 1)
+      put item (j + 1) of cps into e
+      if e = quote or e = "\" or e = "/" then
+        put e after parts
+        add 2 to j
+      else if e is in ["b", "f", "n", "r", "t"] then
+        put fromCodePoint(item (offset(e, "bfnrt")) of [8, 12, 10, 13, 9]) after parts
+        add 2 to j
+      else if e = "u" then
+        put hex4(cps, j + 2, t) into u
+        if u >= 0xDC00 and u <= 0xDFFF then invalid(t, j)
+        add 6 to j
+        if u >= 0xD800 and u <= 0xDBFF then
+          if j + 1 > n then invalid(t, j)
+          if item j of cps <> "\" or item (j + 1) of cps <> "u" then invalid(t, j)
+          put hex4(cps, j + 2, t) into low
+          if low < 0xDC00 or low > 0xDFFF then invalid(t, j)
+          put 0x10000 + (u - 0xD800) * 1024 + (low - 0xDC00) into u
+          add 6 to j
+        end if
+        put fromCodePoint(u) after parts
+      else
+        invalid(t, j + 1)
+      end if
+    else
+      put c after parts
+      add 1 to j
+    end if
+  end repeat
+end readString
+
+-- The four hexadecimal digits starting at code point `i`, as a number.
+private function hex4 cps, i, t
+  put 0 into u
+  repeat for each k in i..(i + 3)
+    if k > the length of cps then invalid(t, k)
+    put offset(lower(item k of cps), "0123456789abcdef") - 1 into d
+    if d < 0 then invalid(t, k)
+    put u * 16 + d into u
+  end repeat
+  return u
+end hex4
+
+private function literalEnd cps, i, lit, t
+  put the code points of lit into want
+  repeat for each k in 1..(the length of want)
+    if i + k - 1 > the length of cps then invalid(t, i + k - 1)
+    if item (i + k - 1) of cps <> item k of want then invalid(t, i + k - 1)
+  end repeat
+  return i + the length of want
+end literalEnd
+
+-- A number, read exactly. Its exponent is applied, and a positive exponent is
+-- rescaled to 0, so `1e5` is 100000 and `2.50e1` is 25.0 (chapter 7).
+private function readNumber cps, i, t
+  put the length of cps into n
+  put i into j
+  put "" into sign
+  if item j of cps = "-" then
+    put "-" into sign
+    add 1 to j
+  end if
+  if j > n then invalid(t, j)
+  if not isDigit(item j of cps) then invalid(t, j)
+  put "" into whole
+  if item j of cps = "0" then
+    put "0" into whole
+    add 1 to j
+  else
+    repeat while j <= n and isDigit(item j of cps)
+      put item j of cps after whole
+      add 1 to j
+    end repeat
+  end if
+  put "" into fraction
+  if j <= n and item j of cps = "." then
+    add 1 to j
+    repeat while j <= n and isDigit(item j of cps)
+      put item j of cps after fraction
+      add 1 to j
+    end repeat
+    if fraction is empty then invalid(t, j)
+  end if
+  put "" into expSign
+  put "" into expDigits
+  if j <= n and (item j of cps = "e" or item j of cps = "E") then
+    add 1 to j
+    if j <= n and (item j of cps = "+" or item j of cps = "-") then
+      put item j of cps into expSign
+      add 1 to j
+    end if
+    repeat while j <= n and isDigit(item j of cps)
+      put item j of cps after expDigits
+      add 1 to j
+    end repeat
+    if expDigits is empty then invalid(t, j)
+  end if
+  return [exactNumber(sign, whole, fraction, expSign, expDigits, t, i), j]
+end readNumber
+
+private function exactNumber sign, whole, fraction, expSign, expDigits, t, start
+  put whole & fraction into coefficient
+  put "" into significant
+  repeat for each k in 1..(the length of coefficient)
+    if character k of coefficient <> "0" then
+      put characters k..-1 of coefficient into significant
+      exit repeat
+    end if
+  end repeat
+  repeat while the length of expDigits > 1 and character 1 of expDigits = "0"
+    put characters 2..-1 of expDigits into expDigits
+  end repeat
+  if the length of expDigits > 9 then
+    if significant is empty and expSign <> "-" then return 0
+    invalid(t, start)
+  end if
+  put 0 into e
+  if expDigits is not empty then put expDigits as number into e
+  if expSign = "-" then put -e into e
+  put e - the length of fraction into q
+  if significant is empty and q >= 0 then return 0
+  if the length of significant > 34 then invalid(t, start)
+  if q >= 0 then
+    if the length of significant + q > 34 then invalid(t, start)
+    return (sign & significant & repeated("0", q)) as number
+  end if
+  if -q > 6176 then invalid(t, start)
+  put coefficient into c
+  if the length of c <= -q then put repeated("0", -q - the length of c + 1) & c into c
+  put the length of c + q into point
+  return (sign & characters 1..point of c & "." & characters (point + 1)..-1 of c) as number
+end exactNumber
+
+private function skipSpace cps, i
+  put i into j
+  repeat while j <= the length of cps
+    if codePoint(item j of cps) is not in [32, 9, 10, 13] then exit repeat
+    add 1 to j
+  end repeat
+  return j
+end skipSpace
+
+private function isDigit c
+  return c matches <digit>
+end isDigit
+
+-- `i` is a code point position. The error gives the Character it falls in.
+private function invalid t, i
+  put the length of t + 1 into at
+  if i <= the length of the code points of t then put the length of (code points 1..i of t) into at
+  throw {code: "can't decode", format: "json", offset: at}
+end invalid
+
+-- Encoding -------------------------------------------------------------------
+
+function encodeJson v
+  return encodeValue(v, [])
+end encodeJson
+
+private function encodeValue v, path
+  if v is nothing then return "null"
+  if v is a boolean or v is a number then return v as text
+  if v is a text then return encodeString(v)
+  if v is a list then
+    put [] into parts
+    put 1 into k
+    repeat for each x in v
+      put encodeValue(x, [...path, k]) after parts
+      add 1 to k
+    end repeat
+    return "[" & join(parts, ",") & "]"
+  end if
+  if v is a map then
+    put [] into parts
+    repeat for each k in the keys of v
+      put encodeString(k) & ":" & encodeValue(the (k) of v, [...path, k]) after parts
+    end repeat
+    return "{" & join(parts, ",") & "}"
+  end if
+  put kindOf(v) into kind
+  throw {code: "not encodable", kind: kind, path: path}
+end encodeValue
+
+private function encodeString s
+  put [] into parts
+  repeat for each c in the code points of s
+    put codePoint(c) into cp
+    if c = quote then
+      put "\" & quote after parts
+    else if c = "\" then
+      put "\\" after parts
+    else if cp is in [8, 9, 10, 12, 13] then
+      put "\" & character (indexIn([8, 9, 10, 12, 13], cp)) of "btnfr" after parts
+    else if cp < 0x20 then
+      put "\u00" & character (cp div 16 + 1) of "0123456789abcdef" & character (cp mod 16 + 1) of "0123456789abcdef" after parts
+    else
+      put c after parts
+    end if
+  end repeat
+  return quote & join(parts) & quote
+end encodeString
+
+private function indexIn xs, value
+  put 1 into i
+  repeat for each x in xs
+    if x = value then return i
+    add 1 to i
+  end repeat
+  return 0
+end indexIn
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

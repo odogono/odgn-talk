@@ -1,0 +1,129 @@
+-- The `map` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+
+function merge a, b
+  needMap(a)
+  needMap(b)
+  put a into merged
+  repeat for each k in the keys of b
+    put the (k) of b into the (k) of merged
+  end repeat
+  return merged
+end merge
+
+function without m, keys
+  needMap(m)
+  needKeys(keys)
+  put {} into kept
+  repeat for each k in the keys of m
+    if k is not in keys then put the (k) of m into the (k) of kept
+  end repeat
+  return kept
+end without
+
+function pick m, keys
+  needMap(m)
+  needKeys(keys)
+  put {} into picked
+  repeat for each k in the keys of m
+    if k is in keys then put the (k) of m into the (k) of picked
+  end repeat
+  return picked
+end pick
+
+function entries m
+  needMap(m)
+  put [] into pairs
+  repeat for each k in the keys of m
+    put [k, the (k) of m] after pairs
+  end repeat
+  return pairs
+end entries
+
+function fromEntries pairs
+  needList(pairs)
+  repeat for each pair in pairs
+    needList(pair)
+    if the length of pair <> 2 then outOfDomain("fromEntries", pair)
+    needText(item 1 of pair)
+  end repeat
+  put {} into built
+  repeat for each pair in pairs
+    put item 2 of pair into the (item 1 of pair) of built
+  end repeat
+  return built
+end fromEntries
+
+function mapValues m, f
+  needMap(m)
+  needFunction(f)
+  put {} into mapped
+  repeat for each k in the keys of m
+    put f(the (k) of m) into the (k) of mapped
+  end repeat
+  return mapped
+end mapValues
+
+-- A list of texts, as `without` and `pick` take.
+private function needKeys keys
+  needList(keys)
+  repeat for each k in keys
+    needText(k)
+  end repeat
+end needKeys
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

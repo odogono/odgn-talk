@@ -1,6 +1,6 @@
 # 7. Libraries and the Standard Library
 
-_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md).
+_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md).
 
 Scripts share code through Libraries: stateless units of source that the Host registers on a Script Group, and whose code runs in the caller's Run. The Standard Library is two tiers. The Built-ins are a small set of functions and Constants that the Cores implement natively and that are always available. The seven stdlib Libraries are written in the language and imported like any other Library. The Standard Capabilities are Capabilities whose Operation Declarations this chapter fixes, and whose answers each Host supplies.
 
@@ -103,7 +103,8 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 - **Written in the language:** each stdlib Library's source is normative Spec text, with Disassembly Cases like any Library's. This chapter states what each export does, and the source does exactly that. The source also fixes what this chapter leaves to it: its private helpers, its Fuel, and the order of any calls it makes where this chapter doesn't give one.
 - **Operation names** are their own namespace, so an Operation may share a name with a stdlib function, as `locale`'s `upper` does with the `upper` Built-in.
 
-> **Note.** The stdlib Libraries' source isn't written yet. [#103](https://github.com/odogono/odgn-talk/issues/103) writes it against this chapter.
+- **The source** is [`spec/stdlib/`](stdlib/), one `.talk` file per Library: [`text`](stdlib/text.talk), [`list`](stdlib/list.talk), [`map`](stdlib/map.talk), [`bytes`](stdlib/bytes.talk), [`json`](stdlib/json.talk), [`date`](stdlib/date.talk) and [`units`](stdlib/units.talk). `bun run grammar:check` parses them, and the generator checks that each exports exactly what [`stdlib.toml`](data/stdlib.toml) lists, with the same parameters and defaults.
+- **Errors from stdlib source** look exactly like a Built-in's. A stdlib Library raises a catalogue error with `throw`, giving the catalogue's fields and no `message`. The Core then adds the `message` from the template, and `at` names the Script's call into the stdlib, not a line of the Library ([chapter 6](06-errors-and-limits.md#errors), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).
 
 ### Rules for every stdlib function
 
@@ -151,6 +152,8 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 | `lower(s)` | `s` under Unicode full default lowercase mapping, then NFC |  |
 | `offset(needle, s)` | The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none |  |
 | `isDisposed(o)` | Whether the Host Object `o` has been disposed |  |
+| `rangeStart(r)` | The first end of the range `r`, as written |  |
+| `rangeEnd(r)` | The second end of the range `r`, as written |  |
 
 <!-- end -->
 
@@ -159,6 +162,7 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 - **`fromCodePoint(n)`** takes an integer from 0 to 1114111 that isn't a surrogate (55296 to 57343). Anything else raises `out of domain`. The result is normalised to NFC, so a few code points come back as a different one.
 - **`upper` and `lower`** use Unicode full default case mapping, with no Locale, so the length can change (`upper("ß")` is `"SS"`). Locale case mapping is the `locale` Capability's ([below](#standard-capabilities)).
 - **`offset(needle, s)`** gives 0 when there is no match, so a Guard can test it without a failure. An empty text needle matches at 1.
+- **`rangeStart(r)` and `rangeEnd(r)`** give a range's two ends exactly as written, for any range, so `rangeStart(5..4)` is `5`, and `rangeEnd(3 m/s..7 m/s)` is `7 m/s`. An empty match's range, `p..p-1`, has no items, and `rangeStart` is how to read where it was ([ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md)).
 - **`isDisposed(o)`** takes a Host Object, and anything else raises `wrong kind`. Guards use it to skip a disposed object at dispatch, as in `where not isDisposed(u)`.
 
 ### Numbers
@@ -521,7 +525,7 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 | `atTime(d, h, mi, s = 0, ns = 0)` | The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds | `out of range` |
 | `dateOnly(d)` | The date of the Civil Date `d`, without its time of day |  |
 | `daysInMonth(d)` | The number of days in the month of the Civil Date `d` |  |
-| `isLeapYear(y)` | Whether the integer `y` is a leap year in the proleptic Gregorian calendar | `out of domain` |
+| `isLeapYear(y)` | Whether the integer `y` is a leap year in the proleptic Gregorian calendar |  |
 | `formatDate(d, template)` | The Civil Date `d` written by `template` | `out of domain` |
 | `parseDate(t, template)` | The Civil Date the text `t` writes by `template` | `can't convert`, `out of domain`, `out of range` |
 | `splitDuration(d)` | The exact duration `d` as the map `{days, hours, minutes, seconds}` | `incompatible units` |

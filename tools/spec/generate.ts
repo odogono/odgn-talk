@@ -285,6 +285,39 @@ function stdlibCheck(d: Data) {
   }
 }
 
+// spec/stdlib/<library>.talk (ADR 0021): each stdlib Library's normative
+// source exports exactly what stdlib.toml lists, with the same parameters and
+// defaults. Private definitions are the source's own business.
+async function stdlibSourceCheck(d: Data) {
+  const s = d.stdlib;
+  for (const lib of s.libraries ?? []) {
+    const rel = `spec/stdlib/${lib}.talk`;
+    const file = join(SPEC, "stdlib", `${lib}.talk`);
+    if (!existsSync(file)) {
+      problems.push(`${rel}: missing; stdlib.toml lists the Library "${lib}"`);
+      continue;
+    }
+    const source = await Bun.file(file).text();
+    const exported = new Map<string, string>();
+    for (const m of source.matchAll(/^(private\s+)?(function|constant)\s+(\w+)(.*)$/gm)) {
+      if (m[1]) continue;
+      if (exported.has(m[3]!)) problems.push(`${rel}: "${m[3]}" is defined twice`);
+      const rest = m[4]!.trim();
+      exported.set(m[3]!, m[2] === "function" ? `${m[3]}(${rest})` : rest.replace(/^=\s*/, ""));
+    }
+    const listed = (s.export ?? []).filter((e: any) => e.library === lib);
+    for (const e of listed) {
+      const got = exported.get(e.name);
+      if (got === undefined) problems.push(`${rel}: doesn't export "${e.name}", which stdlib.toml lists`);
+      else if (isFunction(e) && got !== e.call) problems.push(`${rel}: exports \`${got}\`, but stdlib.toml lists \`${e.call}\``);
+      else if (!isFunction(e) && !got.includes(e.call)) problems.push(`${rel}: the Constant "${e.name}" is \`${got}\`, but stdlib.toml gives \`${e.call}\``);
+    }
+    for (const name of exported.keys()) {
+      if (!listed.some((e: any) => e.name === name)) problems.push(`${rel}: exports "${name}", which stdlib.toml doesn't list (make it private, or list it)`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
@@ -645,6 +678,7 @@ for (const s of ebnf) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n
 stdlibViews(data);
 crossCheck(data);
 stdlibCheck(data);
+await stdlibSourceCheck(data);
 ebnfCheck(data, ebnf);
 const regenerated = await fillRegions(data);
 await checkLinks(regenerated);

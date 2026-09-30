@@ -1,0 +1,361 @@
+-- The `date` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+
+use join, padLeft from text
+
+constant epoch = "1970-01-01T00:00:00Z" as instant
+
+-- Building -------------------------------------------------------------------
+
+function makeDate y, m, d
+  needNumber(y)
+  needNumber(m)
+  needNumber(d)
+  checkDate(y, m, d)
+  return (dateText(y, m, d)) as civil date
+end makeDate
+
+function makeDateTime y, m, d, h, mi, s = 0, ns = 0
+  needNumber(y)
+  needNumber(m)
+  needNumber(d)
+  needNumber(h)
+  needNumber(mi)
+  needNumber(s)
+  needNumber(ns)
+  checkDate(y, m, d)
+  checkTime(h, mi, s, ns)
+  put dateText(y, m, d) & "T" & two(h) & ":" & two(mi) & ":" & two(s) into written
+  if ns > 0 then put "." & padLeft(truncate(ns) as text, 9, "0") after written
+  return written as civil date
+end makeDateTime
+
+function atTime d, h, mi, s = 0, ns = 0
+  needCivil(d)
+  needNumber(h)
+  needNumber(mi)
+  needNumber(s)
+  needNumber(ns)
+  if hasTime(d) then outOfDomain("atTime", d)
+  return makeDateTime(year(d), month(d), day(d), h, mi, s, ns)
+end atTime
+
+function dateOnly d
+  needCivil(d)
+  if not hasTime(d) then return d
+  return makeDate(year(d), month(d), day(d))
+end dateOnly
+
+function daysInMonth d
+  needCivil(d)
+  return monthLength(year(d), month(d))
+end daysInMonth
+
+function isLeapYear y
+  needInteger(y)
+  return y mod 4 = 0 and (y mod 100 <> 0 or y mod 400 = 0)
+end isLeapYear
+
+private function checkDate y, m, d
+  checkField("year", y, 1, 9999)
+  checkField("month", m, 1, 12)
+  checkField("day", d, 1, monthLength(y, m))
+end checkDate
+
+private function checkTime h, mi, s, ns
+  checkField("hour", h, 0, 23)
+  checkField("minute", mi, 0, 59)
+  checkField("second", s, 0, 59)
+  checkField("nanosecond", ns, 0, 999999999)
+end checkTime
+
+-- A field that isn't an integer in its range raises `out of range`, and is
+-- never normalised (ADR 0023).
+private function checkField name, v, low, high
+  if v is not an integer or v < low or v > high then outOfRange(name, v)
+end checkField
+
+private function monthLength y, m
+  if m = 2 and isLeapYear(y) then return 29
+  if m = 2 then return 28
+  if m is in [4, 6, 9, 11] then return 30
+  return 31
+end monthLength
+
+private function dateText y, m, d
+  return padLeft(truncate(y) as text, 4, "0") & "-" & two(m) & "-" & two(d)
+end dateText
+
+-- `truncate` drops a zero fraction, so 9.0 writes as "09".
+private function two n
+  return padLeft(truncate(n) as text, 2, "0")
+end two
+
+-- Templates ------------------------------------------------------------------
+
+function formatDate d, template
+  needCivil(d)
+  needText(template)
+  put readTemplate(template, "formatDate") into pieces
+  if hasTimeToken(pieces) and not hasTime(d) then outOfDomain("formatDate", d)
+  put [] into parts
+  repeat for each piece in pieces
+    if piece is a text then
+      put piece after parts
+    else if the token of piece = "fraction" then
+      put characters 1..(the width of piece) of padLeft(nanosecond(d) as text, 9, "0") after parts
+    else
+      put fieldOf(d, the token of piece) as text into digits
+      if the width of piece is not nothing then put padLeft(digits, the width of piece, "0") into digits
+      put digits after parts
+    end if
+  end repeat
+  return join(parts)
+end formatDate
+
+function parseDate t, template
+  needText(t)
+  needText(template)
+  put readTemplate(template, "parseDate") into pieces
+  put the characters of t into cs
+  put the length of cs into n
+  put 1 into i
+  put {} into found
+  put 0 into weekdayAt
+  repeat for each piece in pieces
+    if piece is a text then
+      repeat for each c in the characters of piece
+        if i > n then noMatch(t, template, i)
+        if item i of cs <> c then noMatch(t, template, i)
+        add 1 to i
+      end repeat
+    else
+      put i into start
+      put "" into digits
+      repeat while i <= n and item i of cs matches <digit>
+        if the width of piece is not nothing and the length of digits = the width of piece then exit repeat
+        put item i of cs after digits
+        add 1 to i
+      end repeat
+      if digits is empty then noMatch(t, template, i)
+      if the width of piece is not nothing and the length of digits < the width of piece then noMatch(t, template, i)
+      if the token of piece = "weekday" then put start into weekdayAt
+      if the token of piece = "fraction" then
+        put (digits as number) * 10 ^ (9 - the width of piece) into the nanosecond of found
+      else if the length of digits > 34 then
+        outOfRange(the token of piece, digits)
+      else
+        put digits as number into the (the token of piece) of found
+      end if
+    end if
+  end repeat
+  if i <= n then noMatch(t, template, i)
+  if the hour of found is nothing then
+    put makeDate(the year of found, the month of found, the day of found) into result
+  else
+    put 0 into s
+    if the second of found is not nothing then put the second of found into s
+    put 0 into ns
+    if the nanosecond of found is not nothing then put the nanosecond of found into ns
+    put makeDateTime(the year of found, the month of found, the day of found, the hour of found, the minute of found, s, ns) into result
+  end if
+  if weekdayAt > 0 and weekday(result) <> the weekday of found then noMatch(t, template, weekdayAt)
+  return result
+end parseDate
+
+private constant timeTokens = ["hour", "minute", "second", "fraction"]
+
+-- A template as a list of literal texts and {token, width} maps, or `out of
+-- domain` with the template if it isn't valid.
+private function readTemplate template, fn
+  put the characters of template into cs
+  put the length of cs into n
+  put [] into pieces
+  put "" into literal
+  put [] into seen
+  put 1 into i
+  repeat while i <= n
+    put item i of cs into c
+    if c = "{" and i < n and item (i + 1) of cs = "{" then
+      put "{" after literal
+      add 2 to i
+    else if c = "}" and i < n and item (i + 1) of cs = "}" then
+      put "}" after literal
+      add 2 to i
+    else if c = "}" then
+      outOfDomain(fn, template)
+    else if c = "{" then
+      put i + 1 into j
+      repeat while j <= n and item j of cs <> "}"
+        add 1 to j
+      end repeat
+      if j > n then outOfDomain(fn, template)
+      put splitAt(characters (i + 1)..(j - 1) of template, ":") into halves
+      put item 1 of halves into token
+      put nothing into width
+      if the length of halves > 2 then outOfDomain(fn, template)
+      if the length of halves = 2 then
+        if not (item 2 of halves matches <digits>) then outOfDomain(fn, template)
+        put item 2 of halves as number into width
+        if width < 1 then outOfDomain(fn, template)
+      end if
+      if token is not in ["year", "month", "day", "hour", "minute", "second", "weekday", "fraction"] then outOfDomain(fn, template)
+      if token is in seen then outOfDomain(fn, template)
+      if token = "fraction" and (width is nothing or width > 9) then outOfDomain(fn, template)
+      put token after seen
+      if literal is not empty then put literal after pieces
+      put "" into literal
+      put {token: token, width: width} after pieces
+      put j + 1 into i
+    else
+      put c after literal
+      add 1 to i
+    end if
+  end repeat
+  if literal is not empty then put literal after pieces
+  repeat for each token in ["year", "month", "day"]
+    if token is not in seen then outOfDomain(fn, template)
+  end repeat
+  repeat for each token in timeTokens
+    if token is in seen and ("hour" is not in seen or "minute" is not in seen) then outOfDomain(fn, template)
+  end repeat
+  return pieces
+end readTemplate
+
+private function hasTimeToken pieces
+  repeat for each piece in pieces
+    if piece is a map and the token of piece is in timeTokens then return true
+  end repeat
+  return false
+end hasTimeToken
+
+private function fieldOf d, token
+  if token = "year" then return year(d)
+  if token = "month" then return month(d)
+  if token = "day" then return day(d)
+  if token = "hour" then return hour(d)
+  if token = "minute" then return minute(d)
+  if token = "second" then return second(d)
+  return weekday(d)
+end fieldOf
+
+private function splitAt t, separator
+  put [] into pieces
+  put "" into piece
+  repeat for each c in the characters of t
+    if c = separator then
+      put piece after pieces
+      put "" into piece
+    else
+      put c after piece
+    end if
+  end repeat
+  put piece after pieces
+  return pieces
+end splitAt
+
+private function noMatch t, template, at
+  throw {code: "can't convert", value: t, to: "civil date", format: template, offset: at}
+end noMatch
+
+-- Durations ------------------------------------------------------------------
+
+function splitDuration d
+  if d is not a quantity then wrongKind("quantity", d)
+  if not (d can be s) then
+    -- The Unit's display form is singular, so it is read from a Quantity of magnitude 1.
+    put d as text into written
+    put characters 1..(offset(" ", written) - 1) of written as number into k
+    if k <> 0 then put (d / abs(k)) as text into written
+    put characters (offset(" ", written) + 1)..-1 of written into unit
+    throw {code: "incompatible units", left: unit, right: "s"}
+  end if
+  put d / 1 s into total
+  put abs(total) into rest
+  put rest div 86400 into days
+  put rest - days * 86400 into rest
+  put rest div 3600 into hours
+  put rest - hours * 3600 into rest
+  put rest div 60 into minutes
+  put rest - minutes * 60 into seconds
+  if total < 0 then return {days: -days, hours: -hours, minutes: -minutes, seconds: -seconds}
+  return {days: days, hours: hours, minutes: minutes, seconds: seconds}
+end splitDuration
+
+function monthsBetween a, b
+  needCivil(a)
+  needCivil(b)
+  if hasTime(a) <> hasTime(b) then
+    throw {code: "can't compare", left: a, right: b}
+  end if
+  if b < a then return -monthsBetween(b, a)
+  put (year(b) - year(a)) * 12 + month(b) - month(a) into n
+  if a + n * 1 month > b then subtract 1 from n
+  return n
+end monthsBetween
+
+-- Helpers --------------------------------------------------------------------
+
+private function needCivil v
+  if v is not a civil date then wrongKind("civil date", v)
+end needCivil
+
+private function outOfRange name, v
+  throw {code: "out of range", field: name, value: v}
+end outOfRange
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

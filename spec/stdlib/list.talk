@@ -1,0 +1,333 @@
+-- The `list` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+
+-- Aggregates -----------------------------------------------------------------
+
+function sum xs
+  needList(xs)
+  if xs is empty then return 0
+  put item 1 of xs into total
+  repeat for each x in items 2..-1 of xs
+    put total + x into total
+  end repeat
+  return total
+end sum
+
+function average xs
+  needList(xs)
+  if xs is empty then outOfDomain("average", xs)
+  return sum(xs) / the length of xs
+end average
+
+-- Reshaping ------------------------------------------------------------------
+
+function zip xs, ys
+  needList(xs)
+  needList(ys)
+  put [] into pairs
+  repeat for each i in 1..(the length of xs)
+    if i > the length of ys then exit repeat
+    put [item i of xs, item i of ys] after pairs
+  end repeat
+  return pairs
+end zip
+
+function unique xs
+  needList(xs)
+  put [] into kept
+  repeat for each x in xs
+    if x is not in kept then put x after kept
+  end repeat
+  return kept
+end unique
+
+function reverse xs
+  needList(xs)
+  put [] into backwards
+  put the length of xs into i
+  repeat while i > 0
+    put item i of xs after backwards
+    subtract 1 from i
+  end repeat
+  return backwards
+end reverse
+
+function flatten xs
+  needList(xs)
+  put [] into flat
+  repeat for each x in xs
+    if x is a list then
+      put ...x after flat
+    else
+      put x after flat
+    end if
+  end repeat
+  return flat
+end flatten
+
+-- Sorting --------------------------------------------------------------------
+
+function sort xs, direction = "ascending"
+  needList(xs)
+  needText(direction)
+  put isDescending(direction, "sort") into down
+  put [] into keyed
+  repeat for each x in xs
+    put [x, x] after keyed
+  end repeat
+  return secondOfEach(mergeByKey(keyed, down))
+end sort
+
+function sortBy xs, key, direction = "ascending"
+  needList(xs)
+  needFunction(key)
+  needText(direction)
+  put isDescending(direction, "sortBy") into down
+  put [] into keyed
+  repeat for each x in xs
+    put [key(x), x] after keyed
+  end repeat
+  return secondOfEach(mergeByKey(keyed, down))
+end sortBy
+
+function sortWith xs, compare, direction = "ascending"
+  needList(xs)
+  needFunction(compare)
+  needText(direction)
+  put isDescending(direction, "sortWith") into down
+  return mergeWith(xs, compare, down)
+end sortWith
+
+private function isDescending direction, fn
+  if direction = "ascending" then return false
+  if direction = "descending" then return true
+  outOfDomain(fn, direction)
+end isDescending
+
+-- The merge sort of chapter 7, over [key, item] pairs compared by `<`.
+private function mergeByKey keyed, down
+  put the length of keyed into n
+  if n < 2 then return keyed
+  put n div 2 into half
+  put mergeByKey(items 1..half of keyed, down) into left
+  put mergeByKey(items (half + 1)..n of keyed, down) into right
+  put [] into merged
+  put 1 into i
+  put 1 into j
+  repeat while i <= the length of left and j <= the length of right
+    put item i of left into l
+    put item j of right into r
+    if down then
+      put item 1 of l < item 1 of r into rightFirst
+    else
+      put item 1 of r < item 1 of l into rightFirst
+    end if
+    if rightFirst then
+      put r after merged
+      add 1 to j
+    else
+      put l after merged
+      add 1 to i
+    end if
+  end repeat
+  put ...items i..-1 of left after merged
+  put ...items j..-1 of right after merged
+  return merged
+end mergeByKey
+
+-- The same merge sort, asking `compare(left, right)` for a number.
+private function mergeWith xs, compare, down
+  put the length of xs into n
+  if n < 2 then return xs
+  put n div 2 into half
+  put mergeWith(items 1..half of xs, compare, down) into left
+  put mergeWith(items (half + 1)..n of xs, compare, down) into right
+  put [] into merged
+  put 1 into i
+  put 1 into j
+  repeat while i <= the length of left and j <= the length of right
+    put item i of left into l
+    put item j of right into r
+    put compare(l, r) into order
+    needNumber(order)
+    if down then
+      put order < 0 into rightFirst
+    else
+      put order > 0 into rightFirst
+    end if
+    if rightFirst then
+      put r after merged
+      add 1 to j
+    else
+      put l after merged
+      add 1 to i
+    end if
+  end repeat
+  put ...items i..-1 of left after merged
+  put ...items j..-1 of right after merged
+  return merged
+end mergeWith
+
+private function secondOfEach keyed
+  put [] into picked
+  repeat for each pair in keyed
+    put item 2 of pair after picked
+  end repeat
+  return picked
+end secondOfEach
+
+-- Calling a Function Value on each item --------------------------------------
+
+function filter xs, keep
+  needList(xs)
+  needFunction(keep)
+  put [] into kept
+  repeat for each x in xs
+    if keep(x) then put x after kept
+  end repeat
+  return kept
+end filter
+
+function map xs, f
+  needList(xs)
+  needFunction(f)
+  put [] into mapped
+  repeat for each x in xs
+    put f(x) after mapped
+  end repeat
+  return mapped
+end map
+
+function reduce xs, f, initial
+  needList(xs)
+  needFunction(f)
+  put initial into acc
+  repeat for each x in xs
+    put f(acc, x) into acc
+  end repeat
+  return acc
+end reduce
+
+function group xs, key
+  needList(xs)
+  needFunction(key)
+  put {} into groups
+  repeat for each x in xs
+    put key(x) into k
+    needText(k)
+    if the (k) of groups is nothing then
+      put [x] into the (k) of groups
+    else
+      put x after the (k) of groups
+    end if
+  end repeat
+  return groups
+end group
+
+function partition xs, keep
+  needList(xs)
+  needFunction(keep)
+  put [] into matching
+  put [] into others
+  repeat for each x in xs
+    if keep(x) then
+      put x after matching
+    else
+      put x after others
+    end if
+  end repeat
+  return [matching, others]
+end partition
+
+function any xs, test
+  needList(xs)
+  needFunction(test)
+  repeat for each x in xs
+    if test(x) then return true
+  end repeat
+  return false
+end any
+
+function all xs, test
+  needList(xs)
+  needFunction(test)
+  repeat for each x in xs
+    if not test(x) then return false
+  end repeat
+  return true
+end all
+
+function find xs, test
+  needList(xs)
+  needFunction(test)
+  repeat for each x in xs
+    if test(x) then return x
+  end repeat
+  return nothing
+end find
+
+function indexOf xs, value
+  needList(xs)
+  put 1 into i
+  repeat for each x in xs
+    if x = value then return i
+    add 1 to i
+  end repeat
+  return 0
+end indexOf
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

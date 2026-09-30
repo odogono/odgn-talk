@@ -396,7 +396,7 @@ rule = "`ignoring` followed by `case` is the modifier"
 
 [[decision]]
 name = "is-a"
-rule = "after `is` or `is not`, `a` or `an` followed by a word that isn't reserved starts a kind test; otherwise it is a name"
+rule = "after `is` or `is not`, `a` or `an` followed by a word that isn't reserved, or by `function`, starts a kind test; otherwise it is a name"
 
 [[decision]]
 name = "kind"

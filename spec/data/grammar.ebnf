@@ -135,7 +135,7 @@ Power          ::= Unary ( '^' Power )?
 Unary          ::= '-' Unary | Conversion
 Conversion     ::= ChunkLevel ( 'as' ( Unit | Kind ) )*
                    /* inside a BuildField, `as` before an integer type ends the value */
-Kind           ::= 'civil' 'date' | Name
+Kind           ::= 'civil' 'date' | 'function' | Name
 
 /* ## operands */
 

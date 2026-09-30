@@ -17,7 +17,7 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 4. [Expressions and statements](04-expressions-and-statements.md)
 5. [Handlers, messages and scheduling](05-handlers-messages-and-scheduling.md)
 6. [Errors and limits](06-errors-and-limits.md)
-7. [Libraries and the Standard Library](07-libraries-and-the-standard-library.md)
+7. [Libraries and the Standard Library](07-libraries-and-the-standard-library.md), with the stdlib Libraries' source in [`stdlib/`](stdlib/)
 8. [The Abstract Machine and the Cost Model](08-the-abstract-machine-and-the-cost-model.md)
 9. [Embedding](09-embedding.md), with the interface declarations [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts)
 10. [Save and restore](10-save-and-restore.md)

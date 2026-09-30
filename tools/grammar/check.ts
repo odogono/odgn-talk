@@ -6,7 +6,7 @@
 //   bun tools/grammar/check.ts --tree FILE   print the parse tree of one file
 //
 // It parses the syntax sketch in sketch/, every `talk` code block in docs/ and
-// spec/, and every .talk file in corpus/, all of which must parse. Then it
+// spec/, the stdlib Libraries in spec/stdlib/, and every .talk file in corpus/, all of which must parse. Then it
 // parses each case in broken.talk, whose first syntax error must be the one
 // the case expects. The parser has no backtracking, throws on a third token
 // of lookahead, and records a relex whenever a buffered token lexed in the
@@ -125,6 +125,7 @@ if (treeAt >= 0) {
 
 for (const f of files(join(import.meta.dir, "sketch"), ".talk")) mustParse(readFileSync(f, "utf8"), relative(ROOT, f));
 for (const f of files(join(ROOT, "corpus"), ".talk")) mustParse(readFileSync(f, "utf8"), relative(ROOT, f));
+for (const f of files(join(ROOT, "spec/stdlib"), ".talk")) mustParse(readFileSync(f, "utf8"), relative(ROOT, f));
 for (const dir of ["docs", "spec"]) for (const f of files(join(ROOT, dir), ".md")) codeBlocks(f);
 broken();
 

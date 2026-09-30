@@ -315,7 +315,7 @@ Power          ::= Unary ( '^' Power )?
 Unary          ::= '-' Unary | Conversion
 Conversion     ::= ChunkLevel ( 'as' ( Unit | Kind ) )*
                    /* inside a BuildField, `as` before an integer type ends the value */
-Kind           ::= 'civil' 'date' | Name
+Kind           ::= 'civil' 'date' | 'function' | Name
 ```
 
 <!-- end -->
@@ -344,7 +344,7 @@ The operators, lowest precedence first:
 - **Lambdas** have the lowest precedence of all. The body of `given r: …` runs to the next top-level comma or closing bracket, so `map(xs, given r: r * 2, 2)` passes `2` as a third argument. A block Lambda (`given r` at the end of a line) ends with `end given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
 - **Comparisons don't chain:** `a = b = c` is a syntax error at the second `=`.
 - **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`.
-- **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, or `civil date`. Which names are kinds is a load rule ([chapter 3](03-values.md)).
+- **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. Which names are kinds is a load rule ([chapter 3](03-values.md)).
 - **Unary minus** binds tighter than `^`, so `-2 ^ 2` is `4`.
 
 Each trailing modifier attaches to its own construct:
@@ -567,7 +567,7 @@ These are the only places where the parser reads a second token before it choose
 | `during` | after a comma in a Handler head, `during` followed by a word is the modifier |
 | `every-match` | `every` followed by `match` starts a Match Search; otherwise `every` is a name |
 | `ignoring-case` | `ignoring` followed by `case` is the modifier |
-| `is-a` | after `is` or `is not`, `a` or `an` followed by a word that isn't reserved starts a kind test; otherwise it is a name |
+| `is-a` | after `is` or `is not`, `a` or `an` followed by a word that isn't reserved, or by `function`, starts a kind test; otherwise it is a name |
 | `kind` | `civil` followed by `date` is the kind `civil date` |
 | `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |

@@ -95,6 +95,18 @@ call = "isDisposed(o)"
 gives = "Whether the Host Object `o` has been disposed"
 
 [[builtin]]
+name = "rangeStart"
+group = "values"
+call = "rangeStart(r)"
+gives = "The first end of the range `r`, as written"
+
+[[builtin]]
+name = "rangeEnd"
+group = "values"
+call = "rangeEnd(r)"
+gives = "The second end of the range `r`, as written"
+
+[[builtin]]
 name = "abs"
 group = "numbers"
 call = "abs(x)"
@@ -704,7 +716,6 @@ library = "date"
 name = "isLeapYear"
 call = "isLeapYear(y)"
 gives = "Whether the integer `y` is a leap year in the proleptic Gregorian calendar"
-errors = ["out of domain"]
 
 [[export]]
 library = "date"

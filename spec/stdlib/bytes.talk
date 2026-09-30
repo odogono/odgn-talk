@@ -1,0 +1,417 @@
+-- The `bytes` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+
+use join from text
+
+-- Hexadecimal ----------------------------------------------------------------
+
+function toHex b
+  needBytes(b)
+  put [] into parts
+  repeat for each n in the bytes of b
+    put character (n div 16 + 1) of hexDigits & character (n mod 16 + 1) of hexDigits after parts
+  end repeat
+  return join(parts)
+end toHex
+
+function fromHex t
+  needText(t)
+  put the characters of t into cs
+  put the length of cs into n
+  if n mod 2 = 1 then badEncoding(t, "hex", n)
+  put [] into nums
+  put 1 into i
+  repeat while i <= n
+    put hexValue(item i of cs) into hi
+    if hi < 0 then badEncoding(t, "hex", i)
+    put hexValue(item (i + 1) of cs) into lo
+    if lo < 0 then badEncoding(t, "hex", i + 1)
+    put hi * 16 + lo after nums
+    add 2 to i
+  end repeat
+  return bytesFrom(nums)
+end fromHex
+
+private constant hexDigits = "0123456789abcdef"
+
+-- The value of one hexadecimal digit, in either case, or -1.
+private function hexValue c
+  return offset(lower(c), hexDigits) - 1
+end hexValue
+
+-- Base64 ---------------------------------------------------------------------
+
+private constant base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+private constant base64UrlAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+function toBase64 b
+  needBytes(b)
+  return encode64(b, base64Alphabet, true)
+end toBase64
+
+function fromBase64 t
+  needText(t)
+  return decode64(t, base64Alphabet, true, "base64")
+end fromBase64
+
+function toBase64Url b
+  needBytes(b)
+  return encode64(b, base64UrlAlphabet, false)
+end toBase64Url
+
+function fromBase64Url t
+  needText(t)
+  return decode64(t, base64UrlAlphabet, false, "base64url")
+end fromBase64Url
+
+private function encode64 b, alphabet, padded
+  put the bytes of b into ns
+  put the length of ns into n
+  put [] into parts
+  put 1 into i
+  repeat while i + 2 <= n
+    put item i of ns * 65536 + item (i + 1) of ns * 256 + item (i + 2) of ns into v
+    put sextets(v, 4, alphabet) after parts
+    add 3 to i
+  end repeat
+  if n - i = 0 then
+    put sextets(item i of ns * 16, 2, alphabet) after parts
+    if padded then put "==" after parts
+  else if n - i = 1 then
+    put sextets((item i of ns * 256 + item (i + 1) of ns) * 4, 3, alphabet) after parts
+    if padded then put "=" after parts
+  end if
+  return join(parts)
+end encode64
+
+-- The `count` base64 digits of `v`, most significant first.
+private function sextets v, count, alphabet
+  put [] into digits
+  repeat for each k in 1..count
+    put (v div 64 ^ (count - k)) mod 64 into d
+    put character (d + 1) of alphabet after digits
+  end repeat
+  return join(digits)
+end sextets
+
+-- Reads only the canonical form: the right alphabet, length and padding, and
+-- zero in the unused trailing bits.
+private function decode64 t, alphabet, padded, fmt
+  put the characters of t into cs
+  put the length of cs into n
+  if padded and n mod 4 <> 0 then badEncoding(t, fmt, n)
+  if not padded and n mod 4 = 1 then badEncoding(t, fmt, n)
+  put n into body
+  if padded then
+    repeat while body > 0 and n - body < 2 and item body of cs = "="
+      subtract 1 from body
+    end repeat
+  end if
+  put [] into values
+  repeat for each i in 1..body
+    put offset(item i of cs, alphabet) - 1 into v
+    if v < 0 or item i of cs = "=" then badEncoding(t, fmt, i)
+    put v after values
+  end repeat
+  put body mod 4 into rest
+  if rest = 1 then badEncoding(t, fmt, body)
+  put [] into nums
+  put 1 into i
+  repeat while i + 3 <= body
+    put ((item i of values * 64 + item (i + 1) of values) * 64 + item (i + 2) of values) * 64 + item (i + 3) of values into v
+    put v div 65536 after nums
+    put (v div 256) mod 256 after nums
+    put v mod 256 after nums
+    add 4 to i
+  end repeat
+  if rest = 2 then
+    put item i of values * 64 + item (i + 1) of values into v
+    if v mod 16 <> 0 then badEncoding(t, fmt, body)
+    put v div 16 after nums
+  else if rest = 3 then
+    put (item i of values * 64 + item (i + 1) of values) * 64 + item (i + 2) of values into v
+    if v mod 4 <> 0 then badEncoding(t, fmt, body)
+    put v div 1024 after nums
+    put (v div 4) mod 256 after nums
+  end if
+  return bytesFrom(nums)
+end decode64
+
+-- Text encodings -------------------------------------------------------------
+
+private constant encodings = ["utf-8", "utf-16le", "utf-16be", "latin-1", "windows-1252"]
+
+-- The code points of bytes 0x80 to 0x9F in the WHATWG windows-1252 index.
+private constant windows1252 = [0x20AC, 0x81, 0x201A, 0x192, 0x201E, 0x2026, 0x2020, 0x2021, 0x2C6, 0x2030, 0x160, 0x2039, 0x152, 0x8D, 0x17D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x2DC, 0x2122, 0x161, 0x203A, 0x153, 0x9D, 0x17E, 0x178]
+
+function decodeText b, encoding = "utf-8", mode = "strict"
+  needBytes(b)
+  needText(encoding)
+  needText(mode)
+  if encoding is not in encodings then outOfDomain("decodeText", encoding)
+  if mode <> "strict" and mode <> "replace" then outOfDomain("decodeText", mode)
+  put mode = "replace" into replacing
+  put the bytes of b into ns
+  if encoding = "utf-8" then
+    put fromUtf8(ns, replacing, b) into cps
+  else if encoding = "utf-16le" then
+    put fromUtf16(ns, true, replacing, b, encoding) into cps
+  else if encoding = "utf-16be" then
+    put fromUtf16(ns, false, replacing, b, encoding) into cps
+  else if encoding = "latin-1" then
+    put ns into cps
+  else
+    put [] into cps
+    repeat for each n in ns
+      if n >= 0x80 and n <= 0x9F then
+        put item (n - 0x7F) of windows1252 after cps
+      else
+        put n after cps
+      end if
+    end repeat
+  end if
+  if encoding begins with "utf" and cps is not empty and item 1 of cps = 0xFEFF then
+    put items 2..-1 of cps into cps
+  end if
+  put [] into parts
+  repeat for each cp in cps
+    put fromCodePoint(cp) after parts
+  end repeat
+  return join(parts)
+end decodeText
+
+function encodeText t, encoding = "utf-8"
+  needText(t)
+  needText(encoding)
+  if encoding is not in encodings then outOfDomain("encodeText", encoding)
+  put [] into nums
+  repeat for each c in the code points of t
+    put codePoint(c) into cp
+    if encoding = "utf-8" then
+      put ...toUtf8(cp) after nums
+    else if encoding = "utf-16le" or encoding = "utf-16be" then
+      repeat for each unit in toUtf16(cp)
+        if encoding = "utf-16le" then
+          put unit mod 256 after nums
+          put unit div 256 after nums
+        else
+          put unit div 256 after nums
+          put unit mod 256 after nums
+        end if
+      end repeat
+    else if cp <= 0x7F or (cp >= 0xA0 and cp <= 0xFF) then
+      put cp after nums
+    else if encoding = "latin-1" and cp <= 0xFF then
+      put cp after nums
+    else if encoding = "windows-1252" and cp is in windows1252 then
+      put 0x7F + indexIn(windows1252, cp) after nums
+    else
+      unencodable(t, encoding)
+    end if
+  end repeat
+  return bytesFrom(nums)
+end encodeText
+
+-- UTF-8, with U+FFFD for each maximal ill-formed subsequence when replacing.
+private function fromUtf8 ns, replacing, b
+  put [] into cps
+  put the length of ns into n
+  put 1 into i
+  repeat while i <= n
+    put item i of ns into b1
+    if b1 < 0x80 then
+      put b1 after cps
+      add 1 to i
+      next repeat
+    end if
+    -- [continuation bytes, and the range of the first one]
+    put nothing into need
+    if b1 >= 0xC2 and b1 <= 0xDF then
+      put [1, 0x80, 0xBF] into need
+    else if b1 = 0xE0 then
+      put [2, 0xA0, 0xBF] into need
+    else if (b1 >= 0xE1 and b1 <= 0xEC) or b1 = 0xEE or b1 = 0xEF then
+      put [2, 0x80, 0xBF] into need
+    else if b1 = 0xED then
+      put [2, 0x80, 0x9F] into need
+    else if b1 = 0xF0 then
+      put [3, 0x90, 0xBF] into need
+    else if b1 >= 0xF1 and b1 <= 0xF3 then
+      put [3, 0x80, 0xBF] into need
+    else if b1 = 0xF4 then
+      put [3, 0x80, 0x8F] into need
+    end if
+    if need is nothing then
+      if not replacing then badText(b, "utf-8")
+      put 0xFFFD after cps
+      add 1 to i
+      next repeat
+    end if
+    put item 1 of need into count
+    put b1 mod 2 ^ (6 - count) into cp
+    put 1 into got
+    repeat while got <= count
+      if i + got > n then exit repeat
+      put item (i + got) of ns into c
+      put 0x80 into lo
+      put 0xBF into hi
+      if got = 1 then
+        put item 2 of need into lo
+        put item 3 of need into hi
+      end if
+      if c < lo or c > hi then exit repeat
+      put cp * 64 + c mod 64 into cp
+      add 1 to got
+    end repeat
+    if got <= count then
+      if not replacing then badText(b, "utf-8")
+      put 0xFFFD after cps
+      add got to i
+    else
+      put cp after cps
+      add count + 1 to i
+    end if
+  end repeat
+  return cps
+end fromUtf8
+
+-- UTF-16, with U+FFFD for an unpaired surrogate or an odd final byte when
+-- replacing.
+private function fromUtf16 ns, little, replacing, b, encoding
+  put [] into units
+  put the length of ns into n
+  put 1 into i
+  repeat while i + 1 <= n
+    if little then
+      put item (i + 1) of ns * 256 + item i of ns after units
+    else
+      put item i of ns * 256 + item (i + 1) of ns after units
+    end if
+    add 2 to i
+  end repeat
+  put [] into cps
+  put the length of units into count
+  put 1 into k
+  repeat while k <= count
+    put item k of units into u
+    if u < 0xD800 or u > 0xDFFF then
+      put u after cps
+      add 1 to k
+    else if u <= 0xDBFF and k < count and item (k + 1) of units >= 0xDC00 and item (k + 1) of units <= 0xDFFF then
+      put 0x10000 + (u - 0xD800) * 1024 + (item (k + 1) of units - 0xDC00) after cps
+      add 2 to k
+    else
+      if not replacing then badText(b, encoding)
+      put 0xFFFD after cps
+      add 1 to k
+    end if
+  end repeat
+  if n mod 2 = 1 then
+    if not replacing then badText(b, encoding)
+    put 0xFFFD after cps
+  end if
+  return cps
+end fromUtf16
+
+private function toUtf8 cp
+  if cp < 0x80 then return [cp]
+  if cp < 0x800 then return [0xC0 + cp div 64, 0x80 + cp mod 64]
+  if cp < 0x10000 then return [0xE0 + cp div 4096, 0x80 + (cp div 64) mod 64, 0x80 + cp mod 64]
+  return [0xF0 + cp div 262144, 0x80 + (cp div 4096) mod 64, 0x80 + (cp div 64) mod 64, 0x80 + cp mod 64]
+end toUtf8
+
+private function toUtf16 cp
+  if cp < 0x10000 then return [cp]
+  put cp - 0x10000 into v
+  return [0xD800 + v div 1024, 0xDC00 + v mod 1024]
+end toUtf16
+
+private function indexIn xs, value
+  put 1 into i
+  repeat for each x in xs
+    if x = value then return i
+    add 1 to i
+  end repeat
+  return 0
+end indexIn
+
+-- Bytes from a list of numbers, halving so each byte is copied about log n times.
+private function bytesFrom nums
+  put the length of nums into n
+  if n = 0 then return <<>>
+  if n = 1 then return << item 1 of nums >>
+  put n div 2 into half
+  return << bytesFrom(items 1..half of nums), bytesFrom(items (half + 1)..n of nums) >>
+end bytesFrom
+
+private function needBytes v
+  if v is not a bytes then wrongKind("bytes", v)
+end needBytes
+
+private function badEncoding t, fmt, at
+  throw {code: "can't convert", value: t, to: "bytes", format: fmt, offset: at}
+end badEncoding
+
+private function badText b, encoding
+  throw {code: "can't convert", value: b, to: "text", format: encoding}
+end badText
+
+private function unencodable t, encoding
+  throw {code: "can't convert", value: t, to: "bytes", format: encoding}
+end unencodable
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6. The Core adds each one's `message` and
+-- points its `at` at the Script's call (ADR 0037).
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction
