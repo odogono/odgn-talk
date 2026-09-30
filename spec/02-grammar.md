@@ -143,7 +143,7 @@ An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-se
 
 - A word that starts a declaration (`on`, `function`, `private`, `use` or `constant`, and `script` before `variable`) starts one.
 - A Reserved Word that starts a statement (`put`, `if`, `wait`, …) starts one, and so does `next` before `repeat`.
-- Any other Name starts a Command Call only if the Session Script has a Handler by that name. Anything else, including an Entry that starts with `the`, `not`, `given` or a constant, is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
+- Any other Name starts a Command Call only if the Session Script has a Handler by that name, or the Name is `say` ([chapter 12](12-sessions-and-tooling.md#the-console)). Anything else, including an Entry that starts with `the`, `not`, `given` or a constant, is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
 
 ## Handlers
 

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/odogono/odgn-talk/spec/data/schema/session.schema.json",
+  "title": "session",
+  "description": "The Session Commands.",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "pattern": "^:[a-z]+$" },
+          "usage": { "type": "string", "minLength": 1 },
+          "does": { "type": "string", "minLength": 1 },
+          "before": { "const": true },
+          "recorded": { "const": false }
+        },
+        "required": ["name", "usage", "does"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["command"],
+  "additionalProperties": false
+}

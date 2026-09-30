@@ -47,7 +47,7 @@ The Spec is handed off as language 1.0-rc with a provisional Cost Model 0. Langu
 
 - **Values in prose** are written in their display form ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)), such as `2.50 GBP`, `2026-09-27` or `"text"`.
 - **Error Codes** are written in code font, such as `can't convert`.
-- **Grammar productions** are written in the EBNF notation of [the W3C XML Recommendation](https://www.w3.org/TR/xml/#sec-notation), and live in [`grammar.ebnf`](data/grammar.ebnf).
+- **Grammar productions** are written in the EBNF notation of [the W3C XML Recommendation](https://www.w3.org/TR/xml/#sec-notation), and live in [`grammar.ebnf`](data/grammar.ebnf), or in [`trace.ebnf`](data/trace.ebnf) for the display form, Traces and Session Transcripts.
 - **Data Files** are cited by path, such as `spec/data/errors.toml`.
 - **Corpus cases** are cited by path, such as [`corpus/examples/orders-pricing/`](../corpus/examples/orders-pricing/).
 

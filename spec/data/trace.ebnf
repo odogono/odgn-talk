@@ -1,0 +1,72 @@
+/* The display form, the Trace's lines and a Session Transcript's lines
+   (ADR 0018, ADR 0014), in the W3C XML Recommendation's EBNF notation.
+   Chapter 11 shows the first two and chapter 12 the third, each as a
+   generated region. A space is exactly one U+0020 wherever one is written. */
+
+/* ## display-form */
+
+Value          ::= 'nothing' | 'true' | 'false' | Number | Quantity | TextValue
+                 | BytesValue | ListValue | MapValue | RangeValue | CivilDate
+                 | Instant | PatternValue | FunctionValue | ObjectValue
+Number         ::= '-'? Digits ( '.' Digits )?
+                   /* canonical text: no leading zeros, and no `-` on a zero */
+Digits         ::= [0-9]+
+Quantity       ::= Number ' ' UnitText
+UnitText       ::= [A-Za-z0-9*/^]+
+                   /* a Unit in normal form; never followed by `=` */
+TextValue      ::= TextPiece ( ' & ' TextPiece )*
+TextPiece      ::= '"' Plain* '"' | 'quote' | 'newline' | 'tab'
+                 | 'fromCodePoint(' Digits ')'
+Plain          ::= [^"#x0-#x1F#x7F-#x9F#x61C#x200E#x200F#x2028-#x202E#x2066-#x2069#xFEFF]
+BytesValue     ::= '<<' ( Byte ( ', ' Byte )* )? '>>'
+Byte           ::= '0x' [0-9A-F] [0-9A-F]
+ListValue      ::= '[' ( Value ( ', ' Value )* )? ']'
+MapValue       ::= '{' ( MapEntry ( ', ' MapEntry )* )? '}'
+MapEntry       ::= MapKey ': ' Value
+MapKey         ::= Word | TextValue
+                   /* a Word exactly when the key is one; a TextValue key
+                      starts with a quoted piece, `"" & ` if need be */
+Word           ::= [A-Za-z_] [A-Za-z0-9_]*
+RangeValue     ::= RangeEnd '..' RangeEnd
+RangeEnd       ::= Number | Quantity
+CivilDate      ::= Date ( 'T' Time )?
+Instant        ::= Date 'T' Time 'Z'
+Date           ::= [0-9] [0-9] [0-9] [0-9] '-' [0-9] [0-9] '-' [0-9] [0-9]
+Time           ::= [0-9] [0-9] ':' [0-9] [0-9] ':' [0-9] [0-9] ( '.' [0-9]+ )?
+                   /* one to nine fraction digits, the last not 0 */
+PatternValue   ::= '<' [^#xA]* '>'
+                   /* a Text Pattern's canonical source, read with chapter 2's
+                      TextPattern production; `<<` starts Bytes, never this */
+FunctionValue  ::= '<function ' Word ( '+' Digits )? ':' ( Word ':' )?
+                   ( Digits ':' Digits | Word ) ( ' ' MapValue )? '>'
+ObjectValue    ::= '<object ' Word ' ' TextValue '>'
+
+/* ## trace-lines */
+
+TraceFile      ::= ( TraceLine #xA )*
+TraceLine      ::= ( '> ' )? Record | '#' [^#xA]* | ''
+Record         ::= RecordName ( ' ' Id )* ( ' ' Field )*
+RecordName     ::= [a-z] [a-z-]*
+Id             ::= [A-Za-z0-9_] [A-Za-z0-9_./:+-]*
+Field          ::= Key '=' FieldValue
+Key            ::= [A-Za-z_] [A-Za-z0-9_-]*
+FieldValue     ::= Value | Id | IdList
+                   /* as the key's type in corpus.toml says */
+IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
+
+/* ## encoding-lines */
+
+EncodingFile   ::= ( EncodingLine #xA )*
+EncodingLine   ::= Value ' => ' [^#xA]+ | '#' [^#xA]* | ''
+                   /* the value, then its Value Encoding's exact bytes */
+
+/* ## transcript-lines */
+
+Transcript     ::= ( TranscriptLine #xA )*
+TranscriptLine ::= '> ' [^#xA]+ | '| ' [^#xA]* | '|' | '< ' [^#xA]* | '<'
+                 | '@ ' Instant | '~ ' Id ' ' Answer | '#' [^#xA]*
+                 | "'" [^#xA]* | OutputLine
+Answer         ::= Value | 'fail ' MapValue
+OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
+                   /* an output line that is empty or starts with one of
+                      these characters is written after a `'` */

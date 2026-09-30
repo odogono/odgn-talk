@@ -6,9 +6,9 @@
 //
 // A region is `<!-- generated: name -->…<!-- end -->` in any Markdown file under
 // spec/. Its name picks a view below, and `ebnf.<section>` shows a section of
-// grammar.ebnf. Both modes also validate each Data File against its schema, run
-// the cross-file checks, check grammar.ebnf against grammar.toml and check every
-// relative link in the repo's Markdown files.
+// grammar.ebnf or trace.ebnf. Both modes also validate each Data File against
+// its schema, run the cross-file checks, check grammar.ebnf against grammar.toml
+// and check every relative link in the repo's Markdown files.
 
 import Ajv2020 from "ajv/dist/2020";
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -38,6 +38,8 @@ const DATA_FILES = [
   "costs",
   "host-errors",
   "stdlib",
+  "corpus",
+  "session",
 ] as const;
 type DataName = (typeof DATA_FILES)[number];
 type Data = Record<DataName, any>;
@@ -71,12 +73,12 @@ function duplicates(values: string[]): string[] {
   return [...new Set(values.filter((v) => seen.has(v) || !seen.add(v)))];
 }
 
-// grammar.ebnf, split into the sections its `/* ## name */` lines start.
+// An EBNF Data File, split into the sections its `/* ## name */` lines start.
 type Production = { name: string; rhs: string };
 type Section = { name: string; text: string; productions: Production[] };
 
-async function loadEbnf(): Promise<Section[]> {
-  const text = await Bun.file(join(DATA, "grammar.ebnf")).text();
+async function loadEbnf(file = "grammar.ebnf"): Promise<Section[]> {
+  const text = await Bun.file(join(DATA, file)).text();
   const parts = text.split(/^\/\* ## ([a-z-]+) \*\/\n/m);
   const sections: Section[] = [];
   for (let i = 1; i < parts.length; i += 2) {
@@ -88,7 +90,7 @@ async function loadEbnf(): Promise<Section[]> {
     }
     sections.push({ name: parts[i]!, text: body, productions });
   }
-  if (!sections.length) problems.push("spec/data/grammar.ebnf: no `/* ## name */` sections");
+  if (!sections.length) problems.push(`spec/data/${file}: no \`/* ## name */\` sections`);
   return sections;
 }
 
@@ -144,6 +146,57 @@ function ebnfCheck(d: Data, sections: Section[]) {
     if (!reserved.has(w) && !contextual.has(w)) fail(`'${w}' is neither a Reserved Word nor a contextual keyword in grammar.toml`);
   }
   for (const w of reserved) if (!quoted.has(w)) fail(`the Reserved Word "${w}" appears in no production`);
+}
+
+// trace.ebnf: every nonterminal is defined once and used, and no section
+// shares a name with one of grammar.ebnf's.
+const TRACE_ROOTS = new Set(["Value", "TraceFile", "Transcript", "EncodingFile"]);
+
+function traceEbnfCheck(sections: Section[], grammar: Section[]) {
+  const fail = (msg: string) => problems.push(`spec/data/trace.ebnf: ${msg}`);
+  const all = sections.flatMap((s) => s.productions);
+  for (const n of duplicates(all.map((p) => p.name))) fail(`${n} is defined twice`);
+  const taken = new Set(grammar.map((s) => s.name));
+  for (const s of sections) if (taken.has(s.name)) fail(`section "${s.name}" is also a section of grammar.ebnf`);
+  const defined = new Set(all.map((p) => p.name));
+  const used = new Set<string>();
+  for (const p of all) {
+    const bare = p.rhs.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/'[^']*'|"[^"]*"|\[[^\]]*\]|#x[0-9A-Fa-f]+/g, " ");
+    for (const m of bare.matchAll(/\b[A-Z][A-Za-z]*\b/g)) {
+      used.add(m[0]);
+      if (!defined.has(m[0])) fail(`${p.name} uses ${m[0]}, which isn't defined`);
+    }
+  }
+  for (const n of defined) if (!used.has(n) && !TRACE_ROOTS.has(n)) fail(`${n} is defined but never used`);
+}
+
+// corpus.toml and session.toml (ADR 0018, ADR 0014): names are unique, every
+// key has a known type, and a word-valued key lists its words.
+const WORD_LISTS: Record<string, string> = { "seg.end": "end", "note.kind": "note" };
+
+function corpusCheck(d: Data) {
+  const fail = (file: string, msg: string) => problems.push(`spec/data/${file}: ${msg}`);
+  const c = d.corpus;
+  const types = new Set(Object.keys(c.type ?? {}));
+  const records = c.record ?? [];
+  for (const n of duplicates(records.map((r: any) => `${r.input ? "> " : ""}${r.name}`))) fail("corpus.toml", `record "${n}" is listed twice`);
+  for (const r of records) {
+    const keys = r.key ?? [];
+    for (const k of duplicates(keys.map((k: any) => k.key))) fail("corpus.toml", `record "${r.name}" lists the key "${k}" twice`);
+    for (const k of keys) {
+      if (!types.has(k.type)) fail("corpus.toml", `"${r.name}.${k.key}" has the type "${k.type}", which [type] doesn't list`);
+      const list = WORD_LISTS[`${r.name}.${k.key}`];
+      if (k.type === "word" && !k.words && !list) fail("corpus.toml", `"${r.name}.${k.key}" is a word, but lists no words`);
+      if (k.words && k.type !== "word") fail("corpus.toml", `"${r.name}.${k.key}" lists words, but isn't a word`);
+      if (k.filled && !r.input) fail("corpus.toml", `"${r.name}.${k.key}" is filled, but "${r.name}" isn't a Host Input`);
+    }
+  }
+  for (const list of ["end", "note"] as const) {
+    for (const w of duplicates((c[list] ?? []).map((e: any) => e.word))) fail("corpus.toml", `[[${list}]] "${w}" is listed twice`);
+  }
+  for (const k of duplicates((c.setup ?? []).map((e: any) => `${e.table}.${e.key}`))) fail("corpus.toml", `the case.toml key "${k}" is listed twice`);
+  for (const n of duplicates((d.session.command ?? []).map((e: any) => e.name))) fail("session.toml", `"${n}" is listed twice`);
+  if (!(d.stdlib.capabilities ?? []).includes("console")) fail("stdlib.toml", "`console`, which every session grants, isn't a Standard Capability");
 }
 
 function crossCheck(d: Data) {
@@ -510,6 +563,33 @@ const VIEWS: Record<string, View> = {
     table(["Code", "Raised when"],
       d["host-errors"].error.map((e: any) => [code(e.code), prose(e.raised_when, file)])),
 
+  "corpus.types": (d) =>
+    table(["Type", "Written as"], Object.entries(d.corpus.type ?? {}).map(([k, v]) => [code(k), v as string])),
+
+  "corpus.inputs": (d) => recordTable(d, true),
+  "corpus.outputs": (d) => recordTable(d, false),
+  "corpus.input-keys": (d) => keyTable(d, true),
+  "corpus.output-keys": (d) => keyTable(d, false),
+
+  "corpus.ends": (d) =>
+    table(["End reason", "The stretch ended because"], (d.corpus.end ?? []).map((e: any) => [code(e.word), e.is])),
+
+  "corpus.notes": (d) =>
+    table(["Note", "Noted when"], (d.corpus.note ?? []).map((e: any) => [code(e.word), e.is])),
+
+  "corpus.setup": (d) =>
+    table(["Table", "Key", "Holds", "Case kinds"],
+      (d.corpus.setup ?? []).map((e: any) => [e.table ? code(`[${e.table}]`) : "top level", code(e.key), e.is, e.kinds.join(", ")])),
+
+  "session.commands": (d) =>
+    table(["Command", "Written", "Does", "Notes"],
+      (d.session.command ?? []).map((c: any) => [
+        code(c.name),
+        code(c.usage),
+        c.does,
+        [c.before ? "before the session starts" : "", c.recorded === false ? "not recorded" : ""].filter(Boolean).join("; "),
+      ])),
+
   // Appendix A: CONTEXT.md from its first section on, with its relative links
   // rebased onto the region's file.
   glossary: (_d, file) => {
@@ -525,6 +605,26 @@ const VIEWS: Record<string, View> = {
 };
 
 const glossarySource = await Bun.file(join(ROOT, "CONTEXT.md")).text();
+
+// Chapter 11: the Trace's records, as a summary and key by key.
+const recordIds = (r: any) => r.ids.map((i: string) => (i.endsWith("?") ? `${code(i.slice(0, -1))} (optional)` : code(i))).join(", ");
+
+function recordTable(d: Data, input: boolean): string {
+  return table(["Record", "Ids", "Keys", "Says"],
+    (d.corpus.record ?? []).filter((r: any) => r.input === input).map((r: any) => [
+      code(r.name),
+      recordIds(r),
+      (r.key ?? []).map((k: any) => code(k.key) + (k.optional ? "?" : "") + (k.filled ? "\\*" : "")).join(", "),
+      r.is,
+    ]));
+}
+
+function keyTable(d: Data, input: boolean): string {
+  const words = (k: any) => (k.words ? `: ${k.words.map(code).join(", ")}` : "");
+  return table(["Record", "Key", "Type", "Is"],
+    (d.corpus.record ?? []).filter((r: any) => r.input === input).flatMap((r: any) =>
+      (r.key ?? []).map((k: any) => [code(r.name), code(k.key), code(k.type), k.is + words(k)])));
+}
 
 // Chapter 7: one region per Built-in group, stdlib Library and Standard Capability.
 // costs.toml (ADRs 0006 and 0010): every formula parses and uses only the
@@ -765,13 +865,16 @@ async function checkLinks(regenerated: Map<string, string>) {
 
 const data = await loadData();
 const ebnf = await loadEbnf();
-for (const s of ebnf) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n```";
+const traceEbnf = await loadEbnf("trace.ebnf");
+for (const s of [...ebnf, ...traceEbnf]) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n```";
 stdlibViews(data);
 machineViews(data);
 crossCheck(data);
 stdlibCheck(data);
 await stdlibSourceCheck(data);
 ebnfCheck(data, ebnf);
+traceEbnfCheck(traceEbnf, ebnf);
+corpusCheck(data);
 const regenerated = await fillRegions(data);
 await checkLinks(regenerated);
 

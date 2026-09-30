@@ -45,5 +45,8 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 | [`costs.toml`](data/costs.toml) | The Cost Model | [8](08-the-abstract-machine-and-the-cost-model.md) |
 | [`host-errors.toml`](data/host-errors.toml) | The Host error catalogue | [9](09-embedding.md) |
 | [`stdlib.toml`](data/stdlib.toml) | The Built-ins, the stdlib Libraries' exports, the text encodings `bytes` decodes, and the Standard Capabilities' Operations | [7](07-libraries-and-the-standard-library.md) |
+| [`corpus.toml`](data/corpus.toml) | The Trace's records and their keys, and the keys of `case.toml` | [11](11-the-trace-and-conformance.md) |
+| [`trace.ebnf`](data/trace.ebnf) | The grammars of the display form, the Trace's lines, Value Encoding case files and Session Transcripts | [11](11-the-trace-and-conformance.md), [12](12-sessions-and-tooling.md) |
+| [`session.toml`](data/session.toml) | The Session Commands | [12](12-sessions-and-tooling.md) |
 
-Each has a schema in [`data/schema/`](data/schema/), except `grammar.ebnf`, which the generator checks against `grammar.toml`. Run `bun install`, then `bun run spec:gen` after editing a Data File or `CONTEXT.md`, `bun run grammar:check` after changing the grammar, and `bun run machine:check` after changing the lowering or `machine.toml`.
+Each has a schema in [`data/schema/`](data/schema/), except `grammar.ebnf`, which the generator checks against `grammar.toml`, and `trace.ebnf`, whose productions it checks are each defined once and used. Run `bun install`, then `bun run spec:gen` after editing a Data File or `CONTEXT.md`, `bun run grammar:check` after changing the grammar, and `bun run machine:check` after changing the lowering or `machine.toml`.

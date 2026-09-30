@@ -35,7 +35,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Standard Capability**:
-A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale` and `timer`.
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer` and `console`.
 _Avoid_: built-in capability, system capability, core capability
 
 **Locale**:
@@ -158,8 +158,12 @@ _Avoid_: sandbox (that word means the security boundary), editor, IDE
 The one ordinary Script a REPL or Playground session builds up, to which every definition the user enters is added.
 _Avoid_: session (as a language concept), workspace, scratch script
 
+**Session Host**:
+The part of a REPL or Playground that runs a session as an ordinary Host: it turns each Entry and Session Command into Host Inputs on the Session Script, and prints what comes back. Its behaviour is normative, since Session Transcripts replay through it.
+_Avoid_: session (as a language concept), shell, kernel
+
 **Entry**:
-One unit of input at a REPL or Playground prompt: definitions, statements, or both. Its statements execute as a Run of an implicit Handler of the Session Script.
+One unit of input at a REPL or Playground prompt: one declaration, one statement or one expression. A statement or expression executes as a Run of an implicit Handler of the Session Script.
 _Avoid_: line, cell, command, input
 
 **Session Command**:

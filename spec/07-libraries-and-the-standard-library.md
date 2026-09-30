@@ -589,12 +589,12 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 ## Standard Capabilities
 
-A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale` and `timer` ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
+A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer` and `console` ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
 
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the answers are Host Inputs, so the Trace records each one, and a Trace Case supplies them as Stubs ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar` and `locale` Operation is immediate, and both `timer` Operations are fire-and-forget.
+- **Modes:** every `clock`, `calendar` and `locale` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
 - **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. Chapter 6 says how both are checked.
 
@@ -694,6 +694,22 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 - **`schedule name, at, message, args`:** `name` is a text, `at` an Instant, `message` a message name as text, and `args` a list. Names are scoped to the Script, and scheduling a name again replaces its timer.
 - **`cancel name`** removes the timer, and cancelling an unknown name does nothing.
 - **Delivery:** the Host stores timers durably. When one is due, the Host delivers `message` with `args` to the Script as an ordinary Delivery, at its next opportunity if `at` has already passed. The Core takes no part in it.
+
+### `console`
+
+<!-- generated: stdlib.capability.console -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `write value` | fire-and-forget | Shows the text form of `value`, any value, as one or more lines of output |  |
+| `read` | suspending | The next line of input the user types, as text, without its line break |  |
+
+<!-- end -->
+
+`console` is the user's terminal or output pane. Every REPL and Playground session grants it, and any other Host may ([chapter 12](12-sessions-and-tooling.md#the-console)).
+
+- **`write value`** takes any value, and the Host shows its [text form](03-values.md#the-text-form). `say x` is short for `tell console to write x`.
+- **`read`** answers with the next line the user types, as text, without its line break. Its `maxPending` is 2,147,483,647 ms, the largest `MaxWait` every Core honours, so a user can take their time ([chapter 6](06-errors-and-limits.md#limits)).
 
 ## Outside parity
 

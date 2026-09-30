@@ -688,6 +688,47 @@ func (g *Group) Save() ([]byte, error)
 // A worker call, between Pumps.
 func (g *Group) Fingerprint() [32]byte
 
+// Inspect reads the Group without changing it: every Script's Script
+// Variables, Runs and mailbox. A worker call, between Pumps, and the Host
+// Input `vars`, which writes a `vars` record for each Script (chapter 11).
+// A REPL renders :vars, :runs and :mailbox from it (chapter 12).
+func (g *Group) Inspect() Inspection
+
+type Inspection struct {
+	Scripts []ScriptView // in load order
+}
+
+type ScriptView struct {
+	Name    string
+	Vars    []Pair        // its Script Variables, in declaration order
+	Runs    []RunView     // every Run that hasn't ended, in the order they started
+	Mailbox []MessageView // in mailbox order
+}
+
+type RunView struct {
+	ID      RunID
+	Status  RunStatus
+	Handler string    // its Handler, or the display form of the Function Value it runs
+	Wait    string    // Suspended: the `seg` end reason it suspended at (chapter 11)
+	Until   time.Time // Suspended: its deadline, if it has one
+	Calls   []CallID  // Suspended: the calls, replies or Join Members it waits for
+}
+
+type RunStatus int
+
+const (
+	Ready RunStatus = iota
+	Suspended
+	Parked
+	Preempted
+)
+
+type MessageView struct {
+	Delivery DeliveryID // empty for a message a Script sent
+	From     string     // for a message a Script sent, the call or Run that sent it
+	Message  Message
+}
+
 // ---------------------------------------------------------------------------
 // Script
 // ---------------------------------------------------------------------------
@@ -762,7 +803,7 @@ type RunEnd struct {
 	Outcome   Outcome
 	Result    Value        // Completed
 	Error     *ScriptError // Errored
-	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "cleanup"
+	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "pattern", "join"; "cleanup" for cleanup that failed
 	At        Location
 	Fuel      int64
 	Alloc     int64

@@ -30,13 +30,13 @@
 # [[operation]]  a Standard Capability's Operation Declaration
 #   capability   the Capability
 #   name         the Operation
-#   mode         immediate or fire-and-forget
+#   mode         immediate, suspending or fire-and-forget
 #   call         its arguments; [ … ] marks an optional one
 #   gives        one sentence: its result or effect
 #   errors       optional: the Error Codes it declares or the Core raises for it
 
 libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
-capabilities = ["clock", "calendar", "locale", "timer"]
+capabilities = ["clock", "calendar", "locale", "timer", "console"]
 
 # ---------------------------------------------------------------------------
 # Built-ins
@@ -951,3 +951,17 @@ name = "cancel"
 mode = "fire-and-forget"
 call = "cancel name"
 gives = "Removes the Script's timer called `name`, if there is one"
+
+[[operation]]
+capability = "console"
+name = "write"
+mode = "fire-and-forget"
+call = "write value"
+gives = "Shows the text form of `value`, any value, as one or more lines of output"
+
+[[operation]]
+capability = "console"
+name = "read"
+mode = "suspending"
+call = "read"
+gives = "The next line of input the user types, as text, without its line break"
