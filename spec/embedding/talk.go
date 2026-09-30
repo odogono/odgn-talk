@@ -441,6 +441,7 @@ type Limits struct {
 	AllocPerRun     int64
 	PersistentState int64 // Script-wide; never overridden per Delivery
 	CallDepth       int
+	PatternSize     int // Text Pattern program instructions; never overridden per Delivery
 	MailboxDepth    int
 	MaxWait         time.Duration // whole milliseconds; anything finer is "invalid value"
 	MaxJoin         int

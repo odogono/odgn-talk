@@ -17,6 +17,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { parse, type Node } from "../grammar/parser";
 import { CompileError, compileSource, type Instr, type Unit } from "./compile";
+import { characters, matchAll, PatternCompiler, run } from "./pattern";
 
 const ROOT = resolve(import.meta.dir, "../..");
 const args = process.argv.slice(2);
@@ -186,7 +187,29 @@ const STDLIB = join(ROOT, "spec/stdlib");
 const libraries = new Map<string, Node[]>();
 for (const f of files(STDLIB, ".talk")) libraries.set(basename(f, ".talk"), parse(readFileSync(f, "utf8")).ast ?? []);
 
+// Every Text Pattern in a source compiles to a program (chapter 8). A splice
+// is compiled as the empty text, since its value is only known at run time.
+let patterns = 0;
+function compilePatterns(src: string, where: string) {
+  const { ast } = parse(src);
+  const walk = (x: any) => {
+    if (!x || typeof x !== "object") return;
+    if (Array.isArray(x)) return x.forEach(walk);
+    if (x.k === "TextPattern") {
+      try {
+        new PatternCompiler(() => "").program(x);
+        patterns++;
+      } catch (e) {
+        problems.push(`${where}:${x.line}:${x.col}: the pattern doesn't compile: ${(e as Error).message}`);
+      }
+    }
+    for (const [k, v] of Object.entries(x)) if (k !== "k") walk(v);
+  };
+  walk(ast);
+}
+
 function lower(src: string, name: string, kind: "script" | "library", where: string, lenient: boolean, lineOffset = 0): Unit | null {
+  compilePatterns(src, where);
   try {
     const unit = compileSource(name, kind, src, { libraries, lenient });
     verify(unit, where);
@@ -227,6 +250,42 @@ for (const dir of ["docs", "spec"]) {
   }
 }
 
+// Runs whose matches and steps chapter 8's rules fix. The steps are the
+// seed corpus's to confirm, once a Core exists.
+const RUNS: [string, string, "whole" | "search" | "prefix" | "suffix" | "all", string, number][] = [
+  [`<"$", digits>`, "$895", "search", "$895", 10],
+  [`<"$", digits lazily>`, "$895", "search", "$8", 6],
+  [`<"a" or "ab">`, "ab", "search", "a", 6],
+  [`<"ab" or "a">`, "ab", "search", "ab", 7],
+  [`<"ID-", 4 digits>`, "ID-0042", "whole", "ID-0042", 8],
+  [`<3 digits>`, "a1234b", "search", "123", 11],
+  [`<word break, "cat", word break>`, "a cat, dog", "search", "", 8],
+  [`<text, "x">`, "aaaxbx", "search", "aaaxbx", 16],
+  [`<text lazily, "x">`, "aaaxbx", "search", "aaax", 11],
+  [`<a number>`, "is -12.5 kg", "search", "-12.5", 20],
+  [`<"WARN">`, "ok WARN", "suffix", "WARN", 12],
+  [`<"ok">`, "ok WARN", "prefix", "ok", 3],
+  [`<digits>`, "a1 b22 c333", "all", "1|22|333", 21],
+  [`<optional "x">`, "ab", "all", "||", 12],
+];
+for (const [src, text, mode, want, steps] of RUNS) {
+  const { ast } = parse(`on t\n  put ${src} into p\nend t\n`);
+  const prog = new PatternCompiler().program(ast![0]!.body[0].value);
+  const cs = characters(text);
+  let got: string;
+  let n: number;
+  if (mode === "all") {
+    const r = matchAll(prog, cs);
+    got = r.matches.map((m) => cs.slice(m.start, m.end).join("")).join("|");
+    n = r.steps;
+  } else {
+    const r = run(prog, cs, 0, mode);
+    got = r.match ? cs.slice(r.match.start, r.match.end).join("") : "";
+    n = r.steps;
+  }
+  if (got !== want || n !== steps) problems.push(`tools/machine/check.ts: ${src} on ${JSON.stringify(text)} (${mode}) gives ${JSON.stringify(got)} in ${n} steps, not ${JSON.stringify(want)} in ${steps}`);
+}
+
 for (const i of machine.instruction) {
   if (!used.has(i.name)) problems.push(`machine.toml: \`${i.name}\` is never emitted by anything the check lowers`);
 }
@@ -234,4 +293,4 @@ if (problems.length) {
   for (const p of problems) console.error(`✗ ${p}`);
   process.exit(1);
 }
-console.log("✓ The lowering covers the stdlib, the sketch, the docs and the corpus, and agrees with machine.toml.");
+console.log(`✓ The lowering covers the stdlib, the sketch, the docs and the corpus, and agrees with machine.toml. ${patterns} Text Patterns compile, and ${RUNS.length} runs give their matches and steps.`);
