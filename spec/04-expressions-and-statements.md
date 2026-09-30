@@ -272,7 +272,7 @@ A Text Pattern is a readable alternative to regular expressions, run on a linear
 - **Whole Characters:** every element matches whole Characters, and every position is between two.
 - **The subject** must be text, or `wrong kind` is raised with `expected` `"text"`.
 - **Use-site `ignoring case`**, on `matches`, a search operator or a `match` subject, is the same as putting `ignoring case` on every text literal of the pattern, spliced ones included.
-- **Limits and Fuel:** matching costs Fuel in proportion to the pattern's size and the text's length, and the pattern size limits are in [chapter 6](06-errors-and-limits.md).
+- **Limits and Fuel:** a pattern compiles to a program for a linear-time matcher, whose steps are charged as Fuel, at most the program's size for each Character ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs)). The Text Pattern size limit is in [chapter 6](06-errors-and-limits.md#limits).
 
 ### Matches
 

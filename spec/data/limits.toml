@@ -72,6 +72,18 @@ exceeded = "a Limit Fault, at the call"
 sources = ["ADR 0020", "#71"]
 
 [[limit]]
+name = "Text Pattern size"
+go = "PatternSize"
+ts = "patternSize"
+measure = "program instructions"
+per = "script"
+overridable = false
+default = 10_000
+minimum = 100_000
+exceeded = "a load error for a literal, and a Limit Fault at `make-pattern` for a pattern made at run time"
+sources = ["ADR 0007", "#92"]
+
+[[limit]]
 name = "mailbox depth"
 go = "MailboxDepth"
 ts = "mailboxDepth"

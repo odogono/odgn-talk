@@ -292,6 +292,7 @@ export interface Limits {
   allocPerRun: number;
   persistentState: number; // Script-wide; never overridden per Delivery
   callDepth: number;
+  patternSize: number; // Text Pattern program instructions; never overridden per Delivery
   mailboxDepth: number;
   maxWaitMs: number; // whole milliseconds; a fraction throws "invalid value"
   maxJoin: number;

@@ -4,8 +4,6 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/
 
 Every Script and Library compiles to a code unit for one Abstract Machine: a stack machine with numbered local slots. The instruction set, and the exact instructions each construct lowers to, are normative, including which local slot each name gets and the order of the constant pool ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). Each instruction is one language-level operation, and is charged Fuel by the Cost Model. So both Cores charge the same Fuel, fault at the same instruction and report the same positions, and a Disassembly Case can pin a Script's lowering exactly ([chapter 11](11-the-trace-and-conformance.md)).
 
-> **Note.** How a Text Pattern compiles, and so the `steps` and `program` measures its rates use, is still to be written.
-
 ## The machine's state
 
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
@@ -628,7 +626,93 @@ Each instruction has a source position, the second column of its disassembly lin
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).
 
-> **Note.** [`tools/machine/`](../tools/machine/check.ts) holds a compiler that follows this chapter. `bun run machine:check` lowers the stdlib, the syntax sketch, the corpus and every `talk` block in `docs/` and `spec/`. It checks every instruction against `machine.toml`: each exists, with its operands, and every path through a body reaches each instruction with one stack depth and ends in an instruction that leaves the body. `bun tools/machine/check.ts --dis FILE` prints a file's canonical disassembly. Like all tooling, it isn't normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+> **Note.** [`tools/machine/`](../tools/machine/check.ts) holds a compiler that follows this chapter. `bun run machine:check` lowers the stdlib, the syntax sketch, the corpus and every `talk` block in `docs/` and `spec/`. It checks every instruction against `machine.toml`: each exists, with its operands, and every path through a body reaches each instruction with one stack depth and ends in an instruction that leaves the body. It also compiles every Text Pattern it reads to a program, and runs a table of patterns whose matches and steps this chapter's rules fix. `bun tools/machine/check.ts --dis FILE` prints a file's canonical disassembly. Like all tooling, it isn't normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+
+## Text Pattern programs
+
+A Text Pattern compiles to a program for one linear-time matcher, a Pike VM, that runs the same on both Cores and never on a Host's regex engine ([ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md)). The program and the way the matcher's thread list evolves are normative, since matching Fuel counts the matcher's threads ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). A Core may run a different matcher, as long as it gives the same matches and the same `steps`.
+
+### The program
+
+A program is a list of instructions, numbered from 0, and its size is the `program` measure. It works over Characters: a position is between two, from 0 before the first to `n` after the last.
+
+| Instruction | Does |
+| --- | --- |
+| `char c` | matches one Character equal to `c` |
+| `char c fold` | matches one Character whose simple case folding equals `c`'s |
+| `class k` | matches one Character in the class `k`: `any`, `digit`, `letter`, `uppercase`, `lowercase`, `punctuation`, `whitespace` or `nonspace` |
+| `split a b` | continues at `a`, and at `b` with less priority |
+| `jump a` | continues at `a` |
+| `save n` | records the position in capture slot `n` |
+| `assert k` | continues only if the anchor `k` holds at the position |
+| `match` | the pattern has matched |
+
+A class holds a Character when its first scalar does, as [chapter 4](04-expressions-and-statements.md#elements) says. `digit` is exactly one of `0` to `9`, and `nonspace` is a Character that isn't White_Space.
+
+### Compiling
+
+A pattern's program is the code of its elements in order, then `match`. In the rules, `P` is the code for `p`, and `L`, `E` are the instruction numbers the code reaches:
+
+| Element | Compiles to |
+| --- | --- |
+| a text literal | one `char` per Character, `char … fold` under `ignoring case` |
+| `character`, `digit`, `letter`, `punctuation`, `whitespace` | `class any`, `class digit`, `class letter`, `class punctuation`, `class whitespace` |
+| `uppercase letter`, `lowercase letter` | `class uppercase`, `class lowercase` |
+| `space` | `char " "` |
+| `word` | one or more of `class nonspace` |
+| `characters`, `digits`, `letters`, `spaces`, `uppercase letters`, `lowercase letters` | one or more of the singular's code |
+| `words` | `word`, then zero or more of: one or more of `class whitespace`, then `word` |
+| `text` | zero or more of `class any` |
+| `a number` | optional `char "-"`, one or more of `class digit`, then optional: `char "."` and one or more of `class digit` |
+| `one or more of p` | L: P, `split L E`, E: |
+| `zero or more of p` | L: `split L+1 E`, P, `jump L`, E: |
+| `optional p` | L: `split L+1 E`, P, E: |
+| `p or q` | L: `split L+1 M`, P, `jump E`, M: Q, E: |
+| `n p` | P, `n` times. For a plural keyword, `n` copies of its singular, and for `words`, `word`, then `n - 1` times one or more of `class whitespace` and `word` |
+| `<p, q, …>` | P, Q, … |
+| `name: p` | `save 2i`, P, `save 2i+1`, where `i` counts the pattern's Captures from 0, in order |
+| an anchor | `assert` of it |
+| `(e)`, a spliced pattern | its elements' code, with its Captures numbered on from the ones before |
+| `(e)`, spliced text | the code of a literal of it |
+
+- **Lazily:** `lazily` swaps the two targets of each `split` the element's own repetition makes, so it prefers to match less: `one or more of p lazily` is L: P, `split E L`, E:. The element's own repetition is its `one or more of`, `zero or more of` or `optional`, or every repetition in a plural keyword's, `text`'s or `words`'s code. On a Capture it applies to the Capture's element. It doesn't reach the elements inside a nested `<…>`, a repetition or an `or`.
+- **When:** a pattern with no splices compiles when its code unit loads, as a constant. One with splices compiles at its `make-pattern`, which charges for it by the program's size.
+- **Conversions** (`as number`, `a number`'s value) aren't code. They are done to the Captures after the match.
+- **Size:** a program over the Text Pattern size limit fails as [chapter 6](06-errors-and-limits.md#limits) says. A pattern's logical size counts its program ([Logical sizes](#logical-sizes)).
+
+> **Example.** `<"$", digits>` compiles to `0 char "$"`, `1 class digit`, `2 split 1 3`, `3 match`, a program of size 4. `<"$", digits lazily>` has `2 split 3 1` instead.
+
+### Running
+
+A run matches a program against the Characters of a text from a start position, and counts `steps`. It keeps a list of threads in priority order, each an instruction number and its capture slots, and a set of the instruction numbers already added at the current position.
+
+- **Adding a thread** at an instruction and position: if the instruction was already added at this position, nothing happens. Otherwise it is marked, and:
+  - `jump a` adds at `a`, and `split a b` adds at `a` then at `b`
+  - `save n` adds at the next instruction, with slot `n` set to the position
+  - `assert k` adds at the next instruction if `k` holds, and otherwise nothing
+  - `char`, `class` and `match` are appended to the list
+- **At each position,** from the start position up:
+  1. **Seeding:** if the run seeds here, a new thread is added at instruction 0, with empty slots, after the threads already in the list.
+  2. **Steps:** the number of threads in the list is added to `steps`.
+  3. **Stepping:** each thread, in order, at a `char` or `class` that the Character at this position satisfies, adds a thread at its next instruction, at the next position, to a new list, with a new set of marks. A thread at `match` is a match, if the run accepts one here: it is recorded, and the threads after it in the list are dropped, since each is less preferred. A run that only needs to know a match exists stops at the first one.
+  4. **Ending:** the new list and its marks become the current ones, for the next position. The run ends after position `n`, or when the list is empty and the run no longer seeds, or has recorded a match.
+- **The match** a run gives is the last one it recorded, with its start (the position its thread was seeded at), its end and its capture slots. A capture slot never set took no part.
+
+Each operation runs one of four kinds of run:
+
+| Run | Seeds | Accepts a match | Used by |
+| --- | --- | --- | --- |
+| whole | at the start only | at the end only | `matches`, `match-whole` |
+| search | at every position, until a match is recorded | anywhere | `contains`, `match-search`, `offset`, the Match Search |
+| prefix | at the start only | anywhere | `begins with` |
+| suffix | at every position, until a match is recorded | at the end only | `ends with` |
+
+- **Stopping at the first match:** `matches`, `contains`, `begins with` and `ends with` need only a boolean, so they stop at the first match recorded. The others run to the end, since a later thread may be more preferred.
+- **A text needle** is run as the program of a literal of it.
+- **The Match Search** (`match-all`, `replace-start`, and the stdlib searches over it) runs searches one after another, each from where the last match ended. A search whose match is empty and starts where the last match ended is discarded, and the next search starts one Character later. `steps` sums every search.
+- **Captures:** a Match's `captures` and `ranges` come from the capture slots, and each Capture's conversion, such as `as number`, happens after the match, in Capture order.
+
+> **Example.** `<"$", digits>` searching `"$895"`: at position 0 the list is the seed at `char "$"`, 1 step. At 1, it is `class digit` then a new seed at `char "$"`, 2 steps, and so on, with the match recorded at position 4, where its thread is first. The search counts 10 steps and gives `"$895"`, the greedy match. With `lazily`, the match at position 2 comes first, and it gives `"$8"` after 6 steps.
 
 ## The Cost Model
 
@@ -666,8 +750,8 @@ A formula is a sum of terms: a whole number, or a measure, optionally multiplied
 | `entries` | the number of keys, for a map; 0 for any other value |
 | `digits` | the number of digits in the coefficient, for a number or the number of a Quantity; 0 for any other value |
 | `scanned` | what the instruction examines, as its rate's `input` says |
-| `steps` | the Text Pattern matcher's steps, chapter 8's matching section |
-| `program` | the size of a Text Pattern's compiled program, chapter 8's matching section |
+| `steps` | the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running) |
+| `program` | the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling) |
 | `frames` | the number of frames an unwinding pops |
 | `clauses` | the number of Handler Clauses a dispatch tries |
 | `count` | the instruction's `count` operand, or 0 if it has none |
