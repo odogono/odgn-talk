@@ -312,11 +312,10 @@ end cantParse
 
 -- Helpers --------------------------------------------------------------------
 
--- Where a match starts. An empty match's range is p..p-1, which has no items,
--- so its first end is read from its text form.
+-- Where a match starts. An empty match's range is p..p-1, which has no
+-- items, so its first end is read with `rangeStart` (ADR 0036).
 private function startOf m
-  put the range of m as text into r
-  return characters 1..(offset("..", r) - 1) of r as number
+  return rangeStart(the range of m)
 end startOf
 
 -- Joins a list of texts, halving so each Character is copied about log n times.
