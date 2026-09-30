@@ -1288,12 +1288,11 @@ export class BodyCompiler {
     if (catchRec) {
       const handler = this.code.length;
       for (const [from, to] of catchRec.spans) this.unwind.push({ from, to, kind: "catch", target: handler, depth: this.iterators });
-      this.at(s.catches[0]);
       const err = this.temp();
       // The error is on the stack until it is stored, so the finally spans
       // start after the store, at the static depth.
       if (finRec) this.closeSpan(finRec);
-      this.emit("store", [err]);
+      this.pos(s.catches[0], () => this.emit("store", [err]));
       if (finRec) finRec.open = this.code.length;
       for (const c of s.catches) this.pos(c, () => {
         const next = this.label();
