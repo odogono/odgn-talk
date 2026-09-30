@@ -55,6 +55,8 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 - **A clause of `try`:** `finally` comes after the `catch` clauses. It runs when the `try` completes, and when an error leaves it, whether caught or not. It also runs when `return`, `exit repeat` or `next repeat` leaves the `try`.
 - **On a Handler:** a Handler whose body ends in `finally` is short for a `try` around its whole body.
 - **No Suspension Points:** a `finally` block may contain no possible Suspension Point. The loader checks this.
+- **No leaving it:** a `return`, `veto` or `pass` inside a `finally` block, or an `exit repeat` or `next repeat` whose loop is outside it, is a load error, since it would drop the error or cancellation in flight.
+- **`veto` and `pass`** run the open `finally` blocks before they end the Run, as `return` does.
 - **On the Run's budgets:** on completion and on errors, `finally` runs on the Run's own Fuel and limits.
 - **An error in `finally`** replaces the error in flight, if there is one. The old error goes in the new map's `during` field, added only when it is missing.
 - **On cancellation,** `finally` blocks run on the Cleanup Budget ([below](#cancellation-and-stop)).

@@ -5,7 +5,8 @@
   "scripts": {
     "spec:gen": "bun tools/spec/generate.ts",
     "spec:check": "bun tools/spec/generate.ts --check",
-    "grammar:check": "bun tools/grammar/check.ts"
+    "grammar:check": "bun tools/grammar/check.ts",
+    "machine:check": "bun tools/machine/check.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

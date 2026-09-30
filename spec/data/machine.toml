@@ -2,20 +2,1463 @@
 #
 # A stack machine with numbered local slots. Every construct lowers to an exact
 # instruction sequence, and each instruction is one language-level operation
-# (ADR 0010). This file holds opcodes, operand kinds, stack effects,
-# Suspension-Point flags, Cost Model keys and error codes.
+# (ADR 0010). Chapter 8 states what each one does and how each construct
+# lowers to them.
 #
 # Schema: schema/machine.schema.json. Shown in chapter 8 (region `machine`).
-# Owned by the chapter 8 task, which fills the instructions and extends the
-# schema.
 #
+#   operand kinds     what an operand can be, with its disassembly form
 #   [[instruction]]
 #     name      the opcode's name in the canonical disassembly, e.g. "chunk-get"
-#     operands  the operand kinds, in order
-#     pops      how many values it pops from the operand stack
-#     pushes    how many values it pushes
+#     group     the section of chapter 8's table it is listed under
+#     operands  the operand kinds, in order; a kind ending in `?` is optional,
+#               and absent from the disassembly when it doesn't apply
+#     pops      how many values it pops: a number, or an operand kind whose
+#               value is the count, optionally plus a number ("count + 1")
+#     pushes    how many values it pushes, in the same notation
+#     jumps     optional: for an instruction with a label, how many values it
+#               leaves pushed when it jumps, after its pops (0 unless given)
 #     suspends  whether it is a Suspension Point
-#     cost      the Cost Model key in costs.toml
-#     errors    the Error Codes it can raise, from errors.toml
+#     cost      its Cost Model key in costs.toml
+#     errors    optional: the Error Codes it can raise itself, from errors.toml
+#     does      one sentence: what it does
 
-instruction = []
+[operand]
+constant = "an index into the code unit's constant pool, shown with the constant"
+local = "a local slot of the current body, shown with its name"
+variable = "a Script Variable's slot, shown with its name"
+definition = "a Constant of the code unit or of an Import, shown by name"
+body = "a body of the code unit, shown by its index and name"
+import = "an imported function, Handler or Constant, shown as library:name"
+builtin = "a Built-in function, shown by name"
+handler = "a Handler of the code unit, or an imported one, shown by name"
+grant = "a Grant, by the name the Script uses"
+operation = "an Operation name"
+message = "a message name"
+object = "a well-known object or Script name"
+label = "an instruction index in the same body"
+count = "a non-negative integer"
+index = "a positive integer"
+kind = "a kind name, `integer`, or a Unit, as written after `is a`, `as` or `can be`"
+chunk = "a chunk kind: character, word, line, item, byte or code point"
+property = "a Built-in property name"
+key = "a map key, as text"
+fold = "`fold` if the operation ignores case, and absent otherwise"
+field = "a Binary Pattern field type: an integer type with its byte order, or a size unit"
+event = "an entry of the code unit's event table"
+code = "an Error Code from errors.toml"
+
+# ---------------------------------------------------------------------------
+# Values and slots
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "const"
+group = "values"
+operands = ["constant"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "const"
+does = "Pushes a constant from the pool"
+
+[[instruction]]
+name = "pop"
+group = "values"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "stack"
+does = "Discards the top value"
+
+[[instruction]]
+name = "load"
+group = "values"
+operands = ["local"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes a local"
+
+[[instruction]]
+name = "store"
+group = "values"
+operands = ["local"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "slot"
+does = "Pops a value into a local"
+
+[[instruction]]
+name = "move"
+group = "values"
+operands = ["local", "local"]
+pops = 0
+pushes = 0
+suspends = false
+cost = "slot"
+does = "Copies the first local into the second, which commits a pattern's binding"
+
+[[instruction]]
+name = "load-var"
+group = "values"
+operands = ["variable"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes a Script Variable"
+
+[[instruction]]
+name = "store-var"
+group = "values"
+operands = ["variable"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "store-var"
+does = "Pops a value into a Script Variable"
+
+[[instruction]]
+name = "load-definition"
+group = "values"
+operands = ["definition"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes a Constant, the code unit's own or an imported one"
+
+[[instruction]]
+name = "store-definition"
+group = "values"
+operands = ["definition"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "slot"
+does = "Pops a Constant's value, in the code unit's initialiser only"
+
+[[instruction]]
+name = "load-object"
+group = "values"
+operands = ["object"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes the well-known Host Object or Script bound to a name at load"
+
+[[instruction]]
+name = "me"
+group = "values"
+operands = []
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes `me`"
+
+[[instruction]]
+name = "target"
+group = "values"
+operands = []
+pops = 0
+pushes = 1
+suspends = false
+cost = "slot"
+does = "Pushes `the target`"
+
+# ---------------------------------------------------------------------------
+# Control
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "jump"
+group = "control"
+operands = ["label"]
+pops = 0
+pushes = 0
+suspends = false
+cost = "jump"
+does = "Continues at the label"
+
+[[instruction]]
+name = "branch-false"
+group = "control"
+operands = ["label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "branch"
+errors = ["wrong kind"]
+does = "Pops a boolean and continues at the label if it is false"
+
+[[instruction]]
+name = "branch-true"
+group = "control"
+operands = ["label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "branch"
+errors = ["wrong kind"]
+does = "Pops a boolean and continues at the label if it is true"
+
+[[instruction]]
+name = "check-boolean"
+group = "control"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "branch"
+errors = ["wrong kind"]
+does = "Raises `wrong kind` unless the top value is a boolean"
+
+[[instruction]]
+name = "not"
+group = "control"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "operator"
+errors = ["wrong kind"]
+does = "Negates a boolean"
+
+# ---------------------------------------------------------------------------
+# Operators
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "add"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "incompatible units", "overflow", "out of range"]
+does = "`a + b`"
+
+[[instruction]]
+name = "subtract"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "incompatible units", "overflow", "out of range"]
+does = "`a - b`"
+
+[[instruction]]
+name = "multiply"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "incompatible units", "overflow"]
+does = "`a * b`"
+
+[[instruction]]
+name = "divide"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "incompatible units", "overflow", "division by zero"]
+does = "`a / b`"
+
+[[instruction]]
+name = "div"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "overflow", "division by zero"]
+does = "`a div b`"
+
+[[instruction]]
+name = "mod"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "arithmetic"
+errors = ["wrong kind", "division by zero"]
+does = "`a mod b`"
+
+[[instruction]]
+name = "power"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "power"
+errors = ["wrong kind", "incompatible units", "overflow", "division by zero", "out of domain"]
+does = "`a ^ b`"
+
+[[instruction]]
+name = "negate"
+group = "operators"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "operator"
+errors = ["wrong kind"]
+does = "Unary `-a`"
+
+[[instruction]]
+name = "concat"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "concat"
+does = "`a & b`"
+
+[[instruction]]
+name = "range"
+group = "operators"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "operator"
+errors = ["wrong kind", "incompatible units"]
+does = "`a..b`"
+
+[[instruction]]
+name = "equal"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+does = "`a = b`, and `a is b`"
+
+[[instruction]]
+name = "not-equal"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+does = "`a <> b`, and `a is not b`"
+
+[[instruction]]
+name = "less"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+errors = ["can't compare"]
+does = "`a < b`"
+
+[[instruction]]
+name = "greater"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+errors = ["can't compare"]
+does = "`a > b`"
+
+[[instruction]]
+name = "less-or-equal"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+errors = ["can't compare"]
+does = "`a <= b`"
+
+[[instruction]]
+name = "greater-or-equal"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "compare"
+errors = ["can't compare"]
+does = "`a >= b`"
+
+[[instruction]]
+name = "member"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "member"
+errors = ["wrong kind", "can't compare"]
+does = "`a is in b`"
+
+[[instruction]]
+name = "is-kind"
+group = "operators"
+operands = ["kind"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "operator"
+does = "`a is a K`, and `a is an integer`"
+
+[[instruction]]
+name = "is-empty"
+group = "operators"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "operator"
+does = "`a is empty`"
+
+[[instruction]]
+name = "can-convert"
+group = "operators"
+operands = ["kind"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "convert"
+does = "`a can be K`"
+
+[[instruction]]
+name = "convert"
+group = "operators"
+operands = ["kind"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "convert"
+errors = ["can't convert", "out of range"]
+does = "`a as K`"
+
+[[instruction]]
+name = "contains"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "search"
+errors = ["wrong kind"]
+does = "`a contains b`"
+
+[[instruction]]
+name = "begins-with"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "search"
+errors = ["wrong kind"]
+does = "`a begins with b`"
+
+[[instruction]]
+name = "ends-with"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "search"
+errors = ["wrong kind"]
+does = "`a ends with b`"
+
+[[instruction]]
+name = "matches"
+group = "operators"
+operands = ["fold?"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "search"
+errors = ["wrong kind"]
+does = "`a matches b`"
+
+# ---------------------------------------------------------------------------
+# Keys, properties and chunks
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "get-key"
+group = "access"
+operands = ["key"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind", "object gone"]
+does = "`the k of x`: a map's value, or a Host Object's property"
+
+[[instruction]]
+name = "get-key-computed"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind", "object gone"]
+does = "`the (k) of x`, with the key below the value"
+
+[[instruction]]
+name = "property"
+group = "access"
+operands = ["property"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "property"
+errors = ["wrong kind"]
+does = "`the p of x`, for a Built-in property"
+
+[[instruction]]
+name = "property-delimited"
+group = "access"
+operands = ["property"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "property"
+errors = ["wrong kind", "out of range"]
+does = "`the items of x delimited by d`, with the delimiter on top"
+
+[[instruction]]
+name = "chunk-get"
+group = "access"
+operands = ["chunk"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "chunk-get"
+errors = ["wrong kind"]
+does = "One chunk level: pops the value, then its index, and pushes the chunk"
+
+[[instruction]]
+name = "chunk-get-delimited"
+group = "access"
+operands = ["chunk"]
+pops = 3
+pushes = 1
+suspends = false
+cost = "chunk-get"
+errors = ["wrong kind", "out of range"]
+does = "An `item` level with its delimiter: pops the delimiter, the value and the index"
+
+[[instruction]]
+name = "chunk-set"
+group = "access"
+operands = ["chunk"]
+pops = 3
+pushes = 1
+suspends = false
+cost = "chunk-set"
+errors = ["wrong kind", "out of range"]
+does = "One chunk level of a write: pops the new part, the whole and the index, and pushes the new whole"
+
+[[instruction]]
+name = "chunk-set-delimited"
+group = "access"
+operands = ["chunk"]
+pops = 4
+pushes = 1
+suspends = false
+cost = "chunk-set"
+errors = ["wrong kind", "out of range"]
+does = "An `item` level of a write, with its delimiter on top"
+
+[[instruction]]
+name = "chunk-delete"
+group = "access"
+operands = ["chunk"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "chunk-set"
+errors = ["wrong kind"]
+does = "`delete` of one chunk level: pops the whole and the index, and pushes the new whole"
+
+[[instruction]]
+name = "chunk-delete-delimited"
+group = "access"
+operands = ["chunk"]
+pops = 3
+pushes = 1
+suspends = false
+cost = "chunk-set"
+errors = ["wrong kind", "out of range"]
+does = "`delete` of an `item` level, with its delimiter on top"
+
+[[instruction]]
+name = "test-chunk"
+group = "access"
+operands = ["chunk", "label"]
+pops = 2
+pushes = 0
+suspends = false
+cost = "chunk-get"
+errors = ["wrong kind"]
+does = "For `delete`: pops the value and the index, and jumps to the label if that chunk isn't there"
+
+[[instruction]]
+name = "test-chunk-delimited"
+group = "access"
+operands = ["chunk", "label"]
+pops = 3
+pushes = 0
+suspends = false
+cost = "chunk-get"
+errors = ["wrong kind", "out of range"]
+does = "`test-chunk` for an `item` level with its delimiter on top"
+
+[[instruction]]
+name = "test-key"
+group = "access"
+operands = ["key", "label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "For `delete`: pops a map, and jumps to the label if it has no such key"
+
+[[instruction]]
+name = "test-key-computed"
+group = "access"
+operands = ["label"]
+pops = 2
+pushes = 0
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "`test-key` with the key below the map"
+
+[[instruction]]
+name = "set-key"
+group = "access"
+operands = ["key"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "set-key"
+errors = ["wrong kind"]
+does = "One key level of a write: pops the new value and the map, and pushes the new map"
+
+[[instruction]]
+name = "set-key-computed"
+group = "access"
+operands = []
+pops = 3
+pushes = 1
+suspends = false
+cost = "set-key"
+errors = ["wrong kind"]
+does = "A computed key level of a write: pops the new value, the map and the key"
+
+[[instruction]]
+name = "delete-key"
+group = "access"
+operands = ["key"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "set-key"
+errors = ["wrong kind"]
+does = "`delete` of a key: pops the map, and pushes it without the key"
+
+[[instruction]]
+name = "delete-key-computed"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "set-key"
+errors = ["wrong kind"]
+does = "`delete` of a computed key: pops the map and the key"
+
+[[instruction]]
+name = "append"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "append"
+errors = ["wrong kind"]
+does = "`put e after c`: pops `e` and the current value, and pushes the new value"
+
+[[instruction]]
+name = "prepend"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "append"
+errors = ["wrong kind"]
+does = "`put e before c`"
+
+[[instruction]]
+name = "append-all"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "append"
+errors = ["wrong kind"]
+does = "`put ...e after c`"
+
+[[instruction]]
+name = "prepend-all"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "append"
+errors = ["wrong kind"]
+does = "`put ...e before c`"
+
+[[instruction]]
+name = "set-property"
+group = "access"
+operands = ["key"]
+pops = 2
+pushes = 0
+suspends = false
+cost = "set-property"
+errors = ["wrong kind", "read only", "object gone"]
+does = "`set the p of o to e`: pops the value and the Host Object, and calls the Host's `Set`"
+
+[[instruction]]
+name = "set-property-computed"
+group = "access"
+operands = []
+pops = 3
+pushes = 0
+suspends = false
+cost = "set-property"
+errors = ["wrong kind", "read only", "object gone"]
+does = "`set the (k) of o to e`: pops the value, the Host Object and the key"
+
+# ---------------------------------------------------------------------------
+# Building values
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "list"
+group = "building"
+operands = ["count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "list"
+does = "Pops `count` values and pushes them as a list, the deepest first"
+
+[[instruction]]
+name = "list-append"
+group = "building"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "list"
+does = "Pops a value and a list, and pushes the list with the value added last"
+
+[[instruction]]
+name = "list-extend"
+group = "building"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "list"
+errors = ["wrong kind"]
+does = "`...e` in a list literal: pops a list and the list so far, and pushes them joined"
+
+[[instruction]]
+name = "map"
+group = "building"
+operands = ["constant", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "map"
+does = "Pops `count` values and pushes a map with the keys the constant lists, in order"
+
+[[instruction]]
+name = "make-pattern"
+group = "building"
+operands = ["constant", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "make-pattern"
+errors = ["wrong kind", "can't convert"]
+does = "Builds a Text Pattern from the constant's template and `count` spliced values"
+
+[[instruction]]
+name = "bytes-field"
+group = "building"
+operands = ["field"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "bytes-field"
+errors = ["wrong kind", "out of range"]
+does = "One field of a `<< … >>` build: pops the value and the Bytes so far, and pushes them extended"
+
+[[instruction]]
+name = "bytes-bits"
+group = "building"
+operands = ["constant", "count"]
+pops = "count + 1"
+pushes = 1
+suspends = false
+cost = "bytes-field"
+errors = ["wrong kind", "out of range"]
+does = "A run of `count` bit fields, with the widths the constant lists: pops their values and the Bytes so far"
+
+[[instruction]]
+name = "match-all"
+group = "building"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "match"
+errors = ["wrong kind"]
+does = "`every match of p in s`: pops the text and the pattern, and pushes the list of Matches"
+
+[[instruction]]
+name = "replace-start"
+group = "building"
+operands = ["count"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "match"
+errors = ["wrong kind"]
+does = "Pops the text and the pattern, and pushes a replacement over its matches, only the first if `count` is 1"
+
+[[instruction]]
+name = "replace-next"
+group = "building"
+operands = ["label"]
+pops = 1
+pushes = 2
+jumps = 1
+suspends = false
+cost = "iterate"
+does = "Pushes the replacement's next Match, or jumps to the label when there are none"
+
+[[instruction]]
+name = "replace-put"
+group = "building"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "iterate"
+does = "Pops the text for the current Match, shown as `&` shows it, and the replacement"
+
+[[instruction]]
+name = "replace-end"
+group = "building"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "concat"
+does = "Pops the replacement, and pushes the finished text"
+
+[[instruction]]
+name = "make-closure"
+group = "building"
+operands = ["body", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "make-closure"
+does = "Pops `count` captured values and pushes a Function Value of the Lambda body"
+
+[[instruction]]
+name = "make-function"
+group = "building"
+operands = ["body"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "make-closure"
+does = "Pushes a named function as a Function Value, with no captures"
+
+[[instruction]]
+name = "make-imported-function"
+group = "building"
+operands = ["import"]
+pops = 0
+pushes = 1
+suspends = false
+cost = "make-closure"
+does = "Pushes an imported function as a Function Value"
+
+# ---------------------------------------------------------------------------
+# Calls
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "call"
+group = "calls"
+operands = ["body", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "call"
+does = "Calls a function of the code unit with `count` arguments, and pushes its result"
+
+[[instruction]]
+name = "call-import"
+group = "calls"
+operands = ["import", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "call"
+does = "Calls an imported function with `count` arguments"
+
+[[instruction]]
+name = "call-handler"
+group = "calls"
+operands = ["handler", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "call"
+errors = ["no match"]
+does = "Calls a Handler of the Script or an imported one, trying its clauses in order"
+
+[[instruction]]
+name = "call-handler-wait"
+group = "calls"
+operands = ["handler", "count"]
+pops = "count"
+pushes = 1
+suspends = true
+cost = "call"
+errors = ["no match"]
+does = "`name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does"
+
+[[instruction]]
+name = "call-builtin"
+group = "calls"
+operands = ["builtin", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "builtin"
+does = "Calls a Built-in function, charged by its own Cost Model key"
+
+[[instruction]]
+name = "call-value"
+group = "calls"
+operands = ["count"]
+pops = "count + 1"
+pushes = 1
+suspends = false
+cost = "call"
+errors = ["wrong kind", "function gone", "wrong arity", "would suspend"]
+does = "Calls the Function Value below the `count` arguments, which must run here without suspending"
+
+[[instruction]]
+name = "call-value-wait"
+group = "calls"
+operands = ["count"]
+pops = "count + 1"
+pushes = 1
+suspends = true
+cost = "call"
+errors = ["wrong kind", "function gone", "wrong arity", "send failed", "timeout"]
+does = "`f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits"
+
+[[instruction]]
+name = "return"
+group = "calls"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "return"
+does = "Ends the body with the popped value as its result"
+
+[[instruction]]
+name = "clause-fail"
+group = "calls"
+operands = []
+pops = 0
+pushes = 0
+suspends = false
+cost = "return"
+does = "Ends a failed clause, test or branch body, so the Core tries the next"
+
+# ---------------------------------------------------------------------------
+# Destructuring
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "test-constant"
+group = "patterns"
+operands = ["constant", "fold?", "label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops a value, and jumps to the label unless it `=` the constant"
+
+[[instruction]]
+name = "test-equal"
+group = "patterns"
+operands = ["label"]
+pops = 2
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops two values, and jumps to the label unless they are `=`, for a pin"
+
+[[instruction]]
+name = "test-list"
+group = "patterns"
+operands = ["count", "label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops a value, and jumps unless it is a list of exactly `count` items"
+
+[[instruction]]
+name = "test-list-at-least"
+group = "patterns"
+operands = ["count", "label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops a value, and jumps unless it is a list of `count` items or more"
+
+[[instruction]]
+name = "list-item"
+group = "patterns"
+operands = ["index"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "test"
+does = "Pops a list the pattern has tested, and pushes its item at `index`"
+
+[[instruction]]
+name = "list-rest"
+group = "patterns"
+operands = ["index"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "list"
+does = "Pops a list the pattern has tested, and pushes its items from `index` on"
+
+[[instruction]]
+name = "test-map"
+group = "patterns"
+operands = ["label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops a value, and jumps unless it is a map"
+
+[[instruction]]
+name = "map-get"
+group = "patterns"
+operands = ["key", "label"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "test"
+does = "Pops a map, and pushes its value under the key, or jumps if it has no such key"
+
+[[instruction]]
+name = "match-whole"
+group = "patterns"
+operands = ["fold?", "label"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "match"
+does = "Pops a Text Pattern and a value, and pushes the Captures map of a whole-text match, or jumps"
+
+[[instruction]]
+name = "match-search"
+group = "patterns"
+operands = ["fold?", "label"]
+pops = 2
+pushes = 1
+suspends = false
+cost = "match"
+does = "Pops a Text Pattern and a value, and pushes the Captures map of the first match, or jumps"
+
+[[instruction]]
+name = "bin-start"
+group = "patterns"
+operands = ["label"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "test"
+does = "Pops a value, and pushes a reader at its first byte, or jumps unless it is Bytes"
+
+[[instruction]]
+name = "bin-literal"
+group = "patterns"
+operands = ["constant", "label"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "bin-field"
+does = "Reads the constant's bytes, or pops the reader and jumps if they differ or run out"
+
+[[instruction]]
+name = "bin-int"
+group = "patterns"
+operands = ["field", "label"]
+pops = 1
+pushes = 2
+suspends = false
+cost = "bin-field"
+does = "Reads an integer field and pushes it above the reader, or pops the reader and jumps"
+
+[[instruction]]
+name = "bin-bits"
+group = "patterns"
+operands = ["constant", "count", "label"]
+pops = 1
+pushes = "count + 1"
+suspends = false
+cost = "bin-field"
+does = "Reads a run of `count` bit fields of the widths the constant lists, and pushes each above the reader"
+
+[[instruction]]
+name = "bin-bytes"
+group = "patterns"
+operands = ["field", "label"]
+pops = 2
+pushes = 2
+suspends = false
+cost = "bin-field"
+does = "Pops a size, and reads that many bytes, as Bytes or as text, above the reader, or pops the reader and jumps"
+
+[[instruction]]
+name = "bin-rest"
+group = "patterns"
+operands = ["field", "label"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "bin-field"
+does = "Pops the reader, and pushes the bytes left, as Bytes or as text, or jumps if they don't decode"
+
+[[instruction]]
+name = "bin-end"
+group = "patterns"
+operands = ["label"]
+pops = 1
+pushes = 0
+suspends = false
+cost = "test"
+does = "Pops the reader, and jumps unless every byte was read"
+
+# ---------------------------------------------------------------------------
+# Loops
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "iterate"
+group = "loops"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "iterate"
+errors = ["wrong kind"]
+does = "Pops a list or an integer range, and pushes an iterator over a snapshot of it"
+
+[[instruction]]
+name = "iterate-times"
+group = "loops"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "iterate"
+errors = ["wrong kind", "out of range"]
+does = "Pops a count, and pushes an iterator that runs that many times"
+
+[[instruction]]
+name = "next"
+group = "loops"
+operands = ["label"]
+pops = 1
+pushes = 2
+jumps = 1
+suspends = false
+cost = "iterate"
+does = "Pushes the iterator's next item above it, or jumps to the label, leaving the iterator, when there are none"
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "throw"
+group = "errors"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "throw"
+errors = ["bad throw"]
+does = "`throw e`: raises the popped map or text"
+
+[[instruction]]
+name = "rethrow"
+group = "errors"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "throw"
+does = "Raises the popped error again, from a `catch` block no clause matched"
+
+[[instruction]]
+name = "raise"
+group = "errors"
+operands = ["code"]
+pops = 0
+pushes = 0
+suspends = false
+cost = "throw"
+does = "Raises a catalogue error that has no fields, such as `no match`"
+
+[[instruction]]
+name = "end-cleanup"
+group = "errors"
+operands = []
+pops = 0
+pushes = 0
+suspends = false
+cost = "return"
+does = "Ends a `finally` block reached by an error or a cancellation, which then goes on"
+
+# ---------------------------------------------------------------------------
+# Effects and suspension
+# ---------------------------------------------------------------------------
+
+[[instruction]]
+name = "ask"
+group = "effects"
+operands = ["grant", "operation", "count"]
+pops = "count"
+pushes = 1
+suspends = false
+cost = "capability"
+errors = ["wrong kind", "capability revoked", "host error"]
+does = "Calls an immediate Operation, and pushes its result"
+
+[[instruction]]
+name = "ask-wait"
+group = "effects"
+operands = ["grant", "operation", "count"]
+pops = "count"
+pushes = 1
+suspends = true
+cost = "capability"
+errors = ["wrong kind", "capability revoked", "host error", "timeout"]
+does = "Calls a suspending Operation, and suspends until it answers"
+
+[[instruction]]
+name = "tell"
+group = "effects"
+operands = ["grant", "operation", "count"]
+pops = "count"
+pushes = 0
+suspends = false
+cost = "capability"
+errors = ["wrong kind", "capability revoked", "host error"]
+does = "Calls a fire-and-forget Operation"
+
+[[instruction]]
+name = "send"
+group = "effects"
+operands = ["message", "count"]
+pops = "count + 1"
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["mailbox full", "object gone", "wrong kind"]
+does = "Pops the receiver and `count` arguments, and puts the message in the receiver's mailbox"
+
+[[instruction]]
+name = "send-wait"
+group = "effects"
+operands = ["message", "count"]
+pops = "count + 1"
+pushes = 1
+suspends = true
+cost = "send"
+errors = ["mailbox full", "object gone", "wrong kind", "send failed", "timeout"]
+does = "Sends as `send` does, then suspends until the reply"
+
+[[instruction]]
+name = "send-up"
+group = "effects"
+operands = ["message", "count"]
+pops = "count"
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["mailbox full"]
+does = "A Command Call with no Handler: sends the message up the Message Path"
+
+[[instruction]]
+name = "send-up-wait"
+group = "effects"
+operands = ["message", "count"]
+pops = "count"
+pushes = 1
+suspends = true
+cost = "send"
+errors = ["mailbox full", "send failed", "timeout"]
+does = "`name args and wait` with no Handler: sends up the Message Path and waits"
+
+[[instruction]]
+name = "wait"
+group = "effects"
+operands = []
+pops = 1
+pushes = 0
+suspends = true
+cost = "wait"
+errors = ["wrong kind"]
+does = "`wait d`: pops an exact duration, and suspends until it has passed"
+
+[[instruction]]
+name = "wait-for"
+group = "effects"
+operands = ["event"]
+pops = "event"
+pushes = 1
+suspends = true
+cost = "wait"
+errors = ["wrong kind"]
+does = "Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout"
+
+[[instruction]]
+name = "wait-for-any"
+group = "effects"
+operands = ["event"]
+pops = "event"
+pushes = 2
+suspends = true
+cost = "wait"
+errors = ["wrong kind"]
+does = "The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number"
+
+[[instruction]]
+name = "join-start"
+group = "effects"
+operands = []
+pops = 0
+pushes = 0
+suspends = false
+cost = "join"
+does = "Starts a Join"
+
+[[instruction]]
+name = "join-ask"
+group = "effects"
+operands = ["grant", "operation", "count"]
+pops = "count"
+pushes = 0
+suspends = false
+cost = "capability"
+errors = ["wrong kind", "capability revoked"]
+does = "Starts a suspending Operation as a Join Member"
+
+[[instruction]]
+name = "join-send"
+group = "effects"
+operands = ["message", "count"]
+pops = "count + 1"
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["mailbox full", "object gone", "wrong kind"]
+does = "Starts a `send … and wait` as a Join Member"
+
+[[instruction]]
+name = "join-end"
+group = "effects"
+operands = []
+pops = 0
+pushes = 1
+suspends = true
+cost = "join"
+errors = ["send failed", "timeout"]
+does = "`end wait`: suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend"
+
+[[instruction]]
+name = "veto"
+group = "effects"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "return"
+does = "Pops the reason, vetoes the Decision and ends the Run"
+
+[[instruction]]
+name = "pass"
+group = "effects"
+operands = ["message"]
+pops = 0
+pushes = 0
+suspends = false
+cost = "send"
+does = "Ends the Run and sends its message on up the Message Path"

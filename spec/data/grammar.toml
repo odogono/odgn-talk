@@ -352,7 +352,7 @@ rule = "`and` followed by `wait` ends the expression before it, and is never a b
 
 [[decision]]
 name = "as-in-build"
-rule = "inside `<< >>`, `as` followed by an integer type ends the value and gives the field type"
+rule = "inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type"
 
 [[decision]]
 name = "begins-with"

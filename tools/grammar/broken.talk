@@ -447,3 +447,13 @@ on t f
   if f is not a function then say "not callable"
   if f can be a function then say "never"
 end t
+-- case: parses: sized fields in a build start with a number, `(` or `^`
+-- expect: parses
+on t flags, mode, body, n
+  put << flags as 4 bits, mode as 4 bits, body as (n) bytes, body as 3 bytes as text >> into b
+end t
+-- case: a name as a build field's size reads as a conversion
+-- expect: unexpected token at 2:20
+on t body, n
+  put << body as n bytes >> into b
+end t

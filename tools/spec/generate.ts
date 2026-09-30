@@ -216,7 +216,13 @@ function crossCheck(d: Data) {
     fail("machine.toml", `instruction "${n}" is listed twice`);
   }
   for (const i of d.machine.instruction ?? []) {
-    if (!rates.has(i.cost)) fail("machine.toml", `instruction "${i.name}" has Cost Model key "${i.cost}", which costs.toml doesn't rate`);
+    // Every key is rated once costs.toml has rates (the Cost Model 0 task).
+    if (rates.size && !rates.has(i.cost)) fail("machine.toml", `instruction "${i.name}" has Cost Model key "${i.cost}", which costs.toml doesn't rate`);
+    for (const o of i.operands.map((k: string) => k.replace(/\?$/, ""))) if (!(o in (d.machine.operand ?? {}))) fail("machine.toml", `instruction "${i.name}" has the operand kind "${o}", which [operand] doesn't list`);
+    for (const e of [i.pops, i.pushes]) {
+      if (typeof e === "string" && !i.operands.includes(e.split(" ")[0])) fail("machine.toml", `instruction "${i.name}" counts "${e}", but has no such operand`);
+    }
+    if (i.jumps !== undefined && !i.operands.includes("label")) fail("machine.toml", `instruction "${i.name}" says what it leaves when it jumps, but has no label`);
     for (const c of i.errors ?? []) {
       if (!codes.has(c)) fail("machine.toml", `instruction "${i.name}" raises "${c}", which isn't in errors.toml`);
     }
@@ -477,19 +483,8 @@ const VIEWS: Record<string, View> = {
         sources(l.sources, file),
       ])),
 
-  machine: (d) => {
-    if (!d.machine.instruction?.length) return todo("chapter 8");
-    return table(["Instruction", "Operands", "Pops", "Pushes", "Suspends", "Cost Model key", "Error Codes"],
-      d.machine.instruction.map((i: any) => [
-        code(i.name),
-        i.operands.join(", "),
-        i.pops,
-        i.pushes,
-        i.suspends ? "yes" : "no",
-        code(i.cost),
-        (i.errors ?? []).map(code).join(", "),
-      ]));
-  },
+  "machine.operands": (d) =>
+    table(["Operand kind", "Is"], Object.entries(d.machine.operand ?? {}).map(([k, v]) => [code(k), v as string])),
 
   costs: (d) => {
     const head = `Cost Model **${d.costs.version}**.`;
@@ -523,6 +518,25 @@ const VIEWS: Record<string, View> = {
 const glossarySource = await Bun.file(join(ROOT, "CONTEXT.md")).text();
 
 // Chapter 7: one region per Built-in group, stdlib Library and Standard Capability.
+// Chapter 8: one region per group of instructions.
+const MACHINE_GROUPS = ["values", "control", "operators", "access", "building", "calls", "patterns", "loops", "errors", "effects"] as const;
+function machineViews(d: Data) {
+  for (const g of MACHINE_GROUPS) {
+    VIEWS[`machine.${g}`] = () => {
+      const rows = (d.machine.instruction ?? []).filter((i: any) => i.group === g);
+      return table(["Instruction", "Operands", "Pops", "Pushes", "Does", "Raises"],
+        rows.map((i: any) => [
+          code(i.name) + (i.suspends ? " (suspends)" : ""),
+          i.operands.map((k: string) => (k.endsWith("?") ? `${code(k.slice(0, -1))} (optional)` : code(k))).join(", "),
+          String(i.pops),
+          String(i.pushes) + (i.jumps ? `, ${i.jumps} on a jump` : ""),
+          i.does,
+          (i.errors ?? []).map(code).join(", "),
+        ]));
+    };
+  }
+}
+
 function stdlibViews(d: Data) {
   const s = d.stdlib;
   const raises = (e: any) => (e.errors ?? []).map(code).join(", ");
@@ -676,6 +690,7 @@ const data = await loadData();
 const ebnf = await loadEbnf();
 for (const s of ebnf) VIEWS[`ebnf.${s.name}`] = () => "```ebnf\n" + s.text + "\n```";
 stdlibViews(data);
+machineViews(data);
 crossCheck(data);
 stdlibCheck(data);
 await stdlibSourceCheck(data);

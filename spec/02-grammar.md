@@ -314,7 +314,7 @@ Multiplicative ::= Power ( ( '*' | '/' | 'mod' | 'div' ) Power )*
 Power          ::= Unary ( '^' Power )?
 Unary          ::= '-' Unary | Conversion
 Conversion     ::= ChunkLevel ( 'as' ( Unit | Kind ) )*
-                   /* inside a BuildField, `as` before an integer type ends the value */
+                   /* inside a BuildField, `as` before an integer type, a number, `(` or `^` ends the value */
 Kind           ::= 'civil' 'date' | 'function' | Name
 ```
 
@@ -537,7 +537,7 @@ BuildField     ::= Concat ( 'as' FieldType )?
 
 - **Fields:** in a Binary Pattern, a Word followed by `:` names a field, and a Number or Text is a literal field. `...` ends the pattern, optionally binding the rest.
 - **Sizes** are a Number, a Name bound earlier in the pattern, a pinned `^n`, or a parenthesised expression, inside which `^n` may also appear (`(^n * 2) bytes`).
-- **Building:** in `<< … >>` in operand position, each field is a value with an optional `as` type. `as` followed by an integer type ends the value, so `<< the length of b as uint16, b >>` needs no parentheses. Inside brackets within the value, `as` is a conversion again.
+- **Building:** in `<< … >>` in operand position, each field is a value with an optional `as` type. `as` followed by an integer type, a number, `(` or `^` ends the value and starts the field type, so `<< the length of b as uint16, b >>` and `<< flags as 4 bits, mode as 4 bits >>` need no parentheses. A size held in a name is written in parentheses, `v as (n) bytes`, since `as n` would read as a conversion. Inside brackets within the value, `as` is a conversion again.
 
 > **Example.**
 >
@@ -556,7 +556,7 @@ These are the only places where the parser reads a second token before it choose
 | Decision | Rule |
 | --- | --- |
 | `and-wait` | `and` followed by `wait` ends the expression before it, and is never a boolean `and` |
-| `as-in-build` | inside `<< >>`, `as` followed by an integer type ends the value and gives the field type |
+| `as-in-build` | inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type |
 | `begins-with` | `begins` or `ends` followed by `with` is the operator; otherwise the word ends the expression |
 | `binary-field` | in a Binary Pattern, a word followed by `:` names a field |
 | `can-be` | `can` followed by `be` is the kind test; otherwise the word ends the expression |
