@@ -1,6 +1,7 @@
 -- reads.talk: the chunk-read-out-of-range case. Reading text past its end,
--- at index 0 or over a reversed range gives empty text, and never raises
--- (chapter 4, Reading).
+-- before its start, at index 0 or over a reversed range gives empty text, and
+-- never raises. A range is clipped to the Characters it covers (chapter 4,
+-- Reading).
 
 script variable pastEnd
 script variable wordZero
@@ -8,6 +9,8 @@ script variable itemPastEnd
 script variable beforeStart
 script variable reversed
 script variable overhang
+script variable underhang
+script variable wrapsReversed
 script variable wholeRangePast
 script variable listPastEnd
 script variable listRangePast
@@ -19,6 +22,8 @@ on go
   put character -4 of "abc" into beforeStart                  -- ""
   put characters 3..2 of "abc" into reversed                  -- ""
   put characters 2..10 of "abc" into overhang                 -- "bc"
+  put characters -5..2 of "abc" into underhang               -- "ab"
+  put characters -1..1 of "abc" into wrapsReversed           -- ""
   put characters 5..10 of "abc" into wholeRangePast           -- ""
   put item 3 of ["a", "b"] into listPastEnd                   -- nothing
   put items 3..4 of ["a", "b"] into listRangePast             -- []

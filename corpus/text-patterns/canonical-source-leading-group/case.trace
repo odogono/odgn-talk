@@ -1,0 +1,20 @@
+# canonical-source-leading-group: pins the canonical source of a Text
+# Pattern whose first element is a nested group. Splicing `<4 digits>` first
+# gives `< <4 digits>, "x">`, and splicing it alone gives `< <4 digits>>`,
+# with one space after the opening `<`, so neither reads back as Bytes
+# (spec chapter 11, The canonical source of a Text Pattern). The display
+# form in `vars` is read with chapter 2's Text Pattern grammar, and a
+# literal written the same way is equal to the spliced pattern, since
+# equality compares canonical sources (chapter 3, Text Patterns). The
+# values are pinned. Fuel, allocation and state are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load leading
+> deliver d1 to=leading message=go
+> pump clock=2026-09-30T09:00:00Z
+seg leading/r1 start delivery=d1 handler=go clause=1 fuel=34 alloc=120 state=150 end=return
+run leading/r1 outcome=completed delivery=d1 handler=go fuel=34 alloc=120
+pumped state=idle fuel=34
+
+> vars
+vars leading unit=<4 digits> first=< <4 digits>, "x"> only=< <4 digits>> same=true

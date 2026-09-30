@@ -709,7 +709,7 @@ Each operation runs one of four kinds of run:
 
 - **Stopping at the first match:** `matches`, `contains`, `begins with` and `ends with` need only a boolean, so they stop at the first match recorded. The others run to the end, since a later thread may be more preferred.
 - **A text needle** is run as the program of a literal of it.
-- **The Match Search** (`match-all`, `replace-start`, and the stdlib searches over it) runs searches one after another, each from where the last match ended. A search whose match is empty and starts where the last match ended is discarded, and the next search starts one Character later. `steps` sums every search.
+- **The Match Search** (`match-all`, `replace-start`, and the stdlib searches over it) runs searches one after another, each from where the last match ended. A search whose match is empty and starts where the last match ended is discarded, whether the last match was empty or not, and the next search starts one Character later. The Match Search stops when a search records no match, or when the next search would start past the end of the text. `steps` sums every search, the discarded ones included.
 - **Captures:** a Match's `captures` and `ranges` come from the capture slots, and each Capture's conversion, such as `as number`, happens after the match, in Capture order.
 
 > **Example.** `<"$", digits>` searching `"$895"`: at position 0 the list is the seed at `char "$"`, 1 step. At 1, it is `class digit` then a new seed at `char "$"`, 2 steps, and so on, with the match recorded at position 4, where its thread is first. The search counts 10 steps and gives `"$895"`, the greedy match. With `lazily`, the match at position 2 comes first, and it gives `"$8"` after 6 steps.

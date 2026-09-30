@@ -151,7 +151,8 @@ A Chunk Expression reads part of a value by kind and position: `word 2 of line 3
 ### Reading
 
 - **Text:** a chunk of text is text. A range of chunks runs from the start of the first to the end of the last, with the delimiters between them, so `items 2..4 of "a,b,c,d,e"` is `"b,c,d"`.
-- **Out of range:** reading text past its end, at index 0 or over a reversed range gives empty text. Reading a list, an integer range or Bytes that way gives Nothing for a single chunk, and an empty list or empty Bytes for a range of them.
+- **Out of range:** reading one chunk of text past its end, before its start or at index 0 gives empty text, so `character -4 of "abc"` is `""`. Reading a list, an integer range or Bytes that way gives Nothing.
+- **A range's ends** are read as indexes first, each on its own, so `characters -1..1 of "abc"` is `characters 3..1`. A range whose first end is after its last is reversed, and gives empty text, an empty list or empty Bytes. Any other range is clipped to the chunks there are: `characters 2..10 of "abc"` is `"bc"`, `characters -5..2 of "abc"` is `"ab"`, and `characters 5..10 of "abc"` is `""`.
 - **Chains:** each `of` reads from the value the chunk to its right gives, so `word 2 of line 3 of s` reads line 3, then its second word.
 - **Chunks of text are text,** so arithmetic on them needs `as number` ([ADR 0003](../docs/adr/0003-no-implicit-coercion.md)).
 
@@ -255,8 +256,8 @@ A Text Pattern is a readable alternative to regular expressions, run on a linear
 | `a or b` | `a`, or else `b` |
 
 - **Sequences:** elements separated by commas match one after another.
-- **Repetition:** `one or more of e`, `zero or more of e` and `optional e` repeat an element, and `n e` repeats it exactly `n` times, where `n` is an integer literal. For a plural keyword, `n` counts its singular, so `4 digits` is four `digit`, and `2 words` is two words separated by white space.
-- **Anchors** match an empty position: `text start` and `text end` at either end of the text, `line start` at the start or after a line break, `line end` at the end or before a line break, and `word break` between a White_Space Character or either end and a Character that isn't White_Space.
+- **Repetition:** `one or more of e`, `zero or more of e` and `optional e` repeat an element, and `n e` repeats it exactly `n` times, where `n` is an integer literal. A count has no limit of its own: every copy counts toward the [Text Pattern size limit](06-errors-and-limits.md#limits). For a plural keyword, `n` counts its singular, so `4 digits` is four `digit`, and `2 words` is two words separated by white space.
+- **Anchors** match an empty position: `text start` and `text end` at either end of the text, `line start` at the start or after a line break, `line end` at the end or before a line break, and `word break` at the start and at the end of every `word`: where the Character on one side isn't White_Space, and the other side is a White_Space Character or an end of the text. So in `"cat, dog"` it holds before `c`, after `,`, before `d` and after `g`, and never between `t` and `,`.
 - **Typed Elements:** `a number` is the only one ([ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)). `a` or `an` before any other kind is a load error.
 - **`as number`** after an element converts its matched text to a number. It is allowed only after an element that can match nothing but ASCII digits, or after `a number`, so the text always has the number syntax. Anywhere else, `as` is a load error. Digits past the [number limits](03-values.md#reading-numbers) raise `can't convert`, as `a number` does.
 - **`ignoring case`** after an element makes its text literals match by simple case folding. Classes keep their meaning.
@@ -283,11 +284,16 @@ A Match is the plain map one match gives:
 - **`captures`**: a map from each Capture's name, in the pattern's order, to its value, or to Nothing if it took no part.
 - **`ranges`**: a map from each Capture's name to its range, or to Nothing.
 
-`every match of p in s`, the Match Search, gives a list of Matches, left to right. Each search starts where the last match ended. An empty match where the last match ended is skipped, and the search goes on one Character later. Nothing holds a last match after `matches` or `contains`. Captures bind only through Destructuring or `replace` ([ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md)).
+`every match of p in s`, the Match Search, gives a list of Matches, left to right. Each search starts where the last match ended.
+
+- **An empty match where the last match ended** is skipped, and the search goes on one Character later. This holds after a non-empty match too, which is where the language differs from Python's and JavaScript's regular expressions: `every match of <zero or more of "a"> in "baab"` gives `""`, `"aa"` and the `""` at the end, and no empty match straight after `"aa"`.
+- **It stops** when a search finds no match, or when the next search would start past the end of the text.
+
+Nothing holds a last match after `matches` or `contains`. Captures bind only through Destructuring or `replace` ([ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md)).
 
 ### `replace`
 
-`replace p in c with e` finds the matches of the Text Pattern or text `p` in the text `c`, as the Match Search does. For each match, in order, the Captures written in `p` are put into locals of those names, and then `e` is evaluated. The result is `c` with each match replaced by the text form of its `e`. `replace first` replaces only the first match.
+`replace p in c with e` finds the matches of the Text Pattern or text `p` in the text `c`, as the Match Search does. For each match, in order, the Captures written in `p` are put into locals of those names, and then `e` is evaluated. The result is `c` with each match replaced by the text form of its `e`. `replace first` replaces only the first match. So empty matches are skipped as the Match Search skips them: `replace <zero or more of "-"> in "a-b" with "+"` gives `"+a+b+"`.
 
 - **The statement** puts the result into the Container `c`. **The expression** gives it.
 - **No match** leaves the text as it was.
@@ -389,8 +395,9 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 ### Writing chunks
 
 - **A chunk of text** is replaced by the text form of the value, and the result is normalised to NFC. Writing a `word` replaces only its Characters, and keeps the white space around it.
-- **Past the end:** writing an `item` or `line` past the end first pads the text with delimiters, or with `newline`, up to that index. Writing a `character` or `word` past the end raises `out of range`.
-- **Index 0, a reversed range or an index before the start** raises `out of range` for every chunk kind, with the chunk word as `field` and the index, or `[from, to]`, as `value`.
+- **Padding:** writing item `k` of a text that has `n` items, with `k` past `n`, first appends `k - n - 1` delimiters, and one more unless the text is empty or already ends with the delimiter, then puts the value there. A delimiter at the very end ends the last item and makes no empty one ([Chunk kinds](#chunk-kinds)), so `put "e" into item 4 of s` gives `"a,b,,e"` whether `s` is `"a,b"` or `"a,b,"`, and `",e"` for item 2 of `""`. A `line` pads the same way with `newline`, and any line break at the end counts as its delimiter.
+- **Past the end:** writing a `character` or `word` past the end raises `out of range`, even just past it, so `put "x" into character 4 of "abc"` raises. A write never appends: `put e after c` does.
+- **Index 0, a reversed range or an index before the start** raises `out of range` for every chunk kind. A range's ends are read as for [reading](#reading), and one at 0 or before the start raises too. `field` is the chunk kind's singular word, even after a plural, and `value` is the index, or for a range the list `[from, to]` of its ends as written. So `put "x" into characters 3..2 of s` raises with `field` `"character"` and `value` `[3, 2]`.
 - **An item of a list** is replaced by the value. Writing past the end pads the list with Nothing. A range of items is replaced by the elements of a list, and any other value there raises `wrong kind`.
 - **A byte** is replaced by an integer from 0 to 255, and a range of bytes by Bytes. Writing past the end raises `out of range`.
 

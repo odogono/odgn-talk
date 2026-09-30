@@ -1,0 +1,15 @@
+-- leading.talk: the canonical-source-leading-group case (spec chapter 11,
+-- The canonical source of a Text Pattern). A spliced pattern is a nested
+-- group, so splicing one first makes a pattern whose first element is a
+-- group, and its canonical source is written `< <`, never `<<`.
+
+script variable unit = <4 digits>
+script variable first = nothing
+script variable only = nothing
+script variable same = nothing
+
+on go
+  put <(unit), "x"> into first
+  put <(unit)> into only
+  put first = < <4 digits>, "x"> into same                    -- true
+end go
