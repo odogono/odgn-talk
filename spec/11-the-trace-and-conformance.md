@@ -163,7 +163,7 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 
 - **One record per line,** in UTF-8, each ended by an LF, with no trailing spaces. A value's display form never breaks a line.
 - **A Host Input** is written after `> `, and the Core's output has no prefix.
-- **A record** is its name, then its ids in order, each after one space, then its keys in the order `corpus.toml` lists them, each as `key=value` after one space. A key that isn't optional is always written. An optional one is written only when it applies, and a list-valued one only when its list isn't empty.
+- **A record** is its name, then its ids in order, each after one space, then its keys in the order `corpus.toml` lists them, each as `key=value` after one space. A key that isn't optional is always written. An optional one is written only when it applies, a list-valued one only when its list isn't empty, and a value-typed one only when its value isn't Nothing, so a Run that completes with Nothing has no `value`, and neither has a bare `veto`. A map's entries are always written, so a `vetoes` entry keeps `reason: nothing`.
 - **Values** are written as their key's type says ([below](#key-types)): a value in the display form, an id, or a list of ids.
 - **Comments and blank lines:** a line that starts with `#`, and an empty line, are an author's. The Core writes neither, and comparing ignores them.
 - **Only outcomes** are recorded, never single instructions.
@@ -173,12 +173,15 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 A record is written when what it records happens, so a Trace is in the order the Core acted:
 
 - **Worker calls** (`load`, `reload`, `extend`, `add-library`, `replace-library`, `save`, `restore` and `vars`) are written when they are made, followed by what they cause, such as `diag`, `stopped` or `vars` records.
-- **Queued calls** are written when the Pump that drains them has read its Clock, in the order they were made, and just before that Pump's `pump` line. So a Delivery an author writes just before a `> pump` is where the Core writes it too, and a worker call written between them moves before it.
-- **A Host Input refused at the call,** with a Host error or `MailboxFull`, is written at the call, with no ids, and a `refused` record follows it. It changes nothing.
+- **Queued calls** are written when the Pump that drains them has read its Clock, in the order they were made, and just before that Pump's `pump` line. So a Delivery an author writes just before a `> pump` is where the Core writes it too, and a worker call or a refused input written between them moves before it.
+- **A queued call never drained,** because a worker call discarded it first, as a variables-only restore drops the saved input queue, is written just before that worker call's line, in the order the calls were made.
+- **A Host Input refused at the call,** with a Host error or `MailboxFull`, is written at the call, with none of the ids the Core would assign, and a `refused` record follows it. It changes nothing. The ids the Host supplies, such as a `settle`'s call id, are kept.
 - **Calls made inside a Pump,** from a Host function, land when that function returns: a queued call is drained by the next Pump, and a refused one, a `Stop` or a `CancelRun` is written right after the record of that crossing ([below](#stops-and-cancels-inside-a-pump)).
-- **Inside a Pump,** the records follow in the order they happened, and the Pump ends with `pumped`. A stretch of a Run is written as `seg` or `preempt` when it ends, so the `call`, `send` and `raise` records it made come before it, and a Run's `run` record comes after its last stretch.
+- **Inside a Pump,** the records follow in the order they happened, and the Pump ends with `pumped`. A Stretch of a Run is written as `seg` or `preempt` when it ends, so the `call`, `send`, `raise`, `guard-skip` and `note` records it made come before it, and a Run's `run` record comes after its last Stretch. A Run's first Stretch carries the start keys (`delivery`, `broadcast`, `from`, `handler`, `clause` and `fn`), whether it is a `seg` or a `preempt`.
+- **A Verdict** is written as `decided` right after the record of what settled it. A seal comes at the end of a Segment, so an allowed or vetoed Decision's `decided` follows the sealing `seg`, and comes before the Run's `run`. An undecided Verdict is settled by the Run's end, so its `decided` follows the `run` record, or the `stopped` record for a Run stopped before its seal. A Decision cancelled in the mailbox is settled as it is drained, after its `run` record with no id, and a Broadcast Decision with no recipients as it is drained. A Broadcast Decision with recipients is settled by its last recipient to settle. An open Decision a variables-only restore discarded or dropped is settled in the first Pump, before any Stretch, in delivery id order.
+- **A reissued call,** settled with `how=reissue`, crosses to the Host again as the first Pump drains the `settle`: a `call` record under its saved call id, before any Stretch. It has `charged` only if the Host function draws with `Charge`, since the declared cost isn't charged again.
 - **Every Host crossing** is recorded: each Capability call as `call`, with an immediate call's result or error and the Fuel it charged, and each property call as `prop`. So a Trace carries every answer a Host gave, and replays without that Host ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)).
-- **Errors:** a Core-raised error map is written without its `message`, wherever the map appears, whose wording is outside parity. Every other key is kept, and so is the `message` of an error a Script or a Host made ([chapter 6](06-errors-and-limits.md#messages)). Text a Script builds from a Core-raised `message` is outside parity too, and no case may depend on it.
+- **Errors:** a Core-raised error map is written without its `message`, wherever the map appears, whose wording is outside parity. Every other key is kept, in the order [chapter 6](06-errors-and-limits.md#errors) gives, and so is the `message` of an error a Script or a Host made ([chapter 6](06-errors-and-limits.md#messages)). Text a Script builds from a Core-raised `message` is outside parity too, and no case may depend on it.
 
 ### Host Inputs
 
@@ -212,7 +215,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `dispose` |  | `object` | disposes a Host Object |
 | `save` | `save` |  | saves the Group |
 | `restore` |  | `from`\*, `mismatch`?, `unbound`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
-| `vars` |  |  | inspects the Group, which writes a `vars` record for each Script |
+| `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
 
 <!-- end -->
 
@@ -297,7 +300,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | Record | Ids | Keys | Says |
 | --- | --- | --- | --- |
 | `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
-| `preempt` | `run` | `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted |
+| `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
 | `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`? | a Capability call |
 | `prop` | `run` | `object`, `name`, `op`, `value`?, `error`? | a Host Object property call |
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
@@ -336,6 +339,12 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `until` | `instant` | the deadline it waits for, if it has one |
 | `seg` | `n` | `count` | for `join-end`, the number of members |
 | `seg` | `value` | `value` | for `veto`, the reason |
+| `preempt` | `delivery` | `id` | for a start, its Delivery |
+| `preempt` | `broadcast` | `id` | for a start, its Broadcast |
+| `preempt` | `from` | `id` | for a start, the call or Run that sent its message |
+| `preempt` | `handler` | `id` | for a start, the Handler dispatched to |
+| `preempt` | `clause` | `count` | for a start, the clause that matched |
+| `preempt` | `fn` | `value` | for a start by a Function Value call, the Function Value |
 | `preempt` | `by` | `word` | what preempted it: `slice`, `cap` |
 | `preempt` | `fuel` | `count` | the Fuel the stretch used |
 | `preempt` | `alloc` | `count` | the allocation the stretch made |
@@ -387,22 +396,23 @@ A record is written when what it records happens, so a Trace is in the order the
 | `unhandled` | `target` | `value` | the object it was addressed to |
 | `call-failed` | `op` | `id` | the Operation, as `<granted name>.<operation>` |
 | `decided` | `verdict` | `word` | its Verdict: `allowed`, `vetoed`, `undecided` |
-| `decided` | `vetoes` | `value` | each veto, as a map `{script, run, reason}`, in recipient order |
-| `decided` | `undecided` | `value` | each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started |
+| `decided` | `vetoes` | `value` | each veto, as a map `{script, run, reason}`, in recipient order, with `script` and `run` as text |
+| `decided` | `undecided` | `value` | each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started; `script` and `run` are text, and `outcome` is text in chapter 5's words: `"errored"`, `"limit fault"`, `"cancelled"`, `"dropped"` or `"stopped"` |
 | `diag` | `code` | `value` | its code, as text |
 | `diag` | `pos` | `pos` | its position |
 | `pumped` | `state` | `word` | the Group's state: `idle`, `sliced`, `stopped` |
 | `pumped` | `fuel` | `count` | the Fuel the Pump used |
-| `pumped` | `next` | `instant` | the next deadline, if anything waits on time |
+| `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one |
 | `refused` | `code` | `value` | the Host error's code, or `"mailbox full"`, as text |
 
 <!-- end -->
 
-- **`seg` figures:** `fuel` and `alloc` are the Fuel and allocation of the stretch, and `state` the Script's Persistent State measured at the Segment's end ([chapter 6](06-errors-and-limits.md#limits)). A `run` record's figures are the Run's totals, from dispatch to its end, cleanup included.
+- **`seg` figures:** `fuel` and `alloc` are the Fuel and allocation of the Stretch, and `state` the Script's Persistent State measured at the Segment's end ([chapter 6](06-errors-and-limits.md#limits)). A `run` record's figures are the Run's totals, from dispatch to its end, cleanup included.
+- **A Limit Fault's charge** isn't made, since the faulting instruction faults before it does anything ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-cost-model)). So the `seg`, `run` and `pumped` figures leave it out, it adds no Fuel Slice debt, and a Run's `fuel` and `alloc` never pass its limits.
 - **`from`:** a Run started by a Script's message names the call id of the send, or the sending Run for a plain `send`. A Run started by an `error` message names the Run that errored.
-- **Abandoned calls:** after a Join's fail-fast `raise`, an `abandon` record follows for each member still pending, in start order. One also follows each `timeout`, and a Limit Fault's or a cancellation's `fault` or `seg` record, for each call it abandons.
+- **Abandoned calls:** after a Join's fail-fast `raise`, an `abandon` record follows for each member still pending, in start order. One also follows the `raise` of each `timeout`, for the call that timed out, and a Limit Fault's or a cancellation's `fault` or `seg` record, for each call it abandons.
 - **`fault`:** `rollback` lists the Script Variables whose bindings the rollback changed back ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
-- **`vars`:** a `vars` record is written for each Script, in load order. Each key is a Script Variable's name, and the record has no other keys. A Script with none is just `vars <script>`.
+- **`vars`:** a `vars` record is written for each Script in the Group, in load order. A Script whose first Load was rejected was never added to the Group ([chapter 9](09-embedding.md#loading-and-libraries)), so it has none. Each key is a Script Variable's name, and the record has no other keys. A Script with none is just `vars <script>`.
 
 ### End reasons
 
@@ -418,7 +428,7 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 | `error` | the Run ended with an uncaught error |
 | `fault` | the Run had a Limit Fault |
 | `cancel` | the Run was cancelled |
-| `stop` | the Run was discarded by Stop Script, a Reload or disposing its Script's owner |
+| `stop` | the Run was discarded by Stop Script, a Reload or disposing its Script's owner, in the middle of this Stretch; a Run discarded while suspended, parked or preempted has no Stretch to end, and only the `stopped` record lists it |
 | `unhandled` | no Handler Clause matched |
 | `dropped` | a `, dropping` clause dropped the Run |
 | `park` | a `, queued` clause parked the Run |

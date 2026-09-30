@@ -22,10 +22,10 @@
 #   search:9  return                      2    28
 #
 # So with fuelPerRun 22 the Run faults at `match-all`, and with 23 it
-# covers `match-all` exactly and faults at the `store-var` after it. The
-# figures on the fault lines follow the worked example, which writes a
-# faulting Run's Fuel as its limit. The allocation and state figures are
-# estimates.
+# covers `match-all` exactly and faults at the `store-var` after it. A
+# faulting instruction's charge isn't made, so a faulting Run's Fuel is what
+# it spent before it: 6 under 22, and 23 under 23. The allocation and state
+# figures are estimates.
 
 > load search
 
@@ -33,9 +33,9 @@
 > deliver d1 to=search message=go limits={fuelPerRun: 22}
 > pump clock=2026-09-30T09:00:00Z
 fault search/r1 limit=fuel at=search:6 pos=8:7
-seg search/r1 start delivery=d1 handler=go clause=1 fuel=22 alloc=0 state=8 end=fault
-run search/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=22 alloc=0
-pumped state=idle fuel=22
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=6 alloc=0 state=8 end=fault
+run search/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=6 alloc=0
+pumped state=idle fuel=6
 
 # `match-all` brings the Run to exactly 23, which isn't past the limit.
 # The `store-var` would bring it to 25, so the Run faults there, before

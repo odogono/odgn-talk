@@ -23,7 +23,7 @@
 # The slice cuts the Run in the middle of its first Segment.
 > deliver d1 to=counter message=spin
 > pump clock=2026-09-30T10:00:00Z fuel-slice=100
-preempt counter/r1 by=slice fuel=100 alloc=16
+preempt counter/r1 start delivery=d1 handler=spin clause=1 by=slice fuel=100 alloc=16
 pumped state=sliced fuel=100
 
 # Saved while preempted. Nothing is pending, so the restore lists nothing to

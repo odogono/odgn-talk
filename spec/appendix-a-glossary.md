@@ -282,6 +282,10 @@ _Avoid_: checkpoint, image, dump
 The part of a Run between two consecutive Suspension Points, or between one and the Run's start or end. A Segment is all-or-nothing: if it ends in a Limit Fault, its changes to Script Variables are undone.
 _Avoid_: turn, slice, tick
 
+**Stretch**:
+One uninterrupted piece of a Segment, from the Run's start, a resume or its continuation after a preemption, to the Segment's end or the next preemption. A Segment that is never preempted is a single Stretch; one preempted by a Fuel Slice spans several.
+_Avoid_: slice, burst, run (a Run is the whole handling of one message)
+
 ## Resources
 
 **Fuel**:

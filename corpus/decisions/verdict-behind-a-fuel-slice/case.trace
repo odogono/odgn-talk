@@ -29,16 +29,16 @@
 
 > decide d1 to=board message=beforeMove args=[{from: "a1", to: "e5", path: ["b2", "c3", "d4", "e5"]}]
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 by=slice fuel=20 alloc=48
+preempt board/r1 start delivery=d1 handler=beforeMove clause=1 by=slice fuel=20 alloc=48
 pumped state=sliced fuel=20
 
 # Still open: the Host pumps again at the same Clock reading.
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 by=slice fuel=21 alloc=48
+preempt board/r1 continue by=slice fuel=21 alloc=48
 pumped state=sliced fuel=21
 
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 by=slice fuel=19 alloc=24
+preempt board/r1 continue by=slice fuel=19 alloc=24
 pumped state=sliced fuel=19
 
 # The Segment ends at the veto, which seals the Verdict in this fourth Pump.

@@ -552,7 +552,7 @@ is = "for a variables-only restore, the abandoned calls"
 name = "vars"
 input = true
 ids = []
-is = "inspects the Group, which writes a `vars` record for each Script"
+is = "inspects the Group, which writes a `vars` record for each Script in it"
 
 [[record]]
 name = "seg"
@@ -637,8 +637,44 @@ is = "for `veto`, the reason"
 [[record]]
 name = "preempt"
 input = false
-ids = ["run"]
-is = "a stretch of a Run that a Fuel Slice or the Fuel cap preempted"
+ids = ["run", "how"]
+is = "a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg`"
+
+[[record.key]]
+key = "delivery"
+type = "id"
+optional = true
+is = "for a start, its Delivery"
+
+[[record.key]]
+key = "broadcast"
+type = "id"
+optional = true
+is = "for a start, its Broadcast"
+
+[[record.key]]
+key = "from"
+type = "id"
+optional = true
+is = "for a start, the call or Run that sent its message"
+
+[[record.key]]
+key = "handler"
+type = "id"
+optional = true
+is = "for a start, the Handler dispatched to"
+
+[[record.key]]
+key = "clause"
+type = "count"
+optional = true
+is = "for a start, the clause that matched"
+
+[[record.key]]
+key = "fn"
+type = "value"
+optional = true
+is = "for a start by a Function Value call, the Function Value"
 
 [[record.key]]
 key = "by"
@@ -1017,13 +1053,13 @@ is = "its Verdict"
 key = "vetoes"
 type = "value"
 optional = true
-is = "each veto, as a map `{script, run, reason}`, in recipient order"
+is = "each veto, as a map `{script, run, reason}`, in recipient order, with `script` and `run` as text"
 
 [[record.key]]
 key = "undecided"
 type = "value"
 optional = true
-is = "each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started"
+is = "each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started; `script` and `run` are text, and `outcome` is text in chapter 5's words: `\"errored\"`, `\"limit fault\"`, `\"cancelled\"`, `\"dropped\"` or `\"stopped\"`"
 
 [[record]]
 name = "diag"
@@ -1068,7 +1104,7 @@ is = "the Fuel the Pump used"
 key = "next"
 type = "instant"
 optional = true
-is = "the next deadline, if anything waits on time"
+is = "the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one"
 
 [[record]]
 name = "refused"
@@ -1107,7 +1143,7 @@ is = "the Run was cancelled"
 
 [[end]]
 word = "stop"
-is = "the Run was discarded by Stop Script, a Reload or disposing its Script's owner"
+is = "the Run was discarded by Stop Script, a Reload or disposing its Script's owner, in the middle of this Stretch; a Run discarded while suspended, parked or preempted has no Stretch to end, and only the `stopped` record lists it"
 
 [[end]]
 word = "unhandled"

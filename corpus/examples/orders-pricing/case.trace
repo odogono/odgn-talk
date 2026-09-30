@@ -8,13 +8,14 @@
 > load pricing identity=9e8d7c6b5a49382716f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a098
 
 # An order that crosses to the pricing Script and waits on a suspending call.
+# Both waits run out at the default 30 s `MaxWait`, the next deadline.
 > deliver d1 to=orders message=order args=[{sku: "A1", qty: 3}]
 > pump clock=2026-09-28T09:00:00Z
 send orders/r1.c1 to=pricing message=quote args=["A1", 3] wait=yes
 seg orders/r1 start delivery=d1 handler=order clause=1 fuel=41 alloc=96 state=212 end=send-wait
 call pricing/r1.c1 op=prices.lookup args=["A1"]
 seg pricing/r1 start from=orders/r1.c1 handler=quote clause=1 fuel=118 alloc=24 state=148 end=ask-wait
-pumped state=idle fuel=159
+pumped state=idle fuel=159 next=2026-09-28T09:00:30Z
 > answer pricing/r1.c1 value=2.50 GBP
 > pump clock=2026-09-28T09:00:00Z
 seg pricing/r1 resume fuel=9 alloc=16 state=156 end=wait until=2026-09-28T09:00:01Z
@@ -36,13 +37,14 @@ run orders/r2 outcome=completed delivery=d2 handler=order fuel=52 alloc=40
 pumped state=idle fuel=52
 
 # Runs out of Fuel. The faulting instruction is pinned, and the Segment's
-# `add 1 GBP to total` is rolled back.
+# `add 1 GBP to total` is rolled back. The faulting instruction's charge
+# isn't made, so the Run's Fuel stops short of its 20000.
 > deliver d3 to=orders message=spin
 > pump clock=2026-09-28T09:00:02Z
 fault orders/r3 limit=fuel at=orders:57 pos=22:5 rollback=[total]
-seg orders/r3 start delivery=d3 handler=spin clause=1 fuel=20000 alloc=19872 state=64 end=fault
-run orders/r3 outcome=limit-fault delivery=d3 handler=spin limit=fuel fuel=20000 alloc=19872
-pumped state=idle fuel=20000
+seg orders/r3 start delivery=d3 handler=spin clause=1 fuel=19998 alloc=19872 state=64 end=fault
+run orders/r3 outcome=limit-fault delivery=d3 handler=spin limit=fuel fuel=19998 alloc=19872
+pumped state=idle fuel=19998
 
 # The runner ends every case by inspecting the Group.
 > vars
