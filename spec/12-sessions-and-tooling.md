@@ -193,7 +193,7 @@ The LSP, the formatter, the debugger and the Lint engine are one TypeScript tool
 
 ### The normative line
 
-- **Normative:** the first syntax error and every load-time diagnostic ([chapter 2](02-grammar.md#syntax-errors)), the display form, the source map ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-source-map)), the lowering, and Session Transcripts.
+- **Normative:** the first syntax error and every load-time diagnostic ([chapter 2](02-grammar.md#syntax-errors), [codes](02-grammar.md#load-time-diagnostics)), the display form, the source map ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-source-map)), the lowering, and Session Transcripts.
 - **Tooling freedom:** the formatter's output, the LSP's features, Lints and the debugger. None of them adds a case kind to the Corpus, and changing one is never a language change.
 - **One parser:** the TS Core's parser gives a lossless syntax tree, comments and blank lines included, and goes on after the first error. The tooling uses that tree, and the Core compiles from the same parse, so the first error the tooling reports is the Core's.
 

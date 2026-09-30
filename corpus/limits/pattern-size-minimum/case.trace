@@ -11,8 +11,10 @@
 # Fuel of the first Run: dispatch 4, const 1, store 1, load 1, branch-false
 # 1, load 1, make-pattern 20 + 2 * 100000, store 1, const 1, return 2, which
 # is 200033, and its allocation is size(result) = 16 + 8 * 100000 = 800016.
-# The second faults after 9 Fuel. Only the fault is pinned. The figures are
-# estimates.
+# The second faults after 9 Fuel: `make-pattern` checks the size before its
+# charge, so an oversized pattern faults on `pattern` whatever Fuel is left,
+# and is never charged (chapter 8, Charging). Only the fault is pinned. The
+# figures are estimates.
 # Unblessed: the output lines are written by hand, not by bless.
 
 > load patterns

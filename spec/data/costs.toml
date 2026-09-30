@@ -26,6 +26,12 @@
 #     fuel    its Fuel formula
 #     alloc   optional: its allocation formula, 0 if absent
 #     input   optional: what `input` and `scanned` are for it
+#   [[change]] each change made to this version's tables or charging rules
+#             since it was first written, oldest first. Cost Model 0 is
+#             provisional and no case is blessed, so it changes in place;
+#             from Cost Model 1 on, a change is a new version.
+#     issue   the issue that made it ("#115")
+#     change  one sentence: what changed
 
 version = 0
 
@@ -284,6 +290,11 @@ alloc = "24"
 input = "an iterator shares its list or range, so only the iterator itself is new"
 
 [[rate]]
+key = "next"
+fuel = "2"
+input = "the item is part of the snapshot the iterator shares, and a Match is part of the replacement, so nothing is new"
+
+[[rate]]
 key = "make-closure"
 fuel = "4 + count"
 alloc = "size(result)"
@@ -295,7 +306,7 @@ fuel = "8"
 [[rate]]
 key = "clause"
 fuel = "4"
-input = "each Handler Clause a dispatch tries, charged as it is tried"
+input = "each Handler Clause a dispatch tries, charged at the clause body's first instruction"
 
 [[rate]]
 key = "return"
@@ -552,3 +563,19 @@ alloc = "size(result)"
 key = "builtin.toInstant"
 fuel = "10"
 alloc = "size(result)"
+
+# ---------------------------------------------------------------------------
+# Changes to Cost Model 0
+# ---------------------------------------------------------------------------
+
+[[change]]
+issue = "#115"
+change = "`next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass"
+
+[[change]]
+issue = "#115"
+change = "Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position"
+
+[[change]]
+issue = "#115"
+change = "An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged"

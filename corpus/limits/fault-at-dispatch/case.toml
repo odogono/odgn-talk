@@ -1,0 +1,12 @@
+# fault-at-dispatch: a Run that can't pay for a Handler Clause that dispatch
+# tries faults at that clause body's first instruction (chapter 8, Charging).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "picker"
+source = "picker.talk"

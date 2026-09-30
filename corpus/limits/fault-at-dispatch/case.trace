@@ -1,0 +1,46 @@
+# fault-at-dispatch: dispatch charges the `clause` rate, 4, for each clause
+# it tries, at the clause body's first instruction and together with that
+# instruction's own charge. So a Run that can't pay for a clause has an
+# ordinary Limit Fault there, with an instruction and a position, even at
+# the "from 1" end of Fuel per Run's range (chapter 8, Charging).
+#
+# The Fuel of `pick 1` (picker.talk, `bun tools/machine/check.ts --dis`):
+#   clause 1: 0002 load 1 + clause 4 = 5, 0003 const 1, 0004 greater 2
+#     (2 + 0 scanned / 16), 0005 branch-false 1, 0010 clause-fail 2   11
+#   clause 2: 0011 const 1 + clause 4 = 5, 0012 return 2               7
+# so 18 in all.
+#
+# With fuelPerRun 1, the first clause's first instruction would make 5, so
+# the Run faults at picker:2, source 4:17, having spent nothing. With 15,
+# the first clause fails its Guard at 11, and the second clause's first
+# instruction would make 16, so the Run faults at picker:11, source 9:10,
+# in clause 2. With the default, it completes on 18.
+#
+# Pinned here: each fault's instruction, position and clause, and the Fuel
+# of all three Runs. Nothing is allocated, and `picker` keeps nothing.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load picker
+
+> deliver d1 to=picker message=pick args=[1] limits={fuelPerRun: 1}
+> pump clock=2026-09-30T09:00:00Z
+fault picker/r1 limit=fuel at=picker:2 pos=4:17
+seg picker/r1 start delivery=d1 handler=pick clause=1 fuel=0 alloc=0 state=0 end=fault
+run picker/r1 outcome=limit-fault delivery=d1 handler=pick limit=fuel fuel=0 alloc=0
+pumped state=idle fuel=0
+
+> deliver d2 to=picker message=pick args=[1] limits={fuelPerRun: 15}
+> pump clock=2026-09-30T09:00:01Z
+fault picker/r2 limit=fuel at=picker:11 pos=9:10
+seg picker/r2 start delivery=d2 handler=pick clause=2 fuel=11 alloc=0 state=0 end=fault
+run picker/r2 outcome=limit-fault delivery=d2 handler=pick limit=fuel fuel=11 alloc=0
+pumped state=idle fuel=11
+
+> deliver d3 to=picker message=pick args=[1]
+> pump clock=2026-09-30T09:00:02Z
+seg picker/r3 start delivery=d3 handler=pick clause=2 fuel=18 alloc=0 state=0 end=return
+run picker/r3 outcome=completed delivery=d3 handler=pick value="small" fuel=18 alloc=0
+pumped state=idle fuel=18
+
+> vars
+vars picker

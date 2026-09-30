@@ -37,6 +37,7 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 | [`version.toml`](data/version.toml) | The language version | [0](00-introduction.md) |
 | [`grammar.ebnf`](data/grammar.ebnf) | The grammar's productions | [1](01-lexical-structure.md), [2](02-grammar.md) |
 | [`grammar.toml`](data/grammar.toml) | Reserved Words, contextual keywords, the FOLLOW set, precedence, modifiers, two-token decisions and syntax error codes | [2](02-grammar.md) |
+| [`diagnostics.toml`](data/diagnostics.toml) | The load-time diagnostic codes | [2](02-grammar.md) |
 | [`unicode.toml`](data/unicode.toml) | The Unicode version and the hash of each UCD file used | [1](01-lexical-structure.md) |
 | [`units.toml`](data/units.toml) | The Unit Catalogue | [3](03-values.md) |
 | [`errors.toml`](data/errors.toml) | The error-code catalogue, with template messages | [6](06-errors-and-limits.md) |

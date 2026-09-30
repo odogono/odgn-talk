@@ -1,0 +1,10 @@
+-- picker.talk: the fault-at-dispatch case. `pick 1` fails the first
+-- clause's Guard and runs the second, so dispatch tries both clauses.
+
+on pick n where n > 10
+  return "big"
+end pick
+
+on pick n
+  return "small"
+end pick

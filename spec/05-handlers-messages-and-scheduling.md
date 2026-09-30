@@ -265,7 +265,7 @@ The Group is Quiescent when the Pump returns.
 ### Work and turns
 
 - **A Script's work** is one FIFO queue holding, in the order each became ready, the messages waiting for dispatch and the Runs ready to resume. Mailbox depth counts only the messages in it.
-- **Ready:** a Run becomes ready when its `wait` fires, its `wait for` matches or times out, its call is answered, fails or times out, its Join settles or fails, or it leaves its clause's queue.
+- **Ready:** a Run becomes ready when its `wait` fires, its `wait for` matches or times out, its call is answered, fails or times out, its Join settles or fails, it leaves its clause's queue, or it is cancelled while it isn't running, so that its cleanup runs in a turn ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **A turn:** Scripts take turns in the order they were loaded into the Group. In its turn, a Script with work takes the head of its queue, dispatches it or resumes it, and runs that Run until it ends, suspends or is preempted. Then the next Script with work takes its turn, round and round.
 - **A preempted Run** stays at the head of its Script's queue, and resumes before anything else of that Script, in a later Pump.
 - **Messages sent during a Pump** join their receiver's queue at once, so a message sent to a Script can be dispatched in the same Pump.

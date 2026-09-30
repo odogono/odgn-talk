@@ -3,9 +3,11 @@
 # patternSize is a Limit Fault there, with limit `pattern` (spec chapter 6,
 # Limits; chapter 8, Compiling). With patternSize 50, splicing the
 # 30-instruction `<29 digits>` after "x" gives 31 instructions and is made,
-# and splicing it twice gives 59 and faults. The fault, its instruction and
-# the rollback of `status` are pinned. Fuel, allocation and state are
-# estimates.
+# and splicing it twice gives 59 and faults. `make-pattern` checks the size
+# before its charge, so the fault is on `pattern`, and the 59-instruction
+# program is never charged (chapter 8, Charging). The fault, its
+# instruction and the rollback of `status` are pinned. Fuel, allocation and
+# state are estimates.
 # Unblessed: the output lines are written by hand, not by bless.
 
 > load maker

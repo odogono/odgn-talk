@@ -1,0 +1,263 @@
+# The load-time diagnostic catalogue: every code the loader gives a Script,
+# a Library or an Entry it rejects, after the parse.
+#
+# A load error is a checker diagnostic: the unit doesn't load, and parity
+# covers each diagnostic's code and position, not its message (ADR 0019).
+# Syntax errors, which stop the parse, are in grammar.toml. The codes here are
+# families: one code covers every rule of its kind, and the chapter that
+# states a rule is its reference.
+#
+# Schema: schema/diagnostics.schema.json. Shown in chapter 2 (region `diagnostics`).
+#
+# [[diagnostic]]
+#   code         the code, lowercase words separated by spaces
+#   raised_when  one sentence: every rule the code covers
+#   at           where it is reported: a token of the construct that breaks
+#                the rule
+#   sources      the ADRs ("ADR 0019") and issues ("#115") that settle it
+
+[[diagnostic]]
+code = "unknown name"
+raised_when = "A Name resolves to nothing (chapter 4), including a well-known object the Host didn't bind, or a Binary Pattern size names a name that isn't bound earlier in the pattern"
+at = "the Name"
+sources = ["ADR 0016", "ADR 0019", "#115"]
+
+[[diagnostic]]
+code = "not a value"
+raised_when = "The bare name of a Handler or a Built-in function is used as a value"
+at = "the name"
+sources = ["ADR 0025", "#115"]
+
+[[diagnostic]]
+code = "name clash"
+raised_when = "A name has two meanings: a variable named like a function of the unit or an Import, a parameter, pattern binding or Capture named like a Script Variable, a Constant or a well-known object, an imported name, after any rename, named like a local Handler, function, Constant, Script Variable or well-known object, two Imports of one name, or a Library Handler that an importer also defines"
+at = "the later of the two in the source; for an Import, its name in the `use` line"
+sources = ["ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "duplicate name"
+raised_when = "One pattern binds the same Name twice, or a Text Pattern has two Captures with one name"
+at = "the second"
+sources = ["ADR 0010", "#115"]
+
+[[diagnostic]]
+code = "duplicate key"
+raised_when = "A map literal names a key twice"
+at = "the second key"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "unknown kind"
+raised_when = "A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, or a Text Pattern's `a` or `an` is followed by a kind other than `number`"
+at = "the kind name"
+sources = ["ADR 0003", "ADR 0034", "#115"]
+
+[[diagnostic]]
+code = "no conversion"
+raised_when = "`as` names a kind that has no conversion, or a Text Pattern's `as number` follows an element that can match something other than ASCII digits or `a number`"
+at = "`as`"
+sources = ["ADR 0003", "#115"]
+
+[[diagnostic]]
+code = "bad number"
+raised_when = "A number literal has more than 34 significant digits, a magnitude of 10^34 or more, or more than 6176 fraction digits"
+at = "the literal"
+sources = ["ADR 0002", "ADR 0034", "#115"]
+
+[[diagnostic]]
+code = "pattern too large"
+raised_when = "A Text Pattern with no splices compiles to a program over the Script's `patternSize`, counting every copy of a counted repetition"
+at = "the pattern's opening `<`"
+sources = ["ADR 0007", "#92", "#115"]
+
+[[diagnostic]]
+code = "wrong argument count"
+raised_when = "A call to a function, the unit's own or imported, passes fewer arguments than its parameters without defaults, or more than all of them, a Capability call passes a number of arguments its Operation Declaration doesn't take, or `say` has no argument or more than one"
+at = "the function's or Operation's name, or `say`"
+sources = ["ADR 0030", "ADR 0035", "#115"]
+
+[[diagnostic]]
+code = "wrong argument"
+raised_when = "A literal argument of a Capability call breaks its parameter's Shape: a literal of the wrong kind, or a closed map literal whose keys don't fit"
+at = "the argument's first token"
+sources = ["ADR 0030", "#115"]
+
+[[diagnostic]]
+code = "unknown operation"
+raised_when = "`ask` or `tell` names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare"
+at = "the Grant's name, or the Operation's"
+sources = ["ADR 0012", "ADR 0015", "#115"]
+
+[[diagnostic]]
+code = "wrong mode"
+raised_when = "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, or `tell` on one that isn't fire-and-forget"
+at = "`ask` or `tell`"
+sources = ["ADR 0012", "#115"]
+
+[[diagnostic]]
+code = "missing and wait"
+raised_when = "A Command Call to a Handler that may suspend has no `and wait`"
+at = "the Handler's name"
+sources = ["ADR 0012", "#115"]
+
+[[diagnostic]]
+code = "needless and wait"
+raised_when = "A Command Call with `and wait` names a Handler that can't suspend, or `say` has `and wait`"
+at = "the Handler's name, or `say`"
+sources = ["ADR 0012", "#115"]
+
+[[diagnostic]]
+code = "can't suspend here"
+raised_when = "A possible Suspension Point is in a `finally` block, or a named function, or a Handler called function-style, reaches one, directly or through what it calls"
+at = "the Suspension Point, or the call in the function or Handler through which it reaches one"
+sources = ["ADR 0017", "ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "unknown import"
+raised_when = "A `use` line names a Library the Group doesn't hold, or a name the Library doesn't export"
+at = "the Library's name, or the name"
+sources = ["ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "import cycle"
+raised_when = "Libraries import each other in a cycle"
+at = "the `use` line that closes the cycle"
+sources = ["ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "missing grant"
+raised_when = "A Library the Script imports, directly or through another Library, needs an Operation that the Script's Grants don't give"
+at = "the `use` line"
+sources = ["ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "not in a library"
+raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable`"
+at = "its first token"
+sources = ["ADR 0016", "ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "not in a script"
+raised_when = "A Script's declaration starts with `private`"
+at = "`private`"
+sources = ["ADR 0020", "#115"]
+
+[[diagnostic]]
+code = "not in a lambda"
+raised_when = "`pass` or `the target` is inside a Lambda"
+at = "`pass` or `the`"
+sources = ["ADR 0025", "#115"]
+
+[[diagnostic]]
+code = "not in a guard"
+raised_when = "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a Host Object property other than `id`"
+at = "the call's name, the Lambda's `given`, or the key's `the` or `'s`"
+sources = ["ADR 0025", "#115"]
+
+[[diagnostic]]
+code = "not in a join"
+raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`"
+at = "its first token, or the member's"
+sources = ["ADR 0026", "#115"]
+
+[[diagnostic]]
+code = "empty join"
+raised_when = "A Join has no member in its source"
+at = "its `wait`"
+sources = ["ADR 0026", "#115"]
+
+[[diagnostic]]
+code = "leaves finally"
+raised_when = "A `return`, `veto` or `pass` is inside a `finally` block, or an `exit repeat` or `next repeat` inside one belongs to a loop outside it"
+at = "its first token"
+sources = ["ADR 0017", "#115"]
+
+[[diagnostic]]
+code = "outside a loop"
+raised_when = "An `exit repeat` or `next repeat` is outside any loop"
+at = "its first token"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "veto outside a decision"
+raised_when = "`veto` is outside a `, deciding` Handler: in a function, a Lambda, or a Handler reached by a Command Call"
+at = "`veto`"
+sources = ["ADR 0031", "#115"]
+
+[[diagnostic]]
+code = "after a suspension"
+raised_when = "A `veto` or `pass` in a `, deciding` Handler is reached, on some path from the Handler's start, through a possible Suspension Point"
+at = "`veto` or `pass`"
+sources = ["ADR 0031", "#115"]
+
+[[diagnostic]]
+code = "wrong message"
+raised_when = "`pass m` names a message other than the one its Handler handles"
+at = "the message's name"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "bad suffixes"
+raised_when = "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, or `, during` on a Handler other than `on error`"
+at = "the first suffix that breaks the rule"
+sources = ["ADR 0031", "#115"]
+
+[[diagnostic]]
+code = "can't write"
+raised_when = "A Container is rooted in a Constant, a Lambda puts into a captured local, or `set` writes a read-only property of a Host Object whose kind is known at load"
+at = "the Container's root, or `set`"
+sources = ["ADR 0016", "ADR 0025", "#115"]
+
+[[diagnostic]]
+code = "not a property"
+raised_when = "`set` writes a bare variable, not a key of a Host Object"
+at = "`set`"
+sources = ["ADR 0016", "#115"]
+
+[[diagnostic]]
+code = "not constant"
+raised_when = "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins"
+at = "the first token that isn't allowed"
+sources = ["ADR 0035", "#115"]
+
+[[diagnostic]]
+code = "default order"
+raised_when = "A parameter without a default follows one with a default"
+at = "the parameter"
+sources = ["ADR 0035", "#115"]
+
+[[diagnostic]]
+code = "initialiser failed"
+raised_when = "An initialiser raises an error when the unit loads"
+at = "the raising instruction's position in the source map"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "nothing to fold"
+raised_when = "`ignoring case` follows `is a`, `can be` or `is empty`, which compare no text"
+at = "`ignoring`"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "no item chunk"
+raised_when = "`delimited by` ends a Chunk Expression chain that has no `item` chunk"
+at = "`delimited`"
+sources = ["#115"]
+
+[[diagnostic]]
+code = "capture in repetition"
+raised_when = "A Text Pattern's Capture is inside a repetition"
+at = "the Capture's name"
+sources = ["ADR 0007", "#115"]
+
+[[diagnostic]]
+code = "rest not last"
+raised_when = "A `...` or `...rest` is anywhere but last in a list pattern or a Binary Pattern"
+at = "the `...`"
+sources = ["ADR 0013", "#115"]
+
+[[diagnostic]]
+code = "bits not whole bytes"
+raised_when = "A run of bit fields in a Binary Pattern or a `<< … >>` build doesn't add up to whole bytes"
+at = "the run's first field"
+sources = ["ADR 0013", "#115"]

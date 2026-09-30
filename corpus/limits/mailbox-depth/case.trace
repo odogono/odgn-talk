@@ -21,8 +21,8 @@ send sender/r1 to=sink message=note args=[1]
 send sender/r1 to=sink message=note args=[2]
 raise sender/r1 code="mailbox full" at=sender:10 pos=11:7
 call sender/r1.c1 op=log.write args=["full at 3"]
-seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=141 alloc=282 state=72 end=return
-run sender/r1 outcome=completed delivery=d1 handler=flood fuel=141 alloc=282
+seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=141 alloc=186 state=72 end=return
+run sender/r1 outcome=completed delivery=d1 handler=flood fuel=141 alloc=186
 # `sink` has its turns once `sender` has none left, loaded order first.
 seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=12 alloc=24 state=88 end=return
 run sink/r1 outcome=completed handler=note fuel=12 alloc=24

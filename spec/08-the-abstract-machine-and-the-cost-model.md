@@ -338,7 +338,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 
 - **Calling a body:** `call`, `call-import`, `call-handler` and `call-value` pop their arguments and push a new frame for the callee's body, with the arguments in slots 1 on and every other local Nothing. The callee's `return` pops its result and its frame, and pushes the result onto the caller's stack.
 - **Defaults:** a call to a function that passes fewer arguments than it has parameters fills each missing one from its default's definition ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)). The loader has checked the count.
-- **Handlers:** `call-handler` and `call-handler-wait`, like a Delivery, try the Handler's clauses in order. For each clause whose parameter count matches the argument count, it pushes a frame for the clause body and runs it. A clause body that reaches `clause-fail` is popped, and the next clause is tried. If none matches, `call-handler` raises `no match`, and a Delivery ends as `unhandled` ([chapter 5](05-handlers-messages-and-scheduling.md)). Each clause tried is charged as an instruction of the Run.
+- **Handlers:** `call-handler` and `call-handler-wait`, like a Delivery, try the Handler's clauses in order. For each clause whose parameter count matches the argument count, it pushes a frame for the clause body and runs it. A clause body that reaches `clause-fail` is popped, and the next clause is tried. If none matches, `call-handler` raises `no match`, and a Delivery ends as `unhandled` ([chapter 5](05-handlers-messages-and-scheduling.md)). Each clause tried is charged at its body's first instruction ([Charging](#charging)).
 - **Built-ins:** `call-builtin` runs the Built-in in place, with no frame, as one instruction. It fills missing arguments from the Built-in's defaults.
 - **Function Values:** `call-value` checks, in order, that the value is a Function Value, that it isn't stale, that its Home Script is this Script, that it can't suspend and that it takes that many arguments ([chapter 4](04-expressions-and-statements.md#calls)). `call-value-wait` makes the same local call, suspending if the body does, or sends a foreign call to the Home Script and waits for its reply.
 - **Lambdas:** a Lambda body's frame has its captured values in its capture slots, from the Function Value.
@@ -571,7 +571,7 @@ Each code unit has one Unwind Table, whose entries are part of its disassembly (
   - **`finally`:** with the error on the Run's cleanup stack. The `end-cleanup` at the copy's end raises it again, and an error raised in the copy replaces it, with the old one as `during` ([chapter 6](06-errors-and-limits.md)).
   - **`guard`:** with nothing, so the clause or branch fails.
 - **No entry:** the frame is popped, and unwinding goes on at the caller's call instruction. Unwinding is charged per frame popped.
-- **Cancellation** runs each `finally` entry's cleanup copy whose range holds a frame's pc, innermost first, with the cancellation on the cleanup stack ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
+- **Cancellation** runs each `finally` entry's cleanup copy whose range holds a frame's pc, innermost first, with the cancellation on the cleanup stack ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)). It isn't unwinding: it charges no `unwind`, and a frame with no `finally` entry left to run is dropped, not popped by an error.
 - **Entering a `try`** costs nothing, since it has no instruction.
 
 ## The event table
@@ -723,12 +723,14 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 ### Charging
 
 - **At the instruction:** each instruction is charged its key's Fuel formula and its allocation formula, together, when it runs, with every measure taken from the values it works on. If either takes the Run past its limit, the Run has a Limit Fault at that instruction, before it does anything ([chapter 6](06-errors-and-limits.md#limit-faults)).
-- **Fuel first:** Fuel is checked before allocation, so a Run past both faults on Fuel.
+- **Its own limit first:** an instruction that has a limit of its own checks it before its charge: a call checks the call depth, `make-pattern` the Text Pattern size, and `join-ask` and `join-send` `MaxJoin`. One that passes it faults on that limit, and is never charged. So `make-pattern` compiles its program and measures it, and is charged by its size only when it fits.
+- **Fuel next:** Fuel is checked before allocation, so a Run past both faults on Fuel.
 - **A Built-in** is charged by its own rate, `builtin.<name>`, in place of `call-builtin`'s key.
-- **Dispatch** charges the `clause` rate for each Handler Clause it tries, as it tries it, on top of the clause body's own instructions ([chapter 5](05-handlers-messages-and-scheduling.md)).
-- **Unwinding** charges the `unwind` rate at the instruction that raised, for the frames it pops, before any of them is popped ([chapter 6](06-errors-and-limits.md)).
+- **Dispatch** charges the `clause` rate for each Handler Clause it tries, at the clause body's first instruction, added to that instruction's own charge. So a Run that can't pay for a clause faults at that instruction, with its position, and the clause is never tried. This holds for a Delivery's dispatch and for `call-handler` and `call-handler-wait` ([chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Unwinding** charges the `unwind` rate at the instruction that raised, for the frames it pops, before any of them is popped ([chapter 6](06-errors-and-limits.md)). A cancellation unwinds nothing, so it charges no `unwind` ([below](#the-unwind-table)).
 - **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
 - **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited.
+- **Cleanup:** a cancelled Run's `finally` blocks are charged as any code is, but to its Cleanup Budget, not to its Fuel ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **Not charged:** loading a code unit and running its initialiser, NFC when a Host builds a text value, and the Host's own work.
 - **Fuel Slices** count the same Fuel ([chapter 5](05-handlers-messages-and-scheduling.md#fuel-slices)).
 
@@ -842,9 +844,10 @@ Cost Model **0**.
 | `bytes-field` | `3 + bytes(input) / 8` | `size(result)` | the field's value |
 | `match` | `6 + steps` | `size(result)` | the text matched |
 | `iterate` | `2` | `24` | an iterator shares its list or range, so only the iterator itself is new |
+| `next` | `2` | 0 | the item is part of the snapshot the iterator shares, and a Match is part of the replacement, so nothing is new |
 | `make-closure` | `4 + count` | `size(result)` |  |
 | `call` | `8` | 0 |  |
-| `clause` | `4` | 0 | each Handler Clause a dispatch tries, charged as it is tried |
+| `clause` | `4` | 0 | each Handler Clause a dispatch tries, charged at the clause body's first instruction |
 | `return` | `2` | 0 |  |
 | `test` | `1` | 0 |  |
 | `bin-field` | `2 + bytes(result) / 8 + scalars(result) / 8` | `size(result)` |  |
@@ -910,6 +913,20 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `hasTime` | `2` | 0 |  |
 | `toCivil` | `10` | `size(result)` |  |
 | `toInstant` | `10` | `size(result)` |  |
+
+<!-- end -->
+
+### Changes to Cost Model 0
+
+Cost Model 0 is provisional, and no case is blessed against it, so it changes in place, and each change is listed in [`costs.toml`](data/costs.toml). From Cost Model 1 on, a change is a new version.
+
+<!-- generated: costs.changes -->
+
+| Issue | Change |
+| --- | --- |
+| [#115](https://github.com/odogono/odgn-talk/issues/115) | `next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass |
+| [#115](https://github.com/odogono/odgn-talk/issues/115) | Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position |
+| [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |
 
 <!-- end -->
 
