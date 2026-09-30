@@ -19,10 +19,11 @@ run knight/r1 outcome=completed delivery=d1 handler=beforeMove fuel=38 alloc=16
 pumped state=idle fuel=38
 
 # A move to the square it stands on hits the bare `veto`, whose reason is
-# Nothing.
+# Nothing. A Nothing value isn't written, so its `seg` has no `value`, but
+# its `vetoes` entry keeps `reason: nothing`.
 > decide d2 to=<object piece "knight"> message=beforeMove args=[{from: "c3", to: "c3"}]
 > pump clock=2026-09-30T10:00:01Z
-seg knight/r2 start delivery=d2 handler=beforeMove clause=1 fuel=30 alloc=16 state=84 end=veto value=nothing
+seg knight/r2 start delivery=d2 handler=beforeMove clause=1 fuel=30 alloc=16 state=84 end=veto
 decided d2 verdict=vetoed vetoes=[{script: "knight", run: "knight/r2", reason: nothing}]
 run knight/r2 outcome=completed delivery=d2 handler=beforeMove fuel=30 alloc=16
 pumped state=idle fuel=30
