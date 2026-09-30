@@ -79,7 +79,8 @@ const (
 )
 
 // ErrMailboxFull is load shedding, not a bug: the Host decides whether to
-// drop, retry or answer 503.
+// drop, retry or answer 503. It counts the Deliveries already queued to the
+// Script, and a Delivery accepted at the call is never refused later.
 var ErrMailboxFull error
 
 // ScriptError is an ordinary, catchable Error inside the Script (ADR 0017).
@@ -335,8 +336,9 @@ func (c *Call) Context() context.Context // cancelled when the call is abandoned
 func (c *Call) Charge(fuel int64) error
 
 // Answer, AnswerWithCost and Fail settle a Suspending call. They are safe from
-// any goroutine and queue a Host Input. An answer to a call whose Run has
-// ended is ignored. AnswerWithCost carries a cost known only now, charged when
+// any goroutine and queue a Host Input, into the Group that made the Call,
+// never one restored from a save of it. An answer to a call that isn't
+// pending (abandoned, its Run ended, or discarded by a restore) is ignored. AnswerWithCost carries a cost known only now, charged when
 // the Run resumes, where it can fault.
 func (c *Call) Answer(v Value)
 func (c *Call) AnswerWithCost(v Value, fuel int64)
@@ -922,9 +924,12 @@ type PendingCall struct {
 	Args      []Value
 }
 
-// Settle settles one restored call, a worker call before the first Pump. A
-// call still unsettled at the first Pump fails as `call lost`. For adopt it
-// returns the Call the Host answers or fails through, and nil otherwise.
+// Settle settles one restored call before the first Pump. Any goroutine; it
+// is queued, and the first Pump drains it. A call id that isn't pending, one
+// already settled, or a Settle once the first Pump has started, is refused at
+// the call with "unknown call". A call still unsettled at the first Pump fails
+// as `call lost`. For adopt it returns the Call the Host answers or fails
+// through, and nil otherwise.
 func (g *Group) Settle(id CallID, s Settlement) (*Call, error)
 
 // Settlement is exactly one of these.

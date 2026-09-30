@@ -502,6 +502,12 @@ optional = true
 is = "the Grants the Host doesn't re-bind, each as `<script>.<granted name>`, which restore as revoked"
 
 [[record.key]]
+key = "withheld"
+type = "ids"
+optional = true
+is = "the Libraries the Host doesn't pass, by name, so a save that needs one is a mismatch"
+
+[[record.key]]
 key = "fingerprint"
 type = "hex"
 filled = true

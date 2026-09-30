@@ -1,0 +1,7 @@
+-- sink.talk: the host-mailbox-depth case, loaded with a mailbox depth of 1.
+
+script variable got = []
+
+on note n
+  put n after got
+end note

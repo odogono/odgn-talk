@@ -2,8 +2,11 @@
 # that joining two Host texts normalises the seam (chapter 3, Text; ADR
 # 0030). The Request's second argument is a lone U+0301, which is already
 # NFC and one Character, so it is written literally. Joined after "e", it
-# composes to U+00E9, one Character, which is the Request's result. Fuel,
-# allocation and state figures are estimates.
+# composes to U+00E9, one Character, which is the Request's result. A Host
+# text that isn't NFC can't be written here, since the Core writes the
+# Request back as the NFC value it built, so the Value Encoding case
+# `text-model/host-text-normalised-to-nfc` pins the constructor normalising
+# one. Fuel, allocation and state figures are estimates.
 # Unblessed: the output lines are written by hand, not by bless.
 
 > load joiner

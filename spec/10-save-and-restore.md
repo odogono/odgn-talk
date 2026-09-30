@@ -1,6 +1,6 @@
 # 10. Save and restore
 
-_Draws on:_ [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72).
+_Draws on:_ [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0038](../docs/adr/0038-settling-a-restored-call-is-a-queued-host-input.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72).
 
 A Host can save a whole Group between Pumps and restore it later on the same Core family. It can also change a loaded Script's code, by reloading it or by extending it. This chapter states what each keeps and what each discards.
 
@@ -59,7 +59,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 1. **Reading:** a save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
 2. **Libraries:** the Host passes compiled Libraries for the saved identities. The Core matches them by identity, and a Library it needs that isn't given is a mismatch.
-3. **Grants:** the Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too.
+3. **Grants:** the Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
 4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts and limits, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one and the save-format version is its own, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, and `VariablesOnly` does a [variables-only restore](#variables-only-restore).
 5. **Host Objects:** the Host's `Resolve` function turns each saved `(kind, id)` into a native object. An id it can't resolve restores as a disposed Host Object, and its `[kind, id]` is listed in the result's `Disposed`.
 6. **Text Patterns** are recompiled from their source, charging nothing.
@@ -73,7 +73,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 ### Settling pending calls
 
-Each pending call is a suspending Operation call that hadn't been answered when the save was made. The Host settles each one with `Group.Settle(callID, settlement)`, before the first Pump, with exactly one of these:
+Each pending call is a suspending Operation call that hadn't been answered when the save was made. The Host settles each one with `Group.Settle(callID, settlement)`, a queued call ([chapter 9](09-embedding.md#threads-and-the-input-queue)), before the first Pump, with exactly one of these:
 
 - **Answer:** the call succeeds with the value, as `Answer` would. Converting it is charged when the Run resumes.
 - **Fail:** the call fails with the error, as `Fail` would.
@@ -82,7 +82,7 @@ Each pending call is a suspending Operation call that hadn't been answered when 
 
 - **In order:** the settlements are Host Inputs, queued, and drained by the first Pump in the order they were made, at step 2 ([chapter 5](05-handlers-messages-and-scheduling.md#a-pump)). Then every call still unsettled fails in its Script with `call lost`, in call id order, before any timer fires. So an unsettled call is `call lost` even when its deadline has also passed.
 - **Deadlines:** a settled call's `maxPending` or `MaxWait` deadline keeps its saved Instant. A reissued or adopted call overdue at the first Pump times out at step 3, unless it has been answered by then.
-- **Misuse:** settling a call id that isn't pending, settling one twice, or settling after the first Pump, is the Host error `unknown call`.
+- **Misuse:** settling a call id that isn't pending, settling one twice, or settling once the first Pump has started, is the Host error `unknown call`. Each is known at the call, so `Settle` returns it, and nothing is queued.
 
 - **Joins:** each member is settled on its own. A Join still waits for all its members, and one member's failure fails the Join as usual ([chapter 5](05-handlers-messages-and-scheduling.md#joins)).
 - **Fire-and-forget and immediate calls** never pend, so they never need settling.
@@ -99,6 +99,7 @@ A variables-only restore rebuilds each Script from its saved source and then eac
 
 - **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked Grants. Host Objects are kept, and resolved as for a full restore.
 - **Discarded:** every Run, suspended, parked or preempted, the mailbox, the work queue, the input queue, each Broadcast in progress and the Fuel Slice debt. Runs are discarded with no `finally`. The result lists the discarded Runs in `DiscardedRuns`, the dropped Deliveries (the mailboxes' and the input queue's) in `DroppedMessages`, and the abandoned calls in `AbandonedCalls`, so the Host can cancel the ones it still has. `Pending` is empty.
+- **Late answers:** an answer or failure for an abandoned call is recorded and ignored, as for any call that isn't pending ([chapter 9](09-embedding.md#capabilities)). A Host reaches the restored Group with one only over the message layer, since a `Call` from before the save answers into the Group that made it.
 - **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, undecided, `cancelled` ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **Function Values** are kept, but they are stale: calling one raises `function gone` ([chapter 3](03-values.md#function-values)).
 - **Failing as a whole:** if any Script no longer loads, the restore fails with its `LoadError`. If any Script's carried-over Script Variables would exceed its Persistent State cap, the restore fails with the Host error `state too large`. Either way, nothing is made.

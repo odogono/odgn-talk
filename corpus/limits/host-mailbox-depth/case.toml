@@ -1,0 +1,15 @@
+# host-mailbox-depth: a Host Delivery is refused with `MailboxFull` at the
+# call when the mailbox and the Deliveries already queued to the Script fill
+# its depth, and one accepted at the call always joins the mailbox at the
+# drain, even past the depth (chapter 9, Deliveries; chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "sink"
+source = "sink.talk"
+limits = { mailboxDepth = 1 }

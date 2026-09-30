@@ -5,10 +5,11 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | Directory | What its cases pin |
 | --- | --- |
 | [`examples/`](examples/) | worked examples of the format |
-| [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, and overdue `wait`s after a restore ([chapter 10](../spec/10-save-and-restore.md)) |
+| [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, Grants and Libraries the Host no longer has, and overdue `wait`s after a restore ([chapter 10](../spec/10-save-and-restore.md)) |
 | [`limits/`](limits/) | exhaustion points, Segment rollback, virtual-Clock deadlines, and each counted limit at its conformance minimum ([chapter 6](../spec/06-errors-and-limits.md)) |
 | [`text-patterns/`](text-patterns/) | successive searches past empty matches, leftmost-first `or`, greedy defaults, matching Fuel, and pattern size and repetition limits ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs)) |
-| [`text-model/`](text-model/) | whole-Character boundaries, NFC at join seams, `word` and `word break` on punctuation, chunk padding on writes, and out-of-range reads ([chapter 3](../spec/03-values.md)) |
+| [`text-model/`](text-model/) | whole-Character boundaries, NFC at join seams and at the Host's text constructor, `word` and `word break` on punctuation, chunk padding on writes, and out-of-range reads ([chapter 3](../spec/03-values.md)) |
+| [`errors/`](errors/) | whole error maps, with their keys in order ([chapter 6](../spec/06-errors-and-limits.md#errors)) |
 | [`decisions/`](decisions/) | Decisions and their Verdicts ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
 
 ## The seed cases are unblessed

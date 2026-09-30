@@ -14,7 +14,7 @@
 // Clock reading. stop and cancelRun land at the latest at the running Pump's
 // next Host crossing (an Operation or property call) or its end, and may land
 // sooner, between instructions. A worker call (load, reload, extend, addLibrary,
-// replaceLibrary, pump, save, settle, inspect) made from inside the Group's own Pump,
+// replaceLibrary, pump, save, inspect) made from inside the Group's own Pump,
 // from an Operation function say, throws HostError "reentrant call".
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export declare class HostError extends Error {
   readonly code: HostErrorCode;
 }
 
-/** Load shedding, not a bug. */
+/** Load shedding, not a bug. Counts the Deliveries already queued to the Script. */
 export declare class MailboxFull extends Error {}
 
 /**
@@ -216,7 +216,10 @@ export interface Call<B> {
   readonly signal: AbortSignal; // aborted when the call is abandoned, including by a timeout
   /** Legal only while starting. Throws LimitReached. */
   charge(fuel: number): void;
-  /** Queued. Ignored once the Run has ended. */
+  /**
+   * Queued, into the Group that made this Call, never one restored from it.
+   * Ignored once the call isn't pending: abandoned, its Run ended, or discarded by a restore.
+   */
   answer(v: Value, lateCost?: { fuel: number }): void;
   fail(e: ScriptError): void;
 }
@@ -436,8 +439,11 @@ export interface Group {
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
   inspect(): Inspection;
-  /** Worker, before the first Pump after a restore. */
-  /** For adopt, returns the Call the Host answers or fails through. */
+  /**
+   * Queued, before the first Pump after a restore. Throws HostError "unknown call"
+   * for a call that isn't pending, one already settled, or once the first Pump has
+   * started. For adopt, returns the Call the Host answers or fails through.
+   */
   settle(callId: string, s: Settlement): Call<any> | undefined;
 }
 

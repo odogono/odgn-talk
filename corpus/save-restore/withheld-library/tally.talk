@@ -1,0 +1,9 @@
+-- tally.talk: part of the withheld-library case. It imports nothing, so a
+-- variables-only restore rebuilds it without fmt.
+
+script variable count = 0
+
+on bump
+  add 1 to count
+  wait 10 s
+end bump

@@ -1,0 +1,10 @@
+# host-text-normalised-to-nfc: text the Host builds is normalised to NFC by
+# the constructor, so its Value Encoding is NFC (spec chapter 9, Values at the
+# boundary; chapter 11, Value Encoding cases). A Trace Case can't show this,
+# since the Core writes each Host Input back as the NFC value it built.
+
+kind = "encoding"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"

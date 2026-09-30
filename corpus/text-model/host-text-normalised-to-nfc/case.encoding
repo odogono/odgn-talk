@@ -1,0 +1,15 @@
+# host-text-normalised-to-nfc: each value is read as the code points written,
+# built through the Host's text constructor, which normalises it to NFC, and
+# encoded. The encoded text is written as raw UTF-8, since the Value Encoding
+# escapes only `"`, `\` and U+0000 to U+001F.
+# Unblessed: the bytes are written by hand, not by bless.
+#
+# "e" then U+0301 COMBINING ACUTE ACCENT composes to U+00E9.
+"e" & fromCodePoint(769) => "é"
+# U+212B ANGSTROM SIGN is a singleton, and becomes U+00C5.
+fromCodePoint(8491) => "Å"
+# A mark with nothing to compose with stays as it is.
+fromCodePoint(769) => "́"
+# Inside a list and a map key, too.
+["e" & fromCodePoint(769)] => ["é"]
+{"e" & fromCodePoint(769): 1} => {"é":1}

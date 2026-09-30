@@ -1,0 +1,6 @@
+-- fmt.talk: the Library the withheld-library case's restore isn't passed.
+-- No Script imports it, so every Script still loads without it.
+
+function label n
+  return "No. " & n
+end label

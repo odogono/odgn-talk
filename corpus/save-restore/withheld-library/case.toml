@@ -1,0 +1,18 @@
+# withheld-library: a restore the Host doesn't pass a Library the save needs
+# is a mismatch, and with the `VariablesOnly` policy it is variables-only
+# (spec chapter 10, "Restoring", steps 2 and 4; chapter 11, `restore`).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[scripts]]
+name = "tally"
+source = "tally.talk"

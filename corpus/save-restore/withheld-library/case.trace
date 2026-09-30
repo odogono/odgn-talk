@@ -1,0 +1,31 @@
+# withheld-library: pins that `withheld` sets up a mismatch without a
+# `replace-library`.
+#
+# - The Group holds fmt, so the save's Group Fingerprint covers fmt's code
+#   identity. The runner leaves fmt out of the Libraries it passes the
+#   restore, so the Fingerprint it computes differs.
+# - With `mismatch=variables-only` the restore is variables-only, not
+#   refused. tally imports nothing, so it still loads. Its Run tally/r1,
+#   suspended in its `wait`, is discarded, and `count` is kept.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> add-library fmt
+> load tally
+
+> deliver d1 to=tally message=bump
+> pump clock=2026-09-30T10:00:00Z
+seg tally/r1 start delivery=d1 handler=bump clause=1 fuel=9 alloc=0 state=24 end=wait until=2026-09-30T10:00:10Z
+pumped state=idle fuel=9 next=2026-09-30T10:00:10Z
+
+> save s1
+> restore from=s1 mismatch=variables-only withheld=[fmt] mode=variables-only discarded=[tally/r1]
+
+# The discarded Run's wait is gone, so the only deadline is tally/r2's.
+> deliver d2 to=tally message=bump
+> pump clock=2026-09-30T10:00:01Z
+seg tally/r2 start delivery=d2 handler=bump clause=1 fuel=9 alloc=0 state=24 end=wait until=2026-09-30T10:00:11Z
+pumped state=idle fuel=9 next=2026-09-30T10:00:11Z
+
+> vars
+vars tally count=2

@@ -1,0 +1,33 @@
+# fail-error-map: pins the whole map a Host `Fail` raises, which a case that
+# catches the error never prints. Nothing catches it, so the Run ends
+# `errored` and its `run` record writes the map, with its keys in chapter 6's
+# order:
+#
+# - `code` and `message`, as the Host gave them. A Host-made `message` is
+#   kept, since only a Core-raised one's wording is outside parity.
+# - The `Data` entries, in the order the Host gave them (`due`, then `left`),
+#   not the order the Operation declares them.
+# - `capability`, `operation` and `at`, which the Core adds. `at` is the
+#   `ask … and wait` (shop:3, pos 5:3).
+#
+# shop has no `on error`, so the `error` message is dropped, with no record.
+# Fuel, allocation and state figures are estimates.
+# Unblessed: the output lines are written by hand, not by bless.
+
+> load shop
+
+> deliver d1 to=shop message=check args=["A1"]
+> pump clock=2026-09-30T10:00:00Z
+call shop/r1.c1 op=stock.check args=["A1"]
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=103 alloc=0 state=0 end=ask-wait
+pumped state=idle fuel=103 next=2026-09-30T10:00:30Z
+
+> fail shop/r1.c1 error={code: "out of stock", message: "None left", due: "Friday", left: 0}
+> pump clock=2026-09-30T10:00:01Z
+raise shop/r1 code="out of stock" at=shop:3 pos=5:3
+seg shop/r1 resume fuel=6 alloc=160 state=0 end=error
+run shop/r1 outcome=errored delivery=d1 handler=check error={code: "out of stock", message: "None left", due: "Friday", left: 0, capability: "stock", operation: "check", at: {unit: "shop", handler: "check", line: 5, column: 3}} fuel=109 alloc=160
+pumped state=idle fuel=6
+
+> vars
+vars shop

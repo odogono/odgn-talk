@@ -96,7 +96,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 - **`send m with args to x`** puts the message at the back of the receiver's mailbox and returns at once. It isn't a Suspension Point. The receiver is `me`, another Script of the Group, or a Host Object. Across Groups, the Host routes.
 - **Order:** mailboxes are FIFO, so two messages from one sender to one receiver are dispatched in the order they were sent.
 - **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too.
-- **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent.
+- **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
 - **A disposed object:** a `send` to a disposed Host Object raises `object gone`, with `object`, before anything is sent.
 - **`send … and wait`** sends the same way, then suspends until the message is ended. The reply is left in `it`. If no reply comes, the Run raises `send failed`, with `reason`: the outcome of the receiver's Run (`errored`, `limit fault`, `cancelled`, `unhandled` or `dropped`), or `stopped`. For `errored`, `error` is the receiver's error map ([chapter 6](06-errors-and-limits.md#errors-across-scripts)).
 - **The receiver's limits:** a Run started by a Script's own `send` runs on the receiving Script's limits.
@@ -256,7 +256,7 @@ A Group makes progress only inside a Pump ([ADR 0015](../docs/adr/0015-the-host-
 A Pump does these steps, in order:
 
 1. **Reads the Clock:** it takes its one Clock reading. A reading earlier than the last Pump's is the Host error `clock backwards`.
-2. **Drains the input queue** in call order. A Delivery joins the back of its receiver's mailbox. An answer or a failure settles its call, which makes the waiting Run ready, unless it waits in a Join with members still pending.
+2. **Drains the input queue** in call order. A Delivery joins the back of its receiver's mailbox, even past its depth, since the depth was checked at the call ([chapter 9](09-embedding.md#deliveries)). An answer or a failure settles its call, which makes the waiting Run ready, unless it waits in a Join with members still pending.
 3. **Fires due timers:** every `wait`, `wait for` timeout, `after` branch, `maxPending` and `MaxWait` whose deadline is at or before the reading fires, in deadline order, and of equal deadlines, in the order they were set. Each makes its Run ready.
 4. **Runs turns** until no Script has work left, or every Script that has work has spent its Fuel Slice, or the Group's Fuel cap is spent.
 
