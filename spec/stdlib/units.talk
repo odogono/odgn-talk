@@ -1,0 +1,96 @@
+-- The `units` Library. Chapter 7 says what each export does, and this source
+-- does exactly that (ADR 0021). It is normative Spec text: its private
+-- helpers, its Fuel and the order of its calls are fixed here.
+--
+-- Temperature Units are differences only (ADR 0022), so an absolute
+-- temperature is a plain number. Each function computes exactly its entry's
+-- expression, left to right.
+
+function celsiusToFahrenheit c
+  needNumber(c)
+  return c * 9 / 5 + 32
+end celsiusToFahrenheit
+
+function fahrenheitToCelsius f
+  needNumber(f)
+  return (f - 32) * 5 / 9
+end fahrenheitToCelsius
+
+function celsiusToKelvin c
+  needNumber(c)
+  return c + 273.15
+end celsiusToKelvin
+
+function kelvinToCelsius k
+  needNumber(k)
+  return k - 273.15
+end kelvinToCelsius
+
+function fahrenheitToKelvin f
+  needNumber(f)
+  return (f - 32) * 5 / 9 + 273.15
+end fahrenheitToKelvin
+
+function kelvinToFahrenheit k
+  needNumber(k)
+  return (k - 273.15) * 9 / 5 + 32
+end kelvinToFahrenheit
+
+-- The helpers below are the same in every stdlib Library. They raise the
+-- catalogue errors of chapter 6, with the catalogue's message templates.
+
+private function kindOf v
+  if v is nothing then return "nothing"
+  if v is a boolean then return "boolean"
+  if v is a number then return "number"
+  if v is a quantity then return "quantity"
+  if v is a text then return "text"
+  if v is a bytes then return "bytes"
+  if v is a list then return "list"
+  if v is a map then return "map"
+  if v is a range then return "range"
+  if v is an instant then return "instant"
+  if v is a civil date then return "civil date"
+  if v is a pattern then return "pattern"
+  if v is a function then return "function"
+  return "object"
+end kindOf
+
+private function shown v
+  if v is a text then return quote & v & quote
+  return "" & v
+end shown
+
+private function wrongKind expected, v
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v, message: "Expected " & shown(expected) & ", but got " & shown(got) & ": " & shown(v)}
+end wrongKind
+
+private function outOfDomain fn, v
+  throw {code: "out of domain", function: fn, value: v, message: shown(v) & " is outside the domain of " & shown(fn)}
+end outOfDomain
+
+private function needText v
+  if v is not a text then wrongKind("text", v)
+end needText
+
+private function needNumber v
+  if v is not a number then wrongKind("number", v)
+end needNumber
+
+private function needInteger v
+  if v is not a number then wrongKind("number", v)
+  if v is not an integer then wrongKind("integer", v)
+end needInteger
+
+private function needList v
+  if v is not a list then wrongKind("list", v)
+end needList
+
+private function needMap v
+  if v is not a map then wrongKind("map", v)
+end needMap
+
+private function needFunction v
+  if v is not a function then wrongKind("function", v)
+end needFunction

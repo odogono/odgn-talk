@@ -440,3 +440,10 @@ end sortBy
 function f a, b =
   return a
 end f
+-- case: parses: `function` is the one Reserved Word that names a kind
+-- expect: parses
+on t f
+  if f is a function then say "callable"
+  if f is not a function then say "not callable"
+  if f can be a function then say "never"
+end t

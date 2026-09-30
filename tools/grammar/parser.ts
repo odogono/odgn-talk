@@ -867,7 +867,7 @@ export class Parser {
       if (this.isWord(u, "in")) {
         this.next();
         node = { k: "is in", neg, l, r: this.concat() };
-      } else if (this.isWord(u, "a", "an") && this.isName(this.la2("is-a", "operator"))) {
+      } else if (this.isWord(u, "a", "an") && this.isKindWord(this.la2("is-a", "operator"))) {
         this.next();
         node = { k: "is a", neg, l, kind: this.kind() };
       } else if (this.isWord(u, "empty")) {
@@ -959,10 +959,16 @@ export class Parser {
     }
   }
 
-  // A kind or Unit name: any word but a Reserved Word, or `civil date`.
+  // A word that can start a kind: a Name, or `function`, the one Reserved
+  // Word that names a kind.
+  isKindWord(t: Token): boolean {
+    return this.isName(t) || this.isWord(t, "function");
+  }
+
+  // A kind or Unit name: any word but a Reserved Word, `function`, or `civil date`.
   kind(mode: Mode = "operand"): string {
     const t = this.peek(0, mode);
-    if (!this.isName(t)) this.fail(t, "a kind or Unit");
+    if (!this.isKindWord(t)) this.fail(t, "a kind or Unit");
     if (this.isWord(t, "civil") && this.isWord(this.la2("kind", mode === "operand" ? "operator" : mode), "date")) {
       this.next(mode);
       this.next(mode);

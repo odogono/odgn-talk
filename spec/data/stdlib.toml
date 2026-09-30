@@ -704,7 +704,6 @@ library = "date"
 name = "isLeapYear"
 call = "isLeapYear(y)"
 gives = "Whether the integer `y` is a leap year in the proleptic Gregorian calendar"
-errors = ["out of domain"]
 
 [[export]]
 library = "date"

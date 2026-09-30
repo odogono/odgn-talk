@@ -103,7 +103,8 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 - **Written in the language:** each stdlib Library's source is normative Spec text, with Disassembly Cases like any Library's. This chapter states what each export does, and the source does exactly that. The source also fixes what this chapter leaves to it: its private helpers, its Fuel, and the order of any calls it makes where this chapter doesn't give one.
 - **Operation names** are their own namespace, so an Operation may share a name with a stdlib function, as `locale`'s `upper` does with the `upper` Built-in.
 
-> **Note.** The stdlib Libraries' source isn't written yet. [#103](https://github.com/odogono/odgn-talk/issues/103) writes it against this chapter.
+- **The source** is [`spec/stdlib/`](stdlib/), one `.talk` file per Library: [`text`](stdlib/text.talk), [`list`](stdlib/list.talk), [`map`](stdlib/map.talk), [`bytes`](stdlib/bytes.talk), [`json`](stdlib/json.talk), [`date`](stdlib/date.talk) and [`units`](stdlib/units.talk). `bun run grammar:check` parses them, and the generator checks that each exports exactly what [`stdlib.toml`](data/stdlib.toml) lists, with the same parameters and defaults.
+- **Errors from stdlib source:** a stdlib Library raises a catalogue error with `throw`, as any Library can, giving the catalogue's fields and a `message` from its template ([chapter 6](06-errors-and-limits.md#messages)). So its `at` names the stdlib Library, and since it is thrown by source, its `message` is data and the Trace keeps it.
 
 ### Rules for every stdlib function
 
@@ -521,7 +522,7 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 | `atTime(d, h, mi, s = 0, ns = 0)` | The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds | `out of range` |
 | `dateOnly(d)` | The date of the Civil Date `d`, without its time of day |  |
 | `daysInMonth(d)` | The number of days in the month of the Civil Date `d` |  |
-| `isLeapYear(y)` | Whether the integer `y` is a leap year in the proleptic Gregorian calendar | `out of domain` |
+| `isLeapYear(y)` | Whether the integer `y` is a leap year in the proleptic Gregorian calendar |  |
 | `formatDate(d, template)` | The Civil Date `d` written by `template` | `out of domain` |
 | `parseDate(t, template)` | The Civil Date the text `t` writes by `template` | `can't convert`, `out of domain`, `out of range` |
 | `splitDuration(d)` | The exact duration `d` as the map `{days, hours, minutes, seconds}` | `incompatible units` |
