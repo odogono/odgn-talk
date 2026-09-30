@@ -56,6 +56,7 @@ A Function Value is `<function`, a space, its Home Script and where its code is,
 A Text Pattern's canonical source is its source written on one line, with its splices resolved. Two Text Patterns are equal when their canonical sources are ([chapter 3](03-values.md#equality)).
 
 - **Its shape:** `<`, its elements separated by `, `, then `>`, and `<>` with none. Alternatives are separated by ` or `, and every other word by one space.
+- **A leading group:** when the first element is a nested `<…>`, one space follows the opening `<`, as in `< <4 digits>, "x">`. So no canonical source starts with `<<`, which starts Bytes, here and in source ([chapter 1](01-lexical-structure.md#modes)).
 - **Kept as written:** the elements, their grouping into nested `<…>`, singular and plural keywords, and counts. So `<digit, digit>` and `<2 digits>` are unequal, though they match the same text.
 - **A text literal** is written between quotes, in NFC, when its display form is a single quoted piece. Otherwise it is written as its display form in parentheses, which splices the same text: `(quote & "x")`.
 - **Keywords, classes, anchors and `a number`** are their words: `uppercase letters`, `text start`, `a number`.
@@ -63,10 +64,10 @@ A Text Pattern's canonical source is its source written on one line, with its sp
 - **A Capture** is `name: e`.
 - **Suffixes:** each suffix an element has, once, in the order `as number`, `ignoring case`, `lazily`.
 - **Splices:** a spliced Text Pattern is its canonical source, as a nested `<…>`. Spliced text is a text literal, as above.
-- **Empty groups:** a nested `<>` is left out, since it matches only where the rest would. So no canonical source starts with `<<`, which starts Bytes.
+- **Empty groups:** a nested `<>` is left out, since it matches only where the rest would.
 - **Not part of it:** a use-site `ignoring case`, which belongs to the operation, not the pattern ([chapter 4](04-expressions-and-statements.md#matching)).
 
-> **Example.** `< "ID" ,(sep),  (tail) >`, with `sep` holding the text `"-"` and `tail` the pattern `<0x04 digits>`, has the canonical source `<"ID", "-", <4 digits>>`. `<last: word, ", ", first: word>` is already canonical.
+> **Example.** `< "ID" ,(sep),  (tail) >`, with `sep` holding the text `"-"` and `tail` the pattern `<0x04 digits>`, has the canonical source `<"ID", "-", <4 digits>>`. `<last: word, ", ", first: word>` is already canonical. `<(tail), "x">` has the canonical source `< <4 digits>, "x">`, and `<(tail)>` has `< <4 digits>>`.
 
 ### Reading it
 
@@ -110,7 +111,8 @@ Time           ::= [0-9] [0-9] ':' [0-9] [0-9] ':' [0-9] [0-9] ( '.' [0-9]+ )?
                    /* one to nine fraction digits, the last not 0 */
 PatternValue   ::= '<' [^#xA]* '>'
                    /* a Text Pattern's canonical source, read with chapter 2's
-                      TextPattern production; `<<` starts Bytes, never this */
+                      TextPattern production; `<<` starts Bytes, never this,
+                      since a leading nested group is written `< <` */
 FunctionValue  ::= '<function ' Word ( '+' Digits )? ':' ( Word ':' )?
                    ( Digits ':' Digits | Word ) ( ' ' MapValue )? '>'
 ObjectValue    ::= '<object ' Word ' ' TextValue '>'

@@ -36,7 +36,8 @@ Time           ::= [0-9] [0-9] ':' [0-9] [0-9] ':' [0-9] [0-9] ( '.' [0-9]+ )?
                    /* one to nine fraction digits, the last not 0 */
 PatternValue   ::= '<' [^#xA]* '>'
                    /* a Text Pattern's canonical source, read with chapter 2's
-                      TextPattern production; `<<` starts Bytes, never this */
+                      TextPattern production; `<<` starts Bytes, never this,
+                      since a leading nested group is written `< <` */
 FunctionValue  ::= '<function ' Word ( '+' Digits )? ':' ( Word ':' )?
                    ( Digits ':' Digits | Word ) ( ' ' MapValue )? '>'
 ObjectValue    ::= '<object ' Word ' ' TextValue '>'
