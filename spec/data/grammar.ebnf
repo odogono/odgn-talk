@@ -45,8 +45,10 @@ Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
-Function       ::= 'function' Name ( Name ( ',' Name )* )? NL Block 'end' Name NL
+Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name NL
                    /* the Name after `end` is the function's name */
+Parameter      ::= Name ( '=' Expression )?
+                   /* a default; only trailing parameters may have one */
 Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
                    /* at a Session prompt only; decided on its first token */
 

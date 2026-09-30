@@ -430,3 +430,13 @@ on t
   if s can be
       a number then say s
 end t
+-- case: parses: trailing function parameters with defaults (ADR 0035)
+-- expect: parses
+function sortBy xs, key, direction = "ascending", places = -2
+  return xs
+end sortBy
+-- case: a parameter default with no expression (the line continues after `=`)
+-- expect: unexpected token at 2:3
+function f a, b =
+  return a
+end f

@@ -1,0 +1,942 @@
+# The Standard Library: the Built-ins, the seven stdlib Libraries' exports, the
+# text encodings `bytes` decodes, and the Standard Capabilities' Operations.
+#
+# Every stdlib name is unique across the Built-ins and all seven Libraries, and
+# none is a Reserved Word (ADR 0021). The generator checks this, and that each
+# function's parameters with defaults come last (ADR 0035). The Libraries'
+# source is normative too (ADR 0021). This file is their export list, and
+# chapter 7 states what each export does.
+#
+# Schema: schema/stdlib.schema.json. Shown in chapter 7 (regions `stdlib.*`).
+#
+# libraries      the stdlib Library names, which a Host may not register
+# capabilities   the Standard Capability names
+#
+# [[builtin]]    a Built-in function or Constant; the properties are in grammar.toml
+#   name         its name
+#   group        values, numbers, floats, dates or constants
+#   call         how it is called, with any defaults; for a Constant, its value
+#   gives        one sentence: what it gives
+#   errors       optional: the Error Codes it raises, besides `wrong kind`
+#
+# [[export]]     a function or Constant a stdlib Library exports
+#   library      the Library
+#   name, call, gives, errors   as for [[builtin]]
+#
+# [[encoding]]   a text encoding that `decodeText` and `encodeText` name
+#   name         its name, as the Script writes it
+#   bytes        one sentence: how its bytes map to code points
+#
+# [[operation]]  a Standard Capability's Operation Declaration
+#   capability   the Capability
+#   name         the Operation
+#   mode         immediate or fire-and-forget
+#   call         its arguments; [ … ] marks an optional one
+#   gives        one sentence: its result or effect
+#   errors       optional: the Error Codes it declares or the Core raises for it
+
+libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
+capabilities = ["clock", "calendar", "locale", "timer"]
+
+# ---------------------------------------------------------------------------
+# Built-ins
+# ---------------------------------------------------------------------------
+
+[[builtin]]
+name = "min"
+group = "values"
+call = "min(xs)"
+gives = "The least item of the list `xs` under `<`, the first of equal ones"
+errors = ["out of domain", "can't compare"]
+
+[[builtin]]
+name = "max"
+group = "values"
+call = "max(xs)"
+gives = "The greatest item of the list `xs` under `<`, the first of equal ones"
+errors = ["out of domain", "can't compare"]
+
+[[builtin]]
+name = "codePoint"
+group = "values"
+call = "codePoint(c)"
+gives = "The code point of `c`, a text of exactly one code point, as a number"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "fromCodePoint"
+group = "values"
+call = "fromCodePoint(n)"
+gives = "The text of the code point `n`, normalised to NFC"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "upper"
+group = "values"
+call = "upper(s)"
+gives = "`s` under Unicode full default uppercase mapping, then NFC"
+
+[[builtin]]
+name = "lower"
+group = "values"
+call = "lower(s)"
+gives = "`s` under Unicode full default lowercase mapping, then NFC"
+
+[[builtin]]
+name = "offset"
+group = "values"
+call = "offset(needle, s)"
+gives = "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none"
+
+[[builtin]]
+name = "isDisposed"
+group = "values"
+call = "isDisposed(o)"
+gives = "Whether the Host Object `o` has been disposed"
+
+[[builtin]]
+name = "abs"
+group = "numbers"
+call = "abs(x)"
+gives = "`x` without its sign"
+
+[[builtin]]
+name = "floor"
+group = "numbers"
+call = "floor(x)"
+gives = "The greatest integer at or below `x`"
+
+[[builtin]]
+name = "ceiling"
+group = "numbers"
+call = "ceiling(x)"
+gives = "The least integer at or above `x`"
+
+[[builtin]]
+name = "truncate"
+group = "numbers"
+call = "truncate(x)"
+gives = "`x` with its fraction dropped, toward zero"
+
+[[builtin]]
+name = "round"
+group = "numbers"
+call = "round(x, places = 0, mode = \"half up\")"
+gives = "`x` rounded to `places` digits after the point, by `mode`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "sqrt"
+group = "numbers"
+call = "sqrt(x)"
+gives = "The square root of `x`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "exp"
+group = "numbers"
+call = "exp(x)"
+gives = "e to the power `x`"
+errors = ["overflow"]
+
+[[builtin]]
+name = "ln"
+group = "numbers"
+call = "ln(x)"
+gives = "The natural logarithm of `x`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "log10"
+group = "numbers"
+call = "log10(x)"
+gives = "The base-10 logarithm of `x`"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "power"
+group = "numbers"
+call = "power(x, y)"
+gives = "`x` to the power `y`"
+errors = ["out of domain", "overflow"]
+
+[[builtin]]
+name = "sin"
+group = "numbers"
+call = "sin(x)"
+gives = "The sine of `x` radians"
+
+[[builtin]]
+name = "cos"
+group = "numbers"
+call = "cos(x)"
+gives = "The cosine of `x` radians"
+
+[[builtin]]
+name = "tan"
+group = "numbers"
+call = "tan(x)"
+gives = "The tangent of `x` radians"
+
+[[builtin]]
+name = "asin"
+group = "numbers"
+call = "asin(x)"
+gives = "The arcsine of `x`, in radians from -pi/2 to pi/2"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "acos"
+group = "numbers"
+call = "acos(x)"
+gives = "The arccosine of `x`, in radians from 0 to pi"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "atan"
+group = "numbers"
+call = "atan(x)"
+gives = "The arctangent of `x`, in radians between -pi/2 and pi/2"
+
+[[builtin]]
+name = "atan2"
+group = "numbers"
+call = "atan2(y, x)"
+gives = "The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "fromFloat64"
+group = "floats"
+call = "fromFloat64(b, order = \"big\")"
+gives = "The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal"
+errors = ["out of domain", "can't convert"]
+
+[[builtin]]
+name = "fromFloat32"
+group = "floats"
+call = "fromFloat32(b, order = \"big\")"
+gives = "The number an IEEE 754 binary32 float in the 4 Bytes `b` holds, as its shortest round-trip decimal"
+errors = ["out of domain", "can't convert"]
+
+[[builtin]]
+name = "toFloat64"
+group = "floats"
+call = "toFloat64(n, order = \"big\")"
+gives = "The 8 Bytes of the binary64 float nearest `n`, ties to even"
+errors = ["out of domain", "can't convert"]
+
+[[builtin]]
+name = "toFloat32"
+group = "floats"
+call = "toFloat32(n, order = \"big\")"
+gives = "The 4 Bytes of the binary32 float nearest `n`, ties to even"
+errors = ["out of domain", "can't convert"]
+
+[[builtin]]
+name = "year"
+group = "dates"
+call = "year(d)"
+gives = "The year of the Civil Date `d`, from 1 to 9999"
+
+[[builtin]]
+name = "month"
+group = "dates"
+call = "month(d)"
+gives = "The month of `d`, from 1 to 12"
+
+[[builtin]]
+name = "day"
+group = "dates"
+call = "day(d)"
+gives = "The day of the month of `d`, from 1 to 31"
+
+[[builtin]]
+name = "hour"
+group = "dates"
+call = "hour(d)"
+gives = "The hour of the date-time `d`, from 0 to 23"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "minute"
+group = "dates"
+call = "minute(d)"
+gives = "The minute of the date-time `d`, from 0 to 59"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "second"
+group = "dates"
+call = "second(d)"
+gives = "The whole seconds of the date-time `d`, from 0 to 59"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "nanosecond"
+group = "dates"
+call = "nanosecond(d)"
+gives = "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999"
+errors = ["out of domain"]
+
+[[builtin]]
+name = "weekday"
+group = "dates"
+call = "weekday(d)"
+gives = "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday"
+
+[[builtin]]
+name = "dayOfYear"
+group = "dates"
+call = "dayOfYear(d)"
+gives = "The day of the year of `d`, from 1 to 366"
+
+[[builtin]]
+name = "isoWeek"
+group = "dates"
+call = "isoWeek(d)"
+gives = "The ISO 8601 week number of `d`, from 1 to 53"
+
+[[builtin]]
+name = "isoWeekYear"
+group = "dates"
+call = "isoWeekYear(d)"
+gives = "The ISO 8601 week-numbering year of `d`"
+
+[[builtin]]
+name = "hasTime"
+group = "dates"
+call = "hasTime(d)"
+gives = "Whether the Civil Date `d` has a time of day"
+
+[[builtin]]
+name = "toCivil"
+group = "dates"
+call = "toCivil(i, offset)"
+gives = "The date-time on the wall clock at `offset` from UTC at the Instant `i`"
+errors = ["out of domain", "out of range"]
+
+[[builtin]]
+name = "toInstant"
+group = "dates"
+call = "toInstant(c, offset)"
+gives = "The Instant at which the wall clock at `offset` from UTC reads the date-time `c`"
+errors = ["out of domain", "out of range"]
+
+[[builtin]]
+name = "pi"
+group = "constants"
+call = "3.141592653589793238462643383279503"
+gives = "pi, rounded half-even to 34 digits"
+
+[[builtin]]
+name = "newline"
+group = "constants"
+call = "U+000A"
+gives = "A line feed, as text"
+
+[[builtin]]
+name = "tab"
+group = "constants"
+call = "U+0009"
+gives = "A tab, as text"
+
+[[builtin]]
+name = "quote"
+group = "constants"
+call = "U+0022"
+gives = "A double quote, as text"
+
+# ---------------------------------------------------------------------------
+# text
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "text"
+name = "pad"
+call = "pad(t, width, fill = \" \")"
+gives = "`t` with `fill` added at the end until it is `width` Characters long"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "padLeft"
+call = "padLeft(t, width, fill = \" \")"
+gives = "`t` with `fill` added at the start until it is `width` Characters long"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "trim"
+call = "trim(t)"
+gives = "`t` without the white space at its start and end"
+
+[[export]]
+library = "text"
+name = "trimStart"
+call = "trimStart(t)"
+gives = "`t` without the white space at its start"
+
+[[export]]
+library = "text"
+name = "trimEnd"
+call = "trimEnd(t)"
+gives = "`t` without the white space at its end"
+
+[[export]]
+library = "text"
+name = "split"
+call = "split(t, separator)"
+gives = "The list of the texts between the matches of `separator`, a text or a Text Pattern, in `t`"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "join"
+call = "join(xs, separator = \"\")"
+gives = "The items of `xs`, each shown as `&` shows it, with `separator` between each pair"
+
+[[export]]
+library = "text"
+name = "repeated"
+call = "repeated(t, n)"
+gives = "`n` copies of `t`, joined"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "lastOffset"
+call = "lastOffset(needle, t)"
+gives = "The Character position where the last match of `needle`, a text or a Text Pattern, starts in `t`, or 0 if there is none"
+
+[[export]]
+library = "text"
+name = "format"
+call = "format(template, values)"
+gives = "`template` with each `{name}` replaced by the value of that key of `values`, shown as `&` shows it"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "formatNumber"
+call = "formatNumber(n, symbols, places = nothing)"
+gives = "The number `n` written with a Locale's `numberSymbols`, rounded to `places` digits after the point if `places` is given"
+errors = ["out of domain"]
+
+[[export]]
+library = "text"
+name = "parseNumber"
+call = "parseNumber(t, symbols)"
+gives = "The number `t` writes with a Locale's `numberSymbols`"
+errors = ["can't convert", "out of domain"]
+
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "list"
+name = "sum"
+call = "sum(xs)"
+gives = "The items of `xs` added with `+`, left to right, or 0 for an empty list"
+errors = ["incompatible units"]
+
+[[export]]
+library = "list"
+name = "average"
+call = "average(xs)"
+gives = "The sum of `xs` divided by its length"
+errors = ["out of domain", "incompatible units"]
+
+[[export]]
+library = "list"
+name = "zip"
+call = "zip(xs, ys)"
+gives = "The list of pairs `[x, y]` of items at the same position, as long as the shorter list"
+
+[[export]]
+library = "list"
+name = "unique"
+call = "unique(xs)"
+gives = "`xs` without the items equal to an earlier item"
+
+[[export]]
+library = "list"
+name = "reverse"
+call = "reverse(xs)"
+gives = "`xs` in reverse order"
+
+[[export]]
+library = "list"
+name = "flatten"
+call = "flatten(xs)"
+gives = "`xs` with each item that is a list replaced by its items, one level deep"
+
+[[export]]
+library = "list"
+name = "sort"
+call = "sort(xs, direction = \"ascending\")"
+gives = "`xs` sorted by `<`, stably"
+errors = ["out of domain", "can't compare"]
+
+[[export]]
+library = "list"
+name = "sortBy"
+call = "sortBy(xs, key, direction = \"ascending\")"
+gives = "`xs` sorted by `<` on the value `key` gives for each item, stably"
+errors = ["out of domain", "can't compare"]
+
+[[export]]
+library = "list"
+name = "sortWith"
+call = "sortWith(xs, compare, direction = \"ascending\")"
+gives = "`xs` sorted by the two-argument comparator `compare`, stably"
+errors = ["out of domain"]
+
+[[export]]
+library = "list"
+name = "filter"
+call = "filter(xs, keep)"
+gives = "The items of `xs` for which `keep` gives true, in order"
+
+[[export]]
+library = "list"
+name = "map"
+call = "map(xs, f)"
+gives = "The list of what `f` gives for each item of `xs`, in order"
+
+[[export]]
+library = "list"
+name = "reduce"
+call = "reduce(xs, f, initial)"
+gives = "`f(f(f(initial, x1), x2), …)` over the items of `xs`, or `initial` for an empty list"
+
+[[export]]
+library = "list"
+name = "group"
+call = "group(xs, key)"
+gives = "A map from each text `key` gives to the list of items that gave it, keyed in first-seen order"
+
+[[export]]
+library = "list"
+name = "partition"
+call = "partition(xs, keep)"
+gives = "`[matching, rest]`: the items for which `keep` gives true and the others, each in order"
+
+[[export]]
+library = "list"
+name = "any"
+call = "any(xs, test)"
+gives = "Whether `test` gives true for some item, stopping at the first that does"
+
+[[export]]
+library = "list"
+name = "all"
+call = "all(xs, test)"
+gives = "Whether `test` gives true for every item, stopping at the first that doesn't"
+
+[[export]]
+library = "list"
+name = "find"
+call = "find(xs, test)"
+gives = "The first item for which `test` gives true, or Nothing"
+
+[[export]]
+library = "list"
+name = "indexOf"
+call = "indexOf(xs, value)"
+gives = "The position of the first item equal to `value`, or 0 if there is none"
+
+# ---------------------------------------------------------------------------
+# map
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "map"
+name = "merge"
+call = "merge(a, b)"
+gives = "The map with the entries of `a` and then of `b`, where `b`'s value wins for a key in both"
+
+[[export]]
+library = "map"
+name = "without"
+call = "without(m, keys)"
+gives = "`m` without the entries whose keys are in the list `keys`"
+
+[[export]]
+library = "map"
+name = "pick"
+call = "pick(m, keys)"
+gives = "`m` with only the entries whose keys are in the list `keys`, in `m`'s order"
+
+[[export]]
+library = "map"
+name = "entries"
+call = "entries(m)"
+gives = "The list of pairs `[key, value]` of `m`, in order"
+
+[[export]]
+library = "map"
+name = "fromEntries"
+call = "fromEntries(pairs)"
+gives = "The map with the entries of the list of pairs `pairs`, where a later pair wins for a repeated key"
+
+[[export]]
+library = "map"
+name = "mapValues"
+call = "mapValues(m, f)"
+gives = "`m` with each value replaced by what `f` gives for it, keys and order kept"
+
+# ---------------------------------------------------------------------------
+# bytes
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "bytes"
+name = "toHex"
+call = "toHex(b)"
+gives = "The Bytes `b` as lowercase hexadecimal text, two digits per byte"
+
+[[export]]
+library = "bytes"
+name = "fromHex"
+call = "fromHex(t)"
+gives = "The Bytes the hexadecimal text `t` writes"
+errors = ["can't convert"]
+
+[[export]]
+library = "bytes"
+name = "toBase64"
+call = "toBase64(b)"
+gives = "The Bytes `b` in the base64 alphabet of RFC 4648, padded"
+
+[[export]]
+library = "bytes"
+name = "fromBase64"
+call = "fromBase64(t)"
+gives = "The Bytes the padded base64 text `t` writes"
+errors = ["can't convert"]
+
+[[export]]
+library = "bytes"
+name = "toBase64Url"
+call = "toBase64Url(b)"
+gives = "The Bytes `b` in the base64url alphabet of RFC 4648, unpadded"
+
+[[export]]
+library = "bytes"
+name = "fromBase64Url"
+call = "fromBase64Url(t)"
+gives = "The Bytes the unpadded base64url text `t` writes"
+errors = ["can't convert"]
+
+[[export]]
+library = "bytes"
+name = "decodeText"
+call = "decodeText(b, encoding = \"utf-8\", mode = \"strict\")"
+gives = "The text the Bytes `b` hold in `encoding`, normalised to NFC"
+errors = ["can't convert", "out of domain"]
+
+[[export]]
+library = "bytes"
+name = "encodeText"
+call = "encodeText(t, encoding = \"utf-8\")"
+gives = "The Bytes of the text `t` in `encoding`"
+errors = ["can't convert", "out of domain"]
+
+# ---------------------------------------------------------------------------
+# json
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "json"
+name = "decodeJson"
+call = "decodeJson(t)"
+gives = "The value the JSON text `t` holds"
+errors = ["can't decode"]
+
+[[export]]
+library = "json"
+name = "encodeJson"
+call = "encodeJson(v)"
+gives = "The value `v` as compact JSON text"
+errors = ["not encodable"]
+
+# ---------------------------------------------------------------------------
+# date
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "date"
+name = "makeDate"
+call = "makeDate(y, m, d)"
+gives = "The date-only Civil Date `y`-`m`-`d`"
+errors = ["out of range"]
+
+[[export]]
+library = "date"
+name = "makeDateTime"
+call = "makeDateTime(y, m, d, h, mi, s = 0, ns = 0)"
+gives = "The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `ns` nanoseconds"
+errors = ["out of range"]
+
+[[export]]
+library = "date"
+name = "atTime"
+call = "atTime(d, h, mi, s = 0, ns = 0)"
+gives = "The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds"
+errors = ["out of range"]
+
+[[export]]
+library = "date"
+name = "dateOnly"
+call = "dateOnly(d)"
+gives = "The date of the Civil Date `d`, without its time of day"
+
+[[export]]
+library = "date"
+name = "daysInMonth"
+call = "daysInMonth(d)"
+gives = "The number of days in the month of the Civil Date `d`"
+
+[[export]]
+library = "date"
+name = "isLeapYear"
+call = "isLeapYear(y)"
+gives = "Whether the integer `y` is a leap year in the proleptic Gregorian calendar"
+errors = ["out of domain"]
+
+[[export]]
+library = "date"
+name = "formatDate"
+call = "formatDate(d, template)"
+gives = "The Civil Date `d` written by `template`"
+errors = ["out of domain"]
+
+[[export]]
+library = "date"
+name = "parseDate"
+call = "parseDate(t, template)"
+gives = "The Civil Date the text `t` writes by `template`"
+errors = ["can't convert", "out of domain", "out of range"]
+
+[[export]]
+library = "date"
+name = "splitDuration"
+call = "splitDuration(d)"
+gives = "The exact duration `d` as the map `{days, hours, minutes, seconds}`"
+errors = ["incompatible units"]
+
+[[export]]
+library = "date"
+name = "monthsBetween"
+call = "monthsBetween(a, b)"
+gives = "The number of whole calendar months from the Civil Date `a` to `b`, negative if `b` is earlier"
+errors = ["can't compare"]
+
+[[export]]
+library = "date"
+name = "epoch"
+call = "1970-01-01T00:00:00Z"
+gives = "The Unix epoch, as an Instant"
+
+# ---------------------------------------------------------------------------
+# units
+# ---------------------------------------------------------------------------
+
+[[export]]
+library = "units"
+name = "celsiusToFahrenheit"
+call = "celsiusToFahrenheit(c)"
+gives = "`c * 9 / 5 + 32`"
+
+[[export]]
+library = "units"
+name = "fahrenheitToCelsius"
+call = "fahrenheitToCelsius(f)"
+gives = "`(f - 32) * 5 / 9`"
+
+[[export]]
+library = "units"
+name = "celsiusToKelvin"
+call = "celsiusToKelvin(c)"
+gives = "`c + 273.15`"
+
+[[export]]
+library = "units"
+name = "kelvinToCelsius"
+call = "kelvinToCelsius(k)"
+gives = "`k - 273.15`"
+
+[[export]]
+library = "units"
+name = "fahrenheitToKelvin"
+call = "fahrenheitToKelvin(f)"
+gives = "`(f - 32) * 5 / 9 + 273.15`"
+
+[[export]]
+library = "units"
+name = "kelvinToFahrenheit"
+call = "kelvinToFahrenheit(k)"
+gives = "`(k - 273.15) * 9 / 5 + 32`"
+
+# ---------------------------------------------------------------------------
+# The text encodings `bytes` decodes and encodes
+# ---------------------------------------------------------------------------
+
+[[encoding]]
+name = "utf-8"
+bytes = "UTF-8, as the Unicode Standard defines it; a leading U+FEFF is dropped when decoding"
+
+[[encoding]]
+name = "utf-16le"
+bytes = "UTF-16, each code unit little-endian, with surrogate pairs; a leading U+FEFF is dropped when decoding"
+
+[[encoding]]
+name = "utf-16be"
+bytes = "UTF-16, each code unit big-endian, with surrogate pairs; a leading U+FEFF is dropped when decoding"
+
+[[encoding]]
+name = "latin-1"
+bytes = "ISO/IEC 8859-1: each byte is the code point of the same value, from U+0000 to U+00FF"
+
+[[encoding]]
+name = "windows-1252"
+bytes = "The windows-1252 index of the WHATWG Encoding Standard: bytes 0x80 to 0x9F map as that index says, and every other byte as in latin-1"
+
+# ---------------------------------------------------------------------------
+# Standard Capabilities
+# ---------------------------------------------------------------------------
+
+[[operation]]
+capability = "clock"
+name = "now"
+mode = "immediate"
+call = "now"
+gives = "The Pump's Clock reading, as an Instant"
+
+[[operation]]
+capability = "calendar"
+name = "today"
+mode = "immediate"
+call = "today [zone]"
+gives = "The date-only Civil Date in the zone at the Pump's Clock reading"
+errors = ["unknown zone"]
+
+[[operation]]
+capability = "calendar"
+name = "now"
+mode = "immediate"
+call = "now [zone]"
+gives = "The date-time in the zone at the Pump's Clock reading"
+errors = ["unknown zone"]
+
+[[operation]]
+capability = "calendar"
+name = "toCivil"
+mode = "immediate"
+call = "toCivil i [, zone]"
+gives = "The date-time in the zone at the Instant `i`"
+errors = ["unknown zone"]
+
+[[operation]]
+capability = "calendar"
+name = "toInstant"
+mode = "immediate"
+call = "toInstant c [, disambiguation] [, zone]"
+gives = "The Instant at which the zone's wall clock reads the date-time `c`"
+errors = ["unknown zone", "ambiguous time"]
+
+[[operation]]
+capability = "calendar"
+name = "offset"
+mode = "immediate"
+call = "offset i [, zone]"
+gives = "The zone's offset from UTC at the Instant `i`, as an exact duration"
+errors = ["unknown zone"]
+
+[[operation]]
+capability = "calendar"
+name = "zone"
+mode = "immediate"
+call = "zone [zone]"
+gives = "The IANA id of the zone in use"
+errors = ["unknown zone"]
+
+[[operation]]
+capability = "locale"
+name = "compare"
+mode = "immediate"
+call = "compare a, b [, options] [, tag]"
+gives = "-1, 0 or 1, as the text `a` sorts before, with or after `b` under the Locale's Collation"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "rank"
+mode = "immediate"
+call = "rank texts [, options] [, tag]"
+gives = "A map from each distinct text of the list `texts` to its dense, 1-based rank under the Locale's Collation"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "upper"
+mode = "immediate"
+call = "upper s [, tag]"
+gives = "`s` under the Locale's uppercase mapping, then NFC"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "lower"
+mode = "immediate"
+call = "lower s [, tag]"
+gives = "`s` under the Locale's lowercase mapping, then NFC"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "numberSymbols"
+mode = "immediate"
+call = "numberSymbols [tag]"
+gives = "The map `{decimal, group, minus, digits, primaryGroup, secondaryGroup, minGrouping}` for the Locale"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "monthNames"
+mode = "immediate"
+call = "monthNames [options] [, tag]"
+gives = "The Locale's 12 month names, January first"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "dayNames"
+mode = "immediate"
+call = "dayNames [options] [, tag]"
+gives = "The Locale's 7 day names, Monday first"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "locale"
+name = "tag"
+mode = "immediate"
+call = "tag [tag]"
+gives = "The BCP 47 tag of the Locale in use, after fallback"
+errors = ["bad locale"]
+
+[[operation]]
+capability = "timer"
+name = "schedule"
+mode = "fire-and-forget"
+call = "schedule name, at, message, args"
+gives = "Stores a durable timer that delivers `message` with the list `args` to the Script at the Instant `at`, replacing one of the same name"
+
+[[operation]]
+capability = "timer"
+name = "cancel"
+mode = "fire-and-forget"
+call = "cancel name"
+gives = "Removes the Script's timer called `name`, if there is one"

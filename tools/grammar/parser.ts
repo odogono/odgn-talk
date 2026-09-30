@@ -349,12 +349,22 @@ export class Parser {
   func(): Node {
     const fn = this.next();
     const name = this.name("a function name");
-    const params: string[] = [];
+    const params: { name: string; default: Node | null }[] = [];
+    // A parameter is a name, then `=` and a default (ADR 0035).
+    const param = () => {
+      const name = this.name("a parameter name");
+      let dflt: Node | null = null;
+      if (this.isOp(this.peek(0, "operator"), "=")) {
+        this.next("operator");
+        dflt = this.expr();
+      }
+      params.push({ name, default: dflt });
+    };
     if (!this.atEnd("operand")) {
-      params.push(this.name("a parameter name"));
+      param();
       while (this.isOp(this.peek(0, "operator"), ",")) {
         this.next("operator");
-        params.push(this.name("a parameter name"));
+        param();
       }
     }
     this.endOfStatement();
