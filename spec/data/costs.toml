@@ -1,19 +1,554 @@
-# The Cost Model: the Fuel and allocation each instruction is charged.
+# The Cost Model: the Fuel and allocation each instruction is charged, and the
+# logical sizes that the Allocation Budget and Persistent State count.
 #
 # Each instruction's charge is a static base plus per-unit terms over measures
-# of its operands and result, applied whole at that instruction (ADR 0010).
-# Changing a cost is a new Cost Model version (ADR 0006). The Abstract Machine is
+# of what it works on, applied whole at that instruction (ADR 0010). Changing a
+# cost is a new Cost Model version (ADR 0006). The Abstract Machine is
 # versioned with it. Cost Model 0 is provisional. Cost Model 1 is calibrated
 # against both Cores after handoff (ADR 0032, Appendix C).
 #
-# Schema: schema/costs.schema.json. Shown in chapter 8 (region `costs`). Owned
-# by the chapter 8 task, which adds the rates and extends the schema.
+# Schema: schema/costs.schema.json. Shown in chapter 8 (regions `costs.*`).
+#
+# A formula is a sum of terms: `3 + characters(result) / 16 + 2 * items(input)`.
+# A term is a whole number, or a measure, optionally multiplied by a whole
+# number before it and divided by one after it. Each divided term rounds up on
+# its own. Every formula gives a whole number, 0 or more.
 #
 #   version   the Cost Model version, an integer
-#   [[rate]]  one per Cost Model key named in machine.toml
-#     key     the Cost Model key
-#     base    the static Fuel charged
-#     terms   optional: per-unit terms, e.g. { per = "character", fuel = 1 }
+#   [measure] each measure a formula may use, with what it counts
+#   [subject] each value a measure may be taken of
+#   [[size]]  the logical size of each kind of value, and of each part of a
+#             Script's Persistent State
+#     of      the kind, or the part
+#     size    its formula, over `v`
+#   [[rate]]  one per Cost Model key named in machine.toml, and one per Built-in
+#     key     the Cost Model key, or `builtin.<name>`
+#     fuel    its Fuel formula
+#     alloc   optional: its allocation formula, 0 if absent
+#     input   optional: what `input` and `scanned` are for it
 
 version = 0
-rate = []
+
+[measure]
+size = "the logical size of the value, as the [[size]] table gives it"
+contents = "the sum of the logical sizes of the values the value holds: a list's items, a map's keys and values, a range's ends, a Function Value's captures"
+characters = "the number of Characters, for text; 0 for any other value"
+scalars = "the number of Unicode scalar values, for text; 0 for any other value"
+utf8 = "the length of the UTF-8 encoding, for text; 0 for any other value"
+bytes = "the number of bytes, for Bytes; 0 for any other value"
+items = "the number of items, for a list, and of integers, for an integer range; 0 for any other value"
+entries = "the number of keys, for a map; 0 for any other value"
+digits = "the number of digits in the coefficient, for a number or the number of a Quantity; 0 for any other value"
+scanned = "what the instruction examines, as its rate's `input` says"
+steps = "the Text Pattern matcher's steps, chapter 8's matching section"
+program = "the size of a Text Pattern's compiled program, chapter 8's matching section"
+frames = "the number of frames an unwinding pops"
+clauses = "the number of Handler Clauses a dispatch tries"
+count = "the instruction's `count` operand, or 0 if it has none"
+declared = "the Operation Declaration's per-call cost, which the Host sets"
+
+[subject]
+input = "the value the instruction works on, as its rate's `input` says"
+result = "the value the instruction pushes, or the first of them"
+v = "the value being measured, in a [[size]] formula"
+x1 = "a Built-in's first argument, and x2, x3, … the others"
+
+# ---------------------------------------------------------------------------
+# Logical sizes
+# ---------------------------------------------------------------------------
+
+[[size]]
+of = "nothing"
+size = "8"
+
+[[size]]
+of = "boolean"
+size = "8"
+
+[[size]]
+of = "number"
+size = "16"
+
+[[size]]
+of = "quantity"
+size = "24"
+
+[[size]]
+of = "text"
+size = "16 + utf8(v)"
+
+[[size]]
+of = "bytes"
+size = "16 + bytes(v)"
+
+[[size]]
+of = "list"
+size = "16 + 8 * items(v) + contents(v)"
+
+[[size]]
+of = "map"
+size = "16 + 8 * entries(v) + contents(v)"
+
+[[size]]
+of = "range"
+size = "16 + contents(v)"
+
+[[size]]
+of = "instant"
+size = "16"
+
+[[size]]
+of = "civil date"
+size = "16"
+
+[[size]]
+of = "pattern"
+size = "16 + 8 * program(v)"
+
+[[size]]
+of = "function"
+size = "32 + 8 * items(v) + contents(v)"
+
+[[size]]
+of = "object"
+size = "16"
+
+[[size]]
+of = "iterator"
+size = "24 + size(v)"
+
+[[size]]
+of = "replacement"
+size = "32 + contents(v)"
+
+[[size]]
+of = "reader"
+size = "24 + size(v)"
+
+[[size]]
+of = "frame"
+size = "64 + 8 * items(v) + contents(v)"
+
+[[size]]
+of = "run"
+size = "96 + contents(v)"
+
+[[size]]
+of = "message"
+size = "32 + contents(v)"
+
+[[size]]
+of = "pending call"
+size = "48"
+
+# ---------------------------------------------------------------------------
+# Rates
+# ---------------------------------------------------------------------------
+
+[[rate]]
+key = "const"
+fuel = "1"
+
+[[rate]]
+key = "stack"
+fuel = "1"
+
+[[rate]]
+key = "slot"
+fuel = "1"
+
+[[rate]]
+key = "store-var"
+fuel = "2"
+
+[[rate]]
+key = "jump"
+fuel = "1"
+
+[[rate]]
+key = "branch"
+fuel = "1"
+
+[[rate]]
+key = "operator"
+fuel = "2"
+alloc = "size(result)"
+
+[[rate]]
+key = "arithmetic"
+fuel = "3 + digits(result) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "power"
+fuel = "8 + 2 * digits(result)"
+alloc = "size(result)"
+
+[[rate]]
+key = "concat"
+fuel = "3 + scalars(result) / 16"
+alloc = "size(result)"
+
+[[rate]]
+key = "compare"
+fuel = "2 + scanned / 16"
+input = "the two operands; `scanned` is the Characters, bytes or items compared before the answer is known"
+
+[[rate]]
+key = "member"
+fuel = "2 + scanned"
+input = "the list or range; `scanned` is the items compared, or 2 for a range"
+
+[[rate]]
+key = "convert"
+fuel = "4 + scalars(input) / 8 + scalars(result) / 8"
+alloc = "size(result)"
+input = "the value converted"
+
+[[rate]]
+key = "search"
+fuel = "4 + steps"
+input = "the text searched"
+
+[[rate]]
+key = "get-key"
+fuel = "3"
+input = "the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does"
+
+[[rate]]
+key = "property"
+fuel = "3 + scalars(input) / 8 + items(result)"
+alloc = "size(result)"
+input = "the value whose property is read"
+
+[[rate]]
+key = "chunk-get"
+fuel = "3 + scanned / 8"
+alloc = "size(result)"
+input = "the value read; `scanned` is the Characters or items from its start to the end of the chunk"
+
+[[rate]]
+key = "chunk-set"
+fuel = "4 + scalars(result) / 8 + items(result) / 8"
+alloc = "size(input)"
+input = "the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010)"
+
+[[rate]]
+key = "set-key"
+fuel = "4 + entries(result) / 16"
+alloc = "8 + size(input)"
+input = "the new value"
+
+[[rate]]
+key = "append"
+fuel = "3 + scalars(result) / 16"
+alloc = "8 + size(input)"
+input = "the value appended"
+
+[[rate]]
+key = "set-property"
+fuel = "10 + size(input) / 32"
+input = "the value set"
+
+[[rate]]
+key = "list"
+fuel = "2 + count + items(result) / 16"
+alloc = "size(result)"
+
+[[rate]]
+key = "map"
+fuel = "2 + 2 * count"
+alloc = "size(result)"
+
+[[rate]]
+key = "make-pattern"
+fuel = "20 + 2 * program(result)"
+alloc = "size(result)"
+
+[[rate]]
+key = "bytes-field"
+fuel = "3 + bytes(input) / 8"
+alloc = "size(result)"
+input = "the field's value"
+
+[[rate]]
+key = "match"
+fuel = "6 + steps"
+alloc = "size(result)"
+input = "the text matched"
+
+[[rate]]
+key = "iterate"
+fuel = "2"
+alloc = "24"
+input = "an iterator shares its list or range, so only the iterator itself is new"
+
+[[rate]]
+key = "make-closure"
+fuel = "4 + count"
+alloc = "size(result)"
+
+[[rate]]
+key = "call"
+fuel = "8"
+
+[[rate]]
+key = "clause"
+fuel = "4"
+input = "each Handler Clause a dispatch tries, charged as it is tried"
+
+[[rate]]
+key = "return"
+fuel = "2"
+
+[[rate]]
+key = "test"
+fuel = "1"
+
+[[rate]]
+key = "bin-field"
+fuel = "2 + bytes(result) / 8 + scalars(result) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "throw"
+fuel = "10"
+alloc = "48"
+input = "the `at` map the Core adds, when it adds one"
+
+[[rate]]
+key = "unwind"
+fuel = "4 * frames"
+
+[[rate]]
+key = "capability"
+fuel = "10 + declared + size(result) / 32"
+alloc = "size(result)"
+input = "the Operation's result, converted into Script values"
+
+[[rate]]
+key = "send"
+fuel = "20 + size(input) / 32"
+alloc = "size(input)"
+input = "the message, whose size counts toward the receiver's mailbox"
+
+[[rate]]
+key = "wait"
+fuel = "10"
+
+[[rate]]
+key = "join"
+fuel = "10"
+alloc = "size(result)"
+
+# ---------------------------------------------------------------------------
+# Built-ins: one rate each (ADR 0021). A Built-in's arguments are x1, x2, …
+# ---------------------------------------------------------------------------
+
+[[rate]]
+key = "builtin.min"
+fuel = "4 + scanned"
+input = "`scanned` is the items compared"
+
+[[rate]]
+key = "builtin.max"
+fuel = "4 + scanned"
+input = "`scanned` is the items compared"
+
+[[rate]]
+key = "builtin.codePoint"
+fuel = "3"
+
+[[rate]]
+key = "builtin.fromCodePoint"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.upper"
+fuel = "4 + scalars(x1) / 4 + scalars(result) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.lower"
+fuel = "4 + scalars(x1) / 4 + scalars(result) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.offset"
+fuel = "4 + steps"
+
+[[rate]]
+key = "builtin.isDisposed"
+fuel = "2"
+
+[[rate]]
+key = "builtin.rangeStart"
+fuel = "2"
+
+[[rate]]
+key = "builtin.rangeEnd"
+fuel = "2"
+
+[[rate]]
+key = "builtin.abs"
+fuel = "3"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.floor"
+fuel = "3 + digits(x1) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.ceiling"
+fuel = "3 + digits(x1) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.truncate"
+fuel = "3 + digits(x1) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.round"
+fuel = "5 + digits(result) / 8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.sqrt"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.exp"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.ln"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.log10"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.power"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.sin"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.cos"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.tan"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.asin"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.acos"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.atan"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.atan2"
+fuel = "60"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.fromFloat64"
+fuel = "8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.fromFloat32"
+fuel = "8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.toFloat64"
+fuel = "8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.toFloat32"
+fuel = "8"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.year"
+fuel = "3"
+
+[[rate]]
+key = "builtin.month"
+fuel = "3"
+
+[[rate]]
+key = "builtin.day"
+fuel = "3"
+
+[[rate]]
+key = "builtin.hour"
+fuel = "3"
+
+[[rate]]
+key = "builtin.minute"
+fuel = "3"
+
+[[rate]]
+key = "builtin.second"
+fuel = "3"
+
+[[rate]]
+key = "builtin.nanosecond"
+fuel = "3"
+
+[[rate]]
+key = "builtin.weekday"
+fuel = "4"
+
+[[rate]]
+key = "builtin.dayOfYear"
+fuel = "4"
+
+[[rate]]
+key = "builtin.isoWeek"
+fuel = "6"
+
+[[rate]]
+key = "builtin.isoWeekYear"
+fuel = "6"
+
+[[rate]]
+key = "builtin.hasTime"
+fuel = "2"
+
+[[rate]]
+key = "builtin.toCivil"
+fuel = "10"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.toInstant"
+fuel = "10"
+alloc = "size(result)"

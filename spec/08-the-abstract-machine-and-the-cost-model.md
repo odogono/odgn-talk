@@ -4,7 +4,7 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/
 
 Every Script and Library compiles to a code unit for one Abstract Machine: a stack machine with numbered local slots. The instruction set, and the exact instructions each construct lowers to, are normative, including which local slot each name gets and the order of the constant pool ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). Each instruction is one language-level operation, and is charged Fuel by the Cost Model. So both Cores charge the same Fuel, fault at the same instruction and report the same positions, and a Disassembly Case can pin a Script's lowering exactly ([chapter 11](11-the-trace-and-conformance.md)).
 
-> **Note.** This chapter gives the machine and the lowering. The Cost Model's formula language, the logical sizes of values and Cost Model 0's rates, and how a Text Pattern compiles for matching Fuel, are still to be written.
+> **Note.** How a Text Pattern compiles, and so the `steps` and `program` measures its rates use, is still to be written.
 
 ## The machine's state
 
@@ -632,9 +632,200 @@ An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-erro
 
 ## The Cost Model
 
+The Cost Model says how much Fuel and allocation each instruction is charged, and how large each value counts as ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). It is [`costs.toml`](data/costs.toml), versioned on its own: a change to a rate, a size or the lowering is a new Cost Model version, and re-blesses the corpus ([chapter 0](00-introduction.md#versions)).
+
+> **Note.** Cost Model 0 is provisional. Its rates keep a simple instruction at about 1 Fuel and scale bulk work by its size, but they aren't measured. Cost Model 1 is calibrated against both Cores once they pass the seed corpus ([Appendix C](appendix-c-handed-off-open.md)).
+
+### Charging
+
+- **At the instruction:** each instruction is charged its key's Fuel formula and its allocation formula, together, when it runs, with every measure taken from the values it works on. If either takes the Run past its limit, the Run has a Limit Fault at that instruction, before it does anything ([chapter 6](06-errors-and-limits.md#limit-faults)).
+- **Fuel first:** Fuel is checked before allocation, so a Run past both faults on Fuel.
+- **A Built-in** is charged by its own rate, `builtin.<name>`, in place of `call-builtin`'s key.
+- **Dispatch** charges the `clause` rate for each Handler Clause it tries, as it tries it, on top of the clause body's own instructions ([chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Unwinding** charges the `unwind` rate at the instruction that raised, for the frames it pops, before any of them is popped ([chapter 6](06-errors-and-limits.md)).
+- **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
+- **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited.
+- **Not charged:** loading a code unit and running its initialiser, NFC when a Host builds a text value, and the Host's own work.
+- **Fuel Slices** count the same Fuel ([chapter 5](05-handlers-messages-and-scheduling.md#fuel-slices)).
+
+### Formulas
+
+A formula is a sum of terms: a whole number, or a measure, optionally multiplied by a whole number before it and divided by one after it, as in `3 + characters(result) / 16 + 2 * items(input)`. Each divided term rounds up on its own, so `characters(result) / 16` is 1 for 1 to 16 Characters. A measure of a value that isn't there, such as the result of an instruction that pushes nothing, is 0.
+
+<!-- generated: costs.measures -->
+
+| Measure | Counts |
+| --- | --- |
+| `size` | the logical size of the value, as the [[size]] table gives it |
+| `contents` | the sum of the logical sizes of the values the value holds: a list's items, a map's keys and values, a range's ends, a Function Value's captures |
+| `characters` | the number of Characters, for text; 0 for any other value |
+| `scalars` | the number of Unicode scalar values, for text; 0 for any other value |
+| `utf8` | the length of the UTF-8 encoding, for text; 0 for any other value |
+| `bytes` | the number of bytes, for Bytes; 0 for any other value |
+| `items` | the number of items, for a list, and of integers, for an integer range; 0 for any other value |
+| `entries` | the number of keys, for a map; 0 for any other value |
+| `digits` | the number of digits in the coefficient, for a number or the number of a Quantity; 0 for any other value |
+| `scanned` | what the instruction examines, as its rate's `input` says |
+| `steps` | the Text Pattern matcher's steps, chapter 8's matching section |
+| `program` | the size of a Text Pattern's compiled program, chapter 8's matching section |
+| `frames` | the number of frames an unwinding pops |
+| `clauses` | the number of Handler Clauses a dispatch tries |
+| `count` | the instruction's `count` operand, or 0 if it has none |
+| `declared` | the Operation Declaration's per-call cost, which the Host sets |
+
+| Subject | Is |
+| --- | --- |
+| `input` | the value the instruction works on, as its rate's `input` says |
+| `result` | the value the instruction pushes, or the first of them |
+| `v` | the value being measured, in a [[size]] formula |
+| `x1` | a Built-in's first argument, and x2, x3, … the others |
+
+<!-- end -->
+
+- **Text measures:** `characters` counts Characters, so it covers segmenting text, and `scalars` covers work done per code point, such as NFC and case folding.
+- **`input` and `scanned`** mean what each rate's "Input" column says.
+- **Arguments:** in a Built-in's rate, `x1`, `x2`, … are its arguments, in order, defaults included.
+
+### Logical sizes
+
+The Allocation Budget and Persistent State count values by their logical size, as if nothing were shared ([ADR 0001](../docs/adr/0001-value-semantics.md)), so a value held twice counts twice, and a Core's sharing is never visible.
+
+<!-- generated: costs.sizes -->
+
+| Of | Logical size |
+| --- | --- |
+| nothing | `8` |
+| boolean | `8` |
+| number | `16` |
+| quantity | `24` |
+| text | `16 + utf8(v)` |
+| bytes | `16 + bytes(v)` |
+| list | `16 + 8 * items(v) + contents(v)` |
+| map | `16 + 8 * entries(v) + contents(v)` |
+| range | `16 + contents(v)` |
+| instant | `16` |
+| civil date | `16` |
+| pattern | `16 + 8 * program(v)` |
+| function | `32 + 8 * items(v) + contents(v)` |
+| object | `16` |
+| iterator | `24 + size(v)` |
+| replacement | `32 + contents(v)` |
+| reader | `24 + size(v)` |
+| frame | `64 + 8 * items(v) + contents(v)` |
+| run | `96 + contents(v)` |
+| message | `32 + contents(v)` |
+| pending call | `48` |
+
+<!-- end -->
+
+- **Persistent State** is measured at each Segment's end, over everything the Script keeps ([chapter 6](06-errors-and-limits.md#limits)): each Script Variable's value, each message in its mailbox, and each suspended, parked or preempted Run, which counts its frames, its pending calls and its Join's early answers.
+- **A frame's** `items` is its number of locals, and its `contents` the values in its locals and on its operand stack. A Run's `contents` is its frames and pending calls, and a message's its arguments.
+- **An internal value** counts the value it holds as well: an iterator its list or range, a reader its Bytes, and a replacement its text and Matches.
+- **The Allocation Budget** counts what each instruction's allocation formula says. An instruction that builds a value counts its size, and a write counts only the new part it puts in, not the whole it rebuilds ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)).
+
+### Rates
+
 <!-- generated: costs -->
 
-Cost Model **0**. _To be written in chapter 8._
+Cost Model **0**.
+
+| Cost Model key | Fuel | Allocation | Input |
+| --- | --- | --- | --- |
+| `const` | `1` | 0 |  |
+| `stack` | `1` | 0 |  |
+| `slot` | `1` | 0 |  |
+| `store-var` | `2` | 0 |  |
+| `jump` | `1` | 0 |  |
+| `branch` | `1` | 0 |  |
+| `operator` | `2` | `size(result)` |  |
+| `arithmetic` | `3 + digits(result) / 8` | `size(result)` |  |
+| `power` | `8 + 2 * digits(result)` | `size(result)` |  |
+| `concat` | `3 + scalars(result) / 16` | `size(result)` |  |
+| `compare` | `2 + scanned / 16` | 0 | the two operands; `scanned` is the Characters, bytes or items compared before the answer is known |
+| `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, or 2 for a range |
+| `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
+| `search` | `4 + steps` | 0 | the text searched |
+| `get-key` | `3` | 0 | the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
+| `property` | `3 + scalars(input) / 8 + items(result)` | `size(result)` | the value whose property is read |
+| `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk |
+| `chunk-set` | `4 + scalars(result) / 8 + items(result) / 8` | `size(input)` | the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010) |
+| `set-key` | `4 + entries(result) / 16` | `8 + size(input)` | the new value |
+| `append` | `3 + scalars(result) / 16` | `8 + size(input)` | the value appended |
+| `set-property` | `10 + size(input) / 32` | 0 | the value set |
+| `list` | `2 + count + items(result) / 16` | `size(result)` |  |
+| `map` | `2 + 2 * count` | `size(result)` |  |
+| `make-pattern` | `20 + 2 * program(result)` | `size(result)` |  |
+| `bytes-field` | `3 + bytes(input) / 8` | `size(result)` | the field's value |
+| `match` | `6 + steps` | `size(result)` | the text matched |
+| `iterate` | `2` | `24` | an iterator shares its list or range, so only the iterator itself is new |
+| `make-closure` | `4 + count` | `size(result)` |  |
+| `call` | `8` | 0 |  |
+| `clause` | `4` | 0 | each Handler Clause a dispatch tries, charged as it is tried |
+| `return` | `2` | 0 |  |
+| `test` | `1` | 0 |  |
+| `bin-field` | `2 + bytes(result) / 8 + scalars(result) / 8` | `size(result)` |  |
+| `throw` | `10` | `48` | the `at` map the Core adds, when it adds one |
+| `unwind` | `4 * frames` | 0 |  |
+| `capability` | `10 + declared + size(result) / 32` | `size(result)` | the Operation's result, converted into Script values |
+| `send` | `20 + size(input) / 32` | `size(input)` | the message, whose size counts toward the receiver's mailbox |
+| `wait` | `10` | 0 |  |
+| `join` | `10` | `size(result)` |  |
+
+<!-- end -->
+
+### Built-in rates
+
+Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)). The transcendental functions are charged a flat rate per call.
+
+<!-- generated: costs.builtins -->
+
+| Built-in | Fuel | Allocation | Input |
+| --- | --- | --- | --- |
+| `min` | `4 + scanned` | 0 | `scanned` is the items compared |
+| `max` | `4 + scanned` | 0 | `scanned` is the items compared |
+| `codePoint` | `3` | 0 |  |
+| `fromCodePoint` | `4` | `size(result)` |  |
+| `upper` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
+| `lower` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
+| `offset` | `4 + steps` | 0 |  |
+| `isDisposed` | `2` | 0 |  |
+| `rangeStart` | `2` | 0 |  |
+| `rangeEnd` | `2` | 0 |  |
+| `abs` | `3` | `size(result)` |  |
+| `floor` | `3 + digits(x1) / 8` | `size(result)` |  |
+| `ceiling` | `3 + digits(x1) / 8` | `size(result)` |  |
+| `truncate` | `3 + digits(x1) / 8` | `size(result)` |  |
+| `round` | `5 + digits(result) / 8` | `size(result)` |  |
+| `sqrt` | `60` | `size(result)` |  |
+| `exp` | `60` | `size(result)` |  |
+| `ln` | `60` | `size(result)` |  |
+| `log10` | `60` | `size(result)` |  |
+| `power` | `60` | `size(result)` |  |
+| `sin` | `60` | `size(result)` |  |
+| `cos` | `60` | `size(result)` |  |
+| `tan` | `60` | `size(result)` |  |
+| `asin` | `60` | `size(result)` |  |
+| `acos` | `60` | `size(result)` |  |
+| `atan` | `60` | `size(result)` |  |
+| `atan2` | `60` | `size(result)` |  |
+| `fromFloat64` | `8` | `size(result)` |  |
+| `fromFloat32` | `8` | `size(result)` |  |
+| `toFloat64` | `8` | `size(result)` |  |
+| `toFloat32` | `8` | `size(result)` |  |
+| `year` | `3` | 0 |  |
+| `month` | `3` | 0 |  |
+| `day` | `3` | 0 |  |
+| `hour` | `3` | 0 |  |
+| `minute` | `3` | 0 |  |
+| `second` | `3` | 0 |  |
+| `nanosecond` | `3` | 0 |  |
+| `weekday` | `4` | 0 |  |
+| `dayOfYear` | `4` | 0 |  |
+| `isoWeek` | `6` | 0 |  |
+| `isoWeekYear` | `6` | 0 |  |
+| `hasTime` | `2` | 0 |  |
+| `toCivil` | `10` | `size(result)` |  |
+| `toInstant` | `10` | `size(result)` |  |
 
 <!-- end -->
 
