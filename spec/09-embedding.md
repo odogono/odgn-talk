@@ -2,9 +2,7 @@
 
 _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md).
 
-> **Note.** Draft, moved from `docs/embedding/README.md`. The chapter 9 task finishes it.
-
-[`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts) are the final embedding interface for the two Cores, settled in [#72](https://github.com/odogono/odgn-talk/issues/72). They are declarations only and are never compiled. The two files have the same calls and differ only in idiom ([ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md)). This chapter holds the rules they share, the Host error catalogue, the Host Manifest format and the Operation naming guide.
+A Host embeds a Core through one interface, declared in [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts). The two files have the same calls, and differ only in idiom: errors as values in Go and exceptions in TS, `Start` and `Answer` in Go and an optional Promise-returning `run` in TS, and maps built from pairs in Go and from a `Map` or `record()` in TS. No Script can observe the differences ([ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md)). They are declarations only, and are never compiled. This chapter states the rules they share, and the language-neutral message layer for a Host in any other language.
 
 ## The shape
 
@@ -35,6 +33,102 @@ _Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0002](../docs/
   - `call failed`, which carries the Host-side detail of a `host error` the Script saw
   - `decided`, carrying a Decision's Verdict (below)
 
+## Values at the boundary
+
+Each Core gives the Host one opaque, tagged `Value` type. A Host builds values only through named constructors and reads them only through accessors, so every conversion follows a rule this section states ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)).
+
+- **Refused, never repaired:** input the value model can't hold is refused at the constructor, as the Host error `invalid value`. Nothing is clamped, rounded or replaced, so a Host bug surfaces at the Host's own call.
+- **Numbers in:** `Int`, `Uint`, `FromFloat` and `Dec` in Go, and `num` and `dec` in TS.
+  - A float becomes the shortest decimal that reads back as the same float, the digits ECMAScript's `Number::toString` and Go's `strconv.FormatFloat(f, 'g', -1, 64)` both give, so `0.1` stays `0.1`.
+  - NaN, ±Infinity, more than 34 significant digits and a magnitude of 10^34 or more are refused ([chapter 3](03-values.md#numbers)). `-0.0` enters as `0`.
+  - `Dec` and `dec` read text exactly as `as number` does, one leading `-` included ([chapter 3](03-values.md#reading-numbers)).
+- **Numbers out:** a number reads as an opaque `Decimal`. Its `String()` is the canonical text, trailing zeros kept. An integer read fails unless the value is an integer that fits, and the float read rounds to nearest, ties to even.
+- **Text:** text that isn't valid UTF-8 (Go), or a lone surrogate (TS), is refused. Text is normalised to NFC when the `Value` is built, uncharged, and text going out is always NFC.
+- **Maps:** keys are text. Order is the order the Host gives, and `Entries()` returns insertion order. A duplicate key, compared after NFC, is refused. TS's `record(obj)` refuses integer-like keys, since JS reorders them.
+- **The other kinds:**
+  - **Nothing** is `talk.Nothing` in Go and the `nothing` constant in TS. `null` and `undefined` are never accepted for it.
+  - **A Quantity** is built from a `Decimal` and a Unit spelled as a Script spells it (`"kg"`), and reads back as its number and its canonical Unit. An unknown Unit is refused.
+  - **A Civil Date** is built from fields, or from text in the `as civil date` syntax, and an invalid date is refused. **An Instant** is built from seconds and nanoseconds since the Unix epoch, or in Go from a `time.Time`, dropping its monotonic reading and zone. No native type is ever read as a Civil Date.
+  - **Bytes** are copied in both directions.
+  - **A range** is built from two ends as `..` builds one, and reads back as its two ends ([ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)).
+  - **A Text Pattern** can only be passed back unchanged. Its canonical source can be read, for display.
+  - **A Function Value** is opaque. Its Home Script and display form can be read ([Function Values](#function-values)).
+  - **A Host Object** is its own handle type, with the Host's id.
+- **The display form:** `String()` and `toString()` give the display form ([chapter 11](11-the-trace-and-conformance.md)).
+
+### JSON and the Value Encoding
+
+- **Plain JSON:** `DecodeJSON` and `EncodeJSON` follow the JSON mapping of [chapter 7](07-libraries-and-the-standard-library.md#the-json-mapping), the rule the `json` Library follows. Numbers are read from their text, never through a float.
+- **The Value Encoding** is the lossless JSON form of every kind that can be encoded, for Host storage and the message layer. The same value always gives the same bytes.
+  - Booleans are JSON booleans, text is a JSON string, Nothing is `null`, and a list is an array.
+  - A number with no fraction digits in its canonical text (so `3`, but not `3.0`) and a magnitude below 2⁵³ is a JSON number, and every other number is `{"$dec": "<canonical text>"}`. So trailing zeros survive.
+  - A map is a JSON object, in order. A map with any key starting with `$` is `{"$map": [[key, value], …]}`, so a key never reads as a tag.
+  - The tags are `{"$quantity": ["2.50", "GBP"]}`, `{"$bytes": "<base64, padded>"}`, `{"$range": [from, to]}`, `{"$instant": "<RFC 3339 in UTC, with the shortest fraction>"}`, `{"$date": "<the as civil date form>"}`, `{"$pattern": "<canonical source>"}` and `{"$object": [kind, id]}`.
+  - A Text Pattern is re-parsed when decoded, and a Host Object is found through the Host's resolver.
+  - **Function Values** can't be encoded for storage, since a Host-held handle isn't durable. Only [the message layer](#the-message-layer) carries them.
+- **Scripts can't reach** the Value Encoding, and the Conformance Corpus uses the display form instead ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)).
+
+## Shapes
+
+An Operation Declaration gives a Shape for each argument and for its result. Shapes cover every kind, Quantities by Unit or by Unit Kind, lists of a Shape, closed and open maps, Host Objects of a kind, a choice (`OneOf`) and an optional value.
+
+- **At load:** the loader checks each call's argument count, the literal keys of a closed map, and the kind of every literal argument. There is no inference beyond literals.
+- **At run time:** the Core checks each argument before the Host function runs. A mismatch raises `wrong kind` in the Script, the Host function never runs, and nothing is charged ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)).
+- **Results:** a result that breaks its Shape is the Host's fault. The call ends as `host error`, and the detail goes in a `call failed` report.
+- **Messages** have Shapes only in the Host Manifest, for tooling. The Core never checks a Delivery against them.
+
+## Capabilities
+
+- **Defining one:** `DefineCapability` takes a name and its Operations, once per process. Each Operation is a declaration (name, argument and result Shapes, cost, mode, `maxPending` and declared error codes) paired with the Host function that implements it. Declarations are ordered by name, whatever order the Host gives. `ask`, `tell`, `send` and `wait` are refused as Operation names.
+- **Modes:**
+  - **Immediate:** `Do` runs at the call, inside the Run, and returns the result.
+  - **Suspending:** `Start` runs at the call and returns at once, and the Host answers later with `Answer`, `AnswerWithCost` or `Fail`, from any thread.
+  - **Fire-and-forget:** `Fire` runs at the call, in order, and its result is dropped. Only these can be called with `tell`.
+- **Grants:** a Grant is a set of a Capability's Operations with the Host's own binding data, which each call reads. `Load` binds Grants by the name the Script uses, so one Capability can be granted twice under two names with different bindings. With `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use.
+- **Standard Capabilities:** `clock`, `calendar`, `locale` and `timer` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). The Host supplies the implementation and a cost for each Operation.
+- **The call:** a Host function gets a `Call`, which gives the call id, the Script's name, the Grant's binding, the Pump's Clock reading, and a context or signal that is cancelled when the call is abandoned. It never reads the Host's own time.
+- **Charging:**
+  - The declared cost is charged before the Host function runs, and a Run that can't cover it has a Limit Fault at the call.
+  - `Charge` draws more Fuel in proportion to the work, before the work, and only while the Operation is starting. It fails exactly when the Run's Fuel left after the declared cost can't cover it, and the Host function then returns without doing the work.
+  - A cost known only later travels with the answer, `AnswerWithCost`, and is charged when the Run resumes, where it can fault.
+  - Converting a result into Script values is charged to the Run ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#charging)).
+- **Failing:** a `Fail`, or a returned `ScriptError`, raises its code in the Script, with its message and its `Data`'s entries as fields ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). A catalogue code the Operation doesn't declare, a code outside a declared list, or a `Data` key that is reserved, becomes `host error`. So does any other error the Host function returns.
+- **Waiting:** a suspending call past its `maxPending`, or else the Script's `MaxWait`, fails with `timeout` and is abandoned. An answer to an abandoned call, or one whose Run has ended, is recorded and ignored.
+- **Revoking:** `Revoke` makes later calls through the named Grant raise `capability revoked` until the next Reload, and makes them load errors after it. Calls in flight are left to the Host.
+
+## Host Objects
+
+- **Object Kinds** are defined once per process, each with its properties. A property has a Shape, a `Get` and optionally a `Set`, each with a cost, and runs inside the Run like an immediate Operation. A property with no `Set` is read-only ([chapter 4](04-expressions-and-statements.md#put-let-and-set)).
+- **Handles:** `group.Object(kind, id, native)` makes a handle the first time a Host-owned thing crosses into the Group. The id is the Host's, stable, and unique within its kind in the Group ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)), and a reused one is `duplicate object id`.
+- **Parents:** the Core holds each object's parent, and the Host changes it with `SetParent`, queued as a Host Input. A cycle is `parent cycle` ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Disposing** an object is a queued Host Input. The object stays an ordinary value, with its id and its equality. Sending to it, or reading or setting a property of it, raises `object gone`, and disposing an owner stops its Owning Script within the same Host Input.
+- **Well-known objects** are bound to names at load, and an Owning Script to its object.
+
+## Loading and Libraries
+
+- **`Load`** compiles a Script, checks it against its Grants, Libraries and well-known objects, runs its initialiser and adds it to the Group. A rejected Script is a `LoadError`, with its diagnostics ([chapter 2](02-grammar.md#syntax-errors)).
+- **Libraries:** `CompileLibrary` compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
+- **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
+- **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)).
+
+## Deliveries
+
+- **`Deliver`** routes a message to an object's Owning Script, or the nearest ancestor that has one, and **`Script.Deliver`** addresses a Script directly ([chapter 5](05-handlers-messages-and-scheduling.md)). Each returns a delivery id, which the Run it starts reports.
+- **`Request`** is a `send … and wait` from outside. Its future settles with the Run's result, or rejects with `send failed` and the reason. Cancelling its context or signal queues `cancel-delivery`.
+- **`Broadcast`** reaches every Script that wants the message when the queue is drained. Each recipient's `run end` carries its own delivery id and the broadcast id.
+- **`Call`** calls a Function Value ([Function Values](#function-values)), and **`Decide`** asks for a Verdict ([Decisions](#decisions)).
+- **Full mailboxes:** a Delivery to a full mailbox fails at the call with `MailboxFull`, which is load shedding, not a Host error.
+
+## The Pump and the Group Fingerprint
+
+- **`Pump(now, options)`** takes the Group's one Clock reading, drains the input queue, fires due waits and runs Runs until nothing is runnable or a Fuel Slice or the Group's Fuel cap is spent ([chapter 5](05-handlers-messages-and-scheduling.md#a-pump)). It returns the Group's state (idle, sliced or stopped), the next deadline, the Fuel used and the reports, and the Group is Quiescent.
+- **Code identity:** the SHA-256 of the UTF-8 text made of these lines, each ended by LF: `odgn-talk code identity 1`, the language version, the Cost Model version, `script` or `library`, the unit's name, then the lowercase hexadecimal identity of each Library it imports directly, one per line, in the order of its `use` lines, then a line `source` followed by the source exactly as given. An imported Library's identity covers its own imports, so a unit's identity covers every Library it reaches ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). An extension's identity is in [chapter 10](10-save-and-restore.md#extend-script).
+- **The Group Fingerprint** is the SHA-256 of the UTF-8 JSON, with no white space, keys in the order given here, strings escaping only `"`, `\` and U+0000 to U+001F (as `\"`, `\\` and lowercase `\u00xx`), and numbers as JSON integers, of `{"language", "costModel", "libraries", "scripts"}`:
+  - `libraries` is each Library's `[name, identity]`, ordered by name.
+  - `scripts` is each Script's `{"name", "identity", "grants", "limits"}`, ordered by name. `grants` maps each granted name to its Capability's name and its Operation Declarations, in the Host Manifest's data model, ordered by name. `limits` maps each limit's `ts` name in [`limits.toml`](data/limits.toml) to the value the Script has after defaults, durations in whole milliseconds, ordered as in `limits.toml`.
+  - Identities are lowercase hexadecimal. The Fingerprint never covers state, so two Groups in lockstep compare it once, before they start.
+
 ## Function Values
 
 - **What the Host holds:** a Function Value is an ordinary `Value` of kind `function`. The Host can read only its Home Script and its display form, and it can't build one.
@@ -59,25 +153,60 @@ A Decision asks Scripts whether something may happen, such as a game move or a f
 
 ## The message layer
 
-The language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir over WASI or a sidecar. [The message-layer research](../docs/research/message-layer.md) (#73) has the full message set. These rules are fixed:
+The message layer is the language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir, over WASI or a sidecar process ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [#79](https://github.com/odogono/odgn-talk/issues/79)). [The message-layer research](../docs/research/message-layer.md) gives the reasons and the measurements.
 
-- **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use the Value Encoding ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), and declarations use the Host Manifest's data model.
-- **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, a property `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host. So a WASI build needs no reentrant imports, and a sidecar carries the same messages.
-- **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox. It counts as received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
-- **Charging:** each Operation call carries the Fuel the Run has left after the declared cost. `Charge` fails exactly when that can't cover it, so the Host can charge locally.
-- **Decisions:** `decide` takes `to` or `script`, `message` and optional `broadcast: true`, and replies with its id. The `decided` report rides in the `pump` reply.
-- **Abandoned calls:** the `pump` reply lists the call ids abandoned during the Pump, so a Host can cancel its own work.
-- **Function Values** cross as `{"$function": [home, display, token]}`. The token holds the value's own data and its Group, so nothing needs releasing. The Core checks `wrong group` when it reads the token, and `function gone` when the queue is drained. Host storage refuses the tag.
-- **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's own handles carry their Group, and its glue code raises `wrong group` before sending.
-- **Not in parity:** framing, protocol errors and the message layer's field names, which are settled with the final spec.
+### Rules
 
-## What stays out
+- **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use [the Value Encoding](#json-and-the-value-encoding), and declarations and Shapes use the Host Manifest's data model.
+- **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, or a property's `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host, so a WASI build needs no reentrant imports.
+- **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox, and it is received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
+- **Stops land at a crossing:** `stop` and `cancel-run` land at the latest at the running Pump's next `op` or `prop`, or at its end. The Trace records where.
+- **Charging:** each `op` carries the Fuel the Run has left after the declared cost. The Host's `Charge` subtracts from it locally and fails exactly when it would go below 0, and its reply carries the total `charged`.
+- **Ids** are the Core's: delivery ids, run ids and call ids are assigned as in `talk.go`. Handles for Grants, Libraries (by identity), Groups and Scripts (by name), and Host Objects (`[kind, id]`) are the Host's.
+- **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's glue code raises `wrong group` before it sends another Group's object.
+- **Function Values** cross as `{"$function": [home, display, token]}`. The token is opaque, and holds the value's own data and its Group, so nothing needs releasing. The Core checks `wrong group` when it reads a token, and `function gone` when the queue is drained. Host storage refuses the tag.
+- **Never crossing:** Grant bindings, native objects, `OnReady` and futures stay on the Host's side.
 
-Helpers built only on this interface, versioned with each Core and not normative:
+### Messages
 
-- **Drivers:** `talk/driver` in Go (a worker pool, a run queue and a timer per Group) and `autoDrive(group)` from `@odgn/talk/driver` in TS. Game Hosts pump by hand.
-- **Other helpers:** `Must*` value constructors for literals in Host code, Trace file sinks, and the corpus runner.
-- **Left to the TS Core:** the debugger's pause hook ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's integer, which the reply echoes. A reply is `{"ref": n, "ok": {…}}` or `{"ref": n, "err": {…}}`. The error forms are `{"kind": "host error", "code", "detail"}`, `{"kind": "load error", "diagnostics": [{code, message, unit, line, col}]}` and `{"kind": "mailbox full"}`. A reply to `pump` or `restore` may be `{"ref": n, "need": {…}}` instead, which the Host answers with the matching `…-result` message under the same `ref`. Every Group message has a `group` field, and every Script message a `script` field too. (V) marks a field in the Value Encoding.
+
+| Message | Fields | Reply | `talk.go` |
+| --- | --- | --- | --- |
+| `hello` | `protocol` | `language`, `costModel`, `unicode`, `core`, `saveFormat` | `CoreVersions` |
+| `define-capability` | `name`, `ops`: Operation Declarations | – | `DefineCapability` |
+| `standard-capability` | `name`, `costs` | – | `ClockCapability` and the others |
+| `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
+| `grant` | `capability`, `ops`: names, or `"all"` | `grant`: a handle | `Grant`, `GrantAll` |
+| `compile-library` | `name`, `version`, `source`, `imports`: identities | `identity`, `needs` | `CompileLibrary` |
+| `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
+| `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
+| `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` | `AddLibrary`, `ReplaceLibrary` |
+| `object` | `kind`, `id` | – | `Object` |
+| `set-parent`, `dispose` | `object`, and `parent` | – | `SetParent`, `Dispose` |
+| `deliver`, `request` | `to`: `{object}` or `{script}`, `message`: `{name, args (V), limits}` | `delivery` | `Deliver`, `Request` |
+| `cancel-delivery` | `delivery` | – | cancelling a `Request`, `Decide` or `Call` |
+| `broadcast` | `message` | `broadcast` | `Broadcast` |
+| `call` | `fn (V)`, `args (V)`, `limits` | `delivery` | `Call` |
+| `decide` | `to`, `message`, or `broadcast: true` and `message` for a Broadcast Decision | `delivery`, or `broadcast` | `Decide`, `DecideBroadcast` |
+| `answer` | `call`, `value (V)`, and optionally `fuel` | – | `Answer`, `AnswerWithCost` |
+| `fail` | `call`, `error`: `{code, message, data (V)}` | – | `Fail` |
+| `pump` | `now`, `fuelSlice`, `fuelCap` | `state`, `nextDeadline`, `fuelUsed`, `reports`, `abandoned`, `trace` | `Pump` |
+| `op` (interim) | `call`, `script`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, `fuelLeft` | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
+| `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
+| `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
+| `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls` | `Restore` |
+| `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans | `Grants`, `Resolve` |
+| `settle` | `call`, `settlement`: `{answer (V)}`, `{fail}`, `{reissue}` or `{adopt}` | – | `Settle`; an adopted call is answered with `answer` or `fail` |
+| `reload`, `extend` | `source`, and `carry` for a reload | `reports`, or – | `Reload`, `Extend` |
+| `stop`, `cancel-run`, `revoke` | `reason`, `run`, or `grant`: the name | – | `Stop`, `CancelRun`, `Revoke` |
+| `counters`, `grants` | – | `Counters`, or `{name: [ops]}` | `Counters`, `Grants` |
+| `export-manifest` | the manifest's definitions, by handle | `manifest`: bytes | `ExportManifest` |
+
+- **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `outcome`, `result (V)`, `error`, `limit`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed` and `decided`.
+- **Encodings:** `now` and `nextDeadline` are `$instant` text, byte strings (saves, identities, fingerprints) are `{"$bytes": …}`, durations are whole milliseconds, and every other integer is a JSON integer when its magnitude is below 2⁵³, and its decimal text in a JSON string otherwise.
+- **Traces:** when a Group was made with `trace: true`, the reply to every message that is a Host Input recorded in the Trace carries `trace`, the records it made ([chapter 11](11-the-trace-and-conformance.md)).
+- **Framing:** over WASI, the Host writes a frame into a buffer the export `talk_buffer(n)` gives, and `talk_send(n)` returns the reply's pointer and length packed as `ptr << 32 | len`. A sidecar sends each frame as a 4-byte big-endian length, then the JSON, both ways on stdio.
 
 ## Host error catalogue
 
@@ -91,13 +220,16 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `parent cycle` | `setParent` would make a cycle |
 | `duplicate object id` | A Host Object id is reused within its kind in one Group |
 | `name reused` | extend Script reuses a name, or a Library name is added twice |
-| `not quiescent` | A save is attempted during a Pump |
 | `reentrant call` | A worker call is made from inside the Group's own Pump |
 | `wrong group` | A Function Value or Host Object is passed into a Group it doesn't belong to |
 | `library mismatch` | A Library's imports have different identities in the Group |
 | `reserved name` | A Host registers a Library under a stdlib name |
 | `not adoptable` | A TS `run` call is settled by adopt after a restore |
 | `invalid value` | Input the value model can't hold ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), a malformed declaration, or a limit override that loosens |
+| `invalid save` | `Restore` is given bytes this Core can't read: another Core family's save, a save format it no longer reads, or corrupt bytes |
+| `save mismatch` | A save's versions, Libraries or Grants don't match, and the Host's policy is to reject |
+| `unknown call` | `Settle` names a call id that isn't pending, one already settled, or comes after the first Pump |
+| `state too large` | The Script Variables a Reload or a variables-only restore carries over would exceed the Persistent State cap |
 
 <!-- end -->
 
@@ -136,4 +268,10 @@ Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tag
 
 ## Outside parity
 
-_None yet._ The chapter 9 task moves [What stays out](#what-stays-out) here.
+- **Idiom:** how each Core expresses the interface: errors or exceptions, `Start`/`Answer` or a Promise, and the builders for maps.
+- **Wording:** a `HostError`'s detail, and a diagnostic's message. Their codes are normative.
+- **Helpers** built only on this interface, versioned with each Core: the drivers (`talk/driver` in Go, with a worker pool, a run queue and a timer per Group, and `autoDrive(group)` from `@odgn/talk/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
+- **The TS Core's debug-pause hook** ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [Appendix C](appendix-c-handed-off-open.md)).
+- **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative.
+- **The Host Manifest** is for tooling, and the Core never reads it.
+- **Host conventions** such as lowercase HTTP header names.

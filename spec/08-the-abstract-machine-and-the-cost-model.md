@@ -20,7 +20,7 @@ The state is defined abstractly. A Core may represent it any way it likes, as lo
   - its pending calls, each with its call id, and for an open Join, each member in start order, with its answer once it has one
   - its cleanup stack: one entry per `finally` block it is running because of an error or a cancellation, giving the frame, the entry, and the error, or that it is a cancellation
 - **A frame** holds its code unit, its body, its pc (an instruction index in the code unit), its locals (as many as the body table says, [below](#bodies)) and its operand stack. A new frame's locals are all Nothing, apart from the arguments.
-- **A Function Value** is its Home Script, its body (a code unit and a body index, or an imported function), its captured values and its may-suspend flag. It is stale when its Home Script's code identity has changed since it was made ([chapter 3](03-values.md#function-values)).
+- **A Function Value** is its Home Script, its body (a code unit and a body index, or an imported function), its captured values and its may-suspend flag. It is stale when, since it was made, its Home Script has stopped or reloaded, or its code has been replaced. Extending the Script doesn't make it stale ([chapter 10](10-save-and-restore.md#extend-script)) ([chapter 3](03-values.md#function-values)).
 - **Values on the operand stack** are Script values, plus three internal values that only instructions can see, and that are plain data too:
   - an **iterator**: a list or range snapshot and a position, or a count left
   - a **replacement**: a text, its Matches, a position and the pieces so far
