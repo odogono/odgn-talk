@@ -918,7 +918,7 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 
 ### Changes to Cost Model 0
 
-Cost Model 0 is provisional, and no case is blessed against it, so it changes in place, and each change is listed in [`costs.toml`](data/costs.toml). From Cost Model 1 on, a change is a new version.
+Cost Model 0 is provisional, so it changes in place, and each change is listed in [`costs.toml`](data/costs.toml). A change re-blesses every case blessed against it ([Appendix B](appendix-b-implementation-order.md#blessing-the-seed-corpus)). From Cost Model 1 on, a change is a new version.
 
 <!-- generated: costs.changes -->
 
