@@ -4,57 +4,40 @@
   "title": "costs",
   "description": "The Cost Model.",
   "type": "object",
+  "$defs": {
+    "formula": { "type": "string", "pattern": "^[0-9a-z()*/+ ]+$" }
+  },
   "properties": {
-    "version": {
-      "type": "integer",
-      "minimum": 0
+    "version": { "type": "integer", "minimum": 0 },
+    "measure": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+    "subject": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+    "size": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "of": { "type": "string", "minLength": 1 },
+          "size": { "$ref": "#/$defs/formula" }
+        },
+        "required": ["of", "size"],
+        "additionalProperties": false
+      }
     },
     "rate": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "key": {
-            "type": "string",
-            "minLength": 1
-          },
-          "base": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "terms": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "per": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "fuel": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              },
-              "required": [
-                "per",
-                "fuel"
-              ],
-              "additionalProperties": false
-            }
-          }
+          "key": { "type": "string", "pattern": "^[a-z]+(-[a-z]+)*(\\.[a-zA-Z0-9]+)?$" },
+          "fuel": { "$ref": "#/$defs/formula" },
+          "alloc": { "$ref": "#/$defs/formula" },
+          "input": { "type": "string", "minLength": 1 }
         },
-        "required": [
-          "key",
-          "base"
-        ],
+        "required": ["key", "fuel"],
         "additionalProperties": false
       }
     }
   },
-  "required": [
-    "version",
-    "rate"
-  ],
+  "required": ["version", "measure", "subject", "size", "rate"],
   "additionalProperties": false
 }

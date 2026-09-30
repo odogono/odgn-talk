@@ -216,8 +216,8 @@ function crossCheck(d: Data) {
     fail("machine.toml", `instruction "${n}" is listed twice`);
   }
   for (const i of d.machine.instruction ?? []) {
-    // Every key is rated once costs.toml has rates (the Cost Model 0 task).
-    if (rates.size && !rates.has(i.cost)) fail("machine.toml", `instruction "${i.name}" has Cost Model key "${i.cost}", which costs.toml doesn't rate`);
+    // `builtin` is rated per Built-in, as `builtin.<name>`.
+    if (i.cost !== "builtin" && !rates.has(i.cost)) fail("machine.toml", `instruction "${i.name}" has Cost Model key "${i.cost}", which costs.toml doesn't rate`);
     for (const o of i.operands.map((k: string) => k.replace(/\?$/, ""))) if (!(o in (d.machine.operand ?? {}))) fail("machine.toml", `instruction "${i.name}" has the operand kind "${o}", which [operand] doesn't list`);
     for (const e of [i.pops, i.pushes]) {
       if (typeof e === "string" && !i.operands.includes(e.split(" ")[0])) fail("machine.toml", `instruction "${i.name}" counts "${e}", but has no such operand`);
@@ -227,6 +227,8 @@ function crossCheck(d: Data) {
       if (!codes.has(c)) fail("machine.toml", `instruction "${i.name}" raises "${c}", which isn't in errors.toml`);
     }
   }
+
+  costsCheck(d, fail);
 
   for (const [name, list] of [["errors.toml", d.errors.error], ["limits.toml", d.limits.limit]] as const) {
     for (const entry of list ?? []) {
@@ -488,14 +490,21 @@ const VIEWS: Record<string, View> = {
 
   costs: (d) => {
     const head = `Cost Model **${d.costs.version}**.`;
-    if (!d.costs.rate?.length) return `${head} ${todo("chapter 8")}`;
-    return [head, table(["Cost Model key", "Base Fuel", "Per-unit terms"],
-      d.costs.rate.map((r: any) => [
-        code(r.key),
-        r.base,
-        (r.terms ?? []).map((t: any) => `${t.fuel} per ${t.per}`).join(", "),
-      ]))].join("\n\n");
+    const rows = (d.costs.rate ?? []).filter((r: any) => !r.key.startsWith("builtin."));
+    return [head, table(["Cost Model key", "Fuel", "Allocation", "Input"],
+      rows.map((r: any) => [code(r.key), code(r.fuel), r.alloc ? code(r.alloc) : "0", r.input ?? ""]))].join("\n\n");
   },
+
+  "costs.builtins": (d) =>
+    table(["Built-in", "Fuel", "Allocation", "Input"],
+      (d.costs.rate ?? []).filter((r: any) => r.key.startsWith("builtin.")).map((r: any) => [code(r.key.slice(8)), code(r.fuel), r.alloc ? code(r.alloc) : "0", r.input ?? ""])),
+
+  "costs.measures": (d) =>
+    [table(["Measure", "Counts"], Object.entries(d.costs.measure ?? {}).map(([k, v]) => [code(k), v as string])),
+     table(["Subject", "Is"], Object.entries(d.costs.subject ?? {}).map(([k, v]) => [code(k), v as string]))].join("\n\n"),
+
+  "costs.sizes": (d) =>
+    table(["Of", "Logical size"], (d.costs.size ?? []).map((s: any) => [s.of, code(s.size)])),
 
   "host-errors": (d, file) =>
     table(["Code", "Raised when"],
@@ -518,6 +527,74 @@ const VIEWS: Record<string, View> = {
 const glossarySource = await Bun.file(join(ROOT, "CONTEXT.md")).text();
 
 // Chapter 7: one region per Built-in group, stdlib Library and Standard Capability.
+// costs.toml (ADRs 0006 and 0010): every formula parses and uses only the
+// measures and subjects it lists, where they apply; every Cost Model key in
+// machine.toml, and every Built-in, has one rate; and every kind has a size.
+const COST_ONLY_KEYS = new Set(["clause", "unwind"]);
+const KINDS = ["nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object"];
+const STATE_SIZES = ["iterator", "replacement", "reader", "frame", "run", "message", "pending call"];
+
+function formulaProblems(f: string, ok: (measure: string, subject: string | null) => string | null, measures: Set<string>, subjects: Set<string>): string[] {
+  const out: string[] = [];
+  for (const term of f.split("+").map((t) => t.trim())) {
+    const m = /^(?:(\d+) \* )?(?:([a-z0-9]+)(?:\(([a-z0-9]+)\))?)(?: \/ (\d+))?$/.exec(term);
+    if (/^\d+$/.test(term)) continue;
+    if (!m) {
+      out.push(`the term \`${term}\` isn't a number or [n *] measure [/ n]`);
+      continue;
+    }
+    const [, , measure, subject] = m;
+    if (!measures.has(measure!)) out.push(`\`${measure}\` isn't a measure`);
+    else if (subject && !subjects.has(subject) && !/^x[1-9]$/.test(subject)) out.push(`\`${subject}\` isn't a subject`);
+    else {
+      const why = ok(measure!, subject ?? null);
+      if (why) out.push(why);
+    }
+  }
+  return out;
+}
+
+function costsCheck(d: Data, fail: (file: string, msg: string) => void) {
+  const c = d.costs;
+  const measures = new Set(Object.keys(c.measure ?? {}));
+  const subjects = new Set(Object.keys(c.subject ?? {}));
+  const BARE = new Set(["scanned", "steps", "frames", "clauses", "count", "declared"]);
+  const machineKeys = new Map<string, any[]>();
+  for (const i of d.machine.instruction ?? []) machineKeys.set(i.cost, [...(machineKeys.get(i.cost) ?? []), i]);
+  const builtins = new Map<string, any>((d.stdlib.builtin ?? []).filter((b: any) => b.group !== "constants").map((b: any) => [b.name, b]));
+  for (const k of duplicates((c.rate ?? []).map((r: any) => r.key))) fail("costs.toml", `the key "${k}" is rated twice`);
+  for (const r of c.rate ?? []) {
+    const isBuiltin = r.key.startsWith("builtin.");
+    const name = r.key.slice("builtin.".length);
+    if (isBuiltin && !builtins.has(name)) fail("costs.toml", `"${r.key}" rates no Built-in`);
+    if (!isBuiltin && !machineKeys.has(r.key) && !COST_ONLY_KEYS.has(r.key)) fail("costs.toml", `"${r.key}" isn't a Cost Model key of any instruction`);
+    const args = isBuiltin ? ((/\((.*)\)/.exec(builtins.get(name)?.call ?? "")?.[1] ?? "").split(",").filter((a: string) => a.trim()).length) : 0;
+    const ok = (measure: string, subject: string | null): string | null => {
+      if (BARE.has(measure) === !!subject) return `\`${measure}\` ${BARE.has(measure) ? "takes no subject" : "needs a subject"}`;
+      if (measure === "declared" && r.key !== "capability") return "`declared` is only for Capability calls";
+      if (measure === "frames" && r.key !== "unwind") return "`frames` is only for unwinding";
+      if (measure === "clauses" && r.key !== "clause") return "`clauses` is only for dispatch";
+      if ((measure === "scanned" || subject === "input") && !r.input) return `\`${subject === "input" ? "input" : "scanned"}\` needs the rate to say what its input is`;
+      if (subject === "v") return "`v` is only for sizes";
+      if (subject && /^x\d$/.test(subject) && (!isBuiltin || Number(subject.slice(1)) > args)) return `\`${subject}\` isn't an argument of this Built-in`;
+      return null;
+    };
+    for (const f of ["fuel", "alloc"] as const) {
+      if (r[f] === undefined) continue;
+      for (const p of formulaProblems(r[f], ok, measures, subjects)) fail("costs.toml", `"${r.key}" ${f}: ${p}`);
+    }
+  }
+  const rated = new Set((c.rate ?? []).map((r: any) => r.key));
+  for (const k of COST_ONLY_KEYS) if (!rated.has(k)) fail("costs.toml", `"${k}" has no rate`);
+  for (const b of builtins.keys()) if (!rated.has(`builtin.${b}`)) fail("costs.toml", `the Built-in "${b}" has no rate`);
+  const sized = (c.size ?? []).map((s: any) => s.of);
+  for (const k of [...KINDS, ...STATE_SIZES]) if (!sized.includes(k)) fail("costs.toml", `"${k}" has no size`);
+  for (const s of c.size ?? []) {
+    const ok = (measure: string, subject: string | null) => (BARE.has(measure) || subject !== "v" ? `a size is measured over \`v\`` : null);
+    for (const p of formulaProblems(s.size, ok, measures, subjects)) fail("costs.toml", `the size of ${s.of}: ${p}`);
+  }
+}
+
 // Chapter 8: one region per group of instructions.
 const MACHINE_GROUPS = ["values", "control", "operators", "access", "building", "calls", "patterns", "loops", "errors", "effects"] as const;
 function machineViews(d: Data) {
