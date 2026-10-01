@@ -265,7 +265,9 @@ describe('Core name resolution', () => {
     const result = checkSource(
       'on t\n put given\n put 1 into x\n end given into f\n put 2 into x\nend t',
     );
-    expect(result.ok).toBe(true);
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([["can't write", 3, 13]]);
     expect(
       result.tree!.scopes[2]!.captures.map(binding => binding.name),
     ).toEqual(['x']);
@@ -351,5 +353,240 @@ describe('Core name resolution', () => {
       expect(result.error).toBeNull();
       expect(result.diagnostics).toEqual([]);
     }
+  });
+});
+
+describe('Core binding and function contracts', () => {
+  test('Constants reject every Container write at its root', () => {
+    const commands = [
+      'put 1 into c',
+      'put 1 after c',
+      'put 1 before c',
+      'add 1 to c',
+      'subtract 1 from c',
+      'multiply c by 2',
+      'divide c by 2',
+      'delete c',
+      'replace <digit> in c with "x"',
+      'put 1 into item 1 of c',
+      'put 1 into the key of c',
+      "put 1 into c's key",
+    ];
+    for (const command of commands) {
+      const source = `constant c = "1"\non t\n ${command}\nend t`;
+      expect(diagnostics(source)).toEqual([
+        ["can't write", 3, command.lastIndexOf('c') + 2],
+      ]);
+    }
+  });
+
+  test('imported Constants keep their binding when written through a rename', () => {
+    const result = checkSource(
+      'use epoch from date as origin\non t\n put 1 into origin\nend t',
+    );
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([["can't write", 3, 13]]);
+    const references = names(result.tree!.root).filter(
+      name => name.text === 'origin',
+    );
+    expect(references[1]!.binding).toBe(references[0]!.binding);
+  });
+
+  test('writes to captured parameters and locals are read-only, including nested Lambdas', () => {
+    expect(
+      diagnostics(
+        'on t x\n put 1 into y\n put given\n  add 1 to x\n  put given\n   delete the key of y\n  end given into nested\n end given into f\nend t',
+      ),
+    ).toEqual([
+      ["can't write", 4, 12],
+      ["can't write", 6, 22],
+    ]);
+  });
+
+  test('Lambda locals, parameters, Script Variables and shadowed Built-ins remain writable', () => {
+    expect(
+      diagnostics(
+        'script variable live\non t x\n put given x\n  put 1 into x\n  let own be 0\n  add 1 to own\n  put 1 into fresh\n  put 1 into live\n  put 1 into pi\n  return it\n end given into f\nend t',
+      ),
+    ).toEqual([]);
+  });
+
+  test('set rejects bare variables but accepts key paths for later kind checks', () => {
+    expect(
+      diagnostics(
+        "on t\n set x to 1\n set the key of x to 2\n set x's key to 3\nend t",
+      ),
+    ).toEqual([['not a property', 2, 2]]);
+    expect(diagnostics('constant c = 1\non t\n set c to 2\nend t')).toEqual([
+      ['not a property', 3, 2],
+      ["can't write", 3, 6],
+    ]);
+  });
+
+  test('named calls enforce required and total parameter counts, including forward calls', () => {
+    expect(
+      diagnostics(
+        'on t\n f()\n f(1)\n f(1, 2)\n f(1, 2, 3)\n f(1, 2, 3, 4)\n zero()\n zero(1)\nend t\nfunction f x, y = 2, z = 3\n return x\nend f\nfunction zero\nend zero',
+      ),
+    ).toEqual([
+      ['wrong argument count', 2, 2],
+      ['wrong argument count', 6, 2],
+      ['wrong argument count', 8, 2],
+    ]);
+    expect(diagnostics('function f x\n return f()\nend f')).toEqual([
+      ['wrong argument count', 2, 9],
+    ]);
+    expect(diagnostics('function f x = 1\n return f()\nend f')).toEqual([]);
+  });
+
+  test('Built-in and Standard Library contracts include optional arguments and renames', () => {
+    expect(
+      diagnostics(
+        'use sortBy from list as ordered\non t\n put round() into x\n put round(1) into x\n put round(1, 2, "half up", 4) into x\n put ordered([]) into x\n put ordered([], given x: x) into x\n put ordered([], given x: x, "descending") into x\nend t',
+      ),
+    ).toEqual([
+      ['wrong argument count', 3, 6],
+      ['wrong argument count', 5, 6],
+      ['wrong argument count', 6, 6],
+    ]);
+  });
+
+  test('registered Library function contracts survive import renames', () => {
+    const result = checkSource(
+      'use f from helpers as renamed\non t\n renamed()\n renamed(1)\n renamed(1, 2)\n renamed(1, 2, 3)\nend t',
+      {
+        libraries: {
+          helpers: {
+            f: { kind: 'function', contract: { required: 1, total: 2 } },
+          },
+        },
+      },
+    );
+    expect(result.error).toBeNull();
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([
+      ['wrong argument count', 3, 2],
+      ['wrong argument count', 6, 2],
+    ]);
+    expect(
+      names(result.tree!.root).find(name => name.role === 'call')!.binding,
+    ).toMatchObject({ contract: { required: 1, total: 2 } });
+  });
+
+  test('calls through variables and Handler clauses defer arity to run time', () => {
+    expect(
+      diagnostics(
+        'on t min\n put named into f\n put given x: x into g\n return [f(), g(), min(), t()]\nend t\nfunction named x\n return x\nend named',
+      ),
+    ).toEqual([]);
+  });
+
+  test('every required parameter after a default reports default order at that parameter', () => {
+    expect(diagnostics('function f a = 1, b, c = 3, d\nend f')).toEqual([
+      ['default order', 1, 19],
+      ['default order', 1, 29],
+    ]);
+  });
+
+  test('initializers and defaults allow literals, earlier Constants and Built-ins', () => {
+    expect(
+      diagnostics(
+        'constant first = 2\nconstant second = round(first + pi)\nscript variable value = [second, {key: the length of "😀"}, <digit>, <<1 as uint8>>]\nfunction f a = first, b = round(2, 1), c = {key: newline}\nend f',
+      ),
+    ).toEqual([]);
+    expect(
+      diagnostics(
+        'use epoch from date\nconstant origin = epoch\nfunction f x = origin\nend f',
+      ),
+    ).toEqual([]);
+  });
+
+  test('literal map keys and property names are not forbidden runtime references', () => {
+    expect(
+      diagnostics(
+        'constant c = {me: 1, it: 2}\nconstant d = the me of c\nfunction f x = the it of c\nend f',
+      ),
+    ).toEqual([]);
+    expect(diagnostics('constant c = ["me", "it"]')).toEqual([]);
+  });
+
+  test('Lambda literals defer their bodies but cannot capture parameters in defaults', () => {
+    expect(
+      diagnostics(
+        'script variable live\nconstant identity = given x: x\nscript variable callback = given x: live + x\nfunction f action = given x: helper(x)\nend f\nfunction helper x\n return x\nend helper',
+      ),
+    ).toEqual([]);
+    expect(
+      diagnostics(
+        'function f a, callback = given x: given y: a + x + y\nend f',
+      ),
+    ).toEqual([['not constant', 1, 44]]);
+  });
+
+  test('initializers reject forward and self references at the first forbidden token', () => {
+    expect(
+      diagnostics(
+        'constant a = b + a\nconstant b = 1\nscript variable v = v\nfunction f x = later\nend f\nconstant later = 2',
+      ),
+    ).toEqual([
+      ['not constant', 1, 14],
+      ['not constant', 3, 21],
+      ['not constant', 4, 16],
+    ]);
+  });
+
+  test('defaults reject parameters, Script Variables and user functions, including bare Function Values', () => {
+    expect(
+      diagnostics(
+        'script variable v\nfunction f a, b = a, c = v, d = helper(), e = helper\nend f\nfunction helper\nend helper',
+      ),
+    ).toEqual([
+      ['not constant', 2, 19],
+      ['not constant', 2, 26],
+      ['not constant', 2, 33],
+      ['not constant', 2, 47],
+    ]);
+  });
+
+  test('runtime-only constructs are forbidden even without ordinary name references', () => {
+    const expressions = ['me', 'it', 'the target'];
+    for (const expression of expressions) {
+      expect(diagnostics(`constant c = ${expression}`)).toContainEqual([
+        'not constant',
+        1,
+        14,
+      ]);
+    }
+    expect(diagnostics('constant c = missing + me')).toEqual([
+      ['unknown name', 1, 14],
+      ['not constant', 1, 14],
+    ]);
+    expect(diagnostics('constant c = f()\nfunction f x\nend f')).toEqual([
+      ['wrong argument count', 1, 14],
+      ['not constant', 1, 14],
+    ]);
+  });
+
+  test('contract diagnostics retain scalar columns, UTF-16 spans and catalogue ordering', () => {
+    const source =
+      'constant c = 1\r\non t\r\n\tput ["😀", f()] into c\r\nend t\r\nfunction f a = me, b\r\nend f';
+    const result = checkSource(source);
+    expect(result.error).toBeNull();
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([
+      ['wrong argument count', 3, 12],
+      ["can't write", 3, 22],
+      ['not constant', 5, 16],
+      ['default order', 5, 20],
+    ]);
+    expect(result.diagnostics[0]!.span).toEqual({
+      start: source.indexOf('f()'),
+      end: source.indexOf('f()') + 1,
+      line: 3,
+      col: 12,
+    });
   });
 });

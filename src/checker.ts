@@ -5,6 +5,8 @@ import type {
   Binding,
   BindingKind,
   ExportKind,
+  FunctionContract,
+  LibraryExport,
   NameRole,
   SemanticElement,
   SemanticName,
@@ -22,8 +24,8 @@ export type Diagnostic = {
   span: SourceSpan;
 };
 export type CheckOptions = {
-  /** Export kinds supplied by the Library loader; standard exports are known by default. */
-  libraries?: Readonly<Record<string, Readonly<Record<string, ExportKind>>>>;
+  /** Exports supplied by the Library loader; kind-only entries defer call-count checks. */
+  libraries?: Readonly<Record<string, Readonly<Record<string, LibraryExport>>>>;
   /** Well-known Host Object names bound at load. */
   objects?: readonly string[];
 };
@@ -71,7 +73,7 @@ const isName = (token: Token) =>
   token.t === 'word' && token.v !== '_' && !RESERVED.has(token.v);
 const bodyRules = new Set(['Handler', 'Function', 'Lambda']);
 
-/** Name/binding checks only: effect, kind, constant and control-flow checks follow later. */
+/** Resolve bindings and check writes, named calls and constant references without evaluation. */
 export const checkSyntax = (
   syntax: SyntaxNode,
   options: CheckOptions = {},
@@ -247,15 +249,16 @@ export const checkSyntax = (
   });
   const native = new Map<string, Binding>();
   for (const builtin of builtins) {
-    native.set(
+    const binding = makeBinding(
       builtin.name,
-      makeBinding(
-        builtin.name,
-        builtin.kind === 'function' ? 'builtin function' : 'builtin constant',
-        unit,
-        null,
-      ),
+      builtin.kind === 'function' ? 'builtin function' : 'builtin constant',
+      unit,
+      null,
     );
+    if ('contract' in builtin) {
+      binding.contract = builtin.contract;
+    }
+    native.set(builtin.name, binding);
   }
   for (const name of options.objects ?? []) {
     unit.bindings.set(name, makeBinding(name, 'object', unit, null));
@@ -265,6 +268,7 @@ export const checkSyntax = (
   }
 
   const declarationSites: {
+    contract?: FunctionContract;
     importedFrom?: Binding['importedFrom'];
     kind: BindingKind;
     site: Site;
@@ -273,25 +277,27 @@ export const checkSyntax = (
     token: Token,
     kind: BindingKind,
     importedFrom?: Binding['importedFrom'],
+    contract?: FunctionContract,
   ) => {
     const site = mark(token, importedFrom ? 'import' : 'declaration');
     site.scope = unit;
-    declarationSites.push({ site, kind, importedFrom });
+    declarationSites.push({ site, kind, importedFrom, contract });
   };
-  const importKind = (
+  const importInfo = (
     library: string,
     name: string,
-  ): ExportKind | undefined => {
+  ): { contract?: FunctionContract; kind: ExportKind } | undefined => {
     const supplied =
       options.libraries && Object.hasOwn(options.libraries, library)
         ? options.libraries[library]
         : undefined;
     if (supplied) {
-      return Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+      const entry = Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+      return typeof entry === 'string' ? { kind: entry } : entry;
     }
     return libraryExports.find(
       entry => entry.library === library && entry.name === name,
-    )?.kind;
+    );
   };
 
   for (const element of ordered) {
@@ -327,9 +333,22 @@ export const checkSyntax = (
           )!,
         );
         if (name) {
+          const parameters = ns.filter(node => node.rule === 'Parameter');
           declaration(
             name,
             element.rule === 'Handler' ? 'handler' : 'function',
+            undefined,
+            element.rule === 'Function'
+              ? {
+                  required: parameters.filter(
+                    parameter =>
+                      !nodes(parameter).some(
+                        node => node.rule === 'Expression',
+                      ),
+                  ).length,
+                  total: parameters.length,
+                }
+              : undefined,
           );
         }
         break;
@@ -352,12 +371,14 @@ export const checkSyntax = (
           if (rename) {
             mark(name, 'import');
           }
-          const kind = importKind(library.v, name.v);
-          if (kind) {
-            declaration(rename ?? name, kind, {
-              library: library.v,
-              name: name.v,
-            });
+          const info = importInfo(library.v, name.v);
+          if (info) {
+            declaration(
+              rename ?? name,
+              info.kind,
+              { library: library.v, name: name.v },
+              info.contract,
+            );
           } else {
             mark(rename ?? name, 'import');
             const knownLibrary =
@@ -430,7 +451,7 @@ export const checkSyntax = (
         if (!sites.has(head) && isName(head) && ts[0] === head && !ns.length) {
           mark(head, binaryOf.get(element) ? 'binary size' : 'value');
         }
-        if (head.v === 'it') {
+        if (head.t === 'word' && head.v === 'it') {
           mark(head, 'value');
         }
         break;
@@ -500,6 +521,7 @@ export const checkSyntax = (
     }
   }
   // Container grammar always follows its base operand down to a bare Primary.
+  const containers: { node: SyntaxNode; root: Site }[] = [];
   for (const element of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Container') {
       continue;
@@ -509,7 +531,7 @@ export const checkSyntax = (
       const children = nodes(base);
       if (base.rule === 'Primary' && !children.length) {
         const root = first.get(base)!;
-        mark(root, 'write', true);
+        containers.push({ node: element, root: mark(root, 'write', true) });
         break;
       }
       const next =
@@ -544,7 +566,7 @@ export const checkSyntax = (
       .filter((element): element is Token => element.kind === 'token')
       .map(token => [token.pos, token]),
   );
-  for (const { site, kind, importedFrom } of declarationSites) {
+  for (const { site, kind, importedFrom, contract } of declarationSites) {
     const old = unit.bindings.get(site.name.text);
     if (
       old &&
@@ -560,6 +582,9 @@ export const checkSyntax = (
     const binding = old ?? makeBinding(site.name.text, kind, unit, site.token);
     if (importedFrom && !old) {
       binding.importedFrom = importedFrom;
+    }
+    if (contract && !old) {
+      binding.contract = contract;
     }
     unit.bindings.set(site.name.text, binding);
     site.name.binding = binding;
@@ -595,7 +620,7 @@ export const checkSyntax = (
       (global.kind !== 'handler' || global.importedFrom) &&
       (site.name.role !== 'write' ||
         global.kind === 'function' ||
-        global.importedFrom)
+        (global.importedFrom && global.kind !== 'constant'))
     ) {
       clash(site, global);
     }
@@ -604,7 +629,7 @@ export const checkSyntax = (
       global &&
       global.kind !== 'function' &&
       global.kind !== 'handler' &&
-      !global.importedFrom
+      (!global.importedFrom || global.kind === 'constant')
     ) {
       site.name.binding = global;
       continue;
@@ -708,6 +733,7 @@ export const checkSyntax = (
       }
     }
   }
+  const firstCapture = new Map<Scope, Token>();
   for (const site of [...sites.values()].sort(
     (a, b) => a.token.pos - b.token.pos,
   )) {
@@ -722,6 +748,121 @@ export const checkSyntax = (
     ) {
       if (scope.kind === 'lambda') {
         scope.captures.add(binding);
+        if (!firstCapture.has(scope)) {
+          firstCapture.set(scope, site.token);
+        }
+      }
+    }
+  }
+
+  for (const { node, root } of containers) {
+    const binding = root.name.binding;
+    if (
+      binding?.kind === 'constant' ||
+      (binding && root.scope.captures.has(binding))
+    ) {
+      report("can't write", root.token);
+    }
+    const statement = parents.get(node);
+    const head = statement && first.get(statement);
+    if (
+      head?.v === 'set' &&
+      first.get(node) === root.token &&
+      last.get(node) === root.token
+    ) {
+      report('not a property', head);
+    }
+  }
+
+  const checkConstant = (expression: SyntaxNode, before: number) => {
+    const pending: SyntaxElement[] = [expression];
+    while (pending.length) {
+      const element = pending.pop()!;
+      if (element.kind === 'node') {
+        // Creation reads captures now; the Lambda body only runs when called.
+        if (element.rule === 'Lambda') {
+          const capture = firstCapture.get(scopeOf.get(element)!);
+          if (capture) {
+            report('not constant', capture);
+            return;
+          }
+          continue;
+        }
+        if (element.rule === 'The' && !nodes(element).length) {
+          report('not constant', first.get(element)!);
+          return;
+        }
+        pending.push(...[...element.children].reverse());
+        continue;
+      }
+      const site = sites.get(element);
+      if (
+        parents.get(element)?.rule === 'Primary' &&
+        element.t === 'word' &&
+        (element.v === 'me' || element.v === 'it')
+      ) {
+        report('not constant', element);
+        return;
+      }
+      if (!site || !['value', 'call', 'binary size'].includes(site.name.role)) {
+        continue;
+      }
+      const binding = site.name.binding;
+      const allowed =
+        site.name.role === 'call'
+          ? binding?.kind === 'builtin function'
+          : binding?.kind === 'builtin constant' ||
+            (binding?.kind === 'constant' &&
+              binding.span !== null &&
+              binding.span.start < before);
+      if (!allowed) {
+        report('not constant', element);
+        return;
+      }
+    }
+  };
+  for (const element of ordered) {
+    if (element.kind !== 'node') {
+      continue;
+    }
+    const head = first.get(element);
+    if (!head) {
+      continue;
+    }
+    const children = nodes(element);
+    if (element.rule === 'Call') {
+      const binding = sites.get(head)?.name.binding;
+      const contract =
+        binding?.kind === 'function' || binding?.kind === 'builtin function'
+          ? binding.contract
+          : undefined;
+      const args = children.find(child => child.rule === 'ExpressionList');
+      const count = args ? nodes(args).length : 0;
+      if (contract && (count < contract.required || count > contract.total)) {
+        report('wrong argument count', head);
+      }
+    } else if (element.rule === 'Function') {
+      let defaultSeen = false;
+      for (const parameter of children.filter(
+        child => child.rule === 'Parameter',
+      )) {
+        const expression = nodes(parameter).find(
+          child => child.rule === 'Expression',
+        );
+        if (expression) {
+          defaultSeen = true;
+          checkConstant(expression, head.pos);
+        } else if (defaultSeen) {
+          report('default order', first.get(parameter)!);
+        }
+      }
+    } else if (
+      element.rule === 'Declaration' &&
+      (head.v === 'constant' || head.v === 'script')
+    ) {
+      const expression = children.find(child => child.rule === 'Expression');
+      if (expression) {
+        checkConstant(expression, head.pos);
       }
     }
   }
