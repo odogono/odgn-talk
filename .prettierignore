@@ -1,0 +1,10 @@
+/.cache/
+/.claude/
+/.codex/
+/.vscode/
+/dist/
+/node_modules/
+# Generated tables must reproduce the generator's exact bytes.
+/src/generated/
+# Normative declarations are Spec artifacts, not implementation code.
+/spec/

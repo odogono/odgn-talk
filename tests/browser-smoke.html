@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NorthTalk browser smoke test</title>
+<pre id="result">Running…</pre>
+<script type="module">
+  import * as talk from "/index.js";
+  const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  const platform = { normalize: String.prototype.normalize, upper: String.prototype.toUpperCase, lower: String.prototype.toLowerCase, segmenter: Intl.Segmenter };
+  try {
+    // A browser's Unicode version cannot affect Core values.
+    String.prototype.normalize = () => { throw new Error("Platform normalization used"); };
+    String.prototype.toUpperCase = () => { throw new Error("Platform uppercase used"); };
+    String.prototype.toLowerCase = () => { throw new Error("Platform lowercase used"); };
+    Intl.Segmenter = class { constructor() { throw new Error("Platform segmentation used"); } };
+    const value = talk.text("e\u0301");
+    assert(value.asText() === "é", "NFC constructor");
+    assert(talk.text("\u1100\u1161\u11a8").asText() === "각", "Hangul NFC");
+    const nested = talk.map([["2", talk.num(2)], ["1", talk.list(value)], ["__proto__", talk.bool(true)]]);
+    assert(talk.encodeValue(nested) === '{"2":2,"1":["é"],"__proto__":true}', "Encoding order");
+    assert(talk.decodeValue(talk.encodeValue(nested), () => undefined).equals(nested), "Encoding round trip");
+    assert(talk.readDisplay(nested.toString()).equals(nested), "Display round trip");
+    assert(talk.num(0.1).asDecimal().toString() === "0.1", "Float constructor");
+    let refused = false;
+    try { talk.text("\ud800"); } catch (error) { refused = error instanceof talk.HostError && error.code === "invalid value"; }
+    assert(refused, "Lone surrogate refusal");
+    let deep = talk.nothing;
+    for (let i = 0; i < 3000; i++) deep = i % 2 ? talk.list(deep) : talk.map([["$deep", deep]]);
+    assert(talk.readDisplay(deep.toString()).equals(deep), "Deep display round trip");
+    assert(talk.decodeValue(talk.encodeValue(deep), () => undefined).equals(deep), "Deep encoding round trip");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input and deep values in a browser";
+    globalThis.smokeResult = { passed: true };
+  } catch (error) {
+    document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
+    globalThis.smokeResult = { passed: false, error: String(error) };
+    console.error(error);
+  } finally {
+    String.prototype.normalize = platform.normalize;
+    String.prototype.toUpperCase = platform.upper;
+    String.prototype.toLowerCase = platform.lower;
+    Intl.Segmenter = platform.segmenter;
+  }
+</script>

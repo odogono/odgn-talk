@@ -2,15 +2,33 @@
   "name": "@odgn/northtalk",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "spec:gen": "bun tools/spec/generate.ts",
     "spec:check": "bun tools/spec/generate.ts --check",
     "grammar:check": "bun tools/grammar/check.ts",
     "machine:check": "bun tools/machine/check.ts",
-    "corpus:check": "bun tools/corpus/check.ts"
+    "corpus:check": "bun tools/corpus/check.ts",
+    "corpus:run": "bun tools/core/corpus.ts",
+    "unicode:generate": "bun tools/unicode/generate.ts",
+    "unicode:check": "bun tools/unicode/generate.ts --check",
+    "typecheck": "tsc",
+    "lint": "bunx --bun eslint . --max-warnings 0",
+    "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
+    "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
+    "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
+    "test": "bun run unicode:check && bun test tests",
+    "build": "bun run unicode:check && bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
+    "test:browser": "bun tools/core/browser-smoke.ts"
   },
   "devDependencies": {
+    "@nkzw/eslint-config": "^3.3.0",
     "@types/bun": "^1.4.2",
-    "ajv": "^8"
+    "ajv": "^8",
+    "eslint": "^9",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.0"
   }
 }
