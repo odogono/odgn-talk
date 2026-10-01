@@ -546,11 +546,13 @@ export class Group {
   }
 
   private landUrgentInputs() {
-    const urgent = this.inputs.filter(i => i.urgent);
-    this.inputs = this.inputs.filter(i => !i.urgent);
-    for (const input of urgent) {
-      this.trace(typeof input.line === 'string' ? input.line : input.line());
-      input.apply();
+    while (this.inputs.some(i => i.urgent)) {
+      const urgent = this.inputs.filter(i => i.urgent);
+      this.inputs = this.inputs.filter(i => !i.urgent);
+      for (const input of urgent) {
+        this.trace(typeof input.line === 'string' ? input.line : input.line());
+        input.apply();
+      }
     }
   }
 
@@ -1439,6 +1441,17 @@ export class Group {
     if (this.lastClock !== null && now < this.lastClock) {
       throw new HostError('clock backwards');
     }
+    this.pumping = true;
+    try {
+      return this.pumpAtClock(now, o);
+    } finally {
+      this.active = null;
+      this.activeStop = null;
+      this.pumping = false;
+    }
+  }
+
+  private pumpAtClock(now: bigint, o: PumpOptions): PumpResult {
     this.lastClock = now;
     const slice = o.fuelSlice ?? 0;
     const cap = o.fuelCap ?? 0;
@@ -1494,51 +1507,46 @@ export class Group {
       }
     }
     this.timers = this.timers.filter(t => t.live);
-    this.pumping = true;
     let fuel = 0;
-    try {
-      // Each Script's Fuel this Pump, against its slice less any debt.
-      const spent = new Map<ScriptState, number>();
-      const allowance = new Map<ScriptState, number>();
+    // Each Script's Fuel this Pump, against its slice less any debt.
+    const spent = new Map<ScriptState, number>();
+    const allowance = new Map<ScriptState, number>();
+    for (const s of this.scripts) {
+      spent.set(s, 0);
+      if (slice) {
+        const available = slice - s.debt;
+        allowance.set(s, Math.max(0, available));
+        s.debt = available < 0 ? -available : 0;
+      }
+    }
+    const capped = () => cap > 0 && fuel >= cap;
+    const sliced = (s: ScriptState) =>
+      slice > 0 && spent.get(s)! >= allowance.get(s)!;
+    const preempt = (s: ScriptState) =>
+      sliced(s) ? 'slice' : capped() ? 'cap' : null;
+    let progress = true;
+    while (progress && !capped()) {
+      progress = false;
       for (const s of this.scripts) {
-        spent.set(s, 0);
-        if (slice) {
-          const available = slice - s.debt;
-          allowance.set(s, Math.max(0, available));
-          s.debt = available < 0 ? -available : 0;
+        if (!s.queue.length || sliced(s) || capped()) {
+          continue;
         }
+        progress = true;
+        this.turn(
+          s,
+          reports,
+          () => preempt(s),
+          cost => {
+            spent.set(s, spent.get(s)! + cost);
+            fuel += cost;
+          },
+        );
       }
-      const capped = () => cap > 0 && fuel >= cap;
-      const sliced = (s: ScriptState) =>
-        slice > 0 && spent.get(s)! >= allowance.get(s)!;
-      const preempt = (s: ScriptState) =>
-        sliced(s) ? 'slice' : capped() ? 'cap' : null;
-      let progress = true;
-      while (progress && !capped()) {
-        progress = false;
-        for (const s of this.scripts) {
-          if (!s.queue.length || sliced(s) || capped()) {
-            continue;
-          }
-          progress = true;
-          this.turn(
-            s,
-            reports,
-            () => preempt(s),
-            cost => {
-              spent.set(s, spent.get(s)! + cost);
-              fuel += cost;
-            },
-          );
-        }
+    }
+    for (const s of this.scripts) {
+      if (slice && spent.get(s)! > allowance.get(s)!) {
+        s.debt += spent.get(s)! - allowance.get(s)!;
       }
-      for (const s of this.scripts) {
-        if (slice && spent.get(s)! > allowance.get(s)!) {
-          s.debt += spent.get(s)! - allowance.get(s)!;
-        }
-      }
-    } finally {
-      this.pumping = false;
     }
     this.landUrgentInputs();
     for (const s of this.scripts) {

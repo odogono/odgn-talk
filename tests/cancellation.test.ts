@@ -268,6 +268,181 @@ describe('Queueing Policies', () => {
 });
 
 describe('cancellation boundaries', () => {
+  test('dropping checks the kept Persistent State at the Run end', () => {
+    const { g } = setup();
+    const s = g.load({
+      name: 's',
+      limits: { persistentState: 180 },
+      source: 'on go, dropping\n  wait 1 s\nend go',
+    });
+    s.deliver({ name: 'go' });
+    g.pump(0n);
+    for (let i = 0; i < 3; i++) {
+      s.deliver({ name: 'go' });
+    }
+    expect(g.pump(0n).reports).toMatchObject([
+      { outcome: 'limit fault', limit: 'persistent' },
+      { outcome: 'limit fault', limit: 'persistent' },
+      { outcome: 'dropped' },
+    ]);
+  });
+
+  test('Stop calls chained through abort callbacks all land before Pump returns', () => {
+    const { g, trace } = setup();
+    const api = defineCapability('api', {
+      hold: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        start: c => {
+          const next = c.id.startsWith('s/')
+            ? 't'
+            : c.id.startsWith('t/')
+              ? 'u'
+              : null;
+          if (next) {
+            c.signal.addEventListener('abort', () =>
+              g.script(next)!.stop('chained'),
+            );
+          }
+        },
+      },
+    });
+    for (const name of ['s', 't', 'u']) {
+      g.load({
+        name,
+        grants: { api: api.grant('all', undefined) },
+        source: 'on go\n  ask api to hold and wait\nend go',
+      }).deliver({ name: 'go' });
+    }
+    g.pump(0n);
+    g.script('s')!.stop('first');
+    const p = g.pump(0n);
+    expect(p.reports.filter(r => r.kind === 'stop').map(r => r.script)).toEqual(
+      ['s', 't', 'u'],
+    );
+    expect(p.state).toBe('stopped');
+    expect(
+      trace.filter(l => l.startsWith('> stop')).map(l => l.split(' ')[2]),
+    ).toEqual(['s', 't', 'u']);
+  });
+
+  test('Stop preserves call abandonment when queued cancellation has not stretched', () => {
+    const { g, trace } = setup();
+    let pending!: Call<unknown>;
+    const api = defineCapability('api', {
+      hold: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        start: c => {
+          pending = c;
+        },
+      },
+    });
+    const s = g.load({
+      name: 's',
+      grants: { api: api.grant('all', undefined) },
+      source:
+        'script variable n = 0\non go\n  try\n    ask api to hold and wait\n  finally\n    put 1 into n\n  end try\nend go',
+    });
+    s.deliver({ name: 'go' });
+    g.pump(0n);
+    s.cancelRun('s/r1');
+    s.stop('done');
+    expect(g.pump(0n).reports).toMatchObject([
+      { kind: 'stop', pendingCalls: ['s/r1.c1'] },
+    ]);
+    expect(pending.signal.aborted).toBe(true);
+    expect(vars(g)).toEqual([['n', '0']]);
+    expect(trace.find(l => l.startsWith('stopped '))).toContain(
+      'abandoned=[s/r1.c1]',
+    );
+    expect(trace.some(l => l.startsWith('abandon '))).toBe(false);
+  });
+
+  test('discarding a ready failed Join preserves deferred abandonment without aborting the failed call', () => {
+    for (const stop of [false, true]) {
+      const { g, trace } = setup();
+      const other = g.load({
+        name: 'other',
+        source: 'on tick\n  return 1\nend tick',
+      });
+      const calls: Call<unknown>[] = [];
+      const api = defineCapability('api', {
+        hold: {
+          mode: 'suspending',
+          cost: { fuel: 0 },
+          start: c => {
+            calls.push(c);
+          },
+        },
+      });
+      const s = g.load({
+        name: 's',
+        grants: { api: api.grant('all', undefined) },
+        source:
+          'on go\n  wait for all\n    ask api to hold and wait\n    ask api to hold and wait\n  end wait\nend go',
+      });
+      s.deliver({ name: 'go' });
+      g.pump(0n);
+      calls[0]!.fail(
+        new Error('failure') as Parameters<Call<unknown>['fail']>[0],
+      );
+      other.deliver({ name: 'tick' });
+      g.pump(0n, { fuelCap: 1 });
+      expect(calls.map(c => c.signal.aborted)).toEqual([false, true]);
+      if (stop) {
+        s.stop('done');
+      } else {
+        s.cancelRun('s/r1');
+      }
+      const p = g.pump(0n);
+      expect(calls.map(c => c.signal.aborted)).toEqual([false, true]);
+      if (stop) {
+        expect(p.reports.filter(r => r.kind === 'stop')).toMatchObject([
+          { kind: 'stop', pendingCalls: ['s/r1.c2'] },
+        ]);
+        expect(trace.find(l => l.startsWith('stopped '))).toContain(
+          'abandoned=[s/r1.c2]',
+        );
+      } else {
+        expect(trace.filter(l => l.startsWith('abandon '))).toEqual([
+          'abandon s/r1.c2',
+        ]);
+      }
+    }
+  });
+
+  test('worker calls from abort listeners during the input drain are reentrant calls', () => {
+    const { g, trace } = setup();
+    let code = '';
+    const api = defineCapability('api', {
+      hold: {
+        mode: 'suspending',
+        cost: { fuel: 0 },
+        start: c => {
+          c.signal.addEventListener('abort', () => {
+            try {
+              g.inspect();
+            } catch (error) {
+              code = (error as { code: string }).code;
+            }
+          });
+        },
+      },
+    });
+    const s = g.load({
+      name: 's',
+      grants: { api: api.grant('all', undefined) },
+      source: 'on go\n  ask api to hold and wait\nend go',
+    });
+    s.deliver({ name: 'go' });
+    g.pump(0n);
+    s.cancelRun('s/r1');
+    g.pump(0n);
+    expect(code).toBe('reentrant call');
+    expect(trace.some(l => l.startsWith('> vars'))).toBe(false);
+  });
+
   test('cancelling at a suspending crossing abandons that just-started call', () => {
     const { g, trace } = setup();
     let pending!: Call<unknown>;

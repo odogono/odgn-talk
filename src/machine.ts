@@ -612,6 +612,10 @@ export class Run {
 
   /** Drop a new Run immediately after dispatch, without entering its body. */
   drop() {
+    if (this.charging && this.persistentState() > this.limits.persistentState) {
+      this.fault('persistentState', this.frame.code.unit.code[this.frame.pc]!);
+      return;
+    }
     this.frames = [];
     this.outcome = { kind: 'dropped' };
   }
@@ -622,13 +626,22 @@ export class Run {
       this.script.variables = [...this.segmentBase];
     }
     const pending = this.suspended;
-    const members =
-      this.join?.members.filter(m => m.answer === undefined) ?? [];
+    const members = this.resumption
+      ? []
+      : (this.join?.members.filter(m => m.answer === undefined) ?? []);
     this.join = null;
     for (const member of members) {
       member.abort?.abort();
     }
-    const ids = members.map(m => m.id);
+    // Fail-fast abandonment happened at input drain, but its records would
+    // normally wait for resume. Keep them when that resume is discarded.
+    const ids = [
+      ...this.cancellationAbandons,
+      ...(this.resumption?.k === 'join-failed'
+        ? this.resumption.abandon
+        : members.map(m => m.id)),
+    ];
+    this.cancellationAbandons = [];
     if (this.crossingCall) {
       this.crossingCall.abort.abort();
       ids.push(this.crossingCall.id);
