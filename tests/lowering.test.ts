@@ -574,9 +574,6 @@ const unsettled = (source: string, options = {}) => {
 };
 
 describe('what the Spec leaves unsettled', () => {
-  test('a Quantity literal naming two Units of one Unit Kind', () => {
-    expect(unsettled('constant a = 2 m*ft')).toBeInstanceOf(LoweringError);
-  });
   test('a bit field whose width is not an integer literal', () => {
     expect(
       unsettled('on h n\n  return << 1 as (n) bits >>\nend h'),

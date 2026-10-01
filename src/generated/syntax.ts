@@ -207,182 +207,322 @@ export const units = [
   {
     "name": "mg",
     "kind": "mass",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.000001",
+      "1"
+    ]
   },
   {
     "name": "g",
     "kind": "mass",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.001",
+      "1"
+    ]
   },
   {
     "name": "kg",
     "kind": "mass",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "lb",
     "kind": "mass",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.45359237",
+      "1"
+    ]
   },
   {
     "name": "oz",
     "kind": "mass",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.028349523125",
+      "1"
+    ]
   },
   {
     "name": "mm",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.001",
+      "1"
+    ]
   },
   {
     "name": "cm",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.01",
+      "1"
+    ]
   },
   {
     "name": "m",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "km",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1000",
+      "1"
+    ]
   },
   {
     "name": "inch",
     "plural": "inches",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.0254",
+      "1"
+    ]
   },
   {
     "name": "ft",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.3048",
+      "1"
+    ]
   },
   {
     "name": "yd",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.9144",
+      "1"
+    ]
   },
   {
     "name": "mi",
     "kind": "length",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1609.344",
+      "1"
+    ]
   },
   {
     "name": "mL",
     "kind": "volume",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.001",
+      "1"
+    ]
   },
   {
     "name": "L",
     "kind": "volume",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "ms",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "0.001",
+      "1"
+    ]
   },
   {
     "name": "s",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "min",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "60",
+      "1"
+    ]
   },
   {
     "name": "hr",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "3600",
+      "1"
+    ]
   },
   {
     "name": "day",
     "plural": "days",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "86400",
+      "1"
+    ]
   },
   {
     "name": "week",
     "plural": "weeks",
     "kind": "exact duration",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "604800",
+      "1"
+    ]
   },
   {
     "name": "month",
     "plural": "months",
     "kind": "calendar duration",
-    "calendar": true
+    "calendar": true,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "year",
     "plural": "years",
     "kind": "calendar duration",
-    "calendar": true
+    "calendar": true,
+    "factor": [
+      "12",
+      "1"
+    ]
   },
   {
     "name": "degC",
     "kind": "temperature difference",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "degF",
     "kind": "temperature difference",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "5",
+      "9"
+    ]
   },
   {
     "name": "USD",
     "kind": "USD",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "EUR",
     "kind": "EUR",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "GBP",
     "kind": "GBP",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "JPY",
     "kind": "JPY",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "CHF",
     "kind": "CHF",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "CNY",
     "kind": "CNY",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "CAD",
     "kind": "CAD",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "AUD",
     "kind": "AUD",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "INR",
     "kind": "INR",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   },
   {
     "name": "SEK",
     "kind": "SEK",
-    "calendar": false
+    "calendar": false,
+    "factor": [
+      "1",
+      "1"
+    ]
   }
 ];
 export const unitKinds = [
@@ -402,6 +542,88 @@ export const unitKinds = [
   "AUD",
   "INR",
   "SEK"
+];
+export const unitKindTable = [
+  {
+    "name": "mass",
+    "dimension": "mass",
+    "factor": "1"
+  },
+  {
+    "name": "length",
+    "dimension": "length",
+    "factor": "1"
+  },
+  {
+    "name": "volume",
+    "dimension": "length^3",
+    "factor": "0.001"
+  },
+  {
+    "name": "exact duration",
+    "dimension": "time",
+    "factor": "1"
+  },
+  {
+    "name": "calendar duration",
+    "dimension": "calendar",
+    "factor": "1"
+  },
+  {
+    "name": "temperature difference",
+    "dimension": "temperature",
+    "factor": "1"
+  },
+  {
+    "name": "USD",
+    "dimension": "USD",
+    "factor": "1"
+  },
+  {
+    "name": "EUR",
+    "dimension": "EUR",
+    "factor": "1"
+  },
+  {
+    "name": "GBP",
+    "dimension": "GBP",
+    "factor": "1"
+  },
+  {
+    "name": "JPY",
+    "dimension": "JPY",
+    "factor": "1"
+  },
+  {
+    "name": "CHF",
+    "dimension": "CHF",
+    "factor": "1"
+  },
+  {
+    "name": "CNY",
+    "dimension": "CNY",
+    "factor": "1"
+  },
+  {
+    "name": "CAD",
+    "dimension": "CAD",
+    "factor": "1"
+  },
+  {
+    "name": "AUD",
+    "dimension": "AUD",
+    "factor": "1"
+  },
+  {
+    "name": "INR",
+    "dimension": "INR",
+    "factor": "1"
+  },
+  {
+    "name": "SEK",
+    "dimension": "SEK",
+    "factor": "1"
+  }
 ];
 export const diagnosticCodes = [
   "unknown name",

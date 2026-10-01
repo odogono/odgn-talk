@@ -1,0 +1,9 @@
+# value-encoding: a Quantity is `$quantity`, with its number's canonical text
+# and its Unit in normal form, and a range is `$range`, with its two ends
+# encoded in turn (spec chapter 9, JSON and the Value Encoding).
+
+kind = "encoding"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"

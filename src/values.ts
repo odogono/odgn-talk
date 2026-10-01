@@ -1,11 +1,21 @@
+import { compareDec, parseDec } from './decimal';
 import { invalidValue } from './errors';
 import { characterBoundaries, isWhiteSpace, normalizeNFC } from './unicode';
+import {
+  parseUnit,
+  sameDimension,
+  toBase,
+  UnitError,
+  unitText,
+  type UnitSpec,
+} from './units';
 
 /** The kinds implemented so far; the rest of chapter 3's follow with #126. */
 export type Kind =
   | 'nothing'
   | 'boolean'
   | 'number'
+  | 'quantity'
   | 'text'
   | 'list'
   | 'map'
@@ -35,7 +45,10 @@ export type PatternRef = {
   readonly program: number;
   readonly source: string;
 };
+/** A Quantity: its number and its Unit, in Kind order (chapter 3). */
+export type QuantityRef = { readonly number: Decimal; readonly unit: UnitSpec };
 type Payload =
+  | QuantityRef
   | PatternRef
   | undefined
   | boolean
@@ -103,6 +116,18 @@ export class Value {
   }
   asDecimal(): Decimal | undefined {
     return this.kind === 'number' ? (this.#data as Decimal) : undefined;
+  }
+  /** A Quantity's number and its Unit in normal form, as the Host reads it. */
+  asQuantity(): { number: Decimal; unit: string } | undefined {
+    if (this.kind !== 'quantity') {
+      return undefined;
+    }
+    const q = this.#data as QuantityRef;
+    return { number: q.number, unit: unitText(q.unit) };
+  }
+  /** The Abstract Machine's view of a Quantity: its Unit's slots. */
+  asQuantityRef(): QuantityRef | undefined {
+    return this.kind === 'quantity' ? (this.#data as QuantityRef) : undefined;
   }
   asRange(): { from: Value; to: Value } | undefined {
     if (this.kind !== 'range') {
@@ -189,6 +214,11 @@ export class Value {
             return false;
           }
           break;
+        case 'quantity':
+          if (!quantitiesEqual(left.asQuantityRef()!, right.asQuantityRef()!)) {
+            return false;
+          }
+          break;
         case 'range': {
           const a = left.asRange()!;
           const b = right.asRange()!;
@@ -271,6 +301,12 @@ export class Value {
         case 'pattern':
           output.push(next.patternSource()!);
           break;
+        case 'quantity': {
+          const q = next.asQuantityRef()!;
+          const n = q.number.toString();
+          output.push(`${n} ${unitText(q.unit, n)}`);
+          break;
+        }
         case 'function': {
           const fn = next.asFunction()!;
           output.push(`<function ${fn.home}:${fn.place}`);
@@ -315,7 +351,7 @@ export const bool = (b: boolean): Value => {
 };
 export const text = (s: string): Value => makeValue('text', normalizeNFC(s));
 
-const trimWhiteSpace = (s: string): string => {
+export const trimWhiteSpace = (s: string): string => {
   const boundaries = characterBoundaries(s);
   let first = 0,
     last = boundaries.length - 1;
@@ -401,15 +437,60 @@ const numericIdentity = (d: Decimal): string =>
     .replace(/\.$/, '');
 
 export const list = (...vs: Value[]): Value => listValues(vs);
-/** Two numbers, kept as given (ADR 0034); Quantity ends follow with Quantities. */
+/** Two numbers, or two Quantities of one dimension, kept as given (ADR 0034). */
 export const range = (from: Value, to: Value): Value => {
   requireValue(from);
   requireValue(to);
-  if (from.kind !== 'number' || to.kind !== 'number') {
-    invalidValue('A range needs two numbers');
+  const numbers = from.kind === 'number' && to.kind === 'number';
+  const quantities =
+    from.kind === 'quantity' &&
+    to.kind === 'quantity' &&
+    sameDimension(from.asQuantityRef()!.unit, to.asQuantityRef()!.unit);
+  if (!numbers && !quantities) {
+    invalidValue(
+      'A range needs two numbers, or two Quantities of one dimension',
+    );
   }
   return makeValue('range', Object.freeze([from, to] as const));
 };
+
+/**
+ * A Quantity of a number Value in a Unit spelled as a Script spells it, such
+ * as `"kg"`. A Unit whose slots all drop, such as `"m/m"`, leaves the number.
+ */
+export const quantity = (n: Value, unit: string): Value => {
+  requireValue(n);
+  if (n.kind !== 'number') {
+    invalidValue('A Quantity needs a number');
+  }
+  if (typeof unit !== 'string') {
+    invalidValue('A Quantity needs a Unit');
+  }
+  let spec: UnitSpec;
+  try {
+    spec = parseUnit(unit);
+  } catch (error) {
+    if (error instanceof UnitError) {
+      return invalidValue(`Not a Unit: ${unit}: ${error.message}`);
+    }
+    throw error;
+  }
+  return spec.length ? quantityOf(n.asDecimal()!, spec) : n;
+};
+/** A Quantity of a Unit already in Kind order; the Abstract Machine's constructor. */
+export const quantityOf = (n: Decimal, unit: UnitSpec): Value =>
+  makeValue(
+    'quantity',
+    Object.freeze({ number: n, unit: Object.freeze([...unit]) }),
+  );
+
+// Equal when their dimensions match and their values in Base Units do.
+const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>
+  sameDimension(a.unit, b.unit) &&
+  compareDec(
+    toBase(parseDec(a.number.toString()), a.unit),
+    toBase(parseDec(b.number.toString()), b.unit),
+  ) === 0;
 /** A Text Pattern value; only the Abstract Machine makes one. */
 export const patternValue = (ref: PatternRef): Value =>
   makeValue('pattern', Object.freeze({ ...ref }));

@@ -1,0 +1,37 @@
+-- units.talk: the arithmetic-through-base-units case, chapter 3's examples.
+
+script variable heavier
+script variable later
+script variable speed
+script variable metric
+script variable area
+script variable mixed
+script variable volume
+script variable rate
+script variable price
+script variable far
+script variable warmer
+script variable tank
+script variable plain
+script variable same
+script variable bigger
+script variable rounded
+
+on go
+  put 5 kg + 250 g into heavier        -- 5.250 kg
+  put 90 min + 1 day into later        -- 1530 min
+  put 500 mi / 4 hr into speed         -- 125 mi/hr
+  put speed as km/hr into metric       -- 201.168 km/hr
+  put 2 m * 3 ft into area             -- 1.8288 m^2
+  put 3 kg * 2 m into mixed            -- 6 kg*m, in Kind order
+  put 4 L / 2 m into volume            -- 2 L/m
+  put 1 / 2 s into rate                -- 0.5 1/s
+  put 100 EUR * 1.1 USD/EUR into price -- 110.0 USD
+  put 60 mi/hr * 2 hr into far         -- 120.0 mi
+  put 9 degF as degC into warmer       -- 5 degC
+  put 24 m^3 as L into tank            -- 24000 L
+  put 4 yd / 2 ft into plain           -- 6
+  put 5 kg = 5000 g into same          -- true
+  put 1200 g > 1 kg into bigger        -- true
+  put round(2.567 kg, 2) into rounded  -- 2.57 kg
+end go

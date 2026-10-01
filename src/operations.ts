@@ -48,10 +48,25 @@ import {
   nothing,
   num,
   patternValue,
+  quantity,
+  quantityOf,
   range,
   text,
+  trimWhiteSpace,
   Value,
+  type QuantityRef,
 } from './values';
+import {
+  combine,
+  fromBase,
+  parseUnit,
+  powerOf,
+  sameDimension,
+  toBase,
+  UnitError,
+  unitText,
+  type UnitSpec,
+} from './units';
 import type { PatternElement } from './view';
 
 /** A catalogue error an operation raises, before the machine adds `message` and `at`. */
@@ -214,6 +229,14 @@ export const order = (a: Value, b: Value, fold = false): -1 | 0 | 1 => {
   switch (a.kind) {
     case 'number':
       return compareDec(decOfValue(a), decOfValue(b));
+    case 'quantity': {
+      const x = a.asQuantityRef()!;
+      const y = b.asQuantityRef()!;
+      if (!sameDimension(x.unit, y.unit)) {
+        throw cantCompare(a, b);
+      }
+      return compareDec(inBase(x), inBase(y));
+    }
     case 'text': {
       const x = codePoints(foldText(textOf(a), fold));
       const y = codePoints(foldText(textOf(b), fold));
@@ -303,7 +326,99 @@ const numberOperand = (v: Value): Dec => {
   return decOfValue(v);
 };
 
+// ---------------------------------------------------------------------------
+// Quantities (chapter 3, Quantity arithmetic)
+// ---------------------------------------------------------------------------
+
+const numberOf = (q: QuantityRef): Dec => parseDec(q.number.toString());
+const inBase = (q: QuantityRef): Dec => toBase(numberOf(q), q.unit);
+const noUnit: UnitSpec = [];
+// A number takes part in `*` and `/` as a Quantity with no Unit.
+const asQuantityRef = (v: Value): QuantityRef =>
+  v.asQuantityRef() ?? { number: v.asDecimal()!, unit: noUnit };
+/** A value in a Unit, or the plain number a Unit with no slots leaves. */
+const inUnit = (d: Dec, unit: UnitSpec): Value =>
+  unit.length
+    ? quantityOf(dec(formatDec(d)).asDecimal()!, unit)
+    : numberValue(d);
+// The fields name the two Units' display forms; a plain number's Unit is `1`.
+const incompatible = (left: UnitSpec, right: UnitSpec) =>
+  new ScriptError('incompatible units', [
+    ['left', text(unitText(left))],
+    ['right', text(unitText(right))],
+  ]);
+const unitsOf = (op: () => UnitSpec, left: UnitSpec, right: UnitSpec) => {
+  try {
+    return op();
+  } catch (error) {
+    if (error instanceof UnitError) {
+      throw incompatible(left, right);
+    }
+    throw error;
+  }
+};
+
+const quantityArithmetic = (op: string, a: Value, b: Value): Value => {
+  for (const v of [a, b]) {
+    if (v.kind !== 'number' && v.kind !== 'quantity') {
+      throw wrongKind('number', v);
+    }
+  }
+  switch (op) {
+    case 'add':
+    case 'subtract': {
+      if (a.kind !== b.kind) {
+        throw wrongKind(a.kind, b);
+      }
+      const x = a.asQuantityRef()!;
+      const y = b.asQuantityRef()!;
+      if (!sameDimension(x.unit, y.unit)) {
+        throw incompatible(x.unit, y.unit);
+      }
+      const sum = (op === 'add' ? add : subtract)(inBase(x), inBase(y));
+      return inUnit(fromBase(sum, x.unit), x.unit);
+    }
+    case 'multiply':
+    case 'divide': {
+      const x = asQuantityRef(a);
+      const y = asQuantityRef(b);
+      const unit = unitsOf(() => combine(x.unit, y.unit, op), x.unit, y.unit);
+      const value = (op === 'multiply' ? multiply : divide)(
+        inBase(x),
+        inBase(y),
+      );
+      return inUnit(fromBase(value, unit), unit);
+    }
+    case 'power': {
+      // A Quantity is raised to a positive integer power, and is never one.
+      if (b.kind === 'quantity') {
+        throw wrongKind('number', b);
+      }
+      const n = decOfValue(b);
+      if (!isInteger(n) || n.negative || n.coefficient === 0n) {
+        throw wrongKind('integer', b);
+      }
+      const x = a.asQuantityRef()!;
+      const unit = unitsOf(
+        () => powerOf(x.unit, Number(integerOf(n))),
+        x.unit,
+        noUnit,
+      );
+      return inUnit(powerInteger(numberOf(x), integerOf(n)), unit);
+    }
+  }
+  // `div` and `mod` take numbers only.
+  throw wrongKind('number', a.kind === 'quantity' ? a : b);
+};
+
 export const arithmetic = (op: string, a: Value, b: Value): Value => {
+  if (a.kind === 'quantity' || b.kind === 'quantity') {
+    try {
+      return quantityArithmetic(op, a, b);
+    } catch (error) {
+      throw arithmeticRaise(error, symbols[op]!);
+    }
+  }
   const x = numberOperand(a);
   const y = numberOperand(b);
   try {
@@ -340,16 +455,26 @@ const arithmeticRaise = (error: unknown, operator: string) =>
       : new ScriptError('division by zero')
     : error;
 
-export const negated = (a: Value): Value =>
-  numberValue(negate(numberOperand(a)));
+export const negated = (a: Value): Value => {
+  const q = a.asQuantityRef();
+  if (q) {
+    return inUnit(negate(numberOf(q)), q.unit);
+  }
+  return numberValue(negate(numberOperand(a)));
+};
 export const concat = (a: Value, b: Value): Value =>
   text(textForm(a) + textForm(b));
 export const makeRange = (a: Value, b: Value): Value => {
-  if (a.kind !== 'number') {
+  if (a.kind !== 'number' && a.kind !== 'quantity') {
     throw wrongKind('number', a);
   }
-  if (b.kind !== 'number') {
-    throw wrongKind('number', b);
+  if (b.kind !== a.kind) {
+    throw wrongKind(a.kind, b);
+  }
+  const x = a.asQuantityRef();
+  const y = b.asQuantityRef();
+  if (x && y && !sameDimension(x.unit, y.unit)) {
+    throw incompatible(x.unit, y.unit);
   }
   return range(a, b);
 };
@@ -411,8 +536,43 @@ export const convert = (v: Value, kind: string): Value => {
         }
       }
       throw cantConvert(v, 'number');
+    case 'bytes':
+    case 'civil date':
+    case 'instant':
+      throw new NotImplementedError(`\`as ${kind}\``);
   }
-  throw new NotImplementedError(`\`as ${kind}\``);
+  return convertToUnit(v, kind);
+};
+
+// `as` with a Unit (chapter 3): a number takes the Unit, a Quantity of its
+// dimension converts through Base Units, and text reads as either first.
+const convertToUnit = (v: Value, written: string): Value => {
+  const unit = parseUnit(written);
+  const to = unitText(unit);
+  let input = v;
+  if (v.kind === 'text') {
+    const m = /^(-?(?:0x[\dA-Fa-f]+|\d+(?:\.\d+)?)) *(.*)$/s.exec(
+      trimWhiteSpace(textOf(v)),
+    );
+    try {
+      input = !m ? v : m[2] ? quantity(dec(m[1]!), m[2]) : dec(m[1]!);
+    } catch {
+      throw cantConvert(v, to);
+    }
+  }
+  if (input.kind === 'number') {
+    return inUnit(decOfValue(input), unit);
+  }
+  const q = input.asQuantityRef();
+  if (!q || !sameDimension(q.unit, unit)) {
+    throw cantConvert(v, to);
+  }
+  try {
+    return inUnit(fromBase(inBase(q), unit), unit);
+  } catch (error) {
+    // A value past the number limits in the Unit doesn't convert.
+    throw error instanceof ArithmeticError ? cantConvert(v, to) : error;
+  }
 };
 export const canConvert = (v: Value, kind: string): Value => {
   try {
@@ -483,7 +643,11 @@ const isIntegerRange = (v: Value) => {
     return false;
   }
   const { from, to } = v.asRange()!;
-  return isInteger(decOfValue(from)) && isInteger(decOfValue(to));
+  return (
+    from.kind === 'number' &&
+    isInteger(decOfValue(from)) &&
+    isInteger(decOfValue(to))
+  );
 };
 const texts = (xs: readonly string[]) => listValues(xs.map(x => text(x)));
 
@@ -1224,6 +1388,17 @@ const roundTo = (x: Dec, places: number, mode: string): Dec => {
   };
 };
 
+// `abs`, `floor`, `ceiling`, `truncate` and `round` act on a Quantity's
+// number and keep its Unit (chapter 7).
+const magnitudeOperand = (v: Value): Dec => {
+  const q = v.asQuantityRef();
+  return q ? numberOf(q) : numberOperand(v);
+};
+const sameUnit = (v: Value, d: Dec): Value => {
+  const q = v.asQuantityRef();
+  return q ? inUnit(d, q.unit) : numberValue(d);
+};
+
 export type BuiltinResult = { result: Value; scanned?: number; steps?: number };
 /** A Built-in call, with its defaults filled in. */
 export const builtin = (
@@ -1298,16 +1473,16 @@ export const builtin = (
     case 'floor':
     case 'ceiling':
     case 'truncate': {
-      const d = numberOperand(x!);
+      const d = magnitudeOperand(x!);
       if (name === 'abs') {
-        return { result: numberValue({ ...d, negative: false }) };
+        return { result: sameUnit(x!, { ...d, negative: false }) };
       }
       const mode =
         name === 'floor' ? 'floor' : name === 'ceiling' ? 'ceiling' : 'down';
-      return { result: numberValue(roundTo(d, 0, mode)) };
+      return { result: sameUnit(x!, roundTo(d, 0, mode)) };
     }
     case 'round': {
-      const d = numberOperand(x!);
+      const d = magnitudeOperand(x!);
       const places = numberOperand(y!);
       if (!isInteger(places) || places.negative) {
         throw outOfDomain(name, y!);
@@ -1322,7 +1497,7 @@ export const builtin = (
       if (rounded.coefficient >= 10n ** 34n) {
         throw new ScriptError('overflow', [['operator', text(name)]]);
       }
-      return { result: numberValue(rounded) };
+      return { result: sameUnit(x!, rounded) };
     }
   }
   throw new NotImplementedError(`the Built-in ${name}`);

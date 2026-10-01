@@ -609,7 +609,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | --- | --- |
 | `bad character` | A character outside a text literal or comment starts no token |
 | `unterminated text` | A text literal has no closing quote before the end of its line; reported at the opening quote |
-| `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, or has a malformed or negative exponent |
+| `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
 | `not a container` | A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token |
 

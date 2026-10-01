@@ -1,0 +1,19 @@
+# value-encoding: each value is read in the display form, built through the
+# Host's constructors, and encoded.
+# Unblessed: the bytes are written by hand, not by bless.
+#
+# The number keeps its trailing zeros.
+2.50 GBP => {"$quantity":["2.50","GBP"]}
+# A word Unit is written singular, whatever the display form's number.
+3 days => {"$quantity":["3","day"]}
+1 day => {"$quantity":["1","day"]}
+# A Compound Unit is in normal form, and a Unit with only a denominator
+# starts with `1/`.
+5 inch/s => {"$quantity":["5","inch/s"]}
+9.8 kg*m/s^2 => {"$quantity":["9.8","kg*m/s^2"]}
+0.5 1/s => {"$quantity":["0.5","1/s"]}
+# A range of numbers, and of Quantities of one dimension, each end as written.
+3..7 => {"$range":[3,7]}
+3 m..7 cm => {"$range":[{"$quantity":["3","m"]},{"$quantity":["7","cm"]}]}
+# Inside a list and a map.
+[1 kg, {a: 1.5..2.5}] => [{"$quantity":["1","kg"]},{"a":{"$range":[{"$dec":"1.5"},{"$dec":"2.5"}]}}]
