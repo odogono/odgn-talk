@@ -65,8 +65,8 @@ export class ScriptError extends Error {
   }
 }
 /** Behaviour this Core doesn't implement yet; never a Script error. */
-export class NotImplemented extends Error {
-  override name = 'NotImplemented';
+export class NotImplementedError extends Error {
+  override name = 'NotImplementedError';
 }
 
 export const kindName = (v: Value): string => v.kind;
@@ -322,7 +322,9 @@ export const arithmetic = (op: string, a: Value, b: Value): Value => {
         return numberValue(mod(x, y));
       case 'power':
         if (!isInteger(y)) {
-          throw new NotImplemented('`^` with a non-integer exponent (power)');
+          throw new NotImplementedError(
+            '`^` with a non-integer exponent (power)',
+          );
         }
         return numberValue(powerInteger(x, integerOf(y)));
     }
@@ -377,7 +379,7 @@ export const isKind = (v: Value, kind: string): Value => {
     return bool(v.kind === 'number' && isInteger(decOfValue(v)));
   }
   if (!kindNames.has(kind)) {
-    throw new NotImplemented(`\`is a ${kind}\``);
+    throw new NotImplementedError(`\`is a ${kind}\``);
   }
   return bool(v.kind === kind);
 };
@@ -410,7 +412,7 @@ export const convert = (v: Value, kind: string): Value => {
       }
       throw cantConvert(v, 'number');
   }
-  throw new NotImplemented(`\`as ${kind}\``);
+  throw new NotImplementedError(`\`as ${kind}\``);
 };
 export const canConvert = (v: Value, kind: string): Value => {
   try {
@@ -535,7 +537,7 @@ export const property = (
       }
       return texts(spans(textOf(v), singular(name)).map(s => s.text));
     case 'bytes':
-      throw new NotImplemented('Bytes');
+      throw new NotImplementedError('Bytes');
   }
   throw new Error(`unknown property ${name}`);
 };
@@ -722,7 +724,7 @@ export const chunkGet = (
     return { result, scanned: at[1] };
   }
   if (kind === 'byte') {
-    throw new NotImplemented('Bytes');
+    throw new NotImplementedError('Bytes');
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -745,7 +747,7 @@ export const chunkThere = (
           : -1;
   if (n < 0) {
     if (kind === 'byte') {
-      throw new NotImplemented('Bytes');
+      throw new NotImplementedError('Bytes');
     }
     throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
   }
@@ -832,7 +834,7 @@ export const chunkSet = (
     return listValues(items);
   }
   if (kind === 'byte') {
-    throw new NotImplemented('Bytes');
+    throw new NotImplementedError('Bytes');
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -886,7 +888,7 @@ export const chunkDelete = (
     return listValues(items);
   }
   if (kind === 'byte') {
-    throw new NotImplemented('Bytes');
+    throw new NotImplementedError('Bytes');
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -1323,7 +1325,7 @@ export const builtin = (
       return { result: numberValue(rounded) };
     }
   }
-  throw new NotImplemented(`the Built-in ${name}`);
+  throw new NotImplementedError(`the Built-in ${name}`);
 };
 /** A Built-in's defaults, from stdlib.toml's call notation. */
 export const builtinDefaults: Record<string, Value[]> = {

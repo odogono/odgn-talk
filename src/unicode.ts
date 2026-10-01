@@ -108,7 +108,14 @@ const compose = (a: number, b: number): number | undefined => {
   return composition[a * 0x11_00_00 + b];
 };
 
+// Below U+0300 nothing has a non-zero combining class, decomposes away under
+// NFC or composes with what follows, so such text is already in NFC.
+const belowCombining = /^[^\u0300-\uFFFF]*$/;
+
 export const normalizeNFC = (s: string): string => {
+  if (typeof s === 'string' && belowCombining.test(s)) {
+    return s;
+  }
   assertScalarText(s);
   const decomposed: number[] = [];
   for (const ch of s) {

@@ -28,3 +28,36 @@ export class HostError extends Error {
 export const invalidValue: (message: string) => never = message => {
   throw new HostError('invalid value', message);
 };
+
+/** A load-time diagnostic, or the first syntax error, as a LoadError carries it. */
+export type LoadDiagnostic = {
+  code: string;
+  col: number;
+  line: number;
+  message: string;
+  unit: string;
+};
+/** A rejected Load (chapter 9): its diagnostics, in order. */
+export class LoadError extends Error {
+  constructor(readonly diagnostics: readonly LoadDiagnostic[]) {
+    super(diagnostics.map(d => `${d.code} at ${d.line}:${d.col}`).join(', '));
+    this.name = 'LoadError';
+  }
+}
+
+/** Load shedding at a Delivery's call, not a bug (chapter 9, Deliveries). */
+export class MailboxFull extends Error {
+  override name = 'MailboxFull';
+}
+
+/** A Script-level error as the Host sees it, such as a Request's `send failed`. */
+export class ScriptError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly data: unknown = null,
+  ) {
+    super(message);
+    this.name = 'ScriptError';
+  }
+}

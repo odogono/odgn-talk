@@ -34,7 +34,7 @@ import {
   matchesOf,
   member,
   negated,
-  NotImplemented,
+  NotImplementedError,
   property,
   ScriptError,
   search,
@@ -63,6 +63,9 @@ export type LimitName =
   | 'persistentState'
   | 'callDepth'
   | 'patternSize'
+  | 'mailboxDepth'
+  | 'maxWaitMs'
+  | 'maxJoin'
   | 'cleanupBudget';
 export type Limits = Record<LimitName, number>;
 export const defaultLimits: Limits = {
@@ -71,11 +74,17 @@ export const defaultLimits: Limits = {
   persistentState: limitDefaults.persistentState,
   callDepth: limitDefaults.callDepth,
   patternSize: limitDefaults.patternSize,
+  mailboxDepth: limitDefaults.mailboxDepth,
+  maxWaitMs: limitDefaults.maxWaitMs,
+  maxJoin: limitDefaults.maxJoin,
   cleanupBudget: limitDefaults.cleanupBudget,
 };
 
+/** The error maps the Core raised, which a Trace writes without `message`. */
+export const coreRaised = new WeakSet<Value>();
+
 /** A code unit that can't load: a literal pattern past its limit, or a failed initialiser. */
-export class LoadError extends Error {
+export class UnitLoadError extends Error {
   constructor(
     readonly code: 'pattern too large' | 'initialiser failed',
     readonly line: number,
@@ -83,7 +92,7 @@ export class LoadError extends Error {
     readonly error: Value | null = null,
   ) {
     super(`${code} at ${line}:${col}`);
-    this.name = 'LoadError';
+    this.name = 'UnitLoadError';
   }
 }
 
@@ -152,7 +161,7 @@ export class Script {
     if (c.k === 'value') {
       return c.value;
     }
-    throw new NotImplemented(
+    throw new NotImplementedError(
       c.k === 'template' ? 'a template constant' : c.what,
     );
   }
@@ -197,7 +206,11 @@ export const loadScript = (
         const at = unit.code.find(
           ins => ins.op === 'const' && ins.operands[0] === i,
         );
-        throw new LoadError('pattern too large', at?.line ?? 1, at?.col ?? 1);
+        throw new UnitLoadError(
+          'pattern too large',
+          at?.line ?? 1,
+          at?.col ?? 1,
+        );
       }
     }
   });
@@ -210,7 +223,7 @@ export const loadScript = (
   const outcome = run.finish();
   if (outcome.kind === 'errored') {
     const at = outcome.error.get('at');
-    throw new LoadError(
+    throw new UnitLoadError(
       'initialiser failed',
       Number(at.get('line').asDecimal()?.toString() ?? 1),
       Number(at.get('column').asDecimal()?.toString() ?? 1),
@@ -256,14 +269,19 @@ type Frame = {
 // where its cleanup copy starts.
 type Cleanup = { error: Value; frame: Frame; start: number };
 
-/** What happened in a Run that a Trace records: each raise, caught or not. */
+/**
+ * What happened in a Run that a Trace records: each raise, caught or not,
+ * and each clause or branch a guard region skipped, with its error's code or
+ * the value its Guard gave that wasn't a boolean.
+ */
 export type RunRecord = {
-  code: string;
+  code?: string;
   col: number;
-  kind: 'raise';
+  kind: 'raise' | 'guard-skip';
   line: number;
   pc: number;
   unit: string;
+  value?: Value;
 };
 export type Outcome =
   | { kind: 'completed'; result: Value }
@@ -274,6 +292,8 @@ export type Outcome =
       limit: LimitName;
       line: number;
       pc: number;
+      /** The Script Variables the rollback changed back, in declaration order. */
+      rollback: string[];
     }
   | { kind: 'unhandled' };
 
@@ -293,6 +313,12 @@ export class Run {
   alloc = 0;
   charging = true;
   records: RunRecord[] = [];
+  /**
+   * The Script's Persistent State, measured at the Segment's end without this
+   * Run, since a Run that is ending keeps nothing (chapter 6, Limits). The
+   * Group adds what else the Script holds, such as its mailbox.
+   */
+  persistentState: () => number = () => this.script.variablesSize();
   /** The Script Variables when the Segment began, for rollback (ADR 0006). */
   readonly segmentBase: Value[];
   private cleanups: Cleanup[] = [];
@@ -330,6 +356,11 @@ export class Run {
 
   get done(): boolean {
     return this.outcome !== null;
+  }
+
+  /** How the Run ended, once it has. */
+  get ended(): Outcome | null {
+    return this.outcome;
   }
 
   // ------------------------------------------------------------- frames
@@ -437,11 +468,15 @@ export class Run {
   }
 
   private fault(limit: LimitName, ins: Instruction) {
+    const rollback = this.script.unit.variables.filter(
+      (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
+    );
     this.script.variables = [...this.segmentBase];
     this.frames = [];
     this.outcome = {
       kind: 'limit fault',
       limit,
+      rollback,
       pc: this.script.unit.code.indexOf(ins),
       line: ins.line,
       col: ins.col,
@@ -473,12 +508,14 @@ export class Run {
       const field = fields.find(([k]) => k === name);
       return field ? field[1].toString() : `{${name}}`;
     });
-    return map([
+    const error = map([
       ['code', text(code)],
       ['message', text(message)],
       ...fields.map(([k, v]) => [k, v] as [string, Value]),
       ['at', this.at(ins)],
     ]);
+    coreRaised.add(error);
+    return error;
   }
 
   private at(ins: Instruction): Value {
@@ -490,10 +527,17 @@ export class Run {
     ]);
   }
 
-  private record(error: Value, ins: Instruction) {
+  private record(error: Value, ins: Instruction, skip: boolean) {
+    // A Guard that gives something other than a boolean is a skip with its value.
+    const notBoolean =
+      skip &&
+      (ins.op === 'branch-false' || ins.op === 'branch-true') &&
+      textForm(error.get('code')) === 'wrong kind';
     this.records.push({
-      kind: 'raise',
-      code: textForm(error.get('code')),
+      kind: skip ? 'guard-skip' : 'raise',
+      ...(notBoolean
+        ? { value: error.get('value') }
+        : { code: textForm(error.get('code')) }),
       unit: this.script.name,
       pc: this.script.unit.code.indexOf(ins),
       line: ins.line,
@@ -507,7 +551,6 @@ export class Run {
    * for the frames popped, then continue there.
    */
   private unwind(error: Value, ins: Instruction) {
-    this.record(error, ins);
     const unwind = this.script.unit.unwind;
     let popped = 0;
     let found: (typeof unwind)[number] | undefined;
@@ -519,6 +562,7 @@ export class Run {
       }
       popped++;
     }
+    this.record(error, ins, found?.kind === 'guard');
     if (popped) {
       try {
         this.pay('unwind', { frames: popped });
@@ -543,11 +587,23 @@ export class Run {
         break;
       }
       this.cleanups.pop();
-      if (error.get('during').kind === 'nothing' && !hasKey(error, 'during')) {
+      if (!hasKey(error, 'during')) {
+        const core = coreRaised.has(error);
         error = map([...error.entries(), ['during', c.error]]);
+        if (core) {
+          coreRaised.add(error);
+        }
       }
     }
     if (!found) {
+      try {
+        this.checkState();
+      } catch (error_) {
+        if (error_ instanceof LimitFaultError) {
+          return this.fault(error_.limit, ins);
+        }
+        throw error_;
+      }
       this.frames = [];
       this.outcome = { kind: 'errored', error };
       return;
@@ -560,6 +616,13 @@ export class Run {
       frame.stack.push(error);
     } else if (found.kind === 'finally') {
       this.cleanups.push({ frame, error, start: found.target });
+    }
+  }
+
+  // A Segment's end: a breach of the Persistent State cap faults here.
+  private checkState() {
+    if (this.charging && this.persistentState() > this.limits.persistentState) {
+      throw new LimitFaultError('persistentState', this.frame.pc);
     }
   }
 
@@ -984,7 +1047,7 @@ export class Run {
       case 'call-handler': {
         const clauses = this.script.clauses.get(a as string);
         if (!clauses) {
-          throw new NotImplemented(`a call to the imported Handler ${a}`);
+          throw new NotImplementedError(`a call to the imported Handler ${a}`);
         }
         const n = b as number;
         const args = this.frame.stack.slice(
@@ -1036,7 +1099,7 @@ export class Run {
           if (ins.op === 'call-value') {
             throw new ScriptError('would suspend');
           }
-          throw new NotImplemented(
+          throw new NotImplementedError(
             'a call that may suspend, or to another Script',
           );
         }
@@ -1063,10 +1126,21 @@ export class Run {
       }
       case 'return': {
         const value = this.peek();
+        if (this.frames.length === 1) {
+          this.checkState();
+        }
         this.pay(key);
         return this.returnFrom(value);
       }
       case 'clause-fail': {
+        if (
+          this.frames.length === 1 &&
+          !frame.dispatch?.clauses
+            .slice(frame.dispatch.next)
+            .some(b => b.params.length === frame.dispatch!.args.length)
+        ) {
+          this.checkState();
+        }
         this.pay(key);
         const failed = this.frames.pop()!;
         const d = failed.dispatch!;
@@ -1266,7 +1340,7 @@ export class Run {
         throw new ThrownError(cleanup.error);
       }
     }
-    throw new NotImplemented(`the instruction ${ins.op}`);
+    throw new NotImplementedError(`the instruction ${ins.op}`);
   }
 
   // Charge, then replace the top `n` values with the measured result.

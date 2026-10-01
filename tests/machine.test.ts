@@ -5,12 +5,12 @@ import { compileSource } from '../src/lowering';
 import {
   callFunction,
   deliver,
-  LoadError,
+  UnitLoadError,
   loadScript,
   type Limits,
   type Outcome,
 } from '../src/machine';
-import { NotImplemented } from '../src/operations';
+import { NotImplementedError } from '../src/operations';
 import { readDisplay } from '../src/readers';
 import { checkSource } from '../src/checker';
 import {
@@ -125,6 +125,7 @@ describe('Cost Model 0', () => {
       pc: 7,
       line: 4,
       col: 3,
+      rollback: ['n'],
     });
     expect(r.run.fuel).toBe(8);
     expect(r.vars.n).toBe('0');
@@ -407,7 +408,9 @@ describe('loading', () => {
       'constant base = 2\nscript variable total = base * 3\non go\nend go',
     );
     expect(script.variables.map(v => v.toString())).toEqual(['6']);
-    expect(() => load('constant x = 1 / 0\non go\nend go')).toThrow(LoadError);
+    expect(() => load('constant x = 1 / 0\non go\nend go')).toThrow(
+      UnitLoadError,
+    );
   });
 
   test("a literal Text Pattern past the size limit doesn't load", () => {
@@ -418,7 +421,7 @@ describe('loading', () => {
 
   test('what this Core does not run yet says so', () => {
     expect(() => run('on go\n  send ping to me\nend go')).toThrow(
-      NotImplemented,
+      NotImplementedError,
     );
   });
 
