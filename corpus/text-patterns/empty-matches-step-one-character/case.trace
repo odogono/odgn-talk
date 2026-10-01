@@ -3,10 +3,10 @@
 # match it discards. `optional "x"` over "ab" gives an empty match before
 # each Character and one at the end, ranges 1..0, 2..1 and 3..2 (spec
 # chapter 4, Matches; chapter 8, Running). The matches and ranges are
-# pinned. Fuel, allocation and state are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# pinned. Its Fuel, allocation and state figures are Cost Model 0's, as the
+# TS Core blessed them.
 
-> load search
+> load search identity=64186f50a15609d16726fce26c2f2b4083a59119088294b7091ad6bcd00dd16f
 
 # Six searches of 2 steps each, 12 steps: a kept empty match at 0, 1 and 2,
 # each followed by a search from the same position whose empty match is

@@ -6,11 +6,10 @@
 # and splicing it twice gives 59 and faults. `make-pattern` checks the size
 # before its charge, so the fault is on `pattern`, and the 59-instruction
 # program is never charged (chapter 8, Charging). The fault, its
-# instruction and the rollback of `status` are pinned. Fuel, allocation and
-# state are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# instruction and the rollback of `status` are pinned. Its Fuel, allocation
+# and state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load maker
+> load maker identity=7d1bad29ae6f001af7207221ff3d18dcd365a0efd0a129946be58fc54e921bef
 
 # The spliced pattern is a nested group in the canonical source.
 > deliver d1 to=maker message=small

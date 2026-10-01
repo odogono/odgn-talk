@@ -3,11 +3,10 @@
 # steps one Character on. So `zero or more of "a"` over "baab" gives three
 # matches, not the four a regex engine that allows an empty match straight
 # after a non-empty one would give (spec chapter 4, Matches; chapter 8,
-# Running). The matches and ranges are pinned. Fuel, allocation and state
-# are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Running). The matches and ranges are pinned. Its Fuel, allocation and
+# state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load search
+> load search identity=da4381d7482c0902eecef16a51373f15b8f2d82bc02f2049fd01b649e710f9bb
 
 # Searches, with positions 0 to 4 between the Characters of "baab":
 #   from 0: empty at 0, range 1..0, kept (there is no last match)      2 steps

@@ -1,10 +1,10 @@
 # greedy-by-default: `text` prefers to match more, with no `lazily`, so
 # `<"<", text, ">">` over "<a> <b>" gives one match running to the last ">"
 # (spec chapter 4, Matching; ADR 0007). The lazily-prefers-fewer case is its
-# pair. The match is pinned. Fuel, allocation and state are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# pair. The match is pinned. Its Fuel, allocation and state figures are
+# Cost Model 0's, as the TS Core blessed them.
 
-> load search
+> load search identity=23bbc026aad5ff5a366490376e32ffc9e7ae738beea015d3a041356380c4e803
 
 # 21 steps: 20 for the search that finds "<a> <b>", and 1 for the one from
 # the end, which finds nothing.
