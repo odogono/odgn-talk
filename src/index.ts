@@ -8,6 +8,12 @@ export {
 } from './errors';
 export {
   codeIdentity,
+  compileLibrary,
+  type Library,
+  type LibrarySource,
+  type OperationRef,
+} from './library';
+export {
   Group,
   newGroup,
   Script as ScriptHandle,

@@ -1,0 +1,9 @@
+-- fine.talk: the registration case's Script that loads.
+
+use two from top
+
+script variable n
+
+on go
+  put two() into n
+end go

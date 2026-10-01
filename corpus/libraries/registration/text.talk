@@ -1,0 +1,5 @@
+-- text.talk: a Library under a stdlib Library's name.
+
+function three
+  return 3
+end three

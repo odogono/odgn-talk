@@ -1,0 +1,19 @@
+-- shelf.talk: the calls case's Script.
+
+use label, shout, prefix, twice from fmt
+use framed, adder from deco
+use label from fmt as tag
+
+script variable labels
+script variable shouts
+script variable values
+script variable applied
+
+on go
+  put [label(7), label(42, 5), tag(1), framed(9), prefix] into labels
+  shout "unused"
+  put [shout("hi"), shout("a", "b")] into shouts
+  put adder(10) into add10
+  put [add10, label, add10(5)] into values
+  put [twice(add10, 1), twice(given y: y * 3, 2), twice(label, 4)] into applied
+end go

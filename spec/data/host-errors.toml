@@ -37,7 +37,7 @@ raised_when = "A Function Value or Host Object is passed into a Group it doesn't
 
 [[error]]
 code = "library mismatch"
-raised_when = "A Library's imports have different identities in the Group"
+raised_when = "A Library's imports aren't in the Group, or have different identities there"
 
 [[error]]
 code = "reserved name"

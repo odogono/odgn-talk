@@ -1,0 +1,26 @@
+# errors: `guarded` catches inside checks, `go` catches what `ratio` raises
+# two frames down, `leak` runs `tidied`'s `finally` and errors, and `burn`
+# faults in `spin` and rolls `count` back. Its Fuel, allocation and state
+# figures are Cost Model 0's, as the TS Core blessed them.
+
+> add-library checks identity=b4ee220cc7fdbe5203db5a3d8d916c776f6f4f8a54a29e658df891f9335c7fb6
+> load meter identity=cb7756a0a882447248599d1ee2cd48b42bd2166e23dd66df83cf035b5f283f61
+> deliver d1 to=meter message=go
+> deliver d2 to=meter message=leak
+> deliver d3 to=meter message=burn
+> pump clock=2026-09-30T09:00:00Z
+raise meter/r1 code="division by zero" at=checks:4 pos=4:12
+raise meter/r1 code="division by zero" at=checks:4 pos=4:12
+seg meter/r1 start delivery=d1 handler=go clause=1 fuel=76 alloc=0 state=469 end=return
+run meter/r1 outcome=completed delivery=d1 handler=go fuel=76 alloc=0
+raise meter/r2 code="division by zero" at=checks:4 pos=4:12
+raise meter/r2 code="division by zero" at=checks:41 pos=16:3
+seg meter/r2 start delivery=d2 handler=leak clause=1 fuel=45 alloc=0 state=437 end=error
+run meter/r2 outcome=errored delivery=d2 handler=leak error={code: "division by zero", at: {unit: "checks", handler: "ratio", line: 4, column: 12}} fuel=45 alloc=0
+fault meter/r3 limit=fuel at=checks:46 pos=24:3 rollback=[count]
+seg meter/r3 start delivery=d3 handler=burn clause=1 fuel=500 alloc=40 state=405 end=fault
+run meter/r3 outcome=limit-fault delivery=d3 handler=burn limit=fuel fuel=500 alloc=40
+pumped state=idle fuel=621
+
+> vars
+vars meter caught={code: "division by zero", at: {unit: "checks", handler: "ratio", line: 4, column: 12}} guard=0 count=0

@@ -260,7 +260,11 @@ export type Function = {
   scope: number;
 };
 export type Decl =
-  | { imports: { local: SemanticName; name: string }[]; k: 'use' }
+  | {
+      imports: { local: SemanticName; name: string }[];
+      k: 'use';
+      library: string;
+    }
   | {
       k: 'constant';
       name: SemanticName;
@@ -376,12 +380,14 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         .slice(0, from)
         .filter(child => child.kind === 'node')
         .map(child => of<SemanticName>(child));
-      const rename = children
+      const after = children
         .slice(from + 1)
         .filter(child => child.kind === 'node')
-        .map(child => of<SemanticName>(child))[1];
+        .map(child => of<SemanticName>(child));
+      const rename = after[1];
       return {
         k: 'use',
+        library: after[0]!.text,
         imports: names.map(name => ({
           name: name.text,
           local: rename ?? name,

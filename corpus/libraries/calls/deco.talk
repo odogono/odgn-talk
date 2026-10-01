@@ -1,0 +1,11 @@
+-- deco.talk: a Library of the calls case, importing another.
+
+use label from fmt
+
+function framed n
+  return "[" & label(n) & "]"
+end framed
+
+function adder k
+  return given x: x + k
+end adder

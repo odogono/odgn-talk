@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Library calls in the Core: `compileLibrary`, `addLibrary` and the `add-library` Host Input, calls to imported functions and Handlers, imported Constants and defaults, Function Values made from Library code, errors and Limit Faults inside Library code, code identities that cover imports, and the `not in a library` load errors; with `libraries/` Trace Cases, and Spec fixes for adding a Library before its imports and for identities, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - The number and Float Built-ins in the Core: `sqrt`, `exp`, `ln`, `log10`, `power`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan` and `atan2`, correctly rounded to 34 digits, and `fromFloat64`, `fromFloat32`, `toFloat64` and `toFloat32`; with `math/` Trace Cases, and Spec fixes for the fields of their domain errors and the rounding of floats, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Instants and Civil Dates in the Core: the `instant` and `civilDate` Host constructors, their display form and `$instant` and `$date` Value Encoding, date arithmetic and comparison, `as civil date` and `as instant`, and the date Built-ins; with `dates/` Trace and Value Encoding cases, and Spec fixes for the fields of date errors, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -48,6 +50,7 @@ tracked separately in the Spec's Data Files.
 
 ### Fixed
 
+- A Run's clause in its `seg` and `preempt` records is its entry Handler's, not that of a Handler it called by name.
 - A Built-in that raises is charged by its own rate, `builtin.<name>`, as chapter 8 says, instead of failing on a rate that doesn't exist.
 - The Core's parser, and the grammar check's, read a build whose first field is a build, `<< <<1, 2>> >>`, as chapter 1 lexes it.
 

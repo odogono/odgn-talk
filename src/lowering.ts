@@ -2150,6 +2150,18 @@ export const exportsOf = (
   return out;
 };
 
+/**
+ * The Libraries a unit's `use` lines name, each once, in the order of the
+ * first line that names it.
+ */
+export const importsOf = (tree: SemanticTree): string[] => [
+  ...new Set(
+    viewSource(tree.root).flatMap(decl =>
+      decl.k === 'use' ? [decl.library] : [],
+    ),
+  ),
+];
+
 /** Lower a checked semantic tree into its code unit. */
 export const lowerTree = (
   tree: SemanticTree,

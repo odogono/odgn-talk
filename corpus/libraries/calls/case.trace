@@ -1,0 +1,16 @@
+# calls: `label(42, 5)` overrides the default width, `tag` is `label`
+# renamed, and `framed` reaches fmt through deco. The Lambda deco makes is
+# placed `shelf:deco:10:10`. Its Fuel, allocation and state figures are Cost
+# Model 0's, as the TS Core blessed them.
+
+> add-library fmt identity=cebff88ea20b6d0f34ee70a9a1ed5df5591e804c72ea0bd36093f0c85db22060
+> add-library deco identity=95b83f90a9eba1d0258c81985a0553dc7a9c6c439625a59f3bf3b7d156f902af
+> load shelf identity=e92589a9583920185c0acb5b53304d35751c1ff54adf0b16c8dc174c07144a09
+> deliver d1 to=shelf message=go
+> pump clock=2026-09-30T09:00:00Z
+seg shelf/r1 start delivery=d1 handler=go clause=1 fuel=831 alloc=1562 state=477 end=return
+run shelf/r1 outcome=completed delivery=d1 handler=go fuel=831 alloc=1562
+pumped state=idle fuel=831
+
+> vars
+vars shelf labels=["No. 007", "No. 00042", "No. 001", "[No. 009]", "No. "] shouts=["hi!", "a b"] values=[<function shelf:deco:10:10 {k: 10}>, <function shelf:fmt:label>, 15] applied=[21, 18, "No. No. 004"]

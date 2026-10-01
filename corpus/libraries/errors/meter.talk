@@ -1,0 +1,25 @@
+-- meter.talk: the errors case's Script.
+
+use ratio, guarded, tidied, spin from checks
+
+script variable caught
+script variable guard
+script variable count = 0
+
+on go
+  put guarded(1, 0) into guard
+  try
+    put ratio(1, 0) into caught
+  catch e
+    put e into caught
+  end try
+end go
+
+on leak
+  return tidied(1, 0)
+end leak
+
+on burn
+  add 1 to count
+  return spin(1000)
+end burn

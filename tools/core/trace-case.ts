@@ -7,8 +7,10 @@ import corpus from '../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  compileLibrary,
   HostError,
   LoadError,
+  type Library,
   newGroup,
   NotImplementedError,
   parseInstant,
@@ -103,6 +105,7 @@ const same = (expected: string, actual: string): boolean => {
 };
 
 type Setup = {
+  libraries?: { name: string; source: string; version: string }[];
   scripts?: {
     grants?: unknown;
     limits?: Partial<Limits>;
@@ -126,6 +129,47 @@ const read = (text: string): Value => {
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
+// Every Library case.toml names, compiled once each Library it imports is, so
+// in any order; one that never compiles keeps its LoadError.
+const compileLibraries = (
+  dir: string,
+  setup: Setup,
+): Map<string, Library | LoadError> => {
+  const out = new Map<string, Library | LoadError>();
+  let pending = setup.libraries ?? [];
+  while (pending.length) {
+    const failed: typeof pending = [];
+    for (const library of pending) {
+      try {
+        const done = [...out.values()].filter(
+          (l): l is Library => !(l instanceof LoadError),
+        );
+        out.set(
+          library.name,
+          compileLibrary(
+            {
+              ...library,
+              source: readFileSync(resolve(dir, library.source), 'utf8'),
+            },
+            done,
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof LoadError)) {
+          throw error;
+        }
+        out.set(library.name, error);
+        failed.push(library);
+      }
+    }
+    if (failed.length === pending.length) {
+      break;
+    }
+    pending = failed;
+  }
+  return out;
+};
+
 /** Replay a case's Host Inputs, giving the Trace the Core wrote. */
 export const replay = (
   dir: string,
@@ -134,6 +178,7 @@ export const replay = (
 ): string[] => {
   const trace: string[] = [];
   const group = newGroup({ name: 'case', trace: line => trace.push(line) });
+  const compiled = compileLibraries(dir, setup);
   for (const line of lines) {
     if (!line.startsWith('> ')) {
       continue;
@@ -155,6 +200,17 @@ export const replay = (
             limits: script.limits,
             objects: Object.keys(script.objects ?? {}),
           });
+          break;
+        }
+        case 'add-library': {
+          const l = compiled.get(r.ids[0] ?? '');
+          if (!l) {
+            throw new Error(`case.toml has no Library ${r.ids[0]}`);
+          }
+          if (l instanceof LoadError) {
+            throw l;
+          }
+          group.addLibrary(l);
           break;
         }
         case 'deliver':

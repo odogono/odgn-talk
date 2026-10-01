@@ -121,6 +121,7 @@ describe('Cost Model 0', () => {
     const r = run(source, 'go', [], { fuelPerRun: 9 });
     expect(r.outcome).toEqual({
       kind: 'limit fault',
+      unit: 'test',
       limit: 'fuelPerRun',
       pc: 7,
       line: 4,
@@ -140,6 +141,7 @@ describe('Cost Model 0', () => {
     );
     expect(r.outcome).toMatchObject({
       kind: 'limit fault',
+      unit: 'test',
       limit: 'callDepth',
       line: 5,
     });
@@ -151,6 +153,7 @@ describe('Cost Model 0', () => {
     });
     expect(r.outcome).toMatchObject({
       kind: 'limit fault',
+      unit: 'test',
       limit: 'allocPerRun',
       line: 2,
     });

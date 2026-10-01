@@ -1,0 +1,7 @@
+-- top.talk: a Library of the registration case that imports base.
+
+use one from base
+
+function two
+  return one() + one()
+end two

@@ -162,6 +162,7 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
 
 /**
  * Check where control-flow statements, `pass`, `the target`, `private`,
+ * what Library code may not use,
  * Guard contents and Handler suffixes may appear. Each Handler, function and
  * Lambda body starts afresh: a Lambda's `return` leaves only the Lambda, and
  * its loops are its own.
@@ -184,6 +185,28 @@ export const checkControl = (
         if (unit === 'script' && word(head, 'private')) {
           report('not in a script', head);
         }
+        if (unit === 'library' && word(head, 'script')) {
+          report('not in a library', head);
+        }
+        break;
+      }
+      case 'Send':
+        if (unit === 'library') {
+          report('not in a library', node.children[0] as Leaf);
+        }
+        break;
+      case 'Wait': {
+        const [head, next] = node.children;
+        if (unit === 'library' && word(next, 'for')) {
+          report('not in a library', head as Leaf);
+        }
+        break;
+      }
+      case 'Primary': {
+        const [head] = node.children;
+        if (unit === 'library' && word(head, 'me')) {
+          report('not in a library', head);
+        }
         break;
       }
       case 'Handler': {
@@ -203,6 +226,9 @@ export const checkControl = (
         break;
       case 'SimpleStatement': {
         const [head, next] = node.children;
+        if (unit === 'library' && (word(head, 'pass') || word(head, 'veto'))) {
+          report('not in a library', head);
+        }
         if (
           word(head, 'exit') ||
           (word(head, 'next') && word(next, 'repeat'))
@@ -241,6 +267,14 @@ export const checkControl = (
       }
       case 'The': {
         const [the, target, ...rest] = node.children;
+        if (
+          unit === 'library' &&
+          word(the, 'the') &&
+          word(target, 'target') &&
+          !rest.length
+        ) {
+          report('not in a library', the);
+        }
         if (
           context.lambda &&
           word(the, 'the') &&
