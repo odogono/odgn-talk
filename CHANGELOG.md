@@ -9,6 +9,7 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Core control-flow and body-context diagnostics: misplaced `exit repeat`/`next repeat`, transfers that leave `finally`, `pass` and `the target` inside Lambdas, `pass` naming another message, and invalid Handler suffix combinations, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Core read-only Constant and Lambda capture checks, bare-variable `set` diagnostics, named function argument contracts, default ordering and initializer/default reference checks with exact diagnostic positions and ordering, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Core name resolution with typed semantic trees, source spans, whole-body local collection, Lambda captures, and exact ordered load-time diagnostics for invalid names, clashes and duplicate bindings, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - A lossless Core modal lexer and predictive parser, with typed concrete syntax trees, original token/trivia spans, exact source reconstruction and first-error syntax diagnostics for [#126](https://github.com/odogono/odgn-talk/issues/126).

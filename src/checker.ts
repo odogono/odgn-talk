@@ -1,3 +1,4 @@
+import { checkControl } from './control';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
 import { parseSource, type ParseError } from './parser';
@@ -73,7 +74,7 @@ const isName = (token: Token) =>
   token.t === 'word' && token.v !== '_' && !RESERVED.has(token.v);
 const bodyRules = new Set(['Handler', 'Function', 'Lambda']);
 
-/** Resolve bindings and check writes, named calls and constant references without evaluation. */
+/** Resolve bindings and check writes, named calls, constant references and control flow without evaluation. */
 export const checkSyntax = (
   syntax: SyntaxNode,
   options: CheckOptions = {},
@@ -902,6 +903,10 @@ export const checkSyntax = (
       });
     }
   }
+  const root = converted.get(syntax) as SemanticNode;
+  for (const { code, span, text } of checkControl(root)) {
+    diagnostics.push({ code, span, message: `${code}: ${text}` });
+  }
   diagnostics.sort(
     (a, b) =>
       a.span.start - b.span.start ||
@@ -911,7 +916,7 @@ export const checkSyntax = (
     ok: diagnostics.length === 0,
     diagnostics,
     tree: {
-      root: converted.get(syntax) as SemanticNode,
+      root,
       scopes: scopes.map(scope => ({
         id: scope.id,
         kind: scope.kind,
