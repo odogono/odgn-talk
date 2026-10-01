@@ -1,4 +1,5 @@
-// The TS Core's embedding interface: declarations only, never compiled.
+// The NorthTalk TS Core's embedding interface: declarations only, never compiled.
+// The package is @odgn/northtalk.
 //
 // This file mirrors talk.go call for call. The differences are idiom only
 // (ADR 0015): exceptions instead of error values, an optional

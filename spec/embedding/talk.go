@@ -1,4 +1,5 @@
-// The Go Core's embedding interface: declarations only, never compiled.
+// The NorthTalk Go Core's embedding interface: declarations only, never compiled.
+// The module is github.com/odogono/odgn-talk; this is its root package.
 //
 // This file and talk.ts are the handoff interface (#72). They differ only in
 // idiom (ADR 0015): errors as values here and exceptions there, Start/Answer
@@ -21,7 +22,7 @@
 // pumps the Group. Two worker calls made at once are undefined. A worker call
 // made from inside the Group's own Pump (from an Operation function, say) is
 // the Host error "reentrant call".
-package talk
+package northtalk
 
 import (
 	"context"

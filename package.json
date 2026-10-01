@@ -1,5 +1,5 @@
 {
-  "name": "odgn-talk",
+  "name": "@odgn/northtalk",
   "private": true,
   "type": "module",
   "scripts": {
