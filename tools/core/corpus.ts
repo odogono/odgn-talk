@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 // Execute implemented Corpus case kinds. This is distinct from corpus:check,
-// which checks formats. Only `--bless` writes, and only a Disassembly Case's
-// expected files; seed Trace output is never rewritten here.
+// which checks formats. Only `--bless` writes, and only the cases it names.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import {
@@ -14,11 +13,12 @@ import {
   type CodeUnit,
   type LibraryExport,
 } from '../../src/index';
+import { DeferredCaseError, runTraceCase, unblessed } from './trace-case';
 
 const root = resolve(import.meta.dir, '../..');
 const corpusRoot = resolve(root, 'corpus');
 /** The case kinds this Core executes; every other kind is deferred. */
-const supported = new Set(['encoding', 'disassembly']);
+const supported = new Set(['encoding', 'disassembly', 'trace']);
 type Setup = {
   disassembly?: { expected: string; unit: string }[];
   kind: string;
@@ -263,7 +263,11 @@ export const runCorpus = (args: string[]): number => {
   }
   const selected = paths.length
     ? paths.flatMap(arg => casesUnder(resolve(corpusRoot, arg)))
-    : casesUnder(corpusRoot).filter(dir => supported.has(readSetup(dir).kind));
+    : // A Trace Case runs by default once blessed; until then, only when named.
+      casesUnder(corpusRoot).filter(dir => {
+        const { kind } = readSetup(dir);
+        return supported.has(kind) && !(kind === 'trace' && unblessed(dir));
+      });
   if (!selected.length) {
     throw new Error('Selection contains no cases');
   }
@@ -292,8 +296,33 @@ export const runCorpus = (args: string[]): number => {
         }
         continue;
       }
+      if (kind === 'trace') {
+        const setup = readSetup(dir);
+        checkVersions(setup);
+        const result = runTraceCase(dir, setup, { bless });
+        if (result.divergence) {
+          const d = result.divergence;
+          console.error(
+            [
+              `FAIL ${name} (TS Core 1.0-rc / Cost Model 0)`,
+              `  case.trace:${d.line}, after ${result.lines} matching lines`,
+              ...d.context.map(line => `    ${line}`),
+              `  expected: ${d.expected}`,
+              `  actual:   ${d.actual}`,
+            ].join('\n'),
+          );
+          failures++;
+        } else {
+          console.log(
+            `${bless ? 'BLESSED' : 'PASS'} ${name} (${result.lines} lines)`,
+          );
+        }
+        continue;
+      }
       if (bless) {
-        throw new Error(`--bless writes Disassembly Cases only, not ${kind}`);
+        throw new Error(
+          `--bless writes Disassembly and Trace Cases only, not ${kind}`,
+        );
       }
       const result = runEncodingCase(dir);
       if (result.divergence) {
@@ -307,7 +336,9 @@ export const runCorpus = (args: string[]): number => {
       }
     } catch (error) {
       console.error(
-        `FAIL ${name}: ${error instanceof Error ? error.message : error}`,
+        error instanceof DeferredCaseError
+          ? `FAIL ${name}: deferred, since it uses ${error.message}`
+          : `FAIL ${name}: ${error instanceof Error ? error.message : error}`,
       );
       failures++;
     }

@@ -1262,6 +1262,7 @@ export const instructions = [
     "suspends": false
   }
 ] as const;
+export const languageVersion = "1.0-rc";
 export const errorMessages = {
   "bad throw": "Only a map with a text `code`, or a text, can be thrown",
   "no match": "The value doesn't match the pattern",

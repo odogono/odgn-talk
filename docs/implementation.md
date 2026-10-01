@@ -1,6 +1,6 @@
 # TS Core foundations
 
-These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, and runs those code units on the Abstract Machine with Cost Model 0. It does not yet perform every load check or provide the embedding interface's Group, so it is not a conforming Core.
+These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. It does not yet perform every load check or provide the rest of the embedding interface, so it is not a conforming Core.
 
 ## Public values
 
@@ -151,6 +151,46 @@ bun test tests/machine.test.ts
 
 Core tests run every text-model seed case's Script through the machine and reproduce its hand-written Script Variables and `raise` records, including instruction indexes and positions. They also hand-check Cost Model 0 charges, Fuel, allocation and call depth faults with rollback, unwind charges, error maps, `finally` and `during`, clause dispatch and Guards, decimal arithmetic, chunks, Lambdas, and Text Pattern matching, including chapter 8's table of runs and their steps.
 
+## The Group and Trace Cases
+
+```ts
+import { newGroup, parseInstant } from "@odgn/northtalk";
+
+const group = newGroup({ name: "demo", trace: line => console.log(line) });
+const counter = group.load({
+  name: "counter",
+  source: "script variable n = 0\non bump\n  add 1 to n\nend bump",
+});
+counter.deliver({ name: "bump" });
+group.pump(parseInstant("2026-09-30T09:00:00Z"));
+group.inspect();
+// > load counter identity=…
+// > deliver d1 to=counter message=bump
+// > pump clock=2026-09-30T09:00:00Z
+// seg counter/r1 start delivery=d1 handler=bump clause=1 fuel=17 alloc=16 state=16 end=return
+// run counter/r1 outcome=completed delivery=d1 handler=bump fuel=17 alloc=16
+// pumped state=idle fuel=17
+// > vars
+// vars counter n=1
+```
+
+The Group follows `talk.ts` for the subset implemented so far:
+
+- **`newGroup`** takes a name and an optional `trace` sink. `group.load` checks, lowers and loads a Script, writing `load` with its code identity, or `diag` records and a `LoadError`. A Script's well-known objects are its `objects` and the Group's other Scripts.
+- **`Script.deliver` and `Script.request`** are queued. Each gets its delivery id at the call. A limit override that loosens a limit, or a full mailbox, is refused there: its line is written with no id, then `refused`, then `HostError` or `MailboxFull` is thrown. A Request's `result` settles with the Run's result, or rejects with `ScriptError` `send failed`.
+- **`group.pump(now, { fuelSlice, fuelCap })`** follows chapter 5. It checks the Clock, then writes the queued inputs and its `pump` line. It drains the queue into each Script's mailbox, and runs turns in load order until no work is left. A Fuel Slice preempts a Script's Run before its next instruction once the Script has spent its slice, and an overrun is carried to its next Pump as debt. The Fuel cap ends the Pump. It returns `run end` and `unhandled` reports.
+- **The records:** each Stretch is written as `seg` or `preempt`, after the `raise`, `guard-skip` and `fault` records it made, then `run` once the Run ends. A Core-raised error map is written without its `message`. Persistent State is the Script Variables and the messages in the mailbox, and a Run's end faults on the cap there.
+- **`group.inspect()`** writes `vars` for each Script, in load order.
+
+Instants are epoch nanoseconds, written in the display form. Code identities use a bundled synchronous SHA-256, so the Group stays browser-safe.
+
+`corpus:run` replays a Trace Case's Host Input lines through the Group and compares the Trace it writes, ignoring comments and blank lines. A Host Input line may leave out its `filled` keys and the ids the Core assigns. A case that needs a Host Input or a feature this Core doesn't implement yet is reported as deferred. Every seed case is still hand-written, `# Unblessed:` says so, and the default selection runs only blessed Trace Cases. Name an unblessed case to replay it and see its first divergence. `--bless` writes a Trace Case's Trace from this Core, keeping each comment and blank line before the Host Input line it preceded. With their figures masked, every implemented text-model, `limits/` and `text-patterns/` case matches its hand-written Trace, except `matching-fuel-exhaustion`. There, a `store-var`'s position is the statement's (chapter 8, as settled with the lowering), not the old prototype's.
+
+```sh
+bun test tests/group.test.ts tests/corpus.test.ts
+bun run corpus:run text-model/host-text-joins-in-nfc
+```
+
 ## Generated Unicode tables
 
 ```sh
@@ -188,4 +228,4 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining step 1 work
 
-The remaining checker diagnostics, the remaining value kinds and Built-ins, Persistent State, the Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented, as do the Spec fixes the lowering's unsettled cases need. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.
+Blessing the text-model Trace Cases, with human review of their Fuel, allocation and state figures, comes next. The remaining checker diagnostics, value kinds and Built-ins, and the rest of the embedding interface follow, as do the Spec fixes the lowering's unsettled cases need. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.

@@ -9,6 +9,7 @@ import machine from '../../spec/data/machine.toml';
 import costs from '../../spec/data/costs.toml';
 import errors from '../../spec/data/errors.toml';
 import limits from '../../spec/data/limits.toml';
+import version from '../../spec/data/version.toml';
 import { resolve } from 'node:path';
 import { parseSource } from '../../src/parser';
 
@@ -149,6 +150,7 @@ const machineContent =
     null,
     2,
   )} as const;\n` +
+  `export const languageVersion = ${JSON.stringify(version.language)};\n` +
   `export const errorMessages = ${JSON.stringify(
     Object.fromEntries(
       (errors.error as { code: string; message: string }[]).map(

@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import {
   cpSync,
+  readdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -14,6 +15,12 @@ import {
   runDisassemblyCase,
   runEncodingCase,
 } from '../tools/core/corpus';
+import {
+  DeferredCaseError,
+  parseRecord,
+  replay,
+  runTraceCase,
+} from '../tools/core/trace-case';
 
 test('the NFC encoding seed case executes every line through the public values', () => {
   const dir = resolve(
@@ -65,17 +72,73 @@ test('encoding selection reports the first differing source line', () => {
   }
 });
 
-test('selecting a deferred case exits with a clear failure', () => {
+test('selecting a case kind this Core defers exits with a clear failure', () => {
   const runner = resolve(import.meta.dir, '../tools/core/corpus.ts');
   const result = Bun.spawnSync([
     process.execPath,
     runner,
-    'text-model/nfc-at-join-seams',
+    'save-restore/variables-only-restore',
   ]);
   expect(result.exitCode).toBe(1);
   expect(new TextDecoder().decode(result.stderr)).toContain(
-    'Deferred case kind: trace',
+    'deferred, since it uses',
   );
+});
+
+test('an unblessed Trace Case runs when named, and reports its first divergence', () => {
+  const dir = resolve(
+    import.meta.dir,
+    '../corpus/text-model/host-text-joins-in-nfc',
+  );
+  const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
+  const result = runTraceCase(dir, setup as never);
+  // The load, request and pump lines match; the hand-written figures don't.
+  expect(result.lines).toBe(3);
+  expect(result.divergence?.expected).toStartWith('seg joiner/r1 start');
+  expect(result.divergence?.actual).toBe(
+    'seg joiner/r1 start delivery=d1 handler=join clause=1 fuel=28 alloc=50 state=32 end=return',
+  );
+});
+
+test('blessing a Trace Case keeps its comments before the inputs they preceded', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-trace-'));
+  try {
+    writeFileSync(
+      resolve(dir, 'case.toml'),
+      'kind = "trace"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n[[scripts]]\nname = "a"\nsource = "a.talk"\n',
+    );
+    writeFileSync(resolve(dir, 'a.talk'), 'on go\n  return 1\nend go\n');
+    writeFileSync(
+      resolve(dir, 'case.trace'),
+      '# a case\n> load a\n\n# deliver it\n> deliver d1 to=a message=go\n> pump clock=2026-09-30T09:00:00Z\nwrong line\n# the end\n',
+    );
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+    );
+    expect(runTraceCase(dir, setup as never).divergence?.expected).toBe(
+      'wrong line',
+    );
+    runTraceCase(dir, setup as never, { bless: true });
+    const blessed = readFileSync(resolve(dir, 'case.trace'), 'utf8');
+    expect(blessed.replace(/ identity=[\da-f]+/, '')).toBe(
+      [
+        '# a case',
+        '> load a',
+        '',
+        '# deliver it',
+        '> deliver d1 to=a message=go',
+        '> pump clock=2026-09-30T09:00:00Z',
+        'seg a/r1 start delivery=d1 handler=go clause=1 fuel=7 alloc=0 state=0 end=return',
+        'run a/r1 outcome=completed delivery=d1 handler=go value=1 fuel=7 alloc=0',
+        'pumped state=idle fuel=7',
+        '# the end',
+        '',
+      ].join('\n'),
+    );
+    expect(runTraceCase(dir, setup as never).divergence).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('every Disassembly Case reproduces its expected text byte for byte', () => {
@@ -138,6 +201,63 @@ test('blessing refuses case kinds this Core does not bless', () => {
   ]);
   expect(result.exitCode).toBe(1);
   expect(new TextDecoder().decode(result.stderr)).toContain(
-    '--bless writes Disassembly Cases only',
+    '--bless writes Disassembly and Trace Cases only',
   );
 });
+
+test("every record the Core writes has corpus.toml's ids and keys, in its order", async () => {
+  const corpus = (await import('../spec/data/corpus.toml')).default as {
+    record: {
+      ids?: string[];
+      key?: { key: string; optional?: boolean }[];
+      name: string;
+    }[];
+  };
+  const specs = new Map(corpus.record.map(r => [r.name, r]));
+  const lines: string[] = [];
+  for (const area of ['text-model', 'limits', 'text-patterns']) {
+    const root = resolve(import.meta.dir, '../corpus', area);
+    for (const name of readdirSync(root)) {
+      const dir = resolve(root, name);
+      const setup = Bun.TOML.parse(
+        readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+      ) as {
+        kind: string;
+      };
+      if (setup.kind !== 'trace') {
+        continue;
+      }
+      try {
+        lines.push(
+          ...replay(
+            dir,
+            setup as never,
+            readFileSync(resolve(dir, 'case.trace'), 'utf8').split('\n'),
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof DeferredCaseError)) {
+          throw error;
+        }
+      }
+    }
+  }
+  expect(lines.length).toBeGreaterThan(100);
+  for (const line of lines) {
+    const record = parseRecord(line);
+    const spec = specs.get(record.name)!;
+    expect(spec).toBeDefined();
+    const keys = (spec.key ?? []).map(k => k.key);
+    const written = [...record.fields.keys()];
+    expect(written).toEqual(keys.filter(k => written.includes(k)));
+    for (const k of spec.key ?? []) {
+      if (!k.optional && !(record.input && 'filled' in k)) {
+        expect([line, written.includes(k.key)]).toEqual([line, true]);
+      }
+    }
+    const required = (spec.ids ?? []).filter(id => !id.endsWith('?')).length;
+    expect(record.ids.length).toBeGreaterThanOrEqual(
+      record.input ? 0 : required,
+    );
+  }
+}, 60_000);

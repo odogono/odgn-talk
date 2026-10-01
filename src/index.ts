@@ -1,4 +1,26 @@
-export { HostError, type HostErrorCode } from './errors';
+export {
+  HostError,
+  LoadError,
+  MailboxFull,
+  ScriptError,
+  type HostErrorCode,
+  type LoadDiagnostic,
+} from './errors';
+export {
+  codeIdentity,
+  Group,
+  newGroup,
+  Script as ScriptHandle,
+  type GroupOptions,
+  type Inspection,
+  type LoadOptions,
+  type Message,
+  type PumpOptions,
+  type PumpResult,
+  type Report,
+  type Requested,
+} from './group';
+export { formatInstant, parseInstant } from './instant';
 export {
   Value,
   Decimal,
@@ -38,8 +60,8 @@ export {
   callFunction,
   defaultLimits,
   deliver,
-  LoadError,
   loadScript,
+  UnitLoadError,
   Run,
   Script,
   type LimitName,
@@ -47,7 +69,7 @@ export {
   type Outcome,
   type RunRecord,
 } from './machine';
-export { NotImplemented } from './operations';
+export { NotImplementedError } from './operations';
 export {
   disassemble,
   type Body,

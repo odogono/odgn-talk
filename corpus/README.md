@@ -38,7 +38,8 @@ The cases under [`disassembly/`](disassembly/) were written with the TS Core's l
 bun run corpus:check          # what CI runs: every case reads as chapter 11 says
 bun run grammar:check         # every .talk file here parses
 bun run machine:check         # and lowers
-bun run corpus:run            # the TS Core runs the case kinds it implements
+bun run corpus:run            # the TS Core runs the case kinds it implements, and blessed Trace Cases
+bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
 ```
 
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

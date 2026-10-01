@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- The Core's Group: Load with code identities and load diagnostics, queued Deliveries and Requests, Pumps that follow chapter 5's turns with Fuel Slices, debt and the Fuel cap, Persistent State at each Segment's end, Inspect, and a Trace sink writing chapter 11's records; and Trace Case replay and bless in the corpus runner, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - The Core's Abstract Machine: loading code units, Handler Clause dispatch, calls and Lambdas, unwinding through the Unwind Table, Cost Model 0 Fuel and allocation with Limit Faults and rollback, exact decimal arithmetic, chunks, properties, Built-ins, and Text Patterns on chapter 8's Pike VM, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Core normative lowering of checked Scripts and Libraries onto chapter 8's code units (constant pool, definitions, variables, objects, body table, code, Unwind Table and event table), with the canonical disassembly, generated instruction tables, a structural check of every lowered source against `machine.toml`, and explicit-stack passes for deep source, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
