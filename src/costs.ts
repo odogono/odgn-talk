@@ -92,7 +92,7 @@ const measureOf = (measure: string, v: Value | undefined): number => {
     case 'program':
       return v.kind === 'pattern' ? v.asPattern()!.program : 0;
     case 'bytes':
-      return 0;
+      return v.bytesView()?.length ?? 0;
   }
   throw new Error(`Unknown measure ${measure}`);
 };

@@ -320,6 +320,7 @@ fuel = "1"
 key = "bin-field"
 fuel = "2 + bytes(result) / 8 + scalars(result) / 8"
 alloc = "size(result)"
+input = "`result` is the value the field reads, which `bin-literal` has none of; for `bin-bits` it is the run's values, and their sizes add"
 
 [[rate]]
 key = "throw"

@@ -2725,6 +2725,12 @@ export class BodyCompiler {
         continue;
       }
       this.expr(f.value);
+      if (f.type && f.type.k === 'Sized') {
+        this.binarySize(f.type.size, null);
+        this.at(f.value);
+        this.emit('bytes-sized', [fieldType(f.type)]);
+        continue;
+      }
       this.at(f.value);
       this.emit('bytes-field', [fieldType(f.type)]);
     }

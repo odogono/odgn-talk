@@ -1,0 +1,8 @@
+# value-encoding: Bytes are `$bytes`, their padded Base64 with the standard
+# alphabet (spec chapter 9, JSON and the Value Encoding).
+
+kind = "encoding"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"

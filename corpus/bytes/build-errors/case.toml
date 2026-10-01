@@ -1,0 +1,12 @@
+# build-errors: a build field that can't be written raises, and nothing wraps
+# around (spec chapter 4, Building Bytes).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "builder"
+source = "builder.talk"

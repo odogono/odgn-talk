@@ -1,0 +1,16 @@
+# build-and-match: the build writes `7 as uint32` big-endian and `-3 as int16
+# little` as its two's complement low byte first, and the pattern reads them
+# back. A size can name a field bound earlier, and `...r` binds what is left.
+# `pick` falls through a pattern that is too short and one that is too long.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
+
+> load packets identity=8139f101e2bcb5f5c3a54f1995430bc2c7691d715dea13ea83ae2458a5dfb976
+> deliver d1 to=packets message=go
+> pump clock=2026-09-30T09:00:00Z
+seg packets/r1 start delivery=d1 handler=go clause=1 fuel=293 alloc=871 state=366 end=return
+run packets/r1 outcome=completed delivery=d1 handler=go fuel=293 alloc=871
+pumped state=idle fuel=293
+
+> vars
+vars packets packet=<<0x02, 0x00, 0x00, 0x00, 0x07, 0xFD, 0xFF>> header=<<0x1F>> fields=[7, -3] framed=<<0x47, 0x45, 0x54, 0x1F, 0x03, 0x61, 0x62, 0x63, 0xFF>> body=[1, 15, "abc"] rest=<<0xFF>> picked="rest" second=0 middle=<<0x00, 0x00, 0x00, 0x07>> patched=<<0x09, 0xFD, 0xFF>> trimmed=<<0x09, 0xFD, 0xFF>> decoded="hé" found=true ordered=true

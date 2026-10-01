@@ -1975,7 +1975,8 @@ export class Parser {
 
   binaryBuild(): Node {
     const fields: Node[] = [];
-    if (!this.isOp(this.peek(0, 'operator'), '>>')) {
+    // A field starts in operand position, so a nested `<<` opens a build.
+    if (!this.isOp(this.peek(0, 'operand'), '>>')) {
       do {
         if (fields.length) {
           this.next('operator');

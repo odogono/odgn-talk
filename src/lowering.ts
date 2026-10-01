@@ -2015,6 +2015,19 @@ class BodyLowering {
         continue;
       }
       yield this.expr(field.value);
+      if (field.type?.k === 'sized') {
+        // `v as n bytes`: the size, as in a Binary Pattern, then `bytes-sized`.
+        const { size } = field.type;
+        if (size.k === 'number') {
+          this.constant(field.pos, numberText(size.text));
+        } else if (size.k === 'pin' || size.k === 'name') {
+          this.load(size.name, field.pos);
+        } else {
+          yield this.expr(size.e);
+        }
+        this.emit(field.pos, 'bytes-sized', fieldText(field.type));
+        continue;
+      }
       this.emit(field.pos, 'bytes-field', fieldText(field.type));
     }
   }

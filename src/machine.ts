@@ -3,6 +3,17 @@
 // Run's frames, slots and operand stacks follow chapter 8's state; each
 // instruction is charged by Cost Model 0 before it does anything, so a Run
 // that can't pay faults at it; errors unwind through the Unwind Table.
+import {
+  buildBits,
+  buildField,
+  buildSized,
+  readBits,
+  readBytes,
+  readInt,
+  readLiteral,
+  readRest,
+  type Reader,
+} from './binary';
 import { charge, partSize, sizeOf, type Measured } from './costs';
 import type { Body, CodeUnit, Instruction } from './code-unit';
 import { instructionSpec } from './code-unit';
@@ -253,7 +264,7 @@ type Replacement = {
   pieces: string[];
   subject: Value;
 };
-type Item = Value | Iterator | Replacement;
+type Item = Value | Iterator | Replacement | Reader;
 type Dispatch = { args: Value[]; clauses: Body[]; next: number };
 type Frame = {
   body: Body;
@@ -438,6 +449,13 @@ export class Run {
       throw new Error('expected values on the stack');
     }
     return items;
+  }
+  private reader(): Reader {
+    const item = this.frame.stack.at(-1);
+    if (!item || isValue(item) || item.k !== 'reader') {
+      throw new Error('expected a reader on the stack');
+    }
+    return item;
   }
   private peek(n = 0): Value {
     const item = this.frame.stack.at(-1 - n);
@@ -939,6 +957,105 @@ export class Run {
         m.result = map(values.map((v, i) => [textForm(keys.index(i + 1)), v]));
         return this.replace(n, key);
       }
+      // Building Bytes
+      case 'bytes-field':
+        m.input = this.peek();
+        m.result = buildField(this.peek(1), m.input, a as string);
+        return this.replace(2, key);
+      case 'bytes-sized':
+        m.input = this.peek(1);
+        m.result = buildSized(this.peek(2), m.input, this.peek(), a as string);
+        return this.replace(3, key);
+      case 'bytes-bits': {
+        const n = b as number;
+        const values = this.frame.stack.slice(-n) as Value[];
+        m.result = buildBits(
+          this.peek(n),
+          values,
+          widthsOf(this.script.constant(a as number)),
+        );
+        return this.replace(n + 1, key);
+      }
+
+      // Binary Patterns: a jump pops the reader, and the subject or size.
+      case 'bin-start': {
+        const v = this.peek();
+        this.pay(key);
+        this.pop();
+        if (v.kind !== 'bytes') {
+          return jump(a as number);
+        }
+        frame.stack.push({ k: 'reader', bytes: v.bytesView()!, at: 0 });
+        return next();
+      }
+      case 'bin-literal': {
+        const r = this.reader();
+        this.pay(key);
+        if (!readLiteral(r, this.script.constant(a as number))) {
+          frame.stack.pop();
+          return jump(b as number);
+        }
+        return next();
+      }
+      case 'bin-int': {
+        const r = this.reader();
+        m.result = readInt({ ...r }, a as string);
+        this.pay(key);
+        if (!m.result) {
+          frame.stack.pop();
+          return jump(b as number);
+        }
+        readInt(r, a as string);
+        frame.stack.push(m.result);
+        return next();
+      }
+      case 'bin-bits': {
+        const r = this.reader();
+        const widths = widthsOf(this.script.constant(a as number));
+        const values = readBits({ ...r }, widths);
+        m.resultSize = values?.reduce((t, v) => t + sizeOf(v), 0) ?? 0;
+        this.pay(key);
+        if (!values) {
+          frame.stack.pop();
+          return jump(c as number);
+        }
+        readBits(r, widths);
+        frame.stack.push(...values);
+        return next();
+      }
+      case 'bin-bytes': {
+        const size = this.peek();
+        const r = this.frame.stack.at(-2) as Reader;
+        const probe = { ...r };
+        m.result = readBytes(probe, size, a as string);
+        this.pay(key);
+        frame.stack.pop();
+        if (!m.result) {
+          frame.stack.pop();
+          return jump(b as number);
+        }
+        r.at = probe.at;
+        frame.stack.push(m.result);
+        return next();
+      }
+      case 'bin-rest': {
+        const r = this.reader();
+        m.result = readRest(r, a as string);
+        this.pay(key);
+        frame.stack.pop();
+        if (!m.result) {
+          return jump(b as number);
+        }
+        frame.stack.push(m.result);
+        return next();
+      }
+      case 'bin-end': {
+        const r = this.reader();
+        this.pay(key);
+        frame.stack.pop();
+        return r.at === r.bytes.length ? next() : jump(a as number);
+      }
+
       case 'make-pattern': {
         const template = this.script.constants[a as number]!;
         if (template.k !== 'template') {
@@ -1352,6 +1469,17 @@ export class Run {
     frame.pc++;
   }
 }
+
+// A widths constant, `[4, 4]`, as numbers.
+const widthsOf = (v: Value): number[] =>
+  Array.from({ length: v.length }, (_, i) =>
+    Number(
+      v
+        .index(i + 1)
+        .asDecimal()!
+        .toString(),
+    ),
+  );
 
 // An error a `throw`, `rethrow`, `raise` or `end-cleanup` raises, already a map.
 class ThrownError extends Error {

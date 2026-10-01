@@ -41,6 +41,8 @@ import {
 } from './unicode';
 import {
   bool,
+  bytesOf,
+  compareBytes,
   dec,
   list,
   listValues,
@@ -91,7 +93,7 @@ export const wrongKind = (expected: string, v: Value) =>
     ['got', text(kindName(v))],
     ['value', v],
   ]);
-const outOfRange = (field: string, value: Value) =>
+export const outOfRange = (field: string, value: Value) =>
   new ScriptError('out of range', [
     ['field', text(field)],
     ['value', value],
@@ -104,8 +106,41 @@ const outOfDomain = (fn: string, value: Value) =>
 
 const decOfValue = (v: Value): Dec => parseDec(v.asDecimal()!.toString());
 export const numberValue = (d: Dec): Value => dec(formatDec(d));
-const integerValue = (n: bigint): Value => numberValue(decOf(n));
+export const integerValue = (n: bigint): Value => numberValue(decOf(n));
 const textOf = (v: Value) => v.asText()!;
+const utf8 = new TextEncoder();
+// Strict UTF-8 (no surrogates, overlongs or truncation), keeping a BOM.
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+/** Bytes' strict UTF-8 decoding, or undefined; `text` then normalises it. */
+export const decodeUtf8 = (b: Uint8Array): string | undefined => {
+  try {
+    return strictUtf8.decode(b);
+  } catch {
+    return undefined;
+  }
+};
+const bytesOperand = (v: Value): Uint8Array => {
+  const b = v.bytesView();
+  if (!b) {
+    throw wrongKind('bytes', v);
+  }
+  return b;
+};
+/** A value that must be one byte: an integer from 0 to 255. */
+export const byteOf = (v: Value, field: string): number => {
+  if (v.kind !== 'number') {
+    throw wrongKind('number', v);
+  }
+  const d = decOfValue(v);
+  if (!isInteger(d)) {
+    throw wrongKind('integer', v);
+  }
+  const n = integerOf(d);
+  if (n < 0n || n > 255n) {
+    throw outOfRange(field, v);
+  }
+  return Number(n);
+};
 
 /** A value's text form (chapter 3): text is itself, and the rest their display form. */
 export const textForm = (v: Value): string =>
@@ -189,6 +224,18 @@ const scannedPairs = (a: Value, b: Value, fold: boolean): number => {
     }
     return i;
   }
+  if (a.kind === 'bytes') {
+    const x = a.bytesView()!;
+    const y = b.bytesView()!;
+    let i = 0;
+    while (i < x.length && i < y.length) {
+      i++;
+      if (x[i - 1] !== y[i - 1]) {
+        break;
+      }
+    }
+    return i;
+  }
   if (a.kind === 'list') {
     let i = 0;
     while (i < a.length && i < b.length) {
@@ -247,6 +294,8 @@ export const order = (a: Value, b: Value, fold = false): -1 | 0 | 1 => {
       }
       return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
     }
+    case 'bytes':
+      return compareBytes(a.bytesView()!, b.bytesView()!);
     case 'list': {
       for (let i = 1; i <= Math.min(a.length, b.length); i++) {
         if (!equals(a.index(i), b.index(i), fold).equal) {
@@ -512,7 +561,8 @@ export const isEmpty = (v: Value): Value =>
   bool(
     (v.kind === 'text' && textOf(v) === '') ||
       (v.kind === 'list' && v.length === 0) ||
-      (v.kind === 'map' && v.entries().length === 0),
+      (v.kind === 'map' && v.entries().length === 0) ||
+      (v.kind === 'bytes' && v.bytesView()!.length === 0),
   );
 
 const cantConvert = (value: Value, to: string) =>
@@ -523,7 +573,22 @@ const cantConvert = (value: Value, to: string) =>
 export const convert = (v: Value, kind: string): Value => {
   switch (kind) {
     case 'text':
+      if (v.kind === 'bytes') {
+        const decoded = decodeUtf8(v.bytesView()!);
+        if (decoded === undefined) {
+          throw cantConvert(v, 'text');
+        }
+        return text(decoded);
+      }
       return text(textForm(v));
+    case 'bytes':
+      if (v.kind === 'bytes') {
+        return v;
+      }
+      if (v.kind === 'text') {
+        return bytesOf(utf8.encode(textOf(v)));
+      }
+      throw cantConvert(v, 'bytes');
     case 'number':
       if (v.kind === 'number') {
         return v;
@@ -536,7 +601,6 @@ export const convert = (v: Value, kind: string): Value => {
         }
       }
       throw cantConvert(v, 'number');
-    case 'bytes':
     case 'civil date':
     case 'instant':
       throw new NotImplementedError(`\`as ${kind}\``);
@@ -670,6 +734,9 @@ export const property = (
       if (isIntegerRange(v)) {
         return integerValue(BigInt(itemsOf(v)));
       }
+      if (v.kind === 'bytes') {
+        return integerValue(BigInt(v.bytesView()!.length));
+      }
       throw wrongKind('text', v);
     case 'keys':
     case 'values':
@@ -701,7 +768,9 @@ export const property = (
       }
       return texts(spans(textOf(v), singular(name)).map(s => s.text));
     case 'bytes':
-      throw new NotImplementedError('Bytes');
+      return listValues(
+        Array.from(bytesOperand(v), x => integerValue(BigInt(x))),
+      );
   }
   throw new Error(`unknown property ${name}`);
 };
@@ -888,7 +957,18 @@ export const chunkGet = (
     return { result, scanned: at[1] };
   }
   if (kind === 'byte') {
-    throw new NotImplementedError('Bytes');
+    const b = bytesOperand(whole);
+    const at = covered(index, b.length);
+    if (!at) {
+      return {
+        result: index.range ? bytesOf(new Uint8Array()) : nothing,
+        scanned: b.length,
+      };
+    }
+    const result = index.range
+      ? bytesOf(b.slice(at[0] - 1, at[1]))
+      : integerValue(BigInt(b[at[0] - 1]!));
+    return { result, scanned: at[1] };
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -908,11 +988,10 @@ export const chunkThere = (
         ? whole.length
         : kind === 'item' && isIntegerRange(whole)
           ? itemsOf(whole)
-          : -1;
+          : kind === 'byte'
+            ? bytesOperand(whole).length
+            : -1;
   if (n < 0) {
-    if (kind === 'byte') {
-      throw new NotImplementedError('Bytes');
-    }
     throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
   }
   return covered(index, n) !== null;
@@ -998,7 +1077,26 @@ export const chunkSet = (
     return listValues(items);
   }
   if (kind === 'byte') {
-    throw new NotImplementedError('Bytes');
+    // A byte is replaced by one integer, and a range of bytes by Bytes. A
+    // write never pads Bytes, so past the end raises.
+    const old = bytesOperand(whole);
+    const n = old.length;
+    const a = fromEnd(index.from, n);
+    const b = fromEnd(index.to, n);
+    if (a < 1n || b < 1n || a > b || b > BigInt(n)) {
+      throw writeOutOfRange(kind, index);
+    }
+    if (!index.range) {
+      const out = old.slice();
+      out[Number(a) - 1] = byteOf(part, 'byte');
+      return bytesOf(out);
+    }
+    const replacement = bytesOperand(part);
+    const out = new Uint8Array(n - Number(b - a) - 1 + replacement.length);
+    out.set(old.subarray(0, Number(a) - 1));
+    out.set(replacement, Number(a) - 1);
+    out.set(old.subarray(Number(b)), Number(a) - 1 + replacement.length);
+    return bytesOf(out);
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -1052,7 +1150,15 @@ export const chunkDelete = (
     return listValues(items);
   }
   if (kind === 'byte') {
-    throw new NotImplementedError('Bytes');
+    const b = bytesOperand(whole);
+    const at = covered(index, b.length);
+    if (!at) {
+      return whole;
+    }
+    const out = new Uint8Array(b.length - (at[1] - at[0] + 1));
+    out.set(b.subarray(0, at[0] - 1));
+    out.set(b.subarray(at[1]), at[0] - 1);
+    return bytesOf(out);
   }
   throw wrongKind(kind === 'item' ? 'list' : 'text', whole);
 };
@@ -1213,6 +1319,11 @@ const subjectText = (s: Value) => {
   return characters(textOf(s));
 };
 
+// Bytes search as a text literal searches Characters, one position per byte:
+// each byte stands for a private-use code point, which is a Character alone.
+const byteUnits = (b: Uint8Array): string[] =>
+  Array.from(b, x => String.fromCodePoint(0xe0_00 + x));
+
 /** `contains`, `begins with`, `ends with` and `matches`, with their `steps`. */
 export const search = (
   op: string,
@@ -1220,8 +1331,13 @@ export const search = (
   needle: Value,
   fold: boolean,
 ): { result: Value; steps: number } => {
-  const cs = subjectText(subject);
-  const program = programOf(needle, fold);
+  const bytesSearch = subject.kind === 'bytes' && op !== 'matches';
+  const cs = bytesSearch
+    ? byteUnits(subject.bytesView()!)
+    : subjectText(subject);
+  const program = bytesSearch
+    ? literalProgram(byteUnits(bytesOperand(needle)).join(''), false)
+    : programOf(needle, fold);
   const kind: RunKind =
     op === 'contains'
       ? 'search'

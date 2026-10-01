@@ -1,0 +1,16 @@
+# build-and-match: `<< … >>` builds Bytes field by field, and a Binary Pattern
+# reads them back left to right, never searching or backtracking (spec
+# chapter 4, Binary Patterns; ADR 0013). Bytes chunks, `as text` and searches
+# count bytes (chapter 3, Bytes).
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "packets"
+source = "packets.talk"

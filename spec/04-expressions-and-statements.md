@@ -82,7 +82,7 @@ Nothing else sets it. A Join Member leaves it unchanged inside the Join's body.
 | `of`, `'s` | [keys](#keys-and-properties) and [chunks](#chunk-expressions) |
 
 - **Membership:** `x is in xs` is `true` when some element of the list `xs` equals `x`. `x is in r` over a range is chapter 3's. Any other right operand raises `wrong kind`, with `expected` `"list"`.
-- **Search:** `a contains b`, `a begins with b` and `a ends with b` take text on the left, and text or a Text Pattern on the right. Text on the right matches its own Characters, on whole-Character boundaries. They also take Bytes on both sides. Any other operand raises `wrong kind`.
+- **Search:** `a contains b`, `a begins with b` and `a ends with b` take text on the left, and text or a Text Pattern on the right. Text on the right matches its own Characters, on whole-Character boundaries. They also take Bytes on both sides, and a Bytes needle matches its bytes in a row. Bytes on the left with anything else on the right raises `wrong kind` with `expected` `"bytes"`. Any other operand raises `wrong kind`.
 - **`matches`:** `s matches p` is `true` when the Text Pattern or text `p` matches the whole of the text `s` ([Text Patterns](#matching)).
 - **`&`:** the result is the NFC form of the two text forms, joined.
 - **`ignoring case`** makes every comparison of two texts that its operator makes compare their simple case foldings, inside lists and maps too, and it applies to every text literal of a Text Pattern the operator uses. After `is a`, `can be` or `is empty` it is a load error, since they compare no text.
@@ -356,7 +356,7 @@ Bytes are matched and built by Binary Patterns, which read fields left to right 
 ### Matching Bytes
 
 - **The value** must be Bytes, or the pattern fails.
-- **Literal fields:** a number matches one byte of that value, and text matches its UTF-8 bytes.
+- **Literal fields:** a number matches one byte of that value, and text matches its UTF-8 bytes. A number that isn't an integer from 0 to 255 never matches.
 - **Integer fields:** `n: uint16` reads 2 bytes as an unsigned integer, and `int8` to `int64` read two's-complement integers. They are big-endian, unless `little` follows, and `big` may be written. Each binds a number, and `_: uint32` skips its bytes.
 - **Bit fields:** `n: 4 bits` reads an unsigned integer, most significant bit first. Their sizes are integer literals, and each run of bit fields in a row must add up to whole bytes, which is checked at load.
 - **Byte fields:** `body: len bytes` binds that many bytes as Bytes. `as text` after it decodes them as `as text` does, and bytes that don't decode make the pattern fail.
@@ -372,7 +372,8 @@ In operand position, `<< … >>` builds Bytes from its fields, in order:
 - **Text** is its UTF-8 bytes, and **Bytes** are copied in as they are.
 - **`v as uint16`**, and the other integer types, write `v` in that many bytes, big-endian unless `little` follows, as for matching. **`v as n bits`** writes `v` in `n` bits, and each run of bit fields must add up to whole bytes.
 - **`v as n bytes`** takes Bytes of exactly `n` bytes, and `v as n bytes as text` takes text whose UTF-8 is exactly `n` bytes.
-- **Errors:** an integer too large or too small for its field raises `out of range`, with the field's type as `field`, such as `"uint16"`. A non-integer, or a Quantity, raises `wrong kind`. Any other value raises `wrong kind` too. Nothing ever wraps around.
+- **Errors:** an integer too large or too small for its field raises `out of range`, with the field's type as `field`, such as `"uint16"`, `"4 bits"`, or `"byte"` for a number with no `as`. A non-integer raises `wrong kind` with `expected` `"integer"`, and a Quantity or any other value where a number is needed raises it with `"number"`. A field with no `as` that isn't a number, text or Bytes raises it with `"bytes"`. Nothing ever wraps around.
+- **Sized fields:** `v as n bytes` needs Bytes, and `as text` text, or it raises `wrong kind` with `"bytes"` or `"text"`. A size that isn't a number raises `wrong kind` with `"number"`, and a non-integer one with `"integer"`. A value whose length isn't the size raises `out of range`, with `field` `"bytes"` or `"bytes as text"` and the value.
 
 > **Example.**
 >
@@ -399,7 +400,7 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 - **Past the end:** writing a `character` or `word` past the end raises `out of range`, even just past it, so `put "x" into character 4 of "abc"` raises. A write never appends: `put e after c` does.
 - **Index 0, a reversed range or an index before the start** raises `out of range` for every chunk kind. A range's ends are read as for [reading](#reading), and one at 0 or before the start raises too. `field` is the chunk kind's singular word, even after a plural, and `value` is the index, or for a range the list `[from, to]` of its ends as written. So `put "x" into characters 3..2 of s` raises with `field` `"character"` and `value` `[3, 2]`.
 - **An item of a list** is replaced by the value. Writing past the end pads the list with Nothing. A range of items is replaced by the elements of a list, and any other value there raises `wrong kind`.
-- **A byte** is replaced by an integer from 0 to 255, and a range of bytes by Bytes. Writing past the end raises `out of range`.
+- **A byte** is replaced by an integer from 0 to 255, and a range of bytes by Bytes. Writing past the end raises `out of range`. A value that isn't a number raises `wrong kind` with `expected` `"number"`, a non-integer raises it with `"integer"`, and an integer outside 0 to 255 raises `out of range` with `field` `"byte"` and the value. A range of bytes given anything but Bytes raises `wrong kind` with `expected` `"bytes"`.
 
 ### Writing keys
 

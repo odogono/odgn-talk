@@ -1,0 +1,22 @@
+-- builder.talk: the build-errors case. Each Handler raises, and the Trace
+-- writes its error map.
+
+on wide
+  return << 70000 as uint16 >>
+end wide
+
+on byte
+  return << 256 >>
+end byte
+
+on fraction
+  return << 1.5 >>
+end fraction
+
+on sized
+  return << << 1, 2 >> as 3 bytes >>
+end sized
+
+on bits
+  return << 16 as 4 bits, 0 as 4 bits >>
+end bits

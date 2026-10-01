@@ -675,6 +675,16 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "bytes-sized",
+    "cost": "bytes-field",
+    "operands": [
+      "field"
+    ],
+    "pops": 3,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
     "name": "bytes-bits",
     "cost": "bytes-field",
     "operands": [

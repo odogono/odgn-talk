@@ -217,6 +217,7 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `map` | `constant`, `count` | count | 1 | Pops `count` values and pushes a map with the keys the constant lists, in order |  |
 | `make-pattern` | `constant`, `count` | count | 1 | Builds a Text Pattern from the constant's template and `count` spliced values | `wrong kind`, `can't convert` |
 | `bytes-field` | `field` | 2 | 1 | One field of a `<< … >>` build: pops the value and the Bytes so far, and pushes them extended | `wrong kind`, `out of range` |
+| `bytes-sized` | `field` | 3 | 1 | A `v as n bytes` field of a build: pops the size, the value and the Bytes so far, and pushes them extended | `wrong kind`, `out of range` |
 | `bytes-bits` | `constant`, `count` | count + 1 | 1 | A run of `count` bit fields, with the widths the constant lists: pops their values and the Bytes so far | `wrong kind`, `out of range` |
 | `match-all` |  | 2 | 1 | `every match of p in s`: pops the text and the pattern, and pushes the list of Matches | `wrong kind` |
 | `replace-start` | `count` | 2 | 1 | Pops the text and the pattern, and pushes a replacement over its matches, only the first if `count` is 1 | `wrong kind` |
@@ -382,14 +383,14 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 | `{k1: a, k2: b, …}` | ⟦a⟧ ⟦b⟧ … `map` of the key list's constant and `n` |
 | a Text Pattern with no splices | `const` of it |
 | a Text Pattern with splices | ⟦s1⟧ ⟦s2⟧ … `make-pattern` of its template and `n` |
-| `<< f1, f2, … >>` | `const <<>>`, then for each field ⟦value⟧ `bytes-field` of its type, and for each run of bit fields ⟦v1⟧ … `bytes-bits` of its widths and `n` |
+| `<< f1, f2, … >>` | `const <<>>`, then for each field ⟦value⟧ `bytes-field` of its type, for each `v as n bytes` field ⟦v⟧ ⟦n⟧ `bytes-sized` of its size unit, and for each run of bit fields ⟦v1⟧ … `bytes-bits` of its widths and `n` |
 | `every match of p in s` | ⟦p⟧ ⟦s⟧ `match-all` |
 | `replace p in s with e` | ⟦p⟧ ⟦s⟧ then [the replacement loop](#replace) |
 | `f(a, …)`, and Lambdas | [below](#calls-lambdas-and-function-values) |
 
 - **Ordinals** lower as their index: `first` is `const 1`, …, `tenth` is `const 10`, and `last` is `const -1`.
 - **Negative literals** are the literal and `negate`, so `-5` is `const 5` `negate`.
-- **A field's type** in `bytes-field` is `value` when the field has no `as`, and otherwise its integer type and byte order (`uint16 little`), or its size unit (`bytes`, `bytes as text`).
+- **A field's type** in `bytes-field` is `value` when the field has no `as`, and otherwise its integer type and byte order (`uint16 little`). In `bytes-sized` it is its size unit, `bytes` or `bytes as text`, and ⟦n⟧ is the `load` of a pinned name, or ⟦size⟧, as in a Binary Pattern.
 
 ### Chunk Expressions
 
@@ -635,7 +636,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Chunks:** a `delimited by`'s `store t` is the outermost level's chunk word, and an ordinal's `const` its level's chunk word.
 - **Lambdas:** a `given …: e`'s `return`, and a Lambda's `raise no match`, are its `given`.
 - **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
-- **Builds:** a field's `bytes-field`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
+- **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`.
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).
@@ -723,6 +724,7 @@ Each operation runs one of four kinds of run:
 
 - **Stopping at the first match:** `matches`, `contains`, `begins with` and `ends with` need only a boolean, so they stop at the first match recorded. The others run to the end, since a later thread may be more preferred.
 - **A text needle** is run as the program of a literal of it.
+- **A Bytes needle** in a search of Bytes is run the same way over the bytes, one position per byte, with a `char` for each byte of the needle.
 - **The Match Search** (`match-all`, `replace-start`, and the stdlib searches over it) runs searches one after another, each from where the last match ended. A search whose match is empty and starts where the last match ended is discarded, whether the last match was empty or not, and the next search starts one Character later. The Match Search stops when a search records no match, or when the next search would start past the end of the text. `steps` sums every search, the discarded ones included.
 - **Captures:** a Match's `captures` and `ranges` come from the capture slots, and each Capture's conversion, such as `as number`, happens after the match, in Capture order.
 
@@ -864,7 +866,7 @@ Cost Model **0**.
 | `clause` | `4` | 0 | each Handler Clause a dispatch tries, charged at the clause body's first instruction |
 | `return` | `2` | 0 |  |
 | `test` | `1` | 0 |  |
-| `bin-field` | `2 + bytes(result) / 8 + scalars(result) / 8` | `size(result)` |  |
+| `bin-field` | `2 + bytes(result) / 8 + scalars(result) / 8` | `size(result)` | `result` is the value the field reads, which `bin-literal` has none of; for `bin-bits` it is the run's values, and their sizes add |
 | `throw` | `10` | `48` | the `at` map the Core adds, when it adds one |
 | `unwind` | `4 * frames` | 0 |  |
 | `capability` | `10 + declared + size(result) / 32` | `size(result)` | the Operation's result, converted into Script values |

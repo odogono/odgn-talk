@@ -53,7 +53,7 @@ bodies
   2 handler comparing clause 1 (x, y) locals 9 0057..0148
   3 handler literals clause 1 () locals 4 0149..0189
   4 handler reading clause 1 (x, k) locals 8 0190..0250
-  5 handler building clause 1 (x, n) locals 9 0251..0303
+  5 handler building clause 1 (x, n) locals 9 0251..0304
 code
   0000 4:18 const 0 ; 10
   0001 4:1 store-definition limit
@@ -327,35 +327,36 @@ code
   0269 42:37 const 40 ; "ok"
   0270 42:37 bytes-field value
   0271 42:43 load 2 ; n
-  0272 42:43 bytes-field bytes
-  0273 42:60 const 39 ; <<>>
-  0274 42:63 const 4 ; 1
-  0275 42:76 load 1 ; x
-  0276 42:63 bytes-bits 41 2 ; [4, 4]
-  0277 42:7 list 2
-  0278 42:3 store 5 ; c
-  0279 43:22 const 14 ; <digits>
-  0280 43:34 load 1 ; x
-  0281 43:7 match-all
-  0282 43:3 store 6 ; found
-  0283 44:11 load 6 ; found
-  0284 44:26 const 42 ; <d: digit>
-  0285 44:40 load 1 ; x
-  0286 44:18 replace-start 0
-  0287 44:18 replace-next 0298
-  0288 44:18 store 8 ; (8)
-  0289 44:18 load 8 ; (8)
-  0290 44:18 get-key "captures"
-  0291 44:18 get-key "d"
-  0292 44:18 store 7 ; d
-  0293 44:47 load 7 ; d
-  0294 44:51 load 7 ; d
-  0295 44:49 concat
-  0296 44:18 replace-put
-  0297 44:18 jump 0287
-  0298 44:18 replace-end
-  0299 44:10 list 2
-  0300 44:3 return
-  0301 45:1 const 2 ; nothing
-  0302 45:1 return
-  0303 45:1 clause-fail
+  0272 42:43 const 6 ; 3
+  0273 42:43 bytes-sized bytes
+  0274 42:60 const 39 ; <<>>
+  0275 42:63 const 4 ; 1
+  0276 42:76 load 1 ; x
+  0277 42:63 bytes-bits 41 2 ; [4, 4]
+  0278 42:7 list 2
+  0279 42:3 store 5 ; c
+  0280 43:22 const 14 ; <digits>
+  0281 43:34 load 1 ; x
+  0282 43:7 match-all
+  0283 43:3 store 6 ; found
+  0284 44:11 load 6 ; found
+  0285 44:26 const 42 ; <d: digit>
+  0286 44:40 load 1 ; x
+  0287 44:18 replace-start 0
+  0288 44:18 replace-next 0299
+  0289 44:18 store 8 ; (8)
+  0290 44:18 load 8 ; (8)
+  0291 44:18 get-key "captures"
+  0292 44:18 get-key "d"
+  0293 44:18 store 7 ; d
+  0294 44:47 load 7 ; d
+  0295 44:51 load 7 ; d
+  0296 44:49 concat
+  0297 44:18 replace-put
+  0298 44:18 jump 0288
+  0299 44:18 replace-end
+  0300 44:10 list 2
+  0301 44:3 return
+  0302 45:1 const 2 ; nothing
+  0303 45:1 return
+  0304 45:1 clause-fail

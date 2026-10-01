@@ -1,0 +1,13 @@
+# value-encoding: each value is read in the display form, built through the
+# Host's constructors, and encoded.
+# Unblessed: the bytes are written by hand, not by bless.
+#
+# Empty Bytes, and each amount of padding.
+<<>> => {"$bytes":""}
+<<0x0D, 0x0A>> => {"$bytes":"DQo="}
+<<0x01>> => {"$bytes":"AQ=="}
+<<0x66, 0x6F, 0x6F>> => {"$bytes":"Zm9v"}
+# `+` and `/` are the standard alphabet's last two characters.
+<<0xFB, 0xFF>> => {"$bytes":"+/8="}
+# Inside a list and a map.
+[<<0x00>>, {b: <<0xFF, 0xFE>>}] => [{"$bytes":"AA=="},{"b":{"$bytes":"//4="}}]
