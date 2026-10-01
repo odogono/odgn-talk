@@ -15,10 +15,10 @@
 # Segment. `second` is dispatch 4, const 1, store-var 2, const 1, return 2.
 #
 # Pinned here: the fault's instruction, the rollback list and the Script
-# Variables. Allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Variables. Its Fuel, allocation and state figures are Cost Model 0's, as
+# the TS Core blessed them.
 
-> load keeper
+> load keeper identity=5fd93b2d8f0582327e3f82406b023c6092d376ff24c4ad0c573a00d9013868f8
 
 > deliver d1 to=keeper message=first
 > pump clock=2026-09-28T09:00:00Z

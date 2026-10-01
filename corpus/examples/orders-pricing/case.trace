@@ -1,51 +1,50 @@
 # orders-pricing: a worked example of a Trace (spec chapter 11). The `>`
 # lines are Host Inputs. An author writes those, leaving out the ids and the
-# keys bless fills in, and bless writes everything else. Every Fuel,
-# allocation and state figure, and every code identity, is invented until
-# Cost Model 1.
-# Unblessed: the output lines are written by hand, not by bless.
+# keys bless fills in, and bless writes everything else. Its Fuel,
+# allocation and state figures are Cost Model 0's, as the TS Core blessed
+# them.
 
-> load orders identity=4c1f0e52d8a9b3c67e21f09a5d4b8c3e6f7a1b2c3d4e5f60718293a4b5c6d7e8
-> load pricing identity=9e8d7c6b5a49382716f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a098
+> load orders identity=a7f73192cc07f92314aed845c23d6b1f1d85c2dd24ac27d844098b8d45a77f46
+> load pricing identity=5adb400b9a91558d580a69fea97b8fd028e7612cc8a45a686ce47fc9da66bd9c
 
 # An order that crosses to the pricing Script and waits on a suspending call.
 # Both waits run out at the default 30 s `MaxWait`, the next deadline.
 > deliver d1 to=orders message=order args=[{sku: "A1", qty: 3}]
 > pump clock=2026-09-28T09:00:00Z
 send orders/r1.c1 to=pricing message=quote args=["A1", 3] wait=yes
-seg orders/r1 start delivery=d1 handler=order clause=1 fuel=41 alloc=96 state=212 end=send-wait
+seg orders/r1 start delivery=d1 handler=order clause=1 fuel=42 alloc=74 state=426 end=send-wait
 call pricing/r1.c1 op=prices.lookup args=["A1"]
-seg pricing/r1 start from=orders/r1.c1 handler=quote clause=1 fuel=118 alloc=24 state=148 end=ask-wait
-pumped state=idle fuel=159 next=2026-09-28T09:00:30Z
+seg pricing/r1 start from=orders/r1.c1 handler=quote clause=1 fuel=115 alloc=0 state=290 end=ask-wait
+pumped state=idle fuel=157 next=2026-09-28T09:00:30Z
 > answer pricing/r1.c1 value=2.50 GBP
 > pump clock=2026-09-28T09:00:00Z
-seg pricing/r1 resume fuel=9 alloc=16 state=156 end=wait until=2026-09-28T09:00:01Z
-pumped state=idle fuel=9 next=2026-09-28T09:00:01Z
+seg pricing/r1 resume fuel=15 alloc=24 state=274 end=wait until=2026-09-28T09:00:01Z
+pumped state=idle fuel=15 next=2026-09-28T09:00:01Z
 > pump clock=2026-09-28T09:00:01Z
-seg pricing/r1 resume fuel=12 alloc=16 state=212 end=return
-run pricing/r1 outcome=completed handler=quote value=7.50 GBP fuel=139 alloc=56
+seg pricing/r1 resume fuel=8 alloc=24 state=0 end=return
+run pricing/r1 outcome=completed handler=quote value=7.50 GBP fuel=138 alloc=48
 call orders/r1.c2 op=log.write args=["total 7.50 GBP"]
-seg orders/r1 resume fuel=35 alloc=40 state=64 end=return
-run orders/r1 outcome=completed delivery=d1 handler=order fuel=76 alloc=136
-pumped state=idle fuel=47
+seg orders/r1 resume fuel=50 alloc=54 state=24 end=return
+run orders/r1 outcome=completed delivery=d1 handler=order fuel=92 alloc=128
+pumped state=idle fuel=58
 
 # The first clause's Guard fails on "lots", so the second clause runs.
 > deliver d2 to=orders message=order args=[{sku: "B2", qty: "lots"}]
 > pump clock=2026-09-28T09:00:01Z
 call orders/r2.c1 op=log.write args=["bad qty for B2: lots"]
-seg orders/r2 start delivery=d2 handler=order clause=2 fuel=52 alloc=40 state=64 end=return
-run orders/r2 outcome=completed delivery=d2 handler=order fuel=52 alloc=40
-pumped state=idle fuel=52
+seg orders/r2 start delivery=d2 handler=order clause=2 fuel=80 alloc=106 state=24 end=return
+run orders/r2 outcome=completed delivery=d2 handler=order fuel=80 alloc=106
+pumped state=idle fuel=80
 
 # Runs out of Fuel. The faulting instruction is pinned, and the Segment's
 # `add 1 GBP to total` is rolled back. The faulting instruction's charge
 # isn't made, so the Run's Fuel stops short of its 20000.
 > deliver d3 to=orders message=spin
 > pump clock=2026-09-28T09:00:02Z
-fault orders/r3 limit=fuel at=orders:57 pos=22:5 rollback=[total]
-seg orders/r3 start delivery=d3 handler=spin clause=1 fuel=19998 alloc=19872 state=64 end=fault
-run orders/r3 outcome=limit-fault delivery=d3 handler=spin limit=fuel fuel=19998 alloc=19872
-pumped state=idle fuel=19998
+fault orders/r3 limit=fuel at=orders:66 pos=22:5 rollback=[total]
+seg orders/r3 start delivery=d3 handler=spin clause=1 fuel=19978 alloc=15924 state=24 end=fault
+run orders/r3 outcome=limit-fault delivery=d3 handler=spin limit=fuel fuel=19978 alloc=15924
+pumped state=idle fuel=19978
 
 # The runner ends every case by inspecting the Group.
 > vars

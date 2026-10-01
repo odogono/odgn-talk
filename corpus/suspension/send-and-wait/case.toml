@@ -1,0 +1,21 @@
+# send-and-wait: a `send … and wait` suspends until the receiver's Run ends,
+# and leaves its reply in `it`. A Run that ends any other way raises
+# `send failed` in the sender, with the outcome as `reason`, and for
+# `errored` its error map. Past `MaxWait` the sender raises `timeout`, the
+# call is abandoned, and the receiver's reply is dropped (spec chapter 5,
+# Sending).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "front"
+source = "front.talk"
+limits = { maxWaitMs = 2000 }
+
+[[scripts]]
+name = "back"
+source = "back.talk"

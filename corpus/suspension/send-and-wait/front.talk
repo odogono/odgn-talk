@@ -1,0 +1,12 @@
+-- front.talk: the send-and-wait case's sender.
+
+script variable replies = []
+
+on query what
+  try
+    send quote with what to back and wait
+    put it after replies
+  catch e
+    put e after replies
+  end try
+end query

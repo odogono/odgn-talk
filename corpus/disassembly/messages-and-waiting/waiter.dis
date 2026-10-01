@@ -21,9 +21,10 @@ bodies
   4 handler events clause 1 (id, limit) locals 8 may suspend 0050..0089
   5 handler joins clause 1 (ids) locals 3 may suspend 0090..0110
   6 handler beforeShip clause 1 (parcel) locals 2 0111..0119
-  7 event paid (…) captures 1 locals 5 0120..0134
-  8 event shipped (…) captures 3 locals 6 0135..0154
-  9 event cancelled (reason) locals 2 0155..0158
+  7 handler tally clause 1 (id) locals 2 0120..0124
+  8 event paid (…) captures 1 locals 5 0125..0139
+  9 event shipped (…) captures 3 locals 6 0140..0159
+  10 event cancelled (reason) locals 2 0160..0163
 code
   0000 1:1 const 0 ; nothing
   0001 1:1 return
@@ -41,8 +42,8 @@ code
   0013 9:11 load 1 ; id
   0014 9:3 send-up-wait refresh 1
   0015 9:3 store 0 ; it
-  0016 10:11 load 1 ; id
-  0017 10:3 call-handler restock 1
+  0016 10:9 load 1 ; id
+  0017 10:3 call-handler tally 1
   0018 10:3 store 0 ; it
   0019 11:11 load 1 ; id
   0020 11:3 call-handler-wait restock 1
@@ -145,49 +146,54 @@ code
   0117 56:1 const 0 ; nothing
   0118 56:1 return
   0119 56:1 clause-fail
-  0120 29:17 load 1 ; (1)
-  0121 29:17 test-map 0134
-  0122 29:17 load 1 ; (1)
-  0123 29:17 map-get "order" 0134
-  0124 29:25 store 4 ; (4)
-  0125 29:25 load 4 ; (4)
-  0126 29:25 load 3 ; id
-  0127 29:25 test-equal 0134
-  0128 29:17 load 1 ; (1)
-  0129 29:17 map-get "amount" 0134
-  0130 29:38 store 2 ; a
-  0131 29:3 load 2 ; a
-  0132 29:3 list 1
-  0133 29:3 return
-  0134 29:3 clause-fail
-  0135 32:18 load 1 ; (1)
-  0136 32:18 test-map 0154
-  0137 32:18 load 1 ; (1)
-  0138 32:18 map-get "order" 0154
-  0139 32:26 store 2 ; o
-  0140 32:35 load 2 ; o
-  0141 32:39 load 3 ; id
-  0142 32:37 equal
-  0143 32:42 branch-false 0149
-  0144 32:46 load 4 ; a
-  0145 32:50 load 5 ; limit
-  0146 32:48 less
-  0147 32:42 check-boolean
-  0148 32:42 jump 0150
-  0149 32:42 const 4 ; false
-  0150 32:35 branch-false 0154
-  0151 32:5 load 2 ; o
-  0152 32:5 list 1
-  0153 32:5 return
-  0154 32:5 clause-fail
-  0155 34:5 load 1 ; reason
-  0156 34:5 list 1
-  0157 34:5 return
-  0158 34:5 clause-fail
+  0120 59:10 load 1 ; id
+  0121 59:3 return
+  0122 60:1 const 0 ; nothing
+  0123 60:1 return
+  0124 60:1 clause-fail
+  0125 29:17 load 1 ; (1)
+  0126 29:17 test-map 0139
+  0127 29:17 load 1 ; (1)
+  0128 29:17 map-get "order" 0139
+  0129 29:25 store 4 ; (4)
+  0130 29:25 load 4 ; (4)
+  0131 29:25 load 3 ; id
+  0132 29:25 test-equal 0139
+  0133 29:17 load 1 ; (1)
+  0134 29:17 map-get "amount" 0139
+  0135 29:38 store 2 ; a
+  0136 29:3 load 2 ; a
+  0137 29:3 list 1
+  0138 29:3 return
+  0139 29:3 clause-fail
+  0140 32:18 load 1 ; (1)
+  0141 32:18 test-map 0159
+  0142 32:18 load 1 ; (1)
+  0143 32:18 map-get "order" 0159
+  0144 32:26 store 2 ; o
+  0145 32:35 load 2 ; o
+  0146 32:39 load 3 ; id
+  0147 32:37 equal
+  0148 32:42 branch-false 0154
+  0149 32:46 load 4 ; a
+  0150 32:50 load 5 ; limit
+  0151 32:48 less
+  0152 32:42 check-boolean
+  0153 32:42 jump 0155
+  0154 32:42 const 4 ; false
+  0155 32:35 branch-false 0159
+  0156 32:5 load 2 ; o
+  0157 32:5 list 1
+  0158 32:5 return
+  0159 32:5 clause-fail
+  0160 34:5 load 1 ; reason
+  0161 34:5 list 1
+  0162 34:5 return
+  0163 34:5 clause-fail
 unwind
-  0120..0130 guard -> 0134 depth 0
-  0135..0150 guard -> 0154 depth 0
+  0125..0135 guard -> 0139 depth 0
+  0140..0155 guard -> 0159 depth 0
 events
-  0 when paid from body 7 captures 1 binds 3; or
+  0 when paid from body 8 captures 1 binds 3; or
   1 when ready
-  2 when shipped body 8 captures 3 binds 4; when cancelled body 9 binds 6; after
+  2 when shipped body 9 captures 3 binds 4; when cancelled body 10 binds 6; after

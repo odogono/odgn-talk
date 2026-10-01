@@ -11,23 +11,23 @@
 #   `ask … and wait` (shop:3, pos 5:3).
 #
 # shop has no `on error`, so the `error` message is dropped, with no record.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load shop
+> load shop identity=3c324b3c4aa01066e9c2e96e103945bc46d7bfaaf3cea15cd9ab76df9d4944bb
 
 > deliver d1 to=shop message=check args=["A1"]
 > pump clock=2026-09-30T10:00:00Z
 call shop/r1.c1 op=stock.check args=["A1"]
-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=103 alloc=0 state=0 end=ask-wait
-pumped state=idle fuel=103 next=2026-09-30T10:00:30Z
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=250 end=ask-wait
+pumped state=idle fuel=115 next=2026-09-30T10:00:30Z
 
 > fail shop/r1.c1 error={code: "out of stock", message: "None left", due: "Friday", left: 0}
 > pump clock=2026-09-30T10:00:01Z
 raise shop/r1 code="out of stock" at=shop:3 pos=5:3
-seg shop/r1 resume fuel=6 alloc=160 state=0 end=error
-run shop/r1 outcome=errored delivery=d1 handler=check error={code: "out of stock", message: "None left", due: "Friday", left: 0, capability: "stock", operation: "check", at: {unit: "shop", handler: "check", line: 5, column: 3}} fuel=109 alloc=160
-pumped state=idle fuel=6
+seg shop/r1 resume fuel=8 alloc=109 state=0 end=error
+run shop/r1 outcome=errored delivery=d1 handler=check error={code: "out of stock", message: "None left", due: "Friday", left: 0, capability: "stock", operation: "check", at: {unit: "shop", handler: "check", line: 5, column: 3}} fuel=123 alloc=109
+pumped state=idle fuel=8
 
 > vars
 vars shop

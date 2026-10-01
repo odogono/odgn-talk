@@ -9,6 +9,7 @@ import {
   MailboxFull,
   ScriptError,
   type HostErrorCode,
+  type ScriptError as HostScriptError,
 } from './errors';
 import { formatInstant } from './dates';
 import { lowerTree } from './lowering';
@@ -19,8 +20,10 @@ import {
   type LimitName,
   type Limits,
   type Outcome,
+  type Resumption,
   type Run,
   type RunHost,
+  type Suspension,
   type Script as Loaded,
 } from './machine';
 import type { Grant } from './capabilities';
@@ -35,7 +38,7 @@ import {
 } from './library';
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
-import { listValues, nothing, text, type Value } from './values';
+import { listValues, map, nothing, text, Value } from './values';
 
 export type GroupOptions = {
   name: string;
@@ -94,7 +97,11 @@ export type Inspection = {
       message: Message;
     }[];
     name: string;
-    runs: { handler: string; id: string; status: 'preempted' }[];
+    runs: {
+      handler: string;
+      id: string;
+      status: 'preempted' | 'ready' | 'suspended';
+    }[];
     vars: [string, Value][];
   }[];
 };
@@ -123,14 +130,21 @@ type Delivery = {
   id: string | null;
   limits: LimitOverride;
   message: string;
+  /** For a `send … and wait`, the sender's call id, which the Run's end settles. */
+  reply: string | null;
   request: { reject: (e: Error) => void; resolve: (v: Value) => void } | null;
 };
 type Running = {
   delivery: Delivery;
   id: string;
+  /** Ready to resume from a Suspension Point, not a preemption. */
+  resuming: boolean;
   run: Run;
-  started: boolean;
 };
+// A timer (chapter 5, A Pump): fired in deadline order, then set order.
+type Timer = { deadline: bigint; fire: () => void; live: boolean; seq: number };
+// A suspended Run waiting on a call: an Operation's answer, or a reply.
+type Pending = { running: Running; s: ScriptState; timer: Timer };
 type ScriptState = {
   debt: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
@@ -145,6 +159,8 @@ type ScriptState = {
   /** Messages waiting for dispatch, and a preempted Run at its head. */
   queue: (Delivery | Running)[];
   runs: number;
+  /** Its suspended Runs, which Persistent State counts. */
+  suspended: Set<Running>;
 };
 type QueuedInput = { apply: () => void; line: string };
 
@@ -192,6 +208,9 @@ export class Group {
   private readonly trace: (line: string) => void;
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
+  private readonly pending = new Map<string, Pending>();
+  private timers: Timer[] = [];
+  private timerSeq = 0;
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private lastClock: bigint | null = null;
@@ -259,6 +278,7 @@ export class Group {
     const handle = new Script(this, o.name);
     this.scripts.push({
       name: o.name,
+      suspended: new Set(),
       objects: o.objects ?? [],
       grants,
       handle,
@@ -314,7 +334,7 @@ export class Group {
       },
       isObject: name => s.objects.includes(name),
       isScript: name => this.scripts.some(other => other.name === name),
-      send: (to, message, args) => {
+      send: (to, message, args, reply) => {
         const receiver = this.scripts.find(other => other.name === to)!;
         const waiting = receiver.queue.filter(item => !('run' in item)).length;
         if (waiting + receiver.incoming >= receiver.limits.mailboxDepth) {
@@ -322,14 +342,88 @@ export class Group {
         }
         receiver.queue.push({
           id: null,
-          from: run.id,
+          from: reply ?? run.id,
           message,
           args,
           limits: {},
+          reply,
           request: null,
         });
       },
+      answer: (id, value, fuel) =>
+        this.inputs.push({
+          line: recordLine(
+            'answer',
+            [id],
+            [
+              ['value', traceValue(value)],
+              ['fuel', fuel ? String(fuel) : null],
+            ],
+            true,
+          ),
+          apply: () => this.settle(id, { k: 'answer', value, fuel }),
+        }),
+      fail: (id, error) =>
+        this.inputs.push({
+          line: recordLine(
+            'fail',
+            [id],
+            [['error', traceValue(failMap(error))]],
+            true,
+          ),
+          apply: () => this.settle(id, { k: 'fail', error }),
+        }),
     };
+  }
+
+  private timer(deadline: bigint, fire: () => void): Timer {
+    const t = { deadline, fire, live: true, seq: this.timerSeq++ };
+    this.timers.push(t);
+    return t;
+  }
+
+  // A suspended Run made ready: it joins the back of its Script's queue.
+  private ready(s: ScriptState, running: Running, r: Resumption) {
+    s.suspended.delete(running);
+    running.run.wake(r);
+    running.resuming = true;
+    s.queue.push(running);
+  }
+
+  // A call's answer or failure, or a reply; one no longer pending is noted.
+  private settle(id: string, r: Resumption) {
+    const p = this.pending.get(id);
+    if (!p) {
+      if (r.k === 'answer' || r.k === 'fail') {
+        this.trace(recordLine('note', [id], [['kind', 'late-answer']]));
+      }
+      return;
+    }
+    this.pending.delete(id);
+    p.timer.live = false;
+    this.ready(p.s, p.running, r);
+  }
+
+  // A Run that suspended: wait on its timer, its answer or its reply.
+  private suspended(s: ScriptState, running: Running, sus: Suspension) {
+    s.suspended.add(running);
+    const now = this.lastClock!;
+    if (sus.k === 'wait') {
+      return this.timer(now + sus.ns, () =>
+        this.ready(s, running, { k: 'wake' }),
+      ).deadline;
+    }
+    const id = sus.k === 'ask' ? sus.call.id : sus.id;
+    const ms = sus.k === 'ask' ? sus.ms : s.limits.maxWaitMs;
+    const timer = this.timer(now + BigInt(ms) * 1_000_000n, () => {
+      this.pending.delete(id);
+      if (sus.k === 'ask') {
+        sus.abort.abort();
+      }
+      this.ready(s, running, { k: 'timeout', after: ms });
+    });
+    this.pending.set(id, { s, running, timer });
+    return null;
   }
 
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
@@ -368,6 +462,7 @@ export class Group {
     const delivery: Delivery = {
       id: `d${++this.deliveries}`,
       from: null,
+      reply: null,
       message: m.name,
       args: m.args ?? [],
       limits: m.limits ?? {},
@@ -438,6 +533,23 @@ export class Group {
     for (const input of drained) {
       input.apply();
     }
+    // Due timers fire in deadline order, then in the order they were set.
+    const due = this.timers
+      .filter(t => t.live && t.deadline <= now)
+      .sort((a, b) =>
+        a.deadline < b.deadline
+          ? -1
+          : a.deadline > b.deadline
+            ? 1
+            : a.seq - b.seq,
+      );
+    for (const t of due) {
+      if (t.live) {
+        t.live = false;
+        t.fire();
+      }
+    }
+    this.timers = this.timers.filter(t => t.live);
     this.pumping = true;
     const reports: Report[] = [];
     let fuel = 0;
@@ -486,6 +598,11 @@ export class Group {
       this.pumping = false;
     }
     const state = this.scripts.some(s => s.queue.length) ? 'sliced' : 'idle';
+    this.timers = this.timers.filter(t => t.live);
+    const next = this.timers.reduce<bigint | null>(
+      (min, t) => (min === null || t.deadline < min ? t.deadline : min),
+      null,
+    );
     this.trace(
       recordLine(
         'pumped',
@@ -493,6 +610,7 @@ export class Group {
         [
           ['state', state],
           ['fuel', String(fuel)],
+          ['next', next === null ? null : formatInstant(next)],
         ],
       ),
     );
@@ -507,7 +625,7 @@ export class Group {
     charge: (fuel: number) => void,
   ) {
     let head = s.queue[0]!;
-    let how: 'start' | 'continue' = 'continue';
+    let how: 'start' | 'continue' | 'resume' = 'continue';
     if (!('run' in head)) {
       const delivery = head;
       const run = dispatch(
@@ -518,20 +636,29 @@ export class Group {
       );
       // At this Run's end, the rest of the queue is what the Script keeps.
       run.persistentState = () => this.persistentState(s, 1);
-      head = { id: `${s.name}/r${++s.runs}`, delivery, run, started: false };
+      head = {
+        id: `${s.name}/r${++s.runs}`,
+        delivery,
+        run,
+        resuming: false,
+      };
       run.id = head.id;
       run.host = this.hostFor(s, run);
       s.queue[0] = head;
       how = 'start';
     }
     const running = head;
+    if (running.resuming) {
+      running.resuming = false;
+      how = 'resume';
+    }
     const { run } = running;
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
     const records0 = run.records.length;
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
-    while (!run.done) {
+    while (!run.done && !run.suspended) {
       by = preempt();
       if (by) {
         break;
@@ -541,6 +668,10 @@ export class Group {
       last = run.fuel;
     }
     for (const rec of run.records.slice(records0)) {
+      if (rec.kind === 'abandon') {
+        this.trace(recordLine('abandon', [rec.id], []));
+        continue;
+      }
       if (rec.kind === 'call') {
         this.trace(
           recordLine(
@@ -565,7 +696,7 @@ export class Group {
         this.trace(
           recordLine(
             'send',
-            [running.id],
+            [rec.id ?? running.id],
             [
               ['to', rec.to],
               ['message', rec.message],
@@ -573,6 +704,7 @@ export class Group {
                 'args',
                 rec.args.length ? traceValue(listValues(rec.args)) : null,
               ],
+              ['wait', rec.id ? 'yes' : null],
             ],
           ),
         );
@@ -607,6 +739,9 @@ export class Group {
       );
     }
     const outcome = run.ended;
+    if (outcome) {
+      s.suspended.delete(running);
+    }
     if (outcome?.kind === 'limit fault') {
       this.trace(
         recordLine(
@@ -630,13 +765,37 @@ export class Group {
             ['delivery', running.delivery.id],
             ['from', running.delivery.from],
             ['handler', handler],
-            ['clause', run.clauseNumber ? String(run.clauseNumber) : null],
+            // No clause matched an unhandled Run.
+            [
+              'clause',
+              run.clauseNumber && outcome?.kind !== 'unhandled'
+                ? String(run.clauseNumber)
+                : null,
+            ],
           ]
         : [];
     const stretch: [string, string][] = [
       ['fuel', String(run.fuel - fuel0)],
       ['alloc', String(run.alloc - alloc0)],
     ];
+    if (!outcome && run.suspended) {
+      s.queue.shift();
+      const deadline = this.suspended(s, running, run.suspended);
+      this.trace(
+        recordLine(
+          'seg',
+          [running.id, how],
+          [
+            ...start,
+            ...stretch,
+            ['state', String(this.persistentState(s))],
+            ['end', suspendReasons[run.suspended.k]],
+            ['until', deadline === null ? null : formatInstant(deadline)],
+          ],
+        ),
+      );
+      return;
+    }
     if (!outcome) {
       this.trace(
         recordLine(
@@ -733,6 +892,19 @@ export class Group {
         message: { name: delivery.message, args: delivery.args },
       });
     }
+    if (delivery.reply) {
+      // The reply to a `send … and wait`, or why there is none.
+      this.settle(
+        delivery.reply,
+        outcome.kind === 'completed'
+          ? { k: 'reply', value: outcome.result }
+          : {
+              k: 'send failed',
+              reason: outcome.kind,
+              error: outcome.kind === 'errored' ? outcome.error : null,
+            },
+      );
+    }
     if (delivery.request) {
       if (outcome.kind === 'completed') {
         delivery.request.resolve(outcome.result);
@@ -755,6 +927,9 @@ export class Group {
   /** A Script's Persistent State: its Script Variables and the messages it holds. */
   private persistentState(s: ScriptState, skip = 0): number {
     let total = s.loaded.variablesSize();
+    for (const r of s.suspended) {
+      total += r.run.size();
+    }
     for (const item of s.queue.slice(skip)) {
       if (!('run' in item)) {
         total += partSize(
@@ -785,17 +960,26 @@ export class Group {
       return {
         name: s.name,
         vars,
-        runs: s.queue.flatMap(item =>
-          'run' in item
-            ? [
-                {
-                  id: item.id,
-                  status: 'preempted' as const,
-                  handler: item.delivery.message,
-                },
-              ]
-            : [],
-        ),
+        runs: [
+          ...s.queue.flatMap(item =>
+            'run' in item
+              ? [
+                  {
+                    id: item.id,
+                    status: item.resuming
+                      ? ('ready' as const)
+                      : ('preempted' as const),
+                    handler: item.delivery.message,
+                  },
+                ]
+              : [],
+          ),
+          ...[...s.suspended].map(item => ({
+            id: item.id,
+            status: 'suspended' as const,
+            handler: item.delivery.message,
+          })),
+        ],
         mailbox: s.queue.flatMap(item =>
           'run' in item
             ? []
@@ -812,6 +996,26 @@ export class Group {
     return { scripts };
   }
 }
+
+// The end reason of a stretch that suspended: its instruction's name.
+const suspendReasons: Record<Suspension['k'], string> = {
+  wait: 'wait',
+  ask: 'ask-wait',
+  send: 'send-wait',
+};
+// A `Fail` as the Trace's `fail` line writes it: `{}` for what isn't a Script error.
+const failMap = (error: HostScriptError | null): Value =>
+  error
+    ? map([
+        ['code', text(error.code)],
+        ...(error.message
+          ? [['message', text(error.message)] as [string, Value]]
+          : []),
+        ...(Value.isValue(error.data) && error.data.kind === 'map'
+          ? error.data.entries()
+          : []),
+      ])
+    : map([]);
 
 const endReason = (outcome: Outcome): string => {
   switch (outcome.kind) {

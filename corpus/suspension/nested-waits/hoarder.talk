@@ -1,0 +1,8 @@
+-- hoarder.talk: the nested-waits case's Script with a small Persistent State.
+
+script variable big = ""
+
+on grow
+  put "abcdefghijklmnopqrstuvwxyz" into big
+  wait 1 s
+end grow

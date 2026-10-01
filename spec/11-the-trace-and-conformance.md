@@ -313,7 +313,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
 | `raise` | `run` | `code`, `at`, `pos` | an error raised, whether or not it is caught |
 | `guard-skip` | `run` | `at`, `pos`, `code`?, `value`? | a clause or branch skipped because its test raised an error or its Guard gave something other than a boolean |
-| `abandon` | `call` |  | a call or Join Member abandoned |
+| `abandon` | `call` |  | a call or Join Member abandoned; for a timeout, after the `raise` it causes |
 | `fault` | `run` | `limit`, `at`, `pos`, `rollback`? | a Limit Fault |
 | `cleanup-failed` | `run` | `code`?, `limit`? | a cancelled Run's cleanup that failed |
 | `note` | `subject` | `kind` | something the Core noted, about a Run, a call or a Delivery |
@@ -337,7 +337,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `broadcast` | `id` | for a start, its Broadcast |
 | `seg` | `from` | `id` | for a start, the call or Run that sent its message |
 | `seg` | `handler` | `id` | for a start, the Handler dispatched to |
-| `seg` | `clause` | `count` | for a start, the clause that matched |
+| `seg` | `clause` | `count` | for a start, the clause that matched; an unhandled Run has none |
 | `seg` | `fn` | `value` | for a start by a Function Value call, the Function Value |
 | `seg` | `fuel` | `count` | the Fuel the stretch used |
 | `seg` | `alloc` | `count` | the allocation the stretch made |
@@ -350,7 +350,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `preempt` | `broadcast` | `id` | for a start, its Broadcast |
 | `preempt` | `from` | `id` | for a start, the call or Run that sent its message |
 | `preempt` | `handler` | `id` | for a start, the Handler dispatched to |
-| `preempt` | `clause` | `count` | for a start, the clause that matched |
+| `preempt` | `clause` | `count` | for a start, the clause that matched; an unhandled Run has none |
 | `preempt` | `fn` | `value` | for a start by a Function Value call, the Function Value |
 | `preempt` | `by` | `word` | what preempted it: `slice`, `cap` |
 | `preempt` | `fuel` | `count` | the Fuel the stretch used |

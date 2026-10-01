@@ -1,0 +1,35 @@
+# nested-waits: `go` waits inside `doze` and then needs no wait for `f`,
+# whose body doesn't suspend; `each` waits twice inside its loop; `month`
+# raises `wrong kind`; and `grow` faults at its `wait`, rolling `big`
+# back. Its Fuel, allocation and state figures are Cost Model 0's, as the TS
+# Core blessed them.
+
+> load napper identity=ec23223c6f964140c7916729644e9260a3d680feb7fa8ceba26b74e2b5d6de73
+> load hoarder identity=097e04b3153c63fd65c95a41c51fcd9e4ab55ea0a46a98b72124ace03a566e4b
+> deliver d1 to=napper message=go
+> deliver d2 to=napper message=each
+> deliver d3 to=napper message=month
+> deliver d4 to=hoarder message=grow
+> pump clock=2026-09-30T09:00:00Z
+seg napper/r1 start delivery=d1 handler=go clause=1 fuel=33 alloc=24 state=392 end=wait until=2026-09-30T09:00:01Z
+fault hoarder/r1 limit=persistent at=hoarder:7 pos=7:3 rollback=[big]
+seg hoarder/r1 start delivery=d4 handler=grow clause=1 fuel=18 alloc=0 state=16 end=fault
+run hoarder/r1 outcome=limit-fault delivery=d4 handler=grow limit=persistent fuel=18 alloc=0
+seg napper/r2 start delivery=d2 handler=each clause=1 fuel=27 alloc=88 state=664 end=wait until=2026-09-30T09:00:01Z
+raise napper/r3 code="wrong kind" at=napper:65 pos=31:5
+seg napper/r3 start delivery=d3 handler=month clause=1 fuel=32 alloc=547 state=1179 end=return
+run napper/r3 outcome=completed delivery=d3 handler=month fuel=32 alloc=547
+pumped state=idle fuel=110 next=2026-09-30T09:00:01Z
+> pump clock=2026-09-30T09:00:01Z
+seg napper/r1 resume fuel=65 alloc=112 state=611 end=return
+run napper/r1 outcome=completed delivery=d1 handler=go fuel=98 alloc=136
+seg napper/r2 resume fuel=24 alloc=24 state=947 end=wait until=2026-09-30T09:00:02Z
+pumped state=idle fuel=89 next=2026-09-30T09:00:02Z
+> pump clock=2026-09-30T09:00:02Z
+seg napper/r2 resume fuel=16 alloc=24 state=659 end=return
+run napper/r2 outcome=completed delivery=d2 handler=each fuel=67 alloc=136
+pumped state=idle fuel=16
+
+> vars
+vars napper log=[{code: "wrong kind", expected: "s", got: "month", value: 1 month, at: {unit: "napper", handler: "month", line: 31, column: 5}}, 10, 4, 1, 2]
+vars hoarder big=""

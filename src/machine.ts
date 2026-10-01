@@ -52,11 +52,18 @@ import {
   setKey,
   splice,
   textForm,
+  waitNs,
   wrongKind,
 } from './operations';
 import { readDisplay } from './readers';
-import { LimitReached, mismatch, type Call, type Grant } from './capabilities';
-import { ScriptError as HostScriptError } from './errors';
+import {
+  LimitReached,
+  mismatch,
+  type Call,
+  type Grant,
+  type Operation,
+} from './capabilities';
+import { HostError, ScriptError as HostScriptError } from './errors';
 import {
   bool,
   dec,
@@ -64,6 +71,7 @@ import {
   listValues,
   map,
   nothing,
+  quantity,
   text,
   Value,
   type FunctionRef,
@@ -368,22 +376,83 @@ export type RunRecord =
       result?: Value;
     }
   | { id: string; kind: 'call-failed'; op: string }
-  | { args: Value[]; kind: 'send'; message: string; to: string };
+  | { id: string; kind: 'abandon' }
+  | {
+      args: Value[];
+      /** The call id of a send that waits for its reply. */
+      id?: string;
+      kind: 'send';
+      message: string;
+      to: string;
+    };
+
+// A call in flight: what its answer or failure needs at the call.
+type CallContext = {
+  declared: number;
+  id: string;
+  key: string;
+  named: [string, Value][];
+  op: Operation<unknown>;
+  /** As the Trace names it, `<granted name>.<operation>`. */
+  opName: string;
+};
+/** Why a Run suspended, which its Group waits on (chapter 5, Suspension Points). */
+export type Suspension =
+  | { k: 'wait'; ns: bigint }
+  | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
+  | { args: Value[]; id: string; k: 'send'; message: string; to: string };
+/** What resumes a suspended Run. */
+export type Resumption =
+  | { k: 'wake' }
+  | { fuel: number; k: 'answer'; value: Value }
+  | { error: HostScriptError | null; k: 'fail' }
+  | { after: number; k: 'timeout' }
+  | { k: 'reply'; value: Value }
+  | { error: Value | null; k: 'send failed'; reason: string };
 
 /**
  * What a Run reaches outside its Script through, which its Group gives it:
  * the Script's Grants, the Pump's Clock reading, and other Scripts' mailboxes.
  */
 export type RunHost = {
+  /** Queues a suspending call's answer, as the Host Input `answer`. */
+  answer(id: string, value: Value, fuel: number): void;
+  /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
+  fail(id: string, error: HostScriptError | null): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
   /** Whether a name is a well-known Host Object the Host bound at load. */
   isObject(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
   readonly now: bigint;
-  /** Puts a message in a Script's mailbox, or throws ScriptError `mailbox full`. */
-  send(to: string, message: string, args: Value[]): void;
+  /**
+   * Puts a message in a Script's mailbox, or throws ScriptError `mailbox
+   * full`; `reply` is the call id of a send that waits for its reply.
+   */
+  send(to: string, message: string, args: Value[], reply: string | null): void;
 };
+// The logical size of a stack item: a value's, or an internal value's,
+// which counts what it holds (chapter 8, Sizes).
+const itemSize = (item: Item): number => {
+  if (isValue(item)) {
+    return sizeOf(item);
+  }
+  switch (item.k) {
+    case 'iterator':
+      return partSize('iterator', 0, item.source ? sizeOf(item.source) : 0);
+    case 'reader':
+      return partSize('reader', 0, partSize('bytes', 0, item.bytes.length));
+    case 'replacement':
+      return partSize(
+        'replacement',
+        0,
+        sizeOf(item.subject) + item.matches.reduce((t, v) => t + sizeOf(v), 0),
+      );
+    case 'receiver':
+      return 0;
+  }
+};
+
 // A path's step: a map key, or a 1-based list index.
 const keyValue = (k: string | number): Value =>
   typeof k === 'number' ? dec(String(k)) : text(k);
@@ -430,6 +499,12 @@ export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
   id = '';
   host: RunHost | null = null;
+  /** Why it suspended, until its Group resumes it. */
+  suspended: Suspension | null = null;
+  private resumption: Resumption | null = null;
+  private abandoning: string | null = null;
+  // What a woken Run had suspended on, until its resume.
+  private waitedOn: Suspension | null = null;
   private calls = 0;
   frames: Frame[] = [];
   fuel = 0;
@@ -443,7 +518,7 @@ export class Run {
    */
   persistentState: () => number = () => this.script.variablesSize();
   /** The Script Variables when the Segment began, for rollback (ADR 0006). */
-  readonly segmentBase: Value[];
+  segmentBase: Value[];
   private cleanups: Cleanup[] = [];
   private outcome: Outcome | null = null;
   private m: Measured = {};
@@ -472,6 +547,9 @@ export class Run {
   /** Run to the end of the Run. */
   finish(): Outcome {
     while (!this.outcome) {
+      if (this.suspended) {
+        throw new NotImplementedError('a suspended Run outside a Group');
+      }
       this.step();
     }
     return this.outcome;
@@ -605,8 +683,14 @@ export class Run {
         ? `builtin.${ins.operands[0]}`
         : instructionSpec.get(ins.op)!.cost;
     this.m = {};
+    const resumption = this.resumption;
+    this.resumption = null;
     try {
-      this.execute(ins, key);
+      if (resumption) {
+        this.resume(resumption);
+      } else {
+        this.execute(ins, key);
+      }
     } catch (error) {
       if (error instanceof ScriptError) {
         this.raiseCore(error, ins, key);
@@ -618,6 +702,100 @@ export class Run {
         throw error;
       }
     }
+    // A timed-out call is abandoned after the raise that reports it.
+    if (resumption?.k === 'timeout' && this.abandoning) {
+      this.records.push({ kind: 'abandon', id: this.abandoning });
+    }
+    this.abandoning = null;
+  }
+
+  /** Make a suspended Run ready: its next step resumes it with `r`. */
+  wake(r: Resumption) {
+    this.resumption = r;
+    this.waitedOn = this.suspended;
+    this.suspended = null;
+  }
+
+  // Suspend at the current instruction, a Segment's end: Persistent State,
+  // this Run's frames included, is measured first (chapter 6, Limits).
+  private suspend(s: Suspension) {
+    if (
+      this.charging &&
+      this.persistentState() + this.size() > this.limits.persistentState
+    ) {
+      throw new LimitFaultError('persistentState', this.frame.pc);
+    }
+    this.suspended = s;
+  }
+
+  /**
+   * Resume at the instruction the Run suspended at, in a new Segment: an
+   * answer is checked and its conversion charged by that instruction's rate,
+   * then pushed; a failure or timeout raises there (chapter 8, Charging).
+   */
+  private resume(r: Resumption) {
+    const s = this.waitedOn!;
+    this.waitedOn = null;
+    this.segmentBase = [...this.script.variables];
+    const frame = this.frame;
+    switch (r.k) {
+      case 'wake':
+        frame.pc++;
+        return;
+      case 'reply':
+        frame.stack.push(r.value);
+        frame.pc++;
+        return;
+      case 'send failed':
+        throw new ScriptError(
+          'send failed',
+          [
+            ['reason', text(r.reason)],
+            ...(r.error ? [['error', r.error] as [string, Value]] : []),
+          ],
+          true,
+        );
+      case 'timeout':
+        this.abandoning =
+          s.k === 'ask' ? s.call.id : s.k === 'send' ? s.id : null;
+        throw new ScriptError(
+          'timeout',
+          [
+            ['after', quantity(dec(String(r.after)), 'ms')],
+            ...(s.k === 'ask' ? s.call.named : []),
+          ],
+          true,
+        );
+    }
+    const ctx = (s as Extract<Suspension, { k: 'ask' }>).call;
+    if (r.k === 'fail') {
+      throw this.failure(ctx, r.error, () => {});
+    }
+    const op = ctx.op;
+    if (op.result && mismatch(r.value, op.result)) {
+      throw this.hostError(ctx);
+    }
+    this.payConversion(ctx, r.value, r.fuel);
+    frame.stack.push(r.value);
+    frame.pc++;
+  }
+
+  /** Its logical size, as Persistent State counts a suspended Run (chapter 8). */
+  size(): number {
+    let frames = 0;
+    for (const f of this.frames) {
+      let contents = f.locals.reduce((t, v) => t + sizeOf(v), 0);
+      for (const item of f.stack) {
+        contents += itemSize(item);
+      }
+      frames += partSize('frame', f.locals.length, contents);
+    }
+    const pending = this.suspended?.k === 'ask' || this.suspended?.k === 'send';
+    return partSize(
+      'run',
+      0,
+      frames + (pending ? partSize('pending call', 0, 0) : 0),
+    );
   }
 
   private fault(limit: LimitName, ins: Instruction) {
@@ -848,11 +1026,12 @@ export class Run {
   }
 
   /**
-   * An immediate or fire-and-forget Capability call (chapter 9): the
-   * arguments checked against their Shapes, uncharged; the declared cost;
-   * the Host function, which may `Charge` more; then its result checked and
-   * its conversion charged. A `Fail` raises its code, and anything else the
-   * Host does wrong is `host error`.
+   * A Capability call (chapter 9): the arguments checked against their
+   * Shapes, uncharged; the declared cost; the Host function, which may
+   * `Charge` more while it starts; then an immediate call's result checked
+   * and its conversion charged. A suspending call suspends the Run until it
+   * is answered, fails or times out. A `Fail` raises its code, and anything
+   * else the Host does wrong is `host error`.
    */
   private capability(
     grantName: string,
@@ -871,9 +1050,6 @@ export class Run {
     if (!grant || !op || (op.args ?? []).length !== args.length) {
       // Only Library code gets here: its `needs` aren't checked at load yet.
       throw new NotImplementedError("checking a Library's needs");
-    }
-    if (op.mode === 'suspending') {
-      throw new NotImplementedError('a suspending Operation');
     }
     const named: [string, Value][] = [
       ['capability', text(grantName)],
@@ -909,19 +1085,32 @@ export class Run {
             true,
           );
     });
-    const declared = { fuel: op.cost.fuel, alloc: op.cost.alloc ?? 0 };
-    this.pay(key, { declared: declared.fuel });
-    this.payAmount(0, declared.alloc);
+    const declared = op.cost.fuel;
+    this.pay(key, { declared });
+    this.payAmount(0, op.cost.alloc ?? 0);
     const id = `${this.id}.c${++this.calls}`;
+    const ctx: CallContext = {
+      id,
+      op,
+      key,
+      named,
+      declared,
+      opName: `${grantName}.${opName}`,
+    };
     let charged = 0;
     let reached = false;
+    let starting = true;
+    const abort = new AbortController();
     const call: Call<unknown> = {
       id,
       scriptName: this.script.name,
       binding: grant.binding,
       now: host.now,
-      signal: new AbortController().signal,
+      signal: abort.signal,
       charge: (fuel: number) => {
+        if (!starting) {
+          throw new HostError('invalid value', 'Charge only while starting');
+        }
         if (this.charging && this.fuel + fuel > this.limits.fuelPerRun) {
           reached = true;
           throw new LimitReached('the Run can’t cover this charge');
@@ -929,90 +1118,137 @@ export class Run {
         this.fuel += fuel;
         charged += fuel;
       },
+      answer: (v: Value, late?: { fuel: number }) =>
+        host.answer(id, v, late?.fuel ?? 0),
+      // Anything but a ScriptError fails as `host error`.
+      fail: (e: HostScriptError) =>
+        host.fail(id, e instanceof HostScriptError ? e : null),
     };
     const record = {
       kind: 'call' as const,
       id,
-      op: `${grantName}.${opName}`,
+      op: ctx.opName,
       args,
-      charged,
-    };
-    const hostError = (error: Value) => {
-      this.records.push(
-        { ...record, charged, error },
-        { kind: 'call-failed', id, op: record.op },
-      );
-      return new ScriptError('host error', named, true);
     };
     let result: unknown;
     try {
-      result =
-        op.mode === 'immediate'
-          ? op.do(call, ...args)
-          : (op.fire(call, ...args), nothing);
+      if (op.mode === 'immediate') {
+        result = op.do(call, ...args);
+      } else if (op.mode === 'fire-and-forget') {
+        op.fire(call, ...args);
+        result = nothing;
+      } else if (op.start) {
+        op.start(call, ...args);
+      } else {
+        op.run!(call, ...args).then(
+          v => call.answer(v),
+          (error: unknown) =>
+            error instanceof HostScriptError
+              ? call.fail(error)
+              : host.fail(id, null),
+        );
+      }
     } catch (error) {
+      starting = false;
       if (reached) {
         // Cut off by its own `Charge`: neither a result nor a failure.
         this.records.push({ ...record, charged });
         throw new LimitFaultError('fuelPerRun', this.frame.pc);
       }
-      if (!(error instanceof HostScriptError)) {
-        throw hostError(map([]));
-      }
-      const data =
-        Value.isValue(error.data) && error.data.kind === 'map'
-          ? error.data
-          : map([]);
-      const failed = map([
-        ['code', text(error.code)],
-        ...(error.message
-          ? [['message', text(error.message)] as [string, Value]]
-          : []),
-        ...data.entries(),
-      ]);
-      const declaredCodes = op.errors?.map(e => e.code);
-      if (
-        error.code in errorMessages ||
-        data.entries().some(([k]) => reservedKeys.has(k)) ||
-        (declaredCodes && !declaredCodes.includes(error.code))
-      ) {
-        throw hostError(failed);
-      }
-      this.records.push({ ...record, charged, error: failed });
-      // Its Data is converted, and charged, as a result is.
-      const conversion = charge(key, { declared: declared.fuel, result: data });
-      const before = charge(key, { declared: declared.fuel });
-      this.payAmount(
-        conversion.fuel - before.fuel,
-        conversion.alloc - before.alloc,
-      );
-      throw new ThrownError(
-        map([
-          ...failed.entries(),
-          ...named,
-          ['at', this.at(this.frame.code.unit.code[this.frame.pc]!)],
-        ]),
+      throw this.failure(
+        ctx,
+        error instanceof HostScriptError ? error : null,
+        failed => this.records.push({ ...record, charged, error: failed }),
       );
     }
+    starting = false;
     if (reached) {
       this.records.push({ ...record, charged });
       throw new LimitFaultError('fuelPerRun', this.frame.pc);
+    }
+    if (op.mode === 'suspending') {
+      this.records.push({ ...record, charged });
+      this.suspend({
+        k: 'ask',
+        call: ctx,
+        abort,
+        ms: op.maxPendingMs ?? this.limits.maxWaitMs,
+      });
+      return nothing;
     }
     if (op.mode === 'fire-and-forget') {
       this.records.push({ ...record, charged });
       return nothing;
     }
     if (!Value.isValue(result) || (op.result && mismatch(result, op.result))) {
-      throw hostError(map([]));
+      this.records.push({ ...record, charged, error: map([]) });
+      throw this.hostError(ctx);
     }
     this.records.push({ ...record, charged, result });
-    const conversion = charge(key, { declared: declared.fuel, result });
-    const before = charge(key, { declared: declared.fuel });
+    this.payConversion(ctx, result, 0);
+    return result;
+  }
+
+  // `host error` for a call, with its `call-failed` record.
+  private hostError(ctx: CallContext): ScriptError {
+    this.records.push({ kind: 'call-failed', id: ctx.id, op: ctx.opName });
+    return new ScriptError('host error', ctx.named, true);
+  }
+
+  // A result's conversion, and any late cost, charged at the call.
+  private payConversion(ctx: CallContext, result: Value, late: number) {
+    const conversion = charge(ctx.key, { declared: ctx.declared, result });
+    const before = charge(ctx.key, { declared: ctx.declared });
     this.payAmount(
-      conversion.fuel - before.fuel,
+      conversion.fuel - before.fuel + late,
       conversion.alloc - before.alloc,
     );
-    return result;
+  }
+
+  /**
+   * What a call's failure raises: a `Fail` with a code the Operation may
+   * use raises it, its Data converted and charged; anything else, given as
+   * null, is `host error` (chapter 6, Errors from Capabilities). `record`
+   * writes the call's failure first, when the call record carries it.
+   */
+  private failure(
+    ctx: CallContext,
+    error: HostScriptError | null,
+    record: (failed: Value) => void,
+  ): Error {
+    if (!error) {
+      record(map([]));
+      return this.hostError(ctx);
+    }
+    const data =
+      Value.isValue(error.data) && error.data.kind === 'map'
+        ? error.data
+        : map([]);
+    const failed = map([
+      ['code', text(error.code)],
+      ...(error.message
+        ? [['message', text(error.message)] as [string, Value]]
+        : []),
+      ...data.entries(),
+    ]);
+    record(failed);
+    const declaredCodes = ctx.op.errors?.map(e => e.code);
+    if (
+      error.code in errorMessages ||
+      data.entries().some(([k]) => reservedKeys.has(k)) ||
+      (declaredCodes && !declaredCodes.includes(error.code))
+    ) {
+      return this.hostError(ctx);
+    }
+    // Its Data is converted, and charged, as a result is.
+    this.payConversion(ctx, data, 0);
+    return new ThrownError(
+      map([
+        ...failed.entries(),
+        ...ctx.named,
+        ['at', this.at(this.frame.code.unit.code[this.frame.pc]!)],
+      ]),
+    );
   }
 
   // ------------------------------------------------------------- instructions
@@ -1518,7 +1754,22 @@ export class Run {
         }
         return next();
       }
-      case 'send': {
+      case 'wait': {
+        const ns = waitNs(this.peek());
+        this.pay(key);
+        this.pop();
+        this.suspend({ k: 'wait', ns });
+        return;
+      }
+      case 'ask-wait': {
+        const n = c as number;
+        const args = this.popArgs(n);
+        this.capability(a as string, b as string, args, key);
+        frame.stack.length -= n;
+        return;
+      }
+      case 'send':
+      case 'send-wait': {
         const n = b as number;
         const to = frame.stack.at(-1);
         if (isValue(to) || to?.k !== 'receiver') {
@@ -1535,15 +1786,30 @@ export class Run {
         );
         m.inputSize = size;
         this.pay(key);
-        this.host!.send(to.name, a as string, args);
+        // A send that waits is a call, with an id of its own.
+        const id =
+          ins.op === 'send-wait' ? `${this.id}.c${this.calls + 1}` : null;
+        this.host!.send(to.name, a as string, args, id);
         this.records.push({
           kind: 'send',
           to: to.name,
           message: a as string,
           args,
+          ...(id ? { id } : {}),
         });
         frame.stack.length -= n + 1;
-        return next();
+        if (!id) {
+          return next();
+        }
+        this.calls++;
+        this.suspend({
+          k: 'send',
+          id,
+          to: to.name,
+          message: a as string,
+          args,
+        });
+        return;
       }
 
       // Calls
@@ -1570,7 +1836,8 @@ export class Run {
         frame.stack.length -= b as number;
         return;
       }
-      case 'call-handler': {
+      case 'call-handler':
+      case 'call-handler-wait': {
         // An imported Handler's clauses are its Library's.
         const target = (a as string).includes(':')
           ? code.library(a as string)
@@ -1627,7 +1894,7 @@ export class Run {
             throw new ScriptError('would suspend');
           }
           throw new NotImplementedError(
-            'a call that may suspend, or to another Script',
+            'a call to a Function Value in another Script',
           );
         }
         const { code: home, body } = ref.code as FunctionCode;

@@ -147,7 +147,14 @@ describe('compiling and adding Libraries', () => {
       codes(
         'function f\n  put me into x\n  send ping to x\n  wait for ping\n  return the target\nend f\non h\n  pass h\nend h',
       ),
-    ).toEqual(Array(5).fill('not in a library'));
+    ).toEqual([
+      'not in a library',
+      'not in a library',
+      "can't suspend here",
+      'not in a library',
+      'not in a library',
+      'not in a library',
+    ]);
     expect(codes('use one from nowhere')).toEqual(['unknown import']);
   });
 
