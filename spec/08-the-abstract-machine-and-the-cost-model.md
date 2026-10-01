@@ -764,7 +764,7 @@ A formula is a sum of terms: a whole number, or a measure, optionally multiplied
 | `bytes` | the number of bytes, for Bytes; 0 for any other value |
 | `items` | the number of items, for a list, and of integers, for an integer range; 0 for any other value |
 | `entries` | the number of keys, for a map; 0 for any other value |
-| `digits` | the number of digits in the coefficient, for a number or the number of a Quantity; 0 for any other value |
+| `digits` | the number of digits in the coefficient, 1 for a zero, for a number or the number of a Quantity; 0 for any other value |
 | `scanned` | what the instruction examines, as its rate's `input` says |
 | `steps` | the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running) |
 | `program` | the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling) |
@@ -841,13 +841,13 @@ Cost Model **0**.
 | `arithmetic` | `3 + digits(result) / 8` | `size(result)` |  |
 | `power` | `8 + 2 * digits(result)` | `size(result)` |  |
 | `concat` | `3 + scalars(result) / 16` | `size(result)` |  |
-| `compare` | `2 + scanned / 16` | 0 | the two operands; `scanned` is the Characters, bytes or items compared before the answer is known |
-| `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, or 2 for a range |
+| `compare` | `2 + scanned / 16` | 0 | the two operands; `scanned` is the pairs compared in order, through the first that differs or to the end of the shorter: Characters of text (their simple case foldings under `ignoring case`), bytes of Bytes, items of a list, or entries of a map in the left operand's order; 0 for any other kind, and between two kinds |
+| `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, through the first equal one, or 2 for a range |
 | `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
 | `search` | `4 + steps` | 0 | the text searched |
 | `get-key` | `3` | 0 | the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
 | `property` | `3 + scalars(input) / 8 + items(result)` | `size(result)` | the value whose property is read |
-| `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk |
+| `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk, code points for a `code point` chunk, and all of them when the chunk isn't there; `test-chunk` measures as a read of the chunk it tests |
 | `chunk-set` | `4 + scalars(result) / 8 + items(result) / 8` | `size(input)` | the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010) |
 | `set-key` | `4 + entries(result) / 16` | `8 + size(input)` | the new value |
 | `append` | `3 + scalars(result) / 16` | `8 + size(input)` | the value appended |
@@ -941,6 +941,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | `next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |
+| [#126](https://github.com/odogono/odgn-talk/issues/126) | The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit |
 
 <!-- end -->
 

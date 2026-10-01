@@ -1,6 +1,7 @@
 // Chapter 8's code unit, and its canonical disassembly.
 import { instructions } from './generated/machine';
 import { textDisplay } from './canonical';
+import type { PatternElement } from './view';
 
 export type Operand = number | string;
 export type Instruction = {
@@ -12,6 +13,8 @@ export type Instruction = {
 export type BodyKind = 'init' | 'function' | 'handler' | 'lambda' | 'event';
 export type Body = {
   captures: number;
+  /** The slot of the first capture, for a Lambda or an event test. */
+  captureStart: number;
   clause: number | null;
   /** For a function, each parameter's default definition, or null. */
   defaults: (number | null)[];
@@ -56,6 +59,11 @@ export type CodeUnit = {
   kind: 'script' | 'library';
   name: string;
   objects: string[];
+  /**
+   * The elements of each Text Pattern constant, by its pool index, for the
+   * machine that runs the unit; a template's splices stay in place.
+   */
+  patterns: Map<number, readonly PatternElement[]>;
   unwind: UnwindEntry[];
   variables: string[];
 };

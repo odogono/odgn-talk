@@ -2,6 +2,7 @@
 export const instructions = [
   {
     "name": "const",
+    "cost": "const",
     "operands": [
       "constant"
     ],
@@ -11,6 +12,7 @@ export const instructions = [
   },
   {
     "name": "pop",
+    "cost": "stack",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -18,6 +20,7 @@ export const instructions = [
   },
   {
     "name": "load",
+    "cost": "slot",
     "operands": [
       "local"
     ],
@@ -27,6 +30,7 @@ export const instructions = [
   },
   {
     "name": "store",
+    "cost": "slot",
     "operands": [
       "local"
     ],
@@ -36,6 +40,7 @@ export const instructions = [
   },
   {
     "name": "move",
+    "cost": "slot",
     "operands": [
       "local",
       "local"
@@ -46,6 +51,7 @@ export const instructions = [
   },
   {
     "name": "load-var",
+    "cost": "slot",
     "operands": [
       "variable"
     ],
@@ -55,6 +61,7 @@ export const instructions = [
   },
   {
     "name": "store-var",
+    "cost": "store-var",
     "operands": [
       "variable"
     ],
@@ -64,6 +71,7 @@ export const instructions = [
   },
   {
     "name": "load-definition",
+    "cost": "slot",
     "operands": [
       "definition"
     ],
@@ -73,6 +81,7 @@ export const instructions = [
   },
   {
     "name": "store-definition",
+    "cost": "slot",
     "operands": [
       "definition"
     ],
@@ -82,6 +91,7 @@ export const instructions = [
   },
   {
     "name": "load-object",
+    "cost": "slot",
     "operands": [
       "object"
     ],
@@ -91,6 +101,7 @@ export const instructions = [
   },
   {
     "name": "me",
+    "cost": "slot",
     "operands": [],
     "pops": 0,
     "pushes": 1,
@@ -98,6 +109,7 @@ export const instructions = [
   },
   {
     "name": "target",
+    "cost": "slot",
     "operands": [],
     "pops": 0,
     "pushes": 1,
@@ -105,6 +117,7 @@ export const instructions = [
   },
   {
     "name": "jump",
+    "cost": "jump",
     "operands": [
       "label"
     ],
@@ -114,6 +127,7 @@ export const instructions = [
   },
   {
     "name": "branch-false",
+    "cost": "branch",
     "operands": [
       "label"
     ],
@@ -123,6 +137,7 @@ export const instructions = [
   },
   {
     "name": "branch-true",
+    "cost": "branch",
     "operands": [
       "label"
     ],
@@ -132,6 +147,7 @@ export const instructions = [
   },
   {
     "name": "check-boolean",
+    "cost": "branch",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -139,6 +155,7 @@ export const instructions = [
   },
   {
     "name": "not",
+    "cost": "operator",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -146,6 +163,7 @@ export const instructions = [
   },
   {
     "name": "add",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -153,6 +171,7 @@ export const instructions = [
   },
   {
     "name": "subtract",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -160,6 +179,7 @@ export const instructions = [
   },
   {
     "name": "multiply",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -167,6 +187,7 @@ export const instructions = [
   },
   {
     "name": "divide",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -174,6 +195,7 @@ export const instructions = [
   },
   {
     "name": "div",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -181,6 +203,7 @@ export const instructions = [
   },
   {
     "name": "mod",
+    "cost": "arithmetic",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -188,6 +211,7 @@ export const instructions = [
   },
   {
     "name": "power",
+    "cost": "power",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -195,6 +219,7 @@ export const instructions = [
   },
   {
     "name": "negate",
+    "cost": "operator",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -202,6 +227,7 @@ export const instructions = [
   },
   {
     "name": "concat",
+    "cost": "concat",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -209,6 +235,7 @@ export const instructions = [
   },
   {
     "name": "range",
+    "cost": "operator",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -216,6 +243,7 @@ export const instructions = [
   },
   {
     "name": "equal",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -225,6 +253,7 @@ export const instructions = [
   },
   {
     "name": "not-equal",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -234,6 +263,7 @@ export const instructions = [
   },
   {
     "name": "less",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -243,6 +273,7 @@ export const instructions = [
   },
   {
     "name": "greater",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -252,6 +283,7 @@ export const instructions = [
   },
   {
     "name": "less-or-equal",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -261,6 +293,7 @@ export const instructions = [
   },
   {
     "name": "greater-or-equal",
+    "cost": "compare",
     "operands": [
       "fold?"
     ],
@@ -270,6 +303,7 @@ export const instructions = [
   },
   {
     "name": "member",
+    "cost": "member",
     "operands": [
       "fold?"
     ],
@@ -279,6 +313,7 @@ export const instructions = [
   },
   {
     "name": "is-kind",
+    "cost": "operator",
     "operands": [
       "kind"
     ],
@@ -288,6 +323,7 @@ export const instructions = [
   },
   {
     "name": "is-empty",
+    "cost": "operator",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -295,6 +331,7 @@ export const instructions = [
   },
   {
     "name": "can-convert",
+    "cost": "convert",
     "operands": [
       "kind"
     ],
@@ -304,6 +341,7 @@ export const instructions = [
   },
   {
     "name": "convert",
+    "cost": "convert",
     "operands": [
       "kind"
     ],
@@ -313,6 +351,7 @@ export const instructions = [
   },
   {
     "name": "contains",
+    "cost": "search",
     "operands": [
       "fold?"
     ],
@@ -322,6 +361,7 @@ export const instructions = [
   },
   {
     "name": "begins-with",
+    "cost": "search",
     "operands": [
       "fold?"
     ],
@@ -331,6 +371,7 @@ export const instructions = [
   },
   {
     "name": "ends-with",
+    "cost": "search",
     "operands": [
       "fold?"
     ],
@@ -340,6 +381,7 @@ export const instructions = [
   },
   {
     "name": "matches",
+    "cost": "search",
     "operands": [
       "fold?"
     ],
@@ -349,6 +391,7 @@ export const instructions = [
   },
   {
     "name": "get-key",
+    "cost": "get-key",
     "operands": [
       "key"
     ],
@@ -358,6 +401,7 @@ export const instructions = [
   },
   {
     "name": "get-key-computed",
+    "cost": "get-key",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -365,6 +409,7 @@ export const instructions = [
   },
   {
     "name": "property",
+    "cost": "property",
     "operands": [
       "property"
     ],
@@ -374,6 +419,7 @@ export const instructions = [
   },
   {
     "name": "property-delimited",
+    "cost": "property",
     "operands": [
       "property"
     ],
@@ -383,6 +429,7 @@ export const instructions = [
   },
   {
     "name": "chunk-get",
+    "cost": "chunk-get",
     "operands": [
       "chunk"
     ],
@@ -392,6 +439,7 @@ export const instructions = [
   },
   {
     "name": "chunk-get-delimited",
+    "cost": "chunk-get",
     "operands": [
       "chunk"
     ],
@@ -401,6 +449,7 @@ export const instructions = [
   },
   {
     "name": "chunk-set",
+    "cost": "chunk-set",
     "operands": [
       "chunk"
     ],
@@ -410,6 +459,7 @@ export const instructions = [
   },
   {
     "name": "chunk-set-delimited",
+    "cost": "chunk-set",
     "operands": [
       "chunk"
     ],
@@ -419,6 +469,7 @@ export const instructions = [
   },
   {
     "name": "chunk-delete",
+    "cost": "chunk-set",
     "operands": [
       "chunk"
     ],
@@ -428,6 +479,7 @@ export const instructions = [
   },
   {
     "name": "chunk-delete-delimited",
+    "cost": "chunk-set",
     "operands": [
       "chunk"
     ],
@@ -437,6 +489,7 @@ export const instructions = [
   },
   {
     "name": "test-chunk",
+    "cost": "chunk-get",
     "operands": [
       "chunk",
       "label"
@@ -447,6 +500,7 @@ export const instructions = [
   },
   {
     "name": "test-chunk-delimited",
+    "cost": "chunk-get",
     "operands": [
       "chunk",
       "label"
@@ -457,6 +511,7 @@ export const instructions = [
   },
   {
     "name": "test-key",
+    "cost": "get-key",
     "operands": [
       "key",
       "label"
@@ -467,6 +522,7 @@ export const instructions = [
   },
   {
     "name": "test-key-computed",
+    "cost": "get-key",
     "operands": [
       "label"
     ],
@@ -476,6 +532,7 @@ export const instructions = [
   },
   {
     "name": "set-key",
+    "cost": "set-key",
     "operands": [
       "key"
     ],
@@ -485,6 +542,7 @@ export const instructions = [
   },
   {
     "name": "set-key-computed",
+    "cost": "set-key",
     "operands": [],
     "pops": 3,
     "pushes": 1,
@@ -492,6 +550,7 @@ export const instructions = [
   },
   {
     "name": "delete-key",
+    "cost": "set-key",
     "operands": [
       "key"
     ],
@@ -501,6 +560,7 @@ export const instructions = [
   },
   {
     "name": "delete-key-computed",
+    "cost": "set-key",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -508,6 +568,7 @@ export const instructions = [
   },
   {
     "name": "append",
+    "cost": "append",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -515,6 +576,7 @@ export const instructions = [
   },
   {
     "name": "prepend",
+    "cost": "append",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -522,6 +584,7 @@ export const instructions = [
   },
   {
     "name": "append-all",
+    "cost": "append",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -529,6 +592,7 @@ export const instructions = [
   },
   {
     "name": "prepend-all",
+    "cost": "append",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -536,6 +600,7 @@ export const instructions = [
   },
   {
     "name": "set-property",
+    "cost": "set-property",
     "operands": [
       "key"
     ],
@@ -545,6 +610,7 @@ export const instructions = [
   },
   {
     "name": "set-property-computed",
+    "cost": "set-property",
     "operands": [],
     "pops": 3,
     "pushes": 0,
@@ -552,6 +618,7 @@ export const instructions = [
   },
   {
     "name": "list",
+    "cost": "list",
     "operands": [
       "count"
     ],
@@ -561,6 +628,7 @@ export const instructions = [
   },
   {
     "name": "list-append",
+    "cost": "list",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -568,6 +636,7 @@ export const instructions = [
   },
   {
     "name": "list-extend",
+    "cost": "list",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -575,6 +644,7 @@ export const instructions = [
   },
   {
     "name": "map",
+    "cost": "map",
     "operands": [
       "constant",
       "count"
@@ -585,6 +655,7 @@ export const instructions = [
   },
   {
     "name": "make-pattern",
+    "cost": "make-pattern",
     "operands": [
       "constant",
       "count"
@@ -595,6 +666,7 @@ export const instructions = [
   },
   {
     "name": "bytes-field",
+    "cost": "bytes-field",
     "operands": [
       "field"
     ],
@@ -604,6 +676,7 @@ export const instructions = [
   },
   {
     "name": "bytes-bits",
+    "cost": "bytes-field",
     "operands": [
       "constant",
       "count"
@@ -614,6 +687,7 @@ export const instructions = [
   },
   {
     "name": "match-all",
+    "cost": "match",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -621,6 +695,7 @@ export const instructions = [
   },
   {
     "name": "replace-start",
+    "cost": "match",
     "operands": [
       "count"
     ],
@@ -630,6 +705,7 @@ export const instructions = [
   },
   {
     "name": "replace-next",
+    "cost": "next",
     "operands": [
       "label"
     ],
@@ -640,6 +716,7 @@ export const instructions = [
   },
   {
     "name": "replace-put",
+    "cost": "iterate",
     "operands": [],
     "pops": 2,
     "pushes": 1,
@@ -647,6 +724,7 @@ export const instructions = [
   },
   {
     "name": "replace-end",
+    "cost": "concat",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -654,6 +732,7 @@ export const instructions = [
   },
   {
     "name": "make-closure",
+    "cost": "make-closure",
     "operands": [
       "body",
       "count"
@@ -664,6 +743,7 @@ export const instructions = [
   },
   {
     "name": "make-function",
+    "cost": "make-closure",
     "operands": [
       "body"
     ],
@@ -673,6 +753,7 @@ export const instructions = [
   },
   {
     "name": "make-imported-function",
+    "cost": "make-closure",
     "operands": [
       "import"
     ],
@@ -682,6 +763,7 @@ export const instructions = [
   },
   {
     "name": "call",
+    "cost": "call",
     "operands": [
       "body",
       "count"
@@ -692,6 +774,7 @@ export const instructions = [
   },
   {
     "name": "call-import",
+    "cost": "call",
     "operands": [
       "import",
       "count"
@@ -702,6 +785,7 @@ export const instructions = [
   },
   {
     "name": "call-handler",
+    "cost": "call",
     "operands": [
       "handler",
       "count"
@@ -712,6 +796,7 @@ export const instructions = [
   },
   {
     "name": "call-handler-wait",
+    "cost": "call",
     "operands": [
       "handler",
       "count"
@@ -722,6 +807,7 @@ export const instructions = [
   },
   {
     "name": "call-builtin",
+    "cost": "builtin",
     "operands": [
       "builtin",
       "count"
@@ -732,6 +818,7 @@ export const instructions = [
   },
   {
     "name": "call-value",
+    "cost": "call",
     "operands": [
       "count"
     ],
@@ -741,6 +828,7 @@ export const instructions = [
   },
   {
     "name": "call-value-wait",
+    "cost": "call",
     "operands": [
       "count"
     ],
@@ -750,6 +838,7 @@ export const instructions = [
   },
   {
     "name": "return",
+    "cost": "return",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -757,6 +846,7 @@ export const instructions = [
   },
   {
     "name": "clause-fail",
+    "cost": "return",
     "operands": [],
     "pops": 0,
     "pushes": 0,
@@ -764,6 +854,7 @@ export const instructions = [
   },
   {
     "name": "test-constant",
+    "cost": "test",
     "operands": [
       "constant",
       "fold?",
@@ -775,6 +866,7 @@ export const instructions = [
   },
   {
     "name": "test-equal",
+    "cost": "test",
     "operands": [
       "label"
     ],
@@ -784,6 +876,7 @@ export const instructions = [
   },
   {
     "name": "test-list",
+    "cost": "test",
     "operands": [
       "count",
       "label"
@@ -794,6 +887,7 @@ export const instructions = [
   },
   {
     "name": "test-list-at-least",
+    "cost": "test",
     "operands": [
       "count",
       "label"
@@ -804,6 +898,7 @@ export const instructions = [
   },
   {
     "name": "list-item",
+    "cost": "test",
     "operands": [
       "index"
     ],
@@ -813,6 +908,7 @@ export const instructions = [
   },
   {
     "name": "list-rest",
+    "cost": "list",
     "operands": [
       "index"
     ],
@@ -822,6 +918,7 @@ export const instructions = [
   },
   {
     "name": "test-map",
+    "cost": "test",
     "operands": [
       "label"
     ],
@@ -831,6 +928,7 @@ export const instructions = [
   },
   {
     "name": "map-get",
+    "cost": "test",
     "operands": [
       "key",
       "label"
@@ -841,6 +939,7 @@ export const instructions = [
   },
   {
     "name": "match-whole",
+    "cost": "match",
     "operands": [
       "fold?",
       "label"
@@ -851,6 +950,7 @@ export const instructions = [
   },
   {
     "name": "match-search",
+    "cost": "match",
     "operands": [
       "fold?",
       "label"
@@ -861,6 +961,7 @@ export const instructions = [
   },
   {
     "name": "bin-start",
+    "cost": "test",
     "operands": [
       "label"
     ],
@@ -870,6 +971,7 @@ export const instructions = [
   },
   {
     "name": "bin-literal",
+    "cost": "bin-field",
     "operands": [
       "constant",
       "label"
@@ -880,6 +982,7 @@ export const instructions = [
   },
   {
     "name": "bin-int",
+    "cost": "bin-field",
     "operands": [
       "field",
       "label"
@@ -890,6 +993,7 @@ export const instructions = [
   },
   {
     "name": "bin-bits",
+    "cost": "bin-field",
     "operands": [
       "constant",
       "count",
@@ -901,6 +1005,7 @@ export const instructions = [
   },
   {
     "name": "bin-bytes",
+    "cost": "bin-field",
     "operands": [
       "field",
       "label"
@@ -911,6 +1016,7 @@ export const instructions = [
   },
   {
     "name": "bin-rest",
+    "cost": "bin-field",
     "operands": [
       "field",
       "label"
@@ -921,6 +1027,7 @@ export const instructions = [
   },
   {
     "name": "bin-end",
+    "cost": "test",
     "operands": [
       "label"
     ],
@@ -930,6 +1037,7 @@ export const instructions = [
   },
   {
     "name": "iterate",
+    "cost": "iterate",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -937,6 +1045,7 @@ export const instructions = [
   },
   {
     "name": "iterate-times",
+    "cost": "iterate",
     "operands": [],
     "pops": 1,
     "pushes": 1,
@@ -944,6 +1053,7 @@ export const instructions = [
   },
   {
     "name": "next",
+    "cost": "next",
     "operands": [
       "label"
     ],
@@ -954,6 +1064,7 @@ export const instructions = [
   },
   {
     "name": "throw",
+    "cost": "throw",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -961,6 +1072,7 @@ export const instructions = [
   },
   {
     "name": "rethrow",
+    "cost": "throw",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -968,6 +1080,7 @@ export const instructions = [
   },
   {
     "name": "raise",
+    "cost": "throw",
     "operands": [
       "code"
     ],
@@ -977,6 +1090,7 @@ export const instructions = [
   },
   {
     "name": "end-cleanup",
+    "cost": "return",
     "operands": [],
     "pops": 0,
     "pushes": 0,
@@ -984,6 +1098,7 @@ export const instructions = [
   },
   {
     "name": "ask",
+    "cost": "capability",
     "operands": [
       "grant",
       "operation",
@@ -995,6 +1110,7 @@ export const instructions = [
   },
   {
     "name": "ask-wait",
+    "cost": "capability",
     "operands": [
       "grant",
       "operation",
@@ -1006,6 +1122,7 @@ export const instructions = [
   },
   {
     "name": "tell",
+    "cost": "capability",
     "operands": [
       "grant",
       "operation",
@@ -1017,6 +1134,7 @@ export const instructions = [
   },
   {
     "name": "send",
+    "cost": "send",
     "operands": [
       "message",
       "count"
@@ -1027,6 +1145,7 @@ export const instructions = [
   },
   {
     "name": "send-wait",
+    "cost": "send",
     "operands": [
       "message",
       "count"
@@ -1037,6 +1156,7 @@ export const instructions = [
   },
   {
     "name": "send-up",
+    "cost": "send",
     "operands": [
       "message",
       "count"
@@ -1047,6 +1167,7 @@ export const instructions = [
   },
   {
     "name": "send-up-wait",
+    "cost": "send",
     "operands": [
       "message",
       "count"
@@ -1057,6 +1178,7 @@ export const instructions = [
   },
   {
     "name": "wait",
+    "cost": "wait",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -1064,6 +1186,7 @@ export const instructions = [
   },
   {
     "name": "wait-for",
+    "cost": "wait",
     "operands": [
       "event"
     ],
@@ -1073,6 +1196,7 @@ export const instructions = [
   },
   {
     "name": "wait-for-any",
+    "cost": "wait",
     "operands": [
       "event"
     ],
@@ -1082,6 +1206,7 @@ export const instructions = [
   },
   {
     "name": "join-start",
+    "cost": "join",
     "operands": [],
     "pops": 0,
     "pushes": 0,
@@ -1089,6 +1214,7 @@ export const instructions = [
   },
   {
     "name": "join-ask",
+    "cost": "capability",
     "operands": [
       "grant",
       "operation",
@@ -1100,6 +1226,7 @@ export const instructions = [
   },
   {
     "name": "join-send",
+    "cost": "send",
     "operands": [
       "message",
       "count"
@@ -1110,6 +1237,7 @@ export const instructions = [
   },
   {
     "name": "join-end",
+    "cost": "join",
     "operands": [],
     "pops": 0,
     "pushes": 1,
@@ -1117,6 +1245,7 @@ export const instructions = [
   },
   {
     "name": "veto",
+    "cost": "return",
     "operands": [],
     "pops": 1,
     "pushes": 0,
@@ -1124,6 +1253,7 @@ export const instructions = [
   },
   {
     "name": "pass",
+    "cost": "send",
     "operands": [
       "message"
     ],
@@ -1132,3 +1262,410 @@ export const instructions = [
     "suspends": false
   }
 ] as const;
+export const errorMessages = {
+  "bad throw": "Only a map with a text `code`, or a text, can be thrown",
+  "no match": "The value doesn't match the pattern",
+  "send failed": "No answer came: the receiver's Run ended {reason}",
+  "mailbox full": "The mailbox of {to} is full",
+  "capability revoked": "The Grant for {capability} is revoked, so {operation} can't be called",
+  "wrong kind": "Expected {expected}, but got {got}: {value}",
+  "can't convert": "Can't convert {value} to {to}",
+  "can't compare": "Can't compare {left} with {right}",
+  "division by zero": "Division by zero",
+  "overflow": "The result of {operator} is too large",
+  "incompatible units": "Can't combine {left} with {right}",
+  "host error": "{capability} failed while doing {operation}",
+  "timeout": "No answer came within {after}",
+  "would suspend": "This function may wait, so call it with `and wait`",
+  "function gone": "The function no longer exists",
+  "wrong arity": "The function was called with the wrong number of arguments",
+  "not encodable": "A {kind} can't be encoded as plain data",
+  "out of domain": "{value} is outside the domain of {function}",
+  "out of range": "{value} is out of range for {field}",
+  "can't decode": "Invalid {format} at Character {offset}",
+  "unknown zone": "Unknown time zone {zone}",
+  "ambiguous time": "{civil} is ambiguous, or doesn't exist, in {zone}",
+  "bad locale": "{locale} isn't a well-formed locale tag",
+  "object gone": "{object} has been disposed",
+  "read only": "That property is read-only",
+  "call lost": "The call was lost in a restore"
+};
+export const limitDefaults = {
+  "fuelPerRun": 10000000,
+  "allocPerRun": 16777216,
+  "persistentState": 1048576,
+  "callDepth": 200,
+  "patternSize": 10000,
+  "mailboxDepth": 1000,
+  "maxWaitMs": 30000,
+  "maxJoin": 16,
+  "cleanupBudget": 10000
+};
+export const costModel = {
+  "version": 0,
+  "sizes": {
+    "nothing": "8",
+    "boolean": "8",
+    "number": "16",
+    "quantity": "24",
+    "text": "16 + utf8(v)",
+    "bytes": "16 + bytes(v)",
+    "list": "16 + 8 * items(v) + contents(v)",
+    "map": "16 + 8 * entries(v) + contents(v)",
+    "range": "16 + contents(v)",
+    "instant": "16",
+    "civil date": "16",
+    "pattern": "16 + 8 * program(v)",
+    "function": "32 + 8 * items(v) + contents(v)",
+    "object": "16",
+    "iterator": "24 + size(v)",
+    "replacement": "32 + contents(v)",
+    "reader": "24 + size(v)",
+    "frame": "64 + 8 * items(v) + contents(v)",
+    "run": "96 + contents(v)",
+    "message": "32 + contents(v)",
+    "pending call": "48"
+  },
+  "rates": {
+    "const": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "stack": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "slot": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "store-var": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "jump": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "branch": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "operator": {
+      "fuel": "2",
+      "alloc": "size(result)"
+    },
+    "arithmetic": {
+      "fuel": "3 + digits(result) / 8",
+      "alloc": "size(result)"
+    },
+    "power": {
+      "fuel": "8 + 2 * digits(result)",
+      "alloc": "size(result)"
+    },
+    "concat": {
+      "fuel": "3 + scalars(result) / 16",
+      "alloc": "size(result)"
+    },
+    "compare": {
+      "fuel": "2 + scanned / 16",
+      "alloc": "0"
+    },
+    "member": {
+      "fuel": "2 + scanned",
+      "alloc": "0"
+    },
+    "convert": {
+      "fuel": "4 + scalars(input) / 8 + scalars(result) / 8",
+      "alloc": "size(result)"
+    },
+    "search": {
+      "fuel": "4 + steps",
+      "alloc": "0"
+    },
+    "get-key": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "property": {
+      "fuel": "3 + scalars(input) / 8 + items(result)",
+      "alloc": "size(result)"
+    },
+    "chunk-get": {
+      "fuel": "3 + scanned / 8",
+      "alloc": "size(result)"
+    },
+    "chunk-set": {
+      "fuel": "4 + scalars(result) / 8 + items(result) / 8",
+      "alloc": "size(input)"
+    },
+    "set-key": {
+      "fuel": "4 + entries(result) / 16",
+      "alloc": "8 + size(input)"
+    },
+    "append": {
+      "fuel": "3 + scalars(result) / 16",
+      "alloc": "8 + size(input)"
+    },
+    "set-property": {
+      "fuel": "10 + size(input) / 32",
+      "alloc": "0"
+    },
+    "list": {
+      "fuel": "2 + count + items(result) / 16",
+      "alloc": "size(result)"
+    },
+    "map": {
+      "fuel": "2 + 2 * count",
+      "alloc": "size(result)"
+    },
+    "make-pattern": {
+      "fuel": "20 + 2 * program(result)",
+      "alloc": "size(result)"
+    },
+    "bytes-field": {
+      "fuel": "3 + bytes(input) / 8",
+      "alloc": "size(result)"
+    },
+    "match": {
+      "fuel": "6 + steps",
+      "alloc": "size(result)"
+    },
+    "iterate": {
+      "fuel": "2",
+      "alloc": "24"
+    },
+    "next": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "make-closure": {
+      "fuel": "4 + count",
+      "alloc": "size(result)"
+    },
+    "call": {
+      "fuel": "8",
+      "alloc": "0"
+    },
+    "clause": {
+      "fuel": "4",
+      "alloc": "0"
+    },
+    "return": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "test": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "bin-field": {
+      "fuel": "2 + bytes(result) / 8 + scalars(result) / 8",
+      "alloc": "size(result)"
+    },
+    "throw": {
+      "fuel": "10",
+      "alloc": "48"
+    },
+    "unwind": {
+      "fuel": "4 * frames",
+      "alloc": "0"
+    },
+    "capability": {
+      "fuel": "10 + declared + size(result) / 32",
+      "alloc": "size(result)"
+    },
+    "send": {
+      "fuel": "20 + size(input) / 32",
+      "alloc": "size(input)"
+    },
+    "wait": {
+      "fuel": "10",
+      "alloc": "0"
+    },
+    "join": {
+      "fuel": "10",
+      "alloc": "size(result)"
+    },
+    "builtin.min": {
+      "fuel": "4 + scanned",
+      "alloc": "0"
+    },
+    "builtin.max": {
+      "fuel": "4 + scanned",
+      "alloc": "0"
+    },
+    "builtin.codePoint": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.fromCodePoint": {
+      "fuel": "4",
+      "alloc": "size(result)"
+    },
+    "builtin.upper": {
+      "fuel": "4 + scalars(x1) / 4 + scalars(result) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.lower": {
+      "fuel": "4 + scalars(x1) / 4 + scalars(result) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.offset": {
+      "fuel": "4 + steps",
+      "alloc": "0"
+    },
+    "builtin.isDisposed": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "builtin.rangeStart": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "builtin.rangeEnd": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "builtin.abs": {
+      "fuel": "3",
+      "alloc": "size(result)"
+    },
+    "builtin.floor": {
+      "fuel": "3 + digits(x1) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.ceiling": {
+      "fuel": "3 + digits(x1) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.truncate": {
+      "fuel": "3 + digits(x1) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.round": {
+      "fuel": "5 + digits(result) / 8",
+      "alloc": "size(result)"
+    },
+    "builtin.sqrt": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.exp": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.ln": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.log10": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.power": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.sin": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.cos": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.tan": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.asin": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.acos": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.atan": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.atan2": {
+      "fuel": "60",
+      "alloc": "size(result)"
+    },
+    "builtin.fromFloat64": {
+      "fuel": "8",
+      "alloc": "size(result)"
+    },
+    "builtin.fromFloat32": {
+      "fuel": "8",
+      "alloc": "size(result)"
+    },
+    "builtin.toFloat64": {
+      "fuel": "8",
+      "alloc": "size(result)"
+    },
+    "builtin.toFloat32": {
+      "fuel": "8",
+      "alloc": "size(result)"
+    },
+    "builtin.year": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.month": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.day": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.hour": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.minute": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.second": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.nanosecond": {
+      "fuel": "3",
+      "alloc": "0"
+    },
+    "builtin.weekday": {
+      "fuel": "4",
+      "alloc": "0"
+    },
+    "builtin.dayOfYear": {
+      "fuel": "4",
+      "alloc": "0"
+    },
+    "builtin.isoWeek": {
+      "fuel": "6",
+      "alloc": "0"
+    },
+    "builtin.isoWeekYear": {
+      "fuel": "6",
+      "alloc": "0"
+    },
+    "builtin.hasTime": {
+      "fuel": "2",
+      "alloc": "0"
+    },
+    "builtin.toCivil": {
+      "fuel": "10",
+      "alloc": "size(result)"
+    },
+    "builtin.toInstant": {
+      "fuel": "10",
+      "alloc": "size(result)"
+    }
+  }
+};

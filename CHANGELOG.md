@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- The Core's Abstract Machine: loading code units, Handler Clause dispatch, calls and Lambdas, unwinding through the Unwind Table, Cost Model 0 Fuel and allocation with Limit Faults and rollback, exact decimal arithmetic, chunks, properties, Built-ins, and Text Patterns on chapter 8's Pike VM, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Core normative lowering of checked Scripts and Libraries onto chapter 8's code units (constant pool, definitions, variables, objects, body table, code, Unwind Table and event table), with the canonical disassembly, generated instruction tables, a structural check of every lowered source against `machine.toml`, and explicit-stack passes for deep source, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Disassembly Cases under `corpus/disassembly/`, together emitting every instruction, and corpus runner support for running them and for `--bless`ing their expected files.
 
