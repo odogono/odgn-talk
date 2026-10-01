@@ -19,7 +19,15 @@ export type BindingKind =
   | 'builtin constant'
   | 'builtin function';
 export type ExportKind = 'constant' | 'function' | 'handler';
+/** Argument counts accepted by a statically named function. */
+export type FunctionContract = {
+  required: number;
+  total: number;
+};
+export type LibraryExport =
+  ExportKind | { contract?: FunctionContract; kind: ExportKind };
 export type Binding = {
+  contract?: FunctionContract;
   id: number;
   importedFrom?: { library: string; name: string };
   initial: 'nothing' | 'parameter' | 'declaration';

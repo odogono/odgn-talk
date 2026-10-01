@@ -29,6 +29,8 @@ export type {
   Binding,
   BindingKind,
   ExportKind,
+  FunctionContract,
+  LibraryExport,
   NameRole,
   SemanticElement,
   SemanticName,

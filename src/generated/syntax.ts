@@ -396,183 +396,363 @@ export const diagnosticCodes = [
 export const builtins = [
   {
     "name": "min",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "max",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "codePoint",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "fromCodePoint",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "upper",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "lower",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "offset",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "name": "isDisposed",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "rangeStart",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "rangeEnd",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "abs",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "floor",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "ceiling",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "truncate",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "round",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 3
+    }
   },
   {
     "name": "sqrt",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "exp",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "ln",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "log10",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "power",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "name": "sin",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "cos",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "tan",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "asin",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "acos",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "atan",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "atan2",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "name": "fromFloat64",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "name": "fromFloat32",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "name": "toFloat64",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "name": "toFloat32",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "name": "year",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "month",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "day",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "hour",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "minute",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "second",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "nanosecond",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "weekday",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "dayOfYear",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "isoWeek",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "isoWeekYear",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "hasTime",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "name": "toCivil",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "name": "toInstant",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "name": "pi",
@@ -595,282 +775,506 @@ export const libraryExports = [
   {
     "library": "text",
     "name": "pad",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
   },
   {
     "library": "text",
     "name": "padLeft",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
   },
   {
     "library": "text",
     "name": "trim",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "text",
     "name": "trimStart",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "text",
     "name": "trimEnd",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "text",
     "name": "split",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "text",
     "name": "join",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "library": "text",
     "name": "repeated",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "text",
     "name": "lastOffset",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "text",
     "name": "format",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "text",
     "name": "formatNumber",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
   },
   {
     "library": "text",
     "name": "parseNumber",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "sum",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "list",
     "name": "average",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "list",
     "name": "zip",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "unique",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "list",
     "name": "reverse",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "list",
     "name": "flatten",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "list",
     "name": "sort",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "sortBy",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
   },
   {
     "library": "list",
     "name": "sortWith",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
   },
   {
     "library": "list",
     "name": "filter",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "map",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "reduce",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 3,
+      "total": 3
+    }
   },
   {
     "library": "list",
     "name": "group",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "partition",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "any",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "all",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "find",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "list",
     "name": "indexOf",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "map",
     "name": "merge",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "map",
     "name": "without",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "map",
     "name": "pick",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "map",
     "name": "entries",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "map",
     "name": "fromEntries",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "map",
     "name": "mapValues",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "bytes",
     "name": "toHex",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "fromHex",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "toBase64",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "fromBase64",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "toBase64Url",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "fromBase64Url",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "bytes",
     "name": "decodeText",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 3
+    }
   },
   {
     "library": "bytes",
     "name": "encodeText",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 2
+    }
   },
   {
     "library": "json",
     "name": "decodeJson",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "json",
     "name": "encodeJson",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "date",
     "name": "makeDate",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 3,
+      "total": 3
+    }
   },
   {
     "library": "date",
     "name": "makeDateTime",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 5,
+      "total": 7
+    }
   },
   {
     "library": "date",
     "name": "atTime",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 3,
+      "total": 5
+    }
   },
   {
     "library": "date",
     "name": "dateOnly",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "date",
     "name": "daysInMonth",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "date",
     "name": "isLeapYear",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "date",
     "name": "formatDate",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "date",
     "name": "parseDate",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "date",
     "name": "splitDuration",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "date",
     "name": "monthsBetween",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
   },
   {
     "library": "date",
@@ -880,31 +1284,55 @@ export const libraryExports = [
   {
     "library": "units",
     "name": "celsiusToFahrenheit",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "units",
     "name": "fahrenheitToCelsius",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "units",
     "name": "celsiusToKelvin",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "units",
     "name": "kelvinToCelsius",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "units",
     "name": "fahrenheitToKelvin",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   },
   {
     "library": "units",
     "name": "kelvinToFahrenheit",
-    "kind": "function"
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   }
 ] as const;

@@ -41,7 +41,17 @@
     assert(!names.ok && names.diagnostics[0].code === "unknown name" && names.diagnostics[0].span.col === 12, "Scalar name diagnostic");
     const builtin = talk.checkSource('on t\n return min\nend t');
     assert(builtin.diagnostics[0].code === "not a value", "Built-in name catalogue");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing and name resolution in a browser";
+    const contracts = talk.checkSource('constant c = 1\non t\n put f() into c\n set x to 1\nend t\nfunction f a = me, b\nend f');
+    assert(JSON.stringify(contracts.diagnostics.map(({ code, span }) => [code, span.line, span.col])) === JSON.stringify([
+      ["wrong argument count", 3, 6], ["can't write", 3, 15], ["not a property", 4, 2],
+      ["not constant", 6, 16], ["default order", 6, 20]
+    ]), "Binding and function contract diagnostics");
+    const imported = talk.checkSource('use sortBy from list\non t\n sortBy([])\nend t');
+    assert(imported.diagnostics[0].code === "wrong argument count", "Standard Library function contract");
+    const captures = talk.checkSource('on t x\n put given\n  delete x\n end given into f\nend t');
+    assert(captures.diagnostics[0].code === "can't write", "Read-only Lambda capture");
+    assert(talk.checkSource('constant identity = given x: x\nconstant labels = ["me", "it"]').ok, "Deferred Lambda literal and text literals");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution and binding/function contracts in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;

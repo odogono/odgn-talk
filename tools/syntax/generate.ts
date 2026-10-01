@@ -5,6 +5,49 @@ import catalogue from '../../spec/data/units.toml';
 import diagnostics from '../../spec/data/diagnostics.toml';
 import stdlib from '../../spec/data/stdlib.toml';
 import { resolve } from 'node:path';
+import { parseSource } from '../../src/parser';
+
+// Parse the catalogue's call notation with the Core grammar, including defaults
+// containing nested expressions or commas in text. Constants have no contract.
+const contract = (call: string) => {
+  const open = call.indexOf('(');
+  if (open < 0 || !call.endsWith(')')) {
+    return undefined;
+  }
+  const parsed = parseSource(
+    `function signature ${call.slice(open + 1, -1)}\nend signature`,
+  );
+  if (parsed.error) {
+    throw new Error(`Invalid function catalogue signature: ${call}`, {
+      cause: parsed.error,
+    });
+  }
+  const declaration = parsed.tree.children.find(
+    child => child.kind === 'node',
+  )!;
+  if (declaration.kind !== 'node') {
+    throw new Error(`Missing signature declaration: ${call}`);
+  }
+  const fn = declaration.children.find(
+    child => child.kind === 'node' && child.rule === 'Function',
+  )!;
+  if (fn.kind !== 'node') {
+    throw new Error(`Missing signature function: ${call}`);
+  }
+  const parameters = fn.children.filter(
+    child => child.kind === 'node' && child.rule === 'Parameter',
+  );
+  return {
+    required: parameters.filter(
+      parameter =>
+        parameter.kind === 'node' &&
+        !parameter.children.some(
+          child => child.kind === 'node' && child.rule === 'Expression',
+        ),
+    ).length,
+    total: parameters.length,
+  };
+};
 
 const calendar = new Set(
   (catalogue.kind as { calendar?: boolean; name: string }[])
@@ -46,10 +89,11 @@ const content =
     2,
   )} as const;\n` +
   `export const builtins = ${JSON.stringify(
-    (stdlib.builtin as { group: string; name: string }[]).map(
-      ({ group, name }) => ({
+    (stdlib.builtin as { call: string; group: string; name: string }[]).map(
+      ({ call, group, name }) => ({
         name,
         kind: group === 'constants' ? 'constant' : 'function',
+        ...(group === 'constants' ? {} : { contract: contract(call) }),
       }),
     ),
     null,
@@ -61,6 +105,7 @@ const content =
         library,
         name,
         kind: call.startsWith(name + '(') ? 'function' : 'constant',
+        ...(call.startsWith(name + '(') ? { contract: contract(call) } : {}),
       }),
     ),
     null,
