@@ -32,6 +32,7 @@ tracked separately in the Spec's Data Files.
 
 ### Changed
 
+- The `text-model/` Trace Cases are blessed by the TS Core, with Cost Model 0's Fuel, allocation and Persistent State figures and their code identities, and run in CI ([#126](https://github.com/odogono/odgn-talk/issues/126)).
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 [Unreleased]: https://github.com/odogono/odgn-talk/commits/main/

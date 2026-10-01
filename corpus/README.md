@@ -13,9 +13,9 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`decisions/`](decisions/) | Decisions and their Verdicts ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
 | [`disassembly/`](disassembly/) | Disassembly Cases: the lowering of expressions, Containers, Destructuring, control flow and `try`, calls and Lambdas, and messages and waiting, which between them emit every instruction ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#the-lowering)) |
 
-## The seed cases are unblessed
+## Unblessed seed cases
 
-No Core exists yet, so no case here has been blessed. Each `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
+The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
 ```text
 # Unblessed: the output lines are written by hand, not by bless.
@@ -27,6 +27,8 @@ No Core exists yet, so no case here has been blessed. Each `case.trace` has its 
 - **Instruction indices** in `at=` come from `bun tools/machine/check.ts --dis <file>`, which isn't normative. Blessing checks them against a Core.
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
+
+The Trace Cases in [`text-model/`](text-model/) are blessed by the TS Core, the only Core available, so their Fuel, allocation and Persistent State figures are Cost Model 0's. The Go Core must agree before they count as blessed by both.
 
 ## The Disassembly Cases
 

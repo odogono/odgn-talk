@@ -4,15 +4,15 @@
 # "e" at all. "q" & U+0301 has no composed form and stays two code points in
 # one Character, so only the whole-Character rule keeps "q" from matching it,
 # for `contains` with text and with a Text Pattern, for `begins with`, and for
-# `offset`. Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# `offset`. Its Fuel, allocation and state figures are Cost Model 0's, as the
+# TS Core blessed them.
 
-> load search
+> load search identity=04cbd9cb398ac0a5ef23e82ea2ccc31adf8c231c6b2a51463f2f62f5ccbee647
 > deliver d1 to=search message=go
 > pump clock=2026-09-30T09:00:00Z
-seg search/r1 start delivery=d1 handler=go clause=1 fuel=141 alloc=168 state=88 end=return
-run search/r1 outcome=completed delivery=d1 handler=go fuel=141 alloc=168
-pumped state=idle fuel=141
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=131 alloc=237 state=133 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=131 alloc=237
+pumped state=idle fuel=131
 
 # eAcute is U+00E9 and qAcute is q, U+0301, both in NFC and written
 # literally, since a combining mark isn't hidden.

@@ -4,15 +4,15 @@
 # item 3: "a,b,,e". A trailing delimiter makes no empty last item, so "a,b,"
 # also has 2 items and gives the same "a,b,,e". Empty text has no items, so
 # item 2 of it gives ",e". `delimited by ";"` pads with ";". Line 3 of "x"
-# pads with two newlines. Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# pads with two newlines. Its Fuel, allocation and state figures are Cost
+# Model 0's, as the TS Core blessed them.
 
-> load padding
+> load padding identity=7b93c9898c2416b9a1ad71442efcbebba0fb5de8b169e4d32c53a9fd2bdd6a40
 > deliver d1 to=padding message=go
 > pump clock=2026-09-30T09:00:00Z
-seg padding/r1 start delivery=d1 handler=go clause=1 fuel=131 alloc=40 state=76 end=return
-run padding/r1 outcome=completed delivery=d1 handler=go fuel=131 alloc=40
-pumped state=idle fuel=131
+seg padding/r1 start delivery=d1 handler=go clause=1 fuel=105 alloc=85 state=102 end=return
+run padding/r1 outcome=completed delivery=d1 handler=go fuel=105 alloc=85
+pumped state=idle fuel=105
 
 > vars
 vars padding row="a,b,,e" trailing="a,b,,e" fromEmpty=",e" semis="a;;c" lined="x" & newline & newline & "z"
