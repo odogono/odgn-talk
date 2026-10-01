@@ -27,7 +27,15 @@
     for (let i = 0; i < 3000; i++) deep = i % 2 ? talk.list(deep) : talk.map([["$deep", deep]]);
     assert(talk.readDisplay(deep.toString()).equals(deep), "Deep display round trip");
     assert(talk.decodeValue(talk.encodeValue(deep), () => undefined).equals(deep), "Deep encoding round trip");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input and deep values in a browser";
+    const source = '\ufeff-- 😀 comment\r\non t\r\n put ["e\u0301", -- list\r\n 2] into xs\r\nend t -- eof';
+    const parsed = talk.parseSource(source);
+    assert(parsed.error === null && talk.syntaxText(parsed.tree) === source, "Lossless Core parser");
+    const deepSource = 'constant nested = ' + '['.repeat(3000) + '1' + ']'.repeat(3000);
+    const deepParse = talk.parseSource(deepSource);
+    assert(deepParse.error === null && talk.syntaxText(deepParse.tree) === deepSource, "Deep lossless parsing");
+    const bad = talk.parseSource('on t\n put "😀" & return into x\nend t');
+    assert(bad.error.code === "unexpected token" && bad.error.tok.line === 2 && bad.error.tok.col === 12, "Scalar syntax diagnostic");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values and lossless parsing in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;

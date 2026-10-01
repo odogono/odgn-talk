@@ -20,6 +20,7 @@ jobs:
       - run: bun run grammar:check
       - run: bun run machine:check
       - run: bun run corpus:check
+      - run: bun run syntax:check
       - run: bun run unicode:check
       - run: bun run typecheck
       - run: bun test tests
