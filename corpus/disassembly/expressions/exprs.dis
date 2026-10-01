@@ -1,0 +1,361 @@
+unit exprs script
+constants
+  0 10
+  1 0
+  2 nothing
+  3 2
+  4 1
+  5 4
+  6 3
+  7 5
+  8 pi
+  9 false
+  10 true
+  11 "a"
+  12 "b"
+  13 "c"
+  14 <digits>
+  15 5 kg
+  16 1 day
+  17 3 days
+  18 2.50 GBP
+  19 60 mi/hr
+  20 9.81 m/s^2
+  21 5 1/s
+  22 31
+  23 7.50
+  24 0.0
+  25 "say "
+  26 quote
+  27 "hi"
+  28 "é"
+  29 newline
+  30 []
+  31 "A1"
+  32 ["sku", "unit price"]
+  33 "s"
+  34 ";"
+  35 -1
+  36 ","
+  37 <"ID-", id: 4 digits as number>
+  38 <(1), " ", rest: text lazily>
+  39 <<>>
+  40 "ok"
+  41 [4, 4]
+  42 <d: digit>
+definitions
+  0 limit
+variables
+  0 seen
+bodies
+  0 init initialiser () locals 1 0000..0005
+  1 handler arithmetic clause 1 (x, y) locals 6 0006..0056
+  2 handler comparing clause 1 (x, y) locals 9 0057..0148
+  3 handler literals clause 1 () locals 4 0149..0189
+  4 handler reading clause 1 (x, k) locals 8 0190..0250
+  5 handler building clause 1 (x, n) locals 9 0251..0303
+code
+  0000 4:18 const 0 ; 10
+  0001 4:1 store-definition limit
+  0002 5:24 const 1 ; 0
+  0003 5:1 store-var 0 ; seen
+  0004 1:1 const 2 ; nothing
+  0005 1:1 return
+  0006 8:7 load 1 ; x
+  0007 8:11 load 2 ; y
+  0008 8:15 const 3 ; 2
+  0009 8:13 multiply
+  0010 8:9 add
+  0011 8:19 const 4 ; 1
+  0012 8:17 subtract
+  0013 8:3 store 3 ; a
+  0014 9:7 load 1 ; x
+  0015 9:11 const 5 ; 4
+  0016 9:9 divide
+  0017 9:15 load 1 ; x
+  0018 9:21 const 6 ; 3
+  0019 9:17 div
+  0020 9:13 concat
+  0021 9:25 load 1 ; x
+  0022 9:31 const 6 ; 3
+  0023 9:27 mod
+  0024 9:23 concat
+  0025 9:35 const 3 ; 2
+  0026 9:39 const 6 ; 3
+  0027 9:43 const 3 ; 2
+  0028 9:41 power
+  0029 9:37 power
+  0030 9:33 concat
+  0031 9:3 store 4 ; b
+  0032 10:8 load 1 ; x
+  0033 10:7 negate
+  0034 10:13 const 7 ; 5
+  0035 10:12 negate
+  0036 10:10 concat
+  0037 10:17 const 4 ; 1
+  0038 10:20 const 7 ; 5
+  0039 10:18 range
+  0040 10:15 concat
+  0041 10:3 store 5 ; c
+  0042 11:10 load-definition limit
+  0043 11:18 load-var 0 ; seen
+  0044 11:16 add
+  0045 11:25 const 8 ; pi
+  0046 11:23 add
+  0047 11:30 load 3 ; a
+  0048 11:28 add
+  0049 11:34 load 4 ; b
+  0050 11:32 add
+  0051 11:38 load 5 ; c
+  0052 11:36 add
+  0053 11:3 return
+  0054 12:1 const 2 ; nothing
+  0055 12:1 return
+  0056 12:1 clause-fail
+  0057 15:7 load 1 ; x
+  0058 15:11 load 2 ; y
+  0059 15:9 equal
+  0060 15:13 branch-false 0066
+  0061 15:17 load 1 ; x
+  0062 15:22 load 2 ; y
+  0063 15:19 not-equal
+  0064 15:13 check-boolean
+  0065 15:13 jump 0067
+  0066 15:13 const 9 ; false
+  0067 15:24 branch-true 0074
+  0068 15:32 load 1 ; x
+  0069 15:36 load 2 ; y
+  0070 15:34 less
+  0071 15:27 not
+  0072 15:24 check-boolean
+  0073 15:24 jump 0075
+  0074 15:24 const 10 ; true
+  0075 15:3 store 3 ; a
+  0076 16:8 load 1 ; x
+  0077 16:12 load 2 ; y
+  0078 16:10 greater
+  0079 16:15 load 1 ; x
+  0080 16:20 load 2 ; y
+  0081 16:17 less-or-equal
+  0082 16:23 load 1 ; x
+  0083 16:28 load 2 ; y
+  0084 16:25 greater-or-equal
+  0085 16:31 load 1 ; x
+  0086 16:36 load 2 ; y
+  0087 16:33 equal
+  0088 16:39 load 1 ; x
+  0089 16:48 load 2 ; y
+  0090 16:41 not-equal
+  0091 16:7 list 5
+  0092 16:3 store 4 ; b
+  0093 17:8 load 1 ; x
+  0094 17:16 load 2 ; y
+  0095 17:10 member
+  0096 17:19 load 1 ; x
+  0097 17:31 load 2 ; y
+  0098 17:21 member fold
+  0099 17:21 not
+  0100 17:48 load 1 ; x
+  0101 17:50 is-kind integer
+  0102 17:7 list 3
+  0103 17:3 store 5 ; c
+  0104 18:8 load 1 ; x
+  0105 18:10 is-kind civil date
+  0106 18:10 not
+  0107 18:31 load 1 ; x
+  0108 18:33 is-empty
+  0109 18:43 load 1 ; x
+  0110 18:45 is-empty
+  0111 18:45 not
+  0112 18:7 list 3
+  0113 18:3 store 6 ; d
+  0114 19:8 load 1 ; x
+  0115 19:10 can-convert number
+  0116 19:25 load 1 ; x
+  0117 19:27 can-convert kg
+  0118 19:38 load 1 ; x
+  0119 19:40 convert text
+  0120 19:49 load 1 ; x
+  0121 19:51 convert m/s
+  0122 19:7 list 4
+  0123 19:3 store 7 ; e
+  0124 20:8 load 1 ; x
+  0125 20:19 const 11 ; "a"
+  0126 20:10 contains fold
+  0127 20:38 load 1 ; x
+  0128 20:52 const 12 ; "b"
+  0129 20:40 begins-with
+  0130 20:57 load 1 ; x
+  0131 20:69 const 13 ; "c"
+  0132 20:59 ends-with
+  0133 20:7 list 3
+  0134 20:3 store 8 ; f
+  0135 21:11 load 3 ; a
+  0136 21:14 load 4 ; b
+  0137 21:17 load 5 ; c
+  0138 21:20 load 6 ; d
+  0139 21:23 load 7 ; e
+  0140 21:26 load 8 ; f
+  0141 21:29 load 1 ; x
+  0142 21:39 const 14 ; <digits>
+  0143 21:31 matches
+  0144 21:10 list 7
+  0145 21:3 return
+  0146 22:1 const 2 ; nothing
+  0147 22:1 return
+  0148 22:1 clause-fail
+  0149 25:8 const 15 ; 5 kg
+  0150 25:14 const 16 ; 1 day
+  0151 25:22 const 17 ; 3 days
+  0152 25:29 const 18 ; 2.50 GBP
+  0153 25:39 const 19 ; 60 mi/hr
+  0154 25:49 const 20 ; 9.81 m/s^2
+  0155 25:61 const 21 ; 5 1/s
+  0156 25:7 list 7
+  0157 25:3 store 1 ; a
+  0158 26:8 const 22 ; 31
+  0159 26:14 const 23 ; 7.50
+  0160 26:22 const 24 ; 0.0
+  0161 26:27 const 25 ; "say "
+  0162 26:36 const 26 ; quote
+  0163 26:34 concat
+  0164 26:44 const 27 ; "hi"
+  0165 26:42 concat
+  0166 26:50 const 28 ; "é"
+  0167 26:55 const 10 ; true
+  0168 26:61 const 9 ; false
+  0169 26:7 list 7
+  0170 26:3 store 2 ; b
+  0171 27:8 const 2 ; nothing
+  0172 27:17 const 29 ; newline
+  0173 27:26 list 0
+  0174 27:30 map 30 0 ; []
+  0175 27:40 const 31 ; "A1"
+  0176 27:60 const 3 ; 2
+  0177 27:34 map 32 2 ; ["sku", "unit price"]
+  0178 27:7 list 5
+  0179 27:3 store 3 ; c
+  0180 28:11 load 1 ; a
+  0181 28:14 load 2 ; b
+  0182 28:17 load 3 ; c
+  0183 28:20 const 15 ; 5 kg
+  0184 28:26 const 22 ; 31
+  0185 28:10 list 5
+  0186 28:3 return
+  0187 29:1 const 2 ; nothing
+  0188 29:1 return
+  0189 29:1 clause-fail
+  0190 32:20 load 1 ; x
+  0191 32:8 get-key "name"
+  0192 32:23 load 1 ; x
+  0193 32:24 get-key "size"
+  0194 32:38 load 2 ; k
+  0195 32:42 const 33 ; "s"
+  0196 32:40 concat
+  0197 32:50 load 1 ; x
+  0198 32:33 get-key-computed
+  0199 32:73 load 1 ; x
+  0200 32:53 get-key "unit price"
+  0201 32:7 list 4
+  0202 32:3 store 3 ; a
+  0203 33:22 load 1 ; x
+  0204 33:8 property length
+  0205 33:25 load 1 ; x
+  0206 33:26 property keys
+  0207 33:48 load 1 ; x
+  0208 33:63 const 34 ; ";"
+  0209 33:35 property-delimited items
+  0210 33:7 list 3
+  0211 33:3 store 4 ; b
+  0212 34:18 const 3 ; 2
+  0213 34:28 const 6 ; 3
+  0214 34:33 load 1 ; x
+  0215 34:23 chunk-get word
+  0216 34:8 chunk-get character
+  0217 34:47 const 3 ; 2
+  0218 34:50 const 5 ; 4
+  0219 34:48 range
+  0220 34:55 load 1 ; x
+  0221 34:36 chunk-get character
+  0222 34:67 const 35 ; -1
+  0223 34:75 load 1 ; x
+  0224 34:90 const 36 ; ","
+  0225 34:67 store 7 ; (7)
+  0226 34:67 load 7 ; (7)
+  0227 34:67 chunk-get-delimited item
+  0228 34:7 list 3
+  0229 34:3 store 5 ; c
+  0230 35:18 const 4 ; 1
+  0231 35:32 load 1 ; x
+  0232 35:18 chunk-get code point
+  0233 35:40 const 4 ; 1
+  0234 35:45 load 1 ; x
+  0235 35:35 chunk-get byte
+  0236 35:54 const 4 ; 1
+  0237 35:53 negate
+  0238 35:59 load 1 ; x
+  0239 35:48 chunk-get line
+  0240 35:7 list 3
+  0241 35:3 store 6 ; d
+  0242 36:11 load 3 ; a
+  0243 36:14 load 4 ; b
+  0244 36:17 load 5 ; c
+  0245 36:20 load 6 ; d
+  0246 36:10 list 4
+  0247 36:3 return
+  0248 37:1 const 2 ; nothing
+  0249 37:1 return
+  0250 37:1 clause-fail
+  0251 40:7 list 0
+  0252 40:8 load 1 ; x
+  0253 40:7 list-append
+  0254 40:14 load 2 ; n
+  0255 40:7 list-extend
+  0256 40:17 const 6 ; 3
+  0257 40:7 list-append
+  0258 40:3 store 3 ; a
+  0259 41:8 const 37 ; <"ID-", id: 4 digits as number>
+  0260 41:43 load 1 ; x
+  0261 41:41 make-pattern 38 1 ; <(1), " ", rest: text lazily>
+  0262 41:7 list 2
+  0263 41:3 store 4 ; b
+  0264 42:8 const 39 ; <<>>
+  0265 42:11 const 3 ; 2
+  0266 42:11 bytes-field value
+  0267 42:17 load 1 ; x
+  0268 42:17 bytes-field uint16 little
+  0269 42:37 const 40 ; "ok"
+  0270 42:37 bytes-field value
+  0271 42:43 load 2 ; n
+  0272 42:43 bytes-field bytes
+  0273 42:60 const 39 ; <<>>
+  0274 42:63 const 4 ; 1
+  0275 42:76 load 1 ; x
+  0276 42:63 bytes-bits 41 2 ; [4, 4]
+  0277 42:7 list 2
+  0278 42:3 store 5 ; c
+  0279 43:22 const 14 ; <digits>
+  0280 43:34 load 1 ; x
+  0281 43:7 match-all
+  0282 43:3 store 6 ; found
+  0283 44:11 load 6 ; found
+  0284 44:26 const 42 ; <d: digit>
+  0285 44:40 load 1 ; x
+  0286 44:18 replace-start 0
+  0287 44:18 replace-next 0298
+  0288 44:18 store 8 ; (8)
+  0289 44:18 load 8 ; (8)
+  0290 44:18 get-key "captures"
+  0291 44:18 get-key "d"
+  0292 44:18 store 7 ; d
+  0293 44:47 load 7 ; d
+  0294 44:51 load 7 ; d
+  0295 44:49 concat
+  0296 44:18 replace-put
+  0297 44:18 jump 0287
+  0298 44:18 replace-end
+  0299 44:10 list 2
+  0300 44:3 return
+  0301 45:1 const 2 ; nothing
+  0302 45:1 return
+  0303 45:1 clause-fail

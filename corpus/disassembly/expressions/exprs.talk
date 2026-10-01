@@ -1,0 +1,45 @@
+-- exprs.talk: the expression lowerings of chapter 8, and the display forms
+-- of the constants they put in the pool. Part of the expressions case.
+
+constant limit = 10
+script variable seen = 0
+
+on arithmetic x, y
+  put x + y * 2 - 1 into a
+  put x / 4 & x div 3 & x mod 3 & 2 ^ 3 ^ 2 into b
+  put -x & -5 & 1..5 into c
+  return limit + seen + pi + a + b + c
+end arithmetic
+
+on comparing x, y
+  put x = y and x <> y or not (x < y) into a
+  put [x > y, x <= y, x >= y, x is y, x is not y] into b
+  put [x is in y, x is not in y ignoring case, x is an integer] into c
+  put [x is not a civil date, x is empty, x is not empty] into d
+  put [x can be number, x can be kg, x as text, x as m/s] into e
+  put [x contains "a" ignoring case, x begins with "b", x ends with "c"] into f
+  return [a, b, c, d, e, f, x matches <digits>]
+end comparing
+
+on literals
+  put [5 kg, 1 days, 3 day, 2.50 GBP, 60 mi/hr, 9.81 m/s^2, 5 1/s] into a
+  put [0x1F, 007.50, 0.0, "say " & quote & "hi", "é", true, false] into b
+  put [nothing, newline, [], {}, {sku: "A1", "unit price": 2}] into c
+  return [a, b, c, 5 kg, 0x1F]
+end literals
+
+on reading x, k
+  put [the name of x, x's size, the (k & "s") of x, the "unit price" of x] into a
+  put [the length of x, x's keys, the items of x delimited by ";"] into b
+  put [character 2 of word 3 of x, characters 2..4 of x, the last item of x delimited by ","] into c
+  put [the first code point of x, byte 1 of x, line -1 of x] into d
+  return [a, b, c, d]
+end reading
+
+on building x, n
+  put [x, ...n, 3] into a
+  put [<"ID-", id: 4 digits as number>, <(x), " ", rest: text lazily>] into b
+  put [<< 0x02, x as uint16 little, "ok", n as 3 bytes >>, << 1 as 4 bits, x as 4 bits >>] into c
+  put every match of <digits> in x into found
+  return [found, replace <d: digit> in x with d & d]
+end building

@@ -61,7 +61,12 @@
       ["not in a script", 1, 1], ["unknown name", 1, 22], ["not in a guard", 1, 22], ["duplicate key", 2, 14],
       ["no conversion", 2, 25], ["capture in repetition", 2, 45], ["bits not whole bytes", 2, 59]
     ]), "Construct and Guard diagnostics");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks in a browser";
+    const lowered = talk.compileSource('on t x where x > 0\n put "e\u0301" into item 2 of x\n return x\nend t', { name: "smoke" });
+    const listing = talk.disassemble(lowered.unit);
+    assert(listing.startsWith("unit smoke script\nconstants\n  0 nothing\n  1 0\n  2 \"é\"\n") && listing.endsWith("unwind\n  0002..0005 guard -> 0021 depth 0\n"), "Lowering and canonical disassembly");
+    const deepUnit = talk.compileSource(deepSource, { name: "deep" });
+    assert(deepUnit.unit.code.length === 3004, "Deep lowering");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering and disassembly in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;

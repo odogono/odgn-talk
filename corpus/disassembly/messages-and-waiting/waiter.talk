@@ -1,0 +1,56 @@
+-- waiter.talk: messages, Capabilities, Suspension Points, waiting and
+-- Joins. Part of the messages-and-waiting case.
+
+on order id
+  send placed with id, me to warehouse
+  send quote with id to pricing and wait
+  put it into price
+  refresh
+  refresh id and wait
+  restock id
+  restock id and wait
+  tell log to write "order " & id
+  say price
+  ask clock to now
+  ask prices to lookup id and wait
+  return the target
+end order
+
+on restock id
+  wait 5 s
+  return id
+end restock
+
+on restock id, n
+  return n
+end restock
+
+on events id, limit
+  wait for paid {order: ^id, amount: a} from pricing or 30 s
+  wait for ready
+  wait for
+    when shipped {order: o} where o = id and a < limit then
+      put o into done
+    when cancelled reason then
+      put reason into done
+    after 1 min then
+      put nothing into done
+  end wait
+  return done
+end events
+
+on joins ids
+  wait for all
+    repeat for each id in ids
+      ask prices to lookup id and wait
+      send quote with id to pricing and wait
+    end repeat
+    ask clock to now
+  end wait
+  return it
+end joins
+
+on beforeShip parcel, deciding
+  if parcel is empty then veto "nothing to ship"
+  pass beforeShip
+end beforeShip

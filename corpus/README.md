@@ -11,6 +11,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`text-model/`](text-model/) | whole-Character boundaries, NFC at join seams and at the Host's text constructor, `word` and `word break` on punctuation, chunk padding on writes, and out-of-range reads ([chapter 3](../spec/03-values.md)) |
 | [`errors/`](errors/) | whole error maps, with their keys in order ([chapter 6](../spec/06-errors-and-limits.md#errors)) |
 | [`decisions/`](decisions/) | Decisions and their Verdicts ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
+| [`disassembly/`](disassembly/) | Disassembly Cases: the lowering of expressions, Containers, Destructuring, control flow and `try`, calls and Lambdas, and messages and waiting, which between them emit every instruction ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#the-lowering)) |
 
 ## The seed cases are unblessed
 
@@ -27,12 +28,17 @@ No Core exists yet, so no case here has been blessed. Each `case.trace` has its 
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
 
+## The Disassembly Cases
+
+The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
+
 ## Checking
 
 ```sh
 bun run corpus:check          # what CI runs: every case reads as chapter 11 says
 bun run grammar:check         # every .talk file here parses
 bun run machine:check         # and lowers
+bun run corpus:run            # the TS Core runs the case kinds it implements
 ```
 
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

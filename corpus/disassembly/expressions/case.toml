@@ -1,0 +1,20 @@
+# expressions: pins the lowering of each expression form in chapter 8's
+# Expressions and Chunk Expressions tables, the order constants enter the
+# pool and the display form each is shown in (chapter 11, In a disassembly).
+# It shows Units in normal form (`1 day`, `3 days`), canonical numbers
+# (`0x1F` is `31`, `007.50` is `7.50`), text pieces joined with `&`, map key
+# lists, Text Pattern templates with `(1)` for a splice, and bit widths.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "exprs"
+source = "exprs.talk"
+
+[[disassembly]]
+unit = "exprs"
+expected = "exprs.dis"

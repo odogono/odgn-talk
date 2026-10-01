@@ -25,6 +25,25 @@ export {
   type Diagnostic,
   type DiagnosticCode,
 } from './checker';
+export {
+  compileSource,
+  exportsOf,
+  lowerTree,
+  LoweringError,
+  type CompileOptions,
+  type CompileResult,
+} from './lowering';
+export {
+  disassemble,
+  type Body,
+  type BodyKind,
+  type CodeUnit,
+  type EventBranch,
+  type EventEntry,
+  type Instruction,
+  type Operand,
+  type UnwindEntry,
+} from './code-unit';
 export type {
   Binding,
   BindingKind,

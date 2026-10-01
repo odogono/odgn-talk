@@ -46,11 +46,11 @@ A code unit is the compiled form of one Script or Library. It holds, in order:
 
 The body table lists every body of the code unit, in this order:
 
-1. **The initialiser**, body 0. It evaluates each Script Variable's initial value, each Constant and each parameter default, in source order, stores them with `store-var` or `store-definition`, and ends with `const nothing` and `return`. It runs once, when the unit loads.
+1. **The initialiser**, body 0, named `initialiser`. It evaluates each Script Variable's initial value, each Constant and each parameter default, in source order, stores them with `store-var` or `store-definition`, and ends with `const nothing` and `return`. It runs once, when the unit loads.
 2. **Each function, and each Handler Clause,** in source order. A Handler's clauses are numbered from 1, in source order.
 3. **Each Lambda and each event test,** in the order the lowering reaches it: in the initialiser first, then in each declaration in source order.
 
-Each entry gives the body's kind (`init`, `function`, `handler`, `lambda` or `event`), its name, its clause number, its parameters, its defaults, its number of captures, its number of locals, whether it may suspend, and its range of instructions. A Lambda is named by its enclosing body's name, then its position (`compare:25:8`, and `compare:25:8:25:20` for a Lambda inside it), and an event test by its message.
+Each entry gives the body's kind (`init`, `function`, `handler`, `lambda` or `event`), its name, its clause number, its parameters, its defaults, its number of captures, its number of locals, whether it may suspend, and its range of instructions. A Lambda is named by its enclosing body's name, then its position (`compare:25:8`, `compare:25:8:25:20` for a Lambda inside it, and `initialiser:3:14` for one in a Constant), and an event test by its message.
 
 - **May suspend:** a body may suspend when it holds a Suspension Point instruction (`suspends` in the table below). For a Lambda, the flag is part of the Function Value ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)). A Handler that may suspend is one whose body may, or that calls one that may, found by the loader over the call graph ([chapter 5](05-handlers-messages-and-scheduling.md)).
 
@@ -78,22 +78,22 @@ The operand kinds:
 | `constant` | an index into the code unit's constant pool, shown with the constant |
 | `local` | a local slot of the current body, shown with its name |
 | `variable` | a Script Variable's slot, shown with its name |
-| `definition` | a Constant of the code unit or of an Import, shown by name |
-| `body` | a body of the code unit, shown by its index and name |
+| `definition` | a Constant of the code unit or of an Import, shown by its name in the definitions |
+| `body` | a body of the code unit, shown by its index, with its name |
 | `import` | an imported function, Handler or Constant, shown as library:name |
 | `builtin` | a Built-in function, shown by name |
 | `handler` | a Handler of the code unit, or an imported one, shown by name |
 | `grant` | a Grant, by the name the Script uses |
 | `operation` | an Operation name |
 | `message` | a message name |
-| `object` | a well-known object or Script name |
-| `label` | an instruction index in the same body |
+| `object` | a well-known object or Script name, shown by name |
+| `label` | an instruction index in the same body, shown as the code's indices are |
 | `count` | a non-negative integer |
 | `index` | a positive integer |
 | `kind` | a kind name, `integer`, or a Unit, as written after `is a`, `as` or `can be` |
 | `chunk` | a chunk kind: character, word, line, item, byte or code point |
 | `property` | a Built-in property name |
-| `key` | a map key, as text |
+| `key` | a map key, shown as text in the display form |
 | `fold` | `fold` if the operation ignores case, and absent otherwise |
 | `field` | a Binary Pattern field type: an integer type with its byte order, or a size unit |
 | `event` | an entry of the code unit's event table |
@@ -429,7 +429,7 @@ A pattern tests the value in a slot `s`, and jumps to a fail label `F`.
 | a literal `v` | `load s` `test-constant v F`, with `fold` under `match … ignoring case` |
 | `^n` | `load s`, the `load` of `n`, `test-equal F` |
 | `[p1, …, pk]` | `load s` `test-list k F`, then for each item `load s` `list-item i` and its sub-pattern |
-| `[p1, …, pk, ...r]` | `load s` `test-list-at-least k F`, the items as above, then `load s` `list-rest k+1` and `store` of `r`'s binding, or `pop` for a bare `...` |
+| `[p1, …, pk, ...r]` | `load s` `test-list-at-least k F`, the items as above, then `load s` `list-rest k+1`, and the `store` of `r`'s binding, or `pop` for a bare `...` |
 | `{k1: p1, …}` | `load s` `test-map F`, then for each entry `load s` `map-get k F` and its sub-pattern |
 | a Text Pattern | `load s`, ⟦the pattern⟧, `match-whole F`, then for each Capture the literal writes, `load t` `get-key name` and its binding, with the Captures map in `t`, or `pop` if there are none |
 | a Binary Pattern | [below](#binary-patterns) |
@@ -513,6 +513,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 
 - **`if`** jumps to L2 after every arm, except the last one when there is no `else`.
 - **An iterator** stays on the stack below the loop's body, which leaves the stack as it found it, and L2 pops it.
+- **`repeat for each`'s temp** is released after the `move`s, before the body.
 - **Grants:** the name after `ask` or `tell` is a Grant, and the Operation's mode picks `ask`, `ask-wait` or `tell`, checked at load ([chapter 5](05-handlers-messages-and-scheduling.md)).
 
 #### `match`
@@ -606,9 +607,11 @@ events
   <index> <branch>; <branch>…[; or]
 ```
 
+- **Spacing:** the fields of a line are separated by one space, with no padding, as in `  0004 2:9 add` and `  0005 2:3 store 3 ; total`.
 - **Numbers:** an instruction index is four digits or more, padded with zeros. A parameter with a default is `name = <definition index>`, and a pattern parameter is `…`.
-- **Operands** are shown as their operand kind says, with a label as an instruction index.
-- **Notes** after `;` name what an operand refers to: a local's name, a constant, a function. They are part of the canonical text. A temp's name is its slot in parentheses, `(12)`.
+- **Operands** are shown as their operand kind says. A `constant`, `local`, `variable` or `body` operand is its number, and a `label` an instruction index. A `key` is text in the display form, as in `get-key "unit price"`. Every other operand is its name, as written: `load-definition rate`, `load-object door`, `call-import list:sortBy 2`, `is-kind civil date`, `raise no match`.
+- **Notes** after `;` name what each `constant`, `local`, `variable` and `body` operand refers to, in operand order, separated by `, `: the constant in the display form, the local's or Script Variable's name, or the body's name, as in `move 13 3 ; (13), a`. They are part of the canonical text, and a line with no such operand has none. A temp's name is its slot in parentheses, `(12)`, and so is the argument slot of a pattern parameter.
+- **Events:** a `when` branch is `when <message>`, then `from`, `body <index>`, `captures <n>` and `binds <slot>, <slot>…`, each only where it applies, and an `after` branch is `after`. A `wait for … or d` ends with `; or`.
 - **Line ends** are LF, and the text ends with one.
 
 ## The source map
@@ -622,7 +625,18 @@ Each instruction has a source position, the second column of its disassembly lin
 - for a Container write, each level's instructions (its index's `store`, its test, its read and its write) are that level's, and the value's `store`, the root's `load` and the root's `store` are the statement's
 - for a pattern, its first token, and for a Binary Pattern field, the field's first token
 - for a Lambda, `given`
-- for a body's closing `const nothing` and `return`, the `end` that closes it, or line 1, column 1 in the initialiser. A clause's or event test's `clause-fail` has the same position
+- for a body's closing `const nothing` and `return`, the `end` that closes it, or line 1, column 1 in the initialiser. A clause's `clause-fail` has the same position
+
+Some rules emit instructions for constructs the list doesn't place. Their positions are:
+
+- **Declarations:** a Script Variable's `store-var` and a Constant's `store-definition` are the declaration's first token, and a parameter default's `store-definition` its parameter's name.
+- **`try`:** the `try`'s own instructions (the `jump` after its body, the catch handler's `store t`, its `load t` and `rethrow`, and `end-cleanup`) are its `try`, or its `finally` for a Handler that ends in one. A `catch` clause's `move`s and `jump` are its `catch`.
+- **Patterns:** a list or map pattern's `load s`, `list-item`, `list-rest` and `map-get` are that pattern's. A sub-pattern's own `store` or `pop`, the `store` of a name or `_` included, is the sub-pattern's.
+- **Chunks:** a `delimited by`'s `store t` is the outermost level's chunk word, and an ordinal's `const` its level's chunk word.
+- **Lambdas:** a `given …: e`'s `return`, and a Lambda's `raise no match`, are its `given`.
+- **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
+- **Builds:** a field's `bytes-field`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
+- **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`.
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).
 

@@ -1,0 +1,388 @@
+unit flow script
+constants
+  0 nothing
+  1 2
+  2 "big"
+  3 "small"
+  4 1
+  5 "one"
+  6 "two"
+  7 3
+  8 "three"
+  9 10
+  10 5
+  11 20
+  12 15
+  13 0
+  14 "division by zero"
+  15 "wrong kind"
+  16 "custom"
+  17 ["code", "reason"]
+  18 "inner"
+  19 "outer"
+  20 "done"
+variables
+  0 log
+bodies
+  0 init initialiser () locals 1 0000..0003
+  1 handler branches clause 1 (x) locals 3 0004..0042
+  2 handler loops clause 1 (n) locals 6 0043..0114
+  3 handler guarded clause 1 (x) locals 9 0115..0192
+  4 handler leaving clause 1 (xs) locals 6 0193..0310
+  5 handler cleanup clause 1 (x) locals 3 0311..0333
+code
+  0000 4:23 list 0
+  0001 4:1 store-var 0 ; log
+  0002 1:1 const 0 ; nothing
+  0003 1:1 return
+  0004 7:6 load 1 ; x
+  0005 7:10 const 1 ; 2
+  0006 7:8 greater
+  0007 7:3 branch-false 0011
+  0008 7:21 const 2 ; "big"
+  0009 7:17 store 2 ; size
+  0010 7:3 jump 0013
+  0011 7:46 const 3 ; "small"
+  0012 7:42 store 2 ; size
+  0013 8:6 load 1 ; x
+  0014 8:10 const 4 ; 1
+  0015 8:8 equal
+  0016 8:3 branch-false 0020
+  0017 9:9 const 5 ; "one"
+  0018 9:5 store 2 ; size
+  0019 8:3 jump 0033
+  0020 10:11 load 1 ; x
+  0021 10:15 const 1 ; 2
+  0022 10:13 equal
+  0023 8:3 branch-false 0027
+  0024 11:9 const 6 ; "two"
+  0025 11:5 store 2 ; size
+  0026 8:3 jump 0033
+  0027 12:11 load 1 ; x
+  0028 12:15 const 7 ; 3
+  0029 12:13 equal
+  0030 8:3 branch-false 0033
+  0031 13:9 const 8 ; "three"
+  0032 13:5 store 2 ; size
+  0033 15:6 load 1 ; x
+  0034 15:8 is-empty
+  0035 15:3 branch-false 0038
+  0036 15:26 const 0 ; nothing
+  0037 15:22 store 2 ; size
+  0038 16:10 load 2 ; size
+  0039 16:3 return
+  0040 17:1 const 0 ; nothing
+  0041 17:1 return
+  0042 17:1 clause-fail
+  0043 20:10 load 1 ; n
+  0044 20:3 iterate-times
+  0045 20:3 next 0054
+  0046 20:3 pop
+  0047 21:9 const 4 ; 1
+  0048 21:5 store 5 ; (5)
+  0049 21:5 load 2 ; count
+  0050 21:5 load 5 ; (5)
+  0051 21:5 add
+  0052 21:5 store 2 ; count
+  0053 20:3 jump 0045
+  0054 20:3 pop
+  0055 23:16 load 2 ; count
+  0056 23:24 const 9 ; 10
+  0057 23:22 less
+  0058 23:3 branch-false 0071
+  0059 24:9 const 4 ; 1
+  0060 24:5 store 5 ; (5)
+  0061 24:5 load 2 ; count
+  0062 24:5 load 5 ; (5)
+  0063 24:5 add
+  0064 24:5 store 2 ; count
+  0065 25:8 load 2 ; count
+  0066 25:16 const 10 ; 5
+  0067 25:14 equal
+  0068 25:5 branch-false 0070
+  0069 25:23 jump 0055
+  0070 23:3 jump 0055
+  0071 27:16 load 2 ; count
+  0072 27:24 const 11 ; 20
+  0073 27:22 greater
+  0074 27:3 branch-true 0087
+  0075 28:9 const 4 ; 1
+  0076 28:5 store 5 ; (5)
+  0077 28:5 load 2 ; count
+  0078 28:5 load 5 ; (5)
+  0079 28:5 add
+  0080 28:5 store 2 ; count
+  0081 29:8 load 2 ; count
+  0082 29:16 const 12 ; 15
+  0083 29:14 equal
+  0084 29:5 branch-false 0086
+  0085 29:24 jump 0087
+  0086 27:3 jump 0071
+  0087 32:5 jump 0089
+  0088 31:3 jump 0087
+  0089 34:24 const 4 ; 1
+  0090 34:27 load 1 ; n
+  0091 34:25 range
+  0092 34:3 iterate
+  0093 34:3 next 0109
+  0094 34:3 store 3 ; i
+  0095 35:27 const 4 ; 1
+  0096 35:30 const 1 ; 2
+  0097 35:26 list 2
+  0098 35:5 iterate
+  0099 35:5 next 0107
+  0100 35:5 store 4 ; j
+  0101 36:10 load 4 ; j
+  0102 36:14 load 3 ; i
+  0103 36:12 equal
+  0104 36:7 branch-false 0106
+  0105 36:21 jump 0107
+  0106 35:5 jump 0099
+  0107 35:5 pop
+  0108 34:3 jump 0093
+  0109 34:3 pop
+  0110 39:10 load 2 ; count
+  0111 39:3 return
+  0112 40:1 const 0 ; nothing
+  0113 40:1 return
+  0114 40:1 clause-fail
+  0115 44:9 load 1 ; x
+  0116 44:13 const 13 ; 0
+  0117 44:11 divide
+  0118 44:5 store 2 ; y
+  0119 43:3 jump 0150
+  0120 43:3 store 6 ; (6)
+  0121 45:9 load 6 ; (6)
+  0122 45:9 test-map 0131
+  0123 45:9 load 6 ; (6)
+  0124 45:9 map-get "code" 0131
+  0125 45:9 store 7 ; (7)
+  0126 45:9 load 7 ; (7)
+  0127 45:9 test-constant 14 0131 ; "division by zero"
+  0128 46:9 const 13 ; 0
+  0129 46:5 store 2 ; y
+  0130 45:3 jump 0150
+  0131 47:9 load 6 ; (6)
+  0132 47:9 test-map 0148
+  0133 47:9 load 6 ; (6)
+  0134 47:9 map-get "code" 0148
+  0135 47:16 store 7 ; (7)
+  0136 47:9 load 6 ; (6)
+  0137 47:9 map-get "value" 0148
+  0138 47:26 store 8 ; (8)
+  0139 47:35 load 7 ; (7)
+  0140 47:40 const 15 ; "wrong kind"
+  0141 47:37 equal
+  0142 47:35 branch-false 0148
+  0143 47:3 move 7 3 ; (7), c
+  0144 47:3 move 8 4 ; (8), v
+  0145 48:9 load 4 ; v
+  0146 48:5 store 2 ; y
+  0147 47:3 jump 0150
+  0148 43:3 load 6 ; (6)
+  0149 43:3 rethrow
+  0150 51:18 const 16 ; "custom"
+  0151 51:36 load 1 ; x
+  0152 51:11 map 17 2 ; ["code", "reason"]
+  0153 51:5 throw
+  0154 55:9 load 2 ; y
+  0155 55:5 store 6 ; (6)
+  0156 55:5 load-var 0 ; log
+  0157 55:5 load 6 ; (6)
+  0158 55:5 append
+  0159 55:5 store-var 0 ; log
+  0160 50:3 jump 0188
+  0161 50:3 store 6 ; (6)
+  0162 52:9 load 6 ; (6)
+  0163 52:9 store 7 ; (7)
+  0164 52:29 load 7 ; (7)
+  0165 52:17 get-key "code"
+  0166 52:34 const 16 ; "custom"
+  0167 52:31 equal
+  0168 52:17 branch-false 0179
+  0169 52:3 move 7 5 ; (7), e
+  0170 53:9 load 5 ; e
+  0171 53:5 store 2 ; y
+  0172 55:9 load 2 ; y
+  0173 55:5 store 7 ; (7)
+  0174 55:5 load-var 0 ; log
+  0175 55:5 load 7 ; (7)
+  0176 55:5 append
+  0177 55:5 store-var 0 ; log
+  0178 52:3 jump 0188
+  0179 50:3 load 6 ; (6)
+  0180 50:3 rethrow
+  0181 55:9 load 2 ; y
+  0182 55:5 store 6 ; (6)
+  0183 55:5 load-var 0 ; log
+  0184 55:5 load 6 ; (6)
+  0185 55:5 append
+  0186 55:5 store-var 0 ; log
+  0187 50:3 end-cleanup
+  0188 57:10 load 2 ; y
+  0189 57:3 return
+  0190 58:1 const 0 ; nothing
+  0191 58:1 return
+  0192 58:1 clause-fail
+  0193 61:24 load 1 ; xs
+  0194 61:3 iterate
+  0195 61:3 next 0248
+  0196 61:3 store 2 ; x
+  0197 63:10 load 2 ; x
+  0198 63:14 const 4 ; 1
+  0199 63:12 equal
+  0200 63:7 branch-false 0208
+  0201 67:11 load 2 ; x
+  0202 67:7 store 4 ; (4)
+  0203 67:7 load-var 0 ; log
+  0204 67:7 load 4 ; (4)
+  0205 67:7 append
+  0206 67:7 store-var 0 ; log
+  0207 63:21 jump 0195
+  0208 64:10 load 2 ; x
+  0209 64:14 const 1 ; 2
+  0210 64:12 equal
+  0211 64:7 branch-false 0219
+  0212 67:11 load 2 ; x
+  0213 67:7 store 4 ; (4)
+  0214 67:7 load-var 0 ; log
+  0215 67:7 load 4 ; (4)
+  0216 67:7 append
+  0217 67:7 store-var 0 ; log
+  0218 64:21 jump 0248
+  0219 65:10 load 2 ; x
+  0220 65:14 const 7 ; 3
+  0221 65:12 equal
+  0222 65:7 branch-false 0233
+  0223 65:28 const 8 ; "three"
+  0224 65:21 store 4 ; (4)
+  0225 67:11 load 2 ; x
+  0226 67:7 store 5 ; (5)
+  0227 67:7 load-var 0 ; log
+  0228 67:7 load 5 ; (5)
+  0229 67:7 append
+  0230 67:7 store-var 0 ; log
+  0231 65:21 load 4 ; (4)
+  0232 65:21 return
+  0233 67:11 load 2 ; x
+  0234 67:7 store 4 ; (4)
+  0235 67:7 load-var 0 ; log
+  0236 67:7 load 4 ; (4)
+  0237 67:7 append
+  0238 67:7 store-var 0 ; log
+  0239 62:5 jump 0247
+  0240 67:11 load 2 ; x
+  0241 67:7 store 4 ; (4)
+  0242 67:7 load-var 0 ; log
+  0243 67:7 load 4 ; (4)
+  0244 67:7 append
+  0245 67:7 store-var 0 ; log
+  0246 62:5 end-cleanup
+  0247 61:3 jump 0195
+  0248 61:3 pop
+  0249 72:14 const 18 ; "inner"
+  0250 72:7 store 4 ; (4)
+  0251 74:11 const 18 ; "inner"
+  0252 74:7 store 5 ; (5)
+  0253 74:7 load-var 0 ; log
+  0254 74:7 load 5 ; (5)
+  0255 74:7 append
+  0256 74:7 store-var 0 ; log
+  0257 79:9 const 19 ; "outer"
+  0258 79:5 store 5 ; (5)
+  0259 79:5 load-var 0 ; log
+  0260 79:5 load 5 ; (5)
+  0261 79:5 append
+  0262 79:5 store-var 0 ; log
+  0263 72:7 load 4 ; (4)
+  0264 72:7 return
+  0265 74:11 const 18 ; "inner"
+  0266 74:7 store 4 ; (4)
+  0267 74:7 load-var 0 ; log
+  0268 74:7 load 4 ; (4)
+  0269 74:7 append
+  0270 74:7 store-var 0 ; log
+  0271 71:5 jump 0279
+  0272 74:11 const 18 ; "inner"
+  0273 74:7 store 4 ; (4)
+  0274 74:7 load-var 0 ; log
+  0275 74:7 load 4 ; (4)
+  0276 74:7 append
+  0277 74:7 store-var 0 ; log
+  0278 71:5 end-cleanup
+  0279 79:9 const 19 ; "outer"
+  0280 79:5 store 4 ; (4)
+  0281 79:5 load-var 0 ; log
+  0282 79:5 load 4 ; (4)
+  0283 79:5 append
+  0284 79:5 store-var 0 ; log
+  0285 70:3 jump 0308
+  0286 70:3 store 4 ; (4)
+  0287 76:9 load 4 ; (4)
+  0288 76:9 store 5 ; (5)
+  0289 76:3 move 5 3 ; (5), err
+  0290 77:11 load 3 ; err
+  0291 77:5 throw
+  0292 79:9 const 19 ; "outer"
+  0293 79:5 store 5 ; (5)
+  0294 79:5 load-var 0 ; log
+  0295 79:5 load 5 ; (5)
+  0296 79:5 append
+  0297 79:5 store-var 0 ; log
+  0298 76:3 jump 0308
+  0299 70:3 load 4 ; (4)
+  0300 70:3 rethrow
+  0301 79:9 const 19 ; "outer"
+  0302 79:5 store 4 ; (4)
+  0303 79:5 load-var 0 ; log
+  0304 79:5 load 4 ; (4)
+  0305 79:5 append
+  0306 79:5 store-var 0 ; log
+  0307 70:3 end-cleanup
+  0308 81:1 const 0 ; nothing
+  0309 81:1 return
+  0310 81:1 clause-fail
+  0311 84:7 load 1 ; x
+  0312 84:3 store 2 ; (2)
+  0313 84:3 load-var 0 ; log
+  0314 84:3 load 2 ; (2)
+  0315 84:3 append
+  0316 84:3 store-var 0 ; log
+  0317 86:7 const 20 ; "done"
+  0318 86:3 store 2 ; (2)
+  0319 86:3 load-var 0 ; log
+  0320 86:3 load 2 ; (2)
+  0321 86:3 append
+  0322 86:3 store-var 0 ; log
+  0323 85:1 jump 0331
+  0324 86:7 const 20 ; "done"
+  0325 86:3 store 2 ; (2)
+  0326 86:3 load-var 0 ; log
+  0327 86:3 load 2 ; (2)
+  0328 86:3 append
+  0329 86:3 store-var 0 ; log
+  0330 85:1 end-cleanup
+  0331 87:1 const 0 ; nothing
+  0332 87:1 return
+  0333 87:1 clause-fail
+unwind
+  0115..0118 catch -> 0120 depth 0
+  0121..0127 guard -> 0131 depth 0
+  0131..0142 guard -> 0148 depth 0
+  0150..0153 catch -> 0161 depth 0
+  0162..0168 guard -> 0179 depth 0
+  0150..0153 finally -> 0181 depth 0
+  0162..0171 finally -> 0181 depth 0
+  0179..0180 finally -> 0181 depth 0
+  0197..0200 finally -> 0240 depth 1
+  0208..0211 finally -> 0240 depth 1
+  0219..0224 finally -> 0240 depth 1
+  0249..0250 finally -> 0272 depth 0
+  0249..0250 catch -> 0286 depth 0
+  0265..0278 catch -> 0286 depth 0
+  0287..0288 guard -> 0299 depth 0
+  0249..0250 finally -> 0301 depth 0
+  0265..0278 finally -> 0301 depth 0
+  0287..0291 finally -> 0301 depth 0
+  0299..0300 finally -> 0301 depth 0
+  0311..0316 finally -> 0324 depth 0

@@ -1,0 +1,174 @@
+unit caller script
+constants
+  0 2
+  1 nothing
+  2 "hi "
+  3 3
+  4 "x"
+  5 "Ann"
+  6 1
+  7 4
+  8 "Bob"
+  9 10
+definitions
+  0 shapes:unit
+  1 scale
+bodies
+  0 init initialiser () locals 1 0000..0003
+  1 function double (x) locals 2 0004..0009
+  2 handler greet clause 1 (name) locals 2 0010..0016
+  3 handler calls clause 1 (xs, f) locals 8 may suspend 0017..0068
+  4 handler lambdas clause 1 (xs, k) locals 9 0069..0097
+  5 lambda initialiser:8:18 (x) locals 2 0098..0101
+  6 lambda lambdas:32:15 (x) captures 1 locals 3 0102..0105
+  7 lambda lambdas:33:18 (p, q) locals 3 0106..0111
+  8 lambda lambdas:34:7 (…) captures 1 locals 5 0112..0126
+  9 lambda lambdas:35:7 (x) captures 1 locals 4 0127..0136
+  10 lambda lambdas:35:7:36:9 (y) captures 2 locals 4 0137..0142
+  11 lambda lambdas:39:7 () locals 1 0143..0144
+code
+  0000 8:18 make-closure 5 0 ; initialiser:8:18
+  0001 8:1 store-definition scale
+  0002 1:1 const 1 ; nothing
+  0003 1:1 return
+  0004 11:10 load 1 ; x
+  0005 11:14 const 0 ; 2
+  0006 11:12 multiply
+  0007 11:3 return
+  0008 12:1 const 1 ; nothing
+  0009 12:1 return
+  0010 15:10 const 2 ; "hi "
+  0011 15:18 load 1 ; name
+  0012 15:16 concat
+  0013 15:3 return
+  0014 16:1 const 1 ; nothing
+  0015 16:1 return
+  0016 16:1 clause-fail
+  0017 19:14 const 3 ; 3
+  0018 19:7 call 1 1 ; double
+  0019 19:3 store 3 ; a
+  0020 20:12 const 0 ; 2
+  0021 20:7 call-import shapes:area 1
+  0022 20:22 const 0 ; 2
+  0023 20:25 const 3 ; 3
+  0024 20:28 load-definition shapes:unit
+  0025 20:17 call-import shapes:area 3
+  0026 20:15 concat
+  0027 20:42 const 4 ; "x"
+  0028 20:47 const 3 ; 3
+  0029 20:36 call-import text:pad 2
+  0030 20:34 concat
+  0031 20:3 store 4 ; b
+  0032 21:11 load 1 ; xs
+  0033 21:7 call-builtin max 1
+  0034 21:23 const 5 ; "Ann"
+  0035 21:17 call-handler greet 1
+  0036 21:15 concat
+  0037 21:3 store 5 ; c
+  0038 22:7 load 2 ; f
+  0039 22:9 const 6 ; 1
+  0040 22:12 const 0 ; 2
+  0041 22:7 call-value 2
+  0042 22:3 store 6 ; d
+  0043 23:3 load 2 ; f
+  0044 23:5 const 3 ; 3
+  0045 23:3 call-value 1
+  0046 23:3 store 0 ; it
+  0047 24:3 load 2 ; f
+  0048 24:5 const 7 ; 4
+  0049 24:3 call-value-wait 1
+  0050 24:3 store 0 ; it
+  0051 25:8 make-function 1 ; double
+  0052 25:16 make-imported-function shapes:area
+  0053 25:22 load-definition scale
+  0054 25:7 list 3
+  0055 25:3 store 7 ; e
+  0056 26:9 const 8 ; "Bob"
+  0057 26:3 call-handler greet 1
+  0058 26:3 store 0 ; it
+  0059 27:11 load 3 ; a
+  0060 27:14 load 4 ; b
+  0061 27:17 load 5 ; c
+  0062 27:20 load 6 ; d
+  0063 27:23 load 7 ; e
+  0064 27:10 list 5
+  0065 27:3 return
+  0066 28:1 const 1 ; nothing
+  0067 28:1 return
+  0068 28:1 clause-fail
+  0069 31:7 const 9 ; 10
+  0070 31:3 store 3 ; base
+  0071 32:11 load 1 ; xs
+  0072 32:15 load 3 ; base
+  0073 32:15 make-closure 6 1 ; lambdas:32:15
+  0074 32:7 call-import list:map 2
+  0075 32:3 store 4 ; a
+  0076 33:14 load 1 ; xs
+  0077 33:18 make-closure 7 0 ; lambdas:33:18
+  0078 33:7 call-import list:sortBy 2
+  0079 33:3 store 5 ; b
+  0080 34:7 load 2 ; k
+  0081 34:7 make-closure 8 1 ; lambdas:34:7
+  0082 34:3 store 6 ; pairSum
+  0083 35:7 load 3 ; base
+  0084 35:7 make-closure 9 1 ; lambdas:35:7
+  0085 35:3 store 7 ; nested
+  0086 39:7 make-closure 11 0 ; lambdas:39:7
+  0087 39:3 store 8 ; self
+  0088 40:11 load 4 ; a
+  0089 40:14 load 5 ; b
+  0090 40:17 load 6 ; pairSum
+  0091 40:26 load 7 ; nested
+  0092 40:34 load 8 ; self
+  0093 40:10 list 5
+  0094 40:3 return
+  0095 41:1 const 1 ; nothing
+  0096 41:1 return
+  0097 41:1 clause-fail
+  0098 8:27 load 1 ; x
+  0099 8:31 const 0 ; 2
+  0100 8:29 multiply
+  0101 8:18 return
+  0102 32:24 load 1 ; x
+  0103 32:28 load 2 ; base
+  0104 32:26 add
+  0105 32:15 return
+  0106 33:42 load 1 ; p
+  0107 33:30 get-key "size"
+  0108 33:58 load 2 ; q
+  0109 33:46 get-key "size"
+  0110 33:44 less
+  0111 33:18 return
+  0112 34:13 load 1 ; (1)
+  0113 34:13 test-list 2 0126
+  0114 34:13 load 1 ; (1)
+  0115 34:13 list-item 1
+  0116 34:14 store 2 ; m
+  0117 34:13 load 1 ; (1)
+  0118 34:13 list-item 2
+  0119 34:17 store 3 ; n
+  0120 34:21 load 2 ; m
+  0121 34:25 load 3 ; n
+  0122 34:23 add
+  0123 34:29 load 4 ; k
+  0124 34:27 add
+  0125 34:7 return
+  0126 34:7 raise no match
+  0127 36:9 load 1 ; x
+  0128 36:9 load 2 ; base
+  0129 36:9 make-closure 10 2 ; lambdas:35:7:36:9
+  0130 36:5 store 3 ; inner
+  0131 37:12 load 3 ; inner
+  0132 37:18 load 1 ; x
+  0133 37:12 call-value 1
+  0134 37:5 return
+  0135 38:3 const 1 ; nothing
+  0136 38:3 return
+  0137 36:18 load 2 ; x
+  0138 36:22 load 1 ; y
+  0139 36:20 add
+  0140 36:26 load 3 ; base
+  0141 36:24 add
+  0142 36:9 return
+  0143 39:14 load 0 ; it
+  0144 39:7 return

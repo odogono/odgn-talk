@@ -9,6 +9,9 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Core normative lowering of checked Scripts and Libraries onto chapter 8's code units (constant pool, definitions, variables, objects, body table, code, Unwind Table and event table), with the canonical disassembly, generated instruction tables, a structural check of every lowered source against `machine.toml`, and explicit-stack passes for deep source, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+- Disassembly Cases under `corpus/disassembly/`, together emitting every instruction, and corpus runner support for running them and for `--bless`ing their expected files.
+
 - Core construct and Guard diagnostics: duplicate map keys, number literal limits, unknown kinds and impossible conversions, misplaced `ignoring case` and `delimited by`, Text Pattern Captures in repetitions and invalid `as number`, misplaced rests, partial-byte bit runs, Script `private` declarations and Guard calls, Lambdas and Host Object properties, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Core control-flow and body-context diagnostics: misplaced `exit repeat`/`next repeat`, transfers that leave `finally`, `pass` and `the target` inside Lambdas, `pass` naming another message, and invalid Handler suffix combinations, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Core read-only Constant and Lambda capture checks, bare-variable `set` diagnostics, named function argument contracts, default ordering and initializer/default reference checks with exact diagnostic positions and ordering, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).

@@ -1,0 +1,49 @@
+-- shapes.talk: Destructuring in each place a pattern goes: Handler Clauses
+-- and their Guards bind directly; `let`, `match` and `repeat for each` bind
+-- temps and move them once the whole pattern passes. Part of the
+-- destructuring case.
+
+on point [x, y] where x > 0
+  return x + y
+end point
+
+on point {kind: "polar", r, theta: t as angle}
+  return [r, t, angle]
+end point
+
+on point other
+  return other
+end point
+
+on unpack value, limit
+  let [a, b, ...rest] be value
+  let {name: n, age} be value
+  let [_, ...] be value
+  let <"ID-", id: 4 digits as number> be value
+  match value ignoring case
+    when "yes" then return 1
+    when ^limit then return 2
+    when [first, -5 kg] where first is a number and first > limit then return first
+    when contains <word, ": ", tail: text> then return tail
+    when {size: 3} as whole then return whole
+    else return 0
+  end match
+end unpack
+
+on walk pairs
+  repeat for each pair in pairs
+    say pair
+  end repeat
+  repeat for each [k, v] in pairs
+    say k & v
+  end repeat
+end walk
+
+on packets packet, n
+  match packet
+    when << 0x02, id: uint32, x: int16 little, _: uint8 >> then return [id, x]
+    when << "GET", hi: 4 bits, lo: 4 bits, size: uint8, body: size bytes, ... >> then return body
+    when << len: uint8, head: (len * 2) bytes as text, tag: ^n bytes, ...tail >> then return [head, tag, tail]
+    when << 0x01, ...text as text >> then return text
+  end match
+end packets

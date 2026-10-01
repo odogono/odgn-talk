@@ -1,0 +1,48 @@
+# messages-and-waiting: pins chapter 8's lowering of sends, Command Calls to
+# Handlers and up the Message Path, Capability calls, `say`, `wait`, the
+# one-line and block `wait for`, Joins, `veto` and `pass`. A `wait for`
+# entry's test body tests the event's patterns and Guard as one guard
+# region, captures the waiting body's locals it reads, and returns the
+# values its patterns bind, which the event table's `binds` puts in the
+# waiting body's slots. A body that holds a Suspension Point may suspend.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+
+[[operations]]
+capability = "prices"
+name = "lookup"
+mode = "suspending"
+args = ["any"]
+result = { unitKind = "GBP" }
+
+[[standard]]
+capability = "clock"
+costs = { now = { fuel = 1 } }
+
+[[standard]]
+capability = "console"
+costs = { write = { fuel = 1 } }
+
+[[scripts]]
+name = "waiter"
+source = "waiter.talk"
+grants = { log = { ops = ["write"] }, prices = { ops = ["lookup"] }, clock = { ops = ["now"] }, console = { ops = ["write"] } }
+objects = { warehouse = { kind = "store", id = "warehouse" } }
+
+[[scripts]]
+name = "pricing"
+source = "pricing.talk"
+
+[[disassembly]]
+unit = "waiter"
+expected = "waiter.dis"

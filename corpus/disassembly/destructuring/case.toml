@@ -1,0 +1,28 @@
+# destructuring: pins chapter 8's Destructuring and Handler Clauses lowering.
+# A clause's parameter patterns and Guard are one guard region that binds
+# each name in its own slot, ending in `clause-fail`. `let`, `match` and
+# `repeat for each` test a temp, bind each name to a temp of its own and
+# `move` them in binding order once the pattern and its Guard pass, so a
+# failed pattern binds nothing. A Guard reads the temps. `ignoring case` on
+# the subject adds `fold` to each test. Binary Patterns read fields in turn,
+# a run of bit fields binding last field first, and a later size reads an
+# earlier field's temp.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[standard]]
+capability = "console"
+costs = { write = { fuel = 1 } }
+
+[[scripts]]
+name = "shapes"
+source = "shapes.talk"
+grants = { console = { ops = ["write"] } }
+
+[[disassembly]]
+unit = "shapes"
+expected = "shapes.dis"

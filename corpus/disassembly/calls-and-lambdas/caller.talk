@@ -1,0 +1,41 @@
+-- caller.talk: each kind of call, named functions as values, and Lambdas
+-- with their captures. Part of the calls-and-lambdas case.
+
+use area, unit from shapes
+use map, sortBy from list
+use pad from text as widen
+
+constant scale = given x: x * 2
+
+function double x
+  return x * 2
+end double
+
+on greet name
+  return "hi " & name
+end greet
+
+on calls xs, f
+  put double(3) into a
+  put area(2) & area(2, 3, unit) & widen("x", 3) into b
+  put max(xs) & greet("Ann") into c
+  put f(1, 2) into d
+  f(3)
+  f(4) and wait
+  put [double, area, scale] into e
+  greet "Bob"
+  return [a, b, c, d, e]
+end calls
+
+on lambdas xs, k
+  put 10 into base
+  put map(xs, given x: x + base) into a
+  put sortBy(xs, given p, q: the size of p < the size of q) into b
+  put given [m, n]: m + n + k into pairSum
+  put given x
+    put given y: x + y + base into inner
+    return inner(x)
+  end given into nested
+  put given: it into self
+  return [a, b, pairSum, nested, self]
+end lambdas

@@ -1,0 +1,21 @@
+# errors-and-loops: pins chapter 8's lowering of `if`, the five `repeat`
+# forms, `exit repeat` and `next repeat`, `try`, `throw` and a Handler that
+# ends in `finally`. Each `try` has a `catch` entry for its body and a
+# `finally` entry for its body and catch handler. Every copy of a `finally`
+# block that a `return`, `exit repeat`, `next repeat` or the normal path
+# inlines lies outside those entries, so an entry its copies split is
+# several, in order. An entry's depth counts the loop iterators below it.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "flow"
+source = "flow.talk"
+
+[[disassembly]]
+unit = "flow"
+expected = "flow.dis"
