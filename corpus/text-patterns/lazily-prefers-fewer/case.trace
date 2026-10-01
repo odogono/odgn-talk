@@ -2,10 +2,10 @@
 # prefers to match less, and `<"<", text lazily, ">">` over "<a> <b>" gives
 # two matches, each ending at the first ">" it can (spec chapter 4,
 # Elements; chapter 8, Compiling). The greedy-by-default case is its pair.
-# The matches are pinned. Fuel, allocation and state are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# The matches are pinned. Its Fuel, allocation and state figures are Cost
+# Model 0's, as the TS Core blessed them.
 
-> load search
+> load search identity=8be578bce0b73d8fe0d29a6b33ff8990747e670c9d87faef9e5ad778d1788bc6
 
 # 24 steps over three searches: from 0, from 3, and from 7, the end.
 > deliver d1 to=search message=go

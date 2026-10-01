@@ -17,9 +17,8 @@
 # Pinned here: the fault's instruction, position and limit, and the Run's
 # allocation. The Fuel figure pins the reading that the faulting
 # instruction's charge isn't counted.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load grower
+> load grower identity=a71a2b92c1a8656dc35c2aa2d4fcfecf7be44deb12961b1e348e09c6447208f8
 
 > deliver d1 to=grower message=grow limits={allocPerRun: 100}
 > pump clock=2026-09-28T09:00:00Z

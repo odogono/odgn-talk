@@ -13,11 +13,10 @@
 # is 200033, and its allocation is size(result) = 16 + 8 * 100000 = 800016.
 # The second faults after 9 Fuel: `make-pattern` checks the size before its
 # charge, so an oversized pattern faults on `pattern` whatever Fuel is left,
-# and is never charged (chapter 8, Charging). Only the fault is pinned. The
-# figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# and is never charged (chapter 8, Charging). Its figures are Cost Model
+# 0's, as the TS Core blessed them.
 
-> load patterns
+> load patterns identity=1c536f68d5736d279f15ee8d4dc10a2dd7e2365619dd771744a6383219fbb2b3
 
 > deliver d1 to=patterns message=build args=[false]
 > pump clock=2026-09-28T09:00:00Z

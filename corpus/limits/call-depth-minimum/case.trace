@@ -7,14 +7,14 @@
 # 1001: `down(1)`, the 1000th frame, faults at its recursive call, the `call`
 # at deep:11, source 6:10, before `down(0)` is pushed.
 #
-# Fuel (deep.talk, estimated with `equal` at 2): `dive` is dispatch 4, load 1,
-# call 8, return 2; each `down` above 0 is 11 before its call, the call 8,
-# and 7 after; `down(0)` is 8. So `dive n` is 23 + 26n: 25971 for 998. The
-# faulting Run spends 13 + 998 * 19 + 11 = 18986. Allocation figures (16 for
-# each `subtract` and `add` result) and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Fuel (deep.talk, with `equal` at 2): `dive` is dispatch 4, load 1, call 8,
+# return 2; each `down` above 0 is 11 before its call, the call 8, and 7
+# after; `down(0)` is 8. So `dive n` is 23 + 26n: 25971 for 998. The
+# faulting Run spends 13 + 998 * 19 + 11 = 18986. Its allocation (16 for
+# each `subtract` and `add` result) and state figures are Cost Model 0's,
+# as the TS Core blessed them.
 
-> load deep
+> load deep identity=eb6b9272a112ebd0f69e73b39345bdb9fea92ab4ffaa935dd02f8b99ac001854
 
 > deliver d1 to=deep message=dive args=[998]
 > pump clock=2026-09-28T09:00:00Z
