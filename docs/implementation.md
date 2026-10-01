@@ -1,6 +1,6 @@
 # TS Core foundations
 
-These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values and parses source losslessly. It does not yet check, load or execute Scripts, so it is not a conforming Core.
+These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly and checks names and bindings. It does not yet perform every load check, load or execute Scripts, so it is not a conforming Core.
 
 ## Public values
 
@@ -36,7 +36,7 @@ if (result.error) {
 }
 ```
 
-`parseSource` accepts a complete Script or Library and returns either a typed concrete syntax tree or its first `ParseError`. Invalid scalar source throws `HostError("invalid value")` before parsing. The syntax tree is a Core front-end API; it is not an addition to the normative embedding declarations. Syntax checking here implements chapters 1 and 2; load-time checker diagnostics from `diagnostics.toml` follow in a later slice.
+`parseSource` accepts a complete Script or Library and returns either a typed concrete syntax tree or its first `ParseError`. Invalid scalar source throws `HostError("invalid value")` before parsing. The syntax tree is a Core front-end API; it is not an addition to the normative embedding declarations. Syntax checking here implements chapters 1 and 2; name and binding checks are described below.
 
 Each `SyntaxNode` identifies a recognition production with `rule`, ordered `children`, and half-open `start`/`end` spans. Its children are further nodes or `Token`s. A token retains its exact `raw` spelling, `pos`/`end`, initial lexical `mode`, and `leadingTrivia`. Trivia records preserve the initial BOM, spaces/tabs, comments and continued physical line breaks; statement-ending line breaks and EOF are tokens. Spans include leading trivia, and every source character belongs to exactly one token or trivia record. `syntaxText` reconstructs source by walking the tree, without requiring a separate source string. Offsets index the original TS string in UTF-16 code units; diagnostic `line` and `col` are 1-based Unicode scalar positions, with tabs counting as one column. Text literal content remains as written; the existing text value constructor performs pinned NFC when a literal becomes a value.
 
@@ -49,6 +49,38 @@ bun test tests/lexer.test.ts tests/parser.test.ts tests/syntax-fixtures.test.ts
 ```
 
 The generator copies the syntax lists from `grammar.toml` and Unit spellings from `units.toml` into browser-safe TS tables. The check reproduces those tables byte for byte and runs in CI, tests and builds. Core tests independently exercise authored first-error fixtures, every corpus Script, Standard Library, syntax sketch and `talk` documentation example. They also check every token/trivia span and exact source reconstruction. These parser checks do not establish execution, lowering or Trace conformance.
+
+## Semantic names and bindings
+
+```ts
+import { checkSource, checkSyntax, parseSource } from "@odgn/northtalk";
+
+const result = checkSource('on greet\n return later\n put 1 into later\nend greet');
+console.log(result.ok); // true: later starts as Nothing
+console.log(result.tree?.scopes); // unit and body bindings, including it
+
+const invalid = checkSource('on greet\n return absent\nend greet');
+console.log(invalid.diagnostics); // unknown name at line 2, column 9
+
+const parsed = parseSource('constant answer = 42');
+if (!parsed.error) checkSyntax(parsed.tree); // check an existing lossless tree
+```
+
+`checkSource` parses once and returns either the first syntax error, with no semantic tree or load diagnostics, or the semantic tree and ordered diagnostics. `checkSyntax` accepts an existing `SyntaxNode` without reconstructing or reparsing source. Both are front-end APIs, not additions to the embedding interface. `ok` means this name-resolution pass succeeded; later load checks and compilation are still required.
+
+The typed semantic tree retains grammar productions and operator/literal tokens for later lowering, omits trivia and empty productions, and replaces declaration, binding and reference tokens with `SemanticName` nodes. Every node has a half-open UTF-16 source span and a 1-based scalar start position. Name nodes identify their role and resolved `Binding`; body nodes identify their scope. Scopes expose parameters, locals (including `it`), and Lambda captures in first-use order. Local bindings record their Nothing initialization. The input lossless tree remains unchanged. Conversion and traversal use explicit work stacks, including for deeply nested expressions.
+
+The checker collects unit declarations, parameters, destructuring/Capture bindings and Container roots before resolving value references and calls. Locals cover the whole body; branches, loops, `catch` and event branches add no scopes. Lambda scopes capture enclosing locals, including those needed by nested Lambdas; Script Variables remain live unit bindings. Built-ins may be shadowed, Script/Library function names are values, and Handler/Built-in function names require a call. Command Calls resolve local/imported Handlers or continue along the Message Path. Message, property, map-key, kind, Grant and Operation positions do not undergo value-name lookup. Binary Pattern bare sizes require a completed earlier field binding, while pins resolve body names.
+
+Implemented diagnostics are `unknown name`, `not a value`, `name clash`, `duplicate name`, and direct `unknown import` checks. Duplicate checks cover parameter lists, destructuring and Text Pattern Captures; rebinding a local in a separate pattern is valid. Diagnostics use the token positions and tie ordering from `diagnostics.toml`, with one diagnostic of a code per offending token. Import clashes point to the local name in the `use` line, including a rename. The browser-safe tables include diagnostic order, Built-ins and Standard Library export kinds, generated from the Spec Data Files.
+
+Pass `{ objects: ['button'], libraries: { helpers: { double: 'function' } } }` to either checker to supply well-known Host Object names and registered Library export kinds (`function`, `handler` or `constant`). Standard Library export kinds are known by default; a supplied entry overrides one Library's exports. This metadata only resolves names: Library graph/cycle checks, Grants, constant evaluation, read-only writes, argument counts, kinds, effects and control-flow diagnostics remain for subsequent slices. No load or execution success is implied.
+
+```sh
+bun test tests/checker.test.ts
+```
+
+Core tests check exact authored codes, scalar positions, diagnostic ordering, bindings and capture identities, all binding forms, and deep input. The browser smoke test also exercises name resolution with platform Unicode functions disabled.
 
 ## Generated Unicode tables
 
@@ -87,4 +119,4 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining step 1 work
 
-The checker and load diagnostics, normative lowering and disassembly, executable Abstract Machine, Built-ins and expressions/statements, Cost Model 0 Fuel/allocation, remaining value kinds, Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.
+The remaining checker diagnostics, normative lowering and disassembly, executable Abstract Machine, Built-ins and expressions/statements, Cost Model 0 Fuel/allocation, remaining value kinds, Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.

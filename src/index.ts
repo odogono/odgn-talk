@@ -17,6 +17,28 @@ export { readDisplay, decodeValue } from './readers';
 export { Lexer, type Mode, type Token, type TokType } from './lexer';
 export { parseSource, ParseError, type ParseResult } from './parser';
 export {
+  checkSource,
+  checkSyntax,
+  type CheckResult,
+  type SemanticResult,
+  type CheckOptions,
+  type Diagnostic,
+  type DiagnosticCode,
+} from './checker';
+export type {
+  Binding,
+  BindingKind,
+  ExportKind,
+  NameRole,
+  SemanticElement,
+  SemanticName,
+  SemanticNode,
+  SemanticScope,
+  SemanticToken,
+  SemanticTree,
+  SourceSpan,
+} from './semantic';
+export {
   syntaxText,
   type SyntaxNode,
   type SyntaxElement,

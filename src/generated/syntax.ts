@@ -350,3 +350,561 @@ export const units = [
     "calendar": false
   }
 ];
+export const diagnosticCodes = [
+  "unknown name",
+  "not a value",
+  "name clash",
+  "duplicate name",
+  "duplicate key",
+  "unknown kind",
+  "no conversion",
+  "bad number",
+  "pattern too large",
+  "wrong argument count",
+  "wrong argument",
+  "unknown operation",
+  "wrong mode",
+  "missing and wait",
+  "needless and wait",
+  "can't suspend here",
+  "unknown import",
+  "import cycle",
+  "missing grant",
+  "not in a library",
+  "not in a script",
+  "not in a lambda",
+  "not in a guard",
+  "not in a join",
+  "empty join",
+  "leaves finally",
+  "outside a loop",
+  "veto outside a decision",
+  "after a suspension",
+  "wrong message",
+  "bad suffixes",
+  "can't write",
+  "not a property",
+  "not constant",
+  "default order",
+  "initialiser failed",
+  "nothing to fold",
+  "no item chunk",
+  "capture in repetition",
+  "rest not last",
+  "bits not whole bytes"
+] as const;
+export const builtins = [
+  {
+    "name": "min",
+    "kind": "function"
+  },
+  {
+    "name": "max",
+    "kind": "function"
+  },
+  {
+    "name": "codePoint",
+    "kind": "function"
+  },
+  {
+    "name": "fromCodePoint",
+    "kind": "function"
+  },
+  {
+    "name": "upper",
+    "kind": "function"
+  },
+  {
+    "name": "lower",
+    "kind": "function"
+  },
+  {
+    "name": "offset",
+    "kind": "function"
+  },
+  {
+    "name": "isDisposed",
+    "kind": "function"
+  },
+  {
+    "name": "rangeStart",
+    "kind": "function"
+  },
+  {
+    "name": "rangeEnd",
+    "kind": "function"
+  },
+  {
+    "name": "abs",
+    "kind": "function"
+  },
+  {
+    "name": "floor",
+    "kind": "function"
+  },
+  {
+    "name": "ceiling",
+    "kind": "function"
+  },
+  {
+    "name": "truncate",
+    "kind": "function"
+  },
+  {
+    "name": "round",
+    "kind": "function"
+  },
+  {
+    "name": "sqrt",
+    "kind": "function"
+  },
+  {
+    "name": "exp",
+    "kind": "function"
+  },
+  {
+    "name": "ln",
+    "kind": "function"
+  },
+  {
+    "name": "log10",
+    "kind": "function"
+  },
+  {
+    "name": "power",
+    "kind": "function"
+  },
+  {
+    "name": "sin",
+    "kind": "function"
+  },
+  {
+    "name": "cos",
+    "kind": "function"
+  },
+  {
+    "name": "tan",
+    "kind": "function"
+  },
+  {
+    "name": "asin",
+    "kind": "function"
+  },
+  {
+    "name": "acos",
+    "kind": "function"
+  },
+  {
+    "name": "atan",
+    "kind": "function"
+  },
+  {
+    "name": "atan2",
+    "kind": "function"
+  },
+  {
+    "name": "fromFloat64",
+    "kind": "function"
+  },
+  {
+    "name": "fromFloat32",
+    "kind": "function"
+  },
+  {
+    "name": "toFloat64",
+    "kind": "function"
+  },
+  {
+    "name": "toFloat32",
+    "kind": "function"
+  },
+  {
+    "name": "year",
+    "kind": "function"
+  },
+  {
+    "name": "month",
+    "kind": "function"
+  },
+  {
+    "name": "day",
+    "kind": "function"
+  },
+  {
+    "name": "hour",
+    "kind": "function"
+  },
+  {
+    "name": "minute",
+    "kind": "function"
+  },
+  {
+    "name": "second",
+    "kind": "function"
+  },
+  {
+    "name": "nanosecond",
+    "kind": "function"
+  },
+  {
+    "name": "weekday",
+    "kind": "function"
+  },
+  {
+    "name": "dayOfYear",
+    "kind": "function"
+  },
+  {
+    "name": "isoWeek",
+    "kind": "function"
+  },
+  {
+    "name": "isoWeekYear",
+    "kind": "function"
+  },
+  {
+    "name": "hasTime",
+    "kind": "function"
+  },
+  {
+    "name": "toCivil",
+    "kind": "function"
+  },
+  {
+    "name": "toInstant",
+    "kind": "function"
+  },
+  {
+    "name": "pi",
+    "kind": "constant"
+  },
+  {
+    "name": "newline",
+    "kind": "constant"
+  },
+  {
+    "name": "tab",
+    "kind": "constant"
+  },
+  {
+    "name": "quote",
+    "kind": "constant"
+  }
+] as const;
+export const libraryExports = [
+  {
+    "library": "text",
+    "name": "pad",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "padLeft",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "trim",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "trimStart",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "trimEnd",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "split",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "join",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "repeated",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "lastOffset",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "format",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "formatNumber",
+    "kind": "function"
+  },
+  {
+    "library": "text",
+    "name": "parseNumber",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "sum",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "average",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "zip",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "unique",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "reverse",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "flatten",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "sort",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "sortBy",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "sortWith",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "filter",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "map",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "reduce",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "group",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "partition",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "any",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "all",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "find",
+    "kind": "function"
+  },
+  {
+    "library": "list",
+    "name": "indexOf",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "merge",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "without",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "pick",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "entries",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "fromEntries",
+    "kind": "function"
+  },
+  {
+    "library": "map",
+    "name": "mapValues",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "toHex",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "fromHex",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "toBase64",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "fromBase64",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "toBase64Url",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "fromBase64Url",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "decodeText",
+    "kind": "function"
+  },
+  {
+    "library": "bytes",
+    "name": "encodeText",
+    "kind": "function"
+  },
+  {
+    "library": "json",
+    "name": "decodeJson",
+    "kind": "function"
+  },
+  {
+    "library": "json",
+    "name": "encodeJson",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "makeDate",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "makeDateTime",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "atTime",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "dateOnly",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "daysInMonth",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "isLeapYear",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "formatDate",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "parseDate",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "splitDuration",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "monthsBetween",
+    "kind": "function"
+  },
+  {
+    "library": "date",
+    "name": "epoch",
+    "kind": "constant"
+  },
+  {
+    "library": "units",
+    "name": "celsiusToFahrenheit",
+    "kind": "function"
+  },
+  {
+    "library": "units",
+    "name": "fahrenheitToCelsius",
+    "kind": "function"
+  },
+  {
+    "library": "units",
+    "name": "celsiusToKelvin",
+    "kind": "function"
+  },
+  {
+    "library": "units",
+    "name": "kelvinToCelsius",
+    "kind": "function"
+  },
+  {
+    "library": "units",
+    "name": "fahrenheitToKelvin",
+    "kind": "function"
+  },
+  {
+    "library": "units",
+    "name": "kelvinToFahrenheit",
+    "kind": "function"
+  }
+] as const;
