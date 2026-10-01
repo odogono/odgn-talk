@@ -8,8 +8,10 @@ import {
   parseSource,
   syntaxText,
   type SemanticElement,
+  type DiagnosticCode,
   type SemanticName,
 } from '../src';
+import { kindNames, unconvertibleKinds } from '../src/constructs';
 
 const names = (tree: SemanticElement): SemanticName[] => {
   const result: SemanticName[] = [];
@@ -349,6 +351,7 @@ describe('Core name resolution', () => {
     for (const path of new Bun.Glob('*.talk').scanSync({ cwd: directory })) {
       const result = checkSource(
         readFileSync(resolve(directory, path), 'utf8'),
+        { unit: 'library' },
       );
       expect(result.error).toBeNull();
       expect(result.diagnostics).toEqual([]);
@@ -763,5 +766,278 @@ describe('Core control-flow and body-context checks', () => {
     expect(
       result.diagnostics.find(({ code }) => code === 'not in a lambda')!.span,
     ).toEqual({ start: the, end: the + 3, line: 4, col: 13 });
+  });
+});
+
+/** The 1-based line and scalar column of the nth occurrence of `needle`. */
+const at = (source: string, needle: string, nth = 1): [number, number] => {
+  let offset = -1;
+  for (let count = 0; count < nth; count++) {
+    offset = source.indexOf(needle, offset + 1);
+  }
+  expect(offset).toBeGreaterThanOrEqual(0);
+  const lines = source.slice(0, offset).split(/\r\n|\r|\n/);
+  return [lines.length, [...lines.at(-1)!].length + 1];
+};
+type Expected = [DiagnosticCode, string, number?];
+const expectAt = (source: string, expected: Expected[], options = {}) => {
+  const result = checkSource(source, options);
+  expect(result.error).toBeNull();
+  expect(
+    result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+  ).toEqual(
+    expected.map(([code, needle, nth]) => [code, ...at(source, needle, nth)]),
+  );
+};
+
+/** One `as number` after 3000 nested Text Patterns around `atom`. */
+const nested = (atom: string) =>
+  `on t\n put < ${'< '.repeat(3000)}${atom}${'>'.repeat(3000)} as number> into a\nend t`;
+
+describe('Core construct and Guard checks', () => {
+  test('map literals report the second of two equal keys after NFC', () => {
+    expectAt(
+      'on t\n put {a: 1, "a": 2, b: 3, "\u00e9": 4, "e\u0301": 5, b: 6} into m\n let {a: x, a: y} be m\nend t',
+      [
+        ['duplicate key', '"a"'],
+        ['duplicate key', '"e\u0301"'],
+        ['duplicate key', 'b: 6'],
+      ],
+    );
+  });
+
+  test('number literals beyond the limits report the literal, in patterns and builds too', () => {
+    const fraction = `0.${'0'.repeat(6176)}`;
+    expect(
+      diagnostics(
+        `on t\n put ${'9'.repeat(34)} + 0.${'1'.repeat(34)} + ${fraction} + 0x1ed09bead87c0378d8e63ffffffff + 0x000${'f'.repeat(28)} into a\nend t`,
+      ),
+    ).toEqual([]);
+    const bad = [
+      '1'.repeat(35),
+      `1${'0'.repeat(34)}`,
+      `1.${'0'.repeat(34)}`,
+      `0.${'0'.repeat(6177)}`,
+      `0x${'f'.repeat(29)}`,
+      '0x1ed09bead87c0378d8e6400000000',
+    ];
+    for (const literal of bad) {
+      expect(diagnostics(`on t\n put ${literal} into a\nend t`)).toEqual([
+        ['bad number', 2, 6],
+      ]);
+    }
+    const long = '1'.repeat(35);
+    expectAt(
+      `on t x\n match x\n  when -${long} then put 1 into y\n end match\n put <<${long}>> & <${long} "a"> into z\nend t`,
+      [
+        ['bad number', long, 1],
+        ['bad number', long, 2],
+        ['bad number', long, 3],
+      ],
+    );
+  });
+
+  test('kind tests and conversions accept chapter 3 kinds, integer tests and Units', () => {
+    expect(
+      diagnostics(
+        'on t x\n put [x is a number, x is not an integer, x is a civil date, x is a function, x can be a kg, x can be km, x can be a text, x can be a list] into a\n put x as text as bytes as civil date as instant as number as kg as km/hr into b\nend t',
+      ),
+    ).toEqual([]);
+  });
+
+  test('unknown kinds report the kind name, and `as` with no conversion reports `as`', () => {
+    const source =
+      'on t x\n put [x is a length, x is a kg, x can be integer, x can be a widget] into a\n put x as integer into b\n put x as list as map into c\nend t';
+    expectAt(source, [
+      ['unknown kind', 'length'],
+      ['unknown kind', 'kg'],
+      ['unknown kind', 'integer'],
+      ['unknown kind', 'widget'],
+      ['unknown kind', 'integer', 2],
+      ['no conversion', 'as list'],
+      ['no conversion', 'as map'],
+    ]);
+    // `nothing` is reserved, so `as nothing` is already a syntax error.
+    for (const kind of [...unconvertibleKinds].filter(
+      kind => kind !== 'nothing',
+    )) {
+      expect(diagnostics(`on t x\n put x as ${kind} into b\nend t`)).toEqual([
+        ['no conversion', 2, 8],
+      ]);
+    }
+  });
+
+  test('chapter 3 kind tables match the checker', () => {
+    const chapter = readFileSync(
+      resolve(import.meta.dir, '../spec/03-values.md'),
+      'utf8',
+    );
+    const kinds = chapter
+      .slice(chapter.indexOf('## Kinds'), chapter.indexOf('- **Kind names:**'))
+      .matchAll(/^\| `([ a-z]+)` \|/gm);
+    expect(new Set([...kinds].map(match => match[1]))).toEqual(
+      new Set(kindNames),
+    );
+    const unconvertible = chapter.match(
+      /\*\*Kinds with no conversion:\*\* `as` with any other kind name \(([^)]*)\)/,
+    )![1]!;
+    expect(
+      new Set([...unconvertible.matchAll(/`([ a-z]+)`/g)].map(m => m[1])),
+    ).toEqual(new Set(unconvertibleKinds));
+  });
+
+  test('ignoring case after kind and emptiness tests has nothing to fold', () => {
+    expectAt(
+      'on t x\n put [x is a text ignoring case, x is not empty ignoring case, x can be a number ignoring case, x is "A" ignoring case, x is in ["a"] ignoring case, x contains "a" ignoring case] into a\nend t',
+      [
+        ['nothing to fold', 'ignoring', 1],
+        ['nothing to fold', 'ignoring', 2],
+        ['nothing to fold', 'ignoring', 3],
+      ],
+    );
+  });
+
+  test('delimited by needs an item chunk or the items property in its chain', () => {
+    expect(
+      diagnostics(
+        'on t s\n put [item 2 of s delimited by ";", word 1 of item 2 of s delimited by ";", items 1..2 of line 1 of s delimited by ";", the last item of s delimited by ";", the items of s delimited by ";", s\'s items delimited by ";", the first word of item 3 of s delimited by ";"] into a\nend t',
+      ),
+    ).toEqual([]);
+    expectAt(
+      'on t s\n put [word 1 of s delimited by ";", the lines of s delimited by ";", the first word of s delimited by ";", line 1 of word 2 of s delimited by ";", s\'s lines delimited by ";", the code points of s delimited by ";"] into a\nend t',
+      [1, 2, 3, 4, 5, 6].map(
+        nth => ['no item chunk', 'delimited', nth] as Expected,
+      ),
+    );
+  });
+
+  test('Text Pattern Captures inside any repetition report the Capture name', () => {
+    expectAt(
+      'on t s\n put [<n: digit, rest: text>, <one or more of <a: digit>>, <zero or more of <<b: digit>>>, <optional <c: "x" or d: "y">>, <3 <e: letter>>, <2 <f: <g: digit>>>] into a\nend t',
+      [
+        ['capture in repetition', 'a:'],
+        ['capture in repetition', 'b:'],
+        ['capture in repetition', 'c:'],
+        ['capture in repetition', 'd:'],
+        ['capture in repetition', 'e:'],
+        ['capture in repetition', 'f:'],
+        ['capture in repetition', 'g:'],
+      ],
+    );
+  });
+
+  test('a Text Pattern spliced inside a repetition is checked as its own pattern', () => {
+    expect(
+      diagnostics('on t\n put <one or more of (<n: digit>)> into a\nend t'),
+    ).toEqual([]);
+  });
+
+  test('Typed Elements allow only a number', () => {
+    expectAt('on t\n put <a number, an text, a date> into a\nend t', [
+      ['unknown kind', 'text'],
+      ['unknown kind', 'date'],
+    ]);
+  });
+
+  test('Text Pattern as number needs an element that matches only ASCII digits', () => {
+    expect(
+      diagnostics(
+        'on t\n put <a number as number, digits as number, digit as number, "42" as number, one or more of digit as number, 4 digits as number, <digit, optional digit> as number, n: digits as number, <"1" or "2"> as number, digits lazily as number> into a\nend t',
+      ),
+    ).toEqual([]);
+    expectAt(
+      'on t\n put <letters as number, "4a" as number, "" as number, optional digit as number, zero or more of digit as number, 0 digit as number, <text start> as number, ("1") as number, <"1" or "x"> as number, <a number, digit> as number, digits as text, digits as widget> into a\nend t',
+      [
+        ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(
+          nth => ['no conversion', 'as ', nth] as Expected,
+        ),
+        ['unknown kind', 'widget'],
+      ],
+    );
+  });
+
+  test('as number checks deeply nested Text Patterns without recursion', () => {
+    expect(diagnostics(nested('digit'))).toEqual([]);
+    expectAt(nested('letter'), [['no conversion', 'as number']]);
+  });
+
+  test('a rest that is not last reports its `...`', () => {
+    expectAt(
+      'on t v\n match v\n  when [a, ...] then put 1 into x\n  when [..., b] then put 1 into x\n  when [...r, c, ...s] then put 1 into x\n  when <<..., d: uint8>> then put 1 into x\n  when <<e: uint8, ...f as text>> then put 1 into x\n end match\n put [...v, 1] into y\nend t',
+      [
+        ['rest not last', '..., b'],
+        ['rest not last', '...r'],
+        ['rest not last', '..., d'],
+      ],
+    );
+  });
+
+  test('each run of bit fields adds up to whole bytes, reported at its first field', () => {
+    expectAt(
+      'on t v\n match v\n  when <<a: 4 bits, b: 4 bits, c: uint8, d: 1 bit, e: 7 bits>> then put 1 into x\n  when <<f: 3 bits, g: uint8, h: 5 bits>> then put 1 into x\n  when <<_: 9 bits, i: 1 byte, j: 2 bits, k: 6 bit, l: 1 bits>> then put 1 into x\n end match\n put <<1 as 4 bits, 2 as 4 bits, 6 as uint8, 30 as 3 bits, 4 as uint8, 50 as 5 bits>> into y\nend t',
+      [
+        ['bits not whole bytes', 'f:'],
+        ['bits not whole bytes', 'h:'],
+        ['bits not whole bytes', '_:'],
+        ['bits not whole bytes', 'j:'],
+        ['bits not whole bytes', '30'],
+        ['bits not whole bytes', '50'],
+      ],
+    );
+  });
+
+  test('private starts a declaration only in a Library', () => {
+    const source =
+      'private function f\nend f\nprivate constant c = 1\nprivate on h\nend h';
+    expect(diagnostics(source)).toEqual([
+      ['not in a script', 1, 1],
+      ['not in a script', 3, 1],
+      ['not in a script', 4, 1],
+    ]);
+    expect(checkSource(source, { unit: 'library' }).diagnostics).toEqual([]);
+  });
+
+  test('Guards may call Built-ins and read locals, ids, keys and Built-in properties', () => {
+    const result = checkSource(
+      "script variable limit = 3\non t x where abs(x) > limit and x's count < power(1, 2) and me's id = the id of button and the length of me = 0 and the target = button\n match x\n  when [a] where a is in the keys of x then put 1 into y\n end match\nend t",
+      { objects: ['button'] },
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  test('Guards reject non-Built-in calls, Lambdas and Host Object properties other than id', () => {
+    const source =
+      'function f x\n return x\nend f\non t x where f(x) and abs(x) > 0\n try\n  put 1 into y\n catch e where abs(given v: v) or the name of me = "a"\n  put 2 into y\n end try\n match x\n  when n where button\'s label = n or the "label" of the target = n or the "id" of button = n then put 3 into y\n end match\nend t\non u upper where upper(1)\nend u';
+    expectAt(
+      source,
+      [
+        ['not in a guard', 'f(x)'],
+        ['not in a guard', 'given'],
+        ['not in a guard', 'the name'],
+        ['not in a guard', "'s label"],
+        ['not in a guard', 'the "label"'],
+        ['not in a guard', 'upper(1)'],
+      ],
+      { objects: ['button'] },
+    );
+  });
+
+  test('construct diagnostics keep scalar columns, UTF-16 spans and catalogue order', () => {
+    const source = `private on t\r\n\tput ["😀", {a: 1, a: 2}, x as list, 1${'0'.repeat(34)}] into y\r\nend t`;
+    const result = checkSource(source);
+    expect(result.error).toBeNull();
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([
+      ['not in a script', 1, 1],
+      ['duplicate key', 2, 19],
+      ['unknown name', 2, 26],
+      ['no conversion', 2, 28],
+      ['bad number', 2, 37],
+    ]);
+    const key = source.indexOf('a: 2');
+    expect(
+      result.diagnostics.find(({ code }) => code === 'duplicate key')!.span,
+    ).toEqual({ start: key, end: key + 1, line: 2, col: 19 });
   });
 });

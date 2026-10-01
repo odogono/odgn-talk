@@ -1,16 +1,14 @@
 import type { DiagnosticCode } from './checker';
+import { grammar } from './generated/syntax';
 import type {
   SemanticElement,
+  SemanticName,
   SemanticNode,
   SemanticToken,
-  SourceSpan,
 } from './semantic';
 
-export type ControlDiagnostic = {
-  code: DiagnosticCode;
-  span: SourceSpan;
-  text: string;
-};
+type Leaf = SemanticName | SemanticToken;
+export type Report = (code: DiagnosticCode, at: Leaf) => void;
 type Context = {
   /** The loop depth at the innermost enclosing `finally` block, if any. */
   finally: number | null;
@@ -50,10 +48,7 @@ const messageName = (node: SemanticNode | undefined) => {
 const checkSuffixes = (
   handler: SemanticNode,
   message: string | null,
-  report: (
-    code: DiagnosticCode,
-    at: SemanticElement & { text: string },
-  ) => void,
+  report: Report,
 ) => {
   const seen = new Set<string>();
   const { children } = handler;
@@ -83,19 +78,99 @@ const checkSuffixes = (
   }
 };
 
+const properties = new Set(grammar.properties);
+const leaves = (node: SemanticNode) =>
+  node.children.filter((child): child is Leaf => child.kind !== 'node');
+const keyText = (key: SemanticNode) =>
+  leaves(key)
+    .map(leaf => leaf.text)
+    .join(' ');
+/** Descend through single-child productions to the construct they wrap. */
+const unwrap = (node: SemanticNode): SemanticNode => {
+  while (node.children.length === 1 && node.children[0]!.kind === 'node') {
+    node = node.children[0] as SemanticNode;
+  }
+  return node;
+};
+/** `me`, `the target` and well-known object names are Host Objects known at load. */
+const isHostObject = (element: SemanticElement | undefined) => {
+  if (element?.kind !== 'node') {
+    return false;
+  }
+  const base = unwrap(element);
+  const [head, next, ...rest] = base.children;
+  if (base.rule === 'The') {
+    return word(head, 'the') && word(next, 'target') && !rest.length;
+  }
+  return (
+    base.rule === 'Primary' &&
+    !next &&
+    (word(head, 'me') ||
+      (head?.kind === 'name' && head.binding?.kind === 'object'))
+  );
+};
+/** A Host Object key read calls the Host, unless it is `id` or a Built-in property. */
+const hostKey = (key: string) => key !== 'id' && !properties.has(key);
+
+/** A Guard may call only Built-ins, holds no Lambda and reads no Host property but `id`. */
+const checkGuard = (guard: SemanticNode, report: Report) => {
+  const work = [guard];
+  while (work.length) {
+    const node = work.pop()!;
+    const [head] = node.children;
+    if (node.rule === 'Lambda') {
+      report('not in a guard', head as Leaf);
+      continue;
+    }
+    if (
+      node.rule === 'Call' &&
+      head?.kind === 'name' &&
+      head.binding?.kind !== 'builtin function'
+    ) {
+      report('not in a guard', head);
+    }
+    if (node.rule === 'The' && isHostObject(node.children.at(-1))) {
+      const key = node.children.find(
+        (child): child is SemanticNode =>
+          child.kind === 'node' && child.rule === 'Key',
+      );
+      const literal = node.children[1];
+      if (
+        (key && hostKey(keyText(key))) ||
+        (literal?.kind === 'token' &&
+          literal.type === 'str' &&
+          literal.text !== 'id')
+      ) {
+        report('not in a guard', head as Leaf);
+      }
+    }
+    if (node.rule === 'Postfix' && isHostObject(head)) {
+      // Only the first key reads the object; later keys read its result.
+      const [, apostrophe, key] = node.children;
+      if (key?.kind === 'node' && hostKey(keyText(key))) {
+        report('not in a guard', apostrophe as Leaf);
+      }
+    }
+    for (let index = node.children.length - 1; index >= 0; index--) {
+      const child = node.children[index]!;
+      if (child.kind === 'node') {
+        work.push(child);
+      }
+    }
+  }
+};
+
 /**
- * Check where control-flow statements, `pass`, `the target` and Handler
- * suffixes may appear. Each Handler, function and Lambda body starts afresh:
- * a Lambda's `return` leaves only the Lambda, and its loops are its own.
+ * Check where control-flow statements, `pass`, `the target`, `private`,
+ * Guard contents and Handler suffixes may appear. Each Handler, function and
+ * Lambda body starts afresh: a Lambda's `return` leaves only the Lambda, and
+ * its loops are its own.
  */
 export const checkControl = (
   root: SemanticNode,
-): readonly ControlDiagnostic[] => {
-  const diagnostics: ControlDiagnostic[] = [];
-  const report = (
-    code: DiagnosticCode,
-    at: SemanticElement & { text: string },
-  ) => diagnostics.push({ code, span: at.span, text: at.text });
+  unit: 'script' | 'library',
+  report: Report,
+) => {
   const work: { context: Context; node: SemanticNode }[] = [
     { node: root, context: outside },
   ];
@@ -104,6 +179,13 @@ export const checkControl = (
     const { node } = current;
     let { context } = current;
     switch (node.rule) {
+      case 'Declaration': {
+        const [head] = node.children;
+        if (unit === 'script' && word(head, 'private')) {
+          report('not in a script', head);
+        }
+        break;
+      }
       case 'Handler': {
         const message = messageName(childNode(node, 'MessageName'))?.text;
         context = { ...outside, message: message ?? null };
@@ -174,6 +256,9 @@ export const checkControl = (
     for (let index = children.length - 1; index >= 0; index--) {
       const child = children[index]!;
       if (child.kind === 'node') {
+        if (child.rule === 'Expression' && word(children[index - 1], 'where')) {
+          checkGuard(child, report);
+        }
         // A `finally` block's own loops may still be left by `exit repeat`.
         const cleanup = word(children[index - 1], 'finally');
         work.push({
@@ -183,5 +268,4 @@ export const checkControl = (
       }
     }
   }
-  return diagnostics;
 };

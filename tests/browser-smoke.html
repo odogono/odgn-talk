@@ -56,7 +56,12 @@
       ["bad suffixes", 1, 15], ["outside a loop", 2, 2], ["not in a lambda", 3, 13],
       ["leaves finally", 5, 2], ["wrong message", 5, 7]
     ]), "Control-flow and body-context diagnostics");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts and control-flow checks in a browser";
+    const constructs = talk.checkSource('private on t x where f(x)\n put [{a: 1, "a": 2}, x as list, <optional <n: digit>>, <<1 as 3 bits>>] into y\nend t');
+    assert(JSON.stringify(constructs.diagnostics.map(({ code, span }) => [code, span.line, span.col])) === JSON.stringify([
+      ["not in a script", 1, 1], ["unknown name", 1, 22], ["not in a guard", 1, 22], ["duplicate key", 2, 14],
+      ["no conversion", 2, 25], ["capture in repetition", 2, 45], ["bits not whole bytes", 2, 59]
+    ]), "Construct and Guard diagnostics");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
