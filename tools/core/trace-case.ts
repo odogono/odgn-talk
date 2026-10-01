@@ -8,6 +8,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   compileLibrary,
+  defineCapability,
+  shape,
+  ScriptError,
+  type FieldShape,
+  type Grant,
+  type Operation,
+  type Shape,
   HostError,
   LoadError,
   type Library,
@@ -15,6 +22,8 @@ import {
   NotImplementedError,
   parseInstant,
   readDisplay,
+  map,
+  nothing,
   type Limits,
   type Value,
 } from '../../src/index';
@@ -104,10 +113,37 @@ const same = (expected: string, actual: string): boolean => {
   return [...e.fields.keys()].every(key => a.fields.has(key));
 };
 
+type ShapeSpec =
+  | string
+  | { quantity: string }
+  | { unitKind: string }
+  | { list: ShapeSpec }
+  | { object: string }
+  | { oneOf: ShapeSpec[] }
+  | { optional: ShapeSpec }
+  | {
+      map: { key: string; optional?: boolean; shape: ShapeSpec }[];
+      open?: boolean;
+    };
+type OperationSpec = {
+  args?: ShapeSpec[];
+  capability: string;
+  cost?: { alloc?: number; fuel?: number };
+  errors?: {
+    code: string;
+    fields?: { key: string; optional?: boolean; shape: ShapeSpec }[];
+  }[];
+  maxPending?: number;
+  mode: 'immediate' | 'suspending' | 'fire-and-forget';
+  name: string;
+  result?: ShapeSpec;
+};
 type Setup = {
   libraries?: { name: string; source: string; version: string }[];
+  operations?: OperationSpec[];
   scripts?: {
-    grants?: unknown;
+    grants?: Record<string, { capability?: string; ops: string[] | 'all' }>;
+    grantsAsUsed?: boolean;
     limits?: Partial<Limits>;
     name: string;
     objects?: Record<string, unknown>;
@@ -126,6 +162,151 @@ const read = (text: string): Value => {
     );
   }
 };
+const kinds: Record<string, Shape> = {
+  any: shape.any,
+  nothing: shape.nothing,
+  boolean: shape.bool,
+  number: shape.number,
+  text: shape.text,
+  bytes: shape.bytes,
+  instant: shape.instant,
+  'civil date': shape.civilDate,
+  range: shape.range,
+  pattern: shape.pattern,
+  function: shape.function,
+};
+// A Shape as case.toml writes it (chapter 11, The setup).
+const shapeOf = (s: ShapeSpec): Shape => {
+  if (typeof s === 'string') {
+    const k = kinds[s];
+    if (!k) {
+      throw new Error(`Unknown Shape ${s}`);
+    }
+    return k;
+  }
+  if ('quantity' in s) {
+    return shape.quantityOf(s.quantity);
+  }
+  if ('unitKind' in s) {
+    return shape.quantityKind(s.unitKind);
+  }
+  if ('list' in s) {
+    return shape.listOf(shapeOf(s.list));
+  }
+  if ('oneOf' in s) {
+    return shape.oneOf(...s.oneOf.map(shapeOf));
+  }
+  if ('optional' in s) {
+    return shape.optional(shapeOf(s.optional));
+  }
+  if ('map' in s) {
+    const fields: Record<string, FieldShape> = Object.fromEntries(
+      s.map.map(f => [
+        f.key,
+        f.optional
+          ? { shape: shapeOf(f.shape), optional: true as const }
+          : shapeOf(f.shape),
+      ]),
+    );
+    return s.open ? shape.openMap(fields) : shape.map(fields);
+  }
+  throw new DeferredCaseError('Host Objects');
+};
+
+type Stub = { charge: number; error?: Value; value?: Value };
+// The next Stub for an Operation: its value or its failure, after its charge.
+const takeStub = (
+  stubs: Map<string, Stub[]>,
+  key: string,
+  call: { charge(fuel: number): void },
+  needed: boolean,
+): Value => {
+  const stub = stubs.get(key)?.shift();
+  if (!stub) {
+    if (needed) {
+      throw new Error(`No Stub for ${key}`);
+    }
+    return nothing;
+  }
+  if (stub.charge) {
+    call.charge(stub.charge);
+  }
+  if (stub.error) {
+    const entries = stub.error.entries();
+    if (!entries.length) {
+      throw new Error(`The Stub for ${key} fails`);
+    }
+    const code = stub.error.get('code').asText() ?? '';
+    const message = stub.error.get('message').asText() ?? '';
+    throw new ScriptError(
+      code,
+      message,
+      map(entries.filter(([k]) => k !== 'code' && k !== 'message')),
+    );
+  }
+  return stub.value ?? nothing;
+};
+
+// The runner's Host functions (chapter 11, Stubs): an immediate call takes
+// the next Stub for its Operation, and a fire-and-forget one takes one if
+// there is one.
+const capabilitiesOf = (
+  setup: Setup,
+  stubs: Map<string, Stub[]>,
+): Map<string, ReturnType<typeof defineCapability>> => {
+  const byCapability = new Map<string, OperationSpec[]>();
+  for (const op of setup.operations ?? []) {
+    byCapability.set(op.capability, [
+      ...(byCapability.get(op.capability) ?? []),
+      op,
+    ]);
+  }
+  const out = new Map<string, ReturnType<typeof defineCapability>>();
+  for (const [name, ops] of byCapability) {
+    const operations: Record<string, Operation<unknown>> = {};
+    for (const op of ops) {
+      if (op.mode === 'suspending') {
+        throw new DeferredCaseError('a suspending Operation');
+      }
+      const key = `${name}.${op.name}`;
+      const base = {
+        args: (op.args ?? []).map(shapeOf),
+        cost: { fuel: op.cost?.fuel ?? 0, alloc: op.cost?.alloc ?? 0 },
+        ...(op.result === undefined ? {} : { result: shapeOf(op.result) }),
+        ...(op.errors
+          ? {
+              errors: op.errors.map(e => ({
+                code: e.code,
+                fields: Object.fromEntries(
+                  (e.fields ?? []).map(f => [
+                    f.key,
+                    f.optional
+                      ? { shape: shapeOf(f.shape), optional: true as const }
+                      : shapeOf(f.shape),
+                  ]),
+                ),
+              })),
+            }
+          : {}),
+      };
+      operations[op.name] =
+        op.mode === 'immediate'
+          ? {
+              ...base,
+              mode: 'immediate',
+              do: call => takeStub(stubs, key, call, true),
+            }
+          : {
+              ...base,
+              mode: 'fire-and-forget',
+              fire: call => void takeStub(stubs, key, call, false),
+            };
+    }
+    out.set(name, defineCapability(name, operations));
+  }
+  return out;
+};
+
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
@@ -179,6 +360,8 @@ export const replay = (
   const trace: string[] = [];
   const group = newGroup({ name: 'case', trace: line => trace.push(line) });
   const compiled = compileLibraries(dir, setup);
+  const stubs = new Map<string, Stub[]>();
+  const capabilities = capabilitiesOf(setup, stubs);
   for (const line of lines) {
     if (!line.startsWith('> ')) {
       continue;
@@ -191,10 +374,21 @@ export const replay = (
           if (!script) {
             throw new Error(`case.toml has no Script ${r.ids[0]}`);
           }
-          if (script.grants || script.owner) {
-            throw new DeferredCaseError('Grants and owners');
+          if (script.owner || script.grantsAsUsed) {
+            throw new DeferredCaseError('owners and grantsAsUsed');
+          }
+          const grants: Record<string, Grant<unknown>> = {};
+          for (const [granted, g] of Object.entries(script.grants ?? {})) {
+            const capability = capabilities.get(g.capability ?? granted);
+            if (!capability) {
+              throw new DeferredCaseError(
+                `the Standard Capability ${g.capability ?? granted}`,
+              );
+            }
+            grants[granted] = capability.grant(g.ops, undefined);
           }
           group.load({
+            grants,
             name: script.name,
             source: readFileSync(resolve(dir, script.source), 'utf8'),
             limits: script.limits,
@@ -253,6 +447,24 @@ export const replay = (
         case 'vars':
           group.inspect();
           break;
+        case 'stub': {
+          // The runner's, written where the case has it; the Core never sees it.
+          const op = r.ids[0]!;
+          stubs.set(op, [
+            ...(stubs.get(op) ?? []),
+            {
+              charge: Number(r.fields.get('charge') ?? 0),
+              ...(r.fields.has('value')
+                ? { value: read(r.fields.get('value')!) }
+                : {}),
+              ...(r.fields.has('error')
+                ? { error: read(r.fields.get('error')!) }
+                : {}),
+            },
+          ]);
+          trace.push(line);
+          break;
+        }
         default:
           throw new DeferredCaseError(`the Host Input ${r.name}`);
       }

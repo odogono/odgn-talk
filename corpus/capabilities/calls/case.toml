@@ -1,0 +1,38 @@
+# calls: an immediate Operation's result is left in `it`, and a
+# fire-and-forget one's is dropped. Each call is charged its declared cost,
+# what `Charge` drew, and the conversion of its result, and is recorded with
+# its call id, `<run>.c<n>` (spec chapter 9, Capabilities; chapter 11, Stubs).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "fx"
+name = "rate"
+mode = "immediate"
+args = ["text", "text"]
+result = { quantity = "EUR/GBP" }
+cost = { fuel = 30 }
+
+[[operations]]
+capability = "catalogue"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = { unitKind = "GBP" }
+cost = { fuel = 50, alloc = 8 }
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+
+[[scripts]]
+name = "till"
+source = "till.talk"
+grants = { fx = { ops = "all" }, catalogue = { ops = ["price"] }, log = { ops = ["write"] } }

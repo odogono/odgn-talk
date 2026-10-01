@@ -1,0 +1,15 @@
+-- form.talk: the argument-shapes case's Script.
+
+script variable seen = []
+
+on submit entry
+  try
+    tell forms to save entry
+  catch e
+    put e after seen
+  end try
+end submit
+
+on wrapped
+  submit {name: "a", tags: [], extra: [1, {f: given x: x}]}
+end wrapped

@@ -1,0 +1,34 @@
+# load-checks: each `ask` and `tell` is checked at load against the Script's
+# Grants: the Grant and Operation exist, the call fits the Operation's mode,
+# it passes as many arguments as the Operation takes, and each literal
+# argument fits its Shape. `say` needs a `console` Grant (spec chapter 2,
+# Load-time diagnostics; chapter 12, `say`).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "clock"
+name = "now"
+mode = "immediate"
+result = "number"
+
+[[operations]]
+capability = "clock"
+name = "stamp"
+mode = "immediate"
+args = ["text"]
+result = "text"
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+grants = { clock = { ops = "all" } }
+
+[[scripts]]
+name = "good"
+source = "good.talk"
+grants = { clock = { ops = ["stamp"] } }

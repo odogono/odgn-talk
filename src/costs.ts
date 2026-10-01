@@ -11,6 +11,8 @@ export type Measured = {
   declared?: number;
   frames?: number;
   input?: Value;
+  /** The logical size of an internal input, such as a message. */
+  inputSize?: number;
   result?: Value;
   /** The logical size of an internal value the instruction pushes. */
   resultSize?: number;
@@ -132,6 +134,12 @@ const evaluate = (
       counts.resultSize !== undefined
     ) {
       m = counts.resultSize;
+    } else if (
+      term.measure === 'size' &&
+      term.subject === 'input' &&
+      counts.inputSize !== undefined
+    ) {
+      m = counts.inputSize;
     } else if (term.measure) {
       m = term.subject
         ? measureOf(term.measure, subject(term.subject))

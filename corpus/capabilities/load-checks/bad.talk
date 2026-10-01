@@ -1,0 +1,10 @@
+-- bad.talk: the load-checks case's Script, which breaks each load rule.
+
+on go
+  ask nobody to x
+  ask clock to never
+  tell clock to now
+  ask clock to now 1
+  ask clock to stamp 5
+  say "hi"
+end go

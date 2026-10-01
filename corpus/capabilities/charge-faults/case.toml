@@ -1,0 +1,23 @@
+# charge-faults: an Operation's declared cost is charged before the Host
+# function runs, so a Run that can't cover it faults at the call with no
+# `call` record. A `Charge` the Run can't cover is a Limit Fault at the call
+# too, after the Host function was reached (spec chapter 9, Charging).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "gauge"
+name = "read"
+mode = "immediate"
+result = "number"
+cost = { fuel = 60 }
+
+[[scripts]]
+name = "meter"
+source = "meter.talk"
+grants = { gauge = { ops = ["read"] } }
+limits = { fuelPerRun = 100 }

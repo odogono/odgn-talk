@@ -1,0 +1,27 @@
+# calls: `catalogue.price` draws 7 more Fuel with `Charge`, and its `charged`
+# records it. No Stub is queued for `log.write`, so each `tell` takes none
+# and succeeds. Its Fuel, allocation and
+# state figures are Cost Model 0's, as the TS Core blessed them.
+
+> load till identity=4a68c6fb1f330e09cced43eda537373cfce1d4907000a678e3fbf6b23ecb1c23
+> stub fx.rate value=1.17 EUR/GBP
+> stub catalogue.price value=2.50 GBP charge=7
+> stub fx.rate value=1.18 EUR/GBP
+> stub catalogue.price value=4 GBP
+> deliver d1 to=till message=ring args=["tea"]
+> deliver d2 to=till message=ring args=["cake"]
+> pump clock=2026-09-30T09:00:00Z
+call till/r1.c1 op=fx.rate args=["GBP", "EUR"] result=1.17 EUR/GBP
+call till/r1.c2 op=catalogue.price args=["tea"] result=2.50 GBP charged=7
+call till/r1.c3 op=log.write args=["rang tea"]
+seg till/r1 start delivery=d1 handler=ring clause=1 fuel=163 alloc=120 state=116 end=return
+run till/r1 outcome=completed delivery=d1 handler=ring fuel=163 alloc=120
+call till/r2.c1 op=fx.rate args=["GBP", "EUR"] result=1.18 EUR/GBP
+call till/r2.c2 op=catalogue.price args=["cake"] result=4 GBP
+call till/r2.c3 op=log.write args=["rang cake"]
+seg till/r2 start delivery=d2 handler=ring clause=1 fuel=156 alloc=121 state=64 end=return
+run till/r2 outcome=completed delivery=d2 handler=ring fuel=156 alloc=121
+pumped state=idle fuel=319
+
+> vars
+vars till rate=1.18 EUR/GBP price=4.72 EUR logged=2

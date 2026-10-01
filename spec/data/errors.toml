@@ -190,7 +190,7 @@ message = "{locale} isn't a well-formed locale tag"
 [[error]]
 code = "object gone"
 fields = ["object"]
-raised_when = "A `send … to` reaches a disposed Host Object, or a property of one is read or set"
+raised_when = "A `send … to` reaches a disposed Host Object, or names a Script the Group doesn't hold, or a property of a disposed object is read or set; `object` is the object, or the Script's name as text"
 sources = ["ADR 0016", "ADR 0017", "ADR 0033", "#71"]
 message = "{object} has been disposed"
 

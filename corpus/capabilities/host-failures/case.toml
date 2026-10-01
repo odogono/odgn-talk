@@ -1,0 +1,26 @@
+# host-failures: a `Fail` with a code the Operation declares raises it, with
+# its message and Data as fields, then `capability`, `operation` and `at`.
+# A catalogue code, a reserved Data key, an undeclared code, an error that
+# isn't a Script error, a missing Stub and a result that breaks its Shape are
+# each `host error`, with a `call-failed` record (spec chapter 6, Errors from
+# Capabilities; chapter 11, Stubs).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "stock"
+name = "level"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+errors = [{ code = "out of stock", fields = [{ key = "due", shape = "text", optional = true }] }]
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { stock = { ops = ["level"] } }

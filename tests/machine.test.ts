@@ -92,6 +92,7 @@ describe('the text-model seed cases', () => {
     expect(
       r.records.map(
         rec =>
+          rec.kind === 'raise' &&
           `raise ${scriptName}/r1 code="${rec.code}" at=${rec.unit}:${rec.pc} pos=${rec.line}:${rec.col}`,
       ),
     ).toEqual(trace.filter(line => line.startsWith('raise ')));
@@ -279,7 +280,9 @@ describe('control and errors', () => {
       'on pick n where n > 10\n  return "big"\nend pick\non pick n\n  return "small"\nend pick';
     const r = run(source, 'pick', [text('x')]);
     expect(result(r.outcome)).toBe('"small"');
-    expect(r.run.records.map(rec => rec.code)).toEqual(["can't compare"]);
+    expect(
+      r.run.records.map(rec => (rec.kind === 'guard-skip' ? rec.code : null)),
+    ).toEqual(["can't compare"]);
     expect(run(source, 'pick', []).outcome.kind).toBe('unhandled');
     expect(run(source, 'other', []).outcome.kind).toBe('unhandled');
   });
