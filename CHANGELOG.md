@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Bytes and Binary Patterns in the Core: the `bytes` Host constructor, their display form and `$bytes` Value Encoding, `<< … >>` builds, Binary Pattern matching, `byte` chunks, `the bytes of`, `as text` and `as bytes`, comparison and Bytes searches; with `bytes/` Trace and Value Encoding cases, and Spec fixes for what chapters 4 and 8 left open, including the `bytes-sized` instruction for `v as n bytes` in a build, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Quantities in the Core: the `quantity` Host constructor, their display form, Value Encoding and ranges of them, Quantity literals, arithmetic and `as` through Base Units, equality and ordering in Base Units, and `abs`, `floor`, `ceiling`, `truncate` and `round` keeping the Unit; with `quantities/` Trace and Value Encoding cases, and Spec fixes for what chapter 3 left open, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - The Core's Group: Load with code identities and load diagnostics, queued Deliveries and Requests, Pumps that follow chapter 5's turns with Fuel Slices, debt and the Fuel cap, Persistent State at each Segment's end, Inspect, and a Trace sink writing chapter 11's records; and Trace Case replay and bless in the corpus runner, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -34,9 +36,14 @@ tracked separately in the Spec's Data Files.
 
 ### Changed
 
+- `v as n bytes` in a build lowers to its value, its size and `bytes-sized`, so its size is kept.
 - A Unit naming two Units of one Unit Kind, such as `2 m*ft`, is `bad unit` rather than a `LoweringError`.
 - Twelve `limits/` and `text-patterns/` Trace Cases are blessed by the TS Core and run in CI ([#159](https://github.com/odogono/odgn-talk/pull/159)).
 - The `text-model/` Trace Cases are blessed by the TS Core, with Cost Model 0's Fuel, allocation and Persistent State figures and their code identities, and run in CI ([#126](https://github.com/odogono/odgn-talk/issues/126)).
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
+
+### Fixed
+
+- The Core's parser, and the grammar check's, read a build whose first field is a build, `<< <<1, 2>> >>`, as chapter 1 lexes it.
 
 [Unreleased]: https://github.com/odogono/odgn-talk/commits/main/

@@ -1,10 +1,12 @@
 // Both readers build values through the same Host constructors. JSON is read
 // directly so decimals, duplicate keys and integer-like key order survive.
+import { fromBase64 } from './base64';
 import { invalidValue } from './errors';
 import { assertScalarText } from './unicode';
 import {
   Value,
   bool,
+  bytesOf,
   dec,
   hiddenCodePoint,
   listValues,
@@ -128,6 +130,9 @@ class DisplayReader extends Reader {
     ) {
       return text(this.textPieces());
     }
+    if (this.peek('<<')) {
+      return this.bytes();
+    }
     const start = this.i;
     const from = this.rangeEnd();
     if (from === undefined) {
@@ -146,6 +151,23 @@ class DisplayReader extends Reader {
       this.fail('Expected a canonical display range');
     }
     return value;
+  }
+  // Bytes: `<<`, each byte as `0x` and two uppercase hex digits, `>>`.
+  private bytes(): Value {
+    this.eat('<<');
+    const out: number[] = [];
+    while (!this.peek('>>')) {
+      if (out.length) {
+        this.eat(', ');
+      }
+      const byte = this.match(/0x[\dA-F]{2}/y);
+      if (byte === undefined) {
+        this.fail('Expected a byte');
+      }
+      out.push(Number.parseInt(byte.slice(2), 16));
+    }
+    this.eat('>>');
+    return bytesOf(Uint8Array.from(out));
   }
   // A number, or a Quantity: a number, one space and a Unit in normal form.
   private rangeEnd(): Value | undefined {
@@ -448,6 +470,14 @@ const fromJson = (value: Json): Value => {
             invalidValue('A $quantity Unit not in normal form');
           }
           assign(q);
+          return;
+        }
+        if (tag === '$bytes' && typeof data === 'string') {
+          const b = fromBase64(data);
+          if (!b) {
+            invalidValue('A $bytes that is not canonical padded Base64');
+          }
+          assign(bytesOf(b));
           return;
         }
         if (tag === '$range' && Array.isArray(data) && data.length === 2) {

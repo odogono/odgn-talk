@@ -32,6 +32,7 @@ export {
   dec,
   list,
   map,
+  bytes,
   quantity,
   range,
   record,

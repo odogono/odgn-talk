@@ -2356,7 +2356,9 @@ class Parser {
     try {
       this.next('operand'); // opening bracket
       const fields: Node[] = [];
-      if (!this.isOp(this.peek(0, 'operator'), '>>')) {
+      // Peeked as an operand, so a nested build can be the first field; `>>`
+      // reads the same either way.
+      if (!this.isOp(this.peek(0, 'operand'), '>>')) {
         do {
           if (fields.length) {
             this.next('operator');

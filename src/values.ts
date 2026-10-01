@@ -17,6 +17,7 @@ export type Kind =
   | 'number'
   | 'quantity'
   | 'text'
+  | 'bytes'
   | 'list'
   | 'map'
   | 'range'
@@ -48,6 +49,7 @@ export type PatternRef = {
 /** A Quantity: its number and its Unit, in Kind order (chapter 3). */
 export type QuantityRef = { readonly number: Decimal; readonly unit: UnitSpec };
 type Payload =
+  | Uint8Array
   | QuantityRef
   | PatternRef
   | undefined
@@ -128,6 +130,16 @@ export class Value {
   /** The Abstract Machine's view of a Quantity: its Unit's slots. */
   asQuantityRef(): QuantityRef | undefined {
     return this.kind === 'quantity' ? (this.#data as QuantityRef) : undefined;
+  }
+  /** A copy of the bytes. */
+  asBytes(): Uint8Array | undefined {
+    return this.kind === 'bytes'
+      ? (this.#data as Uint8Array).slice()
+      : undefined;
+  }
+  /** The Abstract Machine's view of Bytes, which it never writes to. */
+  bytesView(): Uint8Array | undefined {
+    return this.kind === 'bytes' ? (this.#data as Uint8Array) : undefined;
   }
   asRange(): { from: Value; to: Value } | undefined {
     if (this.kind !== 'range') {
@@ -211,6 +223,13 @@ export class Value {
         }
         case 'pattern':
           if (left.patternSource() !== right.patternSource()) {
+            return false;
+          }
+          break;
+        case 'bytes':
+          if (
+            compareBytes(left.#data as Uint8Array, right.#data as Uint8Array)
+          ) {
             return false;
           }
           break;
@@ -300,6 +319,9 @@ export class Value {
         }
         case 'pattern':
           output.push(next.patternSource()!);
+          break;
+        case 'bytes':
+          output.push(bytesDisplay(next.#data as Uint8Array));
           break;
         case 'quantity': {
           const q = next.asQuantityRef()!;
@@ -491,6 +513,30 @@ const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>
     toBase(parseDec(a.number.toString()), a.unit),
     toBase(parseDec(b.number.toString()), b.unit),
   ) === 0;
+/** Bytes, copied in. */
+export const bytes = (b: Uint8Array): Value => {
+  if (
+    !ArrayBuffer.isView(b) ||
+    Object.prototype.toString.call(b) !== '[object Uint8Array]'
+  ) {
+    invalidValue('Bytes need a Uint8Array');
+  }
+  return bytesOf(b.slice());
+};
+/** Bytes the Abstract Machine made, and never writes to again. */
+export const bytesOf = (b: Uint8Array): Value => makeValue('bytes', b);
+/** Bytes ordered byte by byte, unsigned, with a prefix first. */
+export const compareBytes = (a: Uint8Array, b: Uint8Array): -1 | 0 | 1 => {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) {
+      return a[i]! < b[i]! ? -1 : 1;
+    }
+  }
+  return a.length === b.length ? 0 : a.length < b.length ? -1 : 1;
+};
+/** Bytes' display form, their `<<…>>` build: `<<0x0D, 0x0A>>`. */
+const bytesDisplay = (b: Uint8Array): string =>
+  `<<${Array.from(b, x => `0x${x.toString(16).toUpperCase().padStart(2, '0')}`).join(', ')}>>`;
 /** A Text Pattern value; only the Abstract Machine makes one. */
 export const patternValue = (ref: PatternRef): Value =>
   makeValue('pattern', Object.freeze({ ...ref }));

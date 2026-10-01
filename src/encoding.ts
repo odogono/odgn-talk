@@ -1,3 +1,4 @@
+import { toBase64 } from './base64';
 import { invalidValue } from './errors';
 import { Value, requireValue } from './values';
 
@@ -44,6 +45,9 @@ export const encodeValue = (value: Value): string => {
         );
         break;
       }
+      case 'bytes':
+        output.push(`{"$bytes":${quote(toBase64(next.bytesView()!))}}`);
+        break;
       case 'quantity': {
         const q = next.asQuantity()!;
         output.push(

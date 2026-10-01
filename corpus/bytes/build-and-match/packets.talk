@@ -1,0 +1,48 @@
+-- packets.talk: the build-and-match case.
+
+script variable packet
+script variable header
+script variable fields
+script variable framed
+script variable body
+script variable rest
+script variable picked
+script variable second
+script variable middle
+script variable patched
+script variable trimmed
+script variable decoded
+script variable found
+script variable ordered
+
+on go
+  put << 0x02, 7 as uint32, -3 as int16 little >> into packet
+  put << 1 as 4 bits, 15 as 4 bits >> into header
+  match packet
+    when << 0x02, id: uint32, x: int16 little >> then put [id, x] into fields
+  end match
+  put << "GET", header, 3 as uint8, "abc" as 3 bytes as text, 0xFF >> into framed
+  match framed
+    when << "GET", hi: 4 bits, lo: 4 bits, n: uint8, b: n bytes as text, ...r >> then
+      put [hi, lo, b] into body
+      put r into rest
+  end match
+  put pick(<<0x01, 0x02>>) into picked
+  put byte 2 of packet into second
+  put bytes 2..5 of packet into middle
+  put packet into patched
+  put 9 into byte 1 of patched
+  delete bytes 2..5 of patched
+  put patched into trimmed
+  put << 104, 195, 169 >> as text into decoded
+  put packet contains << 0x00, 0x07 >> into found
+  put << 1, 2 >> < << 1, 2, 0 >> into ordered
+end go
+
+function pick b
+  match b
+    when << 1 >> then return "one"
+    when << 1, x: uint16 >> then return "short"
+    when << 1, ... >> then return "rest"
+  end match
+end pick

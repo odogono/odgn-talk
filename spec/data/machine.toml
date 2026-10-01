@@ -839,6 +839,17 @@ errors = ["wrong kind", "out of range"]
 does = "One field of a `<< … >>` build: pops the value and the Bytes so far, and pushes them extended"
 
 [[instruction]]
+name = "bytes-sized"
+group = "building"
+operands = ["field"]
+pops = 3
+pushes = 1
+suspends = false
+cost = "bytes-field"
+errors = ["wrong kind", "out of range"]
+does = "A `v as n bytes` field of a build: pops the size, the value and the Bytes so far, and pushes them extended"
+
+[[instruction]]
 name = "bytes-bits"
 group = "building"
 operands = ["constant", "count"]

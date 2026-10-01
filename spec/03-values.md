@@ -377,7 +377,7 @@ Chunks of text (`word 2 of s`) are in [chapter 4](04-expressions-and-statements.
 
 - **Bytes** is a sequence of values from 0 to 255. Its length and positions count bytes, never Characters ([ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md)).
 - **Comparison:** `=` compares every byte, and `<` is lexicographic, unsigned.
-- **Text:** `as text` decodes strict UTF-8 and then normalises to NFC, and `as bytes` encodes text as UTF-8. Other encodings are functions in the `bytes` Library.
+- **Text:** `as text` decodes strict UTF-8 and then normalises to NFC, and `as bytes` encodes text as UTF-8. Strict UTF-8 refuses overlong forms, surrogates and truncated sequences, and a leading byte order mark decodes as U+FEFF like any other. Other encodings are functions in the `bytes` Library.
 - **Chunks:** `byte n of b` is a number, and `bytes 2..5 of b` is Bytes ([chapter 4](04-expressions-and-statements.md#chunk-expressions)).
 - **Building and matching** use Binary Patterns ([chapter 4](04-expressions-and-statements.md#binary-patterns)).
 
