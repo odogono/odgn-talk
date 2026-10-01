@@ -1,0 +1,31 @@
+# message-path: before the pieces have parents, the pawn's message has no
+# Owning Script on its path. Then the knight's "near" stays with knight,
+# its "far" passes to board, and the pawn's goes to board, the target
+# staying the piece throughout. Its Fuel, allocation and state figures are
+# Cost Model 0's, as the TS Core blessed them.
+
+> load board identity=a4d41af24d91705cc292b14c931fb8d89f211489812a4a0d384f803c09c3c185
+> load knight identity=ccf1a1a6d10e7f32bb63f6338b27ed99250da536c1b5ff09ca82dbad232aa0d9
+> deliver d1 to=<object piece "pawn"> message=move args=["lost"]
+> pump clock=2026-09-30T09:00:00Z
+unhandled d1 message=move args=["lost"] target=<object piece "pawn">
+pumped state=idle fuel=0
+> set-parent object=<object piece "knight"> parent=<object board "main">
+> set-parent object=<object piece "pawn"> parent=<object board "main">
+> deliver d2 to=<object piece "knight"> message=move args=["near"]
+> deliver d3 to=<object piece "knight"> message=move args=["far"]
+> deliver d4 to=<object piece "pawn"> message=move args=["step"]
+> pump clock=2026-09-30T09:00:01Z
+seg board/r1 start delivery=d4 handler=move clause=1 fuel=30 alloc=208 state=124 end=return
+run board/r1 outcome=completed delivery=d4 handler=move fuel=30 alloc=208
+seg knight/r1 start delivery=d2 handler=move clause=1 fuel=31 alloc=156 state=149 end=return
+run knight/r1 outcome=completed delivery=d2 handler=move fuel=31 alloc=156
+seg knight/r2 start delivery=d3 handler=move clause=1 fuel=48 alloc=154 state=179 end=pass
+run knight/r2 outcome=completed delivery=d3 handler=move fuel=48 alloc=154
+seg board/r2 start delivery=d3 handler=move clause=1 fuel=30 alloc=210 state=233 end=return
+run board/r2 outcome=completed delivery=d3 handler=move fuel=30 alloc=210
+pumped state=idle fuel=139
+
+> vars
+vars board heard=[["main", "pawn", "step"], ["main", "knight", "far"]]
+vars knight heard=[["knight", "near"], ["knight", "far"]]

@@ -77,6 +77,7 @@ import {
   type FunctionRef,
 } from './values';
 import type { PatternElement } from './view';
+import { stateOf, type ObjectState } from './objects';
 
 export type LimitName =
   | 'fuelPerRun'
@@ -377,6 +378,15 @@ export type RunRecord =
     }
   | { id: string; kind: 'call-failed'; op: string }
   | { id: string; kind: 'abandon' }
+  | { args: Value[]; kind: 'unhandled'; message: string; target: Value | null }
+  | {
+      error?: Value;
+      kind: 'prop';
+      name: string;
+      object: Value;
+      op: 'get' | 'set';
+      value?: Value;
+    }
   | {
       args: Value[];
       /** The call id of a send that waits for its reply. */
@@ -456,16 +466,27 @@ export type RunHost = {
   /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
   fail(id: string, error: HostScriptError | null): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
-  /** Whether a name is a well-known Host Object the Host bound at load. */
-  isObject(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
+  /** The object the Script owns, or Nothing. */
+  readonly me: Value;
   readonly now: bigint;
+  /** The well-known Host Object the Host bound to a name at load. */
+  object(name: string): Value | undefined;
   /**
-   * Puts a message in a Script's mailbox, or throws ScriptError `mailbox
-   * full`; `reply` is the call id of a send that waits for its reply.
+   * Puts a message in the mailbox of a Script, or of an object's nearest
+   * Owning Script, or throws ScriptError `mailbox full`; `reply` is the call
+   * id of a send that waits for its reply. Gives the Script it reached, or
+   * null for a message no Script on its path takes.
    */
-  send(to: string, message: string, args: Value[], reply: string | null): void;
+  send(
+    to: string | ObjectState,
+    message: string,
+    args: Value[],
+    reply: string | null,
+  ): string | null;
+  /** Sends a Command Call with no Handler up the Message Path, as `send` does. */
+  sendUp(message: string, args: Value[], reply: string | null): string | null;
 };
 const listItems = (v: Value): Value[] =>
   Array.from({ length: v.length }, (_, i) => v.index(i + 1));
@@ -509,7 +530,7 @@ const reservedKeys = new Set([
 // A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
 type Receiver = { k: 'receiver'; name: string };
 export type Outcome =
-  | { kind: 'completed'; result: Value }
+  | { kind: 'completed'; passed?: boolean; result: Value }
   | { error: Value; kind: 'errored' }
   | {
       col: number;
@@ -537,6 +558,8 @@ const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
   id = '';
+  /** `the target`: the object its message was delivered to, or Nothing. */
+  target: Value = nothing;
   host: RunHost | null = null;
   /** Why it suspended, until its Group resumes it. */
   suspended: Suspension | null = null;
@@ -954,6 +977,138 @@ export class Run {
       };
     }
     return null;
+  }
+
+  /**
+   * `the p of o` on a Host Object (chapter 4, Keys): its Core-held `id`, or
+   * the Host's property, charged as a Capability result is, recorded as
+   * `prop`. A key its Object Kind doesn't define gives Nothing.
+   */
+  private getProperty(v: Value, name: string, key: string): Value {
+    const o = stateOf(v)!;
+    if (name === 'id') {
+      const id = text(o.handle.id);
+      this.pay(key, { result: id });
+      return id;
+    }
+    if (o.disposed) {
+      throw new ScriptError('object gone', [['object', v]]);
+    }
+    const prop = o.handle.kind.props.get(name);
+    if (!prop) {
+      this.pay(key);
+      return nothing;
+    }
+    const ctx = this.propContext(o, name, prop.getCost);
+    this.pay(key);
+    this.payAmount(ctx.declared, prop.getCost?.alloc ?? 0);
+    let result: unknown;
+    try {
+      result = prop.get(o.handle);
+    } catch (error) {
+      throw this.failure(
+        ctx,
+        error instanceof HostScriptError ? error : null,
+        failed =>
+          this.records.push({
+            kind: 'prop',
+            object: v,
+            name,
+            op: 'get',
+            error: failed,
+          }),
+      );
+    }
+    if (
+      !Value.isValue(result) ||
+      (prop.shape && mismatch(result, prop.shape))
+    ) {
+      this.records.push({
+        kind: 'prop',
+        object: v,
+        name,
+        op: 'get',
+        error: map([]),
+      });
+      throw this.hostError(ctx);
+    }
+    this.records.push({
+      kind: 'prop',
+      object: v,
+      name,
+      op: 'get',
+      value: result,
+    });
+    this.payConversion(ctx, result, 0);
+    return result;
+  }
+
+  /** `set the p of o to v`: the Host's `Set`, after the value's Shape check. */
+  private setProperty(v: Value, name: string, value: Value, key: string) {
+    const o = stateOf(v);
+    if (!o) {
+      throw wrongKind('object', v);
+    }
+    if (o.disposed) {
+      throw new ScriptError('object gone', [['object', v]]);
+    }
+    const prop = o.handle.kind.props.get(name);
+    if (!prop?.set) {
+      throw new ScriptError('read only');
+    }
+    const bad = prop.shape && mismatch(value, prop.shape);
+    if (bad) {
+      throw new ScriptError(
+        'wrong kind',
+        [
+          ['expected', text(bad.expected)],
+          ['got', text(bad.got)],
+          ['value', bad.value],
+        ],
+        true,
+      );
+    }
+    const ctx = this.propContext(o, name, prop.setCost);
+    this.pay(key, { input: value });
+    this.payAmount(ctx.declared, prop.setCost?.alloc ?? 0);
+    try {
+      prop.set(o.handle, value);
+    } catch (error) {
+      throw this.failure(
+        ctx,
+        error instanceof HostScriptError ? error : null,
+        failed =>
+          this.records.push({
+            kind: 'prop',
+            object: v,
+            name,
+            op: 'set',
+            value,
+            error: failed,
+          }),
+      );
+    }
+    this.records.push({ kind: 'prop', object: v, name, op: 'set', value });
+  }
+
+  // A property call's context, for its failures and conversion: as an
+  // Operation's, with the Object Kind as its Capability (chapter 9).
+  private propContext(
+    o: ObjectState,
+    name: string,
+    cost: { alloc?: number; fuel: number } | undefined,
+  ): CallContext {
+    return {
+      id: '',
+      op: { mode: 'immediate', cost: cost ?? { fuel: 0 }, do: () => nothing },
+      key: 'capability',
+      named: [
+        ['capability', text(o.handle.kind.name)],
+        ['operation', text(name)],
+      ],
+      declared: cost?.fuel ?? 0,
+      opName: `${o.handle.kind.name}.${name}`,
+    };
   }
 
   // A member past `MaxJoin` is a Limit Fault, checked before its charge.
@@ -1425,7 +1580,10 @@ export class Run {
 
   // `host error` for a call, with its `call-failed` record.
   private hostError(ctx: CallContext): ScriptError {
-    this.records.push({ kind: 'call-failed', id: ctx.id, op: ctx.opName });
+    // A property call has no call id; its `prop` record carries the failure.
+    if (ctx.id) {
+      this.records.push({ kind: 'call-failed', id: ctx.id, op: ctx.opName });
+    }
     return new ScriptError('host error', ctx.named, true);
   }
 
@@ -1632,9 +1790,32 @@ export class Run {
 
       // Keys, properties and chunks
       case 'get-key':
+        if (this.peek().kind === 'object') {
+          m.result = this.getProperty(this.peek(), a as string, key);
+          frame.stack.pop();
+          frame.stack.push(m.result);
+          return next();
+        }
         m.result = getKey(this.peek(), a as string);
         return this.replace(1, key);
+      case 'set-property':
+      case 'set-property-computed': {
+        const computed = ins.op === 'set-property-computed';
+        // Deepest first: the key, if computed, the object, then the value.
+        const o = this.peek(1);
+        const v = this.peek();
+        const name = computed ? keyText(this.peek(2)) : (a as string);
+        this.setProperty(o, name, v, key);
+        this.popN(computed ? 3 : 2);
+        return next();
+      }
       case 'get-key-computed':
+        if (this.peek().kind === 'object') {
+          m.result = this.getProperty(this.peek(), keyText(this.peek(1)), key);
+          frame.stack.length -= 2;
+          frame.stack.push(m.result);
+          return next();
+        }
         m.result = getKey(this.peek(), keyText(this.peek(1)));
         return this.replace(2, key);
       case 'property':
@@ -1961,10 +2142,13 @@ export class Run {
       // Effects
       case 'load-object': {
         const name = unit.objects[a as number]!;
+        const object = this.host?.object(name);
+        if (object) {
+          this.pay(key);
+          frame.stack.push(object);
+          return next();
+        }
         if (!this.host?.isScript(name)) {
-          if (!this.host || this.host.isObject(name)) {
-            throw new NotImplementedError(`the Host Object ${name}`);
-          }
           // A receiver that names no Script of the Group (chapter 5, Sending).
           throw new ScriptError('object gone', [['object', text(name)]]);
         }
@@ -1972,11 +2156,20 @@ export class Run {
         frame.stack.push({ k: 'receiver', name });
         return next();
       }
-      case 'me':
-        // Without Host Objects, no Script owns one (chapter 5, `me`).
+      case 'me': {
+        // The object the Script owns, or Nothing (chapter 5, `me`). A Script
+        // that owns none is its own receiver in `send … to me`.
         this.pay(key);
-        frame.stack.push(nothing);
+        const me = this.host?.me ?? nothing;
+        const then = unit.code[frame.pc + 1]?.op;
+        frame.stack.push(
+          me.kind === 'nothing' &&
+            (then === 'send' || then === 'send-wait' || then === 'join-send')
+            ? { k: 'receiver', name: this.script.name }
+            : me,
+        );
         return next();
+      }
       case 'ask':
       case 'tell': {
         const n = c as number;
@@ -2080,18 +2273,33 @@ export class Run {
       }
       case 'send':
       case 'send-wait':
-      case 'join-send': {
+      case 'join-send':
+      case 'send-up':
+      case 'send-up-wait': {
         if (ins.op === 'join-send') {
           this.joinWidth();
         }
+        const up = ins.op === 'send-up' || ins.op === 'send-up-wait';
         const n = b as number;
-        const to = frame.stack.at(-1);
-        if (isValue(to) || to?.k !== 'receiver') {
-          throw new NotImplementedError('a send to a Host Object');
+        // The receiver: a Script named at load, a Host Object, or, for a
+        // Command Call with no Handler, the Message Path (chapter 5).
+        const to = up ? null : frame.stack.at(-1)!;
+        let target: ObjectState | string | null = null;
+        if (to && !isValue(to) && to.k === 'receiver') {
+          target = to.name;
+        } else if (to) {
+          const o = isValue(to) ? stateOf(to) : undefined;
+          if (!o) {
+            throw wrongKind('object', to as Value);
+          }
+          if (o.disposed) {
+            throw new ScriptError('object gone', [['object', o.handle.value]]);
+          }
+          target = o;
         }
         const args = this.frame.stack.slice(
-          this.frame.stack.length - n - 1,
-          -1,
+          this.frame.stack.length - n - (up ? 0 : 1),
+          up ? undefined : -1,
         ) as Value[];
         const size = partSize(
           'message',
@@ -2101,17 +2309,39 @@ export class Run {
         m.inputSize = size;
         this.pay(key);
         // A send that waits is a call, with an id of its own.
-        const id = ins.op === 'send' ? null : `${this.id}.c${this.calls + 1}`;
-        this.host!.send(to.name, a as string, args, id);
+        const waits = ins.op !== 'send' && ins.op !== 'send-up';
+        const id = waits ? `${this.id}.c${this.calls + 1}` : null;
+        const message = a as string;
+        const reached = up
+          ? this.host!.sendUp(message, args, id)
+          : this.host!.send(target!, message, args, id);
+        frame.stack.length -= n + (up ? 0 : 1);
+        const object = typeof target === 'object' && target ? target : null;
+        if (reached === null) {
+          // Past the last Owning Script: `unhandled`, and nothing to wait on.
+          this.records.push({
+            kind: 'unhandled',
+            message,
+            args,
+            target: object ? object.handle.value : null,
+          });
+          if (waits) {
+            throw new ScriptError(
+              'send failed',
+              [['reason', text('unhandled')]],
+              true,
+            );
+          }
+          return next();
+        }
         this.records.push({
           kind: 'send',
-          to: to.name,
-          message: a as string,
+          to: object ? object.handle.value.toString() : reached,
+          message,
           args,
           ...(id ? { id } : {}),
           ...(ins.op === 'join-send' ? { join: true } : {}),
         });
-        frame.stack.length -= n + 1;
         if (!id) {
           return next();
         }
@@ -2125,15 +2355,20 @@ export class Run {
           });
           return next();
         }
-        this.suspend({
-          k: 'send',
-          id,
-          to: to.name,
-          message: a as string,
-          args,
-        });
+        this.suspend({ k: 'send', id, to: reached, message, args });
         return;
       }
+      case 'pass':
+        // Ends the Run as `completed`; its Group sends the message on up.
+        this.checkState();
+        this.pay(key);
+        this.frames = [];
+        this.outcome = { kind: 'completed', result: nothing, passed: true };
+        return;
+      case 'target':
+        this.pay(key);
+        frame.stack.push(this.target);
+        return next();
 
       // Calls
       case 'call': {

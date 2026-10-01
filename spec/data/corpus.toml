@@ -775,7 +775,7 @@ is = "a message a Script sent; `from` is the call id of a send that waits for it
 [[record.key]]
 key = "to"
 type = "target"
-is = "the receiver"
+is = "the receiver; for a Command Call sent up the Message Path, the Script it reaches"
 
 [[record.key]]
 key = "message"

@@ -7,6 +7,13 @@ export {
   type LoadDiagnostic,
 } from './errors';
 export {
+  defineObjectKind,
+  type HostObject,
+  type ObjectKind,
+  type ObjectKindDef,
+  type PropDef,
+} from './objects';
+export {
   defineCapability,
   LimitReached,
   shape,

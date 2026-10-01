@@ -1,0 +1,46 @@
+# sends: a `send` to a Host Object goes to its nearest Owning Script, and one
+# to an object with none on its path is `unhandled`. A Command Call with no
+# Handler sends the message up the Message Path from the parent of the
+# Script's owner, and in a Script that owns nothing it is `unhandled`, as a
+# `send … to me` there goes to the Script itself (spec chapter 5, Sending and
+# The Message Path).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "room"
+
+[[objects]]
+kind = "room"
+id = "office"
+
+[[objects]]
+kind = "room"
+id = "desk"
+
+[[objects]]
+kind = "room"
+id = "drawer"
+
+[[objects]]
+kind = "room"
+id = "stray"
+
+[[scripts]]
+name = "office"
+source = "office.talk"
+owner = { kind = "room", id = "office" }
+
+[[scripts]]
+name = "desk"
+source = "desk.talk"
+owner = { kind = "room", id = "desk" }
+objects = { drawer = { kind = "room", id = "drawer" }, stray = { kind = "room", id = "stray" } }
+
+[[scripts]]
+name = "solo"
+source = "solo.talk"

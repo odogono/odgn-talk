@@ -51,6 +51,11 @@ export const encodeValue = (value: Value): string => {
       case 'civil date':
         output.push(`{"$date":${quote(next.toString())}}`);
         break;
+      case 'object': {
+        const o = next.asObjectRef()!;
+        output.push(`{"$object":[${quote(o.kind)},${quote(o.id)}]}`);
+        break;
+      }
       case 'bytes':
         output.push(`{"$bytes":${quote(toBase64(next.bytesView()!))}}`);
         break;
