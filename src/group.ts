@@ -36,7 +36,6 @@ import {
   type ObjectState,
 } from './objects';
 import type { GrantDecls } from './effects';
-import { NotImplementedError } from './operations';
 import {
   identityOf,
   linksOf,
@@ -80,6 +79,7 @@ export type Decided = {
 };
 export type Deciding = { decided: Promise<Decided>; id: string };
 export type Requested = { id: string; result: Promise<Value> };
+export type CancellationOptions = { signal?: AbortSignal };
 export type PumpOptions = { fuelCap?: number; fuelSlice?: number };
 export type RunOutcome =
   | 'completed'
@@ -92,6 +92,7 @@ export type Report =
   | {
       alloc: number;
       broadcast?: string;
+      cleanupFailed?: { code: string } | { limit: string };
       delivery?: string;
       error?: Value;
       fuel: number;
@@ -104,6 +105,14 @@ export type Report =
       script: string;
     }
   | { delivery: string; kind: 'unhandled'; message: Message }
+  | {
+      discardedRuns: string[];
+      droppedMessages: string[];
+      kind: 'stop';
+      pendingCalls: string[];
+      reason: string;
+      script: string;
+    }
   | ({ kind: 'decided' } & Decided);
 export type PumpResult = {
   fuelUsed: number;
@@ -122,7 +131,7 @@ export type Inspection = {
     runs: {
       handler: string;
       id: string;
-      status: 'preempted' | 'ready' | 'suspended';
+      status: 'preempted' | 'ready' | 'suspended' | 'parked';
     }[];
     vars: [string, Value][];
   }[];
@@ -130,6 +139,7 @@ export type Inspection = {
 
 // The Trace's names for the limits a Limit Fault can pass (chapter 11).
 const faultNames: Partial<Record<LimitName, string>> = {
+  cleanupBudget: 'cleanup',
   fuelPerRun: 'fuel',
   allocPerRun: 'alloc',
   persistentState: 'persistent',
@@ -149,6 +159,8 @@ type Decision = {
   broadcast: boolean;
   id: string;
   resolve: (v: Decided) => void;
+  settled?: boolean;
+  unsubscribe?: () => void;
 };
 type Ballot = {
   decision: Decision;
@@ -177,17 +189,26 @@ type Delivery = {
   request: { reject: (e: Error) => void; resolve: (v: Value) => void } | null;
   /** The object it was addressed to: `the target` all the way up. */
   target: ObjectState | null;
+  unsubscribe?: () => void;
 };
 type Running = {
+  cleanupReady?: boolean;
   delivery: Delivery;
   id: string;
+  parked?: boolean;
   /** Ready to resume from a Suspension Point, not a preemption. */
   resuming: boolean;
   run: Run;
   selected?: boolean;
 };
 // A timer (chapter 5, A Pump): fired in deadline order, then set order.
-type Timer = { deadline: bigint; fire: () => void; live: boolean; seq: number };
+type Timer = {
+  deadline: bigint;
+  fire: () => void;
+  live: boolean;
+  running?: Running;
+  seq: number;
+};
 // A suspended Run waiting on a call: an Operation's answer, or a reply.
 type Pending = {
   /** For a Join Member, its Join's members and the answers in so far. */
@@ -209,15 +230,22 @@ type ScriptState = {
   objects: Readonly<Record<string, HostObject>>;
   /** The object it owns, if any. */
   owner: ObjectState | null;
+  parked: Running[];
   /** Messages waiting for dispatch, and a preempted Run at its head. */
   queue: (Delivery | Running)[];
   runs: number;
+  stopped: boolean;
+  stopReason?: string;
   /** Its suspended Runs, which Persistent State counts. */
   suspended: Set<Running>;
   /** Its pending `wait for`s, in the order the waits began. */
   waiters: { running: Running; timers: Timer[] }[];
 };
-type QueuedInput = { apply: () => void; line: string | (() => string) };
+type QueuedInput = {
+  apply: () => void;
+  line: string | (() => string);
+  urgent?: boolean;
+};
 
 // Each granted Operation's mode and argument Shapes, for the load checks.
 const declarationsOf = (
@@ -246,11 +274,11 @@ export class Script {
     return this.group.queueDelivery('deliver', this.name, m, null).id!;
   }
   /** Queued. Asks for a Verdict sealed in a Pump. */
-  decide(m: Message): Deciding {
-    return this.group.queueDecision(this.name, m);
+  decide(m: Message, o?: CancellationOptions): Deciding {
+    return this.group.queueDecision(this.name, m, o);
   }
   /** Queued. Settles when a Pump ends the Run, or rejects with `send failed`. */
-  request(m: Message): Requested {
+  request(m: Message, o?: CancellationOptions): Requested {
     let settle!: Delivery['request'];
     const result = new Promise<Value>((resolve, reject) => {
       settle = { resolve, reject };
@@ -258,7 +286,14 @@ export class Script {
     // The Host may never read a failed result.
     result.catch(() => {});
     const delivery = this.group.queueDelivery('request', this.name, m, settle);
+    this.group.watchCancellation(delivery, o?.signal);
     return { id: delivery.id!, result };
+  }
+  stop(reason: string): void {
+    this.group.queueStop(this.name, reason);
+  }
+  cancelRun(runId: string): void {
+    this.group.queueCancelRun(this.name, runId);
   }
 }
 
@@ -278,10 +313,256 @@ export class Group {
   private broadcasts = 0;
   private lastClock: bigint | null = null;
   private pumping = false;
+  private active: { records: number; running: Running; s: ScriptState } | null =
+    null;
+  private activeStop: (() => void) | null = null;
+  private drainingTrace: string[] | null = null;
+
+  /** A Request's signal lives until its Run ends; a Decision's until its seal. */
+  watchCancellation(delivery: Delivery, signal?: AbortSignal) {
+    if (!signal) {
+      return;
+    }
+    const cancel = () => {
+      if (!delivery.ballot?.result) {
+        this.cancelDelivery(delivery.id!);
+      }
+    };
+    delivery.unsubscribe = () => signal.removeEventListener('abort', cancel);
+    signal.addEventListener('abort', cancel, { once: true });
+    if (signal.aborted) {
+      cancel();
+    }
+  }
+
+  /** Replay hook for the Host Input produced by aborting a Request or Decision. */
+  cancelDelivery(id: string): void {
+    this.inputs.push({
+      line: recordLine('cancel-delivery', [id], [], true),
+      apply: () => {
+        for (const s of this.scripts) {
+          for (const item of [...s.queue, ...s.suspended, ...s.parked]) {
+            const d = 'run' in item ? item.delivery : item;
+            if ((d.id !== id && d.broadcast !== id) || d.ballot?.result) {
+              continue;
+            }
+            if ('run' in item) {
+              this.cancelRunning(s, item);
+            } else {
+              s.queue = s.queue.filter(q => q !== item);
+              d.unsubscribe?.();
+              this.trace(
+                recordLine(
+                  'run',
+                  [],
+                  [
+                    ['outcome', 'cancelled'],
+                    ['delivery', d.id],
+                    ['broadcast', d.broadcast ?? null],
+                    ['fuel', '0'],
+                    ['alloc', '0'],
+                  ],
+                ),
+              );
+              this.drainReports.push({
+                kind: 'run end',
+                script: s.name,
+                ...(d.id ? { delivery: d.id } : {}),
+                ...(d.broadcast ? { broadcast: d.broadcast } : {}),
+                outcome: 'cancelled',
+                fuel: 0,
+                alloc: 0,
+              });
+              this.seal(d, {
+                verdict: 'undecided',
+                undecided: { script: s.name, outcome: 'cancelled' },
+              });
+              this.answer(d, { kind: 'cancelled' });
+            }
+          }
+        }
+      },
+    });
+  }
+
+  queueCancelRun(name: string, id: string): void {
+    this.inputs.push({
+      urgent: true,
+      line: recordLine('cancel-run', [id], [], true),
+      apply: () => {
+        const s = this.scripts.find(s => s.name === name)!;
+        const running = this.runsOf(s).find(r => r.id === id);
+        if (running) {
+          this.cancelRunning(s, running);
+        }
+      },
+    });
+  }
+
+  queueStop(name: string, reason: string): void {
+    reason = text(reason).asText()!;
+    this.inputs.push({
+      urgent: true,
+      line: recordLine(
+        'stop',
+        [name],
+        [['reason', JSON.stringify(reason)]],
+        true,
+      ),
+      apply: () =>
+        this.stopState(
+          this.scripts.find(s => s.name === name)!,
+          reason,
+        ),
+    });
+  }
+
+  private runsOf(s: ScriptState): Running[] {
+    return [
+      ...s.queue.filter((item): item is Running => 'run' in item),
+      ...s.suspended,
+      ...s.parked,
+    ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
+  }
+
+  private forgetWait(s: ScriptState, running: Running) {
+    s.suspended.delete(running);
+    s.parked = s.parked.filter(r => r !== running);
+    for (const waiter of s.waiters.filter(w => w.running === running)) {
+      this.endWaiter(s, waiter);
+    }
+    for (const timer of this.timers) {
+      if (timer.running === running) {
+        timer.live = false;
+      }
+    }
+    for (const [id, p] of this.pending) {
+      if (p.running === running) {
+        this.pending.delete(id);
+      }
+    }
+  }
+
+  private cancelRunning(s: ScriptState, running: Running) {
+    if (running.run.cancelling || running.run.done) {
+      return;
+    }
+    running.run.cancel(running.parked || running.resuming);
+    this.forgetWait(s, running);
+    running.parked = false;
+    running.cleanupReady = this.active?.running !== running;
+    if (!s.queue.includes(running)) {
+      running.resuming = true;
+      s.queue.push(running);
+    }
+  }
+
+  private stoppedDelivery(s: ScriptState, delivery: Delivery, run?: string) {
+    delivery.unsubscribe?.();
+    this.seal(delivery, {
+      verdict: 'undecided',
+      undecided: {
+        script: s.name,
+        ...(run ? { run } : {}),
+        outcome: 'cancelled',
+      },
+    });
+    this.answer(delivery, { kind: 'stopped' });
+  }
+
+  private stopState(s: ScriptState, reason: string) {
+    if (s.stopped) {
+      return;
+    }
+    s.stopped = true;
+    s.stopReason = reason;
+    const runs = this.runsOf(s);
+    const messages = s.queue.filter((q): q is Delivery => !('run' in q));
+    const pendingCalls: string[] = [];
+    for (const r of runs) {
+      pendingCalls.push(
+        ...r.run.discard(r.parked || r.resuming || r.cleanupReady),
+      );
+      this.forgetWait(s, r);
+    }
+    s.queue = [];
+    const report = () =>
+      this.reportStop(s, reason, runs, messages, pendingCalls);
+    if (this.active?.s === s) {
+      this.activeStop = report;
+    } else {
+      report();
+    }
+  }
+
+  private reportStop(
+    s: ScriptState,
+    reason: string,
+    runs: Running[],
+    messages: Delivery[],
+    pendingCalls: string[],
+  ) {
+    this.trace(
+      recordLine(
+        'stopped',
+        [s.name],
+        [
+          ['reason', JSON.stringify(reason)],
+          ['discarded', idList(runs.map(r => r.id))],
+          ['dropped', idList(messages.flatMap(d => (d.id ? [d.id] : [])))],
+          ['abandoned', idList(pendingCalls)],
+        ],
+      ),
+    );
+    this.drainReports.push({
+      kind: 'stop',
+      script: s.name,
+      reason,
+      discardedRuns: runs.map(r => r.id),
+      droppedMessages: messages.flatMap(d => (d.id ? [d.id] : [])),
+      pendingCalls,
+    });
+    for (const r of runs) {
+      this.stoppedDelivery(s, r.delivery, r.id);
+    }
+    for (const d of messages) {
+      this.stoppedDelivery(s, d);
+    }
+  }
+
+  private dropStoppedMailbox(s: ScriptState) {
+    const messages = s.queue.filter((q): q is Delivery => !('run' in q));
+    s.queue = [];
+    if (messages.length) {
+      this.reportStop(s, s.stopReason!, [], messages, []);
+    }
+  }
+
+  private acceptDelivery(s: ScriptState, delivery: Delivery) {
+    s.queue.push(delivery);
+    if (s.stopped) {
+      this.dropStoppedMailbox(s);
+    }
+  }
+
+  private landUrgentInputs() {
+    const urgent = this.inputs.filter(i => i.urgent);
+    this.inputs = this.inputs.filter(i => !i.urgent);
+    for (const input of urgent) {
+      this.trace(typeof input.line === 'string' ? input.line : input.line());
+      input.apply();
+    }
+  }
 
   constructor(options: GroupOptions) {
     this.name = options.name;
-    this.trace = options.trace ?? (() => {});
+    this.trace = line => {
+      if (this.drainingTrace) {
+        this.drainingTrace.push(line);
+      } else {
+        options.trace?.(line);
+      }
+    };
   }
 
   script(name: string): Script | undefined {
@@ -369,6 +650,8 @@ export class Group {
       runs: 0,
       debt: 0,
       incoming: 0,
+      parked: [],
+      stopped: false,
     });
     return handle;
   }
@@ -409,6 +692,14 @@ export class Group {
   private hostFor(s: ScriptState, run: Run): RunHost {
     const group = this;
     return {
+      crossing: () => {
+        const active = this.active!;
+        this.writeRecords(active.running, active.records);
+        active.records = run.records.length;
+        const cancelling = run.cancelling;
+        this.landUrgentInputs();
+        return s.stopped || (!cancelling && run.cancelling);
+      },
       grants: s.grants,
       get now() {
         return group.lastClock!;
@@ -506,8 +797,8 @@ export class Group {
     receiver.queue.push(delivery);
   }
 
-  private timer(deadline: bigint, fire: () => void): Timer {
-    const t = { deadline, fire, live: true, seq: this.timerSeq++ };
+  private timer(deadline: bigint, fire: () => void, running?: Running): Timer {
+    const t = { deadline, fire, live: true, seq: this.timerSeq++, running };
     this.timers.push(t);
     return t;
   }
@@ -594,8 +885,10 @@ export class Group {
     s.suspended.add(running);
     const now = this.lastClock!;
     if (sus.k === 'wait') {
-      return this.timer(now + sus.ns, () =>
-        this.ready(s, running, { k: 'wake' }),
+      return this.timer(
+        now + sus.ns,
+        () => this.ready(s, running, { k: 'wake' }),
+        running,
       ).deadline;
     }
     if (sus.k === 'wait-for') {
@@ -607,10 +900,12 @@ export class Group {
         this.ready(s, running, { k: 'event-timeout', branch });
       };
       if (sus.timeout !== null) {
-        waiter.timers.push(this.timer(now + sus.timeout, fire(0)));
+        waiter.timers.push(this.timer(now + sus.timeout, fire(0), running));
       }
       for (const after of sus.afters) {
-        waiter.timers.push(this.timer(now + after.ns, fire(after.branch)));
+        waiter.timers.push(
+          this.timer(now + after.ns, fire(after.branch), running),
+        );
       }
       s.waiters.push(waiter);
       return waiter.timers.reduce<bigint | null>(
@@ -625,8 +920,10 @@ export class Group {
         answers: new Map<string, Resumption>(),
       };
       for (const m of sus.members) {
-        const timer = this.timer(now + BigInt(m.ms) * 1_000_000n, () =>
-          this.settle(m.id, { k: 'timeout', after: m.ms }),
+        const timer = this.timer(
+          now + BigInt(m.ms) * 1_000_000n,
+          () => this.settle(m.id, { k: 'timeout', after: m.ms }),
+          running,
         );
         this.pending.set(m.id, { s, running, timer, join });
       }
@@ -634,13 +931,17 @@ export class Group {
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
     const ms = sus.k === 'ask' ? sus.ms : s.limits.maxWaitMs;
-    const timer = this.timer(now + BigInt(ms) * 1_000_000n, () => {
-      this.pending.delete(id);
-      if (sus.k === 'ask') {
-        sus.abort.abort();
-      }
-      this.ready(s, running, { k: 'timeout', after: ms });
-    });
+    const timer = this.timer(
+      now + BigInt(ms) * 1_000_000n,
+      () => {
+        this.pending.delete(id);
+        if (sus.k === 'ask') {
+          sus.abort.abort();
+        }
+        this.ready(s, running, { k: 'timeout', after: ms });
+      },
+      running,
+    );
     this.pending.set(id, { s, running, timer });
     return null;
   }
@@ -710,7 +1011,7 @@ export class Group {
           state.incoming--;
         }
         if (named) {
-          state!.queue.push(delivery);
+          this.acceptDelivery(state!, delivery);
           return;
         }
         // An object's message is routed by the parents as they are now.
@@ -719,18 +1020,22 @@ export class Group {
           this.unhandled(delivery, this.drainReports);
           return;
         }
-        r.s.queue.push({ ...delivery, at: r.at });
+        this.acceptDelivery(r.s, { ...delivery, at: r.at });
       },
     });
     return delivery;
   }
 
   /** Queued. Asks the object's Message Path for a Verdict. */
-  decide(to: HostObject, m: Message): Deciding {
-    return this.queueDecision(this.held(to), m);
+  decide(to: HostObject, m: Message, o?: CancellationOptions): Deciding {
+    return this.queueDecision(this.held(to), m, o);
   }
 
-  queueDecision(to: string | ObjectState, m: Message): Deciding {
+  queueDecision(
+    to: string | ObjectState,
+    m: Message,
+    o?: CancellationOptions,
+  ): Deciding {
     let resolve!: Decision['resolve'];
     const decided = new Promise<Decided>(settle => {
       resolve = settle;
@@ -743,12 +1048,14 @@ export class Group {
     };
     const ballot: Ballot = { decision };
     decision.ballots.push(ballot);
-    decision.id = this.queueDelivery('decide', to, m, null, ballot).id!;
+    const delivery = this.queueDelivery('decide', to, m, null, ballot);
+    decision.id = delivery.id!;
+    this.watchCancellation(delivery, o?.signal);
     return { id: decision.id, decided };
   }
 
   /** Queued. Takes recipients at drain, then waits for every Verdict. */
-  decideBroadcast(m: Message): Deciding {
+  decideBroadcast(m: Message, o?: CancellationOptions): Deciding {
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       if (!validOverride(name, value, defaultLimits[name as LimitName])) {
         this.trace(recordLine('decide-broadcast', [], messageFields(m), true));
@@ -769,27 +1076,71 @@ export class Group {
       ballots: [],
       resolve,
     };
+    this.queueBroadcast(m, decision.id, decision);
+    if (o?.signal) {
+      const cancel = () => {
+        if (!decision.settled) {
+          this.cancelDelivery(decision.id);
+        }
+      };
+      o.signal.addEventListener('abort', cancel, { once: true });
+      decision.unsubscribe = () =>
+        o.signal!.removeEventListener('abort', cancel);
+      if (o.signal.aborted) {
+        cancel();
+      }
+    }
+    return { id: decision.id, decided };
+  }
+
+  /** Queued. Delivers to recipients taken in load order at drain. */
+  broadcast(m: Message): string {
+    const id = `b${this.broadcasts + 1}`;
+    this.queueBroadcast(m, id);
+    this.broadcasts++;
+    return id;
+  }
+
+  private queueBroadcast(m: Message, id: string, decision?: Decision) {
+    const record = decision ? 'decide-broadcast' : 'broadcast';
+    for (const [name, value] of Object.entries(m.limits ?? {})) {
+      if (!validOverride(name, value, defaultLimits[name as LimitName])) {
+        this.trace(recordLine(record, [], messageFields(m), true));
+        this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
+        throw new HostError(
+          'invalid value',
+          `A Broadcast override may only tighten ${name}`,
+        );
+      }
+    }
     let recipients: { delivery: Delivery; s: ScriptState }[] = [];
     this.inputs.push({
       line: () => {
         recipients = this.scripts
           .filter(
             s =>
-              s.loaded.clauses.has(m.name) ||
-              s.waiters.some(
-                w =>
-                  w.running.run.suspended?.k === 'wait-for' &&
-                  w.running.run.suspended.whens.some(b => b.message === m.name),
-              ),
+              !s.stopped &&
+              (s.loaded.clauses.has(m.name) ||
+                s.waiters.some(
+                  w =>
+                    w.running.run.suspended?.k === 'wait-for' &&
+                    w.running.run.suspended.whens.some(
+                      b => b.message === m.name,
+                    ),
+                )),
           )
           .map(s => {
-            const ballot: Ballot = { decision };
-            decision.ballots.push(ballot);
+            const ballot: Ballot | undefined = decision
+              ? { decision }
+              : undefined;
+            if (ballot) {
+              decision!.ballots.push(ballot);
+            }
             return {
               s,
               delivery: {
                 ballot,
-                broadcast: decision.id,
+                broadcast: id,
                 id: `d${++this.deliveries}`,
                 from: null,
                 at: s.owner,
@@ -808,8 +1159,8 @@ export class Group {
             };
           });
         return recordLine(
-          'decide-broadcast',
-          [decision.id],
+          record,
+          [id],
           [
             ...messageFields(m),
             [
@@ -824,12 +1175,11 @@ export class Group {
         for (const { s, delivery } of recipients) {
           s.queue.push(delivery);
         }
-        if (!recipients.length) {
+        if (decision && !recipients.length) {
           this.reportDecision(decision);
         }
       },
     });
-    return { id: decision.id, decided };
   }
 
   private seal(delivery: Delivery, result: NonNullable<Ballot['result']>) {
@@ -838,12 +1188,15 @@ export class Group {
       return;
     }
     ballot.result = result;
+    delivery.unsubscribe?.();
     if (ballot.decision.ballots.every(b => b.result)) {
       this.reportDecision(ballot.decision);
     }
   }
 
   private reportDecision(decision: Decision) {
+    decision.settled = true;
+    decision.unsubscribe?.();
     const vetoes = decision.ballots.flatMap(b =>
       b.result?.veto ? [b.result.veto] : [],
     );
@@ -914,13 +1267,14 @@ export class Group {
     return this.queueDelivery('deliver', this.held(to), m, null).id!;
   }
   /** Queued. As `deliver`, and settles when a Pump ends the Run. */
-  request(to: HostObject, m: Message): Requested {
+  request(to: HostObject, m: Message, o?: CancellationOptions): Requested {
     let settle!: Delivery['request'];
     const result = new Promise<Value>((resolve, reject) => {
       settle = { resolve, reject };
     });
     result.catch(() => {});
     const delivery = this.queueDelivery('request', this.held(to), m, settle);
+    this.watchCancellation(delivery, o?.signal);
     return { id: delivery.id!, result };
   }
 
@@ -981,9 +1335,6 @@ export class Group {
   /** Queued. Disposes an object: it stays a value, and sends to it raise `object gone`. */
   dispose(o: HostObject): void {
     const state = this.held(o);
-    if (state.owner) {
-      throw new NotImplementedError('disposing an Owning Script’s object');
-    }
     this.inputs.push({
       line: recordLine(
         'dispose',
@@ -993,6 +1344,12 @@ export class Group {
       ),
       apply: () => {
         state.disposed = true;
+        if (state.owner) {
+          this.stopState(
+            this.scripts.find(s => s.name === state.owner)!,
+            'owner disposed',
+          );
+        }
       },
     });
   }
@@ -1045,7 +1402,8 @@ export class Group {
   }
 
   // Settle what waits on a message's Run: a sender's reply, or a Request.
-  private answer(delivery: Delivery, outcome: Outcome) {
+  private answer(delivery: Delivery, outcome: Outcome | { kind: 'stopped' }) {
+    delivery.unsubscribe?.();
     if (delivery.reply) {
       this.settle(
         delivery.reply,
@@ -1093,8 +1451,25 @@ export class Group {
     this.lastClock = now;
     const slice = o.fuelSlice ?? 0;
     const cap = o.fuelCap ?? 0;
-    for (const input of this.inputs) {
-      this.trace(typeof input.line === 'string' ? input.line : input.line());
+    const drained = this.inputs;
+    this.inputs = [];
+    const reports: Report[] = [];
+    this.drainReports = reports;
+    const inputLines: string[] = [];
+    const outputLines: string[] = [];
+    this.drainingTrace = outputLines;
+    try {
+      for (const input of drained) {
+        inputLines.push(
+          typeof input.line === 'string' ? input.line : input.line(),
+        );
+        input.apply();
+      }
+    } finally {
+      this.drainingTrace = null;
+    }
+    for (const line of inputLines) {
+      this.trace(line);
     }
     this.trace(
       recordLine(
@@ -1108,12 +1483,8 @@ export class Group {
         true,
       ),
     );
-    const drained = this.inputs;
-    this.inputs = [];
-    const reports: Report[] = [];
-    this.drainReports = reports;
-    for (const input of drained) {
-      input.apply();
+    for (const line of outputLines) {
+      this.trace(line);
     }
     // Due timers fire in deadline order, then in the order they were set.
     const due = this.timers
@@ -1178,7 +1549,18 @@ export class Group {
     } finally {
       this.pumping = false;
     }
-    const state = this.scripts.some(s => s.queue.length) ? 'sliced' : 'idle';
+    this.landUrgentInputs();
+    for (const s of this.scripts) {
+      if (s.stopped) {
+        this.dropStoppedMailbox(s);
+      }
+    }
+    const state =
+      this.scripts.length && this.scripts.every(s => s.stopped)
+        ? 'stopped'
+        : this.scripts.some(s => s.queue.length)
+          ? 'sliced'
+          : 'idle';
     this.timers = this.timers.filter(t => t.live);
     const next = this.timers.reduce<bigint | null>(
       (min, t) => (min === null || t.deadline < min ? t.deadline : min),
@@ -1205,6 +1587,10 @@ export class Group {
     preempt: () => 'slice' | 'cap' | null,
     charge: (fuel: number) => void,
   ) {
+    if (s.stopped) {
+      this.dropStoppedMailbox(s);
+      return;
+    }
     let head = s.queue[0]!;
     let how: 'start' | 'continue' | 'resume' = 'continue';
     if (!('run' in head)) {
@@ -1247,14 +1633,42 @@ export class Group {
     const { run } = running;
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
-    const records0 = run.records.length;
-    let dispatchSealAt: number | null = null;
+
     const selected = () => {
       const clause = run.selectedClause;
       if (!running.selected && clause) {
+        const earlier = this.runsOf(s).filter(
+          r =>
+            r !== running &&
+            r.selected &&
+            r.delivery.message === running.delivery.message &&
+            r.run.clauseNumber === run.clauseNumber,
+        );
+        if (
+          !run.acceptClause(
+            earlier.length > 0 &&
+              (clause.policy === 'queued' || clause.policy === 'dropping'),
+          )
+        ) {
+          return;
+        }
         running.selected = true;
-        if (!clause.deciding) {
-          dispatchSealAt = run.records.length;
+        if (clause.policy === 'dropping' && earlier.length) {
+          run.drop();
+          return;
+        }
+        if (clause.policy === 'queued' && earlier.length) {
+          running.parked = run.park();
+        }
+        if (clause.policy === 'replacing') {
+          for (const r of earlier) {
+            if (!r.run.openVerdict) {
+              this.cancelRunning(s, r);
+            }
+          }
+        }
+        if (!clause.deciding && !run.done) {
+          this.seal(running.delivery, { verdict: 'allowed' });
         }
         run.openVerdict =
           clause.deciding === true &&
@@ -1262,23 +1676,212 @@ export class Group {
           !running.delivery.ballot.result;
       }
     };
+    this.active = { s, running, records: run.records.length };
+    if (running.cleanupReady) {
+      running.cleanupReady = false;
+      run.beginCleanupSegment();
+    } else if (how === 'resume' && !run.suspended && !run.cancelling) {
+      run.beginReadySegment();
+    }
     selected();
+    charge(run.fuel - fuel0);
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
-    while (!run.done && !run.suspended) {
+    while (!run.done && !run.suspended && !running.parked && !s.stopped) {
       by = preempt();
       if (by) {
         break;
       }
       run.step();
+      this.writeRecords(running, this.active.records);
+      this.active.records = run.records.length;
       selected();
       charge(run.fuel - last);
       last = run.fuel;
     }
-    for (let i = records0; i < run.records.length; i++) {
-      if (dispatchSealAt === i) {
-        this.seal(running.delivery, { verdict: 'allowed' });
+    this.active = null;
+    const outcome = run.ended;
+    if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
+      this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
+    }
+    if (outcome) {
+      s.suspended.delete(running);
+    }
+    if (outcome?.kind === 'limit fault') {
+      this.trace(
+        recordLine(
+          'fault',
+          [running.id],
+          [
+            ['limit', faultNames[outcome.limit] ?? outcome.limit],
+            ['at', `${outcome.unit}:${outcome.pc}`],
+            ['pos', `${outcome.line}:${outcome.col}`],
+            ['rollback', idList(outcome.rollback)],
+          ],
+        ),
+      );
+      for (const id of run.faultAbandons) {
+        this.trace(recordLine('abandon', [id], []));
       }
+    }
+    if (outcome?.kind === 'cancelled' && outcome.cleanupFailed) {
+      const failed = outcome.cleanupFailed;
+      this.trace(
+        recordLine(
+          'cleanup-failed',
+          [running.id],
+          [
+            ['code', 'code' in failed ? JSON.stringify(failed.code) : null],
+            [
+              'limit',
+              'limit' in failed
+                ? (faultNames[failed.limit] ?? failed.limit)
+                : null,
+            ],
+          ],
+        ),
+      );
+    }
+    const handler = s.loaded.clauses.has(running.delivery.message)
+      ? running.delivery.message
+      : null;
+    const start: [string, string | null][] =
+      how === 'start'
+        ? [
+            ['delivery', running.delivery.id],
+            ['broadcast', running.delivery.broadcast ?? null],
+            ['from', running.delivery.from],
+            ['handler', handler],
+            // No clause matched an unhandled Run.
+            [
+              'clause',
+              run.clauseNumber && outcome?.kind !== 'unhandled'
+                ? String(run.clauseNumber)
+                : null,
+            ],
+          ]
+        : [];
+    const stretch: [string, string][] = [
+      ['fuel', String(run.fuel - fuel0)],
+      ['alloc', String(run.alloc - alloc0)],
+    ];
+    if (s.stopped) {
+      this.trace(
+        recordLine(
+          'seg',
+          [running.id, how],
+          [
+            ...start,
+            ...stretch,
+            ['state', String(this.persistentState(s))],
+            ['end', 'stop'],
+          ],
+        ),
+      );
+      this.activeStop?.();
+      this.activeStop = null;
+      return;
+    }
+    if (running.parked && !outcome) {
+      s.queue.shift();
+      s.parked.push(running);
+      this.trace(
+        recordLine(
+          'seg',
+          [running.id, how],
+          [
+            ...start,
+            ...stretch,
+            ['state', String(this.persistentState(s))],
+            ['end', 'park'],
+          ],
+        ),
+      );
+      return;
+    }
+    if (!outcome && run.suspended) {
+      s.queue.shift();
+      const deadline = this.suspended(s, running, run.suspended);
+      this.trace(
+        recordLine(
+          'seg',
+          [running.id, how],
+          [
+            ...start,
+            ...stretch,
+            ['state', String(this.persistentState(s))],
+            [
+              'end',
+              run.suspended.k === 'wait-for' && run.suspended.any
+                ? 'wait-for-any'
+                : suspendReasons[run.suspended.k],
+            ],
+            ['until', deadline === null ? null : formatInstant(deadline)],
+          ],
+        ),
+      );
+      this.seal(running.delivery, { verdict: 'allowed' });
+      run.openVerdict = false;
+      return;
+    }
+    if (!outcome) {
+      this.trace(
+        recordLine(
+          'preempt',
+          [running.id, how],
+          [...start, ['by', by], ...stretch],
+        ),
+      );
+      this.writeCancellationAbandons(run);
+      return;
+    }
+    s.queue.shift();
+    this.trace(
+      recordLine(
+        'seg',
+        [running.id, how],
+        [
+          ...start,
+          ...stretch,
+          ['state', String(this.persistentState(s))],
+          ['end', endReason(outcome)],
+          [
+            'value',
+            outcome.kind === 'completed' &&
+            outcome.veto?.kind !== 'nothing' &&
+            outcome.veto
+              ? traceValue(outcome.veto)
+              : null,
+          ],
+        ],
+      ),
+    );
+    if (outcome.kind === 'completed' && !outcome.passed) {
+      this.seal(
+        running.delivery,
+        outcome.veto
+          ? {
+              verdict: 'vetoed',
+              veto: { script: s.name, run: running.id, reason: outcome.veto },
+            }
+          : { verdict: 'allowed' },
+      );
+    }
+    this.writeCancellationAbandons(run);
+    run.openVerdict = false;
+    this.endRun(s, running, outcome, reports, handler);
+  }
+
+  private writeCancellationAbandons(run: Run) {
+    for (const id of run.cancellationAbandons) {
+      this.trace(recordLine('abandon', [id], []));
+    }
+    run.cancellationAbandons = [];
+  }
+
+  private writeRecords(running: Running, records0: number) {
+    const { run } = running;
+    for (let i = records0; i < run.records.length; i++) {
       const rec = run.records[i]!;
       if (rec.kind === 'abandon') {
         this.trace(recordLine('abandon', [rec.id], []));
@@ -1383,125 +1986,6 @@ export class Group {
             ),
       );
     }
-    if (dispatchSealAt === run.records.length) {
-      this.seal(running.delivery, { verdict: 'allowed' });
-    }
-    const outcome = run.ended;
-    if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
-      this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
-    }
-    if (outcome) {
-      s.suspended.delete(running);
-    }
-    if (outcome?.kind === 'limit fault') {
-      this.trace(
-        recordLine(
-          'fault',
-          [running.id],
-          [
-            ['limit', faultNames[outcome.limit] ?? outcome.limit],
-            ['at', `${outcome.unit}:${outcome.pc}`],
-            ['pos', `${outcome.line}:${outcome.col}`],
-            ['rollback', idList(outcome.rollback)],
-          ],
-        ),
-      );
-      for (const id of run.faultAbandons) {
-        this.trace(recordLine('abandon', [id], []));
-      }
-    }
-    const handler = s.loaded.clauses.has(running.delivery.message)
-      ? running.delivery.message
-      : null;
-    const start: [string, string | null][] =
-      how === 'start'
-        ? [
-            ['delivery', running.delivery.id],
-            ['broadcast', running.delivery.broadcast ?? null],
-            ['from', running.delivery.from],
-            ['handler', handler],
-            // No clause matched an unhandled Run.
-            [
-              'clause',
-              run.clauseNumber && outcome?.kind !== 'unhandled'
-                ? String(run.clauseNumber)
-                : null,
-            ],
-          ]
-        : [];
-    const stretch: [string, string][] = [
-      ['fuel', String(run.fuel - fuel0)],
-      ['alloc', String(run.alloc - alloc0)],
-    ];
-    if (!outcome && run.suspended) {
-      s.queue.shift();
-      const deadline = this.suspended(s, running, run.suspended);
-      this.trace(
-        recordLine(
-          'seg',
-          [running.id, how],
-          [
-            ...start,
-            ...stretch,
-            ['state', String(this.persistentState(s))],
-            [
-              'end',
-              run.suspended.k === 'wait-for' && run.suspended.any
-                ? 'wait-for-any'
-                : suspendReasons[run.suspended.k],
-            ],
-            ['until', deadline === null ? null : formatInstant(deadline)],
-          ],
-        ),
-      );
-      this.seal(running.delivery, { verdict: 'allowed' });
-      run.openVerdict = false;
-      return;
-    }
-    if (!outcome) {
-      this.trace(
-        recordLine(
-          'preempt',
-          [running.id, how],
-          [...start, ['by', by], ...stretch],
-        ),
-      );
-      return;
-    }
-    s.queue.shift();
-    this.trace(
-      recordLine(
-        'seg',
-        [running.id, how],
-        [
-          ...start,
-          ...stretch,
-          ['state', String(this.persistentState(s))],
-          ['end', endReason(outcome)],
-          [
-            'value',
-            outcome.kind === 'completed' &&
-            outcome.veto?.kind !== 'nothing' &&
-            outcome.veto
-              ? traceValue(outcome.veto)
-              : null,
-          ],
-        ],
-      ),
-    );
-    if (outcome.kind === 'completed' && !outcome.passed) {
-      this.seal(
-        running.delivery,
-        outcome.veto
-          ? {
-              verdict: 'vetoed',
-              veto: { script: s.name, run: running.id, reason: outcome.veto },
-            }
-          : { verdict: 'allowed' },
-      );
-    }
-    run.openVerdict = false;
-    this.endRun(s, running, outcome, reports, handler);
   }
 
   private endRun(
@@ -1546,6 +2030,18 @@ export class Group {
       ...(delivery.id ? { delivery: delivery.id } : {}),
       ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
       ...(handler ? { handler } : {}),
+      ...(outcome.kind === 'cancelled' && outcome.cleanupFailed
+        ? {
+            cleanupFailed:
+              'code' in outcome.cleanupFailed
+                ? outcome.cleanupFailed
+                : {
+                    limit:
+                      faultNames[outcome.cleanupFailed.limit] ??
+                      outcome.cleanupFailed.limit,
+                  },
+          }
+        : {}),
       outcome: outcome.kind,
       ...(result ? { result } : {}),
       ...(error ? { error } : {}),
@@ -1553,7 +2049,13 @@ export class Group {
       fuel: run.fuel,
       alloc: run.alloc,
     });
-    if (outcome.kind === 'errored' || outcome.kind === 'limit fault') {
+    this.releaseParked(s, running);
+    if (
+      outcome.kind === 'errored' ||
+      outcome.kind === 'limit fault' ||
+      outcome.kind === 'cancelled' ||
+      outcome.kind === 'dropped'
+    ) {
       this.seal(delivery, {
         verdict: 'undecided',
         undecided: { script: s.name, run: running.id, outcome: outcome.kind },
@@ -1623,20 +2125,38 @@ export class Group {
     this.answer(delivery, outcome);
   }
 
+  private releaseParked(s: ScriptState, ended: Running) {
+    const sameClause = (r: Running) =>
+      r.delivery.message === ended.delivery.message &&
+      r.run.clauseNumber === ended.run.clauseNumber;
+    if (this.runsOf(s).some(r => !r.parked && sameClause(r))) {
+      return;
+    }
+    const next = s.parked.find(sameClause);
+    if (!next) {
+      return;
+    }
+    s.parked = s.parked.filter(r => r !== next);
+    next.parked = false;
+    next.resuming = true;
+    s.queue.push(next);
+  }
+
   /** A Script's Persistent State: its Script Variables and the messages it holds. */
   private persistentState(s: ScriptState, skip = 0): number {
     let total = s.loaded.variablesSize();
-    for (const r of s.suspended) {
+    for (const r of [...s.suspended, ...s.parked]) {
       total += r.run.size();
     }
     for (const item of s.queue.slice(skip)) {
-      if (!('run' in item)) {
-        total += partSize(
-          'message',
-          0,
-          item.args.reduce((sum, v) => sum + sizeOf(v), 0),
-        );
-      }
+      total +=
+        'run' in item
+          ? item.run.size()
+          : partSize(
+              'message',
+              0,
+              item.args.reduce((sum, v) => sum + sizeOf(v), 0),
+            );
     }
     return total;
   }
@@ -1659,26 +2179,17 @@ export class Group {
       return {
         name: s.name,
         vars,
-        runs: [
-          ...s.queue.flatMap(item =>
-            'run' in item
-              ? [
-                  {
-                    id: item.id,
-                    status: item.resuming
-                      ? ('ready' as const)
-                      : ('preempted' as const),
-                    handler: item.delivery.message,
-                  },
-                ]
-              : [],
-          ),
-          ...[...s.suspended].map(item => ({
-            id: item.id,
-            status: 'suspended' as const,
-            handler: item.delivery.message,
-          })),
-        ],
+        runs: this.runsOf(s).map(item => ({
+          id: item.id,
+          status: item.parked
+            ? ('parked' as const)
+            : s.suspended.has(item)
+              ? ('suspended' as const)
+              : item.resuming
+                ? ('ready' as const)
+                : ('preempted' as const),
+          handler: item.delivery.message,
+        })),
         mailbox: s.queue.flatMap(item =>
           'run' in item
             ? []
@@ -1728,6 +2239,10 @@ const endReason = (outcome: Outcome): string => {
       return 'fault';
     case 'unhandled':
       return 'unhandled';
+    case 'dropped':
+      return 'dropped';
+    case 'cancelled':
+      return 'cancel';
   }
 };
 

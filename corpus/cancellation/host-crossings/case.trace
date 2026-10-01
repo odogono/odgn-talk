@@ -1,0 +1,20 @@
+# Host Inputs inside a Pump are replayed from their crossing functions.
+> load s identity=f67d894ee8542bff271d7fa91f25332f1fb9c8c3fe77867ee1fa5e97d47857b8
+> load t identity=5c0fe2109b1fc35d06e751103acdd468f4b1c7a3a86ab129dde2c5300fb0ef13
+> stub api.cancel value=1
+> deliver d1 to=s message=go
+> decide d2 to=t message=go
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.cancel args=[] result=1
+> cancel-run s/r1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=16 state=16 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=29 alloc=16
+prop t/r1 object=<object switch "w"> name=value op=get value=1
+> stop t reason="off"
+seg t/r1 start delivery=d2 handler=go clause=1 fuel=11 alloc=0 state=16 end=stop
+stopped t reason="off" discarded=[t/r1]
+decided d2 verdict=undecided undecided=[{script: "t", run: "t/r1", outcome: "cancelled"}]
+pumped state=idle fuel=40
+> vars
+vars s n=1
+vars t n=0

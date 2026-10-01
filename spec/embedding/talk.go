@@ -804,12 +804,18 @@ type RunEnd struct {
 	Broadcast BroadcastID // empty unless the Delivery was a Broadcast's
 	Handler   string
 	Outcome   Outcome
+	CleanupFailed *CleanupFailure // Cancelled, only when its cleanup failed
 	Result    Value        // Completed
 	Error     *ScriptError // Errored
-	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "pattern", "join"; "cleanup" for cleanup that failed
+	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "pattern", "join"
 	At        Location
 	Fuel      int64
 	Alloc     int64
+}
+
+type CleanupFailure struct {
+	Code string // the error's code, or empty when a limit ended cleanup
+	Limit string // "cleanup", "alloc", "persistent", "depth", "pattern", "join", or empty for an error
 }
 
 type Stop struct {

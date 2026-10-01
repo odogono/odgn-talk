@@ -1,0 +1,23 @@
+# Error cleanup keeps its write; a limit rolls cleanup back to committed 9.
+> load error identity=00a051bbf9f99e49fe8d14275190c7b1b9b6b92680f152a07461f05f9ec4a6c1
+> load limited identity=661a90945f0c225c0c673ce6b3680e99aec1318b2008c5336647c38be5f43d38
+> deliver d1 to=error message=go
+> deliver d2 to=limited message=go
+> pump clock=2026-10-01T09:00:00Z
+seg error/r1 start delivery=d1 handler=go clause=1 fuel=18 alloc=0 state=192 end=wait until=2026-10-01T09:00:01Z
+seg limited/r1 start delivery=d2 handler=go clause=1 fuel=18 alloc=0 state=192 end=wait until=2026-10-01T09:00:01Z
+pumped state=idle fuel=36 next=2026-10-01T09:00:01Z
+> cancel-run error/r1
+> cancel-run limited/r1
+> pump clock=2026-10-01T09:00:00Z
+raise error/r1 code="broken cleanup" at=error:16 pos=9:7
+cleanup-failed error/r1 code="broken cleanup"
+seg error/r1 resume fuel=14 alloc=48 state=16 end=cancel
+run error/r1 outcome=cancelled delivery=d1 handler=go fuel=32 alloc=48
+cleanup-failed limited/r1 limit=cleanup
+seg limited/r1 resume fuel=4 alloc=0 state=16 end=cancel
+run limited/r1 outcome=cancelled delivery=d2 handler=go fuel=22 alloc=0
+pumped state=idle fuel=18
+> vars
+vars error n=1
+vars limited n=9

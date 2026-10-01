@@ -1,0 +1,15 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "widget"
+[[objects]]
+kind = "widget"
+id = "w"
+[[scripts]]
+name = "s"
+source = "s.talk"
+owner = { kind = "widget", id = "w" }

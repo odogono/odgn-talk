@@ -47,7 +47,7 @@ pumped state=idle fuel=569 next=2026-09-30T09:00:05Z
 > answer board/r1.c1 value=1
 > fail board/r3.c3 error={code: "no feed"}
 > pump clock=2026-09-30T09:00:01Z
-seg board/r1 resume fuel=16 alloc=272 state=556 end=return
+seg board/r1 resume fuel=16 alloc=272 state=895 end=return
 run board/r1 outcome=completed delivery=d1 handler=gather fuel=164 alloc=394
 raise board/r3 code="no feed" at=board:16 pos=7:5
 abandon board/r3.c1

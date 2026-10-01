@@ -12,7 +12,7 @@ seg watcher/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=22
 pumped state=idle fuel=14
 > decide-broadcast b1 message=move args=[true] recipients=[watcher:d2, broken:d3, decider:d4]
 > pump clock=2026-09-30T10:00:01Z
-seg watcher/r2 start delivery=d2 broadcast=b1 fuel=0 alloc=0 state=16 end=unhandled
+seg watcher/r2 start delivery=d2 broadcast=b1 fuel=0 alloc=0 state=356 end=unhandled
 run watcher/r2 outcome=unhandled delivery=d2 broadcast=b1 fuel=0 alloc=0
 raise broken/r1 code="broken" at=broken:3 pos=2:3
 seg broken/r1 start delivery=d3 broadcast=b1 handler=move clause=1 fuel=19 alloc=48 state=0 end=error

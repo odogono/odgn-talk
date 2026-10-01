@@ -9,6 +9,10 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Broadcasts, AbortSignal cancellation for Requests and Decisions, CancelRun, sticky Stop Script and owner disposal, plus clause-level `queued`, `dropping` and `replacing` policies, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+- Cancellation cleanup with Segment rollback, call abandonment, a separate Cleanup Budget, Fuel Slices and cap preemption, and `cleanupFailed` reports; six cancellation Trace Cases and four newly supported seeds.
+- Spec rules for post-Stop Deliveries and Group state, the cleanup-failure report shape, ready-state accounting and abandonment after preempted cleanup; replay handles Stops and CancelRun inside Host crossings and mailbox refusals ahead of queued inputs.
+
 - Decisions in the TS Core: `decide`, `decideBroadcast`, `veto`, first-Segment Verdict sealing, `decided` reports, Message Path passing, Broadcast aggregation and `wait for` allowing a Decision, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-two tests and nine decision Trace Cases cover seals, preemptions, errors, faults, dispatch and recipients.
 - Decision load checks for veto outside a deciding entry Handler, local Handler calls, veto in Joins and veto or deciding pass after a possible Suspension Point. Spec fixes include function-style Handler calls in the veto restriction, forbid veto inside a Join, define Broadcast overrides as additional per-recipient caps, and place dispatch-time `decided` records before the Handler's Stretch.
 
@@ -62,6 +66,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Persistent State counts ready Runs and their retained answers, as well as parked Runs and cancellation cleanup. Seven existing Trace Cases have corrected state figures; Cost Model rates are unchanged.
 
 - Delivery and Decision limit overrides reject fractional, negative and non-finite values before allocating ids, including fractional `MaxWait`.
 

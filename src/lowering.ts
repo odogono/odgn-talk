@@ -253,6 +253,7 @@ class UnitLowering {
         clauses.set(decl.name, clause);
         const body = this.newBody('handler', decl.name, clause);
         body.deciding = decl.deciding;
+        body.policy = decl.policy;
         body.params = decl.params.map(p =>
           p.k === 'bind' ? p.name.text : '…',
         );

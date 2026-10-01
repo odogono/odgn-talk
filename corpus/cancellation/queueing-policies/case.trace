@@ -1,0 +1,34 @@
+# Dispatch charges once; parked work resumes FIFO while other clauses flow.
+> load s identity=1a199a00ec4cc3f7ef5269b44d2492d8290df85f92d7ccf638160c1e2caf36cf
+> deliver d1 to=s message=queued args=[1]
+> deliver d2 to=s message=queued args=[2]
+> deliver d3 to=s message=dropping args=[3]
+> deliver d4 to=s message=dropping args=[4]
+> deliver d5 to=s message=replacing args=[5]
+> deliver d6 to=s message=replacing args=[6]
+> pump clock=2026-10-01T09:00:00Z
+seg s/r1 start delivery=d1 handler=queued clause=1 fuel=24 alloc=24 state=504 end=wait until=2026-10-01T09:00:01Z
+seg s/r2 start delivery=d2 handler=queued clause=1 fuel=4 alloc=0 state=672 end=park
+seg s/r3 start delivery=d3 handler=dropping clause=1 fuel=15 alloc=0 state=840 end=wait until=2026-10-01T09:00:01Z
+seg s/r4 start delivery=d4 handler=dropping clause=1 fuel=4 alloc=0 state=792 end=dropped
+run s/r4 outcome=dropped delivery=d4 handler=dropping fuel=4 alloc=0
+seg s/r5 start delivery=d5 handler=replacing clause=1 fuel=24 alloc=24 state=992 end=wait until=2026-10-01T09:00:01Z
+seg s/r6 start delivery=d6 handler=replacing clause=1 fuel=24 alloc=24 state=1192 end=wait until=2026-10-01T09:00:01Z
+seg s/r5 resume fuel=16 alloc=40 state=992 end=cancel
+run s/r5 outcome=cancelled delivery=d5 handler=replacing fuel=40 alloc=64
+pumped state=idle fuel=111 next=2026-10-01T09:00:01Z
+> pump clock=2026-10-01T09:00:01Z
+seg s/r1 resume fuel=18 alloc=40 state=792 end=return
+run s/r1 outcome=completed delivery=d1 handler=queued fuel=42 alloc=64
+seg s/r3 resume fuel=12 alloc=24 state=600 end=return
+run s/r3 outcome=completed delivery=d3 handler=dropping fuel=27 alloc=24
+seg s/r6 resume fuel=18 alloc=40 state=400 end=return
+run s/r6 outcome=completed delivery=d6 handler=replacing fuel=42 alloc=64
+seg s/r2 resume fuel=20 alloc=24 state=432 end=wait until=2026-10-01T09:00:02Z
+pumped state=idle fuel=68 next=2026-10-01T09:00:02Z
+> pump clock=2026-10-01T09:00:02Z
+seg s/r2 resume fuel=18 alloc=40 state=232 end=return
+run s/r2 outcome=completed delivery=d2 handler=queued fuel=42 alloc=64
+pumped state=idle fuel=18
+> vars
+vars s got=[1, 5, 6, 50, 10, 3, 60, 2, 20]

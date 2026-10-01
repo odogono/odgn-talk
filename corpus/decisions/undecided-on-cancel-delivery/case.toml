@@ -1,7 +1,6 @@
 # undecided-on-cancel-delivery: a Host that can't wait cancels a Decision
 # before its seal, which leaves it undecided, `cancelled`, and a cancel after
-# the seal does nothing (ADR 0031, #79). Its figures are estimates, so it
-# isn't blessed.
+# the seal does nothing (ADR 0031, #79). Its figures are Cost Model 0's, blessed by the TS Core.
 
 kind = "trace"
 

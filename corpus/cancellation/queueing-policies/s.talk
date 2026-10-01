@@ -1,0 +1,21 @@
+script variable got = []
+on queued n, queued
+  try
+    put n after got
+    wait 1 s
+  finally
+    put n * 10 after got
+  end try
+end queued
+on dropping n, dropping
+  wait 1 s
+  put n after got
+end dropping
+on replacing n, replacing
+  try
+    put n after got
+    wait 1 s
+  finally
+    put n * 10 after got
+  end try
+end replacing

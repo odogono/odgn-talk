@@ -21,7 +21,7 @@ pumped state=idle fuel=14
 decided d3 verdict=allowed
 guard-skip observer/r3 at=observer:17 pos=8:19 code="division by zero"
 note observer/r3 kind=no-verdict
-seg observer/r3 start delivery=d3 handler=move clause=2 fuel=23 alloc=0 state=16 end=veto value=-1
+seg observer/r3 start delivery=d3 handler=move clause=2 fuel=23 alloc=0 state=372 end=veto value=-1
 run observer/r3 outcome=completed delivery=d3 handler=move fuel=23 alloc=0
 seg observer/r2 resume fuel=14 alloc=16 state=16 end=return
 run observer/r2 outcome=completed delivery=d2 handler=watch fuel=39 alloc=56

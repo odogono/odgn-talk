@@ -516,6 +516,7 @@ export type Report =
       broadcast?: string;
       handler?: string; // absent with run
       outcome: Outcome;
+      cleanupFailed?: { code: string } | { limit: "cleanup" | "alloc" | "persistent" | "depth" | "pattern" | "join" };
       result?: Value;
       error?: ScriptError;
       limit?: "fuel" | "alloc" | "persistent" | "depth" | "pattern" | "join" | "cleanup";

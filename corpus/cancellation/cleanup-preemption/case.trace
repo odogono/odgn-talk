@@ -1,0 +1,22 @@
+# Cleanup uses its own budget, participates in cap preemption, and abandons once.
+> load s identity=c254be46ec47d6baca434d252cc67423a894062075be44960f714c51026d8ce1
+> deliver d1 to=s message=go
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.hold args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=14 alloc=0 state=256 end=ask-wait
+pumped state=idle fuel=14 next=2026-10-01T09:00:30Z
+> cancel-run s/r1
+> pump clock=2026-10-01T09:00:00Z fuel-cap=10
+preempt s/r1 resume by=cap fuel=10 alloc=24
+abandon s/r1.c1
+pumped state=sliced fuel=10
+> pump clock=2026-10-01T09:00:00Z
+seg s/r1 continue fuel=138 alloc=160 state=16 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=162 alloc=184
+pumped state=idle fuel=138
+> answer s/r1.c1 value=1
+> pump clock=2026-10-01T09:00:00Z
+note s/r1.c1 kind=late-answer
+pumped state=idle fuel=0
+> vars
+vars s n=10

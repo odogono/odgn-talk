@@ -245,6 +245,7 @@ export type Handler = {
   k: 'handler';
   name: string;
   params: Pattern[];
+  policy?: 'queued' | 'dropping' | 'replacing';
   pos: Pos;
   private?: boolean;
   scope: number;
@@ -809,6 +810,12 @@ const handler = (node: SemanticNode, of: Of): Handler => {
     k: 'handler',
     during,
     deciding: children.some(c => c.kind === 'token' && c.text === 'deciding'),
+    policy: children
+      .filter(c => c.kind === 'token')
+      .map(c => c.text)
+      .find(t =>
+        ['queued', 'dropping', 'replacing'].includes(t),
+      ) as Handler['policy'],
     pos: pos(node),
     name: of<SemanticName>(children[1]).text,
     scope: node.scope,
