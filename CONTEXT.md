@@ -180,6 +180,34 @@ _Avoid_: warning (unqualified), diagnostic (unqualified)
 A named set of Lint levels, `beginner` or `standard`. The Host picks the default and a user may override it.
 _Avoid_: layer, level, mode
 
+## Browser authoring
+
+Terms for the planned [browser creative tool](https://github.com/odogono/odgn-talk/issues/154).
+
+**Project**:
+An authored collection of Pages, assets and Scripts that forms one interactive creation.
+_Avoid_: Stack, Book, application (for the authored creation)
+
+**Page**:
+A scrolling visual surface within a Project, containing freely positioned Elements and optionally its own Owning Script.
+_Avoid_: Card, screen, canvas (for the Page)
+
+**Element**:
+A visual item on a Page: rich text, an image, a button or a shape, optionally with its own Owning Script.
+_Avoid_: widget, component, control (for all Element kinds)
+
+**Script Recipe**:
+A small editable NorthTalk source example for a common authoring task.
+_Avoid_: visual action, macro, behavior block
+
+**Play Session**:
+One interaction with a Project from its authored starting state until the reader or author stops playing.
+_Avoid_: Run, Session Script, preview (for the session)
+
+**Play State**:
+The temporary state of a Play Session, including reader input, visual changes, created or deleted Elements and Script Variables.
+_Avoid_: Project, Script Snapshot, saved progress
+
 ## Syntax
 
 **Reserved Word**:
