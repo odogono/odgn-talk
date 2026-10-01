@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- The number and Float Built-ins in the Core: `sqrt`, `exp`, `ln`, `log10`, `power`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan` and `atan2`, correctly rounded to 34 digits, and `fromFloat64`, `fromFloat32`, `toFloat64` and `toFloat32`; with `math/` Trace Cases, and Spec fixes for the fields of their domain errors and the rounding of floats, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Instants and Civil Dates in the Core: the `instant` and `civilDate` Host constructors, their display form and `$instant` and `$date` Value Encoding, date arithmetic and comparison, `as civil date` and `as instant`, and the date Built-ins; with `dates/` Trace and Value Encoding cases, and Spec fixes for the fields of date errors, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Bytes and Binary Patterns in the Core: the `bytes` Host constructor, their display form and `$bytes` Value Encoding, `<< … >>` builds, Binary Pattern matching, `byte` chunks, `the bytes of`, `as text` and `as bytes`, comparison and Bytes searches; with `bytes/` Trace and Value Encoding cases, and Spec fixes for what chapters 4 and 8 left open, including the `bytes-sized` instruction for `v as n bytes` in a build, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).

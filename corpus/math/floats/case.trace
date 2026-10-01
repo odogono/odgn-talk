@@ -1,0 +1,14 @@
+# floats: binary32's nearest float to 0.1 reads back as 0.1, negative zero
+# reads as 0, and a negative number too small for binary32 writes negative
+# zero. Its Fuel, allocation and state figures are Cost Model 0's, as the TS
+# Core blessed them.
+
+> load floats identity=3f7947e432467b3af66c37af439ca9382b075be78902cbd7a29a19caed3480cf
+> deliver d1 to=floats message=go
+> pump clock=2026-09-30T09:00:00Z
+seg floats/r1 start delivery=d1 handler=go clause=1 fuel=206 alloc=872 state=232 end=return
+run floats/r1 outcome=completed delivery=d1 handler=go fuel=206 alloc=872
+pumped state=idle fuel=206
+
+> vars
+vars floats read=[0.1, 0.1, -1.5, 0] written=[<<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x3F>>, <<0x3D, 0xCC, 0xCC, 0xCD>>, <<0x80, 0x00, 0x00, 0x00>>] trip=3.1415927

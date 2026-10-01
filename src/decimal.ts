@@ -122,6 +122,13 @@ const aligned = (a: Dec, b: Dec) => {
 const signed = (value: bigint, d: bigint, e: number, ideal: number) =>
   result(value < 0n, value < 0n ? -value : value, d, e, ideal);
 
+/**
+ * The exact value num/den × 10^exponent (den > 0) rounded once, with any
+ * trailing zeros after the point dropped: chapter 7's correctly rounded form.
+ */
+export const roundRatio = (num: bigint, den: bigint, exponent: number): Dec =>
+  signed(num, den, exponent, 0);
+
 export const add = (a: Dec, b: Dec): Dec => {
   const { sa, sb, e } = aligned(a, b);
   return signed(sa + sb, 1n, e, e);

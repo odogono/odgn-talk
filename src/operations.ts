@@ -20,6 +20,21 @@ import {
   type Dec,
 } from './decimal';
 import { itemsOf } from './costs';
+import { BINARY32, BINARY64, readFloat, writeFloat } from './floats';
+import {
+  acos,
+  asin,
+  atan,
+  atan2,
+  cos,
+  exp,
+  ln,
+  log10,
+  power,
+  sin,
+  sqrt,
+  tan,
+} from './math';
 import {
   addMonths,
   checkInstant,
@@ -1739,6 +1754,90 @@ const offsetOf = (name: string, v: Value): bigint => {
   return whole * NS_PER_SECOND;
 };
 
+// Chapter 7's correctly rounded number functions, on plain numbers, with
+// their domains.
+const unary: Record<string, (x: Dec) => Dec> = {
+  sqrt,
+  exp,
+  ln,
+  log10,
+  sin,
+  cos,
+  tan,
+  asin,
+  acos,
+  atan,
+};
+const ONE: Dec = { negative: false, coefficient: 1n, exponent: 0 };
+const inDomain = (name: string, x: Dec): boolean => {
+  switch (name) {
+    case 'sqrt':
+      return !x.negative;
+    case 'ln':
+    case 'log10':
+      return !x.negative && x.coefficient !== 0n;
+    case 'asin':
+    case 'acos':
+      return compareDec({ ...x, negative: false }, ONE) <= 0;
+  }
+  return true;
+};
+const numberFunction = (name: string, args: readonly Value[]): Value => {
+  const [x, y] = args.map(numberOperand) as [Dec, Dec | undefined];
+  try {
+    if (name === 'power') {
+      if (x.negative && !isInteger(y!)) {
+        throw outOfDomain(name, args[0]!);
+      }
+      return numberValue(power(x, y!));
+    }
+    if (name === 'atan2') {
+      if (x.coefficient === 0n && y!.coefficient === 0n) {
+        throw outOfDomain(name, args[0]!);
+      }
+      return numberValue(atan2(x, y!));
+    }
+    if (!inDomain(name, x)) {
+      throw outOfDomain(name, args[0]!);
+    }
+    return numberValue(unary[name]!(x));
+  } catch (error) {
+    throw arithmeticRaise(error, name);
+  }
+};
+
+// `order` in the Float Built-ins: "big" or "little", as whether it's little.
+const littleOrder = (name: string, v: Value): boolean => {
+  if (v.kind !== 'text') {
+    throw wrongKind('text', v);
+  }
+  if (textOf(v) !== 'big' && textOf(v) !== 'little') {
+    throw outOfDomain(name, v);
+  }
+  return textOf(v) === 'little';
+};
+const fromFloat = (name: string, b: Value, order: Value): Value => {
+  const format = name === 'fromFloat64' ? BINARY64 : BINARY32;
+  const view = b.bytesView();
+  if (b.kind !== 'bytes' || !view) {
+    throw wrongKind('bytes', b);
+  }
+  const little = littleOrder(name, order);
+  if (view.length !== format.bytes) {
+    throw outOfDomain(name, b);
+  }
+  const d = readFloat(view, format, little);
+  if (!d || d.coefficient >= 10n ** BigInt(34 - d.exponent)) {
+    throw cantConvert(b, 'number');
+  }
+  return numberValue(d);
+};
+const toFloat = (name: string, n: Value, order: Value): Value => {
+  const format = name === 'toFloat64' ? BINARY64 : BINARY32;
+  const d = numberOperand(n);
+  return bytesOf(writeFloat(d, format, littleOrder(name, order)));
+};
+
 export type BuiltinResult = { result: Value; scanned?: number; steps?: number };
 /** A Built-in call, with its defaults filled in. */
 export const builtin = (
@@ -1856,6 +1955,25 @@ export const builtin = (
         name === 'floor' ? 'floor' : name === 'ceiling' ? 'ceiling' : 'down';
       return { result: sameUnit(x!, roundTo(d, 0, mode)) };
     }
+    case 'sqrt':
+    case 'exp':
+    case 'ln':
+    case 'log10':
+    case 'power':
+    case 'sin':
+    case 'cos':
+    case 'tan':
+    case 'asin':
+    case 'acos':
+    case 'atan':
+    case 'atan2':
+      return { result: numberFunction(name, args) };
+    case 'fromFloat64':
+    case 'fromFloat32':
+      return { result: fromFloat(name, x!, y!) };
+    case 'toFloat64':
+    case 'toFloat32':
+      return { result: toFloat(name, x!, y!) };
     case 'round': {
       const d = magnitudeOperand(x!);
       const places = numberOperand(y!);
@@ -1880,4 +1998,8 @@ export const builtin = (
 /** A Built-in's defaults, from stdlib.toml's call notation. */
 export const builtinDefaults: Record<string, Value[]> = {
   round: [num(0), text('half up')],
+  fromFloat64: [text('big')],
+  fromFloat32: [text('big')],
+  toFloat64: [text('big')],
+  toFloat32: [text('big')],
 };
