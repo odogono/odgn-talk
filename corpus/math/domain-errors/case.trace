@@ -1,0 +1,46 @@
+# domain-errors: `power` of a negative number names the base, `atan2(0, 0)`
+# names its 0, `power(0, -0.5)` is `division by zero`, and a bad `order` is
+# `out of domain` like a bad length.
+
+> load domains identity=6be8da937098d7ed5f24a1723731a305c8ca5a819935a943532f39797c0635ea
+> deliver d1 to=domains message=root
+> deliver d2 to=domains message=logarithm
+> deliver d3 to=domains message=base
+> deliver d4 to=domains message=reciprocal
+> deliver d5 to=domains message=angle
+> deliver d6 to=domains message=large
+> deliver d7 to=domains message=width
+> deliver d8 to=domains message=order
+> deliver d9 to=domains message=infinite
+> pump clock=2026-09-30T09:00:00Z
+raise domains/r1 code="out of domain" at=domains:4 pos=5:10
+seg domains/r1 start delivery=d1 handler=root clause=1 fuel=71 alloc=16 state=256 end=error
+run domains/r1 outcome=errored delivery=d1 handler=root error={code: "out of domain", function: "sqrt", value: -1, at: {unit: "domains", handler: "root", line: 5, column: 10}} fuel=71 alloc=16
+raise domains/r2 code="out of domain" at=domains:10 pos=9:10
+seg domains/r2 start delivery=d2 handler=logarithm clause=1 fuel=69 alloc=0 state=224 end=error
+run domains/r2 outcome=errored delivery=d2 handler=logarithm error={code: "out of domain", function: "ln", value: 0, at: {unit: "domains", handler: "logarithm", line: 9, column: 10}} fuel=69 alloc=0
+raise domains/r3 code="out of domain" at=domains:18 pos=13:10
+seg domains/r3 start delivery=d3 handler=base clause=1 fuel=72 alloc=16 state=192 end=error
+run domains/r3 outcome=errored delivery=d3 handler=base error={code: "out of domain", function: "power", value: -8, at: {unit: "domains", handler: "base", line: 13, column: 10}} fuel=72 alloc=16
+raise domains/r4 code="division by zero" at=domains:26 pos=17:10
+seg domains/r4 start delivery=d4 handler=reciprocal clause=1 fuel=72 alloc=16 state=160 end=error
+run domains/r4 outcome=errored delivery=d4 handler=reciprocal error={code: "division by zero", at: {unit: "domains", handler: "reciprocal", line: 17, column: 10}} fuel=72 alloc=16
+raise domains/r5 code="out of domain" at=domains:33 pos=21:10
+seg domains/r5 start delivery=d5 handler=angle clause=1 fuel=70 alloc=0 state=128 end=error
+run domains/r5 outcome=errored delivery=d5 handler=angle error={code: "out of domain", function: "atan2", value: 0, at: {unit: "domains", handler: "angle", line: 21, column: 10}} fuel=70 alloc=0
+raise domains/r6 code="overflow" at=domains:39 pos=25:10
+seg domains/r6 start delivery=d6 handler=large clause=1 fuel=69 alloc=0 state=96 end=error
+run domains/r6 outcome=errored delivery=d6 handler=large error={code: "overflow", operator: "exp", at: {unit: "domains", handler: "large", line: 25, column: 10}} fuel=69 alloc=0
+raise domains/r7 code="out of domain" at=domains:53 pos=29:10
+seg domains/r7 start delivery=d7 handler=width clause=1 fuel=33 alloc=74 state=64 end=error
+run domains/r7 outcome=errored delivery=d7 handler=width error={code: "out of domain", function: "fromFloat64", value: <<0x01, 0x02, 0x03, 0x04>>, at: {unit: "domains", handler: "width", line: 29, column: 10}} fuel=33 alloc=74
+raise domains/r8 code="out of domain" at=domains:60 pos=33:10
+seg domains/r8 start delivery=d8 handler=order clause=1 fuel=18 alloc=0 state=32 end=error
+run domains/r8 outcome=errored delivery=d8 handler=order error={code: "out of domain", function: "toFloat32", value: "middle", at: {unit: "domains", handler: "order", line: 33, column: 10}} fuel=18 alloc=0
+raise domains/r9 code="can't convert" at=domains:74 pos=37:10
+seg domains/r9 start delivery=d9 handler=infinite clause=1 fuel=33 alloc=74 state=0 end=error
+run domains/r9 outcome=errored delivery=d9 handler=infinite error={code: "can't convert", value: <<0x7F, 0x80, 0x00, 0x00>>, to: "number", at: {unit: "domains", handler: "infinite", line: 37, column: 10}} fuel=33 alloc=74
+pumped state=idle fuel=507
+
+> vars
+vars domains

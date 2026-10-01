@@ -1,0 +1,15 @@
+# floats: the four Float Built-ins read a float as the shortest decimal that
+# reads back as it, and write a number as the nearest float, ties to even, in
+# either byte order (spec chapter 7, Floats).
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "floats"
+source = "floats.talk"

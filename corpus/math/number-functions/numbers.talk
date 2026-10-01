@@ -1,0 +1,15 @@
+-- numbers.talk: the number-functions case.
+
+script variable roots
+script variable logs
+script variable powers
+script variable angles
+script variable inverses
+
+on go
+  put [sqrt(2), sqrt(4), sqrt(2.25)] into roots              -- √2 to 34 digits, then 2 and 1.5
+  put [exp(1), exp(0), ln(2), ln(1), log10(1000), log10(2)] into logs
+  put [power(2.50, 2), power(2, 0.5), power(4, 0.5), power(0, 0)] into powers   -- 6.2500, then exact or rounded
+  put [sin(1), cos(1), tan(1), sin(0)] into angles
+  put [asin(1), acos(-1), atan(1), atan2(1, -1), atan2(0, -1)] into inverses
+end go

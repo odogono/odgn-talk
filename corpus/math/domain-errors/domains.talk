@@ -1,0 +1,38 @@
+-- domains.talk: the domain-errors case. Each Handler raises, and the Trace
+-- writes its error map.
+
+on root
+  return sqrt(-1)
+end root
+
+on logarithm
+  return ln(0)
+end logarithm
+
+on base
+  return power(-8, 0.5)
+end base
+
+on reciprocal
+  return power(0, -0.5)
+end reciprocal
+
+on angle
+  return atan2(0, 0)
+end angle
+
+on large
+  return exp(100)
+end large
+
+on width
+  return fromFloat64(<<1, 2, 3, 4>>)
+end width
+
+on order
+  return toFloat32(1, "middle")
+end order
+
+on infinite
+  return fromFloat32(<<0x7F, 0x80, 0, 0>>)
+end infinite

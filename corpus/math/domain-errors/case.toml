@@ -1,0 +1,14 @@
+# domain-errors: an argument outside a number function's domain raises `out of
+# domain` with the function and the argument, a result too large raises
+# `overflow` with the function's name, and a float that isn't a number raises
+# `can't convert` (spec chapter 7, Numbers and Floats).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "domains"
+source = "domains.talk"

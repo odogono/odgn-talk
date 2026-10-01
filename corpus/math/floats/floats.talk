@@ -1,0 +1,11 @@
+-- floats.talk: the floats case.
+
+script variable read
+script variable written
+script variable trip
+
+on go
+  put [fromFloat32(<<0x3D, 0xCC, 0xCC, 0xCD>>), fromFloat64(<<0x3F, 0xB9, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9A>>), fromFloat64(<<0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0xBF>>, "little"), fromFloat32(<<0x80, 0, 0, 0>>)] into read   -- 0.1, 0.1, -1.5, 0
+  put [toFloat64(1.5, "little"), toFloat32(0.1), toFloat32(-0.0000000000000000000000000000000000000000000001)] into written   -- the last is negative zero
+  put fromFloat32(toFloat32(3.14159265358979)) into trip      -- 3.1415927
+end go
