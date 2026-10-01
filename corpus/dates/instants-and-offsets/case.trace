@@ -1,0 +1,41 @@
+# instants-and-offsets: `back` is `stamp` again. The later Handlers each raise:
+# an Instant plus a calendar duration and a date-only value plus a part of a
+# day are `incompatible units`, a date-only value and a date-time can't be
+# compared, a date past 9999 is `out of range` with its year, and an offset
+# that isn't whole minutes or a time field of a date-only value is `out of
+# domain`. Its Fuel, allocation and state figures are Cost Model 0's, as the
+# TS Core blessed them.
+
+> load stamps identity=be86f9e498e5c1e292ffa57e331284092b15b86d3d40b17cda5d0a4e9b3f3f88
+> deliver d1 to=stamps message=go
+> deliver d2 to=stamps message=calendar
+> deliver d3 to=stamps message=hours
+> deliver d4 to=stamps message=mixed
+> deliver d5 to=stamps message=past
+> deliver d6 to=stamps message=offset
+> deliver d7 to=stamps message=field
+> pump clock=2026-09-30T09:00:00Z
+seg stamps/r1 start delivery=d1 handler=go clause=1 fuel=65 alloc=136 state=280 end=return
+run stamps/r1 outcome=completed delivery=d1 handler=go fuel=65 alloc=136
+raise stamps/r2 code="incompatible units" at=stamps:29 pos=18:46
+seg stamps/r2 start delivery=d2 handler=calendar clause=1 fuel=20 alloc=16 state=248 end=error
+run stamps/r2 outcome=errored delivery=d2 handler=calendar error={code: "incompatible units", left: "s", right: "month", at: {unit: "stamps", handler: "calendar", line: 18, column: 46}} fuel=20 alloc=16
+raise stamps/r3 code="incompatible units" at=stamps:37 pos=22:39
+seg stamps/r3 start delivery=d3 handler=hours clause=1 fuel=19 alloc=16 state=216 end=error
+run stamps/r3 outcome=errored delivery=d3 handler=hours error={code: "incompatible units", left: "day", right: "hr", at: {unit: "stamps", handler: "hours", line: 22, column: 39}} fuel=19 alloc=16
+raise stamps/r4 code="can't compare" at=stamps:46 pos=26:39
+seg stamps/r4 start delivery=d4 handler=mixed clause=1 fuel=25 alloc=32 state=184 end=error
+run stamps/r4 outcome=errored delivery=d4 handler=mixed error={code: "can't compare", left: 2026-01-31, right: 2026-01-31T00:00:00, at: {unit: "stamps", handler: "mixed", line: 26, column: 39}} fuel=25 alloc=32
+raise stamps/r5 code="out of range" at=stamps:54 pos=30:39
+seg stamps/r5 start delivery=d5 handler=past clause=1 fuel=19 alloc=16 state=152 end=error
+run stamps/r5 outcome=errored delivery=d5 handler=past error={code: "out of range", field: "year", value: 10000, at: {unit: "stamps", handler: "past", line: 30, column: 39}} fuel=19 alloc=16
+raise stamps/r6 code="out of domain" at=stamps:62 pos=34:10
+seg stamps/r6 start delivery=d6 handler=offset clause=1 fuel=27 alloc=16 state=120 end=error
+run stamps/r6 outcome=errored delivery=d6 handler=offset error={code: "out of domain", function: "toCivil", value: 30 s, at: {unit: "stamps", handler: "offset", line: 34, column: 10}} fuel=27 alloc=16
+raise stamps/r7 code="out of domain" at=stamps:69 pos=38:10
+seg stamps/r7 start delivery=d7 handler=field clause=1 fuel=18 alloc=16 state=88 end=error
+run stamps/r7 outcome=errored delivery=d7 handler=field error={code: "out of domain", function: "hour", value: 2026-01-31, at: {unit: "stamps", handler: "field", line: 38, column: 10}} fuel=18 alloc=16
+pumped state=idle fuel=193
+
+> vars
+vars stamps stamp=2026-09-28T09:00:00Z later=2026-09-28T10:30:00Z elapsed=5400 s wall=2026-09-28T03:30:00 back=2026-09-28T09:00:00Z

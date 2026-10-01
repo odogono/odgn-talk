@@ -45,6 +45,12 @@ export const encodeValue = (value: Value): string => {
         );
         break;
       }
+      case 'instant':
+        output.push(`{"$instant":${quote(next.toString())}}`);
+        break;
+      case 'civil date':
+        output.push(`{"$date":${quote(next.toString())}}`);
+        break;
       case 'bytes':
         output.push(`{"$bytes":${quote(toBase64(next.bytesView()!))}}`);
         break;

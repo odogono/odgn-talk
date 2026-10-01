@@ -20,7 +20,7 @@ export {
   type Report,
   type Requested,
 } from './group';
-export { formatInstant, parseInstant } from './instant';
+export { formatInstant, parseInstant } from './dates';
 export {
   Value,
   Decimal,
@@ -33,6 +33,8 @@ export {
   list,
   map,
   bytes,
+  civilDate,
+  instant,
   quantity,
   range,
   record,

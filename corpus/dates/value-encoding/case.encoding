@@ -1,0 +1,16 @@
+# value-encoding: each value is read in the display form, built through the
+# Host's constructors, and encoded.
+# Unblessed: the bytes are written by hand, not by bless.
+#
+# A date-only value and a date-time, whose fraction has no trailing zeros.
+2026-09-27 => {"$date":"2026-09-27"}
+2026-09-27T14:30:00 => {"$date":"2026-09-27T14:30:00"}
+2026-09-27T14:30:00.5 => {"$date":"2026-09-27T14:30:00.5"}
+# An Instant is always in UTC.
+2026-09-27T13:30:00Z => {"$instant":"2026-09-27T13:30:00Z"}
+1969-12-31T23:59:59.999999999Z => {"$instant":"1969-12-31T23:59:59.999999999Z"}
+# The ends of the range.
+0001-01-01T00:00:00Z => {"$instant":"0001-01-01T00:00:00Z"}
+9999-12-31 => {"$date":"9999-12-31"}
+# Inside a list and a map.
+[2026-09-27, {at: 2026-09-27T13:30:00Z}] => [{"$date":"2026-09-27"},{"at":{"$instant":"2026-09-27T13:30:00Z"}}]

@@ -1,0 +1,13 @@
+# instants-and-offsets: `as instant` converts an offset to UTC, `toCivil` and
+# `toInstant` read the wall clock at a fixed offset, and dates raise their
+# catalogue errors (spec chapter 3, Dates and times; chapter 7, Dates).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "stamps"
+source = "stamps.talk"

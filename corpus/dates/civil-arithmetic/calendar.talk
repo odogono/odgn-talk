@@ -1,0 +1,31 @@
+-- calendar.talk: the civil-arithmetic case.
+
+script variable renewal
+script variable leap
+script variable spring
+script variable later
+script variable sooner
+script variable midnight
+script variable span
+script variable gap
+script variable fields
+script variable weeks
+script variable ordered
+script variable mixed
+
+on go
+  put "2026-01-31" as civil date into start
+  put start + 1 month into renewal                      -- 2026-02-28
+  put "2024-01-31" as civil date + 1 month into leap    -- 2024-02-29
+  put start + 0.25 year into spring                     -- 2026-04-30
+  put start + 48 hr into later                          -- 2026-02-02
+  put start - 1 day into sooner                         -- 2026-01-30
+  put "2026-09-27T23:30:00" as civil date into late
+  put late + 1 hr into midnight                         -- 2026-09-28T00:30:00
+  put ("2026-03-01" as civil date) - start into span    -- 29 days
+  put late - ("2026-09-27T22:00:00.5" as civil date) into gap   -- 5399.5 s
+  put [year(late), month(late), day(late), hour(late), minute(late), weekday(late), dayOfYear(late)] into fields
+  put [isoWeek("2021-01-03" as civil date), isoWeekYear("2021-01-03" as civil date)] into weeks
+  put start < ("2026-02-01" as civil date) into ordered
+  put start = ("2026-01-31T00:00:00" as civil date) into mixed
+end go

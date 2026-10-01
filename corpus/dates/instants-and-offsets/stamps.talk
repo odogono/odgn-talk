@@ -1,0 +1,39 @@
+-- stamps.talk: the instants-and-offsets case.
+
+script variable stamp
+script variable later
+script variable elapsed
+script variable wall
+script variable back
+
+on go
+  put "2026-09-28T10:00:00+01:00" as instant into stamp   -- 2026-09-28T09:00:00Z
+  put stamp + 90 min into later
+  put later - stamp into elapsed                          -- 5400 s
+  put toCivil(stamp, -5.5 hr) into wall                   -- 2026-09-28T03:30:00
+  put toInstant(wall, -5.5 hr) into back
+end go
+
+on calendar
+  return ("2026-09-28T09:00:00Z" as instant) + 1 month
+end calendar
+
+on hours
+  return ("2026-01-31" as civil date) + 36 hr
+end hours
+
+on mixed
+  return ("2026-01-31" as civil date) < ("2026-01-31T00:00:00" as civil date)
+end mixed
+
+on past
+  return ("9999-12-31" as civil date) + 1 day
+end past
+
+on offset
+  return toCivil("2026-09-28T09:00:00Z" as instant, 30 s)
+end offset
+
+on field
+  return hour("2026-01-31" as civil date)
+end field

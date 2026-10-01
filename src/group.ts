@@ -12,7 +12,7 @@ import {
   ScriptError,
   type LoadDiagnostic,
 } from './errors';
-import { formatInstant } from './instant';
+import { formatInstant } from './dates';
 import { lowerTree } from './lowering';
 import {
   defaultLimits,

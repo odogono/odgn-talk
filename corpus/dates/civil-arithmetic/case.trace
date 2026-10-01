@@ -1,0 +1,13 @@
+# civil-arithmetic: `0.25 year` is three months, `48 hr` is two whole days, and
+# a date-only value never equals a date-time. Its Fuel, allocation and state
+# figures are Cost Model 0's, as the TS Core blessed them.
+
+> load calendar identity=6f4b51dba2dcc944f3ce0689d9c90c53c10bfb1636cb89d83cd4698fb6f02998
+> deliver d1 to=calendar message=go
+> pump clock=2026-09-30T09:00:00Z
+seg calendar/r1 start delivery=d1 handler=go clause=1 fuel=201 alloc=536 state=408 end=return
+run calendar/r1 outcome=completed delivery=d1 handler=go fuel=201 alloc=536
+pumped state=idle fuel=201
+
+> vars
+vars calendar renewal=2026-02-28 leap=2024-02-29 spring=2026-04-30 later=2026-02-02 sooner=2026-01-30 midnight=2026-09-28T00:30:00 span=29 days gap=5399.5 s fields=[2026, 9, 27, 23, 30, 7, 270] weeks=[53, 2020] ordered=true mixed=false
