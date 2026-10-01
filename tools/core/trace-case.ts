@@ -521,7 +521,8 @@ export const replay = (
           group.dispose(value(r.fields.get('object')!).asObject()!);
           break;
         case 'deliver':
-        case 'request': {
+        case 'request':
+        case 'decide': {
           const named = r.fields.get('to') ?? '';
           // A Delivery to a Host Object routes to its nearest Owning Script.
           const object = named.startsWith('<object ')
@@ -548,14 +549,36 @@ export const replay = (
           if (object) {
             if (r.name === 'deliver') {
               group.deliver(object, message);
+            } else if (r.name === 'decide') {
+              group.decide(object, message);
             } else {
               group.request(object, message);
             }
           } else if (r.name === 'deliver') {
             to!.deliver(message);
+          } else if (r.name === 'decide') {
+            to!.decide(message);
           } else {
             to!.request(message);
           }
+          break;
+        }
+        case 'decide-broadcast': {
+          const args = r.fields.has('args')
+            ? valuesOf(value(r.fields.get('args')!))
+            : [];
+          const limits = r.fields.has('limits')
+            ? Object.fromEntries(
+                value(r.fields.get('limits')!)
+                  .entries()
+                  .map(([k, v]) => [k, Number(v.asDecimal()!.toString())]),
+              )
+            : undefined;
+          group.decideBroadcast({
+            name: r.fields.get('message')!,
+            args,
+            limits,
+          });
           break;
         }
         case 'pump':

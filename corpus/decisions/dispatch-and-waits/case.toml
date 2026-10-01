@@ -1,0 +1,9 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "observer"
+source = "observer.talk"

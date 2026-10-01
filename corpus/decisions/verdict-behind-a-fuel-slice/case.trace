@@ -23,10 +23,8 @@
 #   Pump 3: d4's branch-false 1 and jump 1, then e5 up to its first concat
 #     and the const after it 17 = 19, before the second concat.
 #   Pump 4: concat 5, veto 2 = 7, and the Segment ends at the veto.
-# Allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load board
+> load board identity=5a376260a447711b28c715a5b3aa73c9cdb28979b8aa13058ba6b08e7447b78e
 
 > decide d1 to=board message=beforeMove args=[{from: "a1", to: "e5", path: ["b2", "c3", "d4", "e5"]}]
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
@@ -39,12 +37,12 @@ preempt board/r1 continue by=slice fuel=21 alloc=0
 pumped state=sliced fuel=21
 
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 continue by=slice fuel=19 alloc=0
+preempt board/r1 continue by=slice fuel=19 alloc=41
 pumped state=sliced fuel=19
 
 # The Segment ends at the veto, which seals the Verdict in this fourth Pump.
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-seg board/r1 continue fuel=7 alloc=83 state=84 end=veto value="The path is blocked at e5."
+seg board/r1 continue fuel=7 alloc=42 state=84 end=veto value="The path is blocked at e5."
 decided d1 verdict=vetoed vetoes=[{script: "board", run: "board/r1", reason: "The path is blocked at e5."}]
 run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=67 alloc=107
 pumped state=idle fuel=7

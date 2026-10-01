@@ -1,0 +1,9 @@
+script variable checked = 0
+on move, deciding
+  try
+    add 1 to checked
+    veto "blocked"
+  finally
+    add 1 to checked
+  end try
+end move

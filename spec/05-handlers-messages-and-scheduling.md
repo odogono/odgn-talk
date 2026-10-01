@@ -174,7 +174,7 @@ A Join, `wait for all … end wait`, starts several calls from one Run and suspe
 - **Load errors in a Join's body:**
   - `wait`, `wait for` or a nested Join, since `end wait` is the Join's only Suspension Point.
   - A Command Call written `name … and wait`, or `f(x) and wait`, since both may run in this Run. The fix is `send name … to me and wait`.
-  - `return`, `pass`, or an `exit repeat` or `next repeat` whose loop is outside the Join.
+  - `return`, `veto`, `pass`, or an `exit repeat` or `next repeat` whose loop is outside the Join.
   - A member inside a `try` in the body. A `try` goes around the whole Join.
   - A Join with no member in its source.
 
@@ -231,7 +231,7 @@ A Decision is a Delivery by which the Host asks whether something may happen, an
 - **One Verdict per Decision:** an allow or a veto ends the Decision, so a parent never sees a Decision a child already decided. Reaching the end of the Message Path allows it, and `unhandled` is reported as usual.
 - **`, replacing`** on a `, deciding` clause cancels only earlier Runs that are already past their seal.
 - **Load errors:**
-  - `veto` outside a `, deciding` Handler: in a function, a Lambda, a Library, or a Handler reached by a Command Call.
+  - `veto` outside a `, deciding` Handler: in a function, a Lambda, a Library, or a Handler reached by a local call, Command Call or function-style.
   - A `veto` or `pass` in a `, deciding` Handler that some path from the Handler's start reaches through a possible Suspension Point.
   - `, queued` with `, deciding`.
 - **Scripts can't start Decisions,** so there is no Script-to-Script veto.

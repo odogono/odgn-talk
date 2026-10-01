@@ -45,6 +45,9 @@ export {
   type PumpResult,
   type Report,
   type Requested,
+  type Decided,
+  type Deciding,
+  type Verdict,
 } from './group';
 export { formatInstant, parseInstant } from './dates';
 export {

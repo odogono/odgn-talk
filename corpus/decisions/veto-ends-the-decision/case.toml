@@ -1,7 +1,4 @@
-# veto-ends-the-decision: a `veto` in the first `, deciding` clause seals the
-# Decision as vetoed, ends the Run as `completed` after its `finally`, and
-# ends the message, so the parent's Script never hears it (ADR 0031). Its
-# figures are estimates, so it isn't blessed.
+# veto-ends-the-decision: see case.trace for the rules and Cost Model 0 figures.
 
 kind = "trace"
 

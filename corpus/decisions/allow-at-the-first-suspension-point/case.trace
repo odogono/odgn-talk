@@ -4,25 +4,23 @@
 # that drains it, while the Run is still suspended. The Run's `run end`
 # comes a Pump later, when the Host answers. Then a plain `deliver` of the
 # same message reaches `veto` with no open Verdict: the Run just ends, the
-# Trace notes `no-verdict`, and there is no `decided` record. Fuel,
-# allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Trace notes `no-verdict`, and there is no `decided` record.
 
-> load board
+> load board identity=14444badb2b7ae640a37b9e88f31058cc3ffcc73ecbeb647ec8135d5ed6ac1f6
 
 # The seal is at the `ask-wait` Segment end, so `decided` follows that `seg`.
 > decide d1 to=board message=beforeMove args=[{from: "a2", to: "a3"}]
 > pump clock=2026-09-30T10:00:00Z
 call board/r1.c1 op=replay.record args=[{from: "a2", to: "a3"}]
-seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=68 alloc=0 state=362 end=ask-wait
+seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=67 alloc=0 state=378 end=ask-wait
 decided d1 verdict=allowed
-pumped state=idle fuel=68 next=2026-09-30T10:00:30Z
+pumped state=idle fuel=67 next=2026-09-30T10:00:30Z
 
 # The allowed Run goes on after its seal, and ends later.
 > answer board/r1.c1 value=1
 > pump clock=2026-09-30T10:00:01Z
 seg board/r1 resume fuel=15 alloc=32 state=24 end=return
-run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=83 alloc=32
+run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=82 alloc=32
 pumped state=idle fuel=15
 
 # `pause` sets `frozen`. The next `beforeMove` is a plain Delivery, not a
@@ -31,12 +29,12 @@ pumped state=idle fuel=15
 > deliver d2 to=board message=pause
 > deliver d3 to=board message=beforeMove args=[{from: "a3", to: "a4"}]
 > pump clock=2026-09-30T10:00:02Z
-seg board/r2 start delivery=d2 handler=pause clause=1 fuel=10 alloc=0 state=170 end=return
+seg board/r2 start delivery=d2 handler=pause clause=1 fuel=10 alloc=0 state=162 end=return
 run board/r2 outcome=completed delivery=d2 handler=pause fuel=10 alloc=0
 note board/r3 kind=no-verdict
-seg board/r3 start delivery=d3 handler=beforeMove clause=1 fuel=8 alloc=0 state=24 end=veto value="The game is paused."
-run board/r3 outcome=completed delivery=d3 handler=beforeMove fuel=8 alloc=0
-pumped state=idle fuel=18
+seg board/r3 start delivery=d3 handler=beforeMove clause=1 fuel=9 alloc=0 state=24 end=veto value="The game is paused."
+run board/r3 outcome=completed delivery=d3 handler=beforeMove fuel=9 alloc=0
+pumped state=idle fuel=19
 
 > vars
 vars board frozen=true moves=1

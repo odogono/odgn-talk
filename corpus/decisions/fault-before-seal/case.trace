@@ -1,0 +1,22 @@
+# fault-before-seal: a Fuel fault before veto rolls back the Segment and
+# leaves the Decision undecided. A later plain Delivery runs the same veto
+# and finally, completes with Nothing, and records no-verdict.
+
+> load decider identity=c8ad0d7c31ed6c2a19365f81dec63ed8eba5ddd49f7dfe8573ef9912c80f2645
+> decide d1 to=decider message=move limits={fuelPerRun: 20}
+> pump clock=2026-09-30T10:00:00Z
+fault decider/r1 limit=fuel at=decider:16 pos=7:5 rollback=[checked]
+seg decider/r1 start delivery=d1 handler=move clause=1 fuel=20 alloc=16 state=16 end=fault
+run decider/r1 outcome=limit-fault delivery=d1 handler=move limit=fuel fuel=20 alloc=16
+decided d1 verdict=undecided undecided=[{script: "decider", run: "decider/r1", outcome: "limit fault"}]
+pumped state=idle fuel=20
+> vars
+vars decider checked=0
+> deliver d2 to=decider message=move
+> pump clock=2026-09-30T10:00:01Z
+note decider/r2 kind=no-verdict
+seg decider/r2 start delivery=d2 handler=move clause=1 fuel=29 alloc=32 state=16 end=veto value="blocked"
+run decider/r2 outcome=completed delivery=d2 handler=move fuel=29 alloc=32
+pumped state=idle fuel=29
+> vars
+vars decider checked=2

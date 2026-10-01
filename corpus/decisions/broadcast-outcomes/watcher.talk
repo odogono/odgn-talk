@@ -1,0 +1,5 @@
+script variable watched = 0
+on watch
+  wait for move x
+  add 1 to watched
+end watch

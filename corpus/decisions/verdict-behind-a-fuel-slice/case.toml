@@ -1,8 +1,4 @@
-# verdict-behind-a-fuel-slice: a deciding Run whose first Segment is
-# preempted by the Fuel Slice seals its Verdict only when that Segment ends,
-# several Pumps later (ADR 0031). Its Fuel figures are worked out from Cost
-# Model 0 in case.trace; its allocation and state figures are estimates. It
-# isn't blessed.
+# verdict-behind-a-fuel-slice: see case.trace for the rules and Cost Model 0 figures.
 
 kind = "trace"
 

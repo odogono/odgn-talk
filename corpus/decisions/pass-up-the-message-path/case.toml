@@ -1,6 +1,4 @@
-# pass-up-the-message-path: `pass` in a `, deciding` clause hands the open
-# Verdict up the Message Path, and the parent object's Script holds it
-# (ADR 0016, ADR 0031). Its figures are estimates, so it isn't blessed.
+# pass-up-the-message-path: see case.trace for the rules and Cost Model 0 figures.
 
 kind = "trace"
 

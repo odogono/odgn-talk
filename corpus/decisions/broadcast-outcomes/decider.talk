@@ -1,0 +1,4 @@
+on move x, deciding
+  if x then veto {reason: "refused"}
+  return
+end move

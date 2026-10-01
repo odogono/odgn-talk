@@ -1,6 +1,4 @@
-# undecided-on-an-error: a deciding Run that errors before its seal leaves
-# the Decision undecided, with outcome `errored` (ADR 0031). Its figures are
-# estimates, so it isn't blessed.
+# undecided-on-an-error: see case.trace for the rules and Cost Model 0 figures.
 
 kind = "trace"
 

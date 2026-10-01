@@ -65,6 +65,12 @@ export class LoweringError extends Error {
   }
 }
 
+// `catch "code"` and `on error "code"` match the error map's code.
+const errorPattern = (p: Pattern): Pattern =>
+  p.k === 'literal' && p.value.k === 'text'
+    ? { k: 'map', pos: p.pos, entries: [{ key: 'code', value: p }] }
+    : p;
+
 type Label = { pc: number | null };
 type Pending = {
   col: number;
@@ -246,6 +252,7 @@ class UnitLowering {
         const clause = (clauses.get(decl.name) ?? 0) + 1;
         clauses.set(decl.name, clause);
         const body = this.newBody('handler', decl.name, clause);
+        body.deciding = decl.deciding;
         body.params = decl.params.map(p =>
           p.k === 'bind' ? p.name.text : '…',
         );
@@ -279,6 +286,9 @@ class UnitLowering {
     const unwind: UnwindEntry[] = [];
     for (const body of this.bodies) {
       body.start = code.length;
+      if (body.acceptedAt !== undefined) {
+        body.acceptedAt += body.start;
+      }
       for (const ins of this.code.get(body.index) ?? []) {
         code.push({
           op: ins.op,
@@ -559,12 +569,20 @@ class BodyLowering {
   }
 
   *handler(decl: Handler): Task {
-    const args = this.layout(decl.params, [], this.scopeLocals());
+    const params =
+      decl.name === 'error' && decl.params.length === 1
+        ? decl.params.map(errorPattern)
+        : decl.params;
+    const args = this.layout(params, [], this.scopeLocals());
+    if (decl.during?.binding) {
+      this.body.duringSlot = this.slots.get(decl.during.binding);
+    }
     const failed = this.label();
     yield this.guarded(
       failed,
-      this.parameters(decl.params, args, decl.guard, failed),
+      this.parameters(params, args, decl.guard, failed),
     );
+    this.body.acceptedAt = this.code.length;
     yield decl.finally
       ? this.tryStatement(
           {
@@ -1052,14 +1070,7 @@ class BodyLowering {
         const next = this.label();
         const binds: Binds = new Map();
         // A text literal head is short for `{code: "…"}`.
-        const pat: Pattern =
-          clause.pat.k === 'literal' && clause.pat.value.k === 'text'
-            ? {
-                k: 'map',
-                pos: clause.pat.pos,
-                entries: [{ key: 'code', value: clause.pat }],
-              }
-            : clause.pat;
+        const pat = errorPattern(clause.pat);
         const self = this;
         yield this.guarded(
           next,

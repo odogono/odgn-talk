@@ -1,11 +1,9 @@
 # undecided-on-an-error: the bishop's clause raises `division by zero` before
 # it decides. The Core doesn't guess allowed or vetoed: the Decision is
 # undecided, and names the Run and its outcome. The uncaught error still
-# sends the Script its `error` message, whose Run holds no Verdict. Fuel,
-# allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# sends the Script its `error` message, whose Run holds no Verdict.
 
-> load bishop
+> load bishop identity=098e6efad333ee93f1ad8315c3b2ee2cce1a80f6d9de5f542905f9e021579bd4
 
 # c1 to e1 is along a rank, so `the ranks of m` is 0. The error ends the Run
 # before its seal. An undecided Verdict carries the Run's outcome, so its
@@ -14,12 +12,12 @@
 > decide d1 to=bishop message=beforeMove args=[{from: "c1", to: "e1", files: 2, ranks: 0}]
 > pump clock=2026-09-30T10:00:00Z
 raise bishop/r1 code="division by zero" at=bishop:8 pos=7:22
-seg bishop/r1 start delivery=d1 handler=beforeMove clause=1 fuel=20 alloc=120 state=16 end=error
-run bishop/r1 outcome=errored delivery=d1 handler=beforeMove error={code: "division by zero", at: {unit: "bishop", handler: "beforeMove", line: 7, column: 22}} fuel=20 alloc=120
+seg bishop/r1 start delivery=d1 handler=beforeMove clause=1 fuel=19 alloc=0 state=16 end=error
+run bishop/r1 outcome=errored delivery=d1 handler=beforeMove error={code: "division by zero", at: {unit: "bishop", handler: "beforeMove", line: 7, column: 22}} fuel=19 alloc=0
 decided d1 verdict=undecided undecided=[{script: "bishop", run: "bishop/r1", outcome: "errored"}]
 seg bishop/r2 start from=bishop/r1 handler=error clause=1 fuel=17 alloc=16 state=16 end=return
 run bishop/r2 outcome=completed handler=error fuel=17 alloc=16
-pumped state=idle fuel=37
+pumped state=idle fuel=36
 
 > vars
 vars bishop faults=1
