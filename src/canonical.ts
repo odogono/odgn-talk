@@ -1,9 +1,9 @@
 // The display forms of the constants a code unit's pool holds (chapter 11, In
 // a disassembly): numbers and Quantities in canonical text, text in NFC, and
 // Text Patterns as their canonical source, with splices numbered `(1)`, ….
-import { unitKinds, units } from './generated/syntax';
 import { runTask, type Task } from './tasks';
 import { normalizeNFC } from './unicode';
+import { parseUnit, unitText } from './units';
 import { displayText, literalDigits } from './values';
 import type { Expr, PatternElement, TextPattern } from './view';
 
@@ -22,74 +22,14 @@ export const numberText = (literal: string, negative = false): string => {
 export const textDisplay = (value: string): string =>
   displayText(normalizeNFC(value));
 
-/** A Unit literal whose value chapter 3 doesn't settle. */
-export class UnitError extends Error {
-  override name = 'UnitError';
-}
-
-type UnitEntry = { kind: string; name: string; plural?: string };
-const unitByName = new Map<string, UnitEntry>();
-for (const unit of units as readonly UnitEntry[]) {
-  unitByName.set(unit.name, unit);
-  if (unit.plural) {
-    unitByName.set(unit.plural, unit);
-  }
-}
-
 /**
  * A Quantity literal's display form: its number, then its Unit in normal form
- * (chapter 3, Compound Units and Printing Quantities). A Unit whose slots all
- * drop leaves a plain number.
+ * (chapter 3, Compound Units and Printing Quantities). The lexer has checked
+ * the Unit. A Unit whose slots all drop leaves a plain number.
  */
 export const quantityText = (number: string, unit: string): string => {
-  const slots = new Map<string, { exponent: number; unit: UnitEntry }>();
-  const body = unit.startsWith('1/') ? unit.slice(2) : unit;
-  let sign = unit.startsWith('1/') ? -1 : 1;
-  for (const [i, part] of body.split(/([*/])/).entries()) {
-    if (i % 2) {
-      if (part === '/') {
-        sign = -1;
-      }
-      continue;
-    }
-    const [name, power] = part.split('^');
-    const entry = unitByName.get(name!);
-    if (!entry) {
-      throw new Error(`${name} is not a Unit`);
-    }
-    const exponent = sign * (power ? Number(power) : 1);
-    const slot = slots.get(entry.kind);
-    if (slot && slot.unit !== entry) {
-      // Chapter 3 gives a Unit one Unit per slot, and leaves a literal that
-      // names two (such as `m*ft`) unsettled.
-      throw new UnitError(`the Unit ${unit} names two Units of one Unit Kind`);
-    }
-    slots.set(entry.kind, {
-      unit: entry,
-      exponent: (slot?.exponent ?? 0) + exponent,
-    });
-  }
-  const ordered = unitKinds.flatMap(kind => {
-    const slot = slots.get(kind);
-    return slot && slot.exponent ? [slot] : [];
-  });
-  if (!ordered.length) {
-    return number;
-  }
-  const factor = ({ unit, exponent }: { exponent: number; unit: UnitEntry }) =>
-    Math.abs(exponent) === 1 ? unit.name : `${unit.name}^${Math.abs(exponent)}`;
-  const top = ordered.filter(slot => slot.exponent > 0);
-  const bottom = ordered.filter(slot => slot.exponent < 0);
-  if (top.length === 1 && !bottom.length && top[0]!.exponent === 1) {
-    // A word Unit standing alone is plural unless the magnitude is exactly 1.
-    const { name, plural } = top[0]!.unit;
-    const one = /^-?1(?:\.0+)?$/.test(number);
-    return `${number} ${plural && !one ? plural : name}`;
-  }
-  const text =
-    (top.length ? top.map(factor).join('*') : '1') +
-    (bottom.length ? `/${bottom.map(factor).join('*')}` : '');
-  return `${number} ${text}`;
+  const spec = parseUnit(unit);
+  return spec.length ? `${number} ${unitText(spec, number)}` : number;
 };
 
 /** A Text Pattern's splices, in source order: each one's expression. */

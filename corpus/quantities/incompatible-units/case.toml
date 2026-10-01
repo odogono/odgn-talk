@@ -1,0 +1,14 @@
+# incompatible-units: `+` across dimensions, or a calendar and an exact
+# duration, raises `incompatible units` with the two Units' display forms, and
+# a number with a Quantity raises `wrong kind` (spec chapter 3, Quantity
+# arithmetic; chapter 6, The error catalogue).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "mixer"
+source = "mixer.talk"

@@ -82,13 +82,13 @@ const measureOf = (measure: string, v: Value | undefined): number => {
       return itemsOf(v);
     case 'entries':
       return v.kind === 'map' ? v.entries().length : 0;
-    case 'digits':
-      return v.kind === 'number'
-        ? Math.max(
-            1,
-            parseDec(v.asDecimal()!.toString()).coefficient.toString().length,
-          )
+    case 'digits': {
+      // A number's, or a Quantity's number's.
+      const n = v.asDecimal() ?? v.asQuantityRef()?.number;
+      return n
+        ? Math.max(1, parseDec(n.toString()).coefficient.toString().length)
         : 0;
+    }
     case 'program':
       return v.kind === 'pattern' ? v.asPattern()!.program : 0;
     case 'bytes':
@@ -104,6 +104,9 @@ export const itemsOf = (v: Value): number => {
   }
   if (v.kind === 'range') {
     const { from, to } = v.asRange()!;
+    if (from.kind !== 'number') {
+      return 0;
+    }
     const a = parseDec(from.asDecimal()!.toString());
     const b = parseDec(to.asDecimal()!.toString());
     if (!isInteger(a) || !isInteger(b)) {

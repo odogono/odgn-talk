@@ -10,6 +10,8 @@ import {
   listValues,
   map,
   nothing,
+  quantity,
+  range,
   text,
 } from './values';
 
@@ -126,15 +128,45 @@ class DisplayReader extends Reader {
     ) {
       return text(this.textPieces());
     }
+    const start = this.i;
+    const from = this.rangeEnd();
+    if (from === undefined) {
+      return this.fail('Unsupported or malformed display value');
+    }
+    if (!this.peek('..')) {
+      return from;
+    }
+    this.eat('..');
+    const to = this.rangeEnd();
+    if (to === undefined) {
+      return this.fail('Expected the end of a range');
+    }
+    const value = range(from, to);
+    if (value.toString() !== this.source.slice(start, this.i)) {
+      this.fail('Expected a canonical display range');
+    }
+    return value;
+  }
+  // A number, or a Quantity: a number, one space and a Unit in normal form.
+  private rangeEnd(): Value | undefined {
+    const start = this.i;
     const number = this.match(/-?\d+(?:\.\d+)?/y);
-    if (number !== undefined) {
-      const value = dec(number);
-      if (value.toString() !== number) {
-        this.fail('Expected canonical display number');
-      }
+    if (number === undefined) {
+      return undefined;
+    }
+    const value = dec(number);
+    if (value.toString() !== number) {
+      this.fail('Expected canonical display number');
+    }
+    const unit = this.match(/ [\d*/A-Z^a-z]+(?!=)/y);
+    if (unit === undefined) {
       return value;
     }
-    return this.fail('Unsupported or malformed display value');
+    const q = quantity(value, unit.slice(1));
+    if (q.toString() !== this.source.slice(start, this.i)) {
+      this.fail('Expected a Quantity in normal form');
+    }
+    return q;
   }
   textPieces(): string {
     const pieces: string[] = [];
@@ -399,6 +431,36 @@ const fromJson = (value: Json): Value => {
           assign(v);
           return;
         }
+        if (
+          tag === '$quantity' &&
+          Array.isArray(data) &&
+          data.length === 2 &&
+          typeof data[0] === 'string' &&
+          typeof data[1] === 'string'
+        ) {
+          const n = dec(data[0]);
+          const unit = data[1];
+          if (n.toString() !== data[0]) {
+            invalidValue('Non-canonical $quantity number');
+          }
+          const q = quantity(n, unit);
+          if (q.kind !== 'quantity' || encodedUnit(q) !== unit) {
+            invalidValue('A $quantity Unit not in normal form');
+          }
+          assign(q);
+          return;
+        }
+        if (tag === '$range' && Array.isArray(data) && data.length === 2) {
+          const ends: Value[] = [nothing, nothing];
+          tasks.push(() => assign(range(ends[0]!, ends[1]!)));
+          enqueue(data[1]!, v => {
+            ends[1] = v;
+          });
+          enqueue(data[0]!, v => {
+            ends[0] = v;
+          });
+          return;
+        }
         if (tag !== '$map' || !Array.isArray(data)) {
           invalidValue(`Unsupported or malformed Value Encoding tag ${tag}`);
         }
@@ -431,6 +493,7 @@ const fromJson = (value: Json): Value => {
   return result;
 };
 
+const encodedUnit = (q: Value) => q.asQuantity()!.unit;
 const abs = (n: bigint) => (n < 0n ? -n : n);
 export const decodeValue = (
   source: string,

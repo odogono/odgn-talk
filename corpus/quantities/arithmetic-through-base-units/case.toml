@@ -1,0 +1,15 @@
+# arithmetic-through-base-units: Quantity arithmetic and `as` with a Unit go
+# through Base Units, every step rounded (spec chapter 3, Converting and
+# Quantity arithmetic; ADR 0022).
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "units"
+source = "units.talk"

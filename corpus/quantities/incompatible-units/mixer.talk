@@ -1,0 +1,18 @@
+-- mixer.talk: the incompatible-units case. Each Handler raises, and the
+-- Trace writes its error map.
+
+on mass
+  return 5 kg + 2 m
+end mass
+
+on calendar
+  return 1 month + 1 day
+end calendar
+
+on plain
+  return 5 kg + 3
+end plain
+
+on spread
+  return 1 m..2 kg
+end spread

@@ -44,6 +44,19 @@ export const encodeValue = (value: Value): string => {
         );
         break;
       }
+      case 'quantity': {
+        const q = next.asQuantity()!;
+        output.push(
+          `{"$quantity":[${quote(q.number.toString())},${quote(q.unit)}]}`,
+        );
+        break;
+      }
+      case 'range': {
+        const { from, to } = next.asRange()!;
+        output.push('{"$range":[');
+        pending.push(']}', to, ',', from);
+        break;
+      }
       case 'list': {
         output.push('[');
         pending.push(']');

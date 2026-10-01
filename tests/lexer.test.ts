@@ -61,6 +61,10 @@ describe('Core lexer', () => {
       'USD/month',
       'm*width',
       '1/s^0',
+      'm*ft',
+      'kg/g',
+      'month^1',
+      '1/year',
     ]) {
       const token = new Lexer(unit).lex(0, 'unit');
       expect(token.code).toBe('bad unit');

@@ -1,7 +1,8 @@
 // Spec chapter 1: lossless modal tokenization. Offsets use UTF-16; columns use scalars.
-import { grammar, units } from './generated/syntax';
+import { grammar } from './generated/syntax';
 import { assertScalarText } from './unicode';
 import type { SyntaxErrorCode, Trivia } from './syntax';
+import { parseUnit, unitEntry, UnitError } from './units';
 
 export type Mode =
   | 'operand' // `<` opens a Text Pattern, `<<` opens a Binary Pattern
@@ -40,16 +41,6 @@ export type Token = {
 
 export const RESERVED = new Set<string>(grammar.reserved);
 
-type Unit = { calendar: boolean; name: string; plural?: string };
-const UNITS = new Map<string, Unit>();
-for (const u of units) {
-  UNITS.set(u.name, u);
-  if (u.plural) {
-    UNITS.set(u.plural, u);
-  }
-}
-const isCalendar = (u: Unit) => u.calendar;
-
 // A Compound Unit's shape: factors joined by `*`, one `/`, exponents after `^`.
 // The lexer takes the longest run of this shape, then checks it.
 const UNIT_SHAPE =
@@ -77,33 +68,17 @@ const OPS = [
 ];
 
 // Why a Unit-shaped run isn't a valid Unit, or null if it is one.
+// A Unit as chapter 1 writes it, or why it's `bad unit`.
 const unitProblem = (text: string): string | null => {
-  let slashes = text.startsWith('1/') ? 1 : 0;
-  const body = text.startsWith('1/') ? text.slice(2) : text;
-  const factors = body.split(/([*/])/);
-  for (let i = 0; i < factors.length; i += 2) {
-    if (factors[i - 1] === '/') {
-      slashes++;
+  try {
+    parseUnit(text);
+    return null;
+  } catch (error) {
+    if (error instanceof UnitError) {
+      return error.message;
     }
-    const [name, exp] = factors[i]!.split('^');
-    const u = UNITS.get(name!);
-    if (!u) {
-      return `\`${name}\` is not a Unit`;
-    }
-    if (exp !== undefined && !/^[1-9]\d*$/.test(exp)) {
-      return 'an exponent must be a positive integer';
-    }
-    if (
-      isCalendar(u) &&
-      (factors.length > 1 || exp !== undefined || text.startsWith('1/'))
-    ) {
-      return `the Calendar Unit \`${name}\` can't be part of a Compound Unit`;
-    }
+    throw error;
   }
-  if (slashes > 1) {
-    return 'a Compound Unit has at most one `/`';
-  }
-  return null;
 };
 
 export class Lexer {
@@ -256,7 +231,7 @@ export class Lexer {
       // does, since a single word there may be a kind.
       if (
         m &&
-        (first === '1' || UNITS.has(first!)) &&
+        (first === '1' || unitEntry(first!) !== undefined) &&
         (mode === 'unit' || compound)
       ) {
         const problem = unitProblem(m[0]);

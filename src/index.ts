@@ -32,6 +32,7 @@ export {
   dec,
   list,
   map,
+  quantity,
   range,
   record,
 } from './values';

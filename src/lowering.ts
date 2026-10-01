@@ -6,7 +6,6 @@
 import {
   capturesOf,
   numberText,
-  UnitError,
   patternSource,
   quantityText,
   splicesOf,
@@ -380,18 +379,6 @@ class BodyLowering {
 
   unsupported(at: Pos, what: string): never {
     throw new LoweringError(at.line, at.col, what);
-  }
-
-  /** A constant's display, where a Unit the Spec leaves unsettled stops the lowering. */
-  settled(at: Pos, display: () => string): string {
-    try {
-      return display();
-    } catch (error) {
-      if (error instanceof UnitError) {
-        return this.unsupported(at, error.message);
-      }
-      throw error;
-    }
   }
 
   // ------------------------------------------------------------- slots
@@ -1614,9 +1601,7 @@ class BodyLowering {
         return void this.bindName(p.name, at, binds);
       case 'literal': {
         this.emit(at, 'load', sub);
-        const c = this.u.constant(
-          this.settled(at, () => literalDisplay(p.value)),
-        );
+        const c = this.u.constant(literalDisplay(p.value));
         return void (fold
           ? this.emit(at, 'test-constant', c, 'fold', failed)
           : this.emit(at, 'test-constant', c, failed));
@@ -1835,7 +1820,7 @@ class BodyLowering {
       case 'quantity':
         return void this.constant(
           at,
-          this.settled(at, () => quantityText(numberText(e.number), e.unit)),
+          quantityText(numberText(e.number), e.unit),
         );
       case 'text':
         return void this.constant(at, textDisplay(e.value));

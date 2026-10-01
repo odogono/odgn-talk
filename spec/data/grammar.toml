@@ -473,7 +473,7 @@ raised_when = "A text literal has no closing quote before the end of its line; r
 
 [[syntax_error]]
 code = "bad unit"
-raised_when = "A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, or has a malformed or negative exponent"
+raised_when = "A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind"
 
 [[syntax_error]]
 code = "unexpected token"

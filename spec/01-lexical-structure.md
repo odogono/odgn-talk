@@ -134,7 +134,7 @@ UnitName       ::= [A-Za-z]+  /* a Unit's name or plural in units.toml; a Calend
 
 - **Only after a literal:** a Number followed by a Unit is a Quantity (`5 s`, `2.50 GBP`). Spaces between the two are optional. Nothing else takes a suffix, so `put 5 s into s` works, and `n kg` is two operands side by side. A variable converts with `n as kg` ([chapter 3](03-values.md)).
 - **Where a Unit starts:** after a Number, a Unit starts at a Word that is a Unit's name or plural in [`units.toml`](data/units.toml), or at `1/`. Otherwise no Unit starts, so in `3 mod 2` the `mod` is an operator. After `as`, only a Compound Unit (one with a `*`, `/`, `^` or a leading `1/`) is a Unit token, and a single word there is a Name, since it may be a kind (`x as number`).
-- **The longest match:** a Unit is the longest run of the Unit shape, with no spaces inside it. Then every factor must be a name or plural in `units.toml`, a Compound Unit has at most one `/`, an exponent is a positive integer, and a Calendar Unit (`month`, `year`) stands alone, with no exponent. Anything else is `bad unit`, reported where the Unit starts.
+- **The longest match:** a Unit is the longest run of the Unit shape, with no spaces inside it. Then every factor must be a name or plural in `units.toml`, a Compound Unit has at most one `/`, an exponent is a positive integer, the factors of one Unit Kind name one Unit, since a Unit has one Unit in each slot ([chapter 3](03-values.md#compound-units)), and a Calendar Unit (`month`, `year`) stands alone, with no exponent. Anything else is `bad unit`, reported where the Unit starts.
 - **Spaced symbols are arithmetic:** `500 mi / 4 hr` divides two Quantities, and `2 m*width` is `bad unit`, since `width` isn't a Unit.
 
 > **Example.**
@@ -148,7 +148,7 @@ UnitName       ::= [A-Za-z]+  /* a Unit's name or plural in units.toml; a Calend
 > put 3 m/s..7 m/s into window      -- what was meant
 > ```
 >
-> `put 5 s^-1 into rate` and `put 12 USD/month into rent` are both `bad unit`.
+> `put 5 s^-1 into rate`, `put 12 USD/month into rent` and `put 2 m*ft into area`, which names two length Units, are all `bad unit`. `2 m*m` is `2 m^2`, and `2 m * 3 ft` multiplies two Quantities and gives `1.8288 m^2`.
 
 ## Lexical errors
 

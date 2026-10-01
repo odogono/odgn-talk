@@ -8,6 +8,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, Grants and Libraries the Host no longer has, and overdue `wait`s after a restore ([chapter 10](../spec/10-save-and-restore.md)) |
 | [`limits/`](limits/) | exhaustion points, at dispatch too, Segment rollback, virtual-Clock deadlines, and each counted limit at its conformance minimum ([chapter 6](../spec/06-errors-and-limits.md)) |
 | [`text-patterns/`](text-patterns/) | successive searches past empty matches, leftmost-first `or`, greedy defaults, matching Fuel, pattern size and repetition limits, and the canonical source of a pattern that starts with a group ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs)) |
+| [`quantities/`](quantities/) | arithmetic and `as` through Base Units, `incompatible units`, and the Value Encoding of Quantities and ranges ([chapter 3](../spec/03-values.md#quantities)) |
 | [`text-model/`](text-model/) | whole-Character boundaries, NFC at join seams and at the Host's text constructor, `word` and `word break` on punctuation, chunk padding on writes, and out-of-range reads ([chapter 3](../spec/03-values.md)) |
 | [`errors/`](errors/) | whole error maps, with their keys in order ([chapter 6](../spec/06-errors-and-limits.md#errors)) |
 | [`decisions/`](decisions/) | Decisions and their Verdicts ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
@@ -28,7 +29,7 @@ The seed cases were written before any Core existed. Until a case is blessed, it
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
 
-The Trace Cases in [`text-model/`](text-model/) are blessed by the TS Core, the only Core available, so their Fuel, allocation and Persistent State figures are Cost Model 0's. The Go Core must agree before they count as blessed by both.
+The Trace Cases in [`text-model/`](text-model/) and [`quantities/`](quantities/) are blessed by the TS Core, the only Core available, so their Fuel, allocation and Persistent State figures are Cost Model 0's. So are twelve more: `alloc-exhaustion-point`, `call-depth-minimum`, `fault-at-dispatch`, `fuel-exhaustion-point` and `pattern-size-minimum` in [`limits/`](limits/), and `empty-match-skipped-after-match`, `empty-matches-step-one-character`, `greedy-by-default`, `lazily-prefers-fewer`, `lazily-stays-on-its-element`, `or-is-leftmost-first` and `pattern-size-made-at-run-time` in [`text-patterns/`](text-patterns/). The Go Core must agree before they count as blessed by both.
 
 ## The Disassembly Cases
 

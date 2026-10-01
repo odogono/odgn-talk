@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Quantities in the Core: the `quantity` Host constructor, their display form, Value Encoding and ranges of them, Quantity literals, arithmetic and `as` through Base Units, equality and ordering in Base Units, and `abs`, `floor`, `ceiling`, `truncate` and `round` keeping the Unit; with `quantities/` Trace and Value Encoding cases, and Spec fixes for what chapter 3 left open, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - The Core's Group: Load with code identities and load diagnostics, queued Deliveries and Requests, Pumps that follow chapter 5's turns with Fuel Slices, debt and the Fuel cap, Persistent State at each Segment's end, Inspect, and a Trace sink writing chapter 11's records; and Trace Case replay and bless in the corpus runner, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - The Core's Abstract Machine: loading code units, Handler Clause dispatch, calls and Lambdas, unwinding through the Unwind Table, Cost Model 0 Fuel and allocation with Limit Faults and rollback, exact decimal arithmetic, chunks, properties, Built-ins, and Text Patterns on chapter 8's Pike VM, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -32,6 +34,8 @@ tracked separately in the Spec's Data Files.
 
 ### Changed
 
+- A Unit naming two Units of one Unit Kind, such as `2 m*ft`, is `bad unit` rather than a `LoweringError`.
+- Twelve `limits/` and `text-patterns/` Trace Cases are blessed by the TS Core and run in CI ([#159](https://github.com/odogono/odgn-talk/pull/159)).
 - The `text-model/` Trace Cases are blessed by the TS Core, with Cost Model 0's Fuel, allocation and Persistent State figures and their code identities, and run in CI ([#126](https://github.com/odogono/odgn-talk/issues/126)).
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 

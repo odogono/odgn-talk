@@ -325,11 +325,12 @@ Arithmetic and `as` go through Base Units ([ADR 0022](../docs/adr/0022-compound-
 
 - **`+` and `-`** take two Quantities of one dimension, and the result is in the left operand's Unit. Quantities of two dimensions, or a calendar and an exact duration, raise `incompatible units`, with the two Units' display forms as `left` and `right`. A number and a Quantity raise `wrong kind`.
 - **`*` and `/`** take any two Quantities, or a Quantity and a number. A number takes part as a Quantity with no Unit. The result's Unit starts as the left operand's. Then, for each slot of the right operand, the right operand's Unit converts into the Unit the left operand already has in that slot, and the exponents add. If the left operand has nothing in that slot, the right operand's Unit is kept. The value is the product or quotient in Base Units, converted into the result's Unit.
-- **`^`** raises a Quantity to a positive integer power, multiplying each exponent by it. Any other exponent, or a Quantity as the exponent, raises `wrong kind`.
+- **`^`** raises a Quantity to a positive integer power, multiplying each exponent by it. Any other exponent raises `wrong kind` with `expected` `"integer"`, and a Quantity as the exponent raises it with `expected` `"number"`.
+- **A result's Unit** that breaks the rule for Calendar Units raises `incompatible units`, as for `1 / 2 month` or `(1 month) ^ 2`. A plain number taking part has the Unit `1` in the fields.
 - **Unary `-`** negates the number and keeps the Unit.
 - **`div` and `mod`** take numbers only, and a Quantity raises `wrong kind`.
 - **Comparing** Quantities follows [equality](#equality) and [ordering](#ordering).
-- **`as` with a Unit** converts a Quantity whose dimension matches, and a Calendar Unit converts only into the other Calendar Unit. Given a plain number, `as` attaches the Unit, and nothing else relabels one.
+- **`as` with a Unit** converts a Quantity whose dimension matches, and a Calendar Unit converts only into the other Calendar Unit. Given a plain number, `as` attaches the Unit, and nothing else relabels one. A value that would pass the number limits in the new Unit raises `can't convert`.
 
 > **Example.**
 >
