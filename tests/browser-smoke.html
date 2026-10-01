@@ -35,7 +35,13 @@
     assert(deepParse.error === null && talk.syntaxText(deepParse.tree) === deepSource, "Deep lossless parsing");
     const bad = talk.parseSource('on t\n put "😀" & return into x\nend t');
     assert(bad.error.code === "unexpected token" && bad.error.tok.line === 2 && bad.error.tok.col === 12, "Scalar syntax diagnostic");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values and lossless parsing in a browser";
+    assert(talk.checkSource('on t\n return later\n put 1 into later\nend t').ok, "Whole-body name resolution");
+    assert(talk.checkSource(deepSource).ok, "Deep semantic checking");
+    const names = talk.checkSource('on t\n put "😀" & missing into x\nend t');
+    assert(!names.ok && names.diagnostics[0].code === "unknown name" && names.diagnostics[0].span.col === 12, "Scalar name diagnostic");
+    const builtin = talk.checkSource('on t\n return min\nend t');
+    assert(builtin.diagnostics[0].code === "not a value", "Built-in name catalogue");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing and name resolution in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
