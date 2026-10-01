@@ -19,9 +19,11 @@
     "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
     "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
-    "test": "bun run unicode:check && bun test tests",
-    "build": "bun run unicode:check && bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
-    "test:browser": "bun tools/core/browser-smoke.ts"
+    "test": "bun run syntax:check && bun run unicode:check && bun test tests",
+    "build": "bun run syntax:check && bun run unicode:check && bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
+    "test:browser": "bun tools/core/browser-smoke.ts",
+    "syntax:generate": "bun tools/syntax/generate.ts",
+    "syntax:check": "bun tools/syntax/generate.ts --check"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",
