@@ -5,15 +5,15 @@
 # covers, at either end: 2..10 gives "bc" and -5..2 gives "ab". -1..1 is 3..1,
 # so it is reversed. A list read out of range gives Nothing for one item and
 # an empty list for a range. No `raise` record is written.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load reads
+> load reads identity=8d8bf2bbe549e7ad84e7c2d8188f327e06270ccbf2e9950878124d468c3694a5
 > deliver d1 to=reads message=go
 > pump clock=2026-09-30T09:00:00Z
-seg reads/r1 start delivery=d1 handler=go clause=1 fuel=116 alloc=64 state=100 end=return
-run reads/r1 outcome=completed delivery=d1 handler=go fuel=116 alloc=64
-pumped state=idle fuel=116
+seg reads/r1 start delivery=d1 handler=go clause=1 fuel=131 alloc=640 state=172 end=return
+run reads/r1 outcome=completed delivery=d1 handler=go fuel=131 alloc=640
+pumped state=idle fuel=131
 
 > vars
 vars reads pastEnd="" wordZero="" itemPastEnd="" beforeStart="" reversed="" overhang="bc" underhang="ab" wrapsReversed="" wholeRangePast="" listPastEnd=nothing listRangePast=[]

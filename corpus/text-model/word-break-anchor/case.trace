@@ -4,16 +4,15 @@
 # the space and "d", and at the end, so the Match Search gives four empty
 # Matches, whose ranges are p..p-1. It never holds between "t" and ",", since
 # neither is White_Space. Each empty match where the last one ended is
-# skipped, and the search goes on one Character later. Fuel, allocation and
-# state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# skipped, and the search goes on one Character later. Its Fuel, allocation
+# and state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load breaks
+> load breaks identity=b45309585600625e3931a5f512fb1765d41ef9b32ba3d503df1dedc21516c3d6
 > deliver d1 to=breaks message=go
 > pump clock=2026-09-30T09:00:00Z
-seg breaks/r1 start delivery=d1 handler=go clause=1 fuel=318 alloc=392 state=120 end=return
-run breaks/r1 outcome=completed delivery=d1 handler=go fuel=318 alloc=392
-pumped state=idle fuel=318
+seg breaks/r1 start delivery=d1 handler=go clause=1 fuel=194 alloc=1832 state=327 end=return
+run breaks/r1 outcome=completed delivery=d1 handler=go fuel=194 alloc=1832
+pumped state=idle fuel=194
 
 > vars
 vars breaks breaks=[1..0, 5..4, 6..5, 9..8] wordTexts=["cat,", "dog"] tBreak=false commaBreak=true

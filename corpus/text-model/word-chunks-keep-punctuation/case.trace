@@ -4,15 +4,15 @@
 # "cat,". A range of words keeps the white space between them, and runs of
 # white space at either end make no empty words. A tab and U+00A0 NO-BREAK
 # SPACE are White_Space and divide words; a hyphen and a comma with no space
-# after it don't. Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# after it don't. Its Fuel, allocation and state figures are Cost Model 0's,
+# as the TS Core blessed them.
 
-> load words
+> load words identity=bda575045ea255ce69a74194c4f5716f3e8cd2bc9893909c0608cc8ebc1c56ef
 > deliver d1 to=words message=go
 > pump clock=2026-09-30T09:00:00Z
-seg words/r1 start delivery=d1 handler=go clause=1 fuel=152 alloc=128 state=96 end=return
-run words/r1 outcome=completed delivery=d1 handler=go fuel=152 alloc=128
-pumped state=idle fuel=152
+seg words/r1 start delivery=d1 handler=go clause=1 fuel=108 alloc=366 state=161 end=return
+run words/r1 outcome=completed delivery=d1 handler=go fuel=108 alloc=366
+pumped state=idle fuel=108
 
 > vars
 vars words firstWord="cat," secondWord="dog" lastWord="dog." both="cat,  dog." joinedCount=1 hyphened="well-known" afterTab="b" afterNbsp="b"

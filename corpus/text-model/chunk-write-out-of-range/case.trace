@@ -6,11 +6,10 @@
 # so it raises rather than appends. Item 0 raises though items pad. Each
 # raise is at its leaf's `chunk-set`, placed at its chunk word, and each is
 # caught, so the Run completes and `s` keeps "abc", since a write that fails
-# leaves the root unchanged. Fuel, allocation and state figures are
-# estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# leaves the root unchanged. Its Fuel, allocation and state figures are Cost
+# Model 0's, as the TS Core blessed them.
 
-> load writes
+> load writes identity=d95b6800842de4e47c0bea6cbc85c8464fdfe40d957da64a021ad5f82529f8c8
 > deliver d1 to=writes message=go
 > pump clock=2026-09-30T09:00:00Z
 raise writes/r1 code="out of range" at=writes:13 pos=16:18
@@ -18,9 +17,9 @@ raise writes/r1 code="out of range" at=writes:48 pos=21:18
 raise writes/r1 code="out of range" at=writes:83 pos=26:18
 raise writes/r1 code="out of range" at=writes:119 pos=31:18
 raise writes/r1 code="out of range" at=writes:156 pos=36:18
-seg writes/r1 start delivery=d1 handler=go clause=1 fuel=246 alloc=520 state=212 end=return
-run writes/r1 outcome=completed delivery=d1 handler=go fuel=246 alloc=520
-pumped state=idle fuel=246
+seg writes/r1 start delivery=d1 handler=go clause=1 fuel=215 alloc=732 state=602 end=return
+run writes/r1 outcome=completed delivery=d1 handler=go fuel=215 alloc=732
+pumped state=idle fuel=215
 
 > vars
 vars writes s="abc" pastEnd=["out of range", "character", 4] wordPastEnd=["out of range", "word", 2] itemZero=["out of range", "item", 0] beforeStart=["out of range", "character", -4] reversed=["out of range", "character", [3, 2]]

@@ -86,18 +86,31 @@ test('selecting a case kind this Core defers exits with a clear failure', () => 
 });
 
 test('an unblessed Trace Case runs when named, and reports its first divergence', () => {
-  const dir = resolve(
-    import.meta.dir,
-    '../corpus/text-model/host-text-joins-in-nfc',
-  );
+  const dir = resolve(import.meta.dir, '../corpus/limits/fuel-alloc-minimums');
   const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
   const result = runTraceCase(dir, setup as never);
-  // The load, request and pump lines match; the hand-written figures don't.
-  expect(result.lines).toBe(3);
-  expect(result.divergence?.expected).toStartWith('seg joiner/r1 start');
-  expect(result.divergence?.actual).toBe(
-    'seg joiner/r1 start delivery=d1 handler=join clause=1 fuel=28 alloc=50 state=32 end=return',
-  );
+  // The hand-written state leaves out the message still in the mailbox.
+  expect(result.lines).toBe(8);
+  expect(result.divergence?.expected).toEndWith('state=16 end=return');
+  expect(result.divergence?.actual).toEndWith('state=48 end=return');
+});
+
+test('the blessed text-model Trace Cases reproduce exactly', () => {
+  const root = resolve(import.meta.dir, '../corpus/text-model');
+  for (const name of readdirSync(root)) {
+    const dir = resolve(root, name);
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+    ) as {
+      kind: string;
+    };
+    if (setup.kind === 'trace') {
+      expect([name, runTraceCase(dir, setup as never).divergence]).toEqual([
+        name,
+        undefined,
+      ]);
+    }
+  }
 });
 
 test('blessing a Trace Case keeps its comments before the inputs they preceded', () => {

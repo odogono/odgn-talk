@@ -2,15 +2,15 @@
 # `offset` match only on whole-Character boundaries (chapter 3, Text; chapter
 # 7, Built-ins). The family U+1F469 U+200D U+1F469 U+200D U+1F467 is one
 # Character, so neither the girl nor the woman it starts with is found in it.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load search
+> load search identity=a85294c0d08715f369ce5b1143f03c6cae7a2f90407c3a99994ebed5e2fe8dd5
 > deliver d1 to=search message=go
 > pump clock=2026-09-30T09:00:00Z
-seg search/r1 start delivery=d1 handler=go clause=1 fuel=164 alloc=312 state=96 end=return
-run search/r1 outcome=completed delivery=d1 handler=go fuel=164 alloc=312
-pumped state=idle fuel=164
+seg search/r1 start delivery=d1 handler=go clause=1 fuel=163 alloc=292 state=116 end=return
+run search/r1 outcome=completed delivery=d1 handler=go fuel=163 alloc=292
+pumped state=idle fuel=163
 
 # The family is written literally: ZWJ isn't a hidden code point. The subject
 # is 3 Characters, and the family starts at Character 2.
