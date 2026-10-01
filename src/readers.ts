@@ -1,12 +1,15 @@
 // Both readers build values through the same Host constructors. JSON is read
 // directly so decimals, duplicate keys and integer-like key order survive.
 import { fromBase64 } from './base64';
+import { parseInstant } from './dates';
 import { invalidValue } from './errors';
 import { assertScalarText } from './unicode';
 import {
   Value,
   bool,
   bytesOf,
+  civilDate,
+  instant,
   dec,
   hiddenCodePoint,
   listValues,
@@ -132,6 +135,12 @@ class DisplayReader extends Reader {
     }
     if (this.peek('<<')) {
       return this.bytes();
+    }
+    const date = this.match(
+      /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z?)?(?![\w.:-])/y,
+    );
+    if (date !== undefined) {
+      return dateValue(date, this.fail.bind(this));
     }
     const start = this.i;
     const from = this.rangeEnd();
@@ -472,6 +481,17 @@ const fromJson = (value: Json): Value => {
           assign(q);
           return;
         }
+        if (
+          (tag === '$instant' || tag === '$date') &&
+          typeof data === 'string'
+        ) {
+          const v = dateValue(data, invalidValue);
+          if (v.kind !== (tag === '$instant' ? 'instant' : 'civil date')) {
+            invalidValue(`Malformed ${tag}`);
+          }
+          assign(v);
+          return;
+        }
         if (tag === '$bytes' && typeof data === 'string') {
           const b = fromBase64(data);
           if (!b) {
@@ -523,6 +543,14 @@ const fromJson = (value: Json): Value => {
   return result;
 };
 
+// An Instant or a Civil Date in its text form, which is the only form read.
+const dateValue = (s: string, fail: (what: string) => never): Value => {
+  const v = s.endsWith('Z') ? instant(parseInstant(s)) : civilDate(s);
+  if (v.toString() !== s) {
+    fail('Expected a date in its display form');
+  }
+  return v;
+};
 const encodedUnit = (q: Value) => q.asQuantity()!.unit;
 const abs = (n: bigint) => (n < 0n ? -n : n);
 export const decodeValue = (

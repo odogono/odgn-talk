@@ -1,3 +1,13 @@
+import {
+  checkInstant,
+  civilFields,
+  civilFromFields,
+  civilText,
+  DateRangeError,
+  formatInstant,
+  parseCivil,
+  type CivilRef,
+} from './dates';
 import { compareDec, parseDec } from './decimal';
 import { invalidValue } from './errors';
 import { characterBoundaries, isWhiteSpace, normalizeNFC } from './unicode';
@@ -21,6 +31,8 @@ export type Kind =
   | 'list'
   | 'map'
   | 'range'
+  | 'instant'
+  | 'civil date'
   | 'pattern'
   | 'function';
 type Pairs = readonly (readonly [string, Value])[];
@@ -49,6 +61,8 @@ export type PatternRef = {
 /** A Quantity: its number and its Unit, in Kind order (chapter 3). */
 export type QuantityRef = { readonly number: Decimal; readonly unit: UnitSpec };
 type Payload =
+  | bigint
+  | CivilRef
   | Uint8Array
   | QuantityRef
   | PatternRef
@@ -131,6 +145,20 @@ export class Value {
   asQuantityRef(): QuantityRef | undefined {
     return this.kind === 'quantity' ? (this.#data as QuantityRef) : undefined;
   }
+  /** An Instant as epoch nanoseconds. */
+  asInstant(): bigint | undefined {
+    return this.kind === 'instant' ? (this.#data as bigint) : undefined;
+  }
+  /** A Civil Date's fields; a date-only value has no time fields. */
+  asCivilDate(): ReturnType<typeof civilFields> | undefined {
+    return this.kind === 'civil date'
+      ? civilFields(this.#data as CivilRef)
+      : undefined;
+  }
+  /** The Abstract Machine's view of a Civil Date. */
+  civilRef(): CivilRef | undefined {
+    return this.kind === 'civil date' ? (this.#data as CivilRef) : undefined;
+  }
   /** A copy of the bytes. */
   asBytes(): Uint8Array | undefined {
     return this.kind === 'bytes'
@@ -200,6 +228,7 @@ export class Value {
           break;
         case 'text':
         case 'boolean':
+        case 'instant':
           if (left.#data !== right.#data) {
             return false;
           }
@@ -226,6 +255,19 @@ export class Value {
             return false;
           }
           break;
+        case 'civil date': {
+          const a = left.#data as CivilRef;
+          const b = right.#data as CivilRef;
+          if (
+            a.year !== b.year ||
+            a.month !== b.month ||
+            a.day !== b.day ||
+            a.ns !== b.ns
+          ) {
+            return false;
+          }
+          break;
+        }
         case 'bytes':
           if (
             compareBytes(left.#data as Uint8Array, right.#data as Uint8Array)
@@ -319,6 +361,12 @@ export class Value {
         }
         case 'pattern':
           output.push(next.patternSource()!);
+          break;
+        case 'instant':
+          output.push(formatInstant(next.#data as bigint));
+          break;
+        case 'civil date':
+          output.push(civilText(next.#data as CivilRef));
           break;
         case 'bytes':
           output.push(bytesDisplay(next.#data as Uint8Array));
@@ -513,6 +561,45 @@ const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>
     toBase(parseDec(a.number.toString()), a.unit),
     toBase(parseDec(b.number.toString()), b.unit),
   ) === 0;
+/** An Instant, from epoch nanoseconds; a JS Date is never accepted. */
+export const instant = (epochNanos: bigint): Value => {
+  if (typeof epochNanos !== 'bigint') {
+    invalidValue('An Instant needs epoch nanoseconds as a bigint');
+  }
+  try {
+    return instantOf(checkInstant(epochNanos));
+  } catch (error) {
+    if (error instanceof DateRangeError) {
+      return invalidValue(`An Instant ${error.message}`);
+    }
+    throw error;
+  }
+};
+export const instantOf = (ns: bigint): Value => makeValue('instant', ns);
+type DateFields = Parameters<typeof civilFromFields>[0];
+/** A Civil Date, from its fields or from text in the `as civil date` form. */
+export const civilDate = (f: DateFields | string): Value => {
+  if (typeof f === 'string') {
+    let c: CivilRef | undefined;
+    try {
+      c = parseCivil(f);
+    } catch (error) {
+      if (!(error instanceof DateRangeError)) {
+        throw error;
+      }
+    }
+    return c ? civilOf(c) : invalidValue(`Not a Civil Date: ${f}`);
+  }
+  if (typeof f !== 'object' || f === null) {
+    invalidValue('A Civil Date needs fields or text');
+  }
+  const c = civilFromFields(f);
+  return typeof c === 'string'
+    ? invalidValue(`Not a Civil Date: ${c}`)
+    : civilOf(c);
+};
+export const civilOf = (c: CivilRef): Value =>
+  makeValue('civil date', Object.freeze({ ...c }));
 /** Bytes, copied in. */
 export const bytes = (b: Uint8Array): Value => {
   if (

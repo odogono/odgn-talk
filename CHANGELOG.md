@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Instants and Civil Dates in the Core: the `instant` and `civilDate` Host constructors, their display form and `$instant` and `$date` Value Encoding, date arithmetic and comparison, `as civil date` and `as instant`, and the date Built-ins; with `dates/` Trace and Value Encoding cases, and Spec fixes for the fields of date errors, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Bytes and Binary Patterns in the Core: the `bytes` Host constructor, their display form and `$bytes` Value Encoding, `<< … >>` builds, Binary Pattern matching, `byte` chunks, `the bytes of`, `as text` and `as bytes`, comparison and Bytes searches; with `bytes/` Trace and Value Encoding cases, and Spec fixes for what chapters 4 and 8 left open, including the `bytes-sized` instruction for `v as n bytes` in a build, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Quantities in the Core: the `quantity` Host constructor, their display form, Value Encoding and ranges of them, Quantity literals, arithmetic and `as` through Base Units, equality and ordering in Base Units, and `abs`, `floor`, `ceiling`, `truncate` and `round` keeping the Unit; with `quantities/` Trace and Value Encoding cases, and Spec fixes for what chapter 3 left open, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -44,6 +46,7 @@ tracked separately in the Spec's Data Files.
 
 ### Fixed
 
+- A Built-in that raises is charged by its own rate, `builtin.<name>`, as chapter 8 says, instead of failing on a rate that doesn't exist.
 - The Core's parser, and the grammar check's, read a build whose first field is a build, `<< <<1, 2>> >>`, as chapter 1 lexes it.
 
 [Unreleased]: https://github.com/odogono/odgn-talk/commits/main/

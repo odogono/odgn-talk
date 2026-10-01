@@ -1,0 +1,15 @@
+# civil-arithmetic: Civil Dates add calendar durations by month, clamping the
+# day, and exact durations on a timeline whose days are all 86400 s long, and
+# their differences are exact (spec chapter 3, Date arithmetic; ADR 0023).
+# No Capabilities, Host Objects or Libraries: the Script only computes, and the
+# case observes it through its Script Variables.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "calendar"
+source = "calendar.talk"

@@ -438,8 +438,8 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
 - **Exact durations** are taken to whole nanoseconds, rounded half-even.
 - **Differences** are exact, written with no more decimal places than they need, and at most nine. So two Instants 90 seconds apart give `90 s`.
 - **Errors:**
-  - An Instant plus a calendar duration, a date-only value plus an exact duration that isn't a whole number of days, and a Civil Date plus a calendar duration that isn't a whole number of months all raise `incompatible units`.
-  - A date-only value against a date-time, an Instant against a Civil Date, two dates added, and a date with a plain number raise `wrong kind`. So does a duration on the left of a date.
+  - An Instant plus a calendar duration, a date-only value plus an exact duration that isn't a whole number of days, and a Civil Date plus a calendar duration that isn't a whole number of months all raise `incompatible units`. So does a date plus a Quantity of any other dimension. `left` is the Unit the date takes, `s` for an Instant or a date-time and `day` for a date-only value, or `month` for a calendar duration that isn't whole months, and `right` is the Quantity's Unit.
+  - A date-only value against a date-time, an Instant against a Civil Date, two dates added, and a date with a plain number raise `wrong kind`. So does a duration on the left of a date. `expected` is `"quantity"` for what is added to a date, the left date's kind for what is subtracted from one, and `"quantity"` or `"number"`, after the left operand, for a date on the right. Every other operator on a date raises it with `"number"`.
 
 ### Date text
 
@@ -448,8 +448,8 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
   - `2026-09-27T14:30:00` for a date-time
   - `2026-09-27T13:30:00Z` for an Instant, always in UTC
 - **A fraction of a second** appears only when it isn't zero, with up to nine digits and no trailing zeros: `2026-09-27T14:30:00.5`.
-- **`as civil date`** reads exactly that form: four digits of year, then `-`, two of month, `-` and two of day, and optionally `T`, two digits each of hour, minute and second, separated by `:`, and an optional fraction of one to nine digits. Text with a `Z` or an offset raises `can't convert`, and so does a date or time that doesn't exist, such as `2026-02-30` or a 60th second.
-- **`as instant`** reads a date-time in the same form, followed by `Z` or a numeric offset (`+01:00`, `-05:30`) of less than 24 hours, and converts it to UTC.
+- **`as civil date`** reads exactly that form, after White_Space is trimmed from either end: four digits of year, then `-`, two of month, `-` and two of day, and optionally `T`, two digits each of hour, minute and second, separated by `:`, and an optional fraction of one to nine digits. Text with a `Z` or an offset raises `can't convert`, and so does a date or time that doesn't exist, such as `2026-02-30` or a 60th second. The year `0000`, which the form can write but the range leaves out, raises `out of range`.
+- **`as instant`** reads a date-time in the same form, followed by `Z` or a numeric offset (`+01:00`, `-05:30`) of less than 24 hours, and converts it to UTC. One that lands outside the range in UTC raises `out of range`.
 
 > **Example.**
 >

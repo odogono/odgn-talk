@@ -468,7 +468,11 @@ export class Run {
   step() {
     const frame = this.frame;
     const ins = this.script.unit.code[frame.pc]!;
-    const key = instructionSpec.get(ins.op)!.cost;
+    // A Built-in call is charged by that Built-in's rate, when it raises too.
+    const key =
+      ins.op === 'call-builtin'
+        ? `builtin.${ins.operands[0]}`
+        : instructionSpec.get(ins.op)!.cost;
     this.m = {};
     try {
       this.execute(ins, key);
@@ -1196,7 +1200,7 @@ export class Run {
         m.result = out.result;
         m.scanned = out.scanned;
         m.steps = out.steps;
-        return this.replace(n, `builtin.${a}`);
+        return this.replace(n, key);
       }
       case 'call-value':
       case 'call-value-wait': {

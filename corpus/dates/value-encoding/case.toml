@@ -1,0 +1,9 @@
+# value-encoding: an Instant is `$instant`, in RFC 3339 in UTC with the
+# shortest fraction, and a Civil Date is `$date`, in the `as civil date` form
+# (spec chapter 9, JSON and the Value Encoding).
+
+kind = "encoding"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
