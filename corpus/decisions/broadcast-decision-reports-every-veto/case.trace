@@ -6,13 +6,12 @@
 # Analytics's clause isn't `, deciding`, so it allows at dispatch. The terms
 # validator is the last to seal, so `decided` follows its `seg`. A Broadcast
 # Decision that no Script wants has no recipients, and is allowed as it is
-# drained. Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# drained.
 
-> load analytics
-> load email
-> load password
-> load terms
+> load analytics identity=118c3c428c1f3336e3fb8e296ca7d7bc3ca33782c945bfa9f97fa963793c8dfa
+> load email identity=9b50a55b70599fe988e452d815bfac333e5b785fe529ea0c87b1f0610a927140
+> load password identity=9a499e057431420766c56c3d5e68f5b842df1a810378a92b89a094d0af79a3e8
+> load terms identity=37bb8a5029fe5de2905854736b2b9e4e6217183c229c8f5dbbfeff8b7fe9df26
 
 # A bad email and a short password: two vetoes, and one allow from terms.
 > decide-broadcast b1 message=submit args=[{email: "ann.example.com", password: "hunter2", terms: true}] recipients=[analytics:d1, email:d2, password:d3, terms:d4]
@@ -20,14 +19,14 @@
 call analytics/r1.c1 op=metrics.count args=["submit"]
 seg analytics/r1 start delivery=d1 broadcast=b1 handler=submit clause=1 fuel=33 alloc=16 state=16 end=return
 run analytics/r1 outcome=completed delivery=d1 broadcast=b1 handler=submit fuel=33 alloc=16
-seg email/r1 start delivery=d2 broadcast=b1 handler=submit clause=1 fuel=36 alloc=0 state=0 end=veto value="Enter a real email address."
-run email/r1 outcome=completed delivery=d2 broadcast=b1 handler=submit fuel=36 alloc=0
+seg email/r1 start delivery=d2 broadcast=b1 handler=submit clause=1 fuel=35 alloc=8 state=0 end=veto value="Enter a real email address."
+run email/r1 outcome=completed delivery=d2 broadcast=b1 handler=submit fuel=35 alloc=8
 seg password/r1 start delivery=d3 broadcast=b1 handler=submit clause=1 fuel=19 alloc=16 state=0 end=veto value="Use at least 8 characters."
 run password/r1 outcome=completed delivery=d3 broadcast=b1 handler=submit fuel=19 alloc=16
-seg terms/r1 start delivery=d4 broadcast=b1 handler=submit clause=1 fuel=24 alloc=16 state=16 end=return
+seg terms/r1 start delivery=d4 broadcast=b1 handler=submit clause=1 fuel=24 alloc=24 state=16 end=return
 decided b1 verdict=vetoed vetoes=[{script: "email", run: "email/r1", reason: "Enter a real email address."}, {script: "password", run: "password/r1", reason: "Use at least 8 characters."}]
-run terms/r1 outcome=completed delivery=d4 broadcast=b1 handler=submit fuel=24 alloc=16
-pumped state=idle fuel=112
+run terms/r1 outcome=completed delivery=d4 broadcast=b1 handler=submit fuel=24 alloc=24
+pumped state=idle fuel=111
 
 # A good form: every recipient allows, so the Broadcast Decision is allowed.
 > decide-broadcast b2 message=submit args=[{email: "ann@example.com", password: "correct horse", terms: true}] recipients=[analytics:d5, email:d6, password:d7, terms:d8]
@@ -35,14 +34,14 @@ pumped state=idle fuel=112
 call analytics/r2.c1 op=metrics.count args=["submit"]
 seg analytics/r2 start delivery=d5 broadcast=b2 handler=submit clause=1 fuel=33 alloc=16 state=16 end=return
 run analytics/r2 outcome=completed delivery=d5 broadcast=b2 handler=submit fuel=33 alloc=16
-seg email/r2 start delivery=d6 broadcast=b2 handler=submit clause=1 fuel=36 alloc=0 state=0 end=return
-run email/r2 outcome=completed delivery=d6 broadcast=b2 handler=submit fuel=36 alloc=0
-seg password/r2 start delivery=d7 broadcast=b2 handler=submit clause=1 fuel=19 alloc=16 state=0 end=return
-run password/r2 outcome=completed delivery=d7 broadcast=b2 handler=submit fuel=19 alloc=16
-seg terms/r2 start delivery=d8 broadcast=b2 handler=submit clause=1 fuel=24 alloc=16 state=16 end=return
+seg email/r2 start delivery=d6 broadcast=b2 handler=submit clause=1 fuel=25 alloc=8 state=0 end=return
+run email/r2 outcome=completed delivery=d6 broadcast=b2 handler=submit fuel=25 alloc=8
+seg password/r2 start delivery=d7 broadcast=b2 handler=submit clause=1 fuel=20 alloc=16 state=0 end=return
+run password/r2 outcome=completed delivery=d7 broadcast=b2 handler=submit fuel=20 alloc=16
+seg terms/r2 start delivery=d8 broadcast=b2 handler=submit clause=1 fuel=24 alloc=24 state=16 end=return
 decided b2 verdict=allowed
-run terms/r2 outcome=completed delivery=d8 broadcast=b2 handler=submit fuel=24 alloc=16
-pumped state=idle fuel=112
+run terms/r2 outcome=completed delivery=d8 broadcast=b2 handler=submit fuel=24 alloc=24
+pumped state=idle fuel=102
 
 # No Script wants `reset`, so there are no recipients and no Delivery ids,
 # and the Decision is allowed when it is drained.

@@ -1,0 +1,18 @@
+script variable watched = 0
+
+on watch
+  wait for move x
+  add 1 to watched
+end watch
+
+on move x where 1 / 0 = 1, deciding
+  veto "unreachable"
+end move
+
+on move x where x < 0, deciding
+  veto x
+end move
+
+on move x
+  pass move
+end move

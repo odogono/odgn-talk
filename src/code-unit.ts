@@ -12,12 +12,17 @@ export type Instruction = {
 };
 export type BodyKind = 'init' | 'function' | 'handler' | 'lambda' | 'event';
 export type Body = {
+  /** First body instruction after successful Handler dispatch. */
+  acceptedAt?: number;
   captures: number;
   /** The slot of the first capture, for a Lambda or an event test. */
   captureStart: number;
   clause: number | null;
+  deciding?: boolean;
   /** For a function, each parameter's default definition, or null. */
   defaults: (number | null)[];
+  /** Local slot bound by an error Handler’s `during` suffix. */
+  duringSlot?: number;
   /** One past the body's last instruction. */
   end: number;
   index: number;

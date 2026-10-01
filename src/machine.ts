@@ -530,7 +530,7 @@ const reservedKeys = new Set([
 // A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
 type Receiver = { k: 'receiver'; name: string };
 export type Outcome =
-  | { kind: 'completed'; passed?: boolean; result: Value }
+  | { kind: 'completed'; passed?: boolean; result: Value; veto?: Value }
   | { error: Value; kind: 'errored' }
   | {
       col: number;
@@ -558,6 +558,8 @@ const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
   id = '';
+  /** Whether this Run holds a Decision’s open Verdict. */
+  openVerdict = false;
   /** `the target`: the object its message was delivered to, or Nothing. */
   target: Value = nothing;
   host: RunHost | null = null;
@@ -590,6 +592,17 @@ export class Run {
   private outcome: Outcome | null = null;
   private m: Measured = {};
   private clause = 0;
+  private during: Value = nothing;
+
+  /** The failed Run’s message for an internally queued error Delivery. */
+  setDuring(value: Value) {
+    this.during = value;
+    for (const f of this.frames) {
+      if (f.body.duringSlot !== undefined) {
+        f.locals[f.body.duringSlot] = value;
+      }
+    }
+  }
 
   constructor(
     readonly script: Script,
@@ -609,6 +622,12 @@ export class Run {
   /** The clause number the Run's dispatch chose, or is trying. */
   get clauseNumber(): number {
     return this.clause;
+  }
+
+  /** A successful entry dispatch, at its first body instruction. */
+  get selectedClause(): Body | null {
+    const f = this.frames[0];
+    return f && f.pc === f.body.acceptedAt ? f.body : null;
   }
 
   /** Run to the end of the Run. */
@@ -646,6 +665,9 @@ export class Run {
     args.forEach((v, i) => {
       locals[i + 1] = v;
     });
+    if (body.duringSlot !== undefined) {
+      locals[body.duringSlot] = this.during;
+    }
     this.frames.push({
       body,
       code,
@@ -2356,6 +2378,14 @@ export class Run {
           return next();
         }
         this.suspend({ k: 'send', id, to: reached, message, args });
+        return;
+      }
+      case 'veto': {
+        const reason = this.peek();
+        this.checkState();
+        this.pay(key);
+        this.frames = [];
+        this.outcome = { kind: 'completed', result: nothing, veto: reason };
         return;
       }
       case 'pass':

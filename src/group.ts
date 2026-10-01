@@ -70,6 +70,15 @@ export type LimitOverride = Partial<
   Pick<Limits, 'fuelPerRun' | 'allocPerRun' | 'maxWaitMs' | 'maxJoin'>
 >;
 export type Message = { args?: Value[]; limits?: LimitOverride; name: string };
+export type Verdict = 'allowed' | 'vetoed' | 'undecided';
+export type Decided = {
+  broadcast?: string;
+  delivery?: string;
+  undecided: { outcome: RunOutcome; run?: string; script: string }[];
+  verdict: Verdict;
+  vetoes: { reason: Value; run: string; script: string }[];
+};
+export type Deciding = { decided: Promise<Decided>; id: string };
 export type Requested = { id: string; result: Promise<Value> };
 export type PumpOptions = { fuelCap?: number; fuelSlice?: number };
 export type RunOutcome =
@@ -82,6 +91,7 @@ export type RunOutcome =
 export type Report =
   | {
       alloc: number;
+      broadcast?: string;
       delivery?: string;
       error?: Value;
       fuel: number;
@@ -93,7 +103,8 @@ export type Report =
       run?: string;
       script: string;
     }
-  | { delivery: string; kind: 'unhandled'; message: Message };
+  | { delivery: string; kind: 'unhandled'; message: Message }
+  | ({ kind: 'decided' } & Decided);
 export type PumpResult = {
   fuelUsed: number;
   reports: Report[];
@@ -133,10 +144,28 @@ const overridable = new Set([
   'maxJoin',
 ]);
 
+type Decision = {
+  ballots: Ballot[];
+  broadcast: boolean;
+  id: string;
+  resolve: (v: Decided) => void;
+};
+type Ballot = {
+  decision: Decision;
+  result?: {
+    undecided?: Decided['undecided'][number];
+    verdict: Verdict;
+    veto?: Decided['vetoes'][number];
+  };
+};
 type Delivery = {
   args: Value[];
   /** The object whose Owning Script holds it, which it climbs on from. */
   at: ObjectState | null;
+  ballot?: Ballot;
+  broadcast?: string;
+  /** The failed message, for an internal `error` Delivery. */
+  during?: Value;
   /** For a message a Script sent, the sending Run. */
   from: string | null;
   /** The delivery id; a message a Script sent has none. */
@@ -155,6 +184,7 @@ type Running = {
   /** Ready to resume from a Suspension Point, not a preemption. */
   resuming: boolean;
   run: Run;
+  selected?: boolean;
 };
 // A timer (chapter 5, A Pump): fired in deadline order, then set order.
 type Timer = { deadline: bigint; fire: () => void; live: boolean; seq: number };
@@ -187,7 +217,7 @@ type ScriptState = {
   /** Its pending `wait for`s, in the order the waits began. */
   waiters: { running: Running; timers: Timer[] }[];
 };
-type QueuedInput = { apply: () => void; line: string };
+type QueuedInput = { apply: () => void; line: string | (() => string) };
 
 // Each granted Operation's mode and argument Shapes, for the load checks.
 const declarationsOf = (
@@ -215,6 +245,10 @@ export class Script {
   deliver(m: Message): string {
     return this.group.queueDelivery('deliver', this.name, m, null).id!;
   }
+  /** Queued. Asks for a Verdict sealed in a Pump. */
+  decide(m: Message): Deciding {
+    return this.group.queueDecision(this.name, m);
+  }
   /** Queued. Settles when a Pump ends the Run, or rejects with `send failed`. */
   request(m: Message): Requested {
     let settle!: Delivery['request'];
@@ -241,6 +275,7 @@ export class Group {
   private timerSeq = 0;
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
+  private broadcasts = 0;
   private lastClock: bigint | null = null;
   private pumping = false;
 
@@ -548,6 +583,7 @@ export class Group {
       );
       if (fired) {
         this.endWaiter(s, waiter);
+        this.seal(delivery, { verdict: 'allowed' });
         this.ready(s, waiter.running, fired);
       }
     }
@@ -611,10 +647,11 @@ export class Group {
 
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
   queueDelivery(
-    record: 'deliver' | 'request',
+    record: 'deliver' | 'request' | 'decide',
     to: string | ObjectState,
     m: Message,
     request: Delivery['request'],
+    ballot?: Ballot,
   ): Delivery {
     const named = typeof to === 'string';
     const toText = named ? to : traceValue(to.handle.value);
@@ -634,7 +671,7 @@ export class Group {
     };
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       const limit = (state?.limits ?? defaultLimits)[name as LimitName];
-      if (!overridable.has(name) || value! > limit) {
+      if (!validOverride(name, value, limit)) {
         refuse(
           'invalid value',
           new HostError(
@@ -652,6 +689,7 @@ export class Group {
       }
     }
     const delivery: Delivery = {
+      ...(ballot ? { ballot } : {}),
       id: `d${++this.deliveries}`,
       from: null,
       at: named ? state!.owner : null,
@@ -685,6 +723,190 @@ export class Group {
       },
     });
     return delivery;
+  }
+
+  /** Queued. Asks the object's Message Path for a Verdict. */
+  decide(to: HostObject, m: Message): Deciding {
+    return this.queueDecision(this.held(to), m);
+  }
+
+  queueDecision(to: string | ObjectState, m: Message): Deciding {
+    let resolve!: Decision['resolve'];
+    const decided = new Promise<Decided>(settle => {
+      resolve = settle;
+    });
+    const decision: Decision = {
+      id: '',
+      broadcast: false,
+      ballots: [],
+      resolve,
+    };
+    const ballot: Ballot = { decision };
+    decision.ballots.push(ballot);
+    decision.id = this.queueDelivery('decide', to, m, null, ballot).id!;
+    return { id: decision.id, decided };
+  }
+
+  /** Queued. Takes recipients at drain, then waits for every Verdict. */
+  decideBroadcast(m: Message): Deciding {
+    for (const [name, value] of Object.entries(m.limits ?? {})) {
+      if (!validOverride(name, value, defaultLimits[name as LimitName])) {
+        this.trace(recordLine('decide-broadcast', [], messageFields(m), true));
+        this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
+        throw new HostError(
+          'invalid value',
+          `A Broadcast override may only tighten ${name}`,
+        );
+      }
+    }
+    let resolve!: Decision['resolve'];
+    const decided = new Promise<Decided>(settle => {
+      resolve = settle;
+    });
+    const decision: Decision = {
+      id: `b${++this.broadcasts}`,
+      broadcast: true,
+      ballots: [],
+      resolve,
+    };
+    let recipients: { delivery: Delivery; s: ScriptState }[] = [];
+    this.inputs.push({
+      line: () => {
+        recipients = this.scripts
+          .filter(
+            s =>
+              s.loaded.clauses.has(m.name) ||
+              s.waiters.some(
+                w =>
+                  w.running.run.suspended?.k === 'wait-for' &&
+                  w.running.run.suspended.whens.some(b => b.message === m.name),
+              ),
+          )
+          .map(s => {
+            const ballot: Ballot = { decision };
+            decision.ballots.push(ballot);
+            return {
+              s,
+              delivery: {
+                ballot,
+                broadcast: decision.id,
+                id: `d${++this.deliveries}`,
+                from: null,
+                at: s.owner,
+                target: null,
+                reply: null,
+                request: null,
+                message: m.name,
+                args: m.args ?? [],
+                limits: Object.fromEntries(
+                  Object.entries(m.limits ?? {}).map(([name, value]) => [
+                    name,
+                    Math.min(value!, s.limits[name as LimitName]),
+                  ]),
+                ),
+              },
+            };
+          });
+        return recordLine(
+          'decide-broadcast',
+          [decision.id],
+          [
+            ...messageFields(m),
+            [
+              'recipients',
+              idList(recipients.map(r => `${r.s.name}:${r.delivery.id}`)),
+            ],
+          ],
+          true,
+        );
+      },
+      apply: () => {
+        for (const { s, delivery } of recipients) {
+          s.queue.push(delivery);
+        }
+        if (!recipients.length) {
+          this.reportDecision(decision);
+        }
+      },
+    });
+    return { id: decision.id, decided };
+  }
+
+  private seal(delivery: Delivery, result: NonNullable<Ballot['result']>) {
+    const ballot = delivery.ballot;
+    if (!ballot || ballot.result) {
+      return;
+    }
+    ballot.result = result;
+    if (ballot.decision.ballots.every(b => b.result)) {
+      this.reportDecision(ballot.decision);
+    }
+  }
+
+  private reportDecision(decision: Decision) {
+    const vetoes = decision.ballots.flatMap(b =>
+      b.result?.veto ? [b.result.veto] : [],
+    );
+    const undecided = decision.ballots.flatMap(b =>
+      b.result?.undecided ? [b.result.undecided] : [],
+    );
+    const result: Decided = {
+      ...(decision.broadcast
+        ? { broadcast: decision.id }
+        : { delivery: decision.id }),
+      verdict: vetoes.length
+        ? 'vetoed'
+        : undecided.length
+          ? 'undecided'
+          : 'allowed',
+      vetoes,
+      undecided,
+    };
+    this.trace(
+      recordLine(
+        'decided',
+        [decision.id],
+        [
+          ['verdict', result.verdict],
+          [
+            'vetoes',
+            vetoes.length
+              ? traceValue(
+                  listValues(
+                    vetoes.map(v =>
+                      map([
+                        ['script', text(v.script)],
+                        ['run', text(v.run)],
+                        ['reason', v.reason],
+                      ]),
+                    ),
+                  ),
+                )
+              : null,
+          ],
+          [
+            'undecided',
+            undecided.length
+              ? traceValue(
+                  listValues(
+                    undecided.map(v =>
+                      map([
+                        ['script', text(v.script)],
+                        ...(v.run
+                          ? [['run', text(v.run)] as [string, Value]]
+                          : []),
+                        ['outcome', text(v.outcome)],
+                      ]),
+                    ),
+                  ),
+                )
+              : null,
+          ],
+        ],
+      ),
+    );
+    this.drainReports.push({ kind: 'decided', ...result });
+    decision.resolve(result);
   }
 
   /** Queued. Routes to the object's nearest Owning Script; returns the delivery id. */
@@ -818,6 +1040,7 @@ export class Group {
         message: { name: delivery.message, args: delivery.args },
       });
     }
+    this.seal(delivery, { verdict: 'allowed' });
     this.answer(delivery, { kind: 'unhandled' });
   }
 
@@ -858,23 +1081,7 @@ export class Group {
     to: string,
     m: Message,
   ) {
-    const limits = Object.entries(m.limits ?? {});
-    return recordLine(
-      record,
-      [id],
-      [
-        ['to', to],
-        ['message', m.name],
-        ['args', m.args?.length ? traceValue(listValues(m.args)) : null],
-        [
-          'limits',
-          limits.length
-            ? `{${limits.map(([k, v]) => `${k}: ${v}`).join(', ')}}`
-            : null,
-        ],
-      ],
-      true,
-    );
+    return recordLine(record, [id], [['to', to], ...messageFields(m)], true);
   }
 
   /** Worker. One Clock reading, the queue drained, then turns until done (chapter 5). */
@@ -887,7 +1094,7 @@ export class Group {
     const slice = o.fuelSlice ?? 0;
     const cap = o.fuelCap ?? 0;
     for (const input of this.inputs) {
-      this.trace(input.line);
+      this.trace(typeof input.line === 'string' ? input.line : input.line());
     }
     this.trace(
       recordLine(
@@ -1003,6 +1210,10 @@ export class Group {
     if (!('run' in head)) {
       const delivery = head;
       this.observe(s, delivery);
+      if (delivery.during && !s.loaded.clauses.has('error')) {
+        s.queue.shift();
+        return;
+      }
       const run = dispatch(
         s.loaded,
         delivery.message,
@@ -1019,6 +1230,9 @@ export class Group {
       };
       run.id = head.id;
       run.host = this.hostFor(s, run);
+      if (delivery.during) {
+        run.setDuring(delivery.during);
+      }
       // The object it was delivered to, or for a message to a Script, the
       // Script's owner (chapter 5, `the target`).
       run.target = (delivery.target ?? s.owner)?.handle.value ?? nothing;
@@ -1034,6 +1248,21 @@ export class Group {
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
     const records0 = run.records.length;
+    let dispatchSealAt: number | null = null;
+    const selected = () => {
+      const clause = run.selectedClause;
+      if (!running.selected && clause) {
+        running.selected = true;
+        if (!clause.deciding) {
+          dispatchSealAt = run.records.length;
+        }
+        run.openVerdict =
+          clause.deciding === true &&
+          !!running.delivery.ballot &&
+          !running.delivery.ballot.result;
+      }
+    };
+    selected();
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
     while (!run.done && !run.suspended) {
@@ -1042,10 +1271,15 @@ export class Group {
         break;
       }
       run.step();
+      selected();
       charge(run.fuel - last);
       last = run.fuel;
     }
-    for (const rec of run.records.slice(records0)) {
+    for (let i = records0; i < run.records.length; i++) {
+      if (dispatchSealAt === i) {
+        this.seal(running.delivery, { verdict: 'allowed' });
+      }
+      const rec = run.records[i]!;
       if (rec.kind === 'abandon') {
         this.trace(recordLine('abandon', [rec.id], []));
         continue;
@@ -1149,7 +1383,13 @@ export class Group {
             ),
       );
     }
+    if (dispatchSealAt === run.records.length) {
+      this.seal(running.delivery, { verdict: 'allowed' });
+    }
     const outcome = run.ended;
+    if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
+      this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
+    }
     if (outcome) {
       s.suspended.delete(running);
     }
@@ -1177,6 +1417,7 @@ export class Group {
       how === 'start'
         ? [
             ['delivery', running.delivery.id],
+            ['broadcast', running.delivery.broadcast ?? null],
             ['from', running.delivery.from],
             ['handler', handler],
             // No clause matched an unhandled Run.
@@ -1213,6 +1454,8 @@ export class Group {
           ],
         ),
       );
+      this.seal(running.delivery, { verdict: 'allowed' });
+      run.openVerdict = false;
       return;
     }
     if (!outcome) {
@@ -1235,9 +1478,29 @@ export class Group {
           ...stretch,
           ['state', String(this.persistentState(s))],
           ['end', endReason(outcome)],
+          [
+            'value',
+            outcome.kind === 'completed' &&
+            outcome.veto?.kind !== 'nothing' &&
+            outcome.veto
+              ? traceValue(outcome.veto)
+              : null,
+          ],
         ],
       ),
     );
+    if (outcome.kind === 'completed' && !outcome.passed) {
+      this.seal(
+        running.delivery,
+        outcome.veto
+          ? {
+              verdict: 'vetoed',
+              veto: { script: s.name, run: running.id, reason: outcome.veto },
+            }
+          : { verdict: 'allowed' },
+      );
+    }
+    run.openVerdict = false;
     this.endRun(s, running, outcome, reports, handler);
   }
 
@@ -1263,6 +1526,7 @@ export class Group {
         [
           ['outcome', word],
           ['delivery', delivery.id],
+          ['broadcast', delivery.broadcast ?? null],
           ['handler', handler],
           [
             'value',
@@ -1280,6 +1544,7 @@ export class Group {
       script: s.name,
       run: running.id,
       ...(delivery.id ? { delivery: delivery.id } : {}),
+      ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
       ...(handler ? { handler } : {}),
       outcome: outcome.kind,
       ...(result ? { result } : {}),
@@ -1288,6 +1553,52 @@ export class Group {
       fuel: run.fuel,
       alloc: run.alloc,
     });
+    if (outcome.kind === 'errored' || outcome.kind === 'limit fault') {
+      this.seal(delivery, {
+        verdict: 'undecided',
+        undecided: { script: s.name, run: running.id, outcome: outcome.kind },
+      });
+    }
+    if (outcome.kind === 'errored' && delivery.message !== 'error') {
+      const waiting =
+        s.queue.filter(item => !('run' in item)).length + s.incoming;
+      if (waiting >= s.limits.mailboxDepth) {
+        this.trace(
+          recordLine('note', [running.id], [['kind', 'error-dropped']]),
+        );
+      } else {
+        s.queue.push({
+          id: null,
+          from: running.id,
+          at: s.owner,
+          target: s.owner,
+          message: 'error',
+          args: [outcome.error],
+          limits: {},
+          reply: null,
+          request: null,
+          during: map([
+            ['name', text(delivery.message)],
+            ['args', listValues(delivery.args)],
+          ]),
+        });
+      }
+    }
+    if (
+      delivery.during &&
+      (outcome.kind === 'unhandled' ||
+        (outcome.kind === 'completed' && outcome.passed))
+    ) {
+      return;
+    }
+    if (
+      delivery.broadcast &&
+      (outcome.kind === 'unhandled' ||
+        (outcome.kind === 'completed' && outcome.passed))
+    ) {
+      this.seal(delivery, { verdict: 'allowed' });
+      return;
+    }
     if (
       outcome.kind === 'unhandled' ||
       (outcome.kind === 'completed' && outcome.passed)
@@ -1410,7 +1721,7 @@ const failMap = (error: HostScriptError | null): Value =>
 const endReason = (outcome: Outcome): string => {
   switch (outcome.kind) {
     case 'completed':
-      return outcome.passed ? 'pass' : 'return';
+      return outcome.veto ? 'veto' : outcome.passed ? 'pass' : 'return';
     case 'errored':
       return 'error';
     case 'limit fault':
@@ -1418,6 +1729,27 @@ const endReason = (outcome: Outcome): string => {
     case 'unhandled':
       return 'unhandled';
   }
+};
+
+const validOverride = (name: string, value: unknown, cap: number): boolean =>
+  overridable.has(name) &&
+  typeof value === 'number' &&
+  Number.isSafeInteger(value) &&
+  value >= 0 &&
+  value <= cap;
+
+const messageFields = (m: Message): [string, string | null][] => {
+  const limits = Object.entries(m.limits ?? {});
+  return [
+    ['message', m.name],
+    ['args', m.args?.length ? traceValue(listValues(m.args)) : null],
+    [
+      'limits',
+      limits.length
+        ? `{${limits.map(([k, v]) => `${k}: ${v}`).join(', ')}}`
+        : null,
+    ],
+  ];
 };
 
 export const newGroup = (o: GroupOptions): Group => new Group(o);

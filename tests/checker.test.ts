@@ -627,6 +627,7 @@ describe('Core control-flow and body-context checks', () => {
       ),
     ).toEqual([
       ['leaves finally', 7, 16],
+      ['veto outside a decision', 7, 16],
       ['leaves finally', 8, 3],
       ['leaves finally', 11, 2],
     ]);

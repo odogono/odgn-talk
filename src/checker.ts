@@ -1,4 +1,5 @@
 import { checkConstructs } from './constructs';
+import { checkDecisions } from './decisions';
 import { checkControl } from './control';
 import { checkEffects, type GrantDecls } from './effects';
 import { checkSuspension } from './suspension';
@@ -359,6 +360,12 @@ export const checkSyntax = (
                 }
               : undefined,
           );
+        }
+        if (element.rule === 'Handler') {
+          const during = ts.findIndex(t => t.v === 'during');
+          if (during >= 0 && ts[during + 1]) {
+            mark(ts[during + 1]!, 'binding', true);
+          }
         }
         break;
       }
@@ -967,13 +974,18 @@ export const checkSyntax = (
   if (options.grants) {
     checkEffects(root, options.grants, reportAt);
   }
-  const may = checkSuspension(
+  const importedSuspension = (binding: Binding) => {
+    const from = binding.importedFrom!;
+    const exp = options.libraries?.[from.library]?.[from.name];
+    return typeof exp === 'object' && exp.maySuspend === true;
+  };
+  const may = checkSuspension(root, importedSuspension, reportAt);
+  checkDecisions(
     root,
-    binding => {
-      const from = binding.importedFrom!;
-      const exp = options.libraries?.[from.library]?.[from.name];
-      return typeof exp === 'object' && exp.maySuspend === true;
-    },
+    binding =>
+      binding.importedFrom
+        ? importedSuspension(binding)
+        : (may.get(binding.name) ?? false),
     reportAt,
   );
   diagnostics.sort(

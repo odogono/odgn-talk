@@ -1,7 +1,4 @@
-# allow-at-the-first-suspension-point: a deciding Run that reaches its first
-# Suspension Point without vetoing allows the Decision there, and goes on
-# after the seal. A `veto` in a Run that holds no open Verdict just ends it,
-# with a `note` (ADR 0031). Its figures are estimates, so it isn't blessed.
+# allow-at-the-first-suspension-point: see case.trace for the rules and Cost Model 0 figures.
 
 kind = "trace"
 

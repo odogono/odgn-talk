@@ -9,6 +9,9 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Decisions in the TS Core: `decide`, `decideBroadcast`, `veto`, first-Segment Verdict sealing, `decided` reports, Message Path passing, Broadcast aggregation and `wait for` allowing a Decision, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-two tests and nine decision Trace Cases cover seals, preemptions, errors, faults, dispatch and recipients.
+- Decision load checks for veto outside a deciding entry Handler, local Handler calls, veto in Joins and veto or deciding pass after a possible Suspension Point. Spec fixes include function-style Handler calls in the veto restriction, forbid veto inside a Join, define Broadcast overrides as additional per-recipient caps, and place dispatch-time `decided` records before the Handler's Stretch.
+
 - Host Objects and the Message Path in the Core: `defineObjectKind`, `group.object`, `setParent`, `dispose`, owners and well-known objects, Deliveries and Requests to objects, climbing on `unhandled` and `pass`, `me` and `the target`, sends to objects and Command Calls up the path, properties with `prop` records, `isDisposed`, and objects in the display form and the Value Encoding; with `objects/` Trace Cases, and Spec fixes for `send … to me` in a Script that owns nothing, undefined properties and property failures, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Joins and `wait for` in the Core: Join Members started where they stand, `MaxJoin`, answers in start order, failing fast with `index` and abandoning the rest; one-line and block `wait for` with `from`, captures, Guards, timeouts and `after` branches, matched as each message is dispatched; and the `not in a join` and `empty join` load checks; with `suspension/joins` and `suspension/wait-for` cases, `max-join-minimum` blessed, and Spec fixes for an event's argument count, its test's charges and naming a Script in `from`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -59,6 +62,10 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Delivery and Decision limit overrides reject fractional, negative and non-finite values before allocating ids, including fractional `MaxWait`.
+
+- Uncaught Run errors now enqueue the Script's `error` message, including `on error` text shorthand, `during` binding in Guards, dropping unmatched error messages and preventing an error-message chain. Pending waits observe these messages even without an error Handler; queued error messages count toward Persistent State until dispatch. Seven existing traces are re-blessed for that state and turn ordering.
 
 - A Run's clause in its `seg` and `preempt` records is its entry Handler's, not that of a Handler it called by name.
 - A Built-in that raises is charged by its own rate, `builtin.<name>`, as chapter 8 says, instead of failing on a rate that doesn't exist.

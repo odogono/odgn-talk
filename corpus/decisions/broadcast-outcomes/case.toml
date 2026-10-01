@@ -1,0 +1,17 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "watcher"
+source = "watcher.talk"
+
+[[scripts]]
+name = "broken"
+source = "broken.talk"
+
+[[scripts]]
+name = "decider"
+source = "decider.talk"

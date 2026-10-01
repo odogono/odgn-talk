@@ -236,6 +236,8 @@ export type Parameter = {
 };
 export type Handler = {
   body: Stmt[];
+  deciding: boolean;
+  during: SemanticName | null;
   end: Pos;
   finally: Stmt[] | null;
   finallyPos: Pos | null;
@@ -775,6 +777,7 @@ const handler = (node: SemanticNode, of: Of): Handler => {
   const { children } = node;
   const params: Pattern[] = [];
   let guard: Guard | null = null;
+  let during: SemanticName | null = null;
   let body: Stmt[] = [];
   let fin: Stmt[] | null = null;
   let finallyPos: Pos | null = null;
@@ -787,6 +790,8 @@ const handler = (node: SemanticNode, of: Of): Handler => {
       } else if (child.rule === 'Block') {
         body = of<Stmt[]>(child);
       }
+    } else if (child.text === 'during') {
+      during = children[++i] as SemanticName;
     } else if (child.text === 'where') {
       guard = guardAt(children[++i], of);
     } else if (child.text === 'finally' && child.kind === 'token') {
@@ -802,6 +807,8 @@ const handler = (node: SemanticNode, of: Of): Handler => {
   }
   return {
     k: 'handler',
+    during,
+    deciding: children.some(c => c.kind === 'token' && c.text === 'deciding'),
     pos: pos(node),
     name: of<SemanticName>(children[1]).text,
     scope: node.scope,

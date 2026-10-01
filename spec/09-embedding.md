@@ -123,6 +123,7 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
 - **`Request`** is a `send … and wait` from outside. Its future settles with the Run's result, or rejects with `send failed` and the reason. Cancelling its context or signal queues `cancel-delivery`.
 - **`Broadcast`** reaches every Script that wants the message when the queue is drained. Each recipient's `run end` carries its own delivery id and the broadcast id.
 - **`Call`** calls a Function Value ([Function Values](#function-values)), and **`Decide`** asks for a Verdict ([Decisions](#decisions)).
+- **Broadcast limit overrides:** a Broadcast or Broadcast Decision's override is checked at the call against the Core's default limits. Each recipient runs with the tighter of its own limit and the override, so the Broadcast never loosens a recipient's limits, including a Script loaded after the call.
 - **Full mailboxes:** a Delivery fails at the call with `MailboxFull`, which is load shedding, not a Host error, when the messages in its receiver's mailbox and the Deliveries already queued to that Script fill its mailbox depth. The receiver is the one the Delivery routes to at the call. A Delivery accepted at the call always joins its mailbox when the queue is drained, even past the depth, since a Broadcast's recipients, a `SetParent` queued ahead of it, or the sends of a running Pump for a call made inside one, aren't known at the call. So a Delivery the Host was told is accepted is never lost.
 
 ## The Pump and the Group Fingerprint

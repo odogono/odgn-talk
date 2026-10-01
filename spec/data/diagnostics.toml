@@ -156,7 +156,7 @@ sources = ["ADR 0025", "#115"]
 
 [[diagnostic]]
 code = "not in a join"
-raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`"
+raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`"
 at = "its first token, or the member's"
 sources = ["ADR 0026", "#115"]
 
@@ -180,7 +180,7 @@ sources = ["#115"]
 
 [[diagnostic]]
 code = "veto outside a decision"
-raised_when = "`veto` is outside a `, deciding` Handler: in a function, a Lambda, or a Handler reached by a Command Call"
+raised_when = "`veto` is outside a `, deciding` Handler: in a function, a Lambda, or a Handler reached by a local call, Command Call or function-style"
 at = "`veto`"
 sources = ["ADR 0031", "#115"]
 

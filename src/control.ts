@@ -291,6 +291,7 @@ export const checkControl = (
               (head?.kind === 'name' ||
                 (head?.kind === 'node' && head.rule === 'Call'))) ||
             word(head, 'return') ||
+            word(head, 'veto') ||
             word(head, 'pass') ||
             ((word(head, 'exit') ||
               (word(head, 'next') && word(next, 'repeat'))) &&
