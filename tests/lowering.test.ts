@@ -185,7 +185,7 @@ const compileFile = (path: string): CodeUnit => {
       })
     : {};
   const unit =
-    path.includes('/stdlib/') ||
+    path.includes('/spec/stdlib/') ||
     setup.libraries?.some(library => library.source === basename(path))
       ? 'library'
       : 'script';

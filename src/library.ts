@@ -8,7 +8,7 @@ import { costModel, languageVersion } from './generated/machine';
 import { libraryExports } from './generated/syntax';
 import { exportsOf, importsOf, lowerTree } from './lowering';
 import { loadLibrary, UnitLoadError, type Code } from './machine';
-import { NotImplementedError } from './operations';
+import { stdlibSources } from './generated/stdlib';
 import type { LibraryExport } from './semantic';
 import { sha256 } from './sha256';
 
@@ -112,11 +112,9 @@ export const prepare = (
   });
   const diagnostics = diagnosticsOf(checked, name);
   const names = checked.tree ? importsOf(checked.tree) : [];
-  const stdlib = names.find(n => stdlibNames.has(n));
-  if (stdlib && !diagnostics) {
-    throw new NotImplementedError(`the stdlib Library ${stdlib}`);
-  }
-  const imports = names.flatMap(n => available.get(n) ?? []);
+  const imports = names.flatMap(
+    n => available.get(n) ?? (stdlibNames.has(n) ? [stdlibLibrary(n)] : []),
+  );
   return {
     checked,
     diagnostics,
@@ -147,11 +145,33 @@ export const loadOrReject = <T>(name: string, load: () => T): T => {
 
 /**
  * Compile a Library, once per process for each code identity. `imports` holds
- * every Library its `use` lines name. Throws LoadError.
+ * every Library its `use` lines name, other than the stdlib's, which are
+ * always there. Throws LoadError.
  */
 export const compileLibrary = (
   src: LibrarySource,
   imports: readonly Library[] = [],
+): Library => build(src, imports, false);
+
+const stdlib = new Map<string, Library>();
+/** A stdlib Library, compiled from its normative source on first use. */
+export const stdlibLibrary = (name: string): Library => {
+  let l = stdlib.get(name);
+  if (!l) {
+    l = build(
+      { name, version: languageVersion, source: stdlibSources[name]! },
+      [],
+      true,
+    );
+    stdlib.set(name, l);
+  }
+  return l;
+};
+
+const build = (
+  src: LibrarySource,
+  imports: readonly Library[],
+  isStdlib: boolean,
 ): Library => {
   const available = new Map(imports.map(l => [l.name, l]));
   const p = prepare('library', src.name, src.source, available);
@@ -170,6 +190,7 @@ export const compileLibrary = (
         ),
       ),
     };
+    entry.code.stdlib = isStdlib;
     cache.set(p.identity, entry);
   }
   const library: Library = Object.freeze({

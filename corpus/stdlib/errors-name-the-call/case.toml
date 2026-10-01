@@ -1,0 +1,15 @@
+# errors-name-the-call: an error raised in stdlib code, by a `throw` there or
+# by an operator or Built-in, gets an `at` naming the Script's call into the
+# stdlib, and a catalogue error the stdlib throws is Core-raised, so the Trace
+# leaves out its `message`. An error in a Lambda the stdlib calls points into
+# the Lambda (spec chapter 6, Errors; ADR 0037).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "checks"
+source = "checks.talk"

@@ -1,0 +1,25 @@
+-- report.talk: the calls case's Script. The stdlib Libraries need no
+-- add-library line.
+
+use pad, join, split from text
+use sortBy, map, sum from list
+use merge from map
+use toHex from bytes
+use encodeJson from json
+use makeDate, formatDate from date
+use celsiusToFahrenheit from units
+
+script variable rows
+script variable line
+script variable total
+script variable extra
+script variable stamp
+
+on go
+  put split("b:2,a:1,c:3", ",") into parts
+  put sortBy(parts, given p: item 2 of split(p, ":")) into rows
+  put join(map(rows, given p: pad(p, 5, ".")), "|") into line
+  put sum([1.50 m, 25 cm]) into total
+  put [merge({a: 1}, {b: 2}), toHex(<<0xCA, 0xFE>>), encodeJson([1, nothing, true]), celsiusToFahrenheit(37)] into extra
+  put formatDate(makeDate(2026, 9, 30), "{day:2}.{month:2}.{year}") into stamp
+end go

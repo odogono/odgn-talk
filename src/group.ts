@@ -247,7 +247,8 @@ export class Group {
     if (this.libraries.has(l.name)) {
       refuse('name reused', `The Group already holds a Library ${l.name}`);
     }
-    for (const i of l.imports) {
+    // The stdlib Libraries are always there.
+    for (const i of l.imports.filter(i => !stdlibNames.has(i.name))) {
       const held = this.libraries.get(i.name);
       if (!held || identityOf(held) !== identityOf(i)) {
         refuse(

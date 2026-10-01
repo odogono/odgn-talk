@@ -100,7 +100,8 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 - **Two tiers:** the Built-ins, which are ambient, and the seven stdlib Libraries, `text`, `list`, `map`, `bytes`, `json`, `date` and `units`, which a Script imports with `use` ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)).
 - **Reserved names:** the seven Library names are the only reserved Library names. A new stdlib Library name is a language-version change.
 - **Unique names:** every stdlib name, Built-in or exported, is unique across the Built-ins and all seven Libraries, so no combination of stdlib Imports can clash. None is a Reserved Word or a Built-in property. Names are camelCase. The generator checks this against [`stdlib.toml`](data/stdlib.toml).
-- **Versioned with the language:** the stdlib is part of the language version, and a stdlib Library's code identity is fixed by it.
+- **Versioned with the language:** the stdlib is part of the language version, and a stdlib Library's code identity is fixed by it. Its version is the language version, and its identity is computed from its source here as any Library's is ([chapter 9](09-embedding.md#loading-and-libraries)), so it covers the stdlib Libraries it imports.
+- **Always there:** every Group holds the seven stdlib Libraries without the Host adding them, and a user Library may import them too.
 - **Written in the language:** each stdlib Library's source is normative Spec text, with Disassembly Cases like any Library's. This chapter states what each export does, and the source does exactly that. The source also fixes what this chapter leaves to it: its private helpers, its Fuel, and the order of any calls it makes where this chapter doesn't give one.
 - **Operation names** are their own namespace, so an Operation may share a name with a stdlib function, as `locale`'s `upper` does with the `upper` Built-in.
 
