@@ -10,6 +10,7 @@ import type {
   Trivia,
 } from './syntax';
 import { Lexer, RESERVED, type Mode, type Token } from './lexer';
+import { runTask, type Task } from './tasks';
 
 // Recognition shapes are private. The public tree contains grammar productions
 // and their original tokens, including fields the eventual checker must inspect.
@@ -89,35 +90,7 @@ type ParseFrame = {
 };
 // Each yield asks the driver to run a child production. Unlike yield*, it
 // never delegates through the native stack, so syntax depth has no JS limit.
-type ParseTask<T> = Generator<ParseTask<unknown>, T, unknown>;
-
-const runParse = <T>(root: ParseTask<T>): T => {
-  const stack: ParseTask<unknown>[] = [root];
-  let value: unknown;
-  let throwing = false;
-  while (stack.length) {
-    const task = stack.at(-1)!;
-    try {
-      const step = throwing ? task.throw(value) : task.next(value);
-      throwing = false;
-      if (step.done) {
-        stack.pop();
-        value = step.value;
-      } else {
-        stack.push(step.value);
-        value = undefined;
-      }
-    } catch (error) {
-      stack.pop();
-      value = error;
-      throwing = true;
-    }
-  }
-  if (throwing) {
-    throw value;
-  }
-  return value as T;
-};
+type ParseTask<T> = Task<T>;
 
 class Parser {
   lx: Lexer;
@@ -2418,7 +2391,7 @@ export type ParseResult =
 export const parseSource = (source: string): ParseResult => {
   const parser = new Parser(source);
   try {
-    runParse(parser.source());
+    runTask(parser.source());
     return { tree: parser.tree, error: null };
   } catch (error) {
     if (error instanceof ParseError) {

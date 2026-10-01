@@ -206,149 +206,202 @@ export const grammar = {
 export const units = [
   {
     "name": "mg",
+    "kind": "mass",
     "calendar": false
   },
   {
     "name": "g",
+    "kind": "mass",
     "calendar": false
   },
   {
     "name": "kg",
+    "kind": "mass",
     "calendar": false
   },
   {
     "name": "lb",
+    "kind": "mass",
     "calendar": false
   },
   {
     "name": "oz",
+    "kind": "mass",
     "calendar": false
   },
   {
     "name": "mm",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "cm",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "m",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "km",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "inch",
     "plural": "inches",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "ft",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "yd",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "mi",
+    "kind": "length",
     "calendar": false
   },
   {
     "name": "mL",
+    "kind": "volume",
     "calendar": false
   },
   {
     "name": "L",
+    "kind": "volume",
     "calendar": false
   },
   {
     "name": "ms",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "s",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "min",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "hr",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "day",
     "plural": "days",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "week",
     "plural": "weeks",
+    "kind": "exact duration",
     "calendar": false
   },
   {
     "name": "month",
     "plural": "months",
+    "kind": "calendar duration",
     "calendar": true
   },
   {
     "name": "year",
     "plural": "years",
+    "kind": "calendar duration",
     "calendar": true
   },
   {
     "name": "degC",
+    "kind": "temperature difference",
     "calendar": false
   },
   {
     "name": "degF",
+    "kind": "temperature difference",
     "calendar": false
   },
   {
     "name": "USD",
+    "kind": "USD",
     "calendar": false
   },
   {
     "name": "EUR",
+    "kind": "EUR",
     "calendar": false
   },
   {
     "name": "GBP",
+    "kind": "GBP",
     "calendar": false
   },
   {
     "name": "JPY",
+    "kind": "JPY",
     "calendar": false
   },
   {
     "name": "CHF",
+    "kind": "CHF",
     "calendar": false
   },
   {
     "name": "CNY",
+    "kind": "CNY",
     "calendar": false
   },
   {
     "name": "CAD",
+    "kind": "CAD",
     "calendar": false
   },
   {
     "name": "AUD",
+    "kind": "AUD",
     "calendar": false
   },
   {
     "name": "INR",
+    "kind": "INR",
     "calendar": false
   },
   {
     "name": "SEK",
+    "kind": "SEK",
     "calendar": false
   }
+];
+export const unitKinds = [
+  "mass",
+  "length",
+  "volume",
+  "exact duration",
+  "calendar duration",
+  "temperature difference",
+  "USD",
+  "EUR",
+  "GBP",
+  "JPY",
+  "CHF",
+  "CNY",
+  "CAD",
+  "AUD",
+  "INR",
+  "SEK"
 ];
 export const diagnosticCodes = [
   "unknown name",

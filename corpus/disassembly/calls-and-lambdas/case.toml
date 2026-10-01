@@ -1,0 +1,33 @@
+# calls-and-lambdas: pins chapter 8's Calls, Lambdas and Function Values
+# lowering: `call` for the unit's own functions, `call-import` for an
+# imported one, `call-handler` for a Handler, `call-builtin` for a Built-in
+# and `call-value` or `call-value-wait` for a Function Value in a variable;
+# `make-function` and `make-imported-function` for bare function names;
+# and each Lambda's body, numbered as the lowering reaches it, named by its
+# enclosing body and position, with its captures in first-use order. The
+# Library's own case shows its definitions: its Constant, then each
+# parameter default, which the initialiser computes. A Script's case shows
+# the Library's functions by name, never their bodies.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "shapes"
+version = "1"
+source = "shapes.talk"
+
+[[scripts]]
+name = "caller"
+source = "caller.talk"
+
+[[disassembly]]
+unit = "shapes"
+expected = "shapes.dis"
+
+[[disassembly]]
+unit = "caller"
+expected = "caller.dis"

@@ -1,0 +1,38 @@
+-- writes.talk: Container writes, each one store to its root (ADR 0001,
+-- chapter 8, Containers). Part of the containers case.
+
+script variable total = 0
+
+on writing row, k, v
+  put v into row
+  put "X" into item 2 of row
+  put "Y" into character 1 of word 2 of line 3 of row
+  put v into the name of the (k) of row
+  put "Z" into item 2 of row delimited by ";"
+  put "!" after row
+  put v before word 1 of row
+  put ...v after item 1 of row
+  put ...v before row
+  add 1 to total
+  subtract v from the count of row
+  multiply item 1 of row by 2
+  divide total by k
+  replace <n: digits> in item 3 of row with n & "!"
+  replace first "a" in row with "b"
+end writing
+
+on deleting m, k, x
+  delete x
+  delete the a of m
+  delete the (k) of m
+  delete item 1 of x
+  delete the b of the (k) of m
+  delete the c of the a of m
+  delete word 1 of line 5 of x
+  delete item 1 of item 2 of x delimited by ";"
+end deleting
+
+on setting button, k
+  set the label of button to "OK"
+  set the (k) of the panel of button to 5
+end setting

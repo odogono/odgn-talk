@@ -1,0 +1,317 @@
+unit shapes script
+constants
+  0 nothing
+  1 0
+  2 "polar"
+  3 <"ID-", id: 4 digits as number>
+  4 "yes"
+  5 1
+  6 2
+  7 -5 kg
+  8 false
+  9 <word, ": ", tail: text>
+  10 3
+  11 "GET"
+  12 [4, 4]
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler point clause 1 (…) locals 4 0002..0020
+  2 handler point clause 2 (…) locals 6 0021..0045
+  3 handler point clause 3 (other) locals 2 0046..0050
+  4 handler unpack clause 1 (value, limit) locals 16 0051..0172
+  5 handler walk clause 1 (pairs) locals 8 0173..0205
+  6 handler packets clause 1 (packet, n) locals 19 0206..0280
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 6:10 load 1 ; (1)
+  0003 6:10 test-list 2 0020
+  0004 6:10 load 1 ; (1)
+  0005 6:10 list-item 1
+  0006 6:11 store 2 ; x
+  0007 6:10 load 1 ; (1)
+  0008 6:10 list-item 2
+  0009 6:14 store 3 ; y
+  0010 6:23 load 2 ; x
+  0011 6:27 const 1 ; 0
+  0012 6:25 greater
+  0013 6:23 branch-false 0020
+  0014 7:10 load 2 ; x
+  0015 7:14 load 3 ; y
+  0016 7:12 add
+  0017 7:3 return
+  0018 8:1 const 0 ; nothing
+  0019 8:1 return
+  0020 8:1 clause-fail
+  0021 10:10 load 1 ; (1)
+  0022 10:10 test-map 0045
+  0023 10:10 load 1 ; (1)
+  0024 10:10 map-get "kind" 0045
+  0025 10:17 store 5 ; (5)
+  0026 10:17 load 5 ; (5)
+  0027 10:17 test-constant 2 0045 ; "polar"
+  0028 10:10 load 1 ; (1)
+  0029 10:10 map-get "r" 0045
+  0030 10:26 store 2 ; r
+  0031 10:10 load 1 ; (1)
+  0032 10:10 map-get "theta" 0045
+  0033 10:36 store 5 ; (5)
+  0034 10:36 load 5 ; (5)
+  0035 10:36 store 3 ; t
+  0036 10:36 load 5 ; (5)
+  0037 10:36 store 4 ; angle
+  0038 11:11 load 2 ; r
+  0039 11:14 load 3 ; t
+  0040 11:17 load 4 ; angle
+  0041 11:10 list 3
+  0042 11:3 return
+  0043 12:1 const 0 ; nothing
+  0044 12:1 return
+  0045 12:1 clause-fail
+  0046 15:10 load 1 ; other
+  0047 15:3 return
+  0048 16:1 const 0 ; nothing
+  0049 16:1 return
+  0050 16:1 clause-fail
+  0051 19:26 load 1 ; value
+  0052 19:3 store 12 ; (12)
+  0053 19:7 load 12 ; (12)
+  0054 19:7 test-list-at-least 2 0068
+  0055 19:7 load 12 ; (12)
+  0056 19:7 list-item 1
+  0057 19:8 store 13 ; (13)
+  0058 19:7 load 12 ; (12)
+  0059 19:7 list-item 2
+  0060 19:11 store 14 ; (14)
+  0061 19:7 load 12 ; (12)
+  0062 19:7 list-rest 3
+  0063 19:7 store 15 ; (15)
+  0064 19:3 move 13 3 ; (13), a
+  0065 19:3 move 14 4 ; (14), b
+  0066 19:3 move 15 5 ; (15), rest
+  0067 19:3 jump 0069
+  0068 19:3 raise no match
+  0069 20:25 load 1 ; value
+  0070 20:3 store 12 ; (12)
+  0071 20:7 load 12 ; (12)
+  0072 20:7 test-map 0082
+  0073 20:7 load 12 ; (12)
+  0074 20:7 map-get "name" 0082
+  0075 20:14 store 13 ; (13)
+  0076 20:7 load 12 ; (12)
+  0077 20:7 map-get "age" 0082
+  0078 20:17 store 14 ; (14)
+  0079 20:3 move 13 6 ; (13), n
+  0080 20:3 move 14 7 ; (14), age
+  0081 20:3 jump 0083
+  0082 20:3 raise no match
+  0083 21:19 load 1 ; value
+  0084 21:3 store 12 ; (12)
+  0085 21:7 load 12 ; (12)
+  0086 21:7 test-list-at-least 1 0094
+  0087 21:7 load 12 ; (12)
+  0088 21:7 list-item 1
+  0089 21:8 pop
+  0090 21:7 load 12 ; (12)
+  0091 21:7 list-rest 2
+  0092 21:7 pop
+  0093 21:3 jump 0095
+  0094 21:3 raise no match
+  0095 22:42 load 1 ; value
+  0096 22:3 store 12 ; (12)
+  0097 22:7 load 12 ; (12)
+  0098 22:7 const 3 ; <"ID-", id: 4 digits as number>
+  0099 22:7 match-whole 0106
+  0100 22:7 store 13 ; (13)
+  0101 22:7 load 13 ; (13)
+  0102 22:7 get-key "id"
+  0103 22:7 store 14 ; (14)
+  0104 22:3 move 14 8 ; (14), id
+  0105 22:3 jump 0107
+  0106 22:3 raise no match
+  0107 23:9 load 1 ; value
+  0108 23:3 store 12 ; (12)
+  0109 24:10 load 12 ; (12)
+  0110 24:10 test-constant 4 fold 0114 ; "yes"
+  0111 24:28 const 5 ; 1
+  0112 24:21 return
+  0113 24:5 jump 0170
+  0114 25:10 load 12 ; (12)
+  0115 25:10 load 2 ; limit
+  0116 25:10 test-equal 0120
+  0117 25:29 const 6 ; 2
+  0118 25:22 return
+  0119 25:5 jump 0170
+  0120 26:10 load 12 ; (12)
+  0121 26:10 test-list 2 0144
+  0122 26:10 load 12 ; (12)
+  0123 26:10 list-item 1
+  0124 26:11 store 13 ; (13)
+  0125 26:10 load 12 ; (12)
+  0126 26:10 list-item 2
+  0127 26:18 store 14 ; (14)
+  0128 26:18 load 14 ; (14)
+  0129 26:18 test-constant 7 fold 0144 ; -5 kg
+  0130 26:31 load 13 ; (13)
+  0131 26:37 is-kind number
+  0132 26:49 branch-false 0138
+  0133 26:53 load 13 ; (13)
+  0134 26:61 load 2 ; limit
+  0135 26:59 greater
+  0136 26:49 check-boolean
+  0137 26:49 jump 0139
+  0138 26:49 const 8 ; false
+  0139 26:31 branch-false 0144
+  0140 26:5 move 13 9 ; (13), first
+  0141 26:79 load 9 ; first
+  0142 26:72 return
+  0143 26:5 jump 0170
+  0144 27:19 load 12 ; (12)
+  0145 27:19 const 9 ; <word, ": ", tail: text>
+  0146 27:19 match-search fold 0155
+  0147 27:19 store 13 ; (13)
+  0148 27:19 load 13 ; (13)
+  0149 27:19 get-key "tail"
+  0150 27:19 store 14 ; (14)
+  0151 27:5 move 14 10 ; (14), tail
+  0152 27:56 load 10 ; tail
+  0153 27:49 return
+  0154 27:5 jump 0170
+  0155 28:10 load 12 ; (12)
+  0156 28:10 test-map 0168
+  0157 28:10 load 12 ; (12)
+  0158 28:10 map-get "size" 0168
+  0159 28:17 store 13 ; (13)
+  0160 28:17 load 13 ; (13)
+  0161 28:17 test-constant 10 fold 0168 ; 3
+  0162 28:10 load 12 ; (12)
+  0163 28:10 store 13 ; (13)
+  0164 28:5 move 13 11 ; (13), whole
+  0165 28:41 load 11 ; whole
+  0166 28:34 return
+  0167 28:5 jump 0170
+  0168 29:17 const 1 ; 0
+  0169 29:10 return
+  0170 31:1 const 0 ; nothing
+  0171 31:1 return
+  0172 31:1 clause-fail
+  0173 34:27 load 1 ; pairs
+  0174 34:3 iterate
+  0175 34:3 next 0180
+  0176 34:3 store 2 ; pair
+  0177 35:9 load 2 ; pair
+  0178 35:5 tell console write 1
+  0179 34:3 jump 0175
+  0180 34:3 pop
+  0181 37:29 load 1 ; pairs
+  0182 37:3 iterate
+  0183 37:3 next 0202
+  0184 37:3 store 5 ; (5)
+  0185 37:19 load 5 ; (5)
+  0186 37:19 test-list 2 0196
+  0187 37:19 load 5 ; (5)
+  0188 37:19 list-item 1
+  0189 37:20 store 6 ; (6)
+  0190 37:19 load 5 ; (5)
+  0191 37:19 list-item 2
+  0192 37:23 store 7 ; (7)
+  0193 37:3 move 6 3 ; (6), k
+  0194 37:3 move 7 4 ; (7), v
+  0195 37:3 jump 0197
+  0196 37:3 raise no match
+  0197 38:9 load 3 ; k
+  0198 38:13 load 4 ; v
+  0199 38:11 concat
+  0200 38:5 tell console write 1
+  0201 37:3 jump 0183
+  0202 37:3 pop
+  0203 40:1 const 0 ; nothing
+  0204 40:1 return
+  0205 40:1 clause-fail
+  0206 43:9 load 1 ; packet
+  0207 43:3 store 14 ; (14)
+  0208 44:10 load 14 ; (14)
+  0209 44:10 bin-start 0225
+  0210 44:13 bin-literal 6 0225 ; 2
+  0211 44:19 bin-int uint32 0225
+  0212 44:19 store 15 ; (15)
+  0213 44:31 bin-int int16 little 0225
+  0214 44:31 store 16 ; (16)
+  0215 44:48 bin-int uint8 0225
+  0216 44:48 pop
+  0217 44:10 bin-end 0225
+  0218 44:5 move 15 3 ; (15), id
+  0219 44:5 move 16 4 ; (16), x
+  0220 44:73 load 3 ; id
+  0221 44:77 load 4 ; x
+  0222 44:72 list 2
+  0223 44:65 return
+  0224 44:5 jump 0278
+  0225 45:10 load 14 ; (14)
+  0226 45:10 bin-start 0245
+  0227 45:13 bin-literal 11 0245 ; "GET"
+  0228 45:20 bin-bits 12 2 0245 ; [4, 4]
+  0229 45:32 store 15 ; (15)
+  0230 45:20 store 16 ; (16)
+  0231 45:44 bin-int uint8 0245
+  0232 45:44 store 17 ; (17)
+  0233 45:57 load 17 ; (17)
+  0234 45:57 bin-bytes bytes 0245
+  0235 45:57 store 18 ; (18)
+  0236 45:75 bin-rest bytes 0245
+  0237 45:75 pop
+  0238 45:5 move 15 6 ; (15), lo
+  0239 45:5 move 16 5 ; (16), hi
+  0240 45:5 move 17 7 ; (17), size
+  0241 45:5 move 18 8 ; (18), body
+  0242 45:94 load 8 ; body
+  0243 45:87 return
+  0244 45:5 jump 0278
+  0245 46:10 load 14 ; (14)
+  0246 46:10 bin-start 0269
+  0247 46:13 bin-int uint8 0269
+  0248 46:13 store 15 ; (15)
+  0249 46:32 load 15 ; (15)
+  0250 46:38 const 6 ; 2
+  0251 46:36 multiply
+  0252 46:25 bin-bytes bytes as text 0269
+  0253 46:25 store 16 ; (16)
+  0254 46:56 load 2 ; n
+  0255 46:56 bin-bytes bytes 0269
+  0256 46:56 store 17 ; (17)
+  0257 46:71 bin-rest bytes 0269
+  0258 46:71 store 18 ; (18)
+  0259 46:5 move 15 9 ; (15), len
+  0260 46:5 move 16 10 ; (16), head
+  0261 46:5 move 17 11 ; (17), tag
+  0262 46:5 move 18 12 ; (18), tail
+  0263 46:95 load 10 ; head
+  0264 46:101 load 11 ; tag
+  0265 46:106 load 12 ; tail
+  0266 46:94 list 3
+  0267 46:87 return
+  0268 46:5 jump 0278
+  0269 47:10 load 14 ; (14)
+  0270 47:10 bin-start 0278
+  0271 47:13 bin-literal 5 0278 ; 1
+  0272 47:19 bin-rest bytes as text 0278
+  0273 47:19 store 15 ; (15)
+  0274 47:5 move 15 13 ; (15), text
+  0275 47:50 load 13 ; text
+  0276 47:43 return
+  0277 47:5 jump 0278
+  0278 49:1 const 0 ; nothing
+  0279 49:1 return
+  0280 49:1 clause-fail
+unwind
+  0002..0013 guard -> 0020 depth 0
+  0021..0037 guard -> 0045 depth 0
+  0109..0110 guard -> 0114 depth 0
+  0114..0116 guard -> 0120 depth 0
+  0120..0139 guard -> 0144 depth 0
+  0144..0150 guard -> 0155 depth 0
+  0155..0163 guard -> 0168 depth 0
+  0208..0217 guard -> 0225 depth 0
+  0225..0237 guard -> 0245 depth 0
+  0245..0258 guard -> 0269 depth 0
+  0269..0273 guard -> 0278 depth 0

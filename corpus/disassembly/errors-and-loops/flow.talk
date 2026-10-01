@@ -1,0 +1,87 @@
+-- flow.talk: branches, loops, `try`, `throw` and leaving `finally` blocks.
+-- Part of the errors-and-loops case.
+
+script variable log = []
+
+on branches x
+  if x > 2 then put "big" into size else put "small" into size
+  if x = 1 then
+    put "one" into size
+  else if x = 2 then
+    put "two" into size
+  else if x = 3 then
+    put "three" into size
+  end if
+  if x is empty then put nothing into size
+  return size
+end branches
+
+on loops n
+  repeat n times
+    add 1 to count
+  end repeat
+  repeat while count < 10
+    add 1 to count
+    if count = 5 then next repeat
+  end repeat
+  repeat until count > 20
+    add 1 to count
+    if count = 15 then exit repeat
+  end repeat
+  repeat forever
+    exit repeat
+  end repeat
+  repeat for each i in 1..n
+    repeat for each j in [1, 2]
+      if j = i then exit repeat
+    end repeat
+  end repeat
+  return count
+end loops
+
+on guarded x
+  try
+    put x / 0 into y
+  catch "division by zero"
+    put 0 into y
+  catch {code: c, value: v} where c is "wrong kind"
+    put v into y
+  end try
+  try
+    throw {code: "custom", reason: x}
+  catch e where the code of e is "custom"
+    put e into y
+  finally
+    put y after log
+  end try
+  return y
+end guarded
+
+on leaving xs
+  repeat for each x in xs
+    try
+      if x = 1 then next repeat
+      if x = 2 then exit repeat
+      if x = 3 then return "three"
+    finally
+      put x after log
+    end try
+  end repeat
+  try
+    try
+      return "inner"
+    finally
+      put "inner" after log
+    end try
+  catch err
+    throw err
+  finally
+    put "outer" after log
+  end try
+end leaving
+
+on cleanup x
+  put x after log
+finally
+  put "done" after log
+end cleanup

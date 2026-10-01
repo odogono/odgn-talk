@@ -1,0 +1,12 @@
+-- shapes.talk: a Library, part of the calls-and-lambdas case. Its own
+-- Disassembly pins its defaults and a private function (ADR 0020).
+
+constant unit = "cm"
+
+function area w, h = 1, label = unit
+  return describe(w * h, label)
+end area
+
+private function describe n, label
+  return n & " " & label
+end describe

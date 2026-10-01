@@ -1,0 +1,21 @@
+# containers: pins chapter 8's Containers lowering: the value's temp, each
+# level's index or computed key from the leaf back, the delimiter's temp, the
+# wholes read from the root down, the writes from the root out and the one
+# store to the root. Also `put … after` and `before`, the arithmetic
+# statements (whose value is read where the source has it), `replace` into a
+# Container, `delete` as a write one level up with its tests and skip label,
+# and `set` of a Host Object's property.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "writes"
+source = "writes.talk"
+
+[[disassembly]]
+unit = "writes"
+expected = "writes.dis"

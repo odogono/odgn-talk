@@ -1,0 +1,6 @@
+-- pricing.talk: the Script `waiter` sends to, part of the
+-- messages-and-waiting case. Its own lowering isn't pinned here.
+
+on quote id
+  return 2.50 GBP
+end quote

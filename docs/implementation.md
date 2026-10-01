@@ -1,6 +1,6 @@
 # TS Core foundations
 
-These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly and checks names and bindings. It does not yet perform every load check, load or execute Scripts, so it is not a conforming Core.
+These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, and lowers checked source to chapter 8's code units with their canonical disassembly. It does not yet perform every load check, load or execute Scripts, so it is not a conforming Core.
 
 ## Public values
 
@@ -48,7 +48,7 @@ bun run syntax:check
 bun test tests/lexer.test.ts tests/parser.test.ts tests/syntax-fixtures.test.ts
 ```
 
-The generator copies the syntax lists from `grammar.toml` and Unit spellings from `units.toml` into browser-safe TS tables. The check reproduces those tables byte for byte and runs in CI, tests and builds. Core tests independently exercise authored first-error fixtures, every corpus Script, Standard Library, syntax sketch and `talk` documentation example. They also check every token/trivia span and exact source reconstruction. These parser checks do not establish execution, lowering or Trace conformance.
+The generator copies the syntax lists from `grammar.toml`, Unit spellings and Unit Kinds from `units.toml`, and the instruction set from `machine.toml` into browser-safe TS tables. The check reproduces those tables byte for byte and runs in CI, tests and builds. Core tests independently exercise authored first-error fixtures, every corpus Script, Standard Library, syntax sketch and `talk` documentation example. They also check every token/trivia span and exact source reconstruction. These parser checks do not establish execution, lowering or Trace conformance.
 
 ## Semantic names and bindings
 
@@ -92,6 +92,35 @@ bun test tests/checker.test.ts
 
 Core tests check exact authored codes, scalar positions, diagnostic ordering, bindings and capture identities, all binding forms, function contracts, initializer/default references, control flow across nested Lambdas, loops and `finally` blocks, Handler suffixes, Guards, literal, kind, chunk and pattern rules, and deep input. The browser smoke test also exercises name resolution, binding/function contracts, control-flow and construct checks with platform Unicode functions disabled.
 
+## Lowering and canonical disassembly
+
+```ts
+import { compileSource, disassemble } from "@odgn/northtalk";
+
+const result = compileSource('on greet name\n  say "hi " & name\nend greet', {
+  name: "greeter",
+});
+if (result.unit) {
+  console.log(disassemble(result.unit)); // chapter 8's canonical text
+}
+```
+
+`compileSource` checks a Script (or, with `{ unit: 'library' }`, a Library) and lowers it when there is no syntax error and no load diagnostic; otherwise `unit` is null. It takes the checker's options, plus the unit's `name`. `lowerTree` lowers an already checked semantic tree, and `exportsOf` gives a checked Library's exports in the form the checker's `libraries` option takes. The code unit holds chapter 8's tables in order: the constant pool (as display forms), definitions, Script Variables, objects, the body table, one instruction array, the Unwind Table and the event table. Operands are indexes where the table has them and names otherwise, and labels are absolute instruction indexes. None of this is an addition to the embedding interface.
+
+The lowering follows chapter 8 rule by rule over the semantic tree's bindings, so slots come from the checker's scopes: `it`, the arguments, the names parameter patterns bind, a Lambda's captures in first-use order, the other locals by first binding site, then temps, each the lowest one released. Constants, objects and Lambda and event-test bodies are numbered as the lowering reaches them, initialiser first. Constants are shown in the display form: numbers in canonical text, Quantities with their Unit in normal form, text in NFC, map key lists, bit widths and Text Pattern canonical source, with `(1)`, `(2)`, … for a template's splices. Each pass runs on an explicit task stack, so deeply nested expressions and blocks lower without the native call stack.
+
+`disassemble` writes chapter 8's canonical text, with LF line ends and a final newline: one space between fields, numbered `constant`, `local`, `variable` and `body` operands with their notes, display-form keys, every other operand by name, and the event table's branch format. Each instruction's position follows chapter 8's source map, including its positions for the instructions that rules emit beyond the constructs the map lists. Those rules, the `initialiser` body name, the bare `...` lowering and the release of `repeat for each`'s temp were settled in chapter 8 with this slice.
+
+Some constructs check without error but chapter 8 doesn't settle their lowering, so `compileSource` throws `LoweringError` at them: a Quantity literal whose Unit names two Units of one Unit Kind (`2 m*ft`), a bit field whose width isn't an integer literal, a Container rooted in a well-known object, and a Container level that is a Built-in property. `v as n bytes` in a build lowers to `bytes-field bytes` as chapter 8 says, so its size isn't lowered; that needs a Spec fix before execution. A `delete` of a delimited `item` evaluates `delimited by` twice, as chapter 8's rule is written.
+
+```sh
+bun test tests/lowering.test.ts
+bun run corpus:run disassembly
+bun run corpus:run --bless disassembly/expressions
+```
+
+Core tests lower the Standard Library, every corpus source and the prototype's coverage file, and check every body against `machine.toml`: operands, stack effects on every path, a single depth at every instruction, Unwind Table depths and bodies that can't run off their end. They also pin slot order, temp reuse, definitions, Lambda naming, event tables, positions, constant displays, deep nesting and the unsettled cases. The non-normative prototype in `tools/machine/` was used as a differential check during development: it agrees instruction for instruction on the Standard Library and the seed corpus, except where chapter 8 decides against it (source positions of `store`s, loop tests, Guards and `try` instructions; `< <` before a leading group; Unit plurals; canonical number text; and Rest bindings' slot order).
+
 ## Generated Unicode tables
 
 ```sh
@@ -123,10 +152,10 @@ Record notable implementation changes under the appropriate Added, Changed, Depr
 
 Tests cover every row and all five NFC columns of the pinned NormalizationTest, identity normalization for every unlisted scalar, every GraphemeBreakTest row, every C/S folding mapping, UnicodeData and unconditional SpecialCasing mappings, final-sigma contexts, text searches/chunks, constructor refusal paths, immutable containers, insertion order, display/encoding round trips and deep values without a reader-only nesting limit.
 
-The execution runner is separate from `corpus:check`, the existing format checker. Its default selection is the implemented seed case `text-model/host-text-normalised-to-nfc`, which runs all five encoding lines through public Host constructors and `encodeValue`. Paths are relative to `corpus/`, or absolute. `--list` marks every existing case supported or deferred. Explicitly selecting deferred case kinds fails; nothing is silently skipped. A mismatch identifies the case, source line, first differing UTF-8 byte, and expected/actual encodings. No blessing or seed rewriting is provided by this slice.
+The execution runner is separate from `corpus:check`, the existing format checker. Its default selection is every case of a kind the Core implements: the Value Encoding case `text-model/host-text-normalised-to-nfc`, which runs all five encoding lines through public Host constructors and `encodeValue`, and the Disassembly Cases under `disassembly/`, which compile each case's Libraries, then its Scripts (whose well-known objects are their `objects` and the case's other Scripts), and compare each pinned unit's disassembly byte for byte. Paths are relative to `corpus/`, or absolute. `--list` marks every existing case supported or deferred. Explicitly selecting deferred case kinds fails; nothing is silently skipped. A mismatch identifies the case, the file and line, the first differing UTF-8 byte, and the expected and actual text. `--bless` writes a Disassembly Case's expected files from this Core, the only one available, for human review; it refuses every other case kind, so seed Traces are never rewritten.
 
-`bun run build` verifies the pins and builds `dist/index.js`, an ES module usable in a browser without Bun or Node dependencies. To check it in a real browser, run `bun run test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing and syntax diagnostics. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
+`bun run build` verifies the pins and builds `dist/index.js`, an ES module usable in a browser without Bun or Node dependencies. To check it in a real browser, run `bun run test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing, syntax and load diagnostics, and lowering and disassembly. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
 
 ## Remaining step 1 work
 
-The remaining checker diagnostics, normative lowering and disassembly, executable Abstract Machine, Built-ins and expressions/statements, Cost Model 0 Fuel/allocation, remaining value kinds, Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.
+The remaining checker diagnostics, executable Abstract Machine, Built-ins and expressions/statements, Cost Model 0 Fuel/allocation, remaining value kinds, Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented, as do the Spec fixes the lowering's unsettled cases need. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.

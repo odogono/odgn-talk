@@ -1,0 +1,193 @@
+unit waiter script
+constants
+  0 nothing
+  1 "order "
+  2 5 s
+  3 30 s
+  4 false
+  5 1 min
+  6 1
+  7 2
+  8 3
+  9 "nothing to ship"
+objects
+  0 warehouse
+  1 pricing
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler order clause 1 (id) locals 3 may suspend 0002..0037
+  2 handler restock clause 1 (id) locals 2 may suspend 0038..0044
+  3 handler restock clause 2 (id, n) locals 3 0045..0049
+  4 handler events clause 1 (id, limit) locals 8 may suspend 0050..0089
+  5 handler joins clause 1 (ids) locals 3 may suspend 0090..0110
+  6 handler beforeShip clause 1 (parcel) locals 2 0111..0119
+  7 event paid (…) captures 1 locals 5 0120..0134
+  8 event shipped (…) captures 3 locals 6 0135..0154
+  9 event cancelled (reason) locals 2 0155..0158
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 5:20 load 1 ; id
+  0003 5:24 me
+  0004 5:30 load-object warehouse
+  0005 5:3 send placed 2
+  0006 6:19 load 1 ; id
+  0007 6:25 load-object pricing
+  0008 6:3 send-wait quote 1
+  0009 6:3 store 0 ; it
+  0010 7:7 load 0 ; it
+  0011 7:3 store 2 ; price
+  0012 8:3 send-up refresh 0
+  0013 9:11 load 1 ; id
+  0014 9:3 send-up-wait refresh 1
+  0015 9:3 store 0 ; it
+  0016 10:11 load 1 ; id
+  0017 10:3 call-handler restock 1
+  0018 10:3 store 0 ; it
+  0019 11:11 load 1 ; id
+  0020 11:3 call-handler-wait restock 1
+  0021 11:3 store 0 ; it
+  0022 12:21 const 1 ; "order "
+  0023 12:32 load 1 ; id
+  0024 12:30 concat
+  0025 12:3 tell log write 1
+  0026 13:7 load 2 ; price
+  0027 13:3 tell console write 1
+  0028 14:3 ask clock now 0
+  0029 14:3 store 0 ; it
+  0030 15:24 load 1 ; id
+  0031 15:3 ask-wait prices lookup 1
+  0032 15:3 store 0 ; it
+  0033 16:10 target
+  0034 16:3 return
+  0035 17:1 const 0 ; nothing
+  0036 17:1 return
+  0037 17:1 clause-fail
+  0038 20:8 const 2 ; 5 s
+  0039 20:3 wait
+  0040 21:10 load 1 ; id
+  0041 21:3 return
+  0042 22:1 const 0 ; nothing
+  0043 22:1 return
+  0044 22:1 clause-fail
+  0045 25:10 load 2 ; n
+  0046 25:3 return
+  0047 26:1 const 0 ; nothing
+  0048 26:1 return
+  0049 26:1 clause-fail
+  0050 29:46 load-object pricing
+  0051 29:3 load 1 ; id
+  0052 29:57 const 3 ; 30 s
+  0053 29:3 wait-for 0
+  0054 29:3 store 0 ; it
+  0055 30:3 wait-for 1
+  0056 30:3 store 0 ; it
+  0057 32:5 load 1 ; id
+  0058 32:5 load 3 ; a
+  0059 32:5 load 2 ; limit
+  0060 36:11 const 5 ; 1 min
+  0061 31:3 wait-for-any 2
+  0062 31:3 store 7 ; (7)
+  0063 31:3 store 0 ; it
+  0064 32:5 load 7 ; (7)
+  0065 32:5 const 6 ; 1
+  0066 32:5 equal
+  0067 32:5 branch-false 0071
+  0068 33:11 load 4 ; o
+  0069 33:7 store 5 ; done
+  0070 32:5 jump 0085
+  0071 34:5 load 7 ; (7)
+  0072 34:5 const 7 ; 2
+  0073 34:5 equal
+  0074 34:5 branch-false 0078
+  0075 35:11 load 6 ; reason
+  0076 35:7 store 5 ; done
+  0077 34:5 jump 0085
+  0078 36:5 load 7 ; (7)
+  0079 36:5 const 8 ; 3
+  0080 36:5 equal
+  0081 36:5 branch-false 0085
+  0082 37:11 const 0 ; nothing
+  0083 37:7 store 5 ; done
+  0084 36:5 jump 0085
+  0085 39:10 load 5 ; done
+  0086 39:3 return
+  0087 40:1 const 0 ; nothing
+  0088 40:1 return
+  0089 40:1 clause-fail
+  0090 43:3 join-start
+  0091 44:27 load 1 ; ids
+  0092 44:5 iterate
+  0093 44:5 next 0101
+  0094 44:5 store 2 ; id
+  0095 45:28 load 2 ; id
+  0096 45:7 join-ask prices lookup 1
+  0097 46:23 load 2 ; id
+  0098 46:29 load-object pricing
+  0099 46:7 join-send quote 1
+  0100 44:5 jump 0093
+  0101 44:5 pop
+  0102 48:5 ask clock now 0
+  0103 48:5 store 0 ; it
+  0104 43:3 join-end
+  0105 43:3 store 0 ; it
+  0106 50:10 load 0 ; it
+  0107 50:3 return
+  0108 51:1 const 0 ; nothing
+  0109 51:1 return
+  0110 51:1 clause-fail
+  0111 54:6 load 1 ; parcel
+  0112 54:13 is-empty
+  0113 54:3 branch-false 0116
+  0114 54:32 const 9 ; "nothing to ship"
+  0115 54:27 veto
+  0116 55:3 pass beforeShip
+  0117 56:1 const 0 ; nothing
+  0118 56:1 return
+  0119 56:1 clause-fail
+  0120 29:17 load 1 ; (1)
+  0121 29:17 test-map 0134
+  0122 29:17 load 1 ; (1)
+  0123 29:17 map-get "order" 0134
+  0124 29:25 store 4 ; (4)
+  0125 29:25 load 4 ; (4)
+  0126 29:25 load 3 ; id
+  0127 29:25 test-equal 0134
+  0128 29:17 load 1 ; (1)
+  0129 29:17 map-get "amount" 0134
+  0130 29:38 store 2 ; a
+  0131 29:3 load 2 ; a
+  0132 29:3 list 1
+  0133 29:3 return
+  0134 29:3 clause-fail
+  0135 32:18 load 1 ; (1)
+  0136 32:18 test-map 0154
+  0137 32:18 load 1 ; (1)
+  0138 32:18 map-get "order" 0154
+  0139 32:26 store 2 ; o
+  0140 32:35 load 2 ; o
+  0141 32:39 load 3 ; id
+  0142 32:37 equal
+  0143 32:42 branch-false 0149
+  0144 32:46 load 4 ; a
+  0145 32:50 load 5 ; limit
+  0146 32:48 less
+  0147 32:42 check-boolean
+  0148 32:42 jump 0150
+  0149 32:42 const 4 ; false
+  0150 32:35 branch-false 0154
+  0151 32:5 load 2 ; o
+  0152 32:5 list 1
+  0153 32:5 return
+  0154 32:5 clause-fail
+  0155 34:5 load 1 ; reason
+  0156 34:5 list 1
+  0157 34:5 return
+  0158 34:5 clause-fail
+unwind
+  0120..0130 guard -> 0134 depth 0
+  0135..0150 guard -> 0154 depth 0
+events
+  0 when paid from body 7 captures 1 binds 3; or
+  1 when ready
+  2 when shipped body 8 captures 3 binds 4; when cancelled body 9 binds 6; after
