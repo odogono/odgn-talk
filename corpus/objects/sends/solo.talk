@@ -1,0 +1,12 @@
+-- solo.talk: the sends case's Script, which owns nothing.
+
+script variable got = []
+
+on go
+  send note with "self" to me
+  ring "nowhere"
+end go
+
+on note x
+  put [x, me] after got
+end note

@@ -53,7 +53,21 @@ class Reader {
   }
 }
 
+/** Finds the Host Object a reader names by its kind and id, or none. */
+export type ObjectResolver = (
+  kind: string,
+  id: string,
+) => { readonly value: Value } | Value | null | undefined;
+const resolved = (r: ReturnType<ObjectResolver>): Value | undefined =>
+  r ? (Value.isValue(r) ? r : r.value) : undefined;
+
 class DisplayReader extends Reader {
+  constructor(
+    source: string,
+    private readonly resolve?: ObjectResolver,
+  ) {
+    super(source);
+  }
   value(): Value {
     type Frame =
       | { kind: 'list'; values: Value[] }
@@ -135,6 +149,19 @@ class DisplayReader extends Reader {
     }
     if (this.peek('<<')) {
       return this.bytes();
+    }
+    if (this.peek('<object ')) {
+      // `<object kind "id">`, which only a resolver can make a value.
+      this.eat('<object ');
+      const kind =
+        this.match(/[A-Z_a-z][\w-]*/y) ?? this.fail('Expected a kind');
+      this.eat(' ');
+      const id = this.textPieces();
+      this.eat('>');
+      return (
+        resolved(this.resolve?.(kind, id)) ??
+        this.fail(`No Host Object ${kind} ${id}`)
+      );
     }
     const date = this.match(
       /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z?)?(?![\w.:-])/y,
@@ -246,8 +273,11 @@ class DisplayReader extends Reader {
   }
 }
 
-export const readDisplay = (source: string): Value => {
-  const reader = new DisplayReader(source);
+export const readDisplay = (
+  source: string,
+  resolve?: ObjectResolver,
+): Value => {
+  const reader = new DisplayReader(source, resolve);
   const value = reader.value();
   reader.done();
   return value;
@@ -409,7 +439,7 @@ class JsonReader extends Reader {
   }
 }
 
-const fromJson = (value: Json): Value => {
+const fromJson = (value: Json, resolve?: ObjectResolver): Value => {
   let result = nothing;
   const tasks: (() => void)[] = [];
   const enqueue = (node: Json, assign: (v: Value) => void): void => {
@@ -500,6 +530,20 @@ const fromJson = (value: Json): Value => {
           assign(bytesOf(b));
           return;
         }
+        if (
+          tag === '$object' &&
+          Array.isArray(data) &&
+          data.length === 2 &&
+          typeof data[0] === 'string' &&
+          typeof data[1] === 'string'
+        ) {
+          const v = resolved(resolve?.(data[0], data[1]));
+          if (!v) {
+            invalidValue(`No Host Object ${data[0]} ${data[1]}`);
+          }
+          assign(v);
+          return;
+        }
         if (tag === '$range' && Array.isArray(data) && data.length === 2) {
           const ends: Value[] = [nothing, nothing];
           tasks.push(() => assign(range(ends[0]!, ends[1]!)));
@@ -555,11 +599,11 @@ const encodedUnit = (q: Value) => q.asQuantity()!.unit;
 const abs = (n: bigint) => (n < 0n ? -n : n);
 export const decodeValue = (
   source: string,
-  _resolve: (kind: string, id: string) => unknown,
+  resolve?: ObjectResolver,
 ): Value => {
   const reader = new JsonReader(source);
   const value = reader.value();
   reader.whitespace();
   reader.done();
-  return fromJson(value);
+  return fromJson(value, resolve);
 };

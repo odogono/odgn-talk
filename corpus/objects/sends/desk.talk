@@ -1,0 +1,14 @@
+-- desk.talk: the sends case's Script, which owns the desk object.
+
+script variable got = []
+
+on note x
+  put x after got
+end note
+
+on go
+  send note with "to the drawer" to drawer
+  send note with "to me" to me
+  send note with "lost" to stray
+  ring "up"
+end go

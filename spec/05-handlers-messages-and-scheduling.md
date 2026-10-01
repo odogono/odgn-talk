@@ -95,7 +95,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 - **`send m with args to x`** puts the message at the back of the receiver's mailbox and returns at once. It isn't a Suspension Point. The receiver is `me`, another Script of the Group, or a Host Object. Across Groups, the Host routes.
 - **Order:** mailboxes are FIFO, so two messages from one sender to one receiver are dispatched in the order they were sent.
-- **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too.
+- **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too. In a Script that owns no object, where `me` is Nothing, `send … to me` sends to the Script itself.
 - **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
 - **Naming a Script:** in a `send`'s receiver, a Name that resolves to nothing else ([chapter 4](04-expressions-and-statements.md#resolving-a-name)) names a Script of the Group by its name, even one loaded later. Whether the Group holds it is checked when the message is sent.
 - **A disposed object:** a `send` to a disposed Host Object raises `object gone`, with `object`, before anything is sent. So does a `send` to a Script the Group doesn't hold, with `object` its name as text.

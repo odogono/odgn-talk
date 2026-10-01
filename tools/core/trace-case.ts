@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 import {
   compileLibrary,
   defineCapability,
+  defineObjectKind,
+  type HostObject,
   shape,
   ScriptError,
   type Call,
@@ -139,24 +141,40 @@ type OperationSpec = {
   name: string;
   result?: ShapeSpec;
 };
+type ObjectRefSpec = { id: string; kind: string };
 type Setup = {
   libraries?: { name: string; source: string; version: string }[];
+  objectKinds?: {
+    name: string;
+    parentKinds?: string[];
+    props?: {
+      getCost?: { alloc?: number; fuel: number };
+      name: string;
+      readOnly?: boolean;
+      setCost?: { alloc?: number; fuel: number };
+      shape?: ShapeSpec;
+    }[];
+  }[];
+  objects?: { id: string; kind: string; props?: Record<string, string> }[];
   operations?: OperationSpec[];
   scripts?: {
     grants?: Record<string, { capability?: string; ops: string[] | 'all' }>;
     grantsAsUsed?: boolean;
     limits?: Partial<Limits>;
     name: string;
-    objects?: Record<string, unknown>;
-    owner?: unknown;
+    objects?: Record<string, ObjectRefSpec>;
+    owner?: ObjectRefSpec;
     source: string;
   }[];
 };
 
 // A value in the display form, or a deferral for a kind this Core can't read yet.
-const read = (text: string): Value => {
+const read = (
+  text: string,
+  resolve?: (kind: string, id: string) => HostObject | undefined,
+): Value => {
   try {
-    return readDisplay(text);
+    return readDisplay(text, resolve);
   } catch (error) {
     throw new DeferredCaseError(
       `a value it can't read yet, ${text}: ${(error as Error).message}`,
@@ -375,6 +393,67 @@ export const replay = (
   const trace: string[] = [];
   const group = newGroup({ name: 'case', trace: line => trace.push(line) });
   const compiled = compileLibraries(dir, setup);
+  // The Host Objects case.toml lists, made before the first Host Input, with
+  // their properties' values, which the runner's Get reads and Set writes.
+  const made = new Map<string, HostObject>();
+  const props = new Map<HostObject, Map<string, Value>>();
+  const resolveObject = (kind: string, id: string) => made.get(`${kind} ${id}`);
+  const value = (text: string) => read(text, resolveObject);
+  const objectOf = (o: ObjectRefSpec): HostObject => {
+    const found = resolveObject(o.kind, o.id);
+    if (!found) {
+      throw new Error(`case.toml has no object ${o.kind} ${o.id}`);
+    }
+    return found;
+  };
+  const kinds = new Map(
+    (setup.objectKinds ?? []).map(k => [
+      k.name,
+      defineObjectKind<null>({
+        name: k.name,
+        ...(k.parentKinds ? { parentKinds: k.parentKinds } : {}),
+        props: Object.fromEntries(
+          (k.props ?? []).map(p => [
+            p.name,
+            {
+              ...(p.shape === undefined ? {} : { shape: shapeOf(p.shape) }),
+              ...(p.getCost ? { getCost: p.getCost } : {}),
+              ...(p.setCost ? { setCost: p.setCost } : {}),
+              get: (o: HostObject<null>) =>
+                props.get(o)?.get(p.name) ?? nothing,
+              ...(p.readOnly
+                ? {}
+                : {
+                    set: (o: HostObject<null>, v: Value) => {
+                      props.get(o)!.set(p.name, v);
+                    },
+                  }),
+            },
+          ]),
+        ),
+      }),
+    ]),
+  );
+  for (const o of setup.objects ?? []) {
+    const kind = kinds.get(o.kind);
+    if (!kind) {
+      throw new Error(`case.toml has no Object Kind ${o.kind}`);
+    }
+    const handle = group.object(kind, o.id, null);
+    made.set(`${o.kind} ${o.id}`, handle);
+  }
+  for (const o of setup.objects ?? []) {
+    const handle = made.get(`${o.kind} ${o.id}`)!;
+    props.set(
+      handle,
+      new Map(
+        Object.entries(o.props ?? {}).map(([name, text]) => [
+          name,
+          value(text),
+        ]),
+      ),
+    );
+  }
   const stubs = new Map<string, Stub[]>();
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
@@ -391,8 +470,8 @@ export const replay = (
           if (!script) {
             throw new Error(`case.toml has no Script ${r.ids[0]}`);
           }
-          if (script.owner || script.grantsAsUsed) {
-            throw new DeferredCaseError('owners and grantsAsUsed');
+          if (script.grantsAsUsed) {
+            throw new DeferredCaseError('grantsAsUsed');
           }
           const grants: Record<string, Grant<unknown>> = {};
           for (const [granted, g] of Object.entries(script.grants ?? {})) {
@@ -409,7 +488,13 @@ export const replay = (
             name: script.name,
             source: readFileSync(resolve(dir, script.source), 'utf8'),
             limits: script.limits,
-            objects: Object.keys(script.objects ?? {}),
+            objects: Object.fromEntries(
+              Object.entries(script.objects ?? {}).map(([name, o]) => [
+                name,
+                objectOf(o),
+              ]),
+            ),
+            ...(script.owner ? { owner: objectOf(script.owner) } : {}),
           });
           break;
         }
@@ -424,14 +509,30 @@ export const replay = (
           group.addLibrary(l);
           break;
         }
+        case 'set-parent': {
+          const parent = r.fields.get('parent');
+          group.setParent(
+            value(r.fields.get('object')!).asObject()!,
+            parent ? value(parent).asObject() : undefined,
+          );
+          break;
+        }
+        case 'dispose':
+          group.dispose(value(r.fields.get('object')!).asObject()!);
+          break;
         case 'deliver':
         case 'request': {
-          const to = group.script(r.fields.get('to') ?? '');
-          if (!to) {
-            throw new DeferredCaseError('a Delivery to a Host Object');
+          const named = r.fields.get('to') ?? '';
+          // A Delivery to a Host Object routes to its nearest Owning Script.
+          const object = named.startsWith('<object ')
+            ? value(named).asObject()!
+            : null;
+          const to = object ? null : group.script(named);
+          if (!object && !to) {
+            throw new DeferredCaseError(`a Delivery to ${named}`);
           }
           const args = r.fields.has('args')
-            ? valuesOf(read(r.fields.get('args')!))
+            ? valuesOf(value(r.fields.get('args')!))
             : [];
           const limitsValue = r.fields.has('limits')
             ? read(r.fields.get('limits')!)
@@ -444,10 +545,16 @@ export const replay = (
               )
             : undefined;
           const message = { name: r.fields.get('message')!, args, limits };
-          if (r.name === 'deliver') {
-            to.deliver(message);
+          if (object) {
+            if (r.name === 'deliver') {
+              group.deliver(object, message);
+            } else {
+              group.request(object, message);
+            }
+          } else if (r.name === 'deliver') {
+            to!.deliver(message);
           } else {
-            to.request(message);
+            to!.request(message);
           }
           break;
         }

@@ -1,0 +1,7 @@
+-- office.talk: the sends case's Script, which owns the office object.
+
+script variable got = []
+
+on ring x
+  put [x, the id of the target] after got
+end ring

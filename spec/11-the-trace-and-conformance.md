@@ -365,7 +365,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `prop` | `op` | `word` | a read or a write: `get`, `set` |
 | `prop` | `value` | `value` | the value read or written |
 | `prop` | `error` | `value` | for a call that failed, the Host's error, as for `call` |
-| `send` | `to` | `target` | the receiver |
+| `send` | `to` | `target` | the receiver; for a Command Call sent up the Message Path, the Script it reaches |
 | `send` | `message` | `id` | the message's name, for a message |
 | `send` | `fn` | `value` | the Function Value, for a call to one in another Script |
 | `send` | `args` | `value` | its arguments, a list |

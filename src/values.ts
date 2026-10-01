@@ -1,3 +1,4 @@
+import type { HostObject } from './objects';
 import {
   checkInstant,
   civilFields,
@@ -34,7 +35,8 @@ export type Kind =
   | 'instant'
   | 'civil date'
   | 'pattern'
-  | 'function';
+  | 'function'
+  | 'object';
 type Pairs = readonly (readonly [string, Value])[];
 /**
  * A Function Value (chapter 3, ADR 0025): its Home Script, where its code is,
@@ -58,6 +60,15 @@ export type PatternRef = {
   readonly program: number;
   readonly source: string;
 };
+/**
+ * A Host Object (chapter 3): its kind and its id, and the Group's own handle,
+ * whose identity is the object's, so two are equal only when they are one.
+ */
+export type ObjectRef = {
+  readonly handle: unknown;
+  readonly id: string;
+  readonly kind: string;
+};
 /** A Quantity: its number and its Unit, in Kind order (chapter 3). */
 export type QuantityRef = { readonly number: Decimal; readonly unit: UnitSpec };
 type Payload =
@@ -73,7 +84,8 @@ type Payload =
   | readonly Value[]
   | Pairs
   | readonly [Value, Value]
-  | FunctionRef;
+  | FunctionRef
+  | ObjectRef;
 const valueToken = Symbol('Value');
 const decimalToken = Symbol('Decimal');
 let makeValue: (kind: Kind, payload: Payload) => Value;
@@ -191,6 +203,16 @@ export class Value {
   asPattern(): PatternRef | undefined {
     return this.kind === 'pattern' ? (this.#data as PatternRef) : undefined;
   }
+  /** The Host Object handle this value stands for (chapter 9). */
+  asObject(): HostObject | undefined {
+    return this.kind === 'object'
+      ? ((this.#data as ObjectRef).handle as { handle: HostObject }).handle
+      : undefined;
+  }
+  /** A Host Object's kind, id and handle. */
+  asObjectRef(): ObjectRef | undefined {
+    return this.kind === 'object' ? (this.#data as ObjectRef) : undefined;
+  }
   /** The Abstract Machine's view of a Function Value. */
   asFunction(): FunctionRef | undefined {
     return this.kind === 'function' ? (this.#data as FunctionRef) : undefined;
@@ -286,6 +308,11 @@ export class Value {
           pending.push([a.from, b.from], [a.to, b.to]);
           break;
         }
+        case 'object':
+          if (left.asObjectRef()!.handle !== right.asObjectRef()!.handle) {
+            return false;
+          }
+          break;
         case 'function': {
           const a = left.asFunction()!;
           const b = right.asFunction()!;
@@ -375,6 +402,11 @@ export class Value {
           const q = next.asQuantityRef()!;
           const n = q.number.toString();
           output.push(`${n} ${unitText(q.unit, n)}`);
+          break;
+        }
+        case 'object': {
+          const o = next.asObjectRef()!;
+          output.push(`<object ${o.kind} ${displayText(o.id)}>`);
           break;
         }
         case 'function': {
@@ -627,6 +659,9 @@ const bytesDisplay = (b: Uint8Array): string =>
 /** A Text Pattern value; only the Abstract Machine makes one. */
 export const patternValue = (ref: PatternRef): Value =>
   makeValue('pattern', Object.freeze({ ...ref }));
+/** A Host Object value; only a Group makes one. */
+export const objectValue = (ref: ObjectRef): Value =>
+  makeValue('object', Object.freeze({ ...ref }));
 /** A Function Value; only the Abstract Machine makes one. */
 export const functionValue = (ref: FunctionRef): Value =>
   makeValue(

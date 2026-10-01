@@ -426,7 +426,7 @@ describe('loading', () => {
   });
 
   test('what this Core does not run yet says so', () => {
-    expect(() => run('on go\n  send ping to me\nend go')).toThrow(
+    expect(() => run('on go\n  tell log to write 1\nend go')).toThrow(
       NotImplementedError,
     );
   });

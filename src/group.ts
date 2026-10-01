@@ -28,7 +28,15 @@ import {
   type Script as Loaded,
 } from './machine';
 import type { Grant } from './capabilities';
+import {
+  makeObject,
+  stateOf,
+  type HostObject,
+  type ObjectKind,
+  type ObjectState,
+} from './objects';
 import type { GrantDecls } from './effects';
+import { NotImplementedError } from './operations';
 import {
   identityOf,
   linksOf,
@@ -52,8 +60,10 @@ export type LoadOptions = {
   grants?: Readonly<Record<string, Grant<any>>>;
   limits?: Partial<Limits>;
   name: string;
-  /** Well-known object names bound at load; Host Objects follow later. */
-  objects?: readonly string[];
+  /** Its well-known Host Objects, by the name the Script uses. */
+  objects?: Readonly<Record<string, HostObject>>;
+  /** The Host Object it owns: the start of its Message Path. */
+  owner?: HostObject;
   source: string;
 };
 export type LimitOverride = Partial<
@@ -125,6 +135,8 @@ const overridable = new Set([
 
 type Delivery = {
   args: Value[];
+  /** The object whose Owning Script holds it, which it climbs on from. */
+  at: ObjectState | null;
   /** For a message a Script sent, the sending Run. */
   from: string | null;
   /** The delivery id; a message a Script sent has none. */
@@ -134,6 +146,8 @@ type Delivery = {
   /** For a `send … and wait`, the sender's call id, which the Run's end settles. */
   reply: string | null;
   request: { reject: (e: Error) => void; resolve: (v: Value) => void } | null;
+  /** The object it was addressed to: `the target` all the way up. */
+  target: ObjectState | null;
 };
 type Running = {
   delivery: Delivery;
@@ -161,8 +175,10 @@ type ScriptState = {
   limits: Limits;
   loaded: Loaded;
   name: string;
-  /** The well-known Host Object names the Host bound at load. */
-  objects: readonly string[];
+  /** The well-known Host Objects the Host bound at load, by name. */
+  objects: Readonly<Record<string, HostObject>>;
+  /** The object it owns, if any. */
+  owner: ObjectState | null;
   /** Messages waiting for dispatch, and a preempted Run at its head. */
   queue: (Delivery | Running)[];
   runs: number;
@@ -218,6 +234,9 @@ export class Group {
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
   private readonly pending = new Map<string, Pending>();
+  private readonly objects = new Map<string, ObjectState>();
+  // The reports of the Pump draining the input queue.
+  private drainReports: Report[] = [];
   private timers: Timer[] = [];
   private timerSeq = 0;
   private inputs: QueuedInput[] = [];
@@ -243,7 +262,20 @@ export class Group {
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
   load(o: LoadOptions): Script {
     this.worker();
-    const objects = [...(o.objects ?? []), ...this.scripts.map(s => s.name)];
+    const objects = [
+      ...Object.keys(o.objects ?? {}),
+      ...this.scripts.map(s => s.name),
+    ];
+    const owner = o.owner ? this.held(o.owner) : null;
+    if (owner?.owner) {
+      throw new HostError(
+        'invalid value',
+        `${owner.handle.value} already has an Owning Script, ${owner.owner}`,
+      );
+    }
+    for (const object of Object.values(o.objects ?? {})) {
+      this.held(object);
+    }
     const grants = new Map(Object.entries(o.grants ?? {}));
     const p = prepare(
       'script',
@@ -285,11 +317,15 @@ export class Group {
       throw error;
     }
     const handle = new Script(this, o.name);
+    if (owner) {
+      owner.owner = o.name;
+    }
     this.scripts.push({
       name: o.name,
       waiters: [],
       suspended: new Set(),
-      objects: o.objects ?? [],
+      objects: o.objects ?? {},
+      owner,
       grants,
       handle,
       loaded,
@@ -342,23 +378,55 @@ export class Group {
       get now() {
         return group.lastClock!;
       },
-      isObject: name => s.objects.includes(name),
+      get me() {
+        return s.owner?.handle.value ?? nothing;
+      },
+      object: name =>
+        Object.hasOwn(s.objects, name) ? s.objects[name]!.value : undefined,
       isScript: name => this.scripts.some(other => other.name === name),
       send: (to, message, args, reply) => {
-        const receiver = this.scripts.find(other => other.name === to)!;
-        const waiting = receiver.queue.filter(item => !('run' in item)).length;
-        if (waiting + receiver.incoming >= receiver.limits.mailboxDepth) {
-          throw new OpScriptError('mailbox full', [['to', text(to)]], true);
+        // A Script, or the nearest Owning Script of an object (chapter 5).
+        const r =
+          typeof to === 'string'
+            ? (() => {
+                const named = this.scripts.find(other => other.name === to)!;
+                return { s: named, at: named.owner };
+              })()
+            : this.route(to);
+        if (!r) {
+          return null;
         }
-        receiver.queue.push({
+        this.enqueue(r.s, to, {
           id: null,
           from: reply ?? run.id,
+          at: r.at,
+          target: typeof to === 'string' ? null : to,
           message,
           args,
           limits: {},
           reply,
           request: null,
         });
+        return r.s.name;
+      },
+      // A Command Call with no Handler climbs from its Script's owner.
+      sendUp: (message, args, reply) => {
+        const r = this.route(s.owner?.parent ?? null);
+        if (!r) {
+          return null;
+        }
+        this.enqueue(r.s, r.s.name, {
+          id: null,
+          from: reply ?? run.id,
+          at: r.at,
+          target: s.owner,
+          message,
+          args,
+          limits: {},
+          reply,
+          request: null,
+        });
+        return r.s.name;
       },
       answer: (id, value, fuel) =>
         this.inputs.push({
@@ -384,6 +452,23 @@ export class Group {
           apply: () => this.settle(id, { k: 'fail', error }),
         }),
     };
+  }
+
+  // A message a Script sent, into its receiver's mailbox, unless it is full.
+  private enqueue(
+    receiver: ScriptState,
+    to: string | ObjectState,
+    delivery: Delivery,
+  ) {
+    const waiting = receiver.queue.filter(item => !('run' in item)).length;
+    if (waiting + receiver.incoming >= receiver.limits.mailboxDepth) {
+      throw new OpScriptError(
+        'mailbox full',
+        [['to', typeof to === 'string' ? text(to) : to.handle.value]],
+        true,
+      );
+    }
+    receiver.queue.push(delivery);
   }
 
   private timer(deadline: bigint, fire: () => void): Timer {
@@ -527,22 +612,29 @@ export class Group {
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
   queueDelivery(
     record: 'deliver' | 'request',
-    to: string,
+    to: string | ObjectState,
     m: Message,
     request: Delivery['request'],
   ): Delivery {
-    const state = this.scripts.find(s => s.name === to);
-    if (!state) {
+    const named = typeof to === 'string';
+    const toText = named ? to : traceValue(to.handle.value);
+    // The Script it routes to at the call, whose mailbox depth it counts
+    // against: a Script, or an object's nearest Owning Script.
+    const state = named
+      ? this.scripts.find(s => s.name === to)
+      : this.route(to)?.s;
+    if (named && !state) {
       throw new HostError('invalid value', `No Script ${to} in the Group`);
     }
     // A Host Input refused at the call is written, with no ids, then `refused`.
     const refuse = (code: string, error: Error): never => {
-      this.trace(this.deliveryLine(record, null, to, m));
+      this.trace(this.deliveryLine(record, null, toText, m));
       this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw error;
     };
     for (const [name, value] of Object.entries(m.limits ?? {})) {
-      if (!overridable.has(name) || value! > state.limits[name as LimitName]) {
+      const limit = (state?.limits ?? defaultLimits)[name as LimitName];
+      if (!overridable.has(name) || value! > limit) {
         refuse(
           'invalid value',
           new HostError(
@@ -552,29 +644,212 @@ export class Group {
         );
       }
     }
-    const waiting =
-      state.queue.filter(item => !('run' in item)).length + state.incoming;
-    if (waiting >= state.limits.mailboxDepth) {
-      refuse('mailbox full', new MailboxFull());
+    if (state) {
+      const waiting =
+        state.queue.filter(item => !('run' in item)).length + state.incoming;
+      if (waiting >= state.limits.mailboxDepth) {
+        refuse('mailbox full', new MailboxFull());
+      }
     }
     const delivery: Delivery = {
       id: `d${++this.deliveries}`,
       from: null,
+      at: named ? state!.owner : null,
+      target: named ? null : to,
       reply: null,
       message: m.name,
       args: m.args ?? [],
       limits: m.limits ?? {},
       request,
     };
-    state.incoming++;
+    if (state) {
+      state.incoming++;
+    }
     this.inputs.push({
-      line: this.deliveryLine(record, delivery.id, to, m),
+      line: this.deliveryLine(record, delivery.id, toText, m),
       apply: () => {
-        state.incoming--;
-        state.queue.push(delivery);
+        if (state) {
+          state.incoming--;
+        }
+        if (named) {
+          state!.queue.push(delivery);
+          return;
+        }
+        // An object's message is routed by the parents as they are now.
+        const r = this.route(to);
+        if (!r) {
+          this.unhandled(delivery, this.drainReports);
+          return;
+        }
+        r.s.queue.push({ ...delivery, at: r.at });
       },
     });
     return delivery;
+  }
+
+  /** Queued. Routes to the object's nearest Owning Script; returns the delivery id. */
+  deliver(to: HostObject, m: Message): string {
+    return this.queueDelivery('deliver', this.held(to), m, null).id!;
+  }
+  /** Queued. As `deliver`, and settles when a Pump ends the Run. */
+  request(to: HostObject, m: Message): Requested {
+    let settle!: Delivery['request'];
+    const result = new Promise<Value>((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+    result.catch(() => {});
+    const delivery = this.queueDelivery('request', this.held(to), m, settle);
+    return { id: delivery.id!, result };
+  }
+
+  /** Makes a handle for a Host-owned thing, the first time it crosses in. */
+  object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N> {
+    const key = `${kind.name}\u0000${id}`;
+    if (this.objects.has(key)) {
+      throw new HostError(
+        'duplicate object id',
+        `The Group already has a ${kind.name} ${id}`,
+      );
+    }
+    const state = makeObject(kind, id, native);
+    this.objects.set(key, state);
+    return state.handle as HostObject<N>;
+  }
+
+  // The Group's state of a handle, which must be one of its own.
+  private held(o: HostObject): ObjectState {
+    const state = stateOf(o.value);
+    if (!state || this.objects.get(`${o.kind.name}\u0000${o.id}`) !== state) {
+      throw new HostError('wrong group', `${o.value} isn't this Group's`);
+    }
+    return state;
+  }
+
+  /** Queued. Sets an object's parent, which the Core holds; a cycle is refused. */
+  setParent(o: HostObject, parent: HostObject | undefined): void {
+    const child = this.held(o);
+    const up = parent ? this.held(parent) : null;
+    const line = recordLine(
+      'set-parent',
+      [],
+      [
+        ['object', traceValue(child.handle.value)],
+        ['parent', up ? traceValue(up.handle.value) : null],
+      ],
+      true,
+    );
+    for (let x = up; x; x = x.parent) {
+      if (x === child) {
+        this.trace(line);
+        this.trace(recordLine('refused', [], [['code', '"parent cycle"']]));
+        throw new HostError(
+          'parent cycle',
+          `${o.value} would be its own ancestor`,
+        );
+      }
+    }
+    this.inputs.push({
+      line,
+      apply: () => {
+        child.parent = up;
+      },
+    });
+  }
+
+  /** Queued. Disposes an object: it stays a value, and sends to it raise `object gone`. */
+  dispose(o: HostObject): void {
+    const state = this.held(o);
+    if (state.owner) {
+      throw new NotImplementedError('disposing an Owning Script’s object');
+    }
+    this.inputs.push({
+      line: recordLine(
+        'dispose',
+        [],
+        [['object', traceValue(state.handle.value)]],
+        true,
+      ),
+      apply: () => {
+        state.disposed = true;
+      },
+    });
+  }
+
+  // The nearest Owning Script from an object up its parents, skipping
+  // disposed objects (chapter 5, The Message Path).
+  private route(
+    from: ObjectState | null,
+  ): { at: ObjectState; s: ScriptState } | null {
+    for (let x = from; x; x = x.parent) {
+      if (!x.disposed && x.owner) {
+        const s = this.scripts.find(other => other.name === x!.owner);
+        if (s) {
+          return { s, at: x };
+        }
+      }
+    }
+    return null;
+  }
+
+  // A message past the last Owning Script: `unhandled`, and a `send … and
+  // wait` or Request for it fails with `send failed`.
+  private unhandled(delivery: Delivery, reports: Report[]) {
+    this.trace(
+      recordLine(
+        'unhandled',
+        [delivery.id],
+        [
+          ['message', delivery.message],
+          [
+            'args',
+            delivery.args.length ? traceValue(listValues(delivery.args)) : null,
+          ],
+          [
+            'target',
+            delivery.target ? traceValue(delivery.target.handle.value) : null,
+          ],
+        ],
+      ),
+    );
+    if (delivery.id) {
+      reports.push({
+        kind: 'unhandled',
+        delivery: delivery.id,
+        message: { name: delivery.message, args: delivery.args },
+      });
+    }
+    this.answer(delivery, { kind: 'unhandled' });
+  }
+
+  // Settle what waits on a message's Run: a sender's reply, or a Request.
+  private answer(delivery: Delivery, outcome: Outcome) {
+    if (delivery.reply) {
+      this.settle(
+        delivery.reply,
+        outcome.kind === 'completed'
+          ? { k: 'reply', value: outcome.result }
+          : {
+              k: 'send failed',
+              reason: outcome.kind,
+              error: outcome.kind === 'errored' ? outcome.error : null,
+            },
+      );
+    }
+    if (delivery.request) {
+      if (outcome.kind === 'completed') {
+        delivery.request.resolve(outcome.result);
+      } else {
+        const reason =
+          outcome.kind === 'limit fault' ? 'limit fault' : outcome.kind;
+        delivery.request.reject(
+          new ScriptError(
+            'send failed',
+            `No answer came: the receiver's Run ended ${reason}`,
+            { reason },
+          ),
+        );
+      }
+    }
   }
 
   private deliveryLine(
@@ -628,6 +903,8 @@ export class Group {
     );
     const drained = this.inputs;
     this.inputs = [];
+    const reports: Report[] = [];
+    this.drainReports = reports;
     for (const input of drained) {
       input.apply();
     }
@@ -649,7 +926,6 @@ export class Group {
     }
     this.timers = this.timers.filter(t => t.live);
     this.pumping = true;
-    const reports: Report[] = [];
     let fuel = 0;
     try {
       // Each Script's Fuel this Pump, against its slice less any debt.
@@ -743,6 +1019,9 @@ export class Group {
       };
       run.id = head.id;
       run.host = this.hostFor(s, run);
+      // The object it was delivered to, or for a message to a Script, the
+      // Script's owner (chapter 5, `the target`).
+      run.target = (delivery.target ?? s.owner)?.handle.value ?? nothing;
       s.queue[0] = head;
       how = 'start';
     }
@@ -769,6 +1048,39 @@ export class Group {
     for (const rec of run.records.slice(records0)) {
       if (rec.kind === 'abandon') {
         this.trace(recordLine('abandon', [rec.id], []));
+        continue;
+      }
+      if (rec.kind === 'unhandled') {
+        this.trace(
+          recordLine(
+            'unhandled',
+            [],
+            [
+              ['message', rec.message],
+              [
+                'args',
+                rec.args.length ? traceValue(listValues(rec.args)) : null,
+              ],
+              ['target', rec.target ? traceValue(rec.target) : null],
+            ],
+          ),
+        );
+        continue;
+      }
+      if (rec.kind === 'prop') {
+        this.trace(
+          recordLine(
+            'prop',
+            [running.id],
+            [
+              ['object', traceValue(rec.object)],
+              ['name', rec.name],
+              ['op', rec.op],
+              ['value', rec.value ? traceValue(rec.value) : null],
+              ['error', rec.error ? traceValue(rec.error) : null],
+            ],
+          ),
+        );
         continue;
       }
       if (rec.kind === 'call') {
@@ -976,59 +1288,28 @@ export class Group {
       fuel: run.fuel,
       alloc: run.alloc,
     });
-    if (outcome.kind === 'unhandled' && delivery.id) {
-      // A Script addressed directly has no Message Path to climb.
-      this.trace(
-        recordLine(
-          'unhandled',
-          [delivery.id],
-          [
-            ['message', delivery.message],
-            [
-              'args',
-              delivery.args.length
-                ? traceValue(listValues(delivery.args))
-                : null,
-            ],
-          ],
-        ),
-      );
-      reports.push({
-        kind: 'unhandled',
-        delivery: delivery.id,
-        message: { name: delivery.message, args: delivery.args },
-      });
-    }
-    if (delivery.reply) {
-      // The reply to a `send … and wait`, or why there is none.
-      this.settle(
-        delivery.reply,
-        outcome.kind === 'completed'
-          ? { k: 'reply', value: outcome.result }
-          : {
-              k: 'send failed',
-              reason: outcome.kind,
-              error: outcome.kind === 'errored' ? outcome.error : null,
-            },
-      );
-    }
-    if (delivery.request) {
-      if (outcome.kind === 'completed') {
-        delivery.request.resolve(outcome.result);
-      } else {
-        const reason =
-          outcome.kind === 'limit fault' ? 'limit fault' : outcome.kind;
-        delivery.request.reject(
-          new ScriptError(
-            'send failed',
-            `No answer came: the receiver's Run ended ${reason}`,
-            {
-              reason,
-            },
-          ),
-        );
+    if (
+      outcome.kind === 'unhandled' ||
+      (outcome.kind === 'completed' && outcome.passed)
+    ) {
+      // It climbs on from the parent of the object whose Owning Script
+      // received it, to the next Owning Script up (chapter 5).
+      const next = this.route(delivery.at?.parent ?? null);
+      if (!next) {
+        this.unhandled(delivery, reports);
+        return;
       }
+      const waiting =
+        next.s.queue.filter(item => !('run' in item)).length + next.s.incoming;
+      if (waiting >= next.s.limits.mailboxDepth) {
+        this.trace(recordLine('note', [running.id], [['kind', 'climb-full']]));
+        this.unhandled(delivery, reports);
+        return;
+      }
+      next.s.queue.push({ ...delivery, at: next.at });
+      return;
     }
+    this.answer(delivery, outcome);
   }
 
   /** A Script's Persistent State: its Script Variables and the messages it holds. */
@@ -1129,7 +1410,7 @@ const failMap = (error: HostScriptError | null): Value =>
 const endReason = (outcome: Outcome): string => {
   switch (outcome.kind) {
     case 'completed':
-      return 'return';
+      return outcome.passed ? 'pass' : 'return';
     case 'errored':
       return 'error';
     case 'limit fault':

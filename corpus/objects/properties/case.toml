@@ -1,0 +1,26 @@
+# properties: `the p of o` reads a Host Object's property through its
+# Object Kind's Get, and `set` writes through its Set, each a `prop` record;
+# `id` is the Core's and needs no call. A property with no Set raises `read
+# only`, a value that breaks its Shape `wrong kind`, and a disposed object
+# `object gone`, though its `id` and `isDisposed` still read (spec chapter 4,
+# Keys and properties; chapter 9, Host Objects).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "state", shape = "text", getCost = { fuel = 2 }, setCost = { fuel = 5 } }, { name = "watts", shape = "number", readOnly = true }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"', watts = "60" }
+
+[[scripts]]
+name = "lamp"
+source = "lamp.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

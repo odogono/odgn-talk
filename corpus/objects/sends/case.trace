@@ -1,0 +1,37 @@
+# sends: the drawer's parent is the desk, so its note comes back to desk,
+# and desk's `ring` climbs to office. The stray room has no Owning Script on
+# its path. Its Fuel, allocation and state figures are Cost Model 0's, as the
+# TS Core blessed them.
+
+> load office identity=3684ef60912886886b7f5c94b463bd2b194d04f474a9861e657407e95e126e71
+> load desk identity=d12848b3cbd06857ef3525783e8e4d0d5acd20e695f5107bfa05c396d7b8a162
+> load solo identity=f7232640c079d6d3c14eb5ef2d93e04b0fe03790f41e558f0b1cdbb48ab52ec1
+> set-parent object=<object room "desk"> parent=<object room "office">
+> set-parent object=<object room "drawer"> parent=<object room "desk">
+> deliver d1 to=desk message=go
+> deliver d2 to=solo message=go
+> pump clock=2026-09-30T09:00:00Z
+send desk/r1 to=<object room "drawer"> message=note args=["to the drawer"]
+send desk/r1 to=<object room "desk"> message=note args=["to me"]
+unhandled message=note args=["lost"] target=<object room "stray">
+send desk/r1 to=office message=ring args=["up"]
+seg desk/r1 start delivery=d1 handler=go clause=1 fuel=102 alloc=216 state=130 end=return
+run desk/r1 outcome=completed delivery=d1 handler=go fuel=102 alloc=216
+send solo/r1 to=solo message=note args=["self"]
+unhandled message=ring args=["nowhere"]
+seg solo/r1 start delivery=d2 handler=go clause=1 fuel=54 alloc=107 state=68 end=return
+run solo/r1 outcome=completed delivery=d2 handler=go fuel=54 alloc=107
+seg office/r1 start from=desk/r1 handler=ring clause=1 fuel=25 alloc=148 state=94 end=return
+run office/r1 outcome=completed handler=ring fuel=25 alloc=148
+seg desk/r2 start from=desk/r1 handler=note clause=1 fuel=16 alloc=37 state=106 end=return
+run desk/r2 outcome=completed handler=note fuel=16 alloc=37
+seg solo/r2 start from=solo/r1 handler=note clause=1 fuel=22 alloc=128 state=84 end=return
+run solo/r2 outcome=completed handler=note fuel=22 alloc=128
+seg desk/r3 start from=desk/r1 handler=note clause=1 fuel=16 alloc=29 state=82 end=return
+run desk/r3 outcome=completed handler=note fuel=16 alloc=29
+pumped state=idle fuel=235
+
+> vars
+vars office got=[["up", "desk"]]
+vars desk got=["to the drawer", "to me"]
+vars solo got=[["self", nothing]]

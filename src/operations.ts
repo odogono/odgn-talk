@@ -1925,7 +1925,14 @@ export const builtin = (
       return { result: name === 'rangeStart' ? from : to };
     }
     case 'isDisposed':
-      throw wrongKind('object', x!);
+      if (x!.kind !== 'object') {
+        throw wrongKind('object', x!);
+      }
+      return {
+        result: bool(
+          (x!.asObjectRef()!.handle as { disposed: boolean }).disposed,
+        ),
+      };
     case 'year':
     case 'month':
     case 'day':

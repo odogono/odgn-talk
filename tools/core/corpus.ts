@@ -23,10 +23,10 @@ type Setup = {
   disassembly?: { expected: string; unit: string }[];
   kind: string;
   libraries?: { name: string; source: string; version: string }[];
-  objects?: Record<string, unknown>;
+  objects?: { id: string; kind: string; props?: Record<string, string> }[];
   scripts?: {
     name: string;
-    objects?: Record<string, unknown>;
+    objects?: Record<string, { id: string; kind: string }>;
     source: string;
   }[];
   versions: { costModel: string; language: string };
