@@ -135,6 +135,8 @@ export class Code {
   readonly clauses = new Map<string, Body[]>();
   /** The Libraries it imports, by name. */
   readonly libraries = new Map<string, Code>();
+  /** Whether it is a stdlib Library's, whose errors name the caller (ADR 0037). */
+  stdlib = false;
 
   constructor(readonly unit: CodeUnit) {
     this.constants = unit.constants.map((display, i) => {
@@ -612,12 +614,20 @@ export class Run {
     return error;
   }
 
+  // An error's `at`: inside stdlib code, the call that entered the stdlib,
+  // in the nearest frame that isn't stdlib code (ADR 0037).
   private at(ins: Instruction): Value {
+    let i = this.frames.length - 1;
+    while (i > 0 && this.frames[i]!.code.stdlib) {
+      i--;
+    }
+    const frame = this.frames[i]!;
+    const site = frame === this.frame ? ins : frame.code.unit.code[frame.pc]!;
     return map([
-      ['unit', text(this.frame.code.name)],
-      ['handler', text(this.frame.handler)],
-      ['line', dec(String(ins.line))],
-      ['column', dec(String(ins.col))],
+      ['unit', text(frame.code.name)],
+      ['handler', text(frame.handler)],
+      ['line', dec(String(site.line))],
+      ['column', dec(String(site.col))],
     ]);
   }
 
@@ -1540,7 +1550,20 @@ export class Run {
           throw new ScriptError('bad throw');
         }
         this.pay(key);
-        if (!hasKey(error, 'at')) {
+        const code = textForm(error.get('code'));
+        if (
+          frame.code.stdlib &&
+          code in errorMessages &&
+          !hasKey(error, 'message') &&
+          !hasKey(error, 'at')
+        ) {
+          // A catalogue error the stdlib throws is Core-raised (ADR 0037).
+          error = this.errorMap(
+            code,
+            error.entries().filter(([k]) => k !== 'code'),
+            ins,
+          );
+        } else if (!hasKey(error, 'at')) {
           error = map([...error.entries(), ['at', this.at(ins)]]);
         }
         this.pop();

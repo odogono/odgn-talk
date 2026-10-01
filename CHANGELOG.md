@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- The stdlib Libraries in the Core: `text`, `list`, `map`, `bytes`, `json`, `date` and `units`, compiled from their normative source and always available, with errors raised in stdlib code naming the Script's call (ADR 0037); with `stdlib/` Trace Cases, and Spec fixes for a stdlib Library's version and identity and for leaving them out of the Group Fingerprint, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Library calls in the Core: `compileLibrary`, `addLibrary` and the `add-library` Host Input, calls to imported functions and Handlers, imported Constants and defaults, Function Values made from Library code, errors and Limit Faults inside Library code, code identities that cover imports, and the `not in a library` load errors; with `libraries/` Trace Cases, and Spec fixes for adding a Library before its imports and for identities, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - The number and Float Built-ins in the Core: `sqrt`, `exp`, `ln`, `log10`, `power`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan` and `atan2`, correctly rounded to 34 digits, and `fromFloat64`, `fromFloat32`, `toFloat64` and `toFloat32`; with `math/` Trace Cases, and Spec fixes for the fields of their domain errors and the rounding of floats, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).

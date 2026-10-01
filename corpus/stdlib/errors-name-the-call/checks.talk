@@ -1,0 +1,23 @@
+-- checks.talk: the errors-name-the-call case's Script.
+
+use pad from text
+use map from list
+use decodeJson from json
+
+script variable caught
+
+on go
+  try
+    put pad("x", -1) into caught
+  catch e
+    put e into caught
+  end try
+end go
+
+on parse
+  return decodeJson("[1,")
+end parse
+
+on invert
+  return map([1, 0], given x: 1 / x)
+end invert

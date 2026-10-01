@@ -5,7 +5,6 @@ import {
   HostError,
   LoadError,
   newGroup,
-  NotImplementedError,
   parseInstant,
   type Library,
 } from '../src/index';
@@ -194,10 +193,15 @@ describe('compiling and adding Libraries', () => {
     expect(lines.at(-1)).toBe('diag s code="unknown import" pos=1:10');
   });
 
-  test('a stdlib import isn’t implemented yet', () => {
-    const group = newGroup({ name: 'g' });
-    expect(() =>
-      group.load({ name: 's', source: 'use pad from text\non go\nend go' }),
-    ).toThrow(NotImplementedError);
+  test('a user Library may import a stdlib Library, which needs no adding', () => {
+    const shout = lib(
+      'shout',
+      'use repeated from text\nfunction shout t\n  return t & repeated("!", 3)\nend shout',
+    );
+    const r = run(
+      'use shout from shout\nscript variable n\non go\n  put shout("hi") into n\nend go',
+      [shout],
+    );
+    expect(r.vars).toBe('vars s n="hi!!!"');
   });
 });
