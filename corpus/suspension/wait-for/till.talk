@@ -1,0 +1,23 @@
+-- till.talk: the wait-for case's waiting Script.
+
+script variable seen = []
+
+on await id
+  wait for paid {order: ^id, amount: a} from bank or 30 s
+  put [it, a] after seen
+end await
+
+on either
+  wait for
+    when paid {order: o} where o > 100 then
+      put "big " & o after seen
+    when refund r then
+      put "refund " & r after seen
+    after 5 s then
+      put "nothing" after seen
+  end wait
+end either
+
+on paid info
+  put "handled " & the order of info after seen
+end paid

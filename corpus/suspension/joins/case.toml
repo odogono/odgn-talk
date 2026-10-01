@@ -1,0 +1,31 @@
+# joins: a Join starts each `ask … and wait` and `send … and wait` its body
+# reaches as a member, and suspends once, at `end wait`. `it` is the members'
+# answers in start order. The first failure to arrive is raised at `end
+# wait` with its member's `index`, and the members still pending are
+# abandoned, as they are when the body raises. A Join that starts no member
+# gives `[]` at once (spec chapter 5, Joins).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+errors = [{ code = "no feed" }]
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { feed = { ops = ["fetch"] } }
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"

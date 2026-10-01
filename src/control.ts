@@ -12,6 +12,10 @@ export type Report = (code: DiagnosticCode, at: Leaf) => void;
 type Context = {
   /** The loop depth at the innermost enclosing `finally` block, if any. */
   finally: number | null;
+  /** The loop depth at the innermost enclosing Join's body, if any. */
+  join: number | null;
+  /** Inside a `try` within that Join's body. */
+  joinTry: boolean;
   lambda: boolean;
   loops: number;
   /** The message the enclosing Handler handles; null outside a Handler. */
@@ -21,6 +25,8 @@ const loopSuffixes = new Set(['queued', 'dropping', 'replacing']);
 const suffixes = new Set([...loopSuffixes, 'deciding', 'during']);
 const outside: Context = {
   finally: null,
+  join: null,
+  joinTry: false,
   lambda: false,
   loops: 0,
   message: null,
@@ -33,6 +39,31 @@ const word = (
   element?.kind === 'token' &&
   element.type === 'word' &&
   (text === undefined || element.text === text);
+const waits = (node: SemanticNode) =>
+  node.children.some(c => c.kind === 'node' && c.rule === 'AndWait');
+const firstLeafOf = (e: SemanticElement): Leaf => {
+  let current = e;
+  while (current.kind === 'node') {
+    current = current.children[0]!;
+  }
+  return current;
+};
+// Whether a Join's body starts a member: an `ask` or `send` with `and wait`
+// outside any Lambda in it.
+const hasMember = (join: SemanticNode): boolean => {
+  const work = [...join.children];
+  while (work.length) {
+    const e = work.pop()!;
+    if (e.kind !== 'node' || e.rule === 'Lambda') {
+      continue;
+    }
+    if ((e.rule === 'AskTell' || e.rule === 'Send') && waits(e)) {
+      return true;
+    }
+    work.push(...e.children);
+  }
+  return false;
+};
 const childNode = (node: SemanticNode, rule: SemanticNode['rule']) =>
   node.children.find(
     (child): child is SemanticNode =>
@@ -194,14 +225,37 @@ export const checkControl = (
         if (unit === 'library') {
           report('not in a library', node.children[0] as Leaf);
         }
+        if (context.joinTry && waits(node)) {
+          report('not in a join', node.children[0] as Leaf);
+        }
+        break;
+      case 'AskTell':
+        if (context.joinTry && waits(node)) {
+          report('not in a join', node.children[0] as Leaf);
+        }
         break;
       case 'Wait': {
-        const [head, next] = node.children;
+        const [head, next, third] = node.children;
         if (unit === 'library' && word(next, 'for')) {
           report('not in a library', head as Leaf);
         }
+        // `end wait` is a Join's only Suspension Point (chapter 5, Joins).
+        if (context.join !== null) {
+          report('not in a join', head as Leaf);
+        }
+        if (word(next, 'for') && word(third, 'all')) {
+          if (!hasMember(node)) {
+            report('empty join', head as Leaf);
+          }
+          context = { ...context, join: context.loops, joinTry: false };
+        }
         break;
       }
+      case 'Try':
+        if (context.join !== null) {
+          context = { ...context, joinTry: true };
+        }
+        break;
       case 'Primary': {
         const [head] = node.children;
         if (unit === 'library' && word(head, 'me')) {
@@ -228,6 +282,22 @@ export const checkControl = (
         const [head, next] = node.children;
         if (unit === 'library' && (word(head, 'pass') || word(head, 'veto'))) {
           report('not in a library', head);
+        }
+        if (context.join !== null) {
+          const call = head?.kind === 'node' ? firstLeafOf(head) : head;
+          if (
+            // `name … and wait` and `f(x) and wait` may run in this Run.
+            (waits(node) &&
+              (head?.kind === 'name' ||
+                (head?.kind === 'node' && head.rule === 'Call'))) ||
+            word(head, 'return') ||
+            word(head, 'pass') ||
+            ((word(head, 'exit') ||
+              (word(head, 'next') && word(next, 'repeat'))) &&
+              context.loops <= context.join)
+          ) {
+            report('not in a join', call as Leaf);
+          }
         }
         if (
           word(head, 'exit') ||

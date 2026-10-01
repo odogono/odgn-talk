@@ -1,0 +1,20 @@
+# wait-for: a `wait for` resumes when a message it matches is dispatched to
+# its Script, leaving the message in `it` and binding its names, and the
+# message still goes to the Handler Clauses. `from` names the sending
+# Script, `^id` pins a captured value, and a Guard must give true. A timeout,
+# or a block's `after` branch, resumes it with Nothing (spec chapter 5,
+# `wait for` a message).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "till"
+source = "till.talk"
+
+[[scripts]]
+name = "bank"
+source = "bank.talk"

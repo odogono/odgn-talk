@@ -1,0 +1,28 @@
+-- board.talk: the joins case's Script.
+
+script variable results = []
+
+on gather keys
+  try
+    wait for all
+      repeat for each k in keys
+        ask feed to fetch k and wait
+        send price with k to shop and wait
+      end repeat
+    end wait
+    put it after results
+  catch e
+    put e after results
+  end try
+end gather
+
+on early
+  try
+    wait for all
+      ask feed to fetch "x" and wait
+      throw {code: "stop"}
+    end wait
+  catch e
+    put the code of e after results
+  end try
+end early

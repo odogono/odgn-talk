@@ -381,6 +381,8 @@ export type RunRecord =
       args: Value[];
       /** The call id of a send that waits for its reply. */
       id?: string;
+      /** A Join Member's send. */
+      join?: boolean;
       kind: 'send';
       message: string;
       to: string;
@@ -400,7 +402,37 @@ type CallContext = {
 export type Suspension =
   | { k: 'wait'; ns: bigint }
   | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
-  | { args: Value[]; id: string; k: 'send'; message: string; to: string };
+  | { args: Value[]; id: string; k: 'send'; message: string; to: string }
+  | { k: 'join'; members: Member[] }
+  | WaitFor;
+/**
+ * A `wait for`, one-line or block: its `when` branches with their `from`
+ * Scripts and captures, its `after` branches' durations and its timeout,
+ * each branch numbered from 1 in source order.
+ */
+export type WaitFor = {
+  afters: { branch: number; ns: bigint }[];
+  any: boolean;
+  k: 'wait-for';
+  timeout: bigint | null;
+  whens: {
+    binds: number[];
+    body: number | null;
+    branch: number;
+    captures: Value[];
+    from: string | null;
+    message: string;
+  }[];
+};
+/** A Join Member: its call id, and for a Capability call, its context. */
+export type Member = {
+  abort: AbortController | null;
+  /** An answer that arrived early, which Persistent State counts. */
+  answer?: Value;
+  call: CallContext | null;
+  id: string;
+  ms: number;
+};
 /** What resumes a suspended Run. */
 export type Resumption =
   | { k: 'wake' }
@@ -408,7 +440,11 @@ export type Resumption =
   | { error: HostScriptError | null; k: 'fail' }
   | { after: number; k: 'timeout' }
   | { k: 'reply'; value: Value }
-  | { error: Value | null; k: 'send failed'; reason: string };
+  | { error: Value | null; k: 'send failed'; reason: string }
+  | { answers: Resumption[]; k: 'joined' }
+  | { binds: Value[]; branch: number; k: 'event'; message: Value }
+  | { branch: number; k: 'event-timeout' }
+  | { abandon: string[]; failure: Resumption; index: number; k: 'join-failed' };
 
 /**
  * What a Run reaches outside its Script through, which its Group gives it:
@@ -431,6 +467,9 @@ export type RunHost = {
    */
   send(to: string, message: string, args: Value[], reply: string | null): void;
 };
+const listItems = (v: Value): Value[] =>
+  Array.from({ length: v.length }, (_, i) => v.index(i + 1));
+
 // The logical size of a stack item: a value's, or an internal value's,
 // which counts what it holds (chapter 8, Sizes).
 const itemSize = (item: Item): number => {
@@ -502,7 +541,12 @@ export class Run {
   /** Why it suspended, until its Group resumes it. */
   suspended: Suspension | null = null;
   private resumption: Resumption | null = null;
-  private abandoning: string | null = null;
+  private abandoning: string[] = [];
+  /** The calls a Limit Fault abandoned, which the Trace writes after it. */
+  faultAbandons: string[] = [];
+  /** The Join open in this Run, with the members it has started. */
+  private join: { frame: Frame; members: Member[]; start: number } | null =
+    null;
   // What a woken Run had suspended on, until its resume.
   private waitedOn: Suspension | null = null;
   private calls = 0;
@@ -702,11 +746,11 @@ export class Run {
         throw error;
       }
     }
-    // A timed-out call is abandoned after the raise that reports it.
-    if (resumption?.k === 'timeout' && this.abandoning) {
-      this.records.push({ kind: 'abandon', id: this.abandoning });
+    // An abandoned call is written after the raise that reports it.
+    for (const id of this.abandoning) {
+      this.records.push({ kind: 'abandon', id });
     }
-    this.abandoning = null;
+    this.abandoning = [];
   }
 
   /** Make a suspended Run ready: its next step resumes it with `r`. */
@@ -738,14 +782,68 @@ export class Run {
     this.waitedOn = null;
     this.segmentBase = [...this.script.variables];
     const frame = this.frame;
+    if (s.k === 'wait-for') {
+      // The message, or Nothing, and for a block its branch's number.
+      if (r.k === 'event') {
+        const when = s.whens.find(w => w.branch === r.branch)!;
+        when.binds.forEach((slot, i) => {
+          frame.locals[slot] = r.binds[i]!;
+        });
+      }
+      frame.stack.push(r.k === 'event' ? r.message : nothing);
+      if (s.any) {
+        frame.stack.push(dec(String((r as { branch: number }).branch)));
+      }
+      frame.pc++;
+      return;
+    }
+    if (s.k === 'join') {
+      this.join = null;
+      if (r.k === 'join-failed') {
+        // Failing fast: the first failure, with its member's `index`.
+        this.abandoning = r.abandon;
+        try {
+          this.settled(s.members[r.index - 1]!.call, r.failure);
+        } catch (error) {
+          throw this.withIndex(error, r.index);
+        }
+      }
+      const answers = (r as Extract<Resumption, { k: 'joined' }>).answers;
+      const values = s.members.map((m, i) => {
+        try {
+          return this.settled(m.call, answers[i]!);
+        } catch (error) {
+          throw this.withIndex(error, i + 1);
+        }
+      });
+      const result = listValues(values);
+      const all = charge('join', { result });
+      const before = charge('join', {});
+      this.payAmount(all.fuel - before.fuel, all.alloc - before.alloc);
+      frame.stack.push(result);
+      frame.pc++;
+      return;
+    }
+    if (r.k === 'timeout') {
+      this.abandoning =
+        s.k === 'ask' ? [s.call.id] : s.k === 'send' ? [s.id] : [];
+    }
+    const value = this.settled(s.k === 'ask' ? s.call : null, r);
+    if (s.k !== 'wait') {
+      frame.stack.push(value);
+    }
+    frame.pc++;
+  }
+
+  // What one call's resumption gives: its value, or the error it raises. An
+  // answer is checked against its Shape, then its conversion and any late
+  // cost charged (chapter 8, Charging).
+  private settled(call: CallContext | null, r: Resumption): Value {
     switch (r.k) {
       case 'wake':
-        frame.pc++;
-        return;
+        return nothing;
       case 'reply':
-        frame.stack.push(r.value);
-        frame.pc++;
-        return;
+        return r.value;
       case 'send failed':
         throw new ScriptError(
           'send failed',
@@ -756,28 +854,113 @@ export class Run {
           true,
         );
       case 'timeout':
-        this.abandoning =
-          s.k === 'ask' ? s.call.id : s.k === 'send' ? s.id : null;
         throw new ScriptError(
           'timeout',
           [
             ['after', quantity(dec(String(r.after)), 'ms')],
-            ...(s.k === 'ask' ? s.call.named : []),
+            ...(call?.named ?? []),
           ],
           true,
         );
+      case 'fail':
+        throw this.failure(call!, r.error, () => {});
+      case 'answer':
+        if (call!.op.result && mismatch(r.value, call!.op.result)) {
+          throw this.hostError(call!);
+        }
+        this.payConversion(call!, r.value, r.fuel);
+        return r.value;
     }
-    const ctx = (s as Extract<Suspension, { k: 'ask' }>).call;
-    if (r.k === 'fail') {
-      throw this.failure(ctx, r.error, () => {});
+    throw new Error(`a Join's resumption for one call: ${r.k}`);
+  }
+
+  // A Join member's error, with `index` added at its end (chapter 6).
+  private withIndex(error: unknown, index: number): unknown {
+    const ins = this.frame.code.unit.code[this.frame.pc]!;
+    const map0 =
+      error instanceof ScriptError
+        ? this.errorMap(error.code, error.fields, ins)
+        : error instanceof ThrownError
+          ? error.error
+          : null;
+    if (!map0) {
+      return error;
     }
-    const op = ctx.op;
-    if (op.result && mismatch(r.value, op.result)) {
-      throw this.hostError(ctx);
+    const indexed = map([...map0.entries(), ['index', dec(String(index))]]);
+    if (coreRaised.has(map0)) {
+      coreRaised.add(indexed);
     }
-    this.payConversion(ctx, r.value, r.fuel);
-    frame.stack.push(r.value);
-    frame.pc++;
+    return new ThrownError(indexed);
+  }
+
+  /**
+   * Whether a message a `wait for` is waiting on fires one of its `when`
+   * branches: the first in source order whose message, `from` and test
+   * match. The test runs on its own, and its Fuel and allocation count
+   * toward this Run (chapter 8, The event table).
+   */
+  matchEvent(
+    message: string,
+    args: Value[],
+    from: string | null,
+  ): Extract<Resumption, { k: 'event' }> | null {
+    const s = this.suspended;
+    if (s?.k !== 'wait-for') {
+      return null;
+    }
+    for (const when of s.whens) {
+      if (
+        when.message !== message ||
+        (when.from !== null && when.from !== from)
+      ) {
+        continue;
+      }
+      let binds: Value[] = [];
+      if (when.body === null) {
+        if (args.length) {
+          continue;
+        }
+      } else {
+        const body = this.script.unit.bodies[when.body]!;
+        if (body.params.length !== args.length) {
+          continue;
+        }
+        // As a one-clause dispatch, so a failed test ends `unhandled`.
+        const test = new Run(this.script, [body], args, {
+          ...this.limits,
+          fuelPerRun: Infinity,
+          allocPerRun: Infinity,
+        });
+        when.captures.forEach((v, i) => {
+          test.frames[0]!.locals[body.captureStart + i] = v;
+        });
+        const outcome = test.finish();
+        this.fuel += test.fuel;
+        this.alloc += test.alloc;
+        this.records.push(...test.records);
+        if (outcome.kind !== 'completed') {
+          continue;
+        }
+        binds = listItems(outcome.result);
+      }
+      return {
+        k: 'event',
+        branch: when.branch,
+        binds,
+        message: map([
+          ['name', text(message)],
+          ['args', listValues(args)],
+        ]),
+      };
+    }
+    return null;
+  }
+
+  // A member past `MaxJoin` is a Limit Fault, checked before its charge.
+  private joinWidth() {
+    if (this.join!.members.length + 1 > this.limits.maxJoin) {
+      throw new LimitFaultError('maxJoin', this.frame.pc);
+    }
   }
 
   /** Its logical size, as Persistent State counts a suspended Run (chapter 8). */
@@ -790,15 +973,64 @@ export class Run {
       }
       frames += partSize('frame', f.locals.length, contents);
     }
-    const pending = this.suspended?.k === 'ask' || this.suspended?.k === 'send';
-    return partSize(
-      'run',
-      0,
-      frames + (pending ? partSize('pending call', 0, 0) : 0),
-    );
+    // Each pending call, and a Join's early answers.
+    let calls = 0;
+    const s = this.suspended;
+    if (s?.k === 'ask' || s?.k === 'send') {
+      calls = partSize('pending call', 0, 0);
+    } else if (s?.k === 'wait-for') {
+      for (const when of s.whens) {
+        calls += when.captures.reduce((t, v) => t + sizeOf(v), 0);
+      }
+    } else if (s?.k === 'join') {
+      for (const member of s.members) {
+        calls += member.answer
+          ? sizeOf(member.answer)
+          : partSize('pending call', 0, 0);
+      }
+    }
+    return partSize('run', 0, calls + frames);
+  }
+
+  // An error caught outside an open Join's body, or not caught, abandons the
+  // members it started, each written after the raise (chapter 5, Joins).
+  private leaveJoin(handler: number, target: number | undefined) {
+    const join = this.join;
+    if (!join) {
+      return;
+    }
+    const at = this.frames.indexOf(join.frame);
+    if (handler > at) {
+      return;
+    }
+    if (handler === at && target !== undefined) {
+      const code = join.frame.code.unit.code;
+      let end = join.start;
+      while (end < code.length && code[end]!.op !== 'join-end') {
+        end++;
+      }
+      if (target > join.start && target <= end) {
+        return;
+      }
+    }
+    for (const id of this.abandonJoin()) {
+      this.records.push({ kind: 'abandon', id });
+    }
+  }
+
+  // Abandon the open Join's members, signalling their Capability calls.
+  private abandonJoin(): string[] {
+    const members = this.join?.members ?? [];
+    this.join = null;
+    for (const member of members) {
+      member.abort?.abort();
+    }
+    return members.map(member => member.id);
   }
 
   private fault(limit: LimitName, ins: Instruction) {
+    // A Join's members are abandoned, after the fault (chapter 5, Joins).
+    this.faultAbandons = this.abandonJoin();
     const code = this.frame.code;
     const rollback = this.script.unit.variables.filter(
       (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
@@ -906,6 +1138,7 @@ export class Run {
       popped++;
     }
     this.record(error, ins, found?.kind === 'guard');
+    this.leaveJoin(found ? this.frames.length - 1 - popped : -1, found?.target);
     if (popped) {
       try {
         this.pay('unwind', { frames: popped });
@@ -1038,6 +1271,7 @@ export class Run {
     opName: string,
     args: Value[],
     key: string,
+    member = false,
   ): Value {
     const host = this.host;
     if (!host) {
@@ -1168,12 +1402,12 @@ export class Run {
     }
     if (op.mode === 'suspending') {
       this.records.push({ ...record, charged });
-      this.suspend({
-        k: 'ask',
-        call: ctx,
-        abort,
-        ms: op.maxPendingMs ?? this.limits.maxWaitMs,
-      });
+      const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
+      if (member) {
+        this.join!.members.push({ id, call: ctx, abort, ms });
+      } else {
+        this.suspend({ k: 'ask', call: ctx, abort, ms });
+      }
       return nothing;
     }
     if (op.mode === 'fire-and-forget') {
@@ -1768,8 +2002,88 @@ export class Run {
         frame.stack.length -= n;
         return;
       }
+      case 'wait-for':
+      case 'wait-for-any': {
+        // Deepest first: each branch's `from` and captures, or duration,
+        // then the timeout (chapter 8, The event table).
+        const entry = unit.events[a as number]!;
+        const count =
+          entry.branches.reduce(
+            (n, br) =>
+              n + (br.kind === 'after' ? 1 : br.captures + (br.from ? 1 : 0)),
+            0,
+          ) + (entry.timeout ? 1 : 0);
+        const items = frame.stack.slice(frame.stack.length - count);
+        let i = 0;
+        const sus: WaitFor = {
+          k: 'wait-for',
+          any: ins.op === 'wait-for-any',
+          whens: [],
+          afters: [],
+          timeout: null,
+        };
+        entry.branches.forEach((br, n) => {
+          if (br.kind === 'after') {
+            sus.afters.push({ branch: n + 1, ns: waitNs(items[i++] as Value) });
+            return;
+          }
+          let from: string | null = null;
+          if (br.from) {
+            const x = items[i++]!;
+            if (isValue(x) || x.k !== 'receiver') {
+              throw new NotImplementedError('`from` a Host Object');
+            }
+            from = x.name;
+          }
+          sus.whens.push({
+            branch: n + 1,
+            message: br.message,
+            from,
+            body: br.body,
+            binds: br.binds,
+            captures: items.slice(i, i + br.captures) as Value[],
+          });
+          i += br.captures;
+        });
+        if (entry.timeout) {
+          sus.timeout = waitNs(items[i++] as Value);
+        }
+        this.pay(key);
+        frame.stack.length -= count;
+        this.suspend(sus);
+        return;
+      }
+      case 'join-start':
+        this.pay(key);
+        this.join = { frame, members: [], start: frame.pc };
+        return next();
+      case 'join-ask': {
+        this.joinWidth();
+        const n = c as number;
+        this.capability(a as string, b as string, this.popArgs(n), key, true);
+        frame.stack.length -= n;
+        return next();
+      }
+      case 'join-end': {
+        const members = this.join!.members;
+        if (!members.length) {
+          // No members: `[]` at once, with no Segment boundary.
+          m.result = listValues([]);
+          this.pay(key);
+          this.join = null;
+          frame.stack.push(m.result);
+          return next();
+        }
+        this.pay(key);
+        this.suspend({ k: 'join', members });
+        return;
+      }
       case 'send':
-      case 'send-wait': {
+      case 'send-wait':
+      case 'join-send': {
+        if (ins.op === 'join-send') {
+          this.joinWidth();
+        }
         const n = b as number;
         const to = frame.stack.at(-1);
         if (isValue(to) || to?.k !== 'receiver') {
@@ -1787,8 +2101,7 @@ export class Run {
         m.inputSize = size;
         this.pay(key);
         // A send that waits is a call, with an id of its own.
-        const id =
-          ins.op === 'send-wait' ? `${this.id}.c${this.calls + 1}` : null;
+        const id = ins.op === 'send' ? null : `${this.id}.c${this.calls + 1}`;
         this.host!.send(to.name, a as string, args, id);
         this.records.push({
           kind: 'send',
@@ -1796,12 +2109,22 @@ export class Run {
           message: a as string,
           args,
           ...(id ? { id } : {}),
+          ...(ins.op === 'join-send' ? { join: true } : {}),
         });
         frame.stack.length -= n + 1;
         if (!id) {
           return next();
         }
         this.calls++;
+        if (ins.op === 'join-send') {
+          this.join!.members.push({
+            id,
+            call: null,
+            abort: null,
+            ms: this.limits.maxWaitMs,
+          });
+          return next();
+        }
         this.suspend({
           k: 'send',
           id,

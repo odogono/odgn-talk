@@ -1,0 +1,5 @@
+-- shop.talk: the joins case's receiver.
+
+on price k
+  return k & "!"
+end price

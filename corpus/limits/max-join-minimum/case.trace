@@ -8,16 +8,13 @@
 #
 # The case doesn't answer 256 members to show a full Join completing: that
 # the 256th member starts without a fault is what pins the minimum.
-# Fuel (estimated: dispatch 4, join-start 10, const 1, load 1, range 2,
-# iterate 2, then 14 per member, then next, store and load for the 257th),
-# allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load fanout
+> load fanout identity=72f20cf619838cbdcbbb5ab99df86851b810e6d2add3c5ea125cd17c16848514
 
 > deliver d1 to=fanout message=fan args=[257]
 > pump clock=2026-09-28T09:00:00Z
-# The 256 members that start, c1 to c256, each pending.
 call fanout/r1.c1 op=feed.fetch args=[1]
 call fanout/r1.c2 op=feed.fetch args=[2]
 call fanout/r1.c3 op=feed.fetch args=[3]
@@ -274,8 +271,6 @@ call fanout/r1.c253 op=feed.fetch args=[253]
 call fanout/r1.c254 op=feed.fetch args=[254]
 call fanout/r1.c255 op=feed.fetch args=[255]
 call fanout/r1.c256 op=feed.fetch args=[256]
-# The 257th would pass MaxJoin: a Limit Fault, and every pending member is
-# abandoned.
 fault fanout/r1 limit=join at=fanout:10 pos=7:7
 abandon fanout/r1.c1
 abandon fanout/r1.c2
@@ -533,9 +528,9 @@ abandon fanout/r1.c253
 abandon fanout/r1.c254
 abandon fanout/r1.c255
 abandon fanout/r1.c256
-seg fanout/r1 start delivery=d1 handler=fan clause=1 fuel=3608 alloc=72 state=0 end=fault
-run fanout/r1 outcome=limit-fault delivery=d1 handler=fan limit=join fuel=3608 alloc=72
-pumped state=idle fuel=3608
+seg fanout/r1 start delivery=d1 handler=fan clause=1 fuel=3864 alloc=72 state=0 end=fault
+run fanout/r1 outcome=limit-fault delivery=d1 handler=fan limit=join fuel=3864 alloc=72
+pumped state=idle fuel=3864
 
 > vars
 vars fanout

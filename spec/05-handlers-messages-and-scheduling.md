@@ -130,9 +130,9 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 ### `wait for` a message
 
-- **A one-shot subscription:** `wait for m p1, p2` suspends until a message `m` whose arguments pass the patterns reaches the Script. Only a message that is dispatched after the wait began can match. Nothing is buffered, so a missed message stays missed.
+- **A one-shot subscription:** `wait for m p1, p2` suspends until a message `m` whose arguments pass the patterns reaches the Script. As for a Handler Clause, the message has exactly as many arguments as the event has patterns, so `wait for ready` matches only a `ready` with none. Only a message that is dispatched after the wait began can match. Nothing is buffered, so a missed message stays missed.
 - **It observes:** when a message is dispatched, every pending `wait for` in the Script that it matches resumes, in the order the waits began, and then the message goes to the Handler Clauses as usual. A `wait for` never consumes a message.
-- **`from x`** also requires the message's Target to be `x`, or, for a message sent by a Script, that Script to be `x`.
+- **`from x`** also requires the message's Target to be `x`, or, for a message sent by a Script, that Script to be `x`. A Name there names a Script as a `send`'s receiver does ([Sending](#sending)).
 - **`it`:** a `wait for` that matches leaves the message in `it`, as the map `{name, args}`: its name as text and its arguments as a list.
 - **A timeout:** `wait for m or d` stops waiting after the exact duration `d`, with the same deadline rule as `wait`, and leaves Nothing in `it`. A `wait for` with no timeout can wait for ever. `MaxWait` doesn't apply to it.
 - **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after `end wait`. A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.

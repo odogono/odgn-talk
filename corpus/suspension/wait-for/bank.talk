@@ -1,0 +1,9 @@
+-- bank.talk: the wait-for case's sender.
+
+on settle order, amount
+  send paid with {order: order, amount: amount} to till
+end settle
+
+on back r
+  send refund with r to till
+end back
