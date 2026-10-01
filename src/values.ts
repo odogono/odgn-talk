@@ -220,6 +220,26 @@ const trimWhiteSpace = (s: string): string => {
   return s.slice(boundaries[first], boundaries[last]);
 };
 
+/** Decimal digits of an unsigned number-syntax literal, or null past chapter 3's limits. */
+export const literalDigits = (
+  s: string,
+): { fraction: string; whole: string } | null => {
+  if (s.startsWith('0x')) {
+    // A valid value cannot require more than 29 significant hex digits.
+    const hex = s.slice(2).replace(/^0+/, '') || '0';
+    if (hex.length > 29) {
+      return null;
+    }
+    s = BigInt(`0x${hex}`).toString();
+  }
+  const [integer, fraction = ''] = s.split('.');
+  const whole = integer!.replace(/^0+/, '') || '0';
+  const coefficient = (whole + fraction).replace(/^0+/, '');
+  return coefficient.length > 34 || whole.length > 34 || fraction.length > 6176
+    ? null
+    : { whole, fraction };
+};
+
 export const dec = (s: string): Value => {
   if (typeof s !== 'string') {
     invalidValue('Decimal must be text');
@@ -229,24 +249,13 @@ export const dec = (s: string): Value => {
     invalidValue('Invalid decimal syntax');
   }
   const negative = s.startsWith('-');
-  if (negative) {
-    s = s.slice(1);
-  }
-  if (s.startsWith('0x')) {
-    // A valid value cannot require more than 29 significant hex digits.
-    const hex = s.slice(2).replace(/^0+/, '') || '0';
-    if (hex.length > 29) {
-      invalidValue('Decimal exceeds 34 digits');
-    }
-    s = BigInt(`0x${hex}`).toString();
-  }
-  const [integer, fraction = ''] = s.split('.');
-  const whole = integer!.replace(/^0+/, '') || '0';
-  const coefficient = (whole + fraction).replace(/^0+/, '');
-  if (coefficient.length > 34 || whole.length > 34 || fraction.length > 6176) {
+  const digits = literalDigits(negative ? s.slice(1) : s);
+  if (!digits) {
     invalidValue('Decimal exceeds the value limits');
   }
-  const canonical = `${negative && coefficient ? '-' : ''}${whole}${fraction.length ? `.${fraction}` : ''}`;
+  const { whole, fraction } = digits;
+  const zero = !/[1-9]/.test(whole + fraction);
+  const canonical = `${negative && !zero ? '-' : ''}${whole}${fraction.length ? `.${fraction}` : ''}`;
   return makeValue('number', makeDecimal(canonical));
 };
 

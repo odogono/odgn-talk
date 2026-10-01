@@ -1,3 +1,4 @@
+import { checkConstructs } from './constructs';
 import { checkControl } from './control';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
@@ -13,6 +14,7 @@ import type {
   SemanticName,
   SemanticNode,
   SemanticScope,
+  SemanticToken,
   SemanticTree,
   SourceSpan,
 } from './semantic';
@@ -29,6 +31,8 @@ export type CheckOptions = {
   libraries?: Readonly<Record<string, Readonly<Record<string, LibraryExport>>>>;
   /** Well-known Host Object names bound at load. */
   objects?: readonly string[];
+  /** Whether the source is a Script (the default) or a Library. */
+  unit?: 'script' | 'library';
 };
 export type SemanticResult = {
   diagnostics: readonly Diagnostic[];
@@ -904,9 +908,10 @@ export const checkSyntax = (
     }
   }
   const root = converted.get(syntax) as SemanticNode;
-  for (const { code, span, text } of checkControl(root)) {
-    diagnostics.push({ code, span, message: `${code}: ${text}` });
-  }
+  const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
+    diagnostics.push({ code, span: at.span, message: `${code}: ${at.text}` });
+  checkControl(root, options.unit ?? 'script', reportAt);
+  checkConstructs(root, reportAt);
   diagnostics.sort(
     (a, b) =>
       a.span.start - b.span.start ||
