@@ -1,4 +1,4 @@
-# The odgn-talk Spec
+# The NorthTalk Spec
 
 <!-- generated: version -->
 

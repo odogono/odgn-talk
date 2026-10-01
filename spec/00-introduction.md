@@ -1,10 +1,14 @@
 # 0. Introduction and conventions
 
-_Draws on:_ [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md).
+_Draws on:_ [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md), [ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md).
 
-This is the Spec of odgn-talk, a HyperTalk-descended scripting language for running untrusted end-user Scripts in a sandbox inside Go servers, Bun servers and browsers. It states every rule of the language once, in its final form. Together with the Conformance Corpus, it is the authority on what the language does. There are two Cores, one in Go and one in TS. Neither is the reference, and both answer to the Spec and the corpus, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
+This is the Spec of NorthTalk, a HyperTalk-descended scripting language for running untrusted end-user Scripts in a sandbox inside Go servers, Bun servers and browsers. It states every rule of the language once, in its final form. Together with the Conformance Corpus, it is the authority on what the language does. There are two Cores, one in Go and one in TS. Neither is the reference, and both answer to the Spec and the corpus, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
 The ADRs in [`docs/adr/`](../docs/adr/) record why each rule is the way it is, and what was rejected. The Spec cites them only for reasons. Where the Spec and an ADR disagree, the Spec wins. The [tour](../docs/tour.md) is an informative introduction.
+
+## Name and source files
+
+The language's public name is **NorthTalk**. Script and Library source files use the `.talk` extension ([ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md)).
 
 ## Versions
 

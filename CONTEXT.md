@@ -1,4 +1,4 @@
-# odgn-talk
+# NorthTalk
 
 A HyperTalk-descended scripting language, embeddable in Go servers, Bun servers and browsers, for running untrusted end-user scripts in a sandbox.
 

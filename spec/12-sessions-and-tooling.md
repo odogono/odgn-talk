@@ -1,6 +1,6 @@
 # 12. Sessions and tooling
 
-_Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [#61](https://github.com/odogono/odgn-talk/issues/61), [#69](https://github.com/odogono/odgn-talk/issues/69), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72).
+_Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [#61](https://github.com/odogono/odgn-talk/issues/61), [#69](https://github.com/odogono/odgn-talk/issues/69), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72), [ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md).
 
 A REPL or Playground session is an ordinary Host running an ordinary Script Group. The Cores have no session concept ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)). This chapter states how that Host, the **Session Host**, turns Entries and Session Commands into Host Inputs, and what it prints. Its behaviour is normative, because a Session Transcript is a Conformance Corpus case, which must replay the same on the Go REPL and the TS REPL. The rest of the tooling is one TS stack, and nothing it produces is normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
@@ -189,6 +189,8 @@ OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
 
 ## Tooling
 
+The command is `northtalk`, the editor language ID is `northtalk`, and the language server launches as `northtalk lsp` ([ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md)).
+
 The LSP, the formatter, the debugger and the Lint engine are one TypeScript tooling stack, under Bun or Node for editors and in a browser worker for the Playground, built on the TS Core's own parser and checker ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)). The Go REPL is the only Go tooling, and has no Lints, formatter or debugger. A Script in a Go Host is debugged by replaying its Trace on the TS Core.
 
 ### The normative line
@@ -265,6 +267,7 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 
 ### The Playground
 
+- **Public name:** NorthTalk Playground.
 - **It ships** the LSP in a worker, the formatter, live debugging, and replay debugging of a pasted Trace.
 - **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`.
 - **Sharing** is source only: a link carries the Session Script's source and, optionally, a Session Transcript, which replays on opening. So a bug report can arrive as a link and be debugged in replay mode.
