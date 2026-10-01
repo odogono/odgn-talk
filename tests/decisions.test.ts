@@ -354,3 +354,56 @@ describe('Decision refusals and follow-up errors', () => {
     expect(pump.reports.map(r => r.kind)).toEqual(['run end', 'run end']);
   });
 });
+
+describe('Decision review regressions', () => {
+  test('a failed Join can reach its catch after the Verdict is sealed', () => {
+    expect(
+      codes(
+        'on move, deciding\n  try\n    wait for all\n      send query to me and wait\n    end wait\n  catch e\n    veto\n  end try\nend move\non query\nend query',
+      ),
+    ).toContain('after a suspension');
+  });
+  test('a wait for error observes the failed Run even without an on error clause', () => {
+    const group = newGroup({ name: 'g' });
+    const s = group.load({
+      name: 's',
+      source:
+        'script variable caught = 0\non watch\n  wait for error e\n  add 1 to caught\nend watch\non move, deciding\n  throw "broken"\nend move',
+    });
+    s.deliver({ name: 'watch' });
+    group.pump(now);
+    s.decide({ name: 'move' });
+    group.pump(now);
+    expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('1');
+  });
+  test('dispatch-time allow follows failed Guard records and precedes body records', () => {
+    const trace: string[] = [];
+    const group = newGroup({ name: 'g', trace: l => trace.push(l) });
+    const s = group.load({
+      name: 's',
+      source:
+        'on move where 1 / 0 = 1, deciding\n  veto\nend move\non move\n  return\nend move',
+    });
+    s.decide({ name: 'move' });
+    group.pump(now);
+    expect(trace.findIndex(l => l.startsWith('guard-skip '))).toBeLessThan(
+      trace.findIndex(l => l.startsWith('decided ')),
+    );
+    expect(trace.findIndex(l => l.startsWith('decided '))).toBeLessThan(
+      trace.findIndex(l => l.startsWith('seg ')),
+    );
+  });
+});
+
+test('Decision overrides refuse fractional milliseconds before allocating ids', () => {
+  const group = newGroup({ name: 'g' });
+  const s = group.load({ name: 's', source: 'on move, deciding\nend move' });
+  expect(() =>
+    group.decideBroadcast({ name: 'move', limits: { maxWaitMs: 0.5 } }),
+  ).toThrow();
+  expect(() =>
+    s.decide({ name: 'move', limits: { maxWaitMs: 0.5 } }),
+  ).toThrow();
+  expect(group.decideBroadcast({ name: 'move' }).id).toBe('b1');
+  expect(s.decide({ name: 'move' }).id).toBe('d1');
+});

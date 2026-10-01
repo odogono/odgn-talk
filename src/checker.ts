@@ -974,25 +974,18 @@ export const checkSyntax = (
   if (options.grants) {
     checkEffects(root, options.grants, reportAt);
   }
-  const may = checkSuspension(
-    root,
-    binding => {
-      const from = binding.importedFrom!;
-      const exp = options.libraries?.[from.library]?.[from.name];
-      return typeof exp === 'object' && exp.maySuspend === true;
-    },
-    reportAt,
-  );
+  const importedSuspension = (binding: Binding) => {
+    const from = binding.importedFrom!;
+    const exp = options.libraries?.[from.library]?.[from.name];
+    return typeof exp === 'object' && exp.maySuspend === true;
+  };
+  const may = checkSuspension(root, importedSuspension, reportAt);
   checkDecisions(
     root,
-    binding => {
-      if (!binding.importedFrom) {
-        return may.get(binding.name) ?? false;
-      }
-      const from = binding.importedFrom;
-      const exp = options.libraries?.[from.library]?.[from.name];
-      return typeof exp === 'object' && exp.maySuspend === true;
-    },
+    binding =>
+      binding.importedFrom
+        ? importedSuspension(binding)
+        : (may.get(binding.name) ?? false),
     reportAt,
   );
   diagnostics.sort(

@@ -12,16 +12,16 @@ raise builder/r1 code="out of range" at=builder:4 pos=5:13
 seg builder/r1 start delivery=d1 handler=wide clause=1 fuel=13 alloc=0 state=128 end=error
 run builder/r1 outcome=errored delivery=d1 handler=wide error={code: "out of range", field: "uint16", value: 70000, at: {unit: "builder", handler: "wide", line: 5, column: 13}} fuel=13 alloc=0
 raise builder/r2 code="out of range" at=builder:11 pos=9:13
-seg builder/r2 start delivery=d2 handler=byte clause=1 fuel=13 alloc=0 state=96 end=error
+seg builder/r2 start delivery=d2 handler=byte clause=1 fuel=13 alloc=0 state=611 end=error
 run builder/r2 outcome=errored delivery=d2 handler=byte error={code: "out of range", field: "byte", value: 256, at: {unit: "builder", handler: "byte", line: 9, column: 13}} fuel=13 alloc=0
 raise builder/r3 code="wrong kind" at=builder:18 pos=13:13
-seg builder/r3 start delivery=d3 handler=fraction clause=1 fuel=13 alloc=0 state=64 end=error
+seg builder/r3 start delivery=d3 handler=fraction clause=1 fuel=13 alloc=0 state=1088 end=error
 run builder/r3 outcome=errored delivery=d3 handler=fraction error={code: "wrong kind", expected: "integer", got: "number", value: 1.5, at: {unit: "builder", handler: "fraction", line: 13, column: 13}} fuel=13 alloc=0
 raise builder/r4 code="out of range" at=builder:30 pos=17:13
-seg builder/r4 start delivery=d4 handler=sized clause=1 fuel=23 alloc=35 state=32 end=error
+seg builder/r4 start delivery=d4 handler=sized clause=1 fuel=23 alloc=35 state=1633 end=error
 run builder/r4 outcome=errored delivery=d4 handler=sized error={code: "out of range", field: "bytes", value: <<0x01, 0x02>>, at: {unit: "builder", handler: "sized", line: 17, column: 13}} fuel=23 alloc=35
 raise builder/r5 code="out of range" at=builder:38 pos=21:13
-seg builder/r5 start delivery=d5 handler=bits clause=1 fuel=14 alloc=0 state=0 end=error
+seg builder/r5 start delivery=d5 handler=bits clause=1 fuel=14 alloc=0 state=2126 end=error
 run builder/r5 outcome=errored delivery=d5 handler=bits error={code: "out of range", field: "4 bits", value: 16, at: {unit: "builder", handler: "bits", line: 21, column: 13}} fuel=14 alloc=0
 pumped state=idle fuel=76
 

@@ -15,7 +15,7 @@ raise checks/r2 code="can't decode" at=json:1296 pos=236:3
 seg checks/r2 start delivery=d2 handler=parse clause=1 fuel=1004 alloc=1933 state=512 end=error
 run checks/r2 outcome=errored delivery=d2 handler=parse error={code: "can't decode", format: "json", offset: 4, at: {unit: "checks", handler: "parse", line: 18, column: 10}} fuel=1004 alloc=1933
 raise checks/r3 code="division by zero" at=checks:37 pos=22:33
-seg checks/r3 start delivery=d3 handler=invert clause=1 fuel=126 alloc=208 state=480 end=error
+seg checks/r3 start delivery=d3 handler=invert clause=1 fuel=126 alloc=208 state=990 end=error
 run checks/r3 outcome=errored delivery=d3 handler=invert error={code: "division by zero", at: {unit: "checks", handler: "invert", line: 22, column: 33}} fuel=126 alloc=208
 pumped state=idle fuel=1264
 

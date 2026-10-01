@@ -1,16 +1,17 @@
 # dispatch-and-waits: an ordinary clause allows only after its Guard tests
-# have dispatched successfully. Its pass then climbs as an ordinary message.
+# have dispatched successfully; guard-skip precedes that allow. Its pass then climbs as an ordinary message.
 # A matching wait for allows before a deciding Handler's veto, so that veto
 # has no open Verdict. An unmatched message allows at the end of its path.
 
-> load observer identity=00cc1bc51ec7ad4fa7da8e407170f523b5d9764e2d0ccfb2cec3a84e7dbd1c19
+> load observer identity=6ebfe68a6bcd5611757fa537d7892a41e2087fe8deba7c8f203f850b305f26f0
 > decide d1 to=observer message=move args=[1]
 > pump clock=2026-09-30T10:00:00Z
+guard-skip observer/r1 at=observer:17 pos=8:19 code="division by zero"
 decided d1 verdict=allowed
-seg observer/r1 start delivery=d1 handler=move clause=2 fuel=35 alloc=0 state=16 end=pass
-run observer/r1 outcome=completed delivery=d1 handler=move fuel=35 alloc=0
+seg observer/r1 start delivery=d1 handler=move clause=3 fuel=46 alloc=0 state=16 end=pass
+run observer/r1 outcome=completed delivery=d1 handler=move fuel=46 alloc=0
 unhandled d1 message=move args=[1]
-pumped state=idle fuel=35
+pumped state=idle fuel=46
 > deliver d2 to=observer message=watch
 > pump clock=2026-09-30T10:00:01Z
 seg observer/r2 start delivery=d2 handler=watch clause=1 fuel=14 alloc=0 state=224 end=wait-for
@@ -18,12 +19,13 @@ pumped state=idle fuel=14
 > decide d3 to=observer message=move args=[-1]
 > pump clock=2026-09-30T10:00:02Z
 decided d3 verdict=allowed
+guard-skip observer/r3 at=observer:17 pos=8:19 code="division by zero"
 note observer/r3 kind=no-verdict
-seg observer/r3 start delivery=d3 handler=move clause=1 fuel=12 alloc=0 state=16 end=veto value=-1
-run observer/r3 outcome=completed delivery=d3 handler=move fuel=12 alloc=0
+seg observer/r3 start delivery=d3 handler=move clause=2 fuel=23 alloc=0 state=16 end=veto value=-1
+run observer/r3 outcome=completed delivery=d3 handler=move fuel=23 alloc=0
 seg observer/r2 resume fuel=14 alloc=16 state=16 end=return
 run observer/r2 outcome=completed delivery=d2 handler=watch fuel=39 alloc=56
-pumped state=idle fuel=26
+pumped state=idle fuel=37
 > decide d4 to=observer message=absent
 > pump clock=2026-09-30T10:00:03Z
 seg observer/r4 start delivery=d4 fuel=0 alloc=0 state=16 end=unhandled

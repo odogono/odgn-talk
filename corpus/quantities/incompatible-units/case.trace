@@ -11,13 +11,13 @@ raise mixer/r1 code="incompatible units" at=mixer:4 pos=5:15
 seg mixer/r1 start delivery=d1 handler=mass clause=1 fuel=13 alloc=0 state=96 end=error
 run mixer/r1 outcome=errored delivery=d1 handler=mass error={code: "incompatible units", left: "kg", right: "m", at: {unit: "mixer", handler: "mass", line: 5, column: 15}} fuel=13 alloc=0
 raise mixer/r2 code="incompatible units" at=mixer:11 pos=9:18
-seg mixer/r2 start delivery=d2 handler=calendar clause=1 fuel=13 alloc=0 state=64 end=error
+seg mixer/r2 start delivery=d2 handler=calendar clause=1 fuel=13 alloc=0 state=572 end=error
 run mixer/r2 outcome=errored delivery=d2 handler=calendar error={code: "incompatible units", left: "month", right: "day", at: {unit: "mixer", handler: "calendar", line: 9, column: 18}} fuel=13 alloc=0
 raise mixer/r3 code="wrong kind" at=mixer:18 pos=13:15
-seg mixer/r3 start delivery=d3 handler=plain clause=1 fuel=13 alloc=0 state=32 end=error
+seg mixer/r3 start delivery=d3 handler=plain clause=1 fuel=13 alloc=0 state=1062 end=error
 run mixer/r3 outcome=errored delivery=d3 handler=plain error={code: "wrong kind", expected: "quantity", got: "number", value: 3, at: {unit: "mixer", handler: "plain", line: 13, column: 15}} fuel=13 alloc=0
 raise mixer/r4 code="incompatible units" at=mixer:25 pos=17:13
-seg mixer/r4 start delivery=d4 handler=spread clause=1 fuel=12 alloc=0 state=0 end=error
+seg mixer/r4 start delivery=d4 handler=spread clause=1 fuel=12 alloc=0 state=1602 end=error
 run mixer/r4 outcome=errored delivery=d4 handler=spread error={code: "incompatible units", left: "m", right: "kg", at: {unit: "mixer", handler: "spread", line: 17, column: 13}} fuel=12 alloc=0
 pumped state=idle fuel=51
 

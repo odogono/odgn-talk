@@ -137,6 +137,9 @@ class Flow {
         const end = this.node();
         this.nodes[end]!.point = true;
         this.nodes[end]!.edges.push({ to: next, after: true });
+        for (const to of context.errors) {
+          this.nodes[end]!.edges.push({ to, after: true });
+        }
         edge(
           (yield this.block(s.body, end, { ...context, join: true })) as number,
         );

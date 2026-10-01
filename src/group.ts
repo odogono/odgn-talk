@@ -671,7 +671,7 @@ export class Group {
     };
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       const limit = (state?.limits ?? defaultLimits)[name as LimitName];
-      if (!overridable.has(name) || value! > limit) {
+      if (!validOverride(name, value, limit)) {
         refuse(
           'invalid value',
           new HostError(
@@ -750,7 +750,7 @@ export class Group {
   /** Queued. Takes recipients at drain, then waits for every Verdict. */
   decideBroadcast(m: Message): Deciding {
     for (const [name, value] of Object.entries(m.limits ?? {})) {
-      if (!overridable.has(name) || value! > defaultLimits[name as LimitName]) {
+      if (!validOverride(name, value, defaultLimits[name as LimitName])) {
         this.trace(recordLine('decide-broadcast', [], messageFields(m), true));
         this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
         throw new HostError(
@@ -1210,6 +1210,10 @@ export class Group {
     if (!('run' in head)) {
       const delivery = head;
       this.observe(s, delivery);
+      if (delivery.during && !s.loaded.clauses.has('error')) {
+        s.queue.shift();
+        return;
+      }
       const run = dispatch(
         s.loaded,
         delivery.message,
@@ -1244,12 +1248,13 @@ export class Group {
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
     const records0 = run.records.length;
+    let dispatchSealAt: number | null = null;
     const selected = () => {
       const clause = run.selectedClause;
       if (!running.selected && clause) {
         running.selected = true;
         if (!clause.deciding) {
-          this.seal(running.delivery, { verdict: 'allowed' });
+          dispatchSealAt = run.records.length;
         }
         run.openVerdict =
           clause.deciding === true &&
@@ -1270,7 +1275,11 @@ export class Group {
       charge(run.fuel - last);
       last = run.fuel;
     }
-    for (const rec of run.records.slice(records0)) {
+    for (let i = records0; i < run.records.length; i++) {
+      if (dispatchSealAt === i) {
+        this.seal(running.delivery, { verdict: 'allowed' });
+      }
+      const rec = run.records[i]!;
       if (rec.kind === 'abandon') {
         this.trace(recordLine('abandon', [rec.id], []));
         continue;
@@ -1373,6 +1382,9 @@ export class Group {
               ],
             ),
       );
+    }
+    if (dispatchSealAt === run.records.length) {
+      this.seal(running.delivery, { verdict: 'allowed' });
     }
     const outcome = run.ended;
     if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
@@ -1547,11 +1559,7 @@ export class Group {
         undecided: { script: s.name, run: running.id, outcome: outcome.kind },
       });
     }
-    if (
-      outcome.kind === 'errored' &&
-      delivery.message !== 'error' &&
-      s.loaded.clauses.has('error')
-    ) {
+    if (outcome.kind === 'errored' && delivery.message !== 'error') {
       const waiting =
         s.queue.filter(item => !('run' in item)).length + s.incoming;
       if (waiting >= s.limits.mailboxDepth) {
@@ -1722,6 +1730,13 @@ const endReason = (outcome: Outcome): string => {
       return 'unhandled';
   }
 };
+
+const validOverride = (name: string, value: unknown, cap: number): boolean =>
+  overridable.has(name) &&
+  typeof value === 'number' &&
+  Number.isSafeInteger(value) &&
+  value >= 0 &&
+  value <= cap;
 
 const messageFields = (m: Message): [string, string | null][] => {
   const limits = Object.entries(m.limits ?? {});

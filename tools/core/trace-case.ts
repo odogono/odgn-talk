@@ -454,6 +454,17 @@ export const replay = (
       ),
     );
   }
+  const messageOf = (r: Parsed) => ({
+    name: r.fields.get('message')!,
+    args: r.fields.has('args') ? valuesOf(value(r.fields.get('args')!)) : [],
+    limits: r.fields.has('limits')
+      ? Object.fromEntries(
+          value(r.fields.get('limits')!)
+            .entries()
+            .map(([k, v]) => [k, Number(v.asDecimal()!.toString())]),
+        )
+      : undefined,
+  });
   const stubs = new Map<string, Stub[]>();
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
@@ -532,20 +543,7 @@ export const replay = (
           if (!object && !to) {
             throw new DeferredCaseError(`a Delivery to ${named}`);
           }
-          const args = r.fields.has('args')
-            ? valuesOf(value(r.fields.get('args')!))
-            : [];
-          const limitsValue = r.fields.has('limits')
-            ? read(r.fields.get('limits')!)
-            : null;
-          const limits = limitsValue
-            ? Object.fromEntries(
-                limitsValue
-                  .entries()
-                  .map(([k, v]) => [k, Number(v.asDecimal()!.toString())]),
-              )
-            : undefined;
-          const message = { name: r.fields.get('message')!, args, limits };
+          const message = messageOf(r);
           if (object) {
             if (r.name === 'deliver') {
               group.deliver(object, message);
@@ -563,24 +561,9 @@ export const replay = (
           }
           break;
         }
-        case 'decide-broadcast': {
-          const args = r.fields.has('args')
-            ? valuesOf(value(r.fields.get('args')!))
-            : [];
-          const limits = r.fields.has('limits')
-            ? Object.fromEntries(
-                value(r.fields.get('limits')!)
-                  .entries()
-                  .map(([k, v]) => [k, Number(v.asDecimal()!.toString())]),
-              )
-            : undefined;
-          group.decideBroadcast({
-            name: r.fields.get('message')!,
-            args,
-            limits,
-          });
+        case 'decide-broadcast':
+          group.decideBroadcast(messageOf(r));
           break;
-        }
         case 'pump':
           group.pump(parseInstant(r.fields.get('clock')!), {
             fuelSlice: r.fields.has('fuel-slice')
