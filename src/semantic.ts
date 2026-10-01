@@ -54,6 +54,7 @@ export type NameRole =
   | 'command'
   | 'message'
   | 'grant'
+  | 'receiver'
   | 'import'
   | 'library';
 export type SemanticName = {

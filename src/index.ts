@@ -7,6 +7,19 @@ export {
   type LoadDiagnostic,
 } from './errors';
 export {
+  defineCapability,
+  LimitReached,
+  shape,
+  type Call,
+  type CapabilityDef,
+  type Cost,
+  type ErrorDecl,
+  type FieldShape,
+  type Grant,
+  type Operation,
+  type Shape,
+} from './capabilities';
+export {
   codeIdentity,
   compileLibrary,
   type Library,

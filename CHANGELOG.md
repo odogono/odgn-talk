@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Capabilities and `send` in the Core: `defineCapability`, Shapes and Grants, the load checks of `ask`, `tell` and `say`, immediate and fire-and-forget Operations with their costs, `Charge`, Shape checks, `Fail` and `host error`, and `send` between Scripts with `mailbox full`; with `capabilities/` Trace Cases, the corpus runner's Stubs, the `mailbox-depth` seed case blessed, and Spec fixes for naming a Script in a `send`, Shape mismatch fields, `Fail` Data charges and `call` records, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - The stdlib Libraries in the Core: `text`, `list`, `map`, `bytes`, `json`, `date` and `units`, compiled from their normative source and always available, with errors raised in stdlib code naming the Script's call (ADR 0037); with `stdlib/` Trace Cases, and Spec fixes for a stdlib Library's version and identity and for leaving them out of the Group Fingerprint, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - Library calls in the Core: `compileLibrary`, `addLibrary` and the `add-library` Host Input, calls to imported functions and Handlers, imported Constants and defaults, Function Values made from Library code, errors and Limit Faults inside Library code, code identities that cover imports, and the `not in a library` load errors; with `libraries/` Trace Cases, and Spec fixes for adding a Library before its imports and for identities, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).

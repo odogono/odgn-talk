@@ -1,0 +1,60 @@
+# host-failures: d1 fails as declared, d2 with a catalogue code, d3 with the
+# reserved key `at`, d4 with an undeclared code, d5 with `{}`, d6 finds no
+# Stub, and d7's result is text. Its Fuel, allocation and state figures are
+# Cost Model 0's, as the TS Core blessed them.
+
+> load shop identity=8c64683ac43860819a7fc8f5eaba664709310f336fbeeed01bab7463519f7c0b
+> stub stock.level error={code: "out of stock", message: "none left", due: "Friday"}
+> stub stock.level error={code: "timeout"}
+> stub stock.level error={code: "x", at: 1}
+> stub stock.level error={code: "lost"}
+> stub stock.level error={}
+> deliver d1 to=shop message=check args=["a"]
+> deliver d2 to=shop message=check args=["b"]
+> deliver d3 to=shop message=check args=["c"]
+> deliver d4 to=shop message=check args=["d"]
+> deliver d5 to=shop message=check args=["e"]
+> deliver d6 to=shop message=check args=["f"]
+> pump clock=2026-09-30T09:00:00Z
+call shop/r1.c1 op=stock.level args=["a"] error={code: "out of stock", message: "none left", due: "Friday"}
+raise shop/r1 code="out of stock" at=shop:5 pos=7:5
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=55 alloc=591 state=787 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=55 alloc=591
+call shop/r2.c1 op=stock.level args=["b"] error={code: "timeout"}
+call-failed shop/r2.c1 op=stock.level
+raise shop/r2 code="host error" at=shop:5 pos=7:5
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=52 alloc=500 state=1238 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=52 alloc=500
+call shop/r3.c1 op=stock.level args=["c"] error={code: "x", at: 1}
+call-failed shop/r3.c1 op=stock.level
+raise shop/r3 code="host error" at=shop:5 pos=7:5
+seg shop/r3 start delivery=d3 handler=check clause=1 fuel=52 alloc=500 state=1689 end=return
+run shop/r3 outcome=completed delivery=d3 handler=check fuel=52 alloc=500
+call shop/r4.c1 op=stock.level args=["d"] error={code: "lost"}
+call-failed shop/r4.c1 op=stock.level
+raise shop/r4 code="host error" at=shop:5 pos=7:5
+seg shop/r4 start delivery=d4 handler=check clause=1 fuel=52 alloc=500 state=2140 end=return
+run shop/r4 outcome=completed delivery=d4 handler=check fuel=52 alloc=500
+call shop/r5.c1 op=stock.level args=["e"] error={}
+call-failed shop/r5.c1 op=stock.level
+raise shop/r5 code="host error" at=shop:5 pos=7:5
+seg shop/r5 start delivery=d5 handler=check clause=1 fuel=52 alloc=500 state=2591 end=return
+run shop/r5 outcome=completed delivery=d5 handler=check fuel=52 alloc=500
+call shop/r6.c1 op=stock.level args=["f"] error={}
+call-failed shop/r6.c1 op=stock.level
+raise shop/r6 code="host error" at=shop:5 pos=7:5
+seg shop/r6 start delivery=d6 handler=check clause=1 fuel=52 alloc=500 state=3042 end=return
+run shop/r6 outcome=completed delivery=d6 handler=check fuel=52 alloc=500
+pumped state=idle fuel=315
+> stub stock.level value="many"
+> deliver d7 to=shop message=check args=["g"]
+> pump clock=2026-09-30T09:00:01Z
+call shop/r7.c1 op=stock.level args=["g"] error={}
+call-failed shop/r7.c1 op=stock.level
+raise shop/r7 code="host error" at=shop:5 pos=7:5
+seg shop/r7 start delivery=d7 handler=check clause=1 fuel=52 alloc=500 state=3542 end=return
+run shop/r7 outcome=completed delivery=d7 handler=check fuel=52 alloc=500
+pumped state=idle fuel=52
+
+> vars
+vars shop errors=[{code: "out of stock", message: "none left", due: "Friday", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}]

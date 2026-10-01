@@ -1,0 +1,8 @@
+-- good.talk: the load-checks case's Script that loads.
+
+script variable stamped
+
+on go
+  ask clock to stamp "x"
+  put it into stamped
+end go

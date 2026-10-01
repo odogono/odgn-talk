@@ -358,7 +358,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `call` | `op` | `id` | the Operation, as `<granted name>.<operation>` |
 | `call` | `args` | `value` | its arguments, a list |
 | `call` | `result` | `value` | for an immediate call that succeeded, the Host's result |
-| `call` | `error` | `value` | for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error |
+| `call` | `error` | `value` | for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error or a result that broke its Shape; a call cut off by a `Charge` the Run can't cover has neither `result` nor `error` |
 | `call` | `charged` | `count` | the Fuel `Charge` drew |
 | `prop` | `object` | `value` | the object |
 | `prop` | `name` | `id` | the property |

@@ -1,0 +1,40 @@
+# argument-shapes: the first entry fits; the others fail at a list item, a
+# missing key, an extra key, a Quantity in the wrong Unit, the whole
+# argument, and a Function Value inside `any`. Only the first is recorded
+# as a call. Its Fuel, allocation and state figures are Cost Model 0's, as
+# the TS Core blessed them.
+
+> load form identity=fda40ef7a41ecad6e1aec7e26442d20f543ccc2733257be69b1781a97329504b
+> deliver d1 to=form message=submit args=[{name: "a", tags: ["x"], weight: 2 kg}]
+> deliver d2 to=form message=submit args=[{name: "a", tags: ["x", 3]}]
+> deliver d3 to=form message=submit args=[{tags: []}]
+> deliver d4 to=form message=submit args=[{name: "a", tags: [], colour: "red"}]
+> deliver d5 to=form message=submit args=[{name: "a", tags: [], weight: 2 g}]
+> deliver d6 to=form message=submit args=["a"]
+> deliver d7 to=form message=wrapped
+> pump clock=2026-09-30T09:00:00Z
+call form/r1.c1 op=forms.save args=[{name: "a", tags: ["x"], weight: 2 kg}]
+seg form/r1 start delivery=d1 handler=submit clause=1 fuel=24 alloc=0 state=752 end=return
+run form/r1 outcome=completed delivery=d1 handler=submit fuel=24 alloc=0
+raise form/r2 code="wrong kind" at=form:5 pos=7:5
+seg form/r2 start delivery=d2 handler=submit clause=1 fuel=22 alloc=792 state=1358 end=return
+run form/r2 outcome=completed delivery=d2 handler=submit fuel=22 alloc=792
+raise form/r3 code="wrong kind" at=form:5 pos=7:5
+seg form/r3 start delivery=d3 handler=submit clause=1 fuel=22 alloc=768 state=2034 end=return
+run form/r3 outcome=completed delivery=d3 handler=submit fuel=22 alloc=768
+raise form/r4 code="wrong kind" at=form:5 pos=7:5
+seg form/r4 start delivery=d4 handler=submit clause=1 fuel=22 alloc=779 state=2627 end=return
+run form/r4 outcome=completed delivery=d4 handler=submit fuel=22 alloc=779
+raise form/r5 code="wrong kind" at=form:5 pos=7:5
+seg form/r5 start delivery=d5 handler=submit clause=1 fuel=22 alloc=788 state=3224 end=return
+run form/r5 outcome=completed delivery=d5 handler=submit fuel=22 alloc=788
+raise form/r6 code="wrong kind" at=form:5 pos=7:5
+seg form/r6 start delivery=d6 handler=submit clause=1 fuel=22 alloc=693 state=3868 end=return
+run form/r6 outcome=completed delivery=d6 handler=submit fuel=22 alloc=693
+raise form/r7 code="not encodable" at=form:5 pos=7:5
+seg form/r7 start delivery=d7 handler=wrapped clause=1 fuel=63 alloc=1099 state=4438 end=return
+run form/r7 outcome=completed delivery=d7 handler=wrapped fuel=63 alloc=1099
+pumped state=idle fuel=197
+
+> vars
+vars form seen=[{code: "wrong kind", expected: "text", got: "number", value: 3, capability: "forms", operation: "save", argument: 1, path: ["tags", 2], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "text", got: "nothing", value: nothing, capability: "forms", operation: "save", argument: 1, path: ["name"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "nothing", got: "text", value: "red", capability: "forms", operation: "save", argument: 1, path: ["colour"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "kg or nothing", got: "g", value: 2 g, capability: "forms", operation: "save", argument: 1, path: ["weight"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "map", got: "text", value: "a", capability: "forms", operation: "save", argument: 1, at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "not encodable", kind: "function", path: [1, "extra", 2, "f"], at: {unit: "form", handler: "submit", line: 7, column: 5}}]

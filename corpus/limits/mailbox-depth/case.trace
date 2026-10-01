@@ -4,16 +4,18 @@
 # `mailbox full` at the `send` (sender:10, source 11:7). Nothing is sent, so
 # no `send` record is written for it. The `catch` keeps its `to`, which is
 # the receiver's name as text, since a Script isn't a value, and logs it.
-# `sink` then handles the two that arrived, in order.
+# `sink` then handles the two that arrived, in order, in its turns once
+# `sender` has none left, loaded order first.
 #
 # The conformance minimum, 10000, isn't exercised directly: every message a
 # Script sends is a `send` record, so filling a mailbox of 10000 would take
 # over 20000 lines. This case pins the rule at a depth well inside it.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them. `sink` names a Script loaded after `sender`, as a `send`'s
+# receiver may.
 
-> load sender
-> load sink
+> load sender identity=b5e7724f2b5be8fbea5cf779bf861bddaa15a84070519c9d49b326c6258d58bb
+> load sink identity=608a7fbea26abc00f07ec51ab8281b545fa926e7042afa863308ed80531df9e0
 
 > deliver d1 to=sender message=flood
 > pump clock=2026-09-28T09:00:00Z
@@ -21,14 +23,13 @@ send sender/r1 to=sink message=note args=[1]
 send sender/r1 to=sink message=note args=[2]
 raise sender/r1 code="mailbox full" at=sender:10 pos=11:7
 call sender/r1.c1 op=log.write args=["full at 3"]
-seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=141 alloc=186 state=72 end=return
-run sender/r1 outcome=completed delivery=d1 handler=flood fuel=141 alloc=186
-# `sink` has its turns once `sender` has none left, loaded order first.
-seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=12 alloc=24 state=88 end=return
-run sink/r1 outcome=completed handler=note fuel=12 alloc=24
-seg sink/r2 start from=sender/r1 handler=note clause=1 fuel=12 alloc=24 state=64 end=return
-run sink/r2 outcome=completed handler=note fuel=12 alloc=24
-pumped state=idle fuel=165
+seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=134 alloc=241 state=20 end=return
+run sender/r1 outcome=completed delivery=d1 handler=flood fuel=134 alloc=241
+seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
+run sink/r1 outcome=completed handler=note fuel=16 alloc=24
+seg sink/r2 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=64 end=return
+run sink/r2 outcome=completed handler=note fuel=16 alloc=24
+pumped state=idle fuel=166
 
 > vars
 vars sender fullTo="sink"

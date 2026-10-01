@@ -1,0 +1,8 @@
+-- meter.talk: the charge-faults case's Script.
+
+script variable runs = 0
+
+on read
+  add 1 to runs
+  ask gauge to read
+end read

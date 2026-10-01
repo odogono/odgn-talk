@@ -1,5 +1,6 @@
 import { checkConstructs } from './constructs';
 import { checkControl } from './control';
+import { checkEffects, type GrantDecls } from './effects';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
 import { parseSource, type ParseError } from './parser';
@@ -27,6 +28,8 @@ export type Diagnostic = {
   span: SourceSpan;
 };
 export type CheckOptions = {
+  /** A Script's Grants, to check its Capability calls against; none checks none. */
+  grants?: GrantDecls;
   /** Exports supplied by the Library loader; kind-only entries defer call-count checks. */
   libraries?: Readonly<Record<string, Readonly<Record<string, LibraryExport>>>>;
   /** Well-known Host Object names bound at load. */
@@ -478,6 +481,31 @@ export const checkSyntax = (
         }
         break;
       }
+      case 'Send': {
+        // A bare receiver may name a Script of the Group, even a later one.
+        const to = element.children.findIndex(
+          child => child.kind === 'token' && child.v === 'to',
+        );
+        let base = element.children[to + 1];
+        while (
+          base?.kind === 'node' &&
+          nodes(base).length === 1 &&
+          tokens(base).length === 0
+        ) {
+          base = nodes(base)[0]!;
+        }
+        const name = base?.kind === 'node' ? first.get(base) : undefined;
+        if (
+          base?.kind === 'node' &&
+          base.rule === 'Primary' &&
+          name &&
+          isName(name) &&
+          !nodes(base).length
+        ) {
+          mark(name, 'receiver');
+        }
+        break;
+      }
       case 'AskTell': {
         // A bare Grant name is checked against Grants by the later effect pass.
         const target = ns.find(node => node.rule === 'Expression');
@@ -695,11 +723,27 @@ export const checkSyntax = (
     fields.set(site.name.text, matches);
     binaryBindings.set(site.binary, fields);
   }
+  const receivers = new Map<string, Binding>();
   for (const site of sites.values()) {
     if (
       site.name.binding ||
-      !['value', 'call', 'binary size', 'command'].includes(site.name.role)
+      !['value', 'call', 'binary size', 'command', 'receiver'].includes(
+        site.name.role,
+      )
     ) {
+      continue;
+    }
+    if (site.name.role === 'receiver') {
+      // Otherwise unbound, it names a Script, looked up when sent (chapter 5).
+      site.name.binding =
+        lookup(site) ??
+        receivers.get(site.name.text) ??
+        receivers
+          .set(
+            site.name.text,
+            makeBinding(site.name.text, 'object', unit, null),
+          )
+          .get(site.name.text)!;
       continue;
     }
     if (site.name.role === 'command') {
@@ -912,6 +956,9 @@ export const checkSyntax = (
     diagnostics.push({ code, span: at.span, message: `${code}: ${at.text}` });
   checkControl(root, options.unit ?? 'script', reportAt);
   checkConstructs(root, reportAt);
+  if (options.grants) {
+    checkEffects(root, options.grants, reportAt);
+  }
   diagnostics.sort(
     (a, b) =>
       a.span.start - b.span.start ||

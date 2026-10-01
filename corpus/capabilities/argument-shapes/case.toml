@@ -1,0 +1,24 @@
+# argument-shapes: an argument that breaks its Shape raises `wrong kind`
+# before the Host function runs, and nothing is charged. Its fields describe
+# the first node that doesn't match, depth-first, with `argument` and `path`;
+# a missing key `got` "nothing" and an extra key in a closed map `expected`
+# "nothing". A Function Value under a data Shape raises `not encodable`
+# (spec chapter 6, Errors from Capabilities).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "forms"
+name = "save"
+mode = "fire-and-forget"
+args = [{ map = [{ key = "name", shape = "text" }, { key = "tags", shape = { list = "text" } }, { key = "weight", shape = { optional = { quantity = "kg" } }, optional = true }, { key = "extra", shape = "any", optional = true }] }]
+cost = { fuel = 5 }
+
+[[scripts]]
+name = "form"
+source = "form.talk"
+grants = { forms = { ops = ["save"] } }

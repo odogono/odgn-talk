@@ -724,7 +724,7 @@ is = "for an immediate call that succeeded, the Host's result"
 key = "error"
 type = "value"
 optional = true
-is = "for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error"
+is = "for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error or a result that broke its Shape; a call cut off by a `Charge` the Run can't cover has neither `result` nor `error`"
 
 [[record.key]]
 key = "charged"

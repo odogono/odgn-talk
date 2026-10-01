@@ -1,0 +1,21 @@
+# load-checks: bad gets one diagnostic for each of its six calls, and
+# good, granted only `stamp`, loads.
+
+> load bad identity=397847dcfa47ae6cd51f38a580595b2ead1758d9d06b3680f3a4a6c13b8c3cb4
+diag bad code="unknown operation" pos=4:7
+diag bad code="unknown operation" pos=5:16
+diag bad code="wrong mode" pos=6:3
+diag bad code="wrong argument count" pos=7:16
+diag bad code="wrong argument" pos=8:22
+diag bad code="unknown operation" pos=9:3
+> load good identity=21927c5e0e014e3a8e5cbf76ec7bdbb3646272ec6987c42fc6ca4bab49a54ab4
+> stub clock.stamp value="x!"
+> deliver d1 to=good message=go
+> pump clock=2026-09-30T09:00:00Z
+call good/r1.c1 op=clock.stamp args=["x"] result="x!"
+seg good/r1 start delivery=d1 handler=go clause=1 fuel=23 alloc=18 state=18 end=return
+run good/r1 outcome=completed delivery=d1 handler=go fuel=23 alloc=18
+pumped state=idle fuel=23
+
+> vars
+vars good stamped="x!"

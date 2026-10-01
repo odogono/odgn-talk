@@ -1,0 +1,26 @@
+# charge-faults: d1 is charged in full, d2 can't cover the declared cost,
+# and d3's Stub charges past the limit. Each fault rolls `runs` back. Its
+# Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
+
+> load meter identity=0077598aae70e2687aff9f5abd4f590aaf79b37e1e6ae8ad08cfa62ce747d432
+> stub gauge.read value=1
+> stub gauge.read value=2 charge=50
+> deliver d1 to=meter message=read
+> deliver d2 to=meter message=read limits={fuelPerRun: 70}
+> deliver d3 to=meter message=read
+> pump clock=2026-09-30T09:00:00Z
+call meter/r1.c1 op=gauge.read args=[] result=1
+seg meter/r1 start delivery=d1 handler=read clause=1 fuel=89 alloc=32 state=80 end=return
+run meter/r1 outcome=completed delivery=d1 handler=read fuel=89 alloc=32
+fault meter/r2 limit=fuel at=meter:10 pos=7:3 rollback=[runs]
+seg meter/r2 start delivery=d2 handler=read clause=1 fuel=14 alloc=16 state=48 end=fault
+run meter/r2 outcome=limit-fault delivery=d2 handler=read limit=fuel fuel=14 alloc=16
+call meter/r3.c1 op=gauge.read args=[]
+fault meter/r3 limit=fuel at=meter:10 pos=7:3 rollback=[runs]
+seg meter/r3 start delivery=d3 handler=read clause=1 fuel=84 alloc=16 state=16 end=fault
+run meter/r3 outcome=limit-fault delivery=d3 handler=read limit=fuel fuel=84 alloc=16
+pumped state=idle fuel=187
+
+> vars
+vars meter runs=1

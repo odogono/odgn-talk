@@ -3,6 +3,7 @@
 // that imports it. A unit's code identity covers the identities of the
 // Libraries it imports directly.
 import { checkSource, type CheckResult } from './checker';
+import type { GrantDecls } from './effects';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import { libraryExports } from './generated/syntax';
@@ -102,10 +103,12 @@ export const prepare = (
   source: string,
   available: ReadonlyMap<string, Library>,
   objects?: readonly string[],
+  grants?: GrantDecls,
 ) => {
   const checked = checkSource(source, {
     unit,
     objects,
+    grants,
     libraries: Object.fromEntries(
       [...available.values()].map(l => [l.name, compiled.get(l)!.exports]),
     ),

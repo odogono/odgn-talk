@@ -97,7 +97,8 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 - **Order:** mailboxes are FIFO, so two messages from one sender to one receiver are dispatched in the order they were sent.
 - **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too.
 - **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
-- **A disposed object:** a `send` to a disposed Host Object raises `object gone`, with `object`, before anything is sent.
+- **Naming a Script:** in a `send`'s receiver, a Name that resolves to nothing else ([chapter 4](04-expressions-and-statements.md#resolving-a-name)) names a Script of the Group by its name, even one loaded later. Whether the Group holds it is checked when the message is sent.
+- **A disposed object:** a `send` to a disposed Host Object raises `object gone`, with `object`, before anything is sent. So does a `send` to a Script the Group doesn't hold, with `object` its name as text.
 - **`send … and wait`** sends the same way, then suspends until the message is ended. The reply is left in `it`. If no reply comes, the Run raises `send failed`, with `reason`: the outcome of the receiver's Run (`errored`, `limit fault`, `cancelled`, `unhandled` or `dropped`), or `stopped`. For `errored`, `error` is the receiver's error map ([chapter 6](06-errors-and-limits.md#errors-across-scripts)).
 - **The receiver's limits:** a Run started by a Script's own `send` runs on the receiving Script's limits.
 - **Cancelling the sender** never cancels the receiver. It keeps running, and its reply is dropped. The same holds when the sender's wait runs out with `timeout`, or when the send is an abandoned Join Member.

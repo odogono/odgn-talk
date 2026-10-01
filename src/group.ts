@@ -20,8 +20,11 @@ import {
   type Limits,
   type Outcome,
   type Run,
+  type RunHost,
   type Script as Loaded,
 } from './machine';
+import type { Grant } from './capabilities';
+import type { GrantDecls } from './effects';
 import {
   identityOf,
   linksOf,
@@ -31,7 +34,8 @@ import {
   type Library,
 } from './library';
 import { idList, recordLine, traceValue } from './trace';
-import { listValues, nothing, type Value } from './values';
+import { ScriptError as OpScriptError } from './operations';
+import { listValues, nothing, text, type Value } from './values';
 
 export type GroupOptions = {
   name: string;
@@ -39,6 +43,9 @@ export type GroupOptions = {
   trace?: (line: string) => void;
 };
 export type LoadOptions = {
+  /** Its Grants, by the name the Script uses for each. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
+  grants?: Readonly<Record<string, Grant<any>>>;
   limits?: Partial<Limits>;
   name: string;
   /** Well-known object names bound at load; Host Objects follow later. */
@@ -80,7 +87,12 @@ export type PumpResult = {
 };
 export type Inspection = {
   scripts: {
-    mailbox: { delivery: string; message: Message }[];
+    /** A Delivery's id, or for a message a Script sent, the sending Run. */
+    mailbox: {
+      delivery: string | null;
+      from: string | null;
+      message: Message;
+    }[];
     name: string;
     runs: { handler: string; id: string; status: 'preempted' }[];
     vars: [string, Value][];
@@ -105,7 +117,10 @@ const overridable = new Set([
 
 type Delivery = {
   args: Value[];
-  id: string;
+  /** For a message a Script sent, the sending Run. */
+  from: string | null;
+  /** The delivery id; a message a Script sent has none. */
+  id: string | null;
   limits: LimitOverride;
   message: string;
   request: { reject: (e: Error) => void; resolve: (v: Value) => void } | null;
@@ -118,17 +133,36 @@ type Running = {
 };
 type ScriptState = {
   debt: number;
+  grants: ReadonlyMap<string, Grant<unknown>>;
   handle: Script;
   /** Deliveries queued to it that the next Pump drains. */
   incoming: number;
   limits: Limits;
   loaded: Loaded;
   name: string;
+  /** The well-known Host Object names the Host bound at load. */
+  objects: readonly string[];
   /** Messages waiting for dispatch, and a preempted Run at its head. */
   queue: (Delivery | Running)[];
   runs: number;
 };
 type QueuedInput = { apply: () => void; line: string };
+
+// Each granted Operation's mode and argument Shapes, for the load checks.
+const declarationsOf = (
+  grants: ReadonlyMap<string, Grant<unknown>>,
+): GrantDecls =>
+  Object.fromEntries(
+    [...grants].map(([name, grant]) => [
+      name,
+      Object.fromEntries(
+        [...grant.ops].map(op => {
+          const decl = grant.capability.operations.get(op)!;
+          return [op, { mode: decl.mode, args: decl.args ?? [] }];
+        }),
+      ),
+    ]),
+  );
 
 /** A handle for calls addressed to one Script. */
 export class Script {
@@ -138,7 +172,7 @@ export class Script {
   ) {}
   /** Queued. Returns the delivery id. */
   deliver(m: Message): string {
-    return this.group.queueDelivery('deliver', this.name, m, null).id;
+    return this.group.queueDelivery('deliver', this.name, m, null).id!;
   }
   /** Queued. Settles when a Pump ends the Run, or rejects with `send failed`. */
   request(m: Message): Requested {
@@ -149,7 +183,7 @@ export class Script {
     // The Host may never read a failed result.
     result.catch(() => {});
     const delivery = this.group.queueDelivery('request', this.name, m, settle);
-    return { id: delivery.id, result };
+    return { id: delivery.id!, result };
   }
 }
 
@@ -182,7 +216,15 @@ export class Group {
   load(o: LoadOptions): Script {
     this.worker();
     const objects = [...(o.objects ?? []), ...this.scripts.map(s => s.name)];
-    const p = prepare('script', o.name, o.source, this.libraries, objects);
+    const grants = new Map(Object.entries(o.grants ?? {}));
+    const p = prepare(
+      'script',
+      o.name,
+      o.source,
+      this.libraries,
+      objects,
+      declarationsOf(grants),
+    );
     this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
     const limits = { ...defaultLimits, ...o.limits };
     let loaded: Loaded;
@@ -217,6 +259,8 @@ export class Group {
     const handle = new Script(this, o.name);
     this.scripts.push({
       name: o.name,
+      objects: o.objects ?? [],
+      grants,
       handle,
       loaded,
       limits,
@@ -260,6 +304,34 @@ export class Group {
     this.libraries.set(l.name, l);
   }
 
+  // What a Run of the Script reaches outside it through (machine.ts).
+  private hostFor(s: ScriptState, run: Run): RunHost {
+    const group = this;
+    return {
+      grants: s.grants,
+      get now() {
+        return group.lastClock!;
+      },
+      isObject: name => s.objects.includes(name),
+      isScript: name => this.scripts.some(other => other.name === name),
+      send: (to, message, args) => {
+        const receiver = this.scripts.find(other => other.name === to)!;
+        const waiting = receiver.queue.filter(item => !('run' in item)).length;
+        if (waiting + receiver.incoming >= receiver.limits.mailboxDepth) {
+          throw new OpScriptError('mailbox full', [['to', text(to)]], true);
+        }
+        receiver.queue.push({
+          id: null,
+          from: run.id,
+          message,
+          args,
+          limits: {},
+          request: null,
+        });
+      },
+    };
+  }
+
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
   queueDelivery(
     record: 'deliver' | 'request',
@@ -295,6 +367,7 @@ export class Group {
     }
     const delivery: Delivery = {
       id: `d${++this.deliveries}`,
+      from: null,
       message: m.name,
       args: m.args ?? [],
       limits: m.limits ?? {},
@@ -446,6 +519,8 @@ export class Group {
       // At this Run's end, the rest of the queue is what the Script keeps.
       run.persistentState = () => this.persistentState(s, 1);
       head = { id: `${s.name}/r${++s.runs}`, delivery, run, started: false };
+      run.id = head.id;
+      run.host = this.hostFor(s, run);
       s.queue[0] = head;
       how = 'start';
     }
@@ -466,6 +541,43 @@ export class Group {
       last = run.fuel;
     }
     for (const rec of run.records.slice(records0)) {
+      if (rec.kind === 'call') {
+        this.trace(
+          recordLine(
+            'call',
+            [rec.id],
+            [
+              ['op', rec.op],
+              ['args', traceValue(listValues(rec.args))],
+              ['result', rec.result ? traceValue(rec.result) : null],
+              ['error', rec.error ? traceValue(rec.error) : null],
+              ['charged', rec.charged ? String(rec.charged) : null],
+            ],
+          ),
+        );
+        continue;
+      }
+      if (rec.kind === 'call-failed') {
+        this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
+        continue;
+      }
+      if (rec.kind === 'send') {
+        this.trace(
+          recordLine(
+            'send',
+            [running.id],
+            [
+              ['to', rec.to],
+              ['message', rec.message],
+              [
+                'args',
+                rec.args.length ? traceValue(listValues(rec.args)) : null,
+              ],
+            ],
+          ),
+        );
+        continue;
+      }
       const at = `${rec.unit}:${rec.pc}`;
       const pos = `${rec.line}:${rec.col}`;
       this.trace(
@@ -516,6 +628,7 @@ export class Group {
       how === 'start'
         ? [
             ['delivery', running.delivery.id],
+            ['from', running.delivery.from],
             ['handler', handler],
             ['clause', run.clauseNumber ? String(run.clauseNumber) : null],
           ]
@@ -588,7 +701,7 @@ export class Group {
       kind: 'run end',
       script: s.name,
       run: running.id,
-      delivery: delivery.id,
+      ...(delivery.id ? { delivery: delivery.id } : {}),
       ...(handler ? { handler } : {}),
       outcome: outcome.kind,
       ...(result ? { result } : {}),
@@ -597,7 +710,7 @@ export class Group {
       fuel: run.fuel,
       alloc: run.alloc,
     });
-    if (outcome.kind === 'unhandled') {
+    if (outcome.kind === 'unhandled' && delivery.id) {
       // A Script addressed directly has no Message Path to climb.
       this.trace(
         recordLine(
@@ -689,6 +802,7 @@ export class Group {
             : [
                 {
                   delivery: item.id,
+                  from: item.from,
                   message: { name: item.message, args: item.args },
                 },
               ],

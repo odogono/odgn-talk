@@ -55,6 +55,8 @@ import {
   wrongKind,
 } from './operations';
 import { readDisplay } from './readers';
+import { LimitReached, mismatch, type Call, type Grant } from './capabilities';
+import { ScriptError as HostScriptError } from './errors';
 import {
   bool,
   dec,
@@ -321,7 +323,7 @@ type Replacement = {
   pieces: string[];
   subject: Value;
 };
-type Item = Value | Iterator | Replacement | Reader;
+type Item = Value | Iterator | Replacement | Reader | Receiver;
 // A Function Value's code: the code unit its body is in, and the body.
 type FunctionCode = { body: Body; code: Code };
 type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
@@ -346,15 +348,58 @@ type Cleanup = { error: Value; frame: Frame; start: number };
  * and each clause or branch a guard region skipped, with its error's code or
  * the value its Guard gave that wasn't a boolean.
  */
-export type RunRecord = {
-  code?: string;
-  col: number;
-  kind: 'raise' | 'guard-skip';
-  line: number;
-  pc: number;
-  unit: string;
-  value?: Value;
+export type RunRecord =
+  | {
+      code?: string;
+      col: number;
+      kind: 'raise' | 'guard-skip';
+      line: number;
+      pc: number;
+      unit: string;
+      value?: Value;
+    }
+  | {
+      args: Value[];
+      charged: number;
+      error?: Value;
+      id: string;
+      kind: 'call';
+      op: string;
+      result?: Value;
+    }
+  | { id: string; kind: 'call-failed'; op: string }
+  | { args: Value[]; kind: 'send'; message: string; to: string };
+
+/**
+ * What a Run reaches outside its Script through, which its Group gives it:
+ * the Script's Grants, the Pump's Clock reading, and other Scripts' mailboxes.
+ */
+export type RunHost = {
+  readonly grants: ReadonlyMap<string, Grant<unknown>>;
+  /** Whether a name is a well-known Host Object the Host bound at load. */
+  isObject(name: string): boolean;
+  /** Whether a name is a Script of the Group. */
+  isScript(name: string): boolean;
+  readonly now: bigint;
+  /** Puts a message in a Script's mailbox, or throws ScriptError `mailbox full`. */
+  send(to: string, message: string, args: Value[]): void;
 };
+// A path's step: a map key, or a 1-based list index.
+const keyValue = (k: string | number): Value =>
+  typeof k === 'number' ? dec(String(k)) : text(k);
+// The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
+const reservedKeys = new Set([
+  'code',
+  'message',
+  'at',
+  'capability',
+  'operation',
+  'index',
+  'during',
+]);
+
+// A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
+type Receiver = { k: 'receiver'; name: string };
 export type Outcome =
   | { kind: 'completed'; result: Value }
   | { error: Value; kind: 'errored' }
@@ -382,6 +427,10 @@ class LimitFaultError extends Error {
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 
 export class Run {
+  /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
+  id = '';
+  host: RunHost | null = null;
+  private calls = 0;
   frames: Frame[] = [];
   fuel = 0;
   alloc = 0;
@@ -493,8 +542,18 @@ export class Run {
     }
     const frame = this.frame;
     const own = charge(key, measured);
-    const { alloc } = own;
-    const fuel = own.fuel + (frame.clauseCharge ? charge('clause').fuel : 0);
+    this.payAmount(
+      own.fuel + (frame.clauseCharge ? charge('clause').fuel : 0),
+      own.alloc,
+    );
+  }
+
+  // Charge an amount, faulting at the current instruction if it can't pay.
+  private payAmount(fuel: number, alloc: number) {
+    if (!this.charging) {
+      return;
+    }
+    const frame = this.frame;
     if (this.fuel + fuel > this.limits.fuelPerRun) {
       throw new LimitFaultError('fuelPerRun', frame.pc);
     }
@@ -583,7 +642,9 @@ export class Run {
   // the error unwinds.
   private raiseCore(error: ScriptError, ins: Instruction, key: string) {
     try {
-      this.pay(key, { ...this.m, result: undefined });
+      if (!error.uncharged) {
+        this.pay(key, { ...this.m, result: undefined });
+      }
     } catch (error_) {
       if (error_ instanceof LimitFaultError) {
         return this.fault(error_.limit, ins);
@@ -780,6 +841,178 @@ export class Run {
       code: { code, body } satisfies FunctionCode,
     };
     return functionValue(ref);
+  }
+
+  private popArgs(n: number): Value[] {
+    return this.frame.stack.slice(this.frame.stack.length - n) as Value[];
+  }
+
+  /**
+   * An immediate or fire-and-forget Capability call (chapter 9): the
+   * arguments checked against their Shapes, uncharged; the declared cost;
+   * the Host function, which may `Charge` more; then its result checked and
+   * its conversion charged. A `Fail` raises its code, and anything else the
+   * Host does wrong is `host error`.
+   */
+  private capability(
+    grantName: string,
+    opName: string,
+    args: Value[],
+    key: string,
+  ): Value {
+    const host = this.host;
+    if (!host) {
+      throw new NotImplementedError('a Capability call outside a Group');
+    }
+    const grant = host.grants.get(grantName);
+    const op = grant?.ops.has(opName)
+      ? grant.capability.operations.get(opName)
+      : undefined;
+    if (!grant || !op || (op.args ?? []).length !== args.length) {
+      // Only Library code gets here: its `needs` aren't checked at load yet.
+      throw new NotImplementedError("checking a Library's needs");
+    }
+    if (op.mode === 'suspending') {
+      throw new NotImplementedError('a suspending Operation');
+    }
+    const named: [string, Value][] = [
+      ['capability', text(grantName)],
+      ['operation', text(opName)],
+    ];
+    (op.args ?? []).forEach((shape, i) => {
+      const bad = mismatch(args[i]!, shape);
+      if (!bad) {
+        return;
+      }
+      const path = bad.path.length
+        ? [['path', listValues(bad.path.map(keyValue))] as [string, Value]]
+        : [];
+      throw bad.unencodable
+        ? new ScriptError(
+            'not encodable',
+            [
+              ['kind', text(bad.got)],
+              ['path', listValues([i + 1, ...bad.path].map(keyValue))],
+            ],
+            true,
+          )
+        : new ScriptError(
+            'wrong kind',
+            [
+              ['expected', text(bad.expected)],
+              ['got', text(bad.got)],
+              ['value', bad.value],
+              ...named,
+              ['argument', dec(String(i + 1))],
+              ...path,
+            ],
+            true,
+          );
+    });
+    const declared = { fuel: op.cost.fuel, alloc: op.cost.alloc ?? 0 };
+    this.pay(key, { declared: declared.fuel });
+    this.payAmount(0, declared.alloc);
+    const id = `${this.id}.c${++this.calls}`;
+    let charged = 0;
+    let reached = false;
+    const call: Call<unknown> = {
+      id,
+      scriptName: this.script.name,
+      binding: grant.binding,
+      now: host.now,
+      signal: new AbortController().signal,
+      charge: (fuel: number) => {
+        if (this.charging && this.fuel + fuel > this.limits.fuelPerRun) {
+          reached = true;
+          throw new LimitReached('the Run can’t cover this charge');
+        }
+        this.fuel += fuel;
+        charged += fuel;
+      },
+    };
+    const record = {
+      kind: 'call' as const,
+      id,
+      op: `${grantName}.${opName}`,
+      args,
+      charged,
+    };
+    const hostError = (error: Value) => {
+      this.records.push(
+        { ...record, charged, error },
+        { kind: 'call-failed', id, op: record.op },
+      );
+      return new ScriptError('host error', named, true);
+    };
+    let result: unknown;
+    try {
+      result =
+        op.mode === 'immediate'
+          ? op.do(call, ...args)
+          : (op.fire(call, ...args), nothing);
+    } catch (error) {
+      if (reached) {
+        // Cut off by its own `Charge`: neither a result nor a failure.
+        this.records.push({ ...record, charged });
+        throw new LimitFaultError('fuelPerRun', this.frame.pc);
+      }
+      if (!(error instanceof HostScriptError)) {
+        throw hostError(map([]));
+      }
+      const data =
+        Value.isValue(error.data) && error.data.kind === 'map'
+          ? error.data
+          : map([]);
+      const failed = map([
+        ['code', text(error.code)],
+        ...(error.message
+          ? [['message', text(error.message)] as [string, Value]]
+          : []),
+        ...data.entries(),
+      ]);
+      const declaredCodes = op.errors?.map(e => e.code);
+      if (
+        error.code in errorMessages ||
+        data.entries().some(([k]) => reservedKeys.has(k)) ||
+        (declaredCodes && !declaredCodes.includes(error.code))
+      ) {
+        throw hostError(failed);
+      }
+      this.records.push({ ...record, charged, error: failed });
+      // Its Data is converted, and charged, as a result is.
+      const conversion = charge(key, { declared: declared.fuel, result: data });
+      const before = charge(key, { declared: declared.fuel });
+      this.payAmount(
+        conversion.fuel - before.fuel,
+        conversion.alloc - before.alloc,
+      );
+      throw new ThrownError(
+        map([
+          ...failed.entries(),
+          ...named,
+          ['at', this.at(this.frame.code.unit.code[this.frame.pc]!)],
+        ]),
+      );
+    }
+    if (reached) {
+      this.records.push({ ...record, charged });
+      throw new LimitFaultError('fuelPerRun', this.frame.pc);
+    }
+    if (op.mode === 'fire-and-forget') {
+      this.records.push({ ...record, charged });
+      return nothing;
+    }
+    if (!Value.isValue(result) || (op.result && mismatch(result, op.result))) {
+      throw hostError(map([]));
+    }
+    this.records.push({ ...record, charged, result });
+    const conversion = charge(key, { declared: declared.fuel, result });
+    const before = charge(key, { declared: declared.fuel });
+    this.payAmount(
+      conversion.fuel - before.fuel,
+      conversion.alloc - before.alloc,
+    );
+    return result;
   }
 
   // ------------------------------------------------------------- instructions
@@ -1253,6 +1486,64 @@ export class Run {
           ins,
         );
         return this.replace(0, key);
+      }
+
+      // Effects
+      case 'load-object': {
+        const name = unit.objects[a as number]!;
+        if (!this.host?.isScript(name)) {
+          if (!this.host || this.host.isObject(name)) {
+            throw new NotImplementedError(`the Host Object ${name}`);
+          }
+          // A receiver that names no Script of the Group (chapter 5, Sending).
+          throw new ScriptError('object gone', [['object', text(name)]]);
+        }
+        this.pay(key);
+        frame.stack.push({ k: 'receiver', name });
+        return next();
+      }
+      case 'me':
+        // Without Host Objects, no Script owns one (chapter 5, `me`).
+        this.pay(key);
+        frame.stack.push(nothing);
+        return next();
+      case 'ask':
+      case 'tell': {
+        const n = c as number;
+        const args = this.popArgs(n);
+        const result = this.capability(a as string, b as string, args, key);
+        frame.stack.length -= n;
+        if (ins.op === 'ask') {
+          frame.stack.push(result);
+        }
+        return next();
+      }
+      case 'send': {
+        const n = b as number;
+        const to = frame.stack.at(-1);
+        if (isValue(to) || to?.k !== 'receiver') {
+          throw new NotImplementedError('a send to a Host Object');
+        }
+        const args = this.frame.stack.slice(
+          this.frame.stack.length - n - 1,
+          -1,
+        ) as Value[];
+        const size = partSize(
+          'message',
+          0,
+          args.reduce((sum, v) => sum + sizeOf(v), 0),
+        );
+        m.inputSize = size;
+        this.pay(key);
+        this.host!.send(to.name, a as string, args);
+        this.records.push({
+          kind: 'send',
+          to: to.name,
+          message: a as string,
+          args,
+        });
+        frame.stack.length -= n + 1;
+        return next();
       }
 
       // Calls

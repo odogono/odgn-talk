@@ -1,0 +1,11 @@
+-- shop.talk: the host-failures case's Script.
+
+script variable errors = []
+
+on check sku
+  try
+    ask stock to level sku
+  catch e
+    put e after errors
+  end try
+end check

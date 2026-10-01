@@ -109,6 +109,8 @@ export class ScriptError extends Error {
   constructor(
     readonly code: string,
     readonly fields: readonly (readonly [string, Value])[] = [],
+    /** Raised after, or instead of, the instruction's charge. */
+    readonly uncharged = false,
   ) {
     super(code);
     this.name = 'ScriptError';

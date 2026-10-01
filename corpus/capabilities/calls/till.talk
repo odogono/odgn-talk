@@ -1,0 +1,14 @@
+-- till.talk: the calls case's Script.
+
+script variable rate
+script variable price
+script variable logged = 0
+
+on ring sku
+  ask fx to rate "GBP", "EUR"
+  put it into rate
+  ask catalogue to price sku
+  put it * rate into price
+  tell log to write "rang " & sku
+  add 1 to logged
+end ring
