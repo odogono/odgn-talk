@@ -25,7 +25,8 @@ export type FunctionContract = {
   total: number;
 };
 export type LibraryExport =
-  ExportKind | { contract?: FunctionContract; kind: ExportKind };
+  | ExportKind
+  | { contract?: FunctionContract; kind: ExportKind; maySuspend?: boolean };
 export type Binding = {
   contract?: FunctionContract;
   id: number;
@@ -81,6 +82,8 @@ export type SemanticNode = {
 };
 export type SemanticElement = SemanticNode | SemanticName | SemanticToken;
 export type SemanticTree = {
+  /** The unit's Handlers that may suspend (chapter 5, Suspension Points). */
+  maySuspend?: readonly string[];
   root: SemanticNode;
   scopes: readonly SemanticScope[];
 };

@@ -1,0 +1,21 @@
+# nested-waits: a `wait` inside a Handler called with `and wait`, or a
+# Lambda called with `and wait`, suspends the whole Run, and the Run resumes
+# in that frame. A suspended Run's frames count toward Persistent State, an
+# iterator's list with them, and a Script past its cap faults at the
+# suspension. `wait` takes only an exact duration (spec chapter 5, Waiting;
+# chapter 6, Limits).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "napper"
+source = "napper.talk"
+
+[[scripts]]
+name = "hoarder"
+source = "hoarder.talk"
+limits = { persistentState = 200 }

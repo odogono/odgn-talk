@@ -7,7 +7,7 @@ on order id
   put it into price
   refresh
   refresh id and wait
-  restock id
+  tally id
   restock id and wait
   tell log to write "order " & id
   say price
@@ -54,3 +54,7 @@ on beforeShip parcel, deciding
   if parcel is empty then veto "nothing to ship"
   pass beforeShip
 end beforeShip
+
+on tally id
+  return id
+end tally

@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Suspension in the Core: `wait`, suspending Operations with `answer`, `fail`, late costs and `maxPending`, `send … and wait` with its reply, `send failed` and `MaxWait`, and `and wait` calls to Handlers and local Function Values, with timers, `abandon` and `late-answer` records, Persistent State counting suspended Runs, and the `missing and wait`, `needless and wait` and `can't suspend here` load checks; with `suspension/` Trace Cases, six seed cases blessed, and Spec fixes for `wait`'s `wrong kind`, late-answer charges, `abandon`'s order and an unhandled Run's clause, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - Capabilities and `send` in the Core: `defineCapability`, Shapes and Grants, the load checks of `ask`, `tell` and `say`, immediate and fire-and-forget Operations with their costs, `Charge`, Shape checks, `Fail` and `host error`, and `send` between Scripts with `mailbox full`; with `capabilities/` Trace Cases, the corpus runner's Stubs, the `mailbox-depth` seed case blessed, and Spec fixes for naming a Script in a `send`, Shape mismatch fields, `Fail` Data charges and `call` records, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - The stdlib Libraries in the Core: `text`, `list`, `map`, `bytes`, `json`, `date` and `units`, compiled from their normative source and always available, with errors raised in stdlib code naming the Script's call (ADR 0037); with `stdlib/` Trace Cases, and Spec fixes for a stdlib Library's version and identity and for leaving them out of the Group Fingerprint, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).

@@ -124,7 +124,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 ### `wait` for a time
 
-- **`wait d`** suspends the Run for the exact duration `d`. Anything that isn't an exact duration Quantity raises `wrong kind`.
+- **`wait d`** suspends the Run for the exact duration `d`. Anything that isn't an exact duration Quantity raises `wrong kind`: a Quantity of another Unit Kind, or a calendar duration, with `expected` `"s"` and `got` its Unit, and anything else with `expected` `"quantity"`.
 - **Its deadline** is the Clock reading of the Pump in which the `wait` ran, plus `d`. It fires at the first later Pump whose Clock reading is at or past the deadline, so it never resumes in the Pump that started it, even for `wait 0 s`.
 - **In Libraries:** Library code may use `wait d` ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 

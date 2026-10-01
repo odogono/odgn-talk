@@ -1,0 +1,26 @@
+# answers: a suspending Operation's answer resumes the Run, charged its
+# conversion and any late cost then. A `Fail` raises as an immediate call's
+# does, and an answer that breaks the result Shape is `host error`. Past its
+# `maxPending` the call is abandoned and raises `timeout`, and an answer that
+# comes after is noted and ignored (spec chapter 9, Capabilities).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 40 }
+maxPending = 3000
+errors = [{ code = "no feed", fields = [{ key = "feed", shape = "text" }] }]
+
+[[scripts]]
+name = "fetcher"
+source = "fetcher.talk"
+grants = { feed = { ops = ["fetch"] } }

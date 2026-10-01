@@ -2144,7 +2144,13 @@ export const exportsOf = (
         },
       };
     } else {
-      out[decl.k === 'handler' ? decl.name : decl.name.text] = { kind: decl.k };
+      out[decl.k === 'handler' ? decl.name : decl.name.text] =
+        decl.k === 'handler'
+          ? {
+              kind: decl.k,
+              maySuspend: tree.maySuspend?.includes(decl.name) ?? false,
+            }
+          : { kind: decl.k };
     }
   }
   return out;

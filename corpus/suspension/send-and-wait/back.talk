@@ -1,0 +1,14 @@
+-- back.talk: the send-and-wait case's receiver.
+
+on quote "ok"
+  return "fine"
+end quote
+
+on quote "slow"
+  wait 5 s
+  return "late"
+end quote
+
+on quote "bad"
+  throw {code: "no price"}
+end quote

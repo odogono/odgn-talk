@@ -6,15 +6,15 @@
 # call is abandoned, and its answer, when it comes, is ignored with a note.
 #
 # `timeout` is raised at the `ask-wait` (waiter:3, source 6:5) and caught.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load waiter
+> load waiter identity=8d3b57e377c5361183dcaa8b5969fc22d9da2f392e8ec9927f0f8ea9570c7db8
 
 > deliver d1 to=waiter message=fetch args=["k1"]
 > pump clock=2026-09-28T09:00:00Z
 call waiter/r1.c1 op=slow.fetch args=["k1"]
-seg waiter/r1 start delivery=d1 handler=fetch clause=1 fuel=15 alloc=0 state=312 end=ask-wait
+seg waiter/r1 start delivery=d1 handler=fetch clause=1 fuel=15 alloc=0 state=298 end=ask-wait
 pumped state=idle fuel=15 next=2026-10-23T05:31:23.647Z
 
 # 1 ms before the deadline: nothing fires.
@@ -27,9 +27,9 @@ pumped state=idle fuel=0 next=2026-10-23T05:31:23.647Z
 raise waiter/r1 code="timeout" at=waiter:3 pos=6:5
 abandon waiter/r1.c1
 call waiter/r1.c2 op=log.write args=["gave up after 2147483647 ms"]
-seg waiter/r1 resume fuel=42 alloc=147 state=0 end=return
-run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=57 alloc=147
-pumped state=idle fuel=42
+seg waiter/r1 resume fuel=32 alloc=43 state=0 end=return
+run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=47 alloc=43
+pumped state=idle fuel=32
 
 # The answer arrives after the call was abandoned.
 > answer waiter/r1.c1 value="late"

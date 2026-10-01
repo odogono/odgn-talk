@@ -594,7 +594,7 @@ is = "for a start, the Handler dispatched to"
 key = "clause"
 type = "count"
 optional = true
-is = "for a start, the clause that matched"
+is = "for a start, the clause that matched; an unhandled Run has none"
 
 [[record.key]]
 key = "fn"
@@ -674,7 +674,7 @@ is = "for a start, the Handler dispatched to"
 key = "clause"
 type = "count"
 optional = true
-is = "for a start, the clause that matched"
+is = "for a start, the clause that matched; an unhandled Run has none"
 
 [[record.key]]
 key = "fn"
@@ -855,7 +855,7 @@ is = "the value that wasn't a boolean"
 name = "abandon"
 input = false
 ids = ["call"]
-is = "a call or Join Member abandoned"
+is = "a call or Join Member abandoned; for a timeout, after the `raise` it causes"
 
 [[record]]
 name = "fault"

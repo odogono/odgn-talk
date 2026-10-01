@@ -544,6 +544,22 @@ const durationNs = (q: QuantityRef): bigint => {
   );
   return (ns.negative ? -1n : 1n) * ns.coefficient;
 };
+/** `wait d`'s duration in nanoseconds; anything but an exact duration is `wrong kind`. */
+export const waitNs = (v: Value): bigint => {
+  const q = v.asQuantityRef();
+  if (!q) {
+    throw wrongKind('quantity', v);
+  }
+  // A Quantity of another Unit Kind, or a calendar duration, expects `s`.
+  if (!sameDimension(q.unit, SECONDS)) {
+    throw new ScriptError('wrong kind', [
+      ['expected', text('s')],
+      ['got', text(unitText(q.unit))],
+      ['value', v],
+    ]);
+  }
+  return durationNs(q);
+};
 // A difference in `s`, with no more decimal places than it needs, at most nine.
 const secondsOf = (ns: bigint): Value => {
   let d: Dec = {

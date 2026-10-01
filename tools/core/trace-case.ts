@@ -11,6 +11,7 @@ import {
   defineCapability,
   shape,
   ScriptError,
+  type Call,
   type FieldShape,
   type Grant,
   type Operation,
@@ -253,6 +254,7 @@ const takeStub = (
 const capabilitiesOf = (
   setup: Setup,
   stubs: Map<string, Stub[]>,
+  calls: Map<string, Call<unknown>>,
 ): Map<string, ReturnType<typeof defineCapability>> => {
   const byCapability = new Map<string, OperationSpec[]>();
   for (const op of setup.operations ?? []) {
@@ -265,9 +267,6 @@ const capabilitiesOf = (
   for (const [name, ops] of byCapability) {
     const operations: Record<string, Operation<unknown>> = {};
     for (const op of ops) {
-      if (op.mode === 'suspending') {
-        throw new DeferredCaseError('a suspending Operation');
-      }
       const key = `${name}.${op.name}`;
       const base = {
         args: (op.args ?? []).map(shapeOf),
@@ -290,17 +289,33 @@ const capabilitiesOf = (
           : {}),
       };
       operations[op.name] =
-        op.mode === 'immediate'
+        op.mode === 'suspending'
           ? {
               ...base,
-              mode: 'immediate',
-              do: call => takeStub(stubs, key, call, true),
+              mode: 'suspending',
+              ...(op.maxPending === undefined
+                ? {}
+                : { maxPendingMs: op.maxPending }),
+              // Only a Stub's charge; `answer` and `fail` lines settle it.
+              start: call => {
+                const stub = stubs.get(key)?.shift();
+                if (stub?.charge) {
+                  call.charge(stub.charge);
+                }
+                calls.set(call.id, call);
+              },
             }
-          : {
-              ...base,
-              mode: 'fire-and-forget',
-              fire: call => void takeStub(stubs, key, call, false),
-            };
+          : op.mode === 'immediate'
+            ? {
+                ...base,
+                mode: 'immediate',
+                do: call => takeStub(stubs, key, call, true),
+              }
+            : {
+                ...base,
+                mode: 'fire-and-forget',
+                fire: call => void takeStub(stubs, key, call, false),
+              };
     }
     out.set(name, defineCapability(name, operations));
   }
@@ -361,7 +376,9 @@ export const replay = (
   const group = newGroup({ name: 'case', trace: line => trace.push(line) });
   const compiled = compileLibraries(dir, setup);
   const stubs = new Map<string, Stub[]>();
-  const capabilities = capabilitiesOf(setup, stubs);
+  // Each suspending call in flight, which `answer` and `fail` lines settle.
+  const calls = new Map<string, Call<unknown>>();
+  const capabilities = capabilitiesOf(setup, stubs, calls);
   for (const line of lines) {
     if (!line.startsWith('> ')) {
       continue;
@@ -447,6 +464,35 @@ export const replay = (
         case 'vars':
           group.inspect();
           break;
+        case 'answer':
+        case 'fail': {
+          const call = calls.get(r.ids[0] ?? '');
+          if (!call) {
+            throw new DeferredCaseError('settling a call after a restore');
+          }
+          if (r.name === 'answer') {
+            const fuel = Number(r.fields.get('fuel') ?? 0);
+            call.answer(
+              read(r.fields.get('value')!),
+              fuel ? { fuel } : undefined,
+            );
+          } else {
+            const error = read(r.fields.get('error')!);
+            const entries = error.entries();
+            call.fail(
+              entries.length
+                ? new ScriptError(
+                    error.get('code').asText() ?? '',
+                    error.get('message').asText() ?? '',
+                    map(
+                      entries.filter(([k]) => k !== 'code' && k !== 'message'),
+                    ),
+                  )
+                : (new Error('not a Script error') as ScriptError),
+            );
+          }
+          break;
+        }
         case 'stub': {
           // The runner's, written where the case has it; the Core never sees it.
           const op = r.ids[0]!;

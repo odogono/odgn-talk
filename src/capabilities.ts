@@ -2,7 +2,7 @@
 // per process, and Grants that bind them to a Script. The Core checks each
 // argument against its Shape before the Host function runs, and each result
 // after (chapter 6, Errors from Capabilities).
-import { HostError } from './errors';
+import { HostError, type ScriptError as HostScriptError } from './errors';
 import { parseUnit, unitEntry, unitText } from './units';
 import { nothing, type Value } from './values';
 
@@ -240,9 +240,12 @@ type OpBase = {
 };
 /** What the Core gives a Host function at each call (chapter 9, The call). */
 export type Call<B> = {
+  /** Queued, for a suspending call; ignored once the call isn't pending. */
+  answer(v: Value, lateCost?: { fuel: number }): void;
   readonly binding: B;
   /** Draws more Fuel, before the work. Throws LimitReached. */
   charge(fuel: number): void;
+  fail(e: HostScriptError): void;
   readonly id: string;
   readonly now: bigint;
   readonly scriptName: string;

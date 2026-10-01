@@ -5,10 +5,10 @@
 # which isn't a Clock going backwards.
 #
 # Fuel (napper.talk): dispatch 4, const 1, wait 10; then const 1, return 2.
-# Allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# Its allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
 
-> load napper
+> load napper identity=752eb132778e19c7d1bf19e6e4b833698cf8777017c86e65e8c874deac78252b
 
 > deliver d1 to=napper message=blink
 > pump clock=2026-09-28T09:00:00Z

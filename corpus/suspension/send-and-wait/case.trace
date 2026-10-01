@@ -1,0 +1,51 @@
+# send-and-wait: "ok" replies in the same Pump; "bad" errors and "other"
+# finds no clause, each `send failed`; "slow" outlives front's 2 s MaxWait.
+# Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
+# blessed them.
+
+> load front identity=4ad82268be3003f3a7fb7565a3db66a182046a618166057a12793d561a24419e
+> load back identity=6d05f1138609088e315cbe1215494ce9cdf783ec5ab9cbfbd441dd877860099c
+> deliver d1 to=front message=query args=["ok"]
+> deliver d2 to=front message=query args=["bad"]
+> deliver d3 to=front message=query args=["other"]
+> deliver d4 to=front message=query args=["slow"]
+> pump clock=2026-09-30T09:00:00Z
+send front/r1.c1 to=back message=quote args=["ok"] wait=yes
+seg front/r1 start delivery=d1 handler=query clause=1 fuel=28 alloc=50 state=470 end=send-wait
+seg back/r1 start from=front/r1.c1 handler=quote clause=1 fuel=9 alloc=0 state=0 end=return
+run back/r1 outcome=completed handler=quote value="fine" fuel=9 alloc=0
+send front/r2.c1 to=back message=quote args=["bad"] wait=yes
+seg front/r2 start delivery=d2 handler=query clause=1 fuel=28 alloc=51 state=420 end=send-wait
+raise back/r2 code="no price" at=back:22 pos=13:3
+seg back/r2 start from=front/r2.c1 handler=quote clause=3 fuel=41 alloc=116 state=0 end=error
+run back/r2 outcome=errored handler=quote error={code: "no price", at: {unit: "back", handler: "quote", line: 13, column: 3}} fuel=41 alloc=116
+send front/r3.c1 to=back message=quote args=["other"] wait=yes
+seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=369 end=send-wait
+seg back/r3 start from=front/r3.c1 handler=quote fuel=24 alloc=0 state=0 end=unhandled
+run back/r3 outcome=unhandled handler=quote fuel=24 alloc=0
+send front/r4.c1 to=back message=quote args=["slow"] wait=yes
+seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=316 end=send-wait
+seg back/r4 start from=front/r4.c1 handler=quote clause=2 fuel=25 alloc=0 state=204 end=wait until=2026-09-30T09:00:05Z
+seg front/r1 resume fuel=14 alloc=28 state=344 end=return
+run front/r1 outcome=completed delivery=d1 handler=query fuel=42 alloc=78
+raise front/r2 code="send failed" at=front:6 pos=7:5
+seg front/r2 resume fuel=17 alloc=791 state=1135 end=return
+run front/r2 outcome=completed delivery=d2 handler=query fuel=45 alloc=842
+raise front/r3 code="send failed" at=front:6 pos=7:5
+seg front/r3 resume fuel=17 alloc=466 state=1601 end=return
+run front/r3 outcome=completed delivery=d3 handler=query fuel=45 alloc=519
+pumped state=idle fuel=259 next=2026-09-30T09:00:02Z
+> pump clock=2026-09-30T09:00:02Z
+raise front/r4 code="timeout" at=front:6 pos=7:5
+abandon front/r4.c1
+seg front/r4 resume fuel=17 alloc=437 state=1738 end=return
+run front/r4 outcome=completed delivery=d4 handler=query fuel=45 alloc=489
+pumped state=idle fuel=17 next=2026-09-30T09:00:05Z
+> pump clock=2026-09-30T09:00:05Z
+seg back/r4 resume fuel=3 alloc=0 state=0 end=return
+run back/r4 outcome=completed handler=quote value="late" fuel=28 alloc=0
+pumped state=idle fuel=3
+
+> vars
+vars front replies=["fine", {code: "send failed", reason: "errored", error: {code: "no price", at: {unit: "back", handler: "quote", line: 13, column: 3}}, at: {unit: "front", handler: "query", line: 7, column: 5}}, {code: "send failed", reason: "unhandled", at: {unit: "front", handler: "query", line: 7, column: 5}}, {code: "timeout", after: 2000 ms, at: {unit: "front", handler: "query", line: 7, column: 5}}]
+vars back

@@ -1,0 +1,12 @@
+-- fetcher.talk: the answers case's Script.
+
+script variable got = []
+
+on fetch key
+  try
+    ask feed to fetch key and wait
+    put it after got
+  catch e
+    put e after got
+  end try
+end fetch

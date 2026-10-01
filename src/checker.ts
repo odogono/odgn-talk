@@ -1,6 +1,7 @@
 import { checkConstructs } from './constructs';
 import { checkControl } from './control';
 import { checkEffects, type GrantDecls } from './effects';
+import { checkSuspension } from './suspension';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
 import { parseSource, type ParseError } from './parser';
@@ -959,6 +960,15 @@ export const checkSyntax = (
   if (options.grants) {
     checkEffects(root, options.grants, reportAt);
   }
+  const may = checkSuspension(
+    root,
+    binding => {
+      const from = binding.importedFrom!;
+      const exp = options.libraries?.[from.library]?.[from.name];
+      return typeof exp === 'object' && exp.maySuspend === true;
+    },
+    reportAt,
+  );
   diagnostics.sort(
     (a, b) =>
       a.span.start - b.span.start ||
@@ -968,6 +978,7 @@ export const checkSyntax = (
     ok: diagnostics.length === 0,
     diagnostics,
     tree: {
+      maySuspend: [...may].filter(([, m]) => m).map(([name]) => name),
       root,
       scopes: scopes.map(scope => ({
         id: scope.id,

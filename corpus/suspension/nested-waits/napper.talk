@@ -1,0 +1,35 @@
+-- napper.talk: the nested-waits case's Script.
+
+script variable log = []
+
+on go
+  doze 1 and wait
+  put it after log
+  put given n: twice(n) into f
+  f(2) and wait
+  put it after log
+end go
+
+on doze n
+  wait n * 1 s
+  return n * 10
+end doze
+
+function twice n
+  return n * 2
+end twice
+
+on each
+  repeat for each n in [1, 2]
+    wait 1 s
+    put n after log
+  end repeat
+end each
+
+on month
+  try
+    wait 1 month
+  catch e
+    put e after log
+  end try
+end month
