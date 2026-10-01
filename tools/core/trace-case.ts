@@ -533,7 +533,14 @@ export const replay = (
   const order: number[] = [];
   let refused: number[] = [];
   for (const [index, line] of lines.entries()) {
-    const next = lines.slice(index + 1).find(l => l && !l.startsWith('#'));
+    let following = index + 1;
+    while (
+      following < lines.length &&
+      (!lines[following] || lines[following]!.startsWith('#'))
+    ) {
+      following++;
+    }
+    const next = lines[following];
     if (line.startsWith('> ') && next === 'refused code="mailbox full"') {
       refused.push(index);
       continue;

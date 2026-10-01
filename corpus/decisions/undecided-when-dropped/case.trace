@@ -14,10 +14,10 @@
 call board/r1.c1 op=replay.record args=[{from: "a2", to: "a3"}]
 seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=74 alloc=0 state=508 end=ask-wait
 decided d1 verdict=allowed
-seg board/r2 start delivery=d2 handler=beforeMove clause=1 fuel=0 alloc=0 state=370 end=dropped
-run board/r2 outcome=dropped delivery=d2 handler=beforeMove fuel=0 alloc=0
+seg board/r2 start delivery=d2 handler=beforeMove clause=1 fuel=4 alloc=0 state=370 end=dropped
+run board/r2 outcome=dropped delivery=d2 handler=beforeMove fuel=4 alloc=0
 decided d2 verdict=undecided undecided=[{script: "board", run: "board/r2", outcome: "dropped"}]
-pumped state=idle fuel=74 next=2026-09-30T10:00:30Z
+pumped state=idle fuel=78 next=2026-09-30T10:00:30Z
 
 > answer board/r1.c1 value=1
 > pump clock=2026-09-30T10:00:01Z

@@ -1056,27 +1056,18 @@ export class Group {
 
   /** Queued. Takes recipients at drain, then waits for every Verdict. */
   decideBroadcast(m: Message, o?: CancellationOptions): Deciding {
-    for (const [name, value] of Object.entries(m.limits ?? {})) {
-      if (!validOverride(name, value, defaultLimits[name as LimitName])) {
-        this.trace(recordLine('decide-broadcast', [], messageFields(m), true));
-        this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
-        throw new HostError(
-          'invalid value',
-          `A Broadcast override may only tighten ${name}`,
-        );
-      }
-    }
     let resolve!: Decision['resolve'];
     const decided = new Promise<Decided>(settle => {
       resolve = settle;
     });
     const decision: Decision = {
-      id: `b${++this.broadcasts}`,
+      id: `b${this.broadcasts + 1}`,
       broadcast: true,
       ballots: [],
       resolve,
     };
     this.queueBroadcast(m, decision.id, decision);
+    this.broadcasts++;
     if (o?.signal) {
       const cancel = () => {
         if (!decision.settled) {
