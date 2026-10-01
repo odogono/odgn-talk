@@ -1,0 +1,68 @@
+# joins: d1 joins four members, answered out of order; d2 starts none; d3's
+# second fetch fails, so its first, still pending, is abandoned and its late
+# answer noted; d4's only member runs past its 5 s; and d5's body throws
+# after starting one. Its Fuel, allocation and state figures are Cost Model
+# 0's, as the TS Core blessed them.
+
+> load board identity=5262508e2af316e9e1e1b35b2ddac89c86a32a0c466d7b53022ef83d4532b227
+> load shop identity=c4ee5fb1c5c94c888e6aa5a91f9b483b880a649bf348ece20c28735f2f5188d5
+> deliver d1 to=board message=gather args=[["a", "b"]]
+> deliver d2 to=board message=gather args=[[]]
+> deliver d3 to=board message=gather args=[["c", "d"]]
+> deliver d4 to=board message=gather args=[["e"]]
+> deliver d5 to=board message=early
+> pump clock=2026-09-30T09:00:00Z
+call board/r1.c1 op=feed.fetch args=["a"]
+send board/r1.c2 to=shop message=price args=["a"] wait=join
+call board/r1.c3 op=feed.fetch args=["b"]
+send board/r1.c4 to=shop message=price args=["b"] wait=join
+seg board/r1 start delivery=d1 handler=gather clause=1 fuel=148 alloc=122 state=782 end=join-end
+seg shop/r1 start from=board/r1.c2 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
+run shop/r1 outcome=completed handler=price value="a!" fuel=12 alloc=18
+seg board/r2 start delivery=d2 handler=gather clause=1 fuel=44 alloc=64 state=728 end=return
+run board/r2 outcome=completed delivery=d2 handler=gather fuel=44 alloc=64
+seg shop/r2 start from=board/r1.c4 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
+run shop/r2 outcome=completed handler=price value="b!" fuel=12 alloc=18
+call board/r3.c1 op=feed.fetch args=["c"]
+send board/r3.c2 to=shop message=price args=["c"] wait=join
+call board/r3.c3 op=feed.fetch args=["d"]
+send board/r3.c4 to=shop message=price args=["d"] wait=join
+seg board/r3 start delivery=d3 handler=gather clause=1 fuel=148 alloc=122 state=1115 end=join-end
+seg shop/r3 start from=board/r3.c2 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
+run shop/r3 outcome=completed handler=price value="c!" fuel=12 alloc=18
+call board/r4.c1 op=feed.fetch args=["e"]
+send board/r4.c2 to=shop message=price args=["e"] wait=join
+seg board/r4 start delivery=d4 handler=gather clause=1 fuel=89 alloc=73 state=1406 end=join-end
+seg shop/r4 start from=board/r3.c4 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
+run shop/r4 outcome=completed handler=price value="d!" fuel=12 alloc=18
+call board/r5.c1 op=feed.fetch args=["x"]
+raise board/r5 code="stop" at=board:46 pos=23:7
+abandon board/r5.c1
+seg board/r5 start delivery=d5 handler=early clause=1 fuel=80 alloc=140 state=1372 end=return
+run board/r5 outcome=completed delivery=d5 handler=early fuel=80 alloc=140
+seg shop/r5 start from=board/r4.c2 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
+run shop/r5 outcome=completed handler=price value="e!" fuel=12 alloc=18
+pumped state=idle fuel=569 next=2026-09-30T09:00:05Z
+> answer board/r1.c3 value=2
+> answer board/r1.c1 value=1
+> fail board/r3.c3 error={code: "no feed"}
+> pump clock=2026-09-30T09:00:01Z
+seg board/r1 resume fuel=16 alloc=272 state=556 end=return
+run board/r1 outcome=completed delivery=d1 handler=gather fuel=164 alloc=394
+raise board/r3 code="no feed" at=board:16 pos=7:5
+abandon board/r3.c1
+seg board/r3 resume fuel=18 alloc=478 state=1018 end=return
+run board/r3 outcome=completed delivery=d3 handler=gather fuel=166 alloc=600
+pumped state=idle fuel=34 next=2026-09-30T09:00:05Z
+> answer board/r3.c1 value=3
+> pump clock=2026-09-30T09:00:05Z
+note board/r3.c1 kind=late-answer
+raise board/r4 code="timeout" at=board:16 pos=7:5
+abandon board/r4.c1
+seg board/r4 resume fuel=17 alloc=591 state=1245 end=return
+run board/r4 outcome=completed delivery=d4 handler=gather fuel=106 alloc=664
+pumped state=idle fuel=17
+
+> vars
+vars board results=[[], "stop", [1, "a!", 2, "b!"], {code: "no feed", capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 7, column: 5}, index: 3}, {code: "timeout", after: 5000 ms, capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 7, column: 5}, index: 1}]
+vars shop

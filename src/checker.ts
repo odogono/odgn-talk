@@ -482,11 +482,18 @@ export const checkSyntax = (
         }
         break;
       }
-      case 'Send': {
-        // A bare receiver may name a Script of the Group, even a later one.
+      case 'Send':
+      case 'Event': {
+        // A bare receiver, or a `wait for`'s `from`, may name a Script of
+        // the Group, even a later one.
         const to = element.children.findIndex(
-          child => child.kind === 'token' && child.v === 'to',
+          child =>
+            child.kind === 'token' &&
+            child.v === (element.rule === 'Send' ? 'to' : 'from'),
         );
+        if (to < 0) {
+          break;
+        }
         let base = element.children[to + 1];
         while (
           base?.kind === 'node' &&

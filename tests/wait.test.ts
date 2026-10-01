@@ -85,6 +85,48 @@ describe('Suspension Points at load', () => {
   });
 });
 
+describe('Joins at load', () => {
+  const feed = defineCapability('feed', {
+    get: {
+      mode: 'suspending',
+      result: shape.text,
+      cost: { fuel: 0 },
+      start: () => {},
+    },
+  });
+  const codes = (body: string) => {
+    try {
+      newGroup({ name: 'g' }).load({
+        name: 's',
+        source: `${napper}on go\n  wait for all\n${body}\n  end wait\nend go`,
+        grants: { feed: feed.grant('all', undefined) },
+      });
+      return [];
+    } catch (error) {
+      return (error as LoadError).diagnostics.map(
+        d => `${d.code} ${d.line}:${d.col}`,
+      );
+    }
+  };
+  test.each([
+    ['    ask feed to get and wait', []],
+    ['    ask feed to get and wait\n    wait 1 s', ['not in a join 7:5']],
+    ['    ask feed to get and wait\n    nap and wait', ['not in a join 7:5']],
+    ['    ask feed to get and wait\n    return 1', ['not in a join 7:5']],
+    [
+      '    try\n      ask feed to get and wait\n    catch e\n    end try',
+      ['not in a join 7:7'],
+    ],
+    [
+      '    repeat 2 times\n      ask feed to get and wait\n      exit repeat\n    end repeat',
+      [],
+    ],
+    ['    put 1 into x', ['empty join 5:3']],
+  ])('%s', (body, expected) => {
+    expect(codes(body)).toEqual(expected);
+  });
+});
+
 describe('suspending Operations from the Host', () => {
   test('`start` gets a Call it answers later, and `run` a Promise', async () => {
     const started: Call<unknown>[] = [];

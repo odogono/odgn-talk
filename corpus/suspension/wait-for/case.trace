@@ -1,0 +1,45 @@
+# wait-for: d1 waits for order 7 and d2 for a big payment or a refund. bank's
+# first payment is order 8, which matches neither; its second, order 7 for
+# 120, ends d1's wait but not d2's, whose Guard needs over 100 in `order`.
+# d3 waits for order 9, which never comes, and times out; d2's `after`
+# fires at 5 s. Its Fuel, allocation and state figures are Cost Model 0's,
+# as the TS Core blessed them.
+
+> load till identity=0703126446f2d80a50e77ee5792339de6f59ee56d5277d333b36a4b0a3952243
+> load bank identity=407df999a2982c74819d53a655b2334a3c7d31fd9b0a1bffc5cf97e76440c29d
+> deliver d1 to=till message=await args=[7]
+> deliver d2 to=till message=either
+> pump clock=2026-09-30T09:00:00Z
+seg till/r1 start delivery=d1 handler=await clause=1 fuel=17 alloc=0 state=296 end=wait-for until=2026-09-30T09:00:30Z
+seg till/r2 start delivery=d2 handler=either clause=1 fuel=15 alloc=0 state=504 end=wait-for-any until=2026-09-30T09:00:05Z
+pumped state=idle fuel=32 next=2026-09-30T09:00:05Z
+> deliver d3 to=bank message=settle args=[8, 50]
+> deliver d4 to=bank message=settle args=[7, 120]
+> deliver d5 to=till message=await args=[9]
+> pump clock=2026-09-30T09:00:01Z
+seg till/r3 start delivery=d5 handler=await clause=1 fuel=17 alloc=0 state=752 end=wait-for until=2026-09-30T09:00:31Z
+send bank/r1 to=till message=paid args=[{order: 8, amount: 50}]
+seg bank/r1 start delivery=d3 handler=settle clause=1 fuel=41 alloc=246 state=64 end=return
+run bank/r1 outcome=completed delivery=d3 handler=settle fuel=41 alloc=246
+seg till/r4 start from=bank/r1 handler=paid clause=1 fuel=24 alloc=58 state=785 end=return
+run till/r4 outcome=completed handler=paid fuel=24 alloc=58
+send bank/r2 to=till message=paid args=[{order: 7, amount: 120}]
+seg bank/r2 start delivery=d4 handler=settle clause=1 fuel=41 alloc=246 state=0 end=return
+run bank/r2 outcome=completed delivery=d4 handler=settle fuel=41 alloc=246
+seg till/r5 start from=bank/r2 handler=paid clause=1 fuel=24 alloc=58 state=570 end=return
+run till/r5 outcome=completed handler=paid fuel=24 alloc=58
+seg till/r1 resume fuel=19 alloc=550 state=849 end=return
+run till/r1 outcome=completed delivery=d1 handler=await fuel=72 alloc=590
+pumped state=idle fuel=166 next=2026-09-30T09:00:05Z
+> pump clock=2026-09-30T09:00:05Z
+seg till/r2 resume fuel=30 alloc=31 state=640 end=return
+run till/r2 outcome=completed delivery=d2 handler=either fuel=77 alloc=31
+pumped state=idle fuel=30 next=2026-09-30T09:00:31Z
+> pump clock=2026-09-30T09:00:31Z
+seg till/r3 resume fuel=19 alloc=104 state=448 end=return
+run till/r3 outcome=completed delivery=d5 handler=await fuel=64 alloc=104
+pumped state=idle fuel=19
+
+> vars
+vars till seen=["handled 8", "handled 7", [{name: "paid", args: [{order: 7, amount: 120}]}, 120], "nothing", [nothing, nothing]]
+vars bank

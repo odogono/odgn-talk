@@ -20,6 +20,7 @@ import {
   type LimitName,
   type Limits,
   type Outcome,
+  type Member,
   type Resumption,
   type Run,
   type RunHost,
@@ -144,7 +145,13 @@ type Running = {
 // A timer (chapter 5, A Pump): fired in deadline order, then set order.
 type Timer = { deadline: bigint; fire: () => void; live: boolean; seq: number };
 // A suspended Run waiting on a call: an Operation's answer, or a reply.
-type Pending = { running: Running; s: ScriptState; timer: Timer };
+type Pending = {
+  /** For a Join Member, its Join's members and the answers in so far. */
+  join?: { answers: Map<string, Resumption>; members: Member[] };
+  running: Running;
+  s: ScriptState;
+  timer: Timer;
+};
 type ScriptState = {
   debt: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
@@ -161,6 +168,8 @@ type ScriptState = {
   runs: number;
   /** Its suspended Runs, which Persistent State counts. */
   suspended: Set<Running>;
+  /** Its pending `wait for`s, in the order the waits began. */
+  waiters: { running: Running; timers: Timer[] }[];
 };
 type QueuedInput = { apply: () => void; line: string };
 
@@ -278,6 +287,7 @@ export class Group {
     const handle = new Script(this, o.name);
     this.scripts.push({
       name: o.name,
+      waiters: [],
       suspended: new Set(),
       objects: o.objects ?? [],
       grants,
@@ -401,7 +411,61 @@ export class Group {
     }
     this.pending.delete(id);
     p.timer.live = false;
-    this.ready(p.s, p.running, r);
+    if (!p.join) {
+      this.ready(p.s, p.running, r);
+      return;
+    }
+    // A Join Member: it waits for all, or fails fast (chapter 5, Joins).
+    const { members, answers } = p.join;
+    const index = members.findIndex(m => m.id === id);
+    if (r.k === 'answer' || r.k === 'reply') {
+      answers.set(id, r);
+      members[index]!.answer = r.value;
+      if (answers.size === members.length) {
+        this.ready(p.s, p.running, {
+          k: 'joined',
+          answers: members.map(m => answers.get(m.id)!),
+        });
+      }
+      return;
+    }
+    const abandon = members.filter(m => m.id !== id && this.pending.has(m.id));
+    for (const m of abandon) {
+      this.pending.get(m.id)!.timer.live = false;
+      this.pending.delete(m.id);
+      m.abort?.abort();
+    }
+    this.ready(p.s, p.running, {
+      k: 'join-failed',
+      index: index + 1,
+      failure: r,
+      // A member that timed out is abandoned too, first.
+      abandon: [...(r.k === 'timeout' ? [id] : []), ...abandon.map(m => m.id)],
+    });
+  }
+
+  private endWaiter(s: ScriptState, waiter: ScriptState['waiters'][number]) {
+    for (const t of waiter.timers) {
+      t.live = false;
+    }
+    s.waiters = s.waiters.filter(w => w !== waiter);
+  }
+
+  // A message being dispatched resumes every pending `wait for` of its
+  // Script that it matches, in the order the waits began (chapter 5).
+  private observe(s: ScriptState, delivery: Delivery) {
+    const from = delivery.from?.split('/')[0] ?? null;
+    for (const waiter of s.waiters) {
+      const fired = waiter.running.run.matchEvent(
+        delivery.message,
+        delivery.args,
+        from,
+      );
+      if (fired) {
+        this.endWaiter(s, waiter);
+        this.ready(s, waiter.running, fired);
+      }
+    }
   }
 
   // A Run that suspended: wait on its timer, its answer or its reply.
@@ -412,6 +476,40 @@ export class Group {
       return this.timer(now + sus.ns, () =>
         this.ready(s, running, { k: 'wake' }),
       ).deadline;
+    }
+    if (sus.k === 'wait-for') {
+      // A timeout, and each `after` branch, is a timer; the first to fire
+      // ends the wait, as a matching message does.
+      const waiter = { running, timers: [] as Timer[] };
+      const fire = (branch: number) => () => {
+        this.endWaiter(s, waiter);
+        this.ready(s, running, { k: 'event-timeout', branch });
+      };
+      if (sus.timeout !== null) {
+        waiter.timers.push(this.timer(now + sus.timeout, fire(0)));
+      }
+      for (const after of sus.afters) {
+        waiter.timers.push(this.timer(now + after.ns, fire(after.branch)));
+      }
+      s.waiters.push(waiter);
+      return waiter.timers.reduce<bigint | null>(
+        (min, t) => (min === null || t.deadline < min ? t.deadline : min),
+        null,
+      );
+    }
+    if (sus.k === 'join') {
+      // Each member waits on its own `maxPending` or `MaxWait`.
+      const join = {
+        members: sus.members,
+        answers: new Map<string, Resumption>(),
+      };
+      for (const m of sus.members) {
+        const timer = this.timer(now + BigInt(m.ms) * 1_000_000n, () =>
+          this.settle(m.id, { k: 'timeout', after: m.ms }),
+        );
+        this.pending.set(m.id, { s, running, timer, join });
+      }
+      return null;
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
     const ms = sus.k === 'ask' ? sus.ms : s.limits.maxWaitMs;
@@ -628,6 +726,7 @@ export class Group {
     let how: 'start' | 'continue' | 'resume' = 'continue';
     if (!('run' in head)) {
       const delivery = head;
+      this.observe(s, delivery);
       const run = dispatch(
         s.loaded,
         delivery.message,
@@ -704,7 +803,7 @@ export class Group {
                 'args',
                 rec.args.length ? traceValue(listValues(rec.args)) : null,
               ],
-              ['wait', rec.id ? 'yes' : null],
+              ['wait', rec.join ? 'join' : rec.id ? 'yes' : null],
             ],
           ),
         );
@@ -755,6 +854,9 @@ export class Group {
           ],
         ),
       );
+      for (const id of run.faultAbandons) {
+        this.trace(recordLine('abandon', [id], []));
+      }
     }
     const handler = s.loaded.clauses.has(running.delivery.message)
       ? running.delivery.message
@@ -789,7 +891,12 @@ export class Group {
             ...start,
             ...stretch,
             ['state', String(this.persistentState(s))],
-            ['end', suspendReasons[run.suspended.k]],
+            [
+              'end',
+              run.suspended.k === 'wait-for' && run.suspended.any
+                ? 'wait-for-any'
+                : suspendReasons[run.suspended.k],
+            ],
             ['until', deadline === null ? null : formatInstant(deadline)],
           ],
         ),
@@ -1002,6 +1109,8 @@ const suspendReasons: Record<Suspension['k'], string> = {
   wait: 'wait',
   ask: 'ask-wait',
   send: 'send-wait',
+  join: 'join-end',
+  'wait-for': 'wait-for',
 };
 // A `Fail` as the Trace's `fail` line writes it: `{}` for what isn't a Script error.
 const failMap = (error: HostScriptError | null): Value =>
