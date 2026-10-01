@@ -1,11 +1,50 @@
 import { invalidValue } from './errors';
 import { characterBoundaries, isWhiteSpace, normalizeNFC } from './unicode';
 
-/** Kinds implemented by the first value foundation slice of #126. */
-export type Kind = 'nothing' | 'boolean' | 'number' | 'text' | 'list' | 'map';
+/** The kinds implemented so far; the rest of chapter 3's follow with #126. */
+export type Kind =
+  | 'nothing'
+  | 'boolean'
+  | 'number'
+  | 'text'
+  | 'list'
+  | 'map'
+  | 'range'
+  | 'pattern'
+  | 'function';
 type Pairs = readonly (readonly [string, Value])[];
+/**
+ * A Function Value (chapter 3, ADR 0025): its Home Script, where its code is,
+ * its captured values in capture-slot order, and its may-suspend flag. `code`
+ * is the Abstract Machine's own reference, which no Host or Script sees.
+ */
+export type FunctionRef = {
+  readonly captures: Pairs;
+  readonly code: unknown;
+  readonly home: string;
+  /** Equal for the same Lambda or named function in the same Home Script. */
+  readonly identity: string;
+  readonly maySuspend: boolean;
+  /** Where its code is, as its display form shows it: `12:3`, `tax`, `text:pad`. */
+  readonly place: string;
+};
+/** A Text Pattern: its canonical source, and the matcher's own data. */
+export type PatternRef = {
+  readonly data: unknown;
+  /** The number of instructions in its compiled program. */
+  readonly program: number;
+  readonly source: string;
+};
 type Payload =
-  undefined | boolean | string | Decimal | readonly Value[] | Pairs;
+  | PatternRef
+  | undefined
+  | boolean
+  | string
+  | Decimal
+  | readonly Value[]
+  | Pairs
+  | readonly [Value, Value]
+  | FunctionRef;
 const valueToken = Symbol('Value');
 const decimalToken = Symbol('Decimal');
 let makeValue: (kind: Kind, payload: Payload) => Value;
@@ -65,6 +104,32 @@ export class Value {
   asDecimal(): Decimal | undefined {
     return this.kind === 'number' ? (this.#data as Decimal) : undefined;
   }
+  asRange(): { from: Value; to: Value } | undefined {
+    if (this.kind !== 'range') {
+      return undefined;
+    }
+    const [from, to] = this.#data as readonly [Value, Value];
+    return { from, to };
+  }
+  /** A Function Value's Home Script, its only Host-visible read. */
+  homeScript(): string | undefined {
+    return this.kind === 'function'
+      ? (this.#data as FunctionRef).home
+      : undefined;
+  }
+  /** A Text Pattern's canonical source, for display. */
+  patternSource(): string | undefined {
+    return this.kind === 'pattern'
+      ? (this.#data as PatternRef).source
+      : undefined;
+  }
+  asPattern(): PatternRef | undefined {
+    return this.kind === 'pattern' ? (this.#data as PatternRef) : undefined;
+  }
+  /** The Abstract Machine's view of a Function Value. */
+  asFunction(): FunctionRef | undefined {
+    return this.kind === 'function' ? (this.#data as FunctionRef) : undefined;
+  }
   get length(): number {
     return this.kind === 'list' ? (this.#data as readonly Value[]).length : 0;
   }
@@ -119,6 +184,32 @@ export class Value {
           }
           break;
         }
+        case 'pattern':
+          if (left.patternSource() !== right.patternSource()) {
+            return false;
+          }
+          break;
+        case 'range': {
+          const a = left.asRange()!;
+          const b = right.asRange()!;
+          pending.push([a.from, b.from], [a.to, b.to]);
+          break;
+        }
+        case 'function': {
+          const a = left.asFunction()!;
+          const b = right.asFunction()!;
+          if (
+            a.home !== b.home ||
+            a.identity !== b.identity ||
+            a.captures.length !== b.captures.length
+          ) {
+            return false;
+          }
+          a.captures.forEach(([, v], i) =>
+            pending.push([v, b.captures[i]![1]]),
+          );
+          break;
+        }
         case 'map': {
           const rhs = new Map(right.entries());
           const entries = left.#data as Pairs;
@@ -169,6 +260,23 @@ export class Value {
               pending.push(', ');
             }
             pending.push(items[i]!);
+          }
+          break;
+        }
+        case 'range': {
+          const { from, to } = next.asRange()!;
+          pending.push(to, '..', from);
+          break;
+        }
+        case 'pattern':
+          output.push(next.patternSource()!);
+          break;
+        case 'function': {
+          const fn = next.asFunction()!;
+          output.push(`<function ${fn.home}:${fn.place}`);
+          pending.push('>');
+          if (fn.captures.length) {
+            pending.push(makeValue('map', fn.captures), ' ');
           }
           break;
         }
@@ -293,6 +401,24 @@ const numericIdentity = (d: Decimal): string =>
     .replace(/\.$/, '');
 
 export const list = (...vs: Value[]): Value => listValues(vs);
+/** Two numbers, kept as given (ADR 0034); Quantity ends follow with Quantities. */
+export const range = (from: Value, to: Value): Value => {
+  requireValue(from);
+  requireValue(to);
+  if (from.kind !== 'number' || to.kind !== 'number') {
+    invalidValue('A range needs two numbers');
+  }
+  return makeValue('range', Object.freeze([from, to] as const));
+};
+/** A Text Pattern value; only the Abstract Machine makes one. */
+export const patternValue = (ref: PatternRef): Value =>
+  makeValue('pattern', Object.freeze({ ...ref }));
+/** A Function Value; only the Abstract Machine makes one. */
+export const functionValue = (ref: FunctionRef): Value =>
+  makeValue(
+    'function',
+    Object.freeze({ ...ref, captures: Object.freeze([...ref.captures]) }),
+  );
 // Readers use this array form to avoid JS argument-count limits. It is not a Host API.
 export const listValues = (vs: readonly Value[]): Value => {
   vs.forEach(requireValue);

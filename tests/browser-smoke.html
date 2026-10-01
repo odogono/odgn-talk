@@ -66,7 +66,10 @@
     assert(listing.startsWith("unit smoke script\nconstants\n  0 nothing\n  1 0\n  2 \"é\"\n") && listing.endsWith("unwind\n  0002..0005 guard -> 0021 depth 0\n"), "Lowering and canonical disassembly");
     const deepUnit = talk.compileSource(deepSource, { name: "deep" });
     assert(deepUnit.unit.code.length === 3004, "Deep lowering");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering and disassembly in a browser";
+    const machine = talk.loadScript(talk.compileSource('script variable seen\non go s\n put the length of s into seen\n put character 2 of s into c\n return [c, s contains <"q">, every match of <word> in "cat, dog", 1 / 3]\nend go', { name: "smoke" }).unit);
+    const ran = talk.deliver(machine, "go", [talk.text("a👩\u200d👩\u200d👧q\u0301b")]).finish();
+    assert(ran.kind === "completed" && ran.result.toString() === '["👩‍👩‍👧", false, [{text: "cat,", range: 1..4, captures: {}, ranges: {}}, {text: "dog", range: 6..8, captures: {}, ranges: {}}], 0.3333333333333333333333333333333333]' && machine.variables[0].toString() === "4", "Abstract Machine");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly and the Abstract Machine in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;

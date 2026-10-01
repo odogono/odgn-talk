@@ -10,6 +10,7 @@ export {
   dec,
   list,
   map,
+  range,
   record,
 } from './values';
 export { encodeValue } from './encoding';
@@ -33,6 +34,20 @@ export {
   type CompileOptions,
   type CompileResult,
 } from './lowering';
+export {
+  callFunction,
+  defaultLimits,
+  deliver,
+  LoadError,
+  loadScript,
+  Run,
+  Script,
+  type LimitName,
+  type Limits,
+  type Outcome,
+  type RunRecord,
+} from './machine';
+export { NotImplemented } from './operations';
 export {
   disassemble,
   type Body,

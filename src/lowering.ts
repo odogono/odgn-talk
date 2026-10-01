@@ -46,6 +46,7 @@ import {
   type Lambda,
   type Literal,
   type Pattern,
+  type PatternElement,
   type Pos,
   type Replace,
   type Stmt,
@@ -150,6 +151,7 @@ class UnitLowering {
   events: EventEntry[] = [];
   objects: string[] = [];
   variables: string[] = [];
+  patterns = new Map<number, readonly PatternElement[]>();
   private constantIndex = new Map<string, number>();
   private objectIndex = new Map<string, number>();
   definitionOf = new Map<Binding | string, number>();
@@ -205,6 +207,7 @@ class UnitLowering {
       params: [],
       defaults: [],
       captures: 0,
+      captureStart: 0,
       locals: [],
       maySuspend: false,
       start: 0,
@@ -319,6 +322,7 @@ class UnitLowering {
       code,
       unwind,
       events: this.events,
+      patterns: this.patterns,
     };
   }
 }
@@ -440,6 +444,7 @@ class BodyLowering {
         }
       }
     }
+    this.body.captureStart = this.locals.length;
     for (const binding of captures) {
       this.slot(binding.name, binding);
     }
@@ -1952,13 +1957,15 @@ class BodyLowering {
   *textPatternValue(pattern: TextPattern, at: Pos): Task {
     const splices = splicesOf(pattern);
     const source = patternSource(pattern);
+    const index = this.u.constant(source);
+    this.u.patterns.set(index, pattern.els);
     if (!splices.length) {
-      return void this.constant(at, source);
+      return void this.emit(at, 'const', index);
     }
     for (const splice of splices) {
       yield this.expr(splice);
     }
-    this.emit(at, 'make-pattern', this.u.constant(source), splices.length);
+    this.emit(at, 'make-pattern', index, splices.length);
   }
 
   *chunkRead(e: Expr & { k: 'chunk' }): Task {

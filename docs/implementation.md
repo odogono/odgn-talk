@@ -1,6 +1,6 @@
 # TS Core foundations
 
-These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, and lowers checked source to chapter 8's code units with their canonical disassembly. It does not yet perform every load check, load or execute Scripts, so it is not a conforming Core.
+These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, and runs those code units on the Abstract Machine with Cost Model 0. It does not yet perform every load check or provide the embedding interface's Group, so it is not a conforming Core.
 
 ## Public values
 
@@ -121,6 +121,36 @@ bun run corpus:run --bless disassembly/expressions
 
 Core tests lower the Standard Library, every corpus source and the prototype's coverage file, and check every body against `machine.toml`: operands, stack effects on every path, a single depth at every instruction, Unwind Table depths and bodies that can't run off their end. They also pin slot order, temp reuse, definitions, Lambda naming, event tables, positions, constant displays, deep nesting and the unsettled cases. The non-normative prototype in `tools/machine/` was used as a differential check during development: it agrees instruction for instruction on the Standard Library and the seed corpus, except where chapter 8 decides against it (source positions of `store`s, loop tests, Guards and `try` instructions; `< <` before a leading group; Unit plurals; canonical number text; and Rest bindings' slot order).
 
+## The Abstract Machine and Cost Model 0
+
+```ts
+import { compileSource, deliver, loadScript, text } from "@odgn/northtalk";
+
+const unit = compileSource('on greet name\n  return "hi " & name\nend greet', {
+  name: "greeter",
+}).unit!;
+const script = loadScript(unit); // runs the initialiser, uncharged
+const run = deliver(script, "greet", [text("Ann")]);
+console.log(run.finish()); // { kind: "completed", result: "hi Ann" }
+console.log(run.fuel, run.alloc); // Cost Model 0's Fuel and allocation
+```
+
+`loadScript` materialises a code unit's constants, refuses a literal Text Pattern past the `patternSize` limit, and runs the initialiser uncharged. A failure is a `LoadError`. `deliver` starts a Run that dispatches a message to a Handler's clauses, and `callFunction` runs a named function. `Run.finish()` gives the outcome: `completed` with its result, `errored` with its error map, `limit fault` with the limit, instruction and position, or `unhandled`. `Run.records` lists every raise, caught or not, with its code, instruction and position. These are Core APIs for the Group and the corpus runner that follow. The embedding interface's Group, `Load`, `Deliver`, `Pump` and Trace sink come next.
+
+The machine follows chapter 8's state: a Run's frames, each with its body, pc, locals and operand stack, plus iterators and replacements as internal values. Handler Clause dispatch tries clauses in order, by parameter count. A guard region's failure reaches the clause's `clause-fail`, and the next clause is tried. Calls check the call depth limit first, fill missing arguments from their defaults, and pass a Lambda's captures in its capture slots. Errors unwind through the Unwind Table. `catch` pushes the error, and `finally` runs the cleanup copy, whose `end-cleanup` raises again. An error in a cleanup copy replaces the one in flight and keeps it as `during`. A Core-raised error is chapter 6's map, `code`, `message` (from the catalogue's template), its fields, then `at`.
+
+Each instruction is charged its `costs.toml` rate before it acts, with the `clause` rate added at a clause body's first instruction and `unwind` at the raising instruction for the frames it pops. A Built-in is charged by its own rate. A Run that can't pay has its Limit Fault at that instruction, Fuel before allocation, and its Script Variables roll back to the Segment's start. Logical sizes follow chapter 8's table, sized leaves first so deep values need no recursion. This slice settled what `scanned` counts for the `compare`, `member` and `chunk-get` rates, and that a zero has one digit, in `costs.toml`.
+
+The values and operations implement chapter 3 and 4's rules for Nothing, booleans, numbers, text, lists, maps, ranges, Text Patterns and Function Values. Arithmetic is exact BigInt decimal work: each result is rounded half-even once to 34 digits, checked for overflow and given the operator's ideal exponent. Chunks of text, lists and integer ranges are read, written, padded and deleted as chapter 4 says, and Built-in properties, conversions to text and numbers, searches, and the value, number and text Built-ins are implemented. Text Patterns compile to chapter 8's programs and run on its Pike VM, whose `steps` charge Fuel, including for text needles. Matches, the Match Search, `replace`, splices and Destructuring Captures follow.
+
+What a later slice adds is raised as `NotImplemented`, never as a Script error: Quantities, Bytes and Binary Patterns, dates, the transcendental and float Built-ins, Library calls and imported Function Values, Host Objects, `me` and `the target`, Capabilities, messages, `wait`, Joins, Decisions, and every other Suspension Point.
+
+```sh
+bun test tests/machine.test.ts
+```
+
+Core tests run every text-model seed case's Script through the machine and reproduce its hand-written Script Variables and `raise` records, including instruction indexes and positions. They also hand-check Cost Model 0 charges, Fuel, allocation and call depth faults with rollback, unwind charges, error maps, `finally` and `during`, clause dispatch and Guards, decimal arithmetic, chunks, Lambdas, and Text Pattern matching, including chapter 8's table of runs and their steps.
+
 ## Generated Unicode tables
 
 ```sh
@@ -158,4 +188,4 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining step 1 work
 
-The remaining checker diagnostics, executable Abstract Machine, Built-ins and expressions/statements, Cost Model 0 Fuel/allocation, remaining value kinds, Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented, as do the Spec fixes the lowering's unsettled cases need. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.
+The remaining checker diagnostics, the remaining value kinds and Built-ins, Persistent State, the Trace sink and Group/Load/Deliver/Request/Pump/Inspect remain to be implemented, as do the Spec fixes the lowering's unsettled cases need. The text-model Trace Cases cannot run until those pieces exist. Seed blessing requires the issue's specified procedure and human review; #126 stays open for the subsequent slices.

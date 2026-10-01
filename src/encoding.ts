@@ -1,3 +1,4 @@
+import { invalidValue } from './errors';
 import { Value, requireValue } from './values';
 
 /** The spec's JSON string form: every U+0000..U+001F uses lowercase \u00xx. */
@@ -72,6 +73,10 @@ export const encodeValue = (value: Value): string => {
         }
         break;
       }
+      default:
+        invalidValue(
+          `The Value Encoding of a ${next.kind} isn't implemented yet`,
+        );
     }
   }
   return output.join('');
