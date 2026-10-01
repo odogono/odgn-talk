@@ -2,15 +2,13 @@
 // subset: Load, Deliver and Request to a Script, Pump with Fuel Slices and a
 // Fuel cap, and Inspect, writing chapter 11's Trace as it goes. Turns follow
 // chapter 5's scheduler.
-import { checkSource } from './checker';
-import { costModel, languageVersion } from './generated/machine';
 import { sizeOf, partSize } from './costs';
 import {
   HostError,
   LoadError,
   MailboxFull,
   ScriptError,
-  type LoadDiagnostic,
+  type HostErrorCode,
 } from './errors';
 import { formatInstant } from './dates';
 import { lowerTree } from './lowering';
@@ -18,14 +16,20 @@ import {
   defaultLimits,
   deliver as dispatch,
   loadScript,
-  UnitLoadError,
   type LimitName,
   type Limits,
   type Outcome,
   type Run,
   type Script as Loaded,
 } from './machine';
-import { sha256 } from './sha256';
+import {
+  identityOf,
+  linksOf,
+  loadOrReject,
+  prepare,
+  stdlibNames,
+  type Library,
+} from './library';
 import { idList, recordLine, traceValue } from './trace';
 import { listValues, nothing, type Value } from './values';
 
@@ -126,16 +130,6 @@ type ScriptState = {
 };
 type QueuedInput = { apply: () => void; line: string };
 
-/** The code identity of a Script with no imports (chapter 9). */
-export const codeIdentity = (
-  unit: 'script' | 'library',
-  name: string,
-  source: string,
-) =>
-  sha256(
-    `odgn-talk code identity 1\n${languageVersion}\n${costModel.version}\n${unit}\n${name}\nsource\n${source}`,
-  );
-
 /** A handle for calls addressed to one Script. */
 export class Script {
   constructor(
@@ -163,6 +157,7 @@ export class Group {
   readonly name: string;
   private readonly trace: (line: string) => void;
   private readonly scripts: ScriptState[] = [];
+  private readonly libraries = new Map<string, Library>();
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private lastClock: bigint | null = null;
@@ -186,60 +181,36 @@ export class Group {
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
   load(o: LoadOptions): Script {
     this.worker();
-    const identity = codeIdentity('script', o.name, o.source);
-    this.trace(recordLine('load', [o.name], [['identity', identity]], true));
     const objects = [...(o.objects ?? []), ...this.scripts.map(s => s.name)];
-    const checked = checkSource(o.source, { objects });
-    const reject = (diagnostics: LoadDiagnostic[]): never => {
-      for (const d of diagnostics) {
-        this.trace(
-          recordLine(
-            'diag',
-            [o.name],
-            [
-              ['code', JSON.stringify(d.code)],
-              ['pos', `${d.line}:${d.col}`],
-            ],
-          ),
-        );
-      }
-      throw new LoadError(diagnostics);
-    };
-    if (checked.error) {
-      const { code, tok, message } = checked.error;
-      return reject([
-        { code, message, unit: o.name, line: tok.line, col: tok.col },
-      ]);
-    }
-    if (!checked.ok) {
-      return reject(
-        checked.diagnostics.map(d => ({
-          code: d.code,
-          message: d.message,
-          unit: o.name,
-          line: d.span.line,
-          col: d.span.col,
-        })),
-      );
-    }
+    const p = prepare('script', o.name, o.source, this.libraries, objects);
+    this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
     const limits = { ...defaultLimits, ...o.limits };
     let loaded: Loaded;
     try {
-      loaded = loadScript(
-        lowerTree(checked.tree, { name: o.name, unit: 'script' }),
-        limits,
+      if (p.diagnostics) {
+        throw new LoadError(p.diagnostics);
+      }
+      loaded = loadOrReject(o.name, () =>
+        loadScript(
+          lowerTree(p.checked.tree!, { name: o.name, unit: 'script' }),
+          limits,
+          linksOf(p.imports),
+        ),
       );
     } catch (error) {
-      if (error instanceof UnitLoadError) {
-        return reject([
-          {
-            code: error.code,
-            message: error.message,
-            unit: o.name,
-            line: error.line,
-            col: error.col,
-          },
-        ]);
+      if (error instanceof LoadError) {
+        for (const d of error.diagnostics) {
+          this.trace(
+            recordLine(
+              'diag',
+              [o.name],
+              [
+                ['code', JSON.stringify(d.code)],
+                ['pos', `${d.line}:${d.col}`],
+              ],
+            ),
+          );
+        }
       }
       throw error;
     }
@@ -255,6 +226,37 @@ export class Group {
       incoming: 0,
     });
     return handle;
+  }
+
+  /**
+   * Worker, Host Input. Adds a compiled Library, whose imports the Group must
+   * already hold, under a name it doesn't hold yet.
+   */
+  addLibrary(l: Library): void {
+    this.worker();
+    this.trace(
+      recordLine('add-library', [l.name], [['identity', identityOf(l)]], true),
+    );
+    const refuse = (code: HostErrorCode, message: string): never => {
+      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      throw new HostError(code, message);
+    };
+    if (stdlibNames.has(l.name)) {
+      refuse('reserved name', `${l.name} is a stdlib Library's name`);
+    }
+    if (this.libraries.has(l.name)) {
+      refuse('name reused', `The Group already holds a Library ${l.name}`);
+    }
+    for (const i of l.imports) {
+      const held = this.libraries.get(i.name);
+      if (!held || identityOf(held) !== identityOf(i)) {
+        refuse(
+          'library mismatch',
+          `The Group doesn't hold the ${i.name} that ${l.name} imports`,
+        );
+      }
+    }
+    this.libraries.set(l.name, l);
   }
 
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
@@ -499,7 +501,7 @@ export class Group {
           [running.id],
           [
             ['limit', faultNames[outcome.limit] ?? outcome.limit],
-            ['at', `${s.name}:${outcome.pc}`],
+            ['at', `${outcome.unit}:${outcome.pc}`],
             ['pos', `${outcome.line}:${outcome.col}`],
             ['rollback', idList(outcome.rollback)],
           ],

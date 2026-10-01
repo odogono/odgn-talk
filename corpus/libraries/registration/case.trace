@@ -1,0 +1,22 @@
+# registration: top is refused until base is held, and a second base and a
+# Library named text are refused. A refused add-library changes nothing, so
+# the second top is added. Its Fuel, allocation and state figures are Cost
+# Model 0's, as the TS Core blessed them.
+
+> add-library top identity=8694359bd4ac3217c6d3f0451d748f44dc9a0e54cf1668a2f6dfd96fce74ca86
+refused code="library mismatch"
+> add-library base identity=3e23a783b1e616e068dbb88a1c0c5c0fc02a810089a44394e5d536757678fde0
+> add-library base identity=3e23a783b1e616e068dbb88a1c0c5c0fc02a810089a44394e5d536757678fde0
+refused code="name reused"
+> add-library text identity=c6c76c3595f5cd029adcbab43e07efe5e09d98c1ab00d594827c938dba4e0fd3
+refused code="reserved name"
+> add-library top identity=8694359bd4ac3217c6d3f0451d748f44dc9a0e54cf1668a2f6dfd96fce74ca86
+> load fine identity=2218244813d18defa58cff812af846c1b5919116b50c54f8c4cbcefb1c3633af
+> deliver d1 to=fine message=go
+> pump clock=2026-09-30T09:00:00Z
+seg fine/r1 start delivery=d1 handler=go clause=1 fuel=45 alloc=16 state=16 end=return
+run fine/r1 outcome=completed delivery=d1 handler=go fuel=45 alloc=16
+pumped state=idle fuel=45
+
+> vars
+vars fine n=2

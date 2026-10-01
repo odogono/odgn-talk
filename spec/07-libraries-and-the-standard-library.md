@@ -85,6 +85,7 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 ### Registering, identity and replacing
 
 - **Registration:** the Host compiles a Library once per process and adds it to a Group before loading the Scripts that import it. Adding a Library is a Host Input, recorded in the Trace ([chapter 9](09-embedding.md)). Compiling runs every checker diagnostic, which parity covers. Only the Grant check waits for an import.
+- **Imports first:** a Group adds a Library only once it holds every Library that one imports, with the same code identities, and otherwise refuses it (`library mismatch`). A refused add changes nothing.
 - **One version per name:** a Group holds at most one Library of each name. A Host may not register a Library under a stdlib Library name (`reserved name`).
 - **Code identity:** a Library's code identity covers its source, the language and Cost Model versions, and the identities of the Libraries it imports. A Script's code identity includes the identities of every Library it imports, directly or through another Library. The Group Fingerprint covers them all.
 - **Sharing:** a Core compiles each Library once per process, and Groups share it when the code identities match. Code isn't Persistent State. A Library's Constants count once per Group, as a fixed overhead.

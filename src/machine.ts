@@ -125,17 +125,18 @@ type Constant =
   | { els: readonly PatternElement[]; k: 'template' }
   | { k: 'unimplemented'; what: string };
 
-/** A loaded Script: its code unit, constants, definitions and Script Variables. */
-export class Script {
+/**
+ * A loaded code unit, a Script's or a Library's: its constants, definitions
+ * and Handler clauses, linked to the Libraries its `use` lines name.
+ */
+export class Code {
   readonly constants: Constant[];
   readonly definitions: Value[];
-  variables: Value[];
   readonly clauses = new Map<string, Body[]>();
+  /** The Libraries it imports, by name. */
+  readonly libraries = new Map<string, Code>();
 
-  constructor(
-    readonly unit: CodeUnit,
-    readonly limits: Limits = defaultLimits,
-  ) {
+  constructor(readonly unit: CodeUnit) {
     this.constants = unit.constants.map((display, i) => {
       const els = unit.patterns.get(i);
       if (els) {
@@ -153,7 +154,6 @@ export class Script {
       }
     });
     this.definitions = unit.definitions.map(() => nothing);
-    this.variables = unit.variables.map(() => nothing);
     for (const body of unit.bodies) {
       if (body.kind === 'handler') {
         const list = this.clauses.get(body.name) ?? [];
@@ -175,6 +175,51 @@ export class Script {
     throw new NotImplementedError(
       c.k === 'template' ? 'a template constant' : c.what,
     );
+  }
+
+  /** The Library that holds an import, written `library:name`. */
+  library(name: string): { code: Code; name: string } {
+    const at = name.indexOf(':');
+    const library = name.slice(0, at);
+    const code = this.libraries.get(library);
+    if (!code) {
+      throw new NotImplementedError(`the stdlib Library ${library}`);
+    }
+    return { code, name: name.slice(at + 1) };
+  }
+
+  /** An exported function's body. */
+  function(name: string): Body {
+    return this.unit.bodies.find(
+      b => b.kind === 'function' && b.name === name,
+    )!;
+  }
+
+  /** Link the Libraries it imports, and take the Constants it imports from them. */
+  link(libraries: ReadonlyMap<string, Code>) {
+    for (const [name, code] of libraries) {
+      this.libraries.set(name, code);
+    }
+    this.unit.definitions.forEach((name, i) => {
+      if (/^[^.]*:/.test(name)) {
+        const { code, name: constant } = this.library(name);
+        this.definitions[i] =
+          code.definitions[code.unit.definitions.indexOf(constant)]!;
+      }
+    });
+  }
+}
+
+/** A loaded Script: its code, and its Script Variables. */
+export class Script extends Code {
+  variables: Value[];
+
+  constructor(
+    unit: CodeUnit,
+    readonly limits: Limits = defaultLimits,
+  ) {
+    super(unit);
+    this.variables = unit.variables.map(() => nothing);
   }
 
   /** The Script Variables' share of Persistent State. */
@@ -208,8 +253,10 @@ const hasSplice = (els: readonly PatternElement[]): boolean => {
 export const loadScript = (
   unit: CodeUnit,
   limits: Partial<Limits> = {},
+  libraries: ReadonlyMap<string, Code> = new Map(),
 ): Script => {
   const script = new Script(unit, { ...defaultLimits, ...limits });
+  script.link(libraries);
   unit.constants.forEach((_, i) => {
     const c = script.constants[i]!;
     if (c.k === 'value' && c.value.kind === 'pattern') {
@@ -243,6 +290,14 @@ export const loadScript = (
   }
   return script;
 };
+/**
+ * Load a Library's code unit, linked to the Libraries it imports: its
+ * initialiser computes its Constants once, for every Group that holds it.
+ */
+export const loadLibrary = (
+  unit: CodeUnit,
+  libraries: ReadonlyMap<string, Code>,
+): Code => loadScript(unit, {}, libraries);
 
 // ---------------------------------------------------------------------------
 // Runs
@@ -265,11 +320,15 @@ type Replacement = {
   subject: Value;
 };
 type Item = Value | Iterator | Replacement | Reader;
-type Dispatch = { args: Value[]; clauses: Body[]; next: number };
+// A Function Value's code: the code unit its body is in, and the body.
+type FunctionCode = { body: Body; code: Code };
+type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
 type Frame = {
   body: Body;
   /** A clause's `clause` charge, added to its first instruction's. */
   clauseCharge: boolean;
+  /** The code unit the body is in: the Script's own, or a Library's. */
+  code: Code;
   dispatch: Dispatch | null;
   handler: string;
   locals: Value[];
@@ -305,6 +364,8 @@ export type Outcome =
       pc: number;
       /** The Script Variables the rollback changed back, in declaration order. */
       rollback: string[];
+      /** The code unit the faulting instruction is in. */
+      unit: string;
     }
   | { kind: 'unhandled' };
 
@@ -346,8 +407,8 @@ export class Run {
     this.segmentBase = [...script.variables];
     const clauses = Array.isArray(entry) ? entry : [entry];
     if (!Array.isArray(entry)) {
-      this.push(entry, args, null);
-    } else if (!this.dispatch({ clauses, next: 0, args })) {
+      this.push(script, entry, args, null);
+    } else if (!this.dispatch({ clauses, code: script, next: 0, args })) {
       this.outcome = { kind: 'unhandled' };
     }
   }
@@ -376,7 +437,12 @@ export class Run {
 
   // ------------------------------------------------------------- frames
 
-  private push(body: Body, args: Value[], dispatch: Dispatch | null) {
+  private push(
+    code: Code,
+    body: Body,
+    args: Value[],
+    dispatch: Dispatch | null,
+  ) {
     const locals: Value[] = Array.from(
       { length: body.locals.length },
       () => nothing,
@@ -386,6 +452,7 @@ export class Run {
     });
     this.frames.push({
       body,
+      code,
       pc: body.start,
       locals,
       stack: [],
@@ -400,8 +467,11 @@ export class Run {
     while (d.next < d.clauses.length) {
       const body = d.clauses[d.next++]!;
       if (body.params.length === d.args.length) {
-        this.clause = body.clause ?? 0;
-        this.push(body, d.args, d);
+        // The Run's clause is its entry Handler's, not a called Handler's.
+        if (!this.frames.length) {
+          this.clause = body.clause ?? 0;
+        }
+        this.push(d.code, body, d.args, d);
         return true;
       }
     }
@@ -467,7 +537,7 @@ export class Run {
 
   step() {
     const frame = this.frame;
-    const ins = this.script.unit.code[frame.pc]!;
+    const ins = frame.code.unit.code[frame.pc]!;
     // A Built-in call is charged by that Built-in's rate, when it raises too.
     const key =
       ins.op === 'call-builtin'
@@ -490,6 +560,7 @@ export class Run {
   }
 
   private fault(limit: LimitName, ins: Instruction) {
+    const code = this.frame.code;
     const rollback = this.script.unit.variables.filter(
       (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
     );
@@ -499,7 +570,8 @@ export class Run {
       kind: 'limit fault',
       limit,
       rollback,
-      pc: this.script.unit.code.indexOf(ins),
+      unit: code.name,
+      pc: code.unit.code.indexOf(ins),
       line: ins.line,
       col: ins.col,
     };
@@ -542,7 +614,7 @@ export class Run {
 
   private at(ins: Instruction): Value {
     return map([
-      ['unit', text(this.script.name)],
+      ['unit', text(this.frame.code.name)],
       ['handler', text(this.frame.handler)],
       ['line', dec(String(ins.line))],
       ['column', dec(String(ins.col))],
@@ -560,8 +632,8 @@ export class Run {
       ...(notBoolean
         ? { value: error.get('value') }
         : { code: textForm(error.get('code')) }),
-      unit: this.script.name,
-      pc: this.script.unit.code.indexOf(ins),
+      unit: this.frame.code.name,
+      pc: this.frame.code.unit.code.indexOf(ins),
       line: ins.line,
       col: ins.col,
     });
@@ -573,12 +645,12 @@ export class Run {
    * for the frames popped, then continue there.
    */
   private unwind(error: Value, ins: Instruction) {
-    const unwind = this.script.unit.unwind;
     let popped = 0;
-    let found: (typeof unwind)[number] | undefined;
+    let found: CodeUnit['unwind'][number] | undefined;
+    // Each frame unwinds through its own code unit's Unwind Table.
     for (let i = this.frames.length - 1; i >= 0; i--) {
-      const pc = this.frames[i]!.pc;
-      found = unwind.find(e => pc >= e.start && pc < e.end);
+      const { code, pc } = this.frames[i]!;
+      found = code.unit.unwind.find(e => pc >= e.start && pc < e.end);
       if (found) {
         break;
       }
@@ -602,7 +674,7 @@ export class Run {
       found !== undefined &&
       this.frames.indexOf(c.frame) === handler &&
       found.start >= c.start &&
-      found.end <= cleanupEnd(this.script.unit, c);
+      found.end <= cleanupEnd(c.frame.code.unit, c);
     while (this.cleanups.length) {
       const c = this.cleanups.at(-1)!;
       if (this.frames.indexOf(c.frame) < handler || inside(c)) {
@@ -658,38 +730,44 @@ export class Run {
     this.frame.pc++;
   }
 
-  private callBody(body: Body, args: Value[], dispatch: Dispatch | null) {
+  private callBody(code: Code, body: Body, args: Value[]) {
     if (this.frames.length + 1 > this.limits.callDepth) {
       throw new LimitFaultError('callDepth', this.frame.pc);
     }
     this.pay('call');
-    this.push(body, args, dispatch);
+    this.push(code, body, args, null);
   }
 
-  private fillDefaults(body: Body, args: Value[]): Value[] {
+  // A function's defaults are its own code unit's definitions.
+  private fillDefaults(code: Code, body: Body, args: Value[]): Value[] {
     const filled = [...args];
     for (let i = args.length; i < body.params.length; i++) {
-      filled.push(this.script.definitions[body.defaults[i]!]!);
+      filled.push(code.definitions[body.defaults[i]!]!);
     }
     return filled;
   }
 
+  // A Function Value's Home Script is the Script whose Run made it, wherever
+  // its code is (chapter 7, Calls into a Library).
   private functionValue(
+    code: Code,
     body: Body,
     captures: Value[],
     ins: Instruction,
   ): Value {
     const lambda = body.kind === 'lambda';
+    const own = code === this.script;
+    const where = own ? '' : `${code.name}:`;
     const ref: FunctionRef = {
       home: this.script.name,
-      place: lambda ? `${ins.line}:${ins.col}` : body.name,
-      identity: `${this.script.name}#${body.index}`,
+      place: where + (lambda ? `${ins.line}:${ins.col}` : body.name),
+      identity: `${this.script.name}#${where}${body.index}`,
       maySuspend: body.maySuspend,
       captures: captures.map((v, i) => [
         body.locals[body.captureStart + i]!,
         v,
       ]),
-      code: body,
+      code: { code, body } satisfies FunctionCode,
     };
     return functionValue(ref);
   }
@@ -706,11 +784,12 @@ export class Run {
     const jump = (label: number) => {
       frame.pc = label;
     };
-    const unit = this.script.unit;
+    const code = frame.code;
+    const unit = code.unit;
     switch (ins.op) {
       // Values and slots
       case 'const': {
-        const value = this.script.constant(a as number);
+        const value = code.constant(a as number);
         this.pay(key);
         frame.stack.push(value);
         return next();
@@ -741,11 +820,11 @@ export class Run {
         return next();
       case 'load-definition':
         this.pay(key);
-        frame.stack.push(this.script.definitions[a as number]!);
+        frame.stack.push(code.definitions[a as number]!);
         return next();
       case 'store-definition':
         this.pay(key);
-        this.script.definitions[a as number] = this.pop();
+        code.definitions[a as number] = this.pop();
         return next();
 
       // Control
@@ -952,7 +1031,7 @@ export class Run {
         return this.replace(2, key);
       }
       case 'map': {
-        const keys = this.script.constant(a as number);
+        const keys = code.constant(a as number);
         const n = b as number;
         m.count = n;
         const values = this.frame.stack.slice(
@@ -976,7 +1055,7 @@ export class Run {
         m.result = buildBits(
           this.peek(n),
           values,
-          widthsOf(this.script.constant(a as number)),
+          widthsOf(code.constant(a as number)),
         );
         return this.replace(n + 1, key);
       }
@@ -995,7 +1074,7 @@ export class Run {
       case 'bin-literal': {
         const r = this.reader();
         this.pay(key);
-        if (!readLiteral(r, this.script.constant(a as number))) {
+        if (!readLiteral(r, code.constant(a as number))) {
           frame.stack.pop();
           return jump(b as number);
         }
@@ -1015,7 +1094,7 @@ export class Run {
       }
       case 'bin-bits': {
         const r = this.reader();
-        const widths = widthsOf(this.script.constant(a as number));
+        const widths = widthsOf(code.constant(a as number));
         const values = readBits({ ...r }, widths);
         m.resultSize = values?.reduce((t, v) => t + sizeOf(v), 0) ?? 0;
         this.pay(key);
@@ -1061,7 +1140,7 @@ export class Run {
       }
 
       case 'make-pattern': {
-        const template = this.script.constants[a as number]!;
+        const template = code.constants[a as number]!;
         if (template.k !== 'template') {
           throw new Error('make-pattern of a constant that is not a template');
         }
@@ -1145,6 +1224,7 @@ export class Run {
         const n = b as number;
         m.count = n;
         m.result = this.functionValue(
+          code,
           body,
           this.frame.stack.slice(this.frame.stack.length - n) as Value[],
           ins,
@@ -1152,8 +1232,18 @@ export class Run {
         return this.replace(n, key);
       }
       case 'make-function':
-        m.result = this.functionValue(unit.bodies[a as number]!, [], ins);
+        m.result = this.functionValue(code, unit.bodies[a as number]!, [], ins);
         return this.replace(0, key);
+      case 'make-imported-function': {
+        const target = code.library(a as string);
+        m.result = this.functionValue(
+          target.code,
+          target.code.function(target.name),
+          [],
+          ins,
+        );
+        return this.replace(0, key);
+      }
 
       // Calls
       case 'call': {
@@ -1161,15 +1251,30 @@ export class Run {
         const args = this.frame.stack.slice(
           this.frame.stack.length - (b as number),
         ) as Value[];
-        this.callBody(body, this.fillDefaults(body, args), null);
+        this.callBody(code, body, this.fillDefaults(code, body, args));
+        frame.stack.length -= b as number;
+        return;
+      }
+      case 'call-import': {
+        const target = code.library(a as string);
+        const body = target.code.function(target.name);
+        const args = this.frame.stack.slice(
+          this.frame.stack.length - (b as number),
+        ) as Value[];
+        this.callBody(
+          target.code,
+          body,
+          this.fillDefaults(target.code, body, args),
+        );
         frame.stack.length -= b as number;
         return;
       }
       case 'call-handler': {
-        const clauses = this.script.clauses.get(a as string);
-        if (!clauses) {
-          throw new NotImplementedError(`a call to the imported Handler ${a}`);
-        }
+        // An imported Handler's clauses are its Library's.
+        const target = (a as string).includes(':')
+          ? code.library(a as string)
+          : { code, name: a as string };
+        const clauses = target.code.clauses.get(target.name)!;
         const n = b as number;
         const args = this.frame.stack.slice(
           this.frame.stack.length - n,
@@ -1182,7 +1287,7 @@ export class Run {
         }
         this.pay('call');
         frame.stack.length -= n;
-        this.dispatch({ clauses, next: 0, args });
+        this.dispatch({ clauses, code: target.code, next: 0, args });
         return;
       }
       case 'call-builtin': {
@@ -1224,7 +1329,7 @@ export class Run {
             'a call that may suspend, or to another Script',
           );
         }
-        const body = ref.code as Body;
+        const { code: home, body } = ref.code as FunctionCode;
         const required = body.defaults.filter(
           d => d === null || d === undefined,
         ).length;
@@ -1236,8 +1341,8 @@ export class Run {
           throw new ScriptError('wrong arity');
         }
         const filled =
-          body.kind === 'lambda' ? args : this.fillDefaults(body, args);
-        this.callBody(body, filled, null);
+          body.kind === 'lambda' ? args : this.fillDefaults(home, body, args);
+        this.callBody(home, body, filled);
         frame.stack.length -= n + 1;
         const callee = this.frame;
         ref.captures.forEach(([, v], i) => {
@@ -1273,7 +1378,7 @@ export class Run {
           return;
         }
         // A `call-handler` whose clauses all failed raises at the call.
-        const call = unit.code[this.frame.pc]!;
+        const call = this.frame.code.unit.code[this.frame.pc]!;
         return this.unwind(this.errorMap('no match', [], call), call);
       }
 
@@ -1281,11 +1386,7 @@ export class Run {
       case 'test-constant': {
         const fold = b === 'fold';
         const target = (fold ? c : b) as number;
-        const ok = equals(
-          this.peek(),
-          this.script.constant(a as number),
-          fold,
-        ).equal;
+        const ok = equals(this.peek(), code.constant(a as number), fold).equal;
         this.pay(key);
         this.pop();
         return ok ? next() : jump(target);

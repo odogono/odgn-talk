@@ -1,0 +1,5 @@
+-- base.talk: a Library of the registration case.
+
+function one
+  return 1
+end one

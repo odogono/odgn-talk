@@ -1,0 +1,26 @@
+-- fmt.talk: a Library of the calls case.
+
+constant prefix = "No. "
+
+private function pad s, width
+  if the length of s < width then
+    return pad("0" & s, width)
+  end if
+  return s
+end pad
+
+function label n, width = 3
+  return prefix & pad(n & "", width)
+end label
+
+on shout s
+  return s & "!"
+end shout
+
+on shout s, t
+  return s & " " & t
+end shout
+
+function twice f, x
+  return f(f(x))
+end twice

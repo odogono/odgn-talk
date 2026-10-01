@@ -1,0 +1,20 @@
+# errors: an error raised in Library code names the Library in `at`, unwinds
+# through each frame by its own code unit's Unwind Table, and is charged per
+# frame popped. A Limit Fault inside Library code rolls back the caller's
+# Segment (spec chapter 7, Calls into a Library; chapter 6, Errors).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "checks"
+version = "1"
+source = "checks.talk"
+
+[[scripts]]
+name = "meter"
+source = "meter.talk"
+limits = { fuelPerRun = 500 }

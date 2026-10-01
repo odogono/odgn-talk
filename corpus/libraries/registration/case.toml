@@ -1,0 +1,28 @@
+# registration: a Group holds one Library of each name, and refuses a stdlib
+# Library's name and a Library whose imports it doesn't hold (spec chapter 7,
+# Registering, identity and replacing; chapter 9, Host errors).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "top"
+version = "1"
+source = "top.talk"
+
+[[libraries]]
+name = "base"
+version = "1"
+source = "base.talk"
+
+[[libraries]]
+name = "text"
+version = "1"
+source = "text.talk"
+
+[[scripts]]
+name = "fine"
+source = "fine.talk"

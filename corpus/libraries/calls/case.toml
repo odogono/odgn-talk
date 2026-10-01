@@ -1,0 +1,26 @@
+# calls: a call into a Library runs in the caller's Run like a local call, and
+# is charged the same: its defaults are its own, an imported Handler's clauses
+# dispatch by argument count, an imported Constant is the Library's value, and
+# a Library may import a Library (spec chapter 7, Calls into a Library).
+# A Function Value made from Library code has the calling Script as its Home
+# Script, and is placed by its Library.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "fmt"
+version = "1"
+source = "fmt.talk"
+
+[[libraries]]
+name = "deco"
+version = "1"
+source = "deco.talk"
+
+[[scripts]]
+name = "shelf"
+source = "shelf.talk"

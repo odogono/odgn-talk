@@ -1,0 +1,28 @@
+-- checks.talk: the errors case's Library.
+
+function ratio a, b
+  return a / b
+end ratio
+
+function guarded a, b
+  try
+    return ratio(a, b)
+  catch {code: "division by zero"}
+    return 0
+  end try
+end guarded
+
+function tidied a, b
+  try
+    return ratio(a, b)
+  finally
+    put 1 into cleaned
+  end try
+end tidied
+
+function spin n
+  repeat n times
+    put n into last
+  end repeat
+  return last
+end spin
