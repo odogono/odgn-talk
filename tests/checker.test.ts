@@ -590,3 +590,178 @@ describe('Core binding and function contracts', () => {
     });
   });
 });
+
+describe('Core control-flow and body-context checks', () => {
+  test('exit repeat and next repeat outside any loop report at their first token', () => {
+    expect(
+      diagnostics(
+        'on t\n exit repeat\n if true then next repeat\n repeat 2 times\n  exit repeat\n end repeat\n next repeat\nend t\nfunction f\n exit repeat\nend f',
+      ),
+    ).toEqual([
+      ['outside a loop', 2, 2],
+      ['outside a loop', 3, 15],
+      ['outside a loop', 7, 2],
+      ['outside a loop', 10, 2],
+    ]);
+  });
+
+  test('a Lambda body has its own loops, so an enclosing loop does not count', () => {
+    expect(
+      diagnostics(
+        'on t xs\n repeat for each x in xs\n  put given\n   next repeat\n   repeat forever\n    exit repeat\n   end repeat\n  end given into f\n end repeat\nend t',
+      ),
+    ).toEqual([['outside a loop', 4, 4]]);
+  });
+
+  test('next stays a Command Call name unless repeat follows', () => {
+    expect(diagnostics('on t\n next 1\nend t')).toEqual([]);
+  });
+
+  test('return, veto and pass inside finally leave cleanup', () => {
+    expect(
+      diagnostics(
+        'on t\n try\n  return 1\n catch e\n  return 2\n finally\n  if true then veto\n  return 3\n end try\nfinally\n pass t\nend t',
+      ),
+    ).toEqual([
+      ['leaves finally', 7, 16],
+      ['leaves finally', 8, 3],
+      ['leaves finally', 11, 2],
+    ]);
+    expect(
+      diagnostics('function f\n try\n finally\n  return 1\n end try\nend f'),
+    ).toEqual([['leaves finally', 4, 3]]);
+  });
+
+  test('loop transfers may stay inside finally but not reach a loop outside it', () => {
+    expect(
+      diagnostics(
+        'on t\n repeat 2 times\n  try\n  finally\n   next repeat\n   repeat 3 times\n    exit repeat\n    try\n    finally\n     next repeat\n    end try\n   end repeat\n   exit repeat\n  end try\n end repeat\nend t',
+      ),
+    ).toEqual([
+      ['leaves finally', 5, 4],
+      ['leaves finally', 10, 6],
+      ['leaves finally', 13, 4],
+    ]);
+  });
+
+  test('a loop inside a nested finally may be left from within that finally', () => {
+    expect(
+      diagnostics(
+        'on t\n try\n finally\n  repeat 2 times\n   try\n   finally\n    repeat 2 times\n     next repeat\n    end repeat\n   end try\n   exit repeat\n  end repeat\n end try\nend t',
+      ),
+    ).toEqual([]);
+  });
+
+  test('a Lambda inside finally returns from itself and has its own loops', () => {
+    expect(
+      diagnostics(
+        'on t\n repeat 2 times\n  try\n  finally\n   put given x\n    repeat 2 times\n     exit repeat\n    end repeat\n    exit repeat\n    return x\n   end given into f\n  end try\n end repeat\nend t',
+      ),
+    ).toEqual([['outside a loop', 9, 5]]);
+  });
+
+  test('pass and the target are rejected inside any Lambda, however nested', () => {
+    expect(
+      diagnostics(
+        'on t\n put the target into a\n put the target of a into b\n put given: the target into f\n put given x\n  put given: [x, the target] into g\n  pass t\n end given into h\n pass t\nend t',
+      ),
+    ).toEqual([
+      ['not in a lambda', 4, 13],
+      ['not in a lambda', 6, 18],
+      ['not in a lambda', 7, 3],
+    ]);
+  });
+
+  test('pass in a Lambda inside finally reports only that it is in a Lambda', () => {
+    expect(
+      diagnostics(
+        'on t\n try\n finally\n  put given\n   pass other\n  end given into f\n end try\nend t',
+      ),
+    ).toEqual([['not in a lambda', 5, 4]]);
+  });
+
+  test('Lambdas in initializers and defaults may not use the target', () => {
+    expect(
+      diagnostics(
+        'constant c = given: the target\nfunction f a = given: the target\nend f',
+      ),
+    ).toEqual([
+      ['not in a lambda', 1, 21],
+      ['not in a lambda', 2, 23],
+    ]);
+  });
+
+  test('pass must name the message of its enclosing Handler, case-sensitively', () => {
+    expect(
+      diagnostics(
+        'on greet\n pass greet\n if true then pass Greet else pass other\nend greet\non error\n pass error\nfinally\n pass greet\nend error',
+      ),
+    ).toEqual([
+      ['wrong message', 3, 20],
+      ['wrong message', 3, 36],
+      ['leaves finally', 8, 2],
+      ['wrong message', 8, 7],
+    ]);
+  });
+
+  test('each Handler clause checks pass against its own message', () => {
+    expect(
+      diagnostics(
+        'on a\n pass a\nend a\non b\n pass a\nend b\non a x\n pass a\nend a',
+      ),
+    ).toEqual([['wrong message', 5, 7]]);
+  });
+
+  test('valid Handler suffix combinations are accepted', () => {
+    expect(
+      diagnostics(
+        'on a, queued\nend a\non b x, dropping, deciding\nend b\non c, deciding, replacing\nend c\non error e where true, queued, during msg\nend error',
+      ),
+    ).toEqual([]);
+  });
+
+  test('bad suffixes reports the first suffix that breaks a combining rule', () => {
+    const heads = [
+      ['on a, queued, dropping', 15],
+      ['on a, dropping, replacing, queued', 17],
+      ['on a, deciding, deciding', 17],
+      ['on a, queued, deciding', 15],
+      ['on a, deciding, queued', 17],
+      ['on a, during m', 7],
+      ['on a x, deciding, during m, during n', 19],
+      ['on error, during m, during n', 21],
+    ] as const;
+    for (const [head, col] of heads) {
+      const name = head.slice(3, head.indexOf(','));
+      const message = name.split(' ')[0];
+      expect(diagnostics(`${head}\nend ${message}`)).toEqual([
+        ['bad suffixes', 1, col],
+      ]);
+    }
+  });
+
+  test('control diagnostics interleave by position with scalar columns and UTF-16 spans', () => {
+    const source =
+      'on t, queued, queued\r\n\tput ["😀", absent] into x\r\n\texit repeat\r\n\tput given: the target into f\r\nfinally\r\n\tpass u\r\nend t';
+    const result = checkSource(source);
+    expect(result.error).toBeNull();
+    expect(
+      result.diagnostics.map(({ code, span }) => [code, span.line, span.col]),
+    ).toEqual([
+      ['bad suffixes', 1, 15],
+      ['unknown name', 2, 12],
+      ['outside a loop', 3, 2],
+      ['not in a lambda', 4, 13],
+      ['leaves finally', 6, 2],
+      ['wrong message', 6, 7],
+    ]);
+    const pass = source.indexOf('pass');
+    expect(
+      result.diagnostics.find(({ code }) => code === 'leaves finally')!.span,
+    ).toEqual({ start: pass, end: pass + 4, line: 6, col: 2 });
+    const the = source.indexOf('the target');
+    expect(
+      result.diagnostics.find(({ code }) => code === 'not in a lambda')!.span,
+    ).toEqual({ start: the, end: the + 3, line: 4, col: 13 });
+  });
+});

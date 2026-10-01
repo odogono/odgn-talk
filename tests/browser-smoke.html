@@ -51,7 +51,12 @@
     const captures = talk.checkSource('on t x\n put given\n  delete x\n end given into f\nend t');
     assert(captures.diagnostics[0].code === "can't write", "Read-only Lambda capture");
     assert(talk.checkSource('constant identity = given x: x\nconstant labels = ["me", "it"]').ok, "Deferred Lambda literal and text literals");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution and binding/function contracts in a browser";
+    const control = talk.checkSource('on t, queued, queued\n exit repeat\n put given: the target into f\nfinally\n pass u\nend t');
+    assert(JSON.stringify(control.diagnostics.map(({ code, span }) => [code, span.line, span.col])) === JSON.stringify([
+      ["bad suffixes", 1, 15], ["outside a loop", 2, 2], ["not in a lambda", 3, 13],
+      ["leaves finally", 5, 2], ["wrong message", 5, 7]
+    ]), "Control-flow and body-context diagnostics");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts and control-flow checks in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
