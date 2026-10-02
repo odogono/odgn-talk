@@ -112,7 +112,7 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
 ## Loading and Libraries
 
 - **`Load`** compiles a Script, checks it against its Grants, Libraries and well-known objects, runs its initialiser and adds it to the Group. A rejected Script is a `LoadError`, with its diagnostics ([chapter 2](02-grammar.md#load-time-diagnostics)).
-- **Libraries:** `CompileLibrary` compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **Libraries:** `CompileLibrary(src, imports, declarations)` checks Capability calls against explicit Operation modes and argument Shapes, and compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
 - **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)).
@@ -187,7 +187,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `standard-capability` | `name`, `costs` | – | `ClockCapability` and the others |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
 | `grant` | `capability`, `ops`: names, or `"all"` | `grant`: a handle | `Grant`, `GrantAll` |
-| `compile-library` | `name`, `version`, `source`, `imports`: identities | `identity`, `needs` | `CompileLibrary` |
+| `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
 | `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` | `AddLibrary`, `ReplaceLibrary` |

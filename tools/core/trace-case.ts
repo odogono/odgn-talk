@@ -18,6 +18,7 @@ import {
   type Call,
   type FieldShape,
   type Grant,
+  type GrantDecls,
   type Operation,
   type Shape,
   HostError,
@@ -360,6 +361,21 @@ const capabilitiesOf = (
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
+const operationDeclarations = (setup: Setup): GrantDecls => {
+  const declarations: Record<
+    string,
+    Record<string, { args: Shape[]; mode: OperationSpec['mode'] }>
+  > = Object.create(null);
+  for (const op of setup.operations ?? []) {
+    declarations[op.capability] ??= Object.create(null);
+    declarations[op.capability]![op.name] = {
+      args: (op.args ?? []).map(shapeOf),
+      mode: op.mode,
+    };
+  }
+  return declarations;
+};
+
 // Every Library case.toml names, compiled once each Library it imports is, so
 // in any order; one that never compiles keeps its LoadError.
 const compileLibraries = (
@@ -383,6 +399,7 @@ const compileLibraries = (
               source: readFileSync(resolve(dir, library.source), 'utf8'),
             },
             done,
+            operationDeclarations(setup),
           ),
         );
       } catch (error) {
@@ -671,6 +688,7 @@ export const replay = (
               source: readDisplayText(r.fields.get('source')!),
             },
             [...registered.values()],
+            operationDeclarations(setup),
           );
           group.replaceLibrary(
             library,

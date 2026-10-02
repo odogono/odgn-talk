@@ -1,0 +1,4 @@
+function fetch key
+  ask io to read key
+  return it
+end fetch

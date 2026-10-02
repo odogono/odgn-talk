@@ -328,6 +328,12 @@ export interface GroupOptions {
   trace?: (line: string) => void;
 }
 
+/** Compile-time Operation modes and argument Shapes, by the Grant name in source. */
+export type GrantDecls = Readonly<Record<string, Readonly<Record<string, {
+  mode: "immediate" | "suspending" | "fire-and-forget";
+  args: readonly Shape[];
+}>>>>;
+
 export interface LibrarySource { name: string; version: string; source: string }
 export interface OperationRef { capability: string; operation: string }
 
@@ -349,7 +355,7 @@ export interface Core {
   localeCapability(impl: LocaleImpl, costs: Costs): CapabilityDef<string>;     // binding: default tag
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
-  compileLibrary(src: LibrarySource, imports?: Library[]): Library;
+  compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;
   restore(save: Uint8Array, o: RestoreOptions): { group: Group; result: RestoreResult };
 }

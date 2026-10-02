@@ -1,0 +1,26 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "io"
+name = "read"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 10 }
+[[libraries]]
+name = "base"
+version = "1"
+source = "base.talk"
+[[libraries]]
+name = "wrapper"
+version = "1"
+source = "wrapper.talk"
+[[scripts]]
+name = "missing"
+source = "s.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { io = { ops = ["read"] } }

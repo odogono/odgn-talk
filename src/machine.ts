@@ -1872,8 +1872,8 @@ export class Run {
       ? grant.capability.operations.get(opName)
       : undefined;
     if (!grant || !op || (op.args ?? []).length !== args.length) {
-      // Only Library code gets here: its `needs` aren't checked at load yet.
-      throw new NotImplementedError("checking a Library's needs");
+      // Script and Library calls were checked against these Grants at load.
+      throw new Error('A Capability call was not validated at load');
     }
     const named: [string, Value][] = [
       ['capability', text(grantName)],
