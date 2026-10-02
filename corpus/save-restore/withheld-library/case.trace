@@ -7,25 +7,23 @@
 # - With `mismatch=variables-only` the restore is variables-only, not
 #   refused. tally imports nothing, so it still loads. Its Run tally/r1,
 #   suspended in its `wait`, is discarded, and `count` is kept.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> add-library fmt
-> load tally
+> add-library fmt identity=112f5282ed25c421f2130579ddd02a58695b39f4f18a33077f56c076aa5dd689
+> load tally identity=e3fc15af689150bc548133e4cc8f44a465a9ff9d8121358daf13b0242be053e3
 
 > deliver d1 to=tally message=bump
 > pump clock=2026-09-30T10:00:00Z
-seg tally/r1 start delivery=d1 handler=bump clause=1 fuel=9 alloc=0 state=24 end=wait until=2026-09-30T10:00:10Z
-pumped state=idle fuel=9 next=2026-09-30T10:00:10Z
+seg tally/r1 start delivery=d1 handler=bump clause=1 fuel=25 alloc=16 state=216 end=wait until=2026-09-30T10:00:10Z
+pumped state=idle fuel=25 next=2026-09-30T10:00:10Z
 
 > save s1
-> restore from=s1 mismatch=variables-only withheld=[fmt] mode=variables-only discarded=[tally/r1]
+> restore from=s1 mismatch=variables-only withheld=[fmt] fingerprint=a18a6b625e6fb4beb60339d8f893ae9225b5747d6d91313c23c7fc13f6cfc099 mode=variables-only discarded=[tally/r1]
 
 # The discarded Run's wait is gone, so the only deadline is tally/r2's.
 > deliver d2 to=tally message=bump
 > pump clock=2026-09-30T10:00:01Z
-seg tally/r2 start delivery=d2 handler=bump clause=1 fuel=9 alloc=0 state=24 end=wait until=2026-09-30T10:00:11Z
-pumped state=idle fuel=9 next=2026-09-30T10:00:11Z
+seg tally/r2 start delivery=d2 handler=bump clause=1 fuel=25 alloc=16 state=216 end=wait until=2026-09-30T10:00:11Z
+pumped state=idle fuel=25 next=2026-09-30T10:00:11Z
 
 > vars
 vars tally count=2

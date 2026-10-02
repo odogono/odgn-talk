@@ -8,24 +8,22 @@
 #   waits began in the order a, b, c, d, with deadlines 30 s, 10 s, 20 s and
 #   10 s on, so they fire b, d, c, a. They are all one Script's, so they run
 #   in the order they became ready, and `fired` records it.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load sleeper
+> load sleeper identity=f19e6f51a1a4c96198fe7642c9241cc9737faf135850a43fa097a24459eca396
 
 > deliver d1 to=sleeper message=nap args=["a", 30 s]
 > deliver d2 to=sleeper message=nap args=["b", 10 s]
 > deliver d3 to=sleeper message=nap args=["c", 20 s]
 > deliver d4 to=sleeper message=nap args=["d", 10 s]
 > pump clock=2026-09-30T10:00:00Z
-seg sleeper/r1 start delivery=d1 handler=nap clause=1 fuel=15 alloc=0 state=200 end=wait until=2026-09-30T10:00:30Z
-seg sleeper/r2 start delivery=d2 handler=nap clause=1 fuel=15 alloc=0 state=384 end=wait until=2026-09-30T10:00:10Z
-seg sleeper/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=568 end=wait until=2026-09-30T10:00:20Z
-seg sleeper/r4 start delivery=d4 handler=nap clause=1 fuel=15 alloc=0 state=752 end=wait until=2026-09-30T10:00:10Z
+seg sleeper/r1 start delivery=d1 handler=nap clause=1 fuel=15 alloc=0 state=484 end=wait until=2026-09-30T10:00:30Z
+seg sleeper/r2 start delivery=d2 handler=nap clause=1 fuel=15 alloc=0 state=660 end=wait until=2026-09-30T10:00:10Z
+seg sleeper/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=836 end=wait until=2026-09-30T10:00:20Z
+seg sleeper/r4 start delivery=d4 handler=nap clause=1 fuel=15 alloc=0 state=1012 end=wait until=2026-09-30T10:00:10Z
 pumped state=idle fuel=60 next=2026-09-30T10:00:10Z
 
 > save s1
-> restore from=s1 mode=full
+> restore from=s1 fingerprint=d3f5d7a287c35e9b11f8609ab57629da0d0a27a8313b4ff1260b3b4a5fc89981 mode=full
 
 # Earlier than the saved reading: refused, and the Group is unchanged.
 > pump clock=2026-09-30T09:59:59Z
@@ -33,15 +31,15 @@ refused code="clock backwards"
 
 # A minute on, all four are overdue.
 > pump clock=2026-09-30T10:01:00Z
-seg sleeper/r2 resume fuel=10 alloc=48 state=616 end=return
-run sleeper/r2 outcome=completed delivery=d2 handler=nap fuel=25 alloc=48
-seg sleeper/r4 resume fuel=10 alloc=48 state=488 end=return
-run sleeper/r4 outcome=completed delivery=d4 handler=nap fuel=25 alloc=48
-seg sleeper/r3 resume fuel=10 alloc=48 state=360 end=return
-run sleeper/r3 outcome=completed delivery=d3 handler=nap fuel=25 alloc=48
-seg sleeper/r1 resume fuel=10 alloc=48 state=232 end=return
-run sleeper/r1 outcome=completed delivery=d1 handler=nap fuel=25 alloc=48
-pumped state=idle fuel=40
+seg sleeper/r2 resume fuel=12 alloc=25 state=788 end=return
+run sleeper/r2 outcome=completed delivery=d2 handler=nap fuel=27 alloc=25
+seg sleeper/r4 resume fuel=12 alloc=25 state=564 end=return
+run sleeper/r4 outcome=completed delivery=d4 handler=nap fuel=27 alloc=25
+seg sleeper/r3 resume fuel=12 alloc=25 state=340 end=return
+run sleeper/r3 outcome=completed delivery=d3 handler=nap fuel=27 alloc=25
+seg sleeper/r1 resume fuel=12 alloc=25 state=116 end=return
+run sleeper/r1 outcome=completed delivery=d1 handler=nap fuel=27 alloc=25
+pumped state=idle fuel=48
 
 > vars
 vars sleeper fired=["b", "d", "c", "a"]

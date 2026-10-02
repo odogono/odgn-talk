@@ -3,7 +3,7 @@ import { invalidValue } from './errors';
 import { Value, requireValue } from './values';
 
 /** The spec's JSON string form: every U+0000..U+001F uses lowercase \u00xx. */
-const quote = (s: string): string =>
+export const quoteJSON = (s: string): string =>
   '"' +
   s.replaceAll(/[\u0000-\u001f"\\]/g, ch =>
     ch === '"'
@@ -32,7 +32,7 @@ export const encodeValue = (value: Value): string => {
         output.push(next.asBool() ? 'true' : 'false');
         break;
       case 'text':
-        output.push(quote(next.asText()!));
+        output.push(quoteJSON(next.asText()!));
         break;
       case 'number': {
         const canonical = next.asDecimal()!.toString();
@@ -41,28 +41,28 @@ export const encodeValue = (value: Value): string => {
             BigInt(canonical) > -(2n ** 53n) &&
             BigInt(canonical) < 2n ** 53n
             ? canonical
-            : `{"$dec":${quote(canonical)}}`,
+            : `{"$dec":${quoteJSON(canonical)}}`,
         );
         break;
       }
       case 'instant':
-        output.push(`{"$instant":${quote(next.toString())}}`);
+        output.push(`{"$instant":${quoteJSON(next.toString())}}`);
         break;
       case 'civil date':
-        output.push(`{"$date":${quote(next.toString())}}`);
+        output.push(`{"$date":${quoteJSON(next.toString())}}`);
         break;
       case 'object': {
         const o = next.asObjectRef()!;
-        output.push(`{"$object":[${quote(o.kind)},${quote(o.id)}]}`);
+        output.push(`{"$object":[${quoteJSON(o.kind)},${quoteJSON(o.id)}]}`);
         break;
       }
       case 'bytes':
-        output.push(`{"$bytes":${quote(toBase64(next.bytesView()!))}}`);
+        output.push(`{"$bytes":${quoteJSON(toBase64(next.bytesView()!))}}`);
         break;
       case 'quantity': {
         const q = next.asQuantity()!;
         output.push(
-          `{"$quantity":[${quote(q.number.toString())},${quote(q.unit)}]}`,
+          `{"$quantity":[${quoteJSON(q.number.toString())},${quoteJSON(q.unit)}]}`,
         );
         break;
       }
@@ -94,9 +94,9 @@ export const encodeValue = (value: Value): string => {
             pending.push(',');
           }
           if (tagged) {
-            pending.push(']', v, `[${quote(k)},`);
+            pending.push(']', v, `[${quoteJSON(k)},`);
           } else {
-            pending.push(v, `${quote(k)}:`);
+            pending.push(v, `${quoteJSON(k)}:`);
           }
         }
         break;

@@ -72,17 +72,23 @@ test('encoding selection reports the first differing source line', () => {
   }
 });
 
-test('selecting a case kind this Core defers exits with a clear failure', () => {
+test('selecting a Trace Case with a deferred input exits with a clear failure', () => {
   const runner = resolve(import.meta.dir, '../tools/core/corpus.ts');
-  const result = Bun.spawnSync([
-    process.execPath,
-    runner,
-    'save-restore/variables-only-restore',
-  ]);
-  expect(result.exitCode).toBe(1);
-  expect(new TextDecoder().decode(result.stderr)).toContain(
-    'deferred, since it uses',
-  );
+  const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-deferred-'));
+  try {
+    writeFileSync(
+      resolve(dir, 'case.toml'),
+      'kind = "trace"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n',
+    );
+    writeFileSync(resolve(dir, 'case.trace'), '> revoke s grant=api\n');
+    const result = Bun.spawnSync([process.execPath, runner, dir]);
+    expect(result.exitCode).toBe(1);
+    expect(new TextDecoder().decode(result.stderr)).toContain(
+      'deferred, since it uses',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('an unblessed Trace Case runs when named, and reports its first divergence', () => {

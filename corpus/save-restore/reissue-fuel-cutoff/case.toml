@@ -1,0 +1,14 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "hold"
+mode = "suspending"
+cost = { fuel = 1 }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["hold"] } }
+limits = { fuelPerRun = 100 }

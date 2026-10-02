@@ -24,6 +24,7 @@ import {
   LoadError,
   type Library,
   newGroup,
+  restore,
   NotImplementedError,
   parseInstant,
   readDisplay,
@@ -405,9 +406,38 @@ export const replay = (
   dir: string,
   setup: Setup,
   lines: readonly string[],
+  { restoreBetweenPumps = false } = {},
 ): string[] => {
   const trace: string[] = [];
-  const group = newGroup({ name: 'case', trace: line => trace.push(line) });
+  let hidden = false;
+  const adopted = new Set<string>();
+  const saveNames = new Map<string, string>();
+  let visibleSaves = 0;
+  const writeTrace = (line: string) => {
+    if (hidden) {
+      return;
+    }
+    if (restoreBetweenPumps && line.startsWith('> settle ')) {
+      const r = parseRecord(line);
+      if (r.fields.get('how') === 'adopt' && adopted.delete(r.ids[0]!)) {
+        return;
+      }
+    }
+    if (restoreBetweenPumps && line.startsWith('> save ')) {
+      const actual = parseRecord(line).ids[0]!;
+      const visible = `s${++visibleSaves}`;
+      saveNames.set(actual, visible);
+      line = `> save ${visible}`;
+    } else if (restoreBetweenPumps && line.startsWith('> restore ')) {
+      const actual = parseRecord(line).fields.get('from')!;
+      line = line.replace(
+        `from=${actual}`,
+        `from=${saveNames.get(actual) ?? actual}`,
+      );
+    }
+    trace.push(line);
+  };
+  let group = newGroup({ name: 'case', trace: writeTrace });
   // A Stop or CancelRun after a crossing is made from that Host function,
   // rather than a second time by the outer replay loop (chapter 11).
   const atCrossings = new Map<string, Parsed[][]>();
@@ -454,7 +484,7 @@ export const replay = (
   // The Host Objects case.toml lists, made before the first Host Input, with
   // their properties' values, which the runner's Get reads and Set writes.
   const made = new Map<string, HostObject>();
-  const props = new Map<HostObject, Map<string, Value>>();
+  const props = new Map<string, Map<string, Value>>();
   const resolveObject = (kind: string, id: string) => made.get(`${kind} ${id}`);
   const value = (text: string) => read(text, resolveObject);
   const objectOf = (o: ObjectRefSpec): HostObject => {
@@ -479,13 +509,15 @@ export const replay = (
               ...(p.setCost ? { setCost: p.setCost } : {}),
               get: (o: HostObject<null>) => {
                 crossing(`${o.value}:${p.name}:get`);
-                return props.get(o)?.get(p.name) ?? nothing;
+                return (
+                  props.get(`${o.kind.name} ${o.id}`)?.get(p.name) ?? nothing
+                );
               },
               ...(p.readOnly
                 ? {}
                 : {
                     set: (o: HostObject<null>, v: Value) => {
-                      props.get(o)!.set(p.name, v);
+                      props.get(`${o.kind.name} ${o.id}`)!.set(p.name, v);
                       crossing(`${o.value}:${p.name}:set`);
                     },
                   }),
@@ -506,7 +538,7 @@ export const replay = (
   for (const o of setup.objects ?? []) {
     const handle = made.get(`${o.kind} ${o.id}`)!;
     props.set(
-      handle,
+      `${handle.kind.name} ${handle.id}`,
       new Map(
         Object.entries(o.props ?? {}).map(([name, text]) => [
           name,
@@ -555,6 +587,8 @@ export const replay = (
   }
   order.push(...refused);
   let registered = new Map<string, Library>();
+  const saved = new Map<string, Uint8Array>();
+  const bound = new Map<string, Record<string, Grant<unknown>>>();
   for (const index of order) {
     const line = lines[index]!;
     if (crossingLines.has(index)) {
@@ -584,6 +618,7 @@ export const replay = (
             }
             grants[granted] = capability.grant(g.ops, undefined);
           }
+          bound.set(script.name, grants);
           group.load({
             grants,
             name: script.name,
@@ -704,6 +739,82 @@ export const replay = (
             .script(r.ids[0]!)!
             .stop(value(r.fields.get('reason')!).asText()!);
           break;
+        case 'save': {
+          const bytes = group.save();
+          saved.set(parseRecord(trace.at(-1)!).ids[0]!, bytes);
+          break;
+        }
+        case 'restore': {
+          const from = r.fields.get('from') ?? [...saved.keys()].at(-1)!;
+          const ids = (field: string) =>
+            (r.fields.get(field) ?? '[]')
+              .slice(1, -1)
+              .split(', ')
+              .filter(Boolean);
+          const unbound = new Set(ids('unbound'));
+          const withheld = new Set(ids('withheld'));
+          const disposed = r.fields.has('disposed')
+            ? valuesOf(value(r.fields.get('disposed')!)).map(v => v.toString())
+            : [];
+          const restored = restore(saved.get(from)!, {
+            name: 'case',
+            trace: writeTrace,
+            libraries: [...registered.values()].filter(
+              l => !withheld.has(l.name),
+            ),
+            grants: (script, name) =>
+              unbound.has(`${script}.${name}`)
+                ? undefined
+                : bound.get(script)?.[name],
+            resolve: (kind, id) => {
+              const handle = made.get(`${kind} ${id}`);
+              return !handle || disposed.includes(handle.value.toString())
+                ? undefined
+                : { native: handle.native };
+            },
+            onMismatch:
+              r.fields.get('mismatch') === 'variables-only'
+                ? 'variables only'
+                : 'reject',
+          });
+          group = restored.group;
+          for (const [key, handle] of made) {
+            made.set(key, group.objectById(handle.kind.name, handle.id)!);
+          }
+          break;
+        }
+        case 'settle': {
+          const id = r.ids[0]!;
+          const how = r.fields.get('how');
+          const error =
+            how === 'fail' ? value(r.fields.get('error')!) : nothing;
+          const call = group.settle(
+            id,
+            how === 'answer'
+              ? { answer: value(r.fields.get('value')!) }
+              : how === 'fail'
+                ? {
+                    fail: new ScriptError(
+                      error.get('code').asText()!,
+                      error.get('message').asText() ?? '',
+                      map(
+                        error
+                          .entries()
+                          .filter(
+                            ([key]) => key !== 'code' && key !== 'message',
+                          ),
+                      ),
+                    ),
+                  }
+                : how === 'adopt'
+                  ? { adopt: true }
+                  : { reissue: true },
+          );
+          if (call) {
+            calls.set(id, call);
+          }
+          break;
+        }
         case 'pump':
           group.pump(parseInstant(r.fields.get('clock')!), {
             fuelSlice: r.fields.has('fuel-slice')
@@ -713,6 +824,66 @@ export const replay = (
               ? Number(r.fields.get('fuel-cap'))
               : 0,
           });
+          if (
+            restoreBetweenPumps &&
+            lines.slice(index + 1).some(line => line.startsWith('> pump ')) &&
+            // An explicit save/restore case already exercises this boundary;
+            // hidden adoption must not become a visible queued settlement.
+            !lines
+              .slice(
+                index + 1,
+                lines.findIndex(
+                  (line, j) => j > index && line.startsWith('> pump '),
+                ),
+              )
+              .some(
+                line =>
+                  line.startsWith('> save ') || line.startsWith('> restore '),
+              )
+          ) {
+            // A later input using a nonpending old Call or cancellation handle
+            // belongs to the old Group; chapter 11 excludes these boundaries.
+            const future = lines
+              .slice(index + 1)
+              .filter(
+                line =>
+                  line.startsWith('> answer ') ||
+                  line.startsWith('> fail ') ||
+                  line.startsWith('> cancel-delivery ') ||
+                  line.startsWith('> call-value '),
+              );
+            hidden = true;
+            const bytes = group.save();
+            const restored = restore(bytes, {
+              name: 'case',
+              trace: writeTrace,
+              libraries: [...registered.values()],
+              grants: (script, name) => bound.get(script)?.[name],
+              resolve: (kind, id) => ({
+                native: made.get(`${kind} ${id}`)!.native,
+              }),
+              onMismatch: 'reject',
+            });
+            hidden = false;
+            const pending = new Set(restored.result.pending.map(p => p.id));
+            if (
+              !future.some(
+                line =>
+                  line.startsWith('> cancel-delivery ') ||
+                  line.startsWith('> call-value ') ||
+                  !pending.has(parseRecord(line).ids[0]!),
+              )
+            ) {
+              group = restored.group;
+              for (const [key, handle] of made) {
+                made.set(key, group.objectById(handle.kind.name, handle.id)!);
+              }
+              for (const p of restored.result.pending) {
+                calls.set(p.id, group.settle(p.id, { adopt: true })!);
+                adopted.add(p.id);
+              }
+            }
+          }
           break;
         case 'vars':
           group.inspect();
@@ -768,6 +939,9 @@ export const replay = (
           throw new DeferredCaseError(`the Host Input ${r.name}`);
       }
     } catch (error) {
+      if (hidden) {
+        throw error;
+      }
       if (
         error instanceof LoadError ||
         (error instanceof Error && error.name === 'MailboxFull') ||
@@ -803,6 +977,13 @@ export const runTraceCase = (
     file.pop();
   }
   const actual = replay(dir, setup, file);
+  const roundTripped = replay(dir, setup, file, { restoreBetweenPumps: true });
+  if (actual.join('\n') !== roundTripped.join('\n')) {
+    const at = actual.findIndex((line, i) => line !== roundTripped[i]);
+    throw new Error(
+      `Save/restore replay differs at output ${at + 1}:\nexpected ${actual[at]}\nactual ${roundTripped[at]}`,
+    );
+  }
   if (bless) {
     writeFileSync(path, blessed(file, actual));
     return { lines: actual.length };

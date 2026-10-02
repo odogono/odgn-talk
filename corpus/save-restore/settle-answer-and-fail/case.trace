@@ -7,10 +7,8 @@
 #   Pump in the order they were made, so shop/r1 is ready before shop/r2.
 # - An answer settles as `Answer` would, and a failure raises its code at the
 #   `ask … and wait` (shop:5, pos 9:5), as `Fail` would.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load shop
+> load shop identity=24386efa13383c9ca67037f1906cee7db512af4ce65f3ddf54fca68b83144627
 
 # Two Runs, each suspended on its own call. Each call's MaxWait (30 s, the
 # default) is the next deadline.
@@ -18,24 +16,24 @@
 > deliver d2 to=shop message=check args=["B2"]
 > pump clock=2026-09-30T10:00:00Z
 call shop/r1.c1 op=stock.check args=["A1"]
-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=240 end=ask-wait
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
 call shop/r2.c1 op=stock.check args=["B2"]
-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=464 end=ask-wait
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
 pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
 
 > save s1
-> restore from=s1 mode=full pending=[shop/r1.c1, shop/r2.c1]
+> restore from=s1 fingerprint=2b73606268ab4c03e12eadc3e969e20903d5d993350a4f8b13afe0364570ba88 mode=full pending=[shop/r1.c1, shop/r2.c1]
 
 # Settled in this order, before the first Pump.
 > settle shop/r1.c1 how=answer value=12
 > settle shop/r2.c1 how=fail error={code: "out of stock"}
 > pump clock=2026-09-30T10:00:05Z
-seg shop/r1 resume fuel=24 alloc=88 state=312 end=return
-run shop/r1 outcome=completed delivery=d1 handler=check fuel=139 alloc=88
+seg shop/r1 resume fuel=21 alloc=156 state=356 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=136 alloc=156
 raise shop/r2 code="out of stock" at=shop:5 pos=9:5
-seg shop/r2 resume fuel=62 alloc=240 state=128 end=return
-run shop/r2 outcome=completed delivery=d2 handler=check fuel=177 alloc=240
-pumped state=idle fuel=86
+seg shop/r2 resume fuel=27 alloc=180 state=176 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=180
+pumped state=idle fuel=48
 
 # The first Pump has run, so a settlement now is Host misuse, and changes
 # nothing.

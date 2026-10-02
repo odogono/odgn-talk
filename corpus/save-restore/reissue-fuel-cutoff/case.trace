@@ -1,0 +1,21 @@
+# A reissue that can't cover Charge faults at the saved ask, abandons the
+# pending Call, and preserves n=9 committed at the original suspension.
+> load s identity=005ff054399aba6ae6015f60df44459ab5c187e23f00a1e8ecd030fcb9fc19ba
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=api.hold args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=18 next=2026-09-30T10:00:30Z
+> save s1
+> restore from=s1 fingerprint=adb881cdac8f1a7985381dd423bfebc8ae413baa8697820abc9c26d0b308cb71 mode=full pending=[s/r1.c1]
+> stub api.hold charge=1000
+> settle s/r1.c1 how=reissue
+> pump clock=2026-09-30T10:00:01Z
+call s/r1.c1 op=api.hold args=[]
+fault s/r1 limit=fuel at=s:6 pos=4:3
+abandon s/r1.c1
+seg s/r1 resume fuel=0 alloc=0 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=18 alloc=0
+pumped state=idle fuel=0
+> vars
+vars s n=9

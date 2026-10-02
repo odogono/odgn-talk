@@ -1,0 +1,5 @@
+script variable n = 0
+on go
+  put 9 into n
+  ask api to hold and wait
+end go

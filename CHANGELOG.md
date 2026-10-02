@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core same-family Save and Restore, Group Fingerprints, full and variables-only restores, Host rebinding and pending-call Answer, Fail, Reissue and Adopt, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-seven regression tests, nine blessed save/restore seeds and two new reissue Trace Cases cover the changes; every implemented Trace Case also runs with save/restore between eligible Pumps.
+
 - TS Core Reload, Extend and atomic Library replacement with transitive importers, variable carry/reset, separate extension code units and stale Function Values, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-one tests, five `reload/` Trace Cases and the newly supported `pattern-size-literal-limit` seed cover the changes.
 - Spec rules for the extension Persistent State cap, inherited tables and links in extension lowering, and preserving exact source scalars in Trace inputs.
 
@@ -69,6 +71,9 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Reissue Fuel cutoff preserves committed state and abandons only pending calls, including partially answered Joins. Backwards Pumps write their refusal while retaining queued inputs.
+- Spec gaps in canonical Fingerprint declarations, Save id counters, numeric call-id ordering, reissue Fuel accounting and discarded Broadcast Decisions are settled. Cost Model rates are unchanged.
 
 - Existing Script names no longer overwrite declared bindings during checking. Decision checks include calls from extensions into older vetoing Handlers, and Function Values receive immutable code identities before initialisers run.
 

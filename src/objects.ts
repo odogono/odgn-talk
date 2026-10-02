@@ -24,13 +24,21 @@ export type ObjectKind<N = unknown> = {
   readonly props: ReadonlyMap<string, PropDef<N>>;
 };
 
+const kinds = new Map<string, ObjectKind>();
+/** A restored handle uses the process's definition of its saved kind. */
+export const objectKind = (name: string): ObjectKind | undefined =>
+  kinds.get(name);
+
 /** Define an Object Kind, once per process. */
-export const defineObjectKind = <N>(k: ObjectKindDef<N>): ObjectKind<N> =>
-  Object.freeze({
+export const defineObjectKind = <N>(k: ObjectKindDef<N>): ObjectKind<N> => {
+  const kind = Object.freeze({
     name: k.name,
     parentKinds: Object.freeze([...(k.parentKinds ?? [])]),
     props: new Map(Object.entries(k.props)),
   });
+  kinds.set(kind.name, kind as ObjectKind);
+  return kind;
+};
 
 /** A Group-scoped handle to something the Host owns. */
 export type HostObject<N = unknown> = {
@@ -74,3 +82,14 @@ export const makeObject = <N>(
 /** The Group's state of an object value. */
 export const stateOf = (v: Value): ObjectState | undefined =>
   v.asObjectRef()?.handle as ObjectState | undefined;
+
+/** Rebind native state while preserving every saved reference to this object. */
+export const rebindObject = (state: ObjectState, native: unknown): void => {
+  const { kind, id } = state.handle;
+  state.handle = Object.freeze({
+    kind,
+    id,
+    native,
+    value: objectValue({ kind: kind.name, id, handle: state }),
+  });
+};

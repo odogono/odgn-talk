@@ -1,0 +1,20 @@
+# Reissue Charge counts toward the Pump cap and Script slice. Its overrun
+# becomes debt, keeping the new Delivery queued through the next Pump.
+> load s identity=005ff054399aba6ae6015f60df44459ab5c187e23f00a1e8ecd030fcb9fc19ba
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=api.hold args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=18 next=2026-09-30T10:00:30Z
+> save s1
+> restore from=s1 fingerprint=2aa2a4876f15543dde5d53b02a6032acdf821a9ceb81bccaedf7aa640aae5d27 mode=full pending=[s/r1.c1]
+> stub api.hold charge=50
+> settle s/r1.c1 how=reissue
+> deliver d2 to=s message=go
+> pump clock=2026-09-30T10:00:01Z fuel-slice=10 fuel-cap=10
+call s/r1.c1 op=api.hold args=[] charged=50
+pumped state=sliced fuel=50 next=2026-09-30T10:00:30Z
+> pump clock=2026-09-30T10:00:02Z fuel-slice=10
+pumped state=sliced fuel=0 next=2026-09-30T10:00:30Z
+> vars
+vars s n=9
