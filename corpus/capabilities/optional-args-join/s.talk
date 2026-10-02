@@ -1,0 +1,9 @@
+script variable seen = []
+on go
+  wait for all
+    ask api to read and wait
+    ask api to read nothing and wait
+    ask api to read "x" and wait
+  end
+  put it into seen
+end

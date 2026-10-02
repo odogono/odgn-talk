@@ -255,7 +255,7 @@ func MapShape(fields ...Field) Shape // closed
 func OpenMap(fields ...Field) Shape
 func ObjectShape(kind *ObjectKind) Shape
 func OneOf(ss ...Shape) Shape
-func Optional(s Shape) Shape // may be Nothing, or missing when trailing
+func Optional(s Shape) Shape // Nothing or s; an outer Optional suffix may be omitted
 
 type Field struct {
 	Key      string
@@ -295,7 +295,7 @@ type ErrorDecl struct {
 // implements it. Exactly one of Do, Start and Fire is set, matching Mode.
 type Operation struct {
 	Name       string // a literal word; `ask`, `tell`, `send` and `wait` are refused
-	Args       []Shape
+	Args       []Shape // an Optional suffix may be omitted; Host functions receive only supplied args
 	Result     Shape
 	Cost       Cost
 	Mode       Mode

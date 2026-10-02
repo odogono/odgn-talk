@@ -22,6 +22,13 @@ export type Shape =
   | { k: 'optional'; of: Shape };
 export type FieldShape = Shape | { optional: true; shape: Shape };
 
+/** Only a suffix of directly Optional argument Shapes can be omitted. */
+export const acceptsArgumentCount = (
+  args: readonly Shape[],
+  count: number,
+): boolean =>
+  count <= args.length && args.slice(count).every(s => s.k === 'optional');
+
 const kind = (k: string): Shape => ({ k: 'kind', kind: k });
 const fieldsOf = (fields: Record<string, FieldShape>) =>
   Object.entries(fields).map(([key, f]) =>

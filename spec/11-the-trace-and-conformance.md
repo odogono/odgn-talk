@@ -564,6 +564,8 @@ A Shape is written as one of these:
 - **`{list = <shape>}`**, **`{object = "<kind>"}`**, **`{oneOf = [<shape>, …]}`** and **`{optional = <shape>}`**.
 - **`{map = [<field>, …]}`**, a closed map, or with `open = true` an open one. A field is `{key, shape}`, with `optional = true` for a key that may be missing.
 
+An Operation's trailing `{optional = <shape>}` arguments may be omitted as [chapter 9](09-embedding.md#shapes) says. Its `call` record keeps only supplied arguments; the runner adds no placeholders. Saved pending arguments keep that list for Reissue or Adopt.
+
 ### Running a case
 
 - **The runner** is each Core's corpus-runner Example Host. The two share only data: the Corpus and the Data Files ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).

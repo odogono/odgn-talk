@@ -57,6 +57,7 @@ import {
 } from './operations';
 import { readDisplay } from './readers';
 import {
+  acceptsArgumentCount,
   LimitReached,
   mismatch,
   type Call,
@@ -1872,7 +1873,7 @@ export class Run {
     const op = grant?.ops.has(opName)
       ? grant.capability.operations.get(opName)
       : undefined;
-    if (!grant || !op || (op.args ?? []).length !== args.length) {
+    if (!grant || !op || !acceptsArgumentCount(op.args ?? [], args.length)) {
       // Script and Library calls were checked against these Grants at load.
       throw new Error('A Capability call was not validated at load');
     }
@@ -1880,8 +1881,8 @@ export class Run {
       ['capability', text(grantName)],
       ['operation', text(opName)],
     ];
-    (op.args ?? []).forEach((shape, i) => {
-      const bad = mismatch(args[i]!, shape);
+    args.forEach((arg, i) => {
+      const bad = mismatch(arg, op.args![i]!);
       if (!bad) {
         return;
       }

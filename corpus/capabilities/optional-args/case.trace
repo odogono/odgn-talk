@@ -1,0 +1,21 @@
+# A Library omits both trailing Optional positions; later calls supply
+# one and two. Explicit Nothing is distinct from an absent argument.
+# Every call pays its declared cost, including a zero-argument tell.
+> add-library helper identity=55528ff455e05cb221d1816c004d2f45e849d9901f4f1806ae3c80941990ea44
+> load s identity=d10dc9d25b314ab9fedcd4655c382323bbf67ea7b0860dd95360eda21f9a83e8
+> stub api.count value=1
+> stub api.count value=2
+> stub api.count value=3
+> stub api.note charge=5
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T14:00:00Z
+call s/r1.c1 op=api.count args=[1] result=1
+call s/r1.c2 op=api.count args=[1, "zone"] result=2
+call s/r1.c3 op=api.count args=[1, nothing, 3] result=3
+call s/r1.c4 op=api.note args=[] charged=5
+call s/r1.c5 op=api.note args=[nothing]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=137 alloc=126 state=88 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=137 alloc=126
+pumped state=idle fuel=137
+> vars
+vars s counts=[1, 2, 3]

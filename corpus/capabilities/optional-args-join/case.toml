@@ -1,0 +1,15 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "read"
+mode = "suspending"
+args = [{ optional = "text" }]
+result = "number"
+cost = { fuel = 2 }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = "all" } }

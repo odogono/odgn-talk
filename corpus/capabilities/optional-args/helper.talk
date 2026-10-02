@@ -1,0 +1,4 @@
+function fetch
+  ask api to count 1
+  return it
+end

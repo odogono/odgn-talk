@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core trailing Optional Capability arguments, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twelve regression tests and three Trace Cases cover all Operation modes, Joins, literal and dynamic checks, Library compilation and imports, code changes, costs and save/restore settlement. The Host and Trace retain the supplied argument list.
+
 - TS Core Console Standard Capability factory, `ConsoleImpl` and `shape.value`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Ten regression tests and three Console Trace Cases cover `say`, nested Function Values, Library needs, reads with extra Fuel, cancellation, the human-input timeout, Host failures and save/restore replay. The corpus runner supports Console through `[[standard]]`.
 
 - TS Core Clock and Timer Standard Capability factories, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Nine regression tests and three Trace Cases cover exact Pump readings, fixed declarations, Host timer calls, costs, Library needs and save/restore replay. The corpus runner supports `[[standard]]` for both.
@@ -79,6 +81,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Spec rules for Optional Capability argument omission: only an outer Optional suffix may be omitted, explicit Nothing remains supplied, and no placeholders or defaults are inserted. Declared costs still apply; `say` keeps exactly one source argument. No syntax or Cost Model rate changes.
 
 - Spec gaps in Console's embedding interface and fixed declarations. The new `value` Shape accepts all values, including nested Function Values, so Console can show their text form; `any` remains data-only and storage still refuses Function Values. No syntax or Cost Model rate changes.
 

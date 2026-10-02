@@ -163,7 +163,7 @@ export declare const shape: {
   openMap(fields: Record<string, FieldShape>): Shape;
   object(kind: ObjectKind): Shape;
   oneOf(...ss: Shape[]): Shape;
-  optional(s: Shape): Shape;
+  optional(s: Shape): Shape; // Nothing or s; an outer Optional suffix may be omitted
 };
 
 // ---------------------------------------------------------------------------
@@ -175,6 +175,7 @@ export interface Cost { fuel: number; alloc?: number }
 export interface ErrorDecl { code: string; fields?: Record<string, FieldShape> }
 
 interface OpBase {
+  /** A trailing Optional suffix may be omitted; Host functions receive only supplied args. */
   args?: Shape[];
   result?: Shape;
   cost: Cost;
