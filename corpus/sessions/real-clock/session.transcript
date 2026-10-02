@@ -1,0 +1,31 @@
+# Under a real Clock, the Session Host sleeps while the Foreground Run waits
+# only for a deadline, answers the Foreground Run's `read` with a typed line,
+# and pumps at each deadline a background Run waits for.
+> on nap
+|   wait 2 s
+|   say "rested"
+| end nap
+> nap and wait
+@ 2026-09-30T10:00:00Z
+@ 2026-09-30T10:00:02Z
+rested
+> on echo
+|   ask console to read and wait
+|   say "got " & it
+| end echo
+> echo and wait
+@ 2026-09-30T10:00:03Z
+< hello
+@ 2026-09-30T10:00:04Z
+got hello
+> on later
+|   wait 5 s
+|   say "later"
+| end later
+> send later to session
+@ 2026-09-30T10:00:05Z
+> 1 + 1
+@ 2026-09-30T10:00:06Z
+2
+@ 2026-09-30T10:00:10Z
+[session/r4] later

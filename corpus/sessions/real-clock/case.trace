@@ -1,0 +1,47 @@
+> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
+> extend session source="on nap" & newline & "  wait 2 s" & newline & "  say " & quote & "rested" & quote & newline & "end nap" identity=2cabc607f00871b551339a271a259d01582ac0e6f61649701cc3e2f09bfaee48
+> extend session source="on entry1" & newline & "nap and wait" & newline & "end entry1" & newline identity=b5318ed5a597df9f6961d8fd26bf189235ef6fb305ff333f2dcf2c612563b3e9
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=27 alloc=0 state=256 end=wait until=2026-09-30T10:00:02Z
+pumped state=idle fuel=27 next=2026-09-30T10:00:02Z
+> pump clock=2026-09-30T10:00:02Z
+call session/r1.c1 op=console.write args=["rested"]
+seg session/r1 resume fuel=18 alloc=0 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=45 alloc=0
+pumped state=idle fuel=18
+> extend session source="on echo" & newline & "  ask console to read and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end echo" identity=39905da3c4601775e9cb23f40095b9df84729fee6aa5d44d00f80a76088e8806
+> extend session source="on entry2" & newline & "echo and wait" & newline & "end entry2" & newline identity=139af39803362d8554c2f372209a65aa9cbfb2b62079f74ac4dd11c8be4596f9
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:03Z
+call session/r2.c1 op=console.read args=[]
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=26 alloc=0 state=304 end=ask-wait
+pumped state=idle fuel=26 next=2026-10-25T06:31:26.647Z
+> answer session/r2.c1 value="hello"
+> pump clock=2026-09-30T10:00:04Z
+call session/r2.c2 op=console.write args=["got hello"]
+seg session/r2 resume fuel=25 alloc=46 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=51 alloc=46
+pumped state=idle fuel=25
+> extend session source="on later" & newline & "  wait 5 s" & newline & "  say " & quote & "later" & quote & newline & "end later" identity=92970e94091002eb0a5811edf1984e38a3895bec68f26eba114e95b18a4f67b8
+> extend session source="on entry3" & newline & "send later to session" & newline & "end entry3" & newline identity=bb6bc9ff368988ac5f11d68dd40c84cbeb998a79e37666b5ea322d210af70ecb
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:05Z
+send session/r3 to=session message=later
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=29 alloc=32 state=32 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
+seg session/r4 start from=session/r3 handler=later clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:00:10Z
+pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
+> extend session source="on entry4" & newline & "return 1 + 1" & newline & "end entry4" & newline identity=df1a8b6bce8783e040a13dd87ab609c57f8030dd73b481b1174b29c78dd40a0e
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:06Z
+seg session/r5 start delivery=d4 handler=entry4 clause=1 fuel=12 alloc=16 state=176 end=return
+run session/r5 outcome=completed delivery=d4 handler=entry4 value=2 fuel=12 alloc=16
+pumped state=idle fuel=12 next=2026-09-30T10:00:10Z
+> pump clock=2026-09-30T10:00:10Z
+call session/r4.c1 op=console.write args=["later"]
+seg session/r4 resume fuel=14 alloc=0 state=0 end=return
+run session/r4 outcome=completed handler=later fuel=29 alloc=0
+pumped state=idle fuel=14
+> vars
+vars session

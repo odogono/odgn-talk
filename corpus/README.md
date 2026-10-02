@@ -26,10 +26,11 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`reload/`](reload/) | Reload carry/reset and discarded Runs, extension code units and their state cap, transitive Library replacement, and stale Function Values ([chapter 10](../spec/10-save-and-restore.md#reload-and-extend)) |
 | [`builtins/`](builtins/) | reading a value's kind with `kindOf`, and a Function Value's arity and name with `functionArity` and `functionName`, stale ones included, and a Host Object's Object Kind with `objectKind`, disposed ones included ([chapter 7](../spec/07-libraries-and-the-standard-library.md#values), [ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md), [ADR 0044](../docs/adr/0044-a-host-objects-object-kind-is-read-with-a-built-in.md)) |
 | [`disassembly/`](disassembly/) | Disassembly Cases: the lowering of expressions, Containers, Destructuring, control flow and `try`, calls and Lambdas, and messages and waiting, which between them emit every instruction ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#the-lowering)) |
+| [`sessions/`](sessions/) | Session Transcripts: Entries, echoes and `say`, implicit Script Variables, declarations and redefinitions, rejected Entries, background lines, and a real Clock's `@` readings, deadline Pumps and `read` answers ([chapter 12](../spec/12-sessions-and-tooling.md#session-transcripts)) |
 
 ## Seed blessing
 
-All 146 current corpus cases execute, and every Trace Case is blessed by the TS Core, the only available Core. Every first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
+All 148 current corpus cases execute, and every Trace Case and Session Transcript is blessed by the TS Core, the only available Core. Every first blessing has had its human review except the two Session Transcripts' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -70,6 +71,8 @@ Every current Trace Case runs in CI, including the limits at their conformance m
 
 
 ## The Disassembly Cases
+
+The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case, in both replays. They await their first human review, in [#131](https://github.com/odogono/odgn-talk/issues/131).
 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 
