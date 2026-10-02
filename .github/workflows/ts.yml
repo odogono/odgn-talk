@@ -35,6 +35,8 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
+      # The Unicode tests read the pinned source files this check downloads.
+      - run: bun run unicode:check
       - run: bun test tests
         working-directory: impl/ts
       - run: bun run corpus:run
