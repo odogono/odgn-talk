@@ -1,0 +1,34 @@
+-- probe.talk: the function-values case's Script.
+
+use pad, maker from tools
+use pad from tools as padLeft
+
+script variable log = []
+script variable kept = nothing
+
+function zero
+  return 0
+end zero
+
+function tax amount, rate = 20
+  return amount * rate / 100
+end tax
+
+on go
+  put given a, b: a into both
+  repeat for each f in [zero, tax, both, pad, padLeft, maker()]
+    put [functionArity(f), functionName(f)] after log
+  end repeat
+  put [2 is in functionArity(tax), 3 is in functionArity(tax)] after log
+  try
+    put functionArity(3) into a
+  catch e
+    put e after log
+  end try
+  try
+    put functionName("tax") into n
+  catch e
+    put e after log
+  end try
+  put tax into kept
+end go

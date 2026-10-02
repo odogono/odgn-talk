@@ -1,0 +1,24 @@
+-- kinds.talk: the kind-of case's Script.
+
+script variable log = []
+
+on go
+  put [nothing, true, 3, 2.5, 3 kg, "t", << 1, 2 >>, [1], {a: 1}, 1..3] into vs
+  put "2026-09-27T13:30:00Z" as instant after vs
+  put "2026-09-27" as civil date after vs
+  put <"ID-", 4 digits> after vs
+  put (given x: x) after vs
+  put bulb after vs
+  repeat for each v in vs
+    put kindOf(v) after log
+  end repeat
+  put [which({a: 1}), which([1])] after log
+end go
+
+on which v where kindOf(v) = "map"
+  return "a map"
+end which
+
+on which v
+  return "something else"
+end which
