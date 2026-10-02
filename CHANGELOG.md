@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- `call failed` Host reports and `PumpResult.nextDeadline`, part of [#196](https://github.com/odogono/odgn-talk/issues/196). A `host error` now reports its call id, `{capability, operation}` and the Host-side detail (a thrown error, a result that breaks its Shape, or a refused failure code or key) beside its `call-failed` Trace record; the Script still sees no detail. `nextDeadline` is the `pumped` record's `next`. Five tests cover immediate and suspending calls, declared failures and deadlines.
+
 - Group-level regression tests for the `initialiser failed` load diagnostic and the `duplicate object id` Host error, from the [#126](https://github.com/odogono/odgn-talk/issues/126) embedding API and diagnostic audit. The audit's remaining interface gaps are #196 to #200, recorded in the implementation guide.
 
 - TS Core `Script.counters()` and public `Counters`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Seventeen tests and three Trace Cases cover live, parked, completed and discarded work, faults, cleanup, event tests, Reissue, code changes and restore. Chapter 9 settles counting rules and chapter 11 adds `counters` input/output records.

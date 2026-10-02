@@ -22,6 +22,7 @@ import {
   type Outcome,
   type Member,
   type Resumption,
+  type RunRecord,
   Run,
   type RunHost,
   type Suspension,
@@ -68,6 +69,7 @@ import {
   prepare,
   stdlibNames,
   type Library,
+  type OperationRef,
 } from './library';
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
@@ -170,6 +172,14 @@ export type Report =
     }
   | { delivery: string; kind: 'unhandled'; message: Message }
   | {
+      call: string;
+      /** What the Host did wrong; the Script saw only `host error`. */
+      detail: string;
+      kind: 'call failed';
+      operation: OperationRef;
+      script: string;
+    }
+  | {
       discardedRuns: string[];
       droppedMessages: string[];
       kind: 'stop';
@@ -180,6 +190,8 @@ export type Report =
   | ({ kind: 'decided' } & Decided);
 export type PumpResult = {
   fuelUsed: number;
+  /** The earliest deadline the next Pump could fire, if there is one. */
+  nextDeadline?: bigint;
   reports: Report[];
   state: 'idle' | 'sliced' | 'stopped';
 };
@@ -348,7 +360,7 @@ type InputAction =
   | { k: 'stop'; name: string; reason: string }
   | { grant: string; k: 'revoke'; name: string }
   | { fuel: number; id: string; k: 'answer'; value: Value }
-  | { error: HostScriptError | null; id: string; k: 'fail' }
+  | { detail?: string; error: HostScriptError | null; id: string; k: 'fail' }
   | {
       delivery: Delivery;
       k: 'delivery';
@@ -1257,7 +1269,11 @@ export class Group {
         });
         break;
       case 'fail':
-        this.settleReply(action.id, { k: 'fail', error: action.error });
+        this.settleReply(action.id, {
+          k: 'fail',
+          error: action.error,
+          detail: action.detail,
+        });
         break;
       case 'delivery': {
         const { state, to, delivery } = action;
@@ -2142,7 +2158,7 @@ export class Group {
         this.checkFunctionGroups([value], line);
         this.inputs.push({ line, action: { k: 'answer', id, value, fuel } });
       },
-      fail: (id, error) => {
+      fail: (id, error, detail) => {
         const value = failMap(error);
         const line = recordLine(
           'fail',
@@ -2151,7 +2167,7 @@ export class Group {
           true,
         );
         this.checkFunctionGroups([value], line);
-        this.inputs.push({ line, action: { k: 'fail', id, error } });
+        this.inputs.push({ line, action: { k: 'fail', id, error, detail } });
       },
     };
   }
@@ -3070,7 +3086,12 @@ export class Group {
         ],
       ),
     );
-    return { state, fuelUsed: fuel, reports };
+    return {
+      state,
+      ...(next === null ? {} : { nextDeadline: next }),
+      fuelUsed: fuel,
+      reports,
+    };
   }
 
   // An admitted message follows its live path before any dispatch or observation.
@@ -3417,6 +3438,27 @@ export class Group {
     run.cancellationAbandons = [];
   }
 
+  // The Host-side report of a `host error`, beside its `call-failed` record.
+  private callFailed(
+    script: string,
+    rec: Extract<RunRecord, { kind: 'call-failed' }>,
+  ): Report {
+    const dot = rec.op.indexOf('.');
+    const grant = rec.op.slice(0, dot);
+    return {
+      kind: 'call failed',
+      script,
+      call: rec.id,
+      operation: {
+        capability:
+          this.scripts.find(s => s.name === script)?.grants.get(grant)
+            ?.capability.name ?? grant,
+        operation: rec.op.slice(dot + 1),
+      },
+      detail: rec.detail,
+    };
+  }
+
   private writeRecords(running: Running, records0: number) {
     const { run } = running;
     for (let i = records0; i < run.records.length; i++) {
@@ -3476,6 +3518,7 @@ export class Group {
       }
       if (rec.kind === 'call-failed') {
         this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
+        this.drainReports.push(this.callFailed(run.script.name, rec));
         continue;
       }
       if (rec.kind === 'send') {
