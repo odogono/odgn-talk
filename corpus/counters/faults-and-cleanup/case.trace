@@ -1,0 +1,35 @@
+# Rollback keeps spent Fuel; queued cancellation starts no Run; failed cleanup is cancellation.
+> load s identity=2cdbcda51c191e7e7dfd80b2500fed5fc64d25e82e2e6dd41ebf871cf4946dac
+> counters s
+counters s fuel=0 alloc=0 runs=0 faults=0 state=16 mailbox=0
+> deliver d1 to=s message=spin
+> pump clock=2026-10-02T09:00:00Z
+fault s/r1 limit=fuel at=s:6 pos=4:3 rollback=[n]
+seg s/r1 start delivery=d1 handler=spin clause=1 fuel=30 alloc=0 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=spin limit=fuel fuel=30 alloc=0
+pumped state=idle fuel=30
+> counters s
+counters s fuel=30 alloc=0 runs=1 faults=1 state=16 mailbox=0
+> deliver d2 to=s message=clean
+> cancel-delivery d2
+> pump clock=2026-10-02T09:00:00Z
+run outcome=cancelled delivery=d2 fuel=0 alloc=0
+pumped state=idle fuel=0
+> counters s
+counters s fuel=30 alloc=0 runs=1 faults=1 state=16 mailbox=0
+> deliver d3 to=s message=clean
+> pump clock=2026-10-02T09:00:00Z
+seg s/r2 start delivery=d3 handler=clean clause=1 fuel=15 alloc=0 state=192 end=wait until=2026-10-02T09:00:01Z
+pumped state=idle fuel=15 next=2026-10-02T09:00:01Z
+> counters s
+counters s fuel=45 alloc=0 runs=2 faults=1 state=192 mailbox=0
+> cancel-run s/r2
+> pump clock=2026-10-02T09:00:00Z
+cleanup-failed s/r2 limit=cleanup
+seg s/r2 resume fuel=8 alloc=0 state=16 end=cancel
+run s/r2 outcome=cancelled delivery=d3 handler=clean fuel=23 alloc=0
+pumped state=idle fuel=8
+> counters s
+counters s fuel=53 alloc=0 runs=2 faults=1 state=16 mailbox=0
+> vars
+vars s n=0

@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core `Script.counters()` and public `Counters`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Seventeen tests and three Trace Cases cover live, parked, completed and discarded work, faults, cleanup, event tests, Reissue, code changes and restore. Chapter 9 settles counting rules and chapter 11 adds `counters` input/output records.
+
 - Queued Host Object messages follow the live Message Path at dispatch, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-four regression tests and three Trace Cases cover mailbox transfers, ordering, Requests and Script sends, Decisions, cancellation, receiver limits, path continuation, disposal and save/restore. `wait for … from` now supports evaluated object filters as well as named senders, including block waits and retained state accounting.
 
 - TS Core Function Value calls across Scripts and from the Host through `group.call`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Forty-one tests and four Trace Cases cover mailbox Runs, replies, defaults, captures, Home Script Grants and limits, cancellation, timeouts, stale handles and save/restore. Library Constant callbacks bind to the importing Script; display-form readers and corpus replay resolve earlier Host-held handles. The Spec settles foreign charging, Host arity failures, callback Constants/defaults and Function call inspection/error labels.
@@ -93,6 +95,10 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Corpus restore replay drops withheld Libraries from its current registry, so a later full restore uses the restored Group's Library set.
+
+- Save format 2 preserves completed and discarded Run Fuel/allocation totals and Limit Fault counts, including variables-only restores. Format 1 is now `invalid save`, since its missing totals cannot be reconstructed without losing already spent work.
 
 - The Spec settles moving-message admission and scheduling: transfers join the destination tail without a new depth check or dispatch charge; already started Runs stay put. Climbs continue from the last owner’s current parent, and receiver limits cannot be loosened by an earlier Host override. Script-addressed messages keep their original owner Target while climbing. Detaching an object writes the required `parent=nothing` Trace field.
 

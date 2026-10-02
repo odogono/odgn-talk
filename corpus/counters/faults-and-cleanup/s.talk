@@ -1,0 +1,14 @@
+script variable n = 0
+on spin
+  put 1 into n
+  repeat forever
+  end repeat
+end spin
+on clean
+  try
+    wait 1 s
+  finally
+    repeat forever
+    end repeat
+  end try
+end clean

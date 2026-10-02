@@ -510,6 +510,7 @@ export interface Script {
   readonly name: string;
   /** Worker. A fresh map of kept names and Operations, including revoked Grants. */
   grants(): Record<string, string[]>;
+  /** Worker. Fresh snapshot; chapter 9 defines lifetime totals and current state. */
   counters(): Counters;
   /** Worker. Throws LoadError. */
   reload(source: string, carry: CarryOver): Report[];

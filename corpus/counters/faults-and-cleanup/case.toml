@@ -1,0 +1,8 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { fuelPerRun = 30, cleanupBudget = 8 }

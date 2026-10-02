@@ -183,6 +183,15 @@ export type PumpResult = {
   reports: Report[];
   state: 'idle' | 'sliced' | 'stopped';
 };
+/** A snapshot of lifetime work and current retained state. */
+export type Counters = {
+  allocTotal: number;
+  faults: number;
+  fuelTotal: number;
+  mailboxLen: number;
+  persistentState: number;
+  runs: number;
+};
 export type Inspection = {
   scripts: {
     /** A Delivery's id, or for a message a Script sent, the sending Run. */
@@ -301,7 +310,11 @@ type SourceUnit = {
   tree: SemanticTree;
 };
 type ScriptState = {
+  /** Work charged to Runs that have ended or been discarded. */
+  allocTotal: number;
   debt: number;
+  faults: number;
+  fuelTotal: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
   handle: Script;
   identity: string;
@@ -407,6 +420,10 @@ export class Script {
   /** Worker. A snapshot of kept Operations, including revoked Grants. */
   grants(): Record<string, string[]> {
     return this.group.scriptGrants(this.name);
+  }
+  /** Worker. Lifetime totals and current state, without draining inputs. */
+  counters(): Counters {
+    return this.group.scriptCounters(this.name);
   }
   /** Queued. Returns the delivery id. */
   deliver(m: Message): string {
@@ -554,6 +571,9 @@ export class Group {
         parked: s.parked,
         queue: s.queue,
         runs: s.runs,
+        fuelTotal: s.fuelTotal,
+        allocTotal: s.allocTotal,
+        faults: s.faults,
         stopped: s.stopped,
         stopReason: s.stopReason,
         suspended: s.suspended,
@@ -575,7 +595,7 @@ export class Group {
     };
     const saved: SavedGroup = {
       family: 'odgn-talk-ts',
-      format: 1,
+      format: 2,
       language: languageVersion,
       costModel: costModel.version,
       fingerprint: hexOf(this.fingerprint()),
@@ -659,7 +679,7 @@ export class Group {
       group.libraries.set(library.name, library);
     }
     let mismatch =
-      saved.format !== 1 ||
+      saved.format !== 2 ||
       saved.language !== languageVersion ||
       saved.costModel !== costModel.version ||
       saved.libraries.some(
@@ -844,6 +864,9 @@ export class Group {
     for (const [i, runtime] of state.scripts.entries()) {
       const script = group.scripts[i]!;
       script.runs = runtime.runs;
+      script.fuelTotal = runtime.fuelTotal;
+      script.allocTotal = runtime.allocTotal;
+      script.faults = runtime.faults;
       for (const name of runtime.revoked) {
         script.revoked.add(name);
       }
@@ -859,6 +882,7 @@ export class Group {
             .flatMap(d => (d.id ? [d.id] : [])),
         );
         for (const running of savedRuns(runtime)) {
+          group.accumulateRunCosts(script, running.run);
           group.discardDecision(running.delivery, script.name, running.id);
         }
         for (const item of runtime.queue) {
@@ -1349,6 +1373,7 @@ export class Group {
     const messages = s.queue.filter((q): q is Delivery => !('run' in q));
     const pendingCalls: string[] = [];
     for (const r of runs) {
+      this.accumulateRunCosts(s, r.run);
       pendingCalls.push(
         ...r.run.discard(r.parked || r.resuming || r.cleanupReady),
       );
@@ -1446,6 +1471,44 @@ export class Group {
     }
   }
 
+  private accumulateRunCosts(s: ScriptState, run: Run) {
+    s.fuelTotal += run.fuel;
+    s.allocTotal += run.alloc;
+  }
+
+  scriptCounters(name: string): Counters {
+    this.worker();
+    const s = this.scripts.find(s => s.name === name)!;
+    const counters = {
+      fuelTotal: s.fuelTotal,
+      allocTotal: s.allocTotal,
+      runs: s.runs,
+      faults: s.faults,
+      persistentState: this.persistentState(s),
+      mailboxLen: s.queue.filter(q => !('run' in q)).length,
+    };
+    for (const { run } of this.runsOf(s)) {
+      counters.fuelTotal += run.fuel;
+      counters.allocTotal += run.alloc;
+    }
+    this.trace(recordLine('counters', [name], [], true));
+    this.trace(
+      recordLine(
+        'counters',
+        [name],
+        [
+          ['fuel', String(counters.fuelTotal)],
+          ['alloc', String(counters.allocTotal)],
+          ['runs', String(counters.runs)],
+          ['faults', String(counters.faults)],
+          ['state', String(counters.persistentState)],
+          ['mailbox', String(counters.mailboxLen)],
+        ],
+      ),
+    );
+    return counters;
+  }
+
   scriptGrants(name: string): Record<string, string[]> {
     this.worker();
     return Object.fromEntries(
@@ -1512,6 +1575,9 @@ export class Group {
       limits,
       queue: [],
       runs: 0,
+      fuelTotal: 0,
+      allocTotal: 0,
+      faults: 0,
       debt: 0,
       incoming: 0,
       parked: [],
@@ -3463,6 +3529,10 @@ export class Group {
     handler: string | null,
   ) {
     const { run, delivery } = running;
+    this.accumulateRunCosts(s, run);
+    if (outcome.kind === 'limit fault') {
+      s.faults++;
+    }
     const word = outcome.kind === 'limit fault' ? 'limit-fault' : outcome.kind;
     const result = outcome.kind === 'completed' ? outcome.result : null;
     const error = outcome.kind === 'errored' ? outcome.error : null;
@@ -3764,6 +3834,9 @@ type SavedGroup = {
 type SavedScriptState = Pick<
   ScriptState,
   | 'name'
+  | 'fuelTotal'
+  | 'allocTotal'
+  | 'faults'
   | 'debt'
   | 'incoming'
   | 'parked'
@@ -3836,7 +3909,7 @@ const readSave = (bytes: Uint8Array): SavedGroup => {
     const saved = JSON.parse(outer.payload) as SavedGroup;
     if (
       saved.family !== 'odgn-talk-ts' ||
-      saved.format !== 1 ||
+      saved.format !== 2 ||
       !/^s[1-9]\d*$/.test(saved.id) ||
       !Array.isArray(saved.scripts) ||
       !Array.isArray(saved.objects) ||

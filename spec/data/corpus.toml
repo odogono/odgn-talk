@@ -555,6 +555,12 @@ filled = true
 is = "for a variables-only restore, the abandoned calls"
 
 [[record]]
+name = "counters"
+input = true
+ids = ["script"]
+is = "reads the Script's Counters without draining Host Inputs; writes one `counters` record"
+
+[[record]]
 name = "vars"
 input = true
 ids = []
@@ -1082,6 +1088,42 @@ is = "its code, as text"
 key = "pos"
 type = "pos"
 is = "its position"
+
+[[record]]
+name = "counters"
+input = false
+ids = ["script"]
+is = "a snapshot of the Script's lifetime work and current state (chapter 9)"
+
+[[record.key]]
+key = "fuel"
+type = "count"
+is = "FuelTotal, including live Runs"
+
+[[record.key]]
+key = "alloc"
+type = "count"
+is = "AllocTotal, including live Runs"
+
+[[record.key]]
+key = "runs"
+type = "count"
+is = "Runs started since load"
+
+[[record.key]]
+key = "faults"
+type = "count"
+is = "Runs ended with a Limit Fault"
+
+[[record.key]]
+key = "state"
+type = "count"
+is = "current Persistent State, in bytes"
+
+[[record.key]]
+key = "mailbox"
+type = "count"
+is = "messages currently in the mailbox, excluding Runs and undrained Host Inputs"
 
 [[record]]
 name = "vars"

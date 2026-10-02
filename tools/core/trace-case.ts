@@ -985,6 +985,9 @@ export const replay = (
                 : 'reject',
           });
           group = restored.group;
+          registered = new Map(
+            [...registered].filter(([name]) => !withheld.has(name)),
+          );
           for (const [key, handle] of made) {
             made.set(key, group.objectById(handle.kind.name, handle.id)!);
           }
@@ -1105,6 +1108,9 @@ export const replay = (
           }
           break;
         }
+        case 'counters':
+          group.script(r.ids[0]!)!.counters();
+          break;
         case 'vars':
           for (const script of group.inspect().scripts) {
             for (const [, value] of script.vars) {

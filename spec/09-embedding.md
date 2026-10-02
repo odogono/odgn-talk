@@ -146,6 +146,18 @@ The Host function receives only the arguments supplied, in order. The Core inser
   - Identities are lowercase hexadecimal. The Fingerprint never covers state, so two Groups in lockstep compare it once, before they start.
 - **`Inspect()`** reads the Group without changing it, between Pumps: each Script's Script Variables in declaration order, its Runs that haven't ended, with their status, Handler and what each suspended one waits for, and the messages in its mailbox. It charges nothing, and is the Host Input `vars` in the Trace ([chapter 11](11-the-trace-and-conformance.md)). A REPL's `:vars`, `:runs` and `:mailbox` render it ([chapter 12](12-sessions-and-tooling.md)).
 
+## Script counters
+
+`Script.Counters()` is a worker read between Pumps. It returns a fresh snapshot, charges nothing, drains no Host Inputs and changes no scheduling state. It is the Host Input `counters <script>` in the Trace, followed by one `counters` output record ([chapter 11](11-the-trace-and-conformance.md)).
+
+- **`FuelTotal`, `AllocTotal`:** all Fuel and allocation charged to the Script's Runs since load, including live Runs, event Pattern/Guard tests, Capability Charges, Reissue and cancellation cleanup. Initialisers at Load, Reload and Extend contribute nothing. A refused Charge contributes nothing. Rollback, Stop, Reload, Library replacement and either restore policy retain already charged work; a live Run's work is counted once when it ends or is discarded.
+- **`Runs`:** Runs started since load, including a Run that parks, drops, is unhandled, errors, faults or is cancelled. Each Handler dispatch or Function Value call that starts a Run increments it once; event tests are part of the waiting Run. A Delivery cancelled before dispatch, a stale Function call, a Message Path transfer or an unhandled path with no Owning Script starts no Run. An internal `error` message with no Handler starts no Run either.
+- **`Faults`:** Runs that ended with the outcome `limit fault`, once per Run. Ordinary errors, Stop and cancellation do not increment it; a Cleanup Budget failure still ends `cancelled`.
+- **`PersistentState`:** current logical Persistent State in bytes, with the same accounting as the Script's cap ([chapter 6](06-errors-and-limits.md#limits)). It includes Script Variables, retained Runs and mailbox messages, and falls when work is released.
+- **`MailboxLen`:** messages currently in the Script's mailbox. It excludes preempted, ready, suspended and parked Runs and Host Inputs not yet drained. A message's transfer changes the readouts only when a Pump transfers it.
+
+The four lifetime counters carry over Reload, Extend, Library replacement and full or variables-only restore. The two current-state readouts describe the resulting state, rather than preserving the old mailbox or discarded Runs ([chapter 10](10-save-and-restore.md)).
+
 ## Function Values
 
 - **What the Host holds:** a Function Value is an ordinary `Value` of kind `function`. The Host can read only its Home Script and its display form, and it can't build one.

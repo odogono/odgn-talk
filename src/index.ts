@@ -46,6 +46,7 @@ export {
   type CancellationOptions,
   type CarryOver,
   type Inspection,
+  type Counters,
   type LoadOptions,
   type Message,
   type PumpOptions,

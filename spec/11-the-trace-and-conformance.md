@@ -220,6 +220,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `dispose` |  | `object` | disposes a Host Object |
 | `save` | `save` |  | saves the Group |
 | `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
+| `counters` | `script` |  | reads the Script's Counters without draining Host Inputs; writes one `counters` record |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
 
 <!-- end -->
@@ -323,6 +324,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
 | `decided` | `delivery` | `verdict`, `vetoes`?, `undecided`? | a `decided` report, by the Decision's delivery id or broadcast id |
 | `diag` | `unit` | `code`, `pos` | a load-time diagnostic, or the first syntax error |
+| `counters` | `script` | `fuel`, `alloc`, `runs`, `faults`, `state`, `mailbox` | a snapshot of the Script's lifetime work and current state (chapter 9) |
 | `vars` | `script` |  | a Script's Script Variables, each as `<name>=<value>`, in declaration order |
 | `pumped` |  | `state`, `fuel`, `next`? | the end of a Pump |
 | `refused` |  | `code` | the Host Input before it was refused at the call, and changed nothing |
@@ -407,6 +409,12 @@ A record is written when what it records happens, so a Trace is in the order the
 | `decided` | `undecided` | `value` | each undecided recipient, as a map `{script, run, outcome}`, in recipient order, with `run` left out for a Delivery that never started; `script` and `run` are text, and `outcome` is text in chapter 5's words: `"errored"`, `"limit fault"`, `"cancelled"`, `"dropped"` or `"stopped"` |
 | `diag` | `code` | `value` | its code, as text |
 | `diag` | `pos` | `pos` | its position |
+| `counters` | `fuel` | `count` | FuelTotal, including live Runs |
+| `counters` | `alloc` | `count` | AllocTotal, including live Runs |
+| `counters` | `runs` | `count` | Runs started since load |
+| `counters` | `faults` | `count` | Runs ended with a Limit Fault |
+| `counters` | `state` | `count` | current Persistent State, in bytes |
+| `counters` | `mailbox` | `count` | messages currently in the mailbox, excluding Runs and undrained Host Inputs |
 | `pumped` | `state` | `word` | the Group's state: `idle`, `sliced`, `stopped` |
 | `pumped` | `fuel` | `count` | the Fuel the Pump used |
 | `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one |
