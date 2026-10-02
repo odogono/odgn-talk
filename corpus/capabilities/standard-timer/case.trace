@@ -1,0 +1,21 @@
+# The standard timer declarations forward scheduling and cancellation to
+# the Host, including the caller's Script and Operation costs. A Stub
+# supplies extra Fuel. The due timer's Delivery is an ordinary Host Input,
+# not a Core-owned timer; the runner replays it explicitly.
+> add-library helper identity=e352d8d1cc5c4139b8dd0470c9e8aa931eb6dd6a5d2c9f80852a93869d532f9a
+> load s identity=63dd0d79f9e3e5a27e335bef4e50c5a5cf64cf13625e53d7d772f73c09160bae
+> stub timer.schedule charge=5
+> deliver d1 to=s message=go args=[2026-10-02T10:00:02Z]
+> pump clock=2026-10-02T10:00:00Z
+call s/r1.c1 op=timer.schedule args=["wake", 2026-10-02T10:00:02Z, "tick", [9]] charged=5
+call s/r1.c2 op=timer.cancel args=["unknown"]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=70 alloc=43 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=70 alloc=43
+pumped state=idle fuel=70
+> deliver d2 to=s message=tick args=[9]
+> pump clock=2026-10-02T10:00:02Z
+seg s/r2 start delivery=d2 handler=tick clause=1 fuel=16 alloc=24 state=40 end=return
+run s/r2 outcome=completed delivery=d2 handler=tick fuel=16 alloc=24
+pumped state=idle fuel=16
+> vars
+vars s seen=[9]

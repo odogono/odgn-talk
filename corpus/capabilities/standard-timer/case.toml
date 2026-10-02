@@ -1,0 +1,15 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "timer"
+costs = { schedule = { fuel = 10, alloc = 3 }, cancel = { fuel = 2 } }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { timer = { ops = "all" } }

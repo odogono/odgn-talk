@@ -1,0 +1,12 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "clock"
+costs = { now = { fuel = 100 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { clock = { ops = ["now"] } }
+limits = { fuelPerRun = 40 }
