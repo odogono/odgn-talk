@@ -32,6 +32,51 @@ test('the NFC encoding seed case executes every line through the public values',
   expect(result.divergence).toBeUndefined();
 });
 
+test('the runner reads object Shapes from the shared declaration data model', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-object-shapes-'));
+  try {
+    writeFileSync(
+      resolve(dir, 'script.talk'),
+      'on go x\n  ask api to read x\n  return it\nend',
+    );
+    const setup = {
+      operations: [
+        {
+          capability: 'api',
+          name: 'read',
+          mode: 'immediate',
+          args: [{ object: 'door' }],
+          result: { object: 'door' },
+          cost: { fuel: 0 },
+        },
+      ],
+      objectKinds: [{ name: 'door' }],
+      objects: [{ kind: 'door', id: 'a' }],
+      scripts: [
+        { name: 's', source: 'script.talk', grants: { api: { ops: 'all' } } },
+      ],
+    };
+    const lines = replay(dir, setup as never, [
+      '> load s source=script.talk',
+      '> request d1 to=s message=go args=[<object door "a">]',
+      '> stub api.read value=<object door "a">',
+      '> pump clock=2026-10-02T00:00:00Z',
+    ]);
+    expect(lines).toContain(
+      'call s/r1.c1 op=api.read args=[<object door "a">] result=<object door "a">',
+    );
+    expect(
+      lines.some(
+        line =>
+          line.startsWith('run s/r1 outcome=completed') &&
+          line.includes('value=<object door "a">'),
+      ),
+    ).toBe(true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('divergence output identifies the first byte and retains both outputs', () => {
   expect(firstDivergence('"é"', '"e"')).toEqual({
     byte: 2,

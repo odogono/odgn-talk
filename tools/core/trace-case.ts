@@ -249,6 +249,10 @@ const shapeOf = (s: ShapeSpec): Shape => {
   if ('unitKind' in s) {
     return shape.quantityKind(s.unitKind);
   }
+  if ('object' in s) {
+    // Declarations name Object Kinds, including forward references in properties.
+    return { k: 'object', kind: s.object };
+  }
   if ('list' in s) {
     return shape.listOf(shapeOf(s.list));
   }
