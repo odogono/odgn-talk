@@ -235,6 +235,7 @@ type Shape struct { /* opaque */
 
 var (
 	AnyShape       Shape
+	ValueShape     Shape // every value, including nested Function Values; not a storage encoding
 	NothingShape   Shape
 	BoolShape      Shape
 	NumberShape    Shape
@@ -401,6 +402,15 @@ type TimerImpl interface {
 }
 
 func (c *Core) TimerCapability(impl TimerImpl, costs Costs) (*CapabilityDef, error)
+
+// console: Write shows the Value's text form. Read starts a suspending call
+// and answers with text, without its line break. Read has maxPending 2147483647 ms.
+type ConsoleImpl interface {
+	Write(c *Call, value Value) error
+	Read(c *Call) error
+}
+
+func (c *Core) ConsoleCapability(impl ConsoleImpl, costs Costs) (*CapabilityDef, error)
 
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)

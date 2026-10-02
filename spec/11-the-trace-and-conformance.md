@@ -559,7 +559,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 
 A Shape is written as one of these:
 
-- **A kind name,** as text: `"text"`, `"number"`, `"boolean"`, `"nothing"`, `"bytes"`, `"instant"`, `"civil date"`, `"range"`, `"pattern"` or `"function"`, or `"any"`.
+- **A kind name,** as text: `"text"`, `"number"`, `"boolean"`, `"nothing"`, `"bytes"`, `"instant"`, `"civil date"`, `"range"`, `"pattern"` or `"function"`, or `"any"` or `"value"` ([chapter 9](09-embedding.md#shapes)).
 - **`{quantity = "kg"}`** for a Quantity in exactly that Unit, and **`{unitKind = "mass"}`** for any Unit of that Unit Kind.
 - **`{list = <shape>}`**, **`{object = "<kind>"}`**, **`{oneOf = [<shape>, …]}`** and **`{optional = <shape>}`**.
 - **`{map = [<field>, …]}`**, a closed map, or with `open = true` an open one. A field is `{key, shape}`, with `optional = true` for a key that may be missing.

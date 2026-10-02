@@ -1,0 +1,21 @@
+# Standard Console write accepts Function Values nested in Containers.
+# A Library's say uses the caller's Grant. Read accepts an empty line,
+# with extra starting and late Fuel; save/restore replay keeps declarations.
+> add-library helper identity=e27b0ffc132ebf503d05e106edc1844b600bca755e46d808dfe2d1ec3cf1f491
+> load s identity=2b3b67d3a974d918db1c0c2666a734c489a76b2fe3ebaf9b735e2d7326461d47
+> stub console.write charge=5
+> stub console.read charge=3
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r1.c1 op=console.write args=[[{callback: <function s:4:7>}]] charged=5
+call s/r1.c2 op=console.read args=[] charged=3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=77 alloc=221 state=296 end=ask-wait
+pumped state=idle fuel=77 next=2026-10-27T08:31:23.647Z
+> answer s/r1.c2 value="" fuel=4
+> pump clock=2026-10-02T12:00:01Z
+call s/r1.c3 op=console.write args=[""]
+seg s/r1 resume fuel=36 alloc=42 state=40 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=113 alloc=263
+pumped state=idle fuel=36
+> vars
+vars s seen=[""]

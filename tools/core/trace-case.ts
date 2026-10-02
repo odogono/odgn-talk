@@ -12,6 +12,7 @@ import {
   compileLibrary,
   defineCapability,
   clockCapability,
+  consoleCapability,
   timerCapability,
   defineObjectKind,
   type HostObject,
@@ -194,6 +195,7 @@ const read = (
 };
 const kinds: Record<string, Shape> = {
   any: shape.any,
+  value: shape.value,
   nothing: shape.nothing,
   boolean: shape.bool,
   number: shape.number,
@@ -290,6 +292,21 @@ const fireStub = (
   }
 };
 
+const startStub = (
+  stubs: Map<string, Stub[]>,
+  key: string,
+  call: Call<unknown>,
+  calls: Map<string, Call<unknown>>,
+  crossing: (id: string) => void,
+) => {
+  const stub = stubs.get(key)?.shift();
+  if (stub?.charge) {
+    call.charge(stub.charge);
+  }
+  calls.set(call.id, call);
+  crossing(call.id);
+};
+
 // The runner's Host functions (chapter 11, Stubs): an immediate call takes
 // the next Stub for its Operation, and a fire-and-forget one takes one if
 // there is one.
@@ -340,14 +357,7 @@ const capabilitiesOf = (
                 ? {}
                 : { maxPendingMs: op.maxPending }),
               // Only a Stub's charge; `answer` and `fail` lines settle it.
-              start: call => {
-                const stub = stubs.get(key)?.shift();
-                if (stub?.charge) {
-                  call.charge(stub.charge);
-                }
-                calls.set(call.id, call);
-                crossing(call.id);
-              },
+              start: call => startStub(stubs, key, call, calls, crossing),
             }
           : op.mode === 'immediate'
             ? {
@@ -413,6 +423,18 @@ const capabilitiesOf = (
           {
             schedule: call => fireStub(stubs, 'timer.schedule', call, crossing),
             cancel: call => fireStub(stubs, 'timer.cancel', call, crossing),
+          },
+          costs,
+        ),
+      );
+    } else if (capability === 'console') {
+      out.set(
+        capability,
+        consoleCapability(
+          {
+            write: call => fireStub(stubs, 'console.write', call, crossing),
+            read: call =>
+              startStub(stubs, 'console.read', call, calls, crossing),
           },
           costs,
         ),

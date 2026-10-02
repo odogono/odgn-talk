@@ -8,6 +8,7 @@ import { nothing, type Value } from './values';
 
 export type Shape =
   | { k: 'any' }
+  | { k: 'value' }
   | { k: 'kind'; kind: string }
   | { k: 'quantity'; unit: string }
   | { k: 'unitKind'; kind: string }
@@ -31,6 +32,7 @@ const fieldsOf = (fields: Record<string, FieldShape>) =>
 /** The Shape constructors of `talk.ts`. */
 export const shape = {
   any: { k: 'any' } as Shape,
+  value: { k: 'value' } as Shape,
   nothing: kind('nothing'),
   bool: kind('boolean'),
   number: kind('number'),
@@ -69,6 +71,8 @@ export const expectedOf = (s: Shape): string => {
   switch (s.k) {
     case 'any':
       return 'any';
+    case 'value':
+      return 'value';
     case 'kind':
       return s.kind;
     case 'quantity':
@@ -115,6 +119,8 @@ export const mismatch = (
     value: v,
   });
   switch (s.k) {
+    case 'value':
+      return null;
     case 'any':
       return v.kind === 'function'
         ? { ...wrong(), unencodable: true }

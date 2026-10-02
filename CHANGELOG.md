@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Console Standard Capability factory, `ConsoleImpl` and `shape.value`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Ten regression tests and three Console Trace Cases cover `say`, nested Function Values, Library needs, reads with extra Fuel, cancellation, the human-input timeout, Host failures and save/restore replay. The corpus runner supports Console through `[[standard]]`.
+
 - TS Core Clock and Timer Standard Capability factories, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Nine regression tests and three Trace Cases cover exact Pump readings, fixed declarations, Host timer calls, costs, Library needs and save/restore replay. The corpus runner supports `[[standard]]` for both.
 
 - TS Core `GrantsAsUsed`, kept-Grant inspection and queued revocation, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Fourteen regression tests and three Capability Trace Cases cover caller aliases, Library needs, pending calls, code changes and save/restore replay.
@@ -77,6 +79,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Spec gaps in Console's embedding interface and fixed declarations. The new `value` Shape accepts all values, including nested Function Values, so Console can show their text form; `any` remains data-only and storage still refuses Function Values. No syntax or Cost Model rate changes.
 
 - Spec rules for Standard Capability factory costs: required per-Operation entries, bounded whole numbers, copied costs and ignored extra names; explicit Clock and Timer arities and error declarations; and Trace setup conflicts, Clock Stubs and Host-owned timer Deliveries. No syntax or Cost Model rate changes.
 

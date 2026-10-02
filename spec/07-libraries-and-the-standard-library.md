@@ -718,6 +718,8 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 - **`write value`** takes any value, and the Host shows its [text form](03-values.md#the-text-form). `say x` is short for `tell console to write x`.
 - **`read`** answers with the next line the user types, as text, without its line break. Its `maxPending` is 2,147,483,647 ms, the largest `MaxWait` every Core honours, so a user can take their time ([chapter 6](06-errors-and-limits.md#limits)).
 
+`write` takes exactly one argument, with the `value` Shape: every value, including Function Values nested in lists or maps. `read` takes no arguments and returns text, including empty text for an empty line. Both declare no Script error codes; a Host failure becomes `host error`. The Console factory forwards `write`'s Value to the Host, which shows its text form, and starts `read` with a `Call` that the Host answers with text. Both calls retain the Grant's binding and the Script's name.
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.

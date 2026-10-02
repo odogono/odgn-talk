@@ -106,6 +106,7 @@ const literalOf = (e: SemanticNode): Literal | undefined => {
 const fits = (l: Literal, s: Shape): boolean => {
   switch (s.k) {
     case 'any':
+    case 'value':
       return true;
     case 'oneOf':
       return s.of.some(option => fits(l, option));

@@ -1,0 +1,19 @@
+# A cancelled Console read abandons its Call. A late answer is ignored.
+> load s identity=441a1c9ed51a1f2be3dc7bad58ae8de35c9bd5ad6893bfb797732f2790b118f0
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r1.c1 op=console.read args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=14 alloc=0 state=249 end=ask-wait
+pumped state=idle fuel=14 next=2026-10-27T08:31:23.647Z
+> cancel-run s/r1
+> pump clock=2026-10-02T12:00:01Z
+seg s/r1 resume fuel=0 alloc=0 state=25 end=cancel
+abandon s/r1.c1
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=14 alloc=0
+pumped state=idle fuel=0
+> answer s/r1.c1 value="late"
+> pump clock=2026-10-02T12:00:02Z
+note s/r1.c1 kind=late-answer
+pumped state=idle fuel=0
+> vars
+vars s seen="unchanged"
