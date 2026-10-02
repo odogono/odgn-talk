@@ -1,0 +1,28 @@
+# Object filters observe the Target only after its queued message reaches the correct Script.
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "old"
+[[objects]]
+kind = "room"
+id = "new"
+[[objects]]
+kind = "room"
+id = "leaf"
+[[objects]]
+kind = "room"
+id = "decoy"
+[[scripts]]
+name = "old"
+source = "old.talk"
+owner = { kind = "room", id = "old" }
+[[scripts]]
+name = "next"
+source = "next.talk"
+owner = { kind = "room", id = "new" }
+objects = { watched = { kind = "room", id = "leaf" }, decoy = { kind = "room", id = "decoy" } }

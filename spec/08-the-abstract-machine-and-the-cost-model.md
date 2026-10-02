@@ -584,7 +584,7 @@ Each `wait for` has an entry. For each branch, a `when` entry gives its message,
 
 - **The values `wait-for` pops,** deepest first: for each branch in order, the `from` object and the captured values of a `when`, or the duration of an `after`, then the timeout.
 - **A test body** is a body of kind `event`. Its arguments are the message's arguments, and its captures are in its capture slots. It tests the event's patterns and Guard as one guard region, pushes the values of the names they bind, in order, then `list n` and `return`. A failure reaches `clause-fail`. An event with no patterns and no Guard has no test body.
-- **Matching** is chapter 5's ([chapter 5](05-handlers-messages-and-scheduling.md)). The Core runs a pending `wait for`'s test body when a message is dispatched, charging it to the waiting Run: its Fuel and allocation count toward that Run's, uncapped there, so a Run past its limit faults at its next instruction once it resumes.
+- **Matching** is chapter 5's ([chapter 5](05-handlers-messages-and-scheduling.md)). A pending branch retains its evaluated `from` object and captured values; their logical sizes count in its Run’s Persistent State, while a named Script is not a value. The Core runs a pending `wait for`'s test body when a message is dispatched, charging it to the waiting Run: its Fuel and allocation count toward that Run's, uncapped there, so a Run past its limit faults at its next instruction once it resumes.
 
 ## The canonical disassembly
 

@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Queued Host Object messages follow the live Message Path at dispatch, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-four regression tests and three Trace Cases cover mailbox transfers, ordering, Requests and Script sends, Decisions, cancellation, receiver limits, path continuation, disposal and save/restore. `wait for … from` now supports evaluated object filters as well as named senders, including block waits and retained state accounting.
+
 - TS Core Function Value calls across Scripts and from the Host through `group.call`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Forty-one tests and four Trace Cases cover mailbox Runs, replies, defaults, captures, Home Script Grants and limits, cancellation, timeouts, stale handles and save/restore. Library Constant callbacks bind to the importing Script; display-form readers and corpus replay resolve earlier Host-held handles. The Spec settles foreign charging, Host arity failures, callback Constants/defaults and Function call inspection/error labels.
 
 - TS Core fractional-exponent `^`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). It uses the correctly rounded `power` math while preserving the operator's Fuel, allocation, overflow fields and integer/Quantity rules. Regression tests and two Trace Cases cover results, domain errors, underflow, limits and rollback; the Spec clarifies operator diagnostics and charging.
@@ -91,6 +93,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- The Spec settles moving-message admission and scheduling: transfers join the destination tail without a new depth check or dispatch charge; already started Runs stay put. Climbs continue from the last owner’s current parent, and receiver limits cannot be loosened by an earlier Host override. Script-addressed messages keep their original owner Target while climbing. Detaching an object writes the required `parent=nothing` Trace field.
 
 - Function ownership is validated at inbound Host boundaries, including nested results, answers, failure Data and properties. Automatic Promise forwarding settles refused results as `host error`, including after Reissue. Foreign reply timers respect each Run’s MaxWait override. Corpus Stubs and answers resolve previously exported Function handles.
 

@@ -1,0 +1,3 @@
+on ping
+  pass ping
+end ping

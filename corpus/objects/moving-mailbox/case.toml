@@ -1,0 +1,25 @@
+# Admitted messages transfer at dispatch, even into a full mailbox, without a Run at the old owner.
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "old"
+[[objects]]
+kind = "room"
+id = "new"
+[[objects]]
+kind = "room"
+id = "leaf"
+[[scripts]]
+name = "old"
+source = "old.talk"
+owner = { kind = "room", id = "old" }
+[[scripts]]
+name = "next"
+source = "next.talk"
+owner = { kind = "room", id = "new" }
+limits = { mailboxDepth = 1 }

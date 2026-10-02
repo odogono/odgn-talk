@@ -1,0 +1,28 @@
+# A passed Script-addressed message follows its previous owner's current parent and keeps its Target.
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "child"
+[[objects]]
+kind = "room"
+id = "old"
+[[objects]]
+kind = "room"
+id = "new"
+[[scripts]]
+name = "child"
+source = "child.talk"
+owner = { kind = "room", id = "child" }
+[[scripts]]
+name = "old"
+source = "old.talk"
+owner = { kind = "room", id = "old" }
+[[scripts]]
+name = "next"
+source = "next.talk"
+owner = { kind = "room", id = "new" }
