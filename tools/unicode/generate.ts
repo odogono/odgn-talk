@@ -228,7 +228,7 @@ if (import.meta.main) {
     ),
   );
   const generated = generateTables(files);
-  const target = resolve(root, 'src/generated/unicode.ts');
+  const target = resolve(root, 'impl/ts/src/generated/unicode.ts');
   if (args.includes('--check')) {
     let current = '';
     try {

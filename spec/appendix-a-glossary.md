@@ -146,6 +146,10 @@ _Avoid_: history, log, recording, notebook
 
 ## Tooling
 
+**Tooling**:
+The programs that help authors write and debug Scripts (the LSP, the formatter, the Lint engine, the debugger and the Playground), built on the TS Core. Nothing they produce is normative.
+_Avoid_: SDK, devtools
+
 **REPL**:
 A command-line Host where a user enters source a line at a time and sees each result straight away, against a live session. Each Core has one.
 _Avoid_: console, shell, interpreter

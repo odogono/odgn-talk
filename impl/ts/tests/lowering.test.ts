@@ -15,7 +15,7 @@ import { instructionSpec, operandKinds } from '../src/code-unit';
 import { instructions } from '../src/generated/machine';
 import { viewSource } from '../src/view';
 
-const root = resolve(import.meta.dir, '..');
+const root = resolve(import.meta.dir, '../../..');
 const files = (dir: string): string[] =>
   readdirSync(dir)
     .sort()

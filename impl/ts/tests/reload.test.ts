@@ -9,7 +9,7 @@ import {
 } from '../src/index';
 
 import { readDisplayText } from '../src/readers';
-import { parseRecord } from '../tools/core/trace-case';
+import { parseRecord } from '../tools/trace-case';
 
 const setup = () => {
   const trace: string[] = [];

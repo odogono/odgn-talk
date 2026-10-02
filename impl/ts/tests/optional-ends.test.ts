@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { compileSource, parseSource, syntaxText } from '../src';
-import { parse } from '../tools/grammar/parser';
+import { parse } from '../../../tools/grammar/parser';
 
 const explicitSources: readonly (readonly [string, string])[] = [
   ['Handler', 'on h\nend h'],

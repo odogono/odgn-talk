@@ -7,9 +7,9 @@ export default [
       '.claude/**',
       '.codex/**',
       '.vscode/**',
-      'dist/**',
-      'node_modules/**',
-      'src/generated/**',
+      '**/dist/**',
+      '**/node_modules/**',
+      'impl/ts/src/generated/**',
       'spec/**',
     ],
   },
@@ -36,12 +36,15 @@ export default [
     },
     settings: {
       'import-x/resolver': {
-        typescript: { project: './tsconfig.json' },
+        typescript: {
+          noWarnOnMultipleProjects: true,
+          project: ['./impl/ts/tsconfig.json', './tools/tsconfig.json'],
+        },
       },
     },
   },
   {
-    files: ['tools/**/*.ts'],
+    files: ['tools/**/*.ts', 'impl/ts/tools/**/*.ts'],
     rules: {
       // These command-line Hosts print their reports and diagnostics.
       'no-console': 'off',
@@ -53,7 +56,7 @@ export default [
       'tools/grammar/**/*.ts',
       'tools/machine/**/*.ts',
       'tools/spec/**/*.ts',
-      'types/toml.d.ts',
+      'impl/ts/types/toml.d.ts',
     ],
     rules: {
       // Existing Spec prototypes use dynamic parse trees and schema-validated TOML.
@@ -64,9 +67,9 @@ export default [
   },
   {
     files: [
-      'src/encoding.ts',
-      'src/json.ts',
-      'src/readers.ts',
+      'impl/ts/src/encoding.ts',
+      'impl/ts/src/json.ts',
+      'impl/ts/src/readers.ts',
       'tools/corpus/check.ts',
     ],
     rules: {

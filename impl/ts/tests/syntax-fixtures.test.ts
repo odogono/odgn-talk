@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseSource, syntaxText, type SyntaxElement } from '../src';
 
-const root = resolve(import.meta.dir, '..');
+const root = resolve(import.meta.dir, '../../..');
 const assertLossless = (source: string, tree: SyntaxElement) => {
   const stack = [tree];
   let offset = 0;

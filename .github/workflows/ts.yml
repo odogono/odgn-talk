@@ -1,0 +1,43 @@
+name: TS Core
+
+on:
+  pull_request:
+    paths:
+      - 'impl/ts/**'
+      - 'tooling/**'
+      - 'tools/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.base.json'
+      - '.github/workflows/ts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'impl/ts/**'
+      - 'tooling/**'
+      - 'tools/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.base.json'
+      - '.github/workflows/ts.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test tests
+        working-directory: impl/ts
+      - run: bun run corpus:run
+        working-directory: impl/ts
+      - run: bun run build
+        working-directory: impl/ts

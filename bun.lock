@@ -7,10 +7,18 @@
       "devDependencies": {
         "@nkzw/eslint-config": "^3.3.0",
         "@types/bun": "^1.4.2",
-        "ajv": "^8",
         "eslint": "^9",
         "prettier": "^3.9.9",
         "typescript": "~6.0.0",
+      },
+    },
+    "impl/ts": {
+      "name": "@odgn/northtalk",
+    },
+    "tools": {
+      "name": "@odgn/northtalk-spec-tools",
+      "devDependencies": {
+        "ajv": "^8",
       },
     },
   },
@@ -96,6 +104,10 @@
     "@nkzw/eslint-config": ["@nkzw/eslint-config@3.3.0", "", { "dependencies": { "@eslint/js": "^9.39.2", "@nkzw/eslint-plugin": "^2.0.0", "@typescript-eslint/parser": "^8.50.0", "eslint-import-resolver-typescript": "^4.4.4", "eslint-plugin-import-x": "^4.16.1", "eslint-plugin-no-only-tests": "^3.3.0", "eslint-plugin-perfectionist": "^5.0.0", "eslint-plugin-react": "^7.37.5", "eslint-plugin-react-hooks": "^7.0.1", "eslint-plugin-unicorn": "^62.0.0", "eslint-plugin-unused-imports": "~4.3.0", "globals": "^16.5.0", "typescript-eslint": "^8.50.0" }, "peerDependencies": { "eslint": ">= 9" } }, "sha512-TmxbVKQDFdh+bO9jDN9278qNWyQLVzYs5vEVQIv2PmYqLyyzrxywHvbFxb76j6yRQTphC6anNMAyVy+uTYKy/A=="],
 
     "@nkzw/eslint-plugin": ["@nkzw/eslint-plugin@2.0.0", "", { "peerDependencies": { "eslint": ">= 9" } }, "sha512-IoU8kOqHfnf7se2dGxMD/7RPm6WVjzjOjWSo7FulRx3lJzuZvXioSkT5Nd82l66DH3Pl2whw74lPT1di3KMwFA=="],
+
+    "@odgn/northtalk": ["@odgn/northtalk@workspace:impl/ts"],
+
+    "@odgn/northtalk-spec-tools": ["@odgn/northtalk-spec-tools@workspace:tools"],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 

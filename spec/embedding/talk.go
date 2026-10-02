@@ -1,5 +1,5 @@
 // The NorthTalk Go Core's embedding interface: declarations only, never compiled.
-// The module is github.com/odogono/odgn-talk; this is its root package.
+// The module is github.com/odogono/odgn-talk/impl/go; this is its root package.
 //
 // This file and talk.ts are the handoff interface (#72). They differ only in
 // idiom (ADR 0015): errors as values here and exceptions there, Start/Answer
