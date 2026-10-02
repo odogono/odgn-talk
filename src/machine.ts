@@ -64,6 +64,7 @@ import {
   type Call,
   type Grant,
   type Operation,
+  type Shape,
 } from './capabilities';
 import { HostError, ScriptError as HostScriptError } from './errors';
 import {
@@ -489,7 +490,7 @@ export type RunRecord =
       op: string;
       result?: Value;
     }
-  | { id: string; kind: 'call-failed'; op: string }
+  | { detail: string; id: string; kind: 'call-failed'; op: string }
   | { id: string; kind: 'abandon' }
   | { args: Value[]; kind: 'unhandled'; message: string; target: Value | null }
   | {
@@ -565,7 +566,7 @@ export type Resumption =
   | { k: 'wake' }
   | { code: 'call lost' | 'capability revoked'; k: 'restore-fail' }
   | { fuel: number; k: 'answer'; value: Value }
-  | { error: HostScriptError | null; k: 'fail' }
+  | { detail?: string; error: HostScriptError | null; k: 'fail' }
   | { after: number; k: 'timeout' }
   | { k: 'reply'; value: Value }
   | { error: Value | null; k: 'send failed'; reason: string }
@@ -585,8 +586,11 @@ export type RunHost = {
   callValue(fn: Value, args: Value[], reply: string): string;
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
-  /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
-  fail(id: string, error: HostScriptError | null): void;
+  /**
+   * Queues its failure, as `fail`; null fails with what isn't a Script error,
+   * which `detail` describes for the `call failed` report.
+   */
+  fail(id: string, error: HostScriptError | null, detail?: string): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
@@ -635,6 +639,32 @@ const itemSize = (item: Item): number => {
     case 'receiver':
       return 0;
   }
+};
+
+// What the Host did wrong, for a `call failed` report's detail. Its wording
+// is outside parity (chapter 9).
+const hostDetail = (error: unknown): string =>
+  error instanceof Error
+    ? `${error.name}: ${error.message}`
+    : `the Host threw ${typeof error === 'symbol' ? error.toString() : String(error)}`;
+const resultDetail = (
+  result: unknown,
+  shape: Shape | undefined,
+  group: object | undefined,
+): string => {
+  if (!Value.isValue(result)) {
+    return 'its result is not a Value';
+  }
+  if (!functionsBelongTo([result], group)) {
+    return 'its result holds a Function Value from another Group';
+  }
+  const bad = shape && mismatch(result, shape);
+  if (bad) {
+    const at = bad.path.length ? ` at ${bad.path.join('.')}` : '';
+    return `its result breaks its Shape${at}: expected ${bad.expected}, got ${bad.got}`;
+  }
+  // Only a Standard Capability's own result rules remain.
+  return 'its result breaks its Standard Capability’s rules';
 };
 
 // A path's step: a map key, or a 1-based list index.
@@ -803,7 +833,9 @@ export class Run {
       },
       answer: (value, cost) => this.host!.answer(id, value, cost?.fuel ?? 0),
       fail: error =>
-        this.host!.fail(id, error instanceof HostScriptError ? error : null),
+        error instanceof HostScriptError
+          ? this.host!.fail(id, error)
+          : this.host!.fail(id, null, hostDetail(error)),
       charge: fuel => {
         if (!starting || !Number.isSafeInteger(fuel) || fuel < 0) {
           throw new HostError('invalid value');
@@ -859,10 +891,10 @@ export class Run {
             }),
       });
       if (!reached) {
-        failure = {
-          k: 'fail',
-          error: error instanceof HostScriptError ? error : null,
-        };
+        failure =
+          error instanceof HostScriptError
+            ? { k: 'fail', error }
+            : { k: 'fail', error: null, detail: hostDetail(error) };
       }
     } finally {
       starting = false;
@@ -1414,13 +1446,16 @@ export class Run {
           true,
         );
       case 'fail':
-        throw this.failure(call!, r.error, () => {});
+        throw this.failure(call!, r.error, () => {}, r.detail);
       case 'answer':
         if (
           !functionsBelongTo([r.value], this.script.functionGroup) ||
           (call!.op.result && mismatch(r.value, call!.op.result))
         ) {
-          throw this.hostError(call!);
+          throw this.hostError(
+            call!,
+            resultDetail(r.value, call!.op.result, this.script.functionGroup),
+          );
         }
         this.payConversion(call!, r.value, r.fuel);
         return r.value;
@@ -1566,7 +1601,10 @@ export class Run {
         op: 'get',
         error: map([]),
       });
-      throw this.hostError(ctx);
+      throw this.hostError(
+        ctx,
+        resultDetail(result, prop.shape, this.script.functionGroup),
+      );
     }
     this.recordCrossing({
       kind: 'prop',
@@ -2104,7 +2142,9 @@ export class Run {
         host.answer(id, v, late?.fuel ?? 0),
       // Anything but a ScriptError fails as `host error`.
       fail: (e: HostScriptError) =>
-        host.fail(id, e instanceof HostScriptError ? e : null),
+        e instanceof HostScriptError
+          ? host.fail(id, e)
+          : host.fail(id, null, hostDetail(e)),
     };
     const record = {
       kind: 'call' as const,
@@ -2138,6 +2178,7 @@ export class Run {
         ctx,
         error instanceof HostScriptError ? error : null,
         failed => this.recordCrossing({ ...record, charged, error: failed }),
+        hostDetail(error),
       );
     }
     starting = false;
@@ -2169,7 +2210,10 @@ export class Run {
       standardChecks(op)?.result?.(result, args) === false
     ) {
       this.recordCrossing({ ...record, charged, error: map([]) });
-      throw this.hostError(ctx);
+      throw this.hostError(
+        ctx,
+        resultDetail(result, op.result, this.script.functionGroup),
+      );
     }
     this.recordCrossing({ ...record, charged, result });
     this.payConversion(ctx, result, 0);
@@ -2183,12 +2227,13 @@ export class Run {
       .then(
         value => call.answer(value),
         (error: unknown) =>
-          this.host!.fail(
-            call.id,
-            error instanceof HostScriptError ? error : null,
-          ),
+          error instanceof HostScriptError
+            ? this.host!.fail(call.id, error)
+            : this.host!.fail(call.id, null, hostDetail(error)),
       )
-      .catch(() => this.host!.fail(call.id, null));
+      .catch((error: unknown) =>
+        this.host!.fail(call.id, null, hostDetail(error)),
+      );
   }
 
   private recordCrossing(
@@ -2201,11 +2246,17 @@ export class Run {
     this.crossingCall = null;
   }
 
-  // `host error` for a call, with its `call-failed` record.
-  private hostError(ctx: CallContext): ScriptError {
+  // `host error` for a call, with its `call-failed` record, which carries the
+  // Host-side detail the Script never sees (chapter 6).
+  private hostError(ctx: CallContext, detail: string): ScriptError {
     // A property call has no call id; its `prop` record carries the failure.
     if (ctx.id) {
-      this.records.push({ kind: 'call-failed', id: ctx.id, op: ctx.opName });
+      this.records.push({
+        kind: 'call-failed',
+        id: ctx.id,
+        op: ctx.opName,
+        detail,
+      });
     }
     return new ScriptError('host error', ctx.named, true);
   }
@@ -2230,10 +2281,11 @@ export class Run {
     ctx: CallContext,
     error: HostScriptError | null,
     record: (failed: Value) => void,
+    detail = 'the Host failed the call with something other than a ScriptError',
   ): Error {
     if (!error) {
       record(map([]));
-      return this.hostError(ctx);
+      return this.hostError(ctx, detail);
     }
     const data =
       Value.isValue(error.data) && error.data.kind === 'map'
@@ -2248,17 +2300,25 @@ export class Run {
     ]);
     if (!functionsBelongTo([data], this.script.functionGroup)) {
       record(map([]));
-      return this.hostError(ctx);
+      return this.hostError(
+        ctx,
+        `failure "${error.code}" holds a Function Value from another Group`,
+      );
     }
     record(failed);
     const declaredCodes = ctx.op.errors?.map(e => e.code);
-    if (
-      (error.code in errorMessages &&
-        !standardChecks(ctx.op)?.error?.(error.code, data)) ||
-      data.entries().some(([k]) => reservedKeys.has(k)) ||
-      (declaredCodes && !declaredCodes.includes(error.code))
-    ) {
-      return this.hostError(ctx);
+    const reserved = data.entries().find(([k]) => reservedKeys.has(k));
+    const refused =
+      error.code in errorMessages &&
+      !standardChecks(ctx.op)?.error?.(error.code, data)
+        ? `failure "${error.code}" is a catalogue code the Operation doesn't declare`
+        : reserved
+          ? `failure "${error.code}" has the reserved data key "${reserved[0]}"`
+          : declaredCodes && !declaredCodes.includes(error.code)
+            ? `failure "${error.code}" is outside the Operation's declared codes`
+            : null;
+    if (refused) {
+      return this.hostError(ctx, refused);
     }
     // Its Data is converted, and charged, as a result is.
     this.payConversion(ctx, data, 0);
