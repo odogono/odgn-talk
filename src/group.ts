@@ -85,6 +85,11 @@ import {
   Value,
 } from './values';
 import { compareText } from './text';
+import type { CodeUnit } from './code-unit';
+
+// Process-wide compiled code. Checks and initialisation still happen for every
+// load, since Grants, limits, bindings and Script state aren't code identity.
+const compiledScripts = new Map<string, CodeUnit>();
 
 export type GroupOptions = {
   name: string;
@@ -1673,19 +1678,33 @@ export class Group {
     name: string,
     p: ReturnType<typeof prepare>,
     limits: Limits,
-    existing?: { home: Loaded; links: ReadonlyMap<string, Code> },
+    existing?: {
+      home: Loaded;
+      identity: string;
+      links: ReadonlyMap<string, Code>;
+    },
   ): Loaded {
     try {
       if (p.diagnostics) {
         throw new LoadError(p.diagnostics);
       }
-      const loaded = loadOrReject(name, () =>
-        loadScript(
+      // An extension's lowering also depends on all earlier definitions and
+      // variable slots, so cache it under the complete extended Script identity.
+      const identity = existing?.identity ?? p.identity;
+      let unit = compiledScripts.get(identity);
+      if (!unit) {
+        unit = loadOrReject(name, () =>
           lowerTree(p.checked.tree!, {
             name,
             unit: 'script',
             existingVariables: existing?.home.variableNames,
           }),
+        );
+        compiledScripts.set(identity, unit);
+      }
+      const loaded = loadOrReject(name, () =>
+        loadScript(
+          unit,
           limits,
           new Map([...(existing?.links ?? []), ...linksOf(p.imports)]),
           existing?.home.variables,
@@ -1938,6 +1957,7 @@ export class Group {
     const extension = this.loadPrepared(name, p, s.limits, {
       home: s.loaded,
       links,
+      identity: extendedIdentity,
     });
     const state =
       this.persistentState(s) -
