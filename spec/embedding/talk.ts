@@ -252,7 +252,12 @@ export interface CalendarImpl {
   offset(call: Call<string>, instant: Value, zone?: string): Value;
   zone(call: Call<string>, zone?: string): Value;
 }
-/** The Core raises `bad locale` for a malformed tag before these run. */
+/**
+ * The binding is the default tag. The Core checks the effective tag's RFC 5646
+ * syntax before these run; the Host owns supported-tag lookup and fallback.
+ * Omitted/Nothing tags arrive as undefined; opts has all keys with defaults
+ * filled in. Every Host failure becomes host error, including bad locale.
+ */
 export interface LocaleImpl {
   compare(call: Call<string>, a: Value, b: Value, opts: Value, tag?: string): Value;
   rank(call: Call<string>, texts: Value, opts: Value, tag?: string): Value;

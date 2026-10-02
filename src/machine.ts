@@ -1912,7 +1912,7 @@ export class Run {
             true,
           );
     });
-    standardChecks(op)?.arguments?.(args);
+    standardChecks(op)?.arguments?.(args, grant.binding);
     const declared = op.cost.fuel;
     this.pay(key, { declared });
     this.payAmount(0, op.cost.alloc ?? 0);
@@ -2029,7 +2029,7 @@ export class Run {
     if (
       !Value.isValue(result) ||
       (op.result && mismatch(result, op.result)) ||
-      standardChecks(op)?.result?.(result) === false
+      standardChecks(op)?.result?.(result, args) === false
     ) {
       this.recordCrossing({ ...record, charged, error: map([]) });
       throw this.hostError(ctx);

@@ -1,0 +1,41 @@
+# Tag, option-domain and Shape checks run before call costs or Stubs.
+# Wrong name counts and Host attempts to raise bad locale become host error.
+> load s identity=b1d528f09ac167a085cae03e1e638183ae5cd3303940f2d00de862732d3f3592
+> deliver d1 to=s message=badTag
+> pump clock=2026-10-02T12:00:00Z
+raise s/r1 code="bad locale" at=s:3 pos=2:3
+seg s/r1 start delivery=d1 handler=badTag clause=1 fuel=9 alloc=0 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=badTag error={code: "bad locale", locale: "en_US", at: {unit: "s", handler: "badTag", line: 2, column: 3}} fuel=9 alloc=0
+pumped state=idle fuel=9
+> deliver d2 to=s message=badWord
+> pump clock=2026-10-02T12:00:00Z
+raise s/r2 code="out of domain" at=s:10 pos=5:3
+seg s/r2 start delivery=d2 handler=badWord clause=1 fuel=13 alloc=65 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=badWord error={code: "out of domain", function: "monthNames", value: "wide", at: {unit: "s", handler: "badWord", line: 5, column: 3}} fuel=13 alloc=65
+pumped state=idle fuel=13
+> deliver d3 to=s message=badShape
+> pump clock=2026-10-02T12:00:00Z
+raise s/r3 code="wrong kind" at=s:21 pos=9:3
+seg s/r3 start delivery=d3 handler=badShape clause=1 fuel=17 alloc=66 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=badShape error={code: "wrong kind", expected: "map or text or nothing", got: "map", value: {numeric: "yes"}, capability: "loc", operation: "compare", argument: 3, at: {unit: "s", handler: "badShape", line: 9, column: 3}} fuel=17 alloc=66
+pumped state=idle fuel=17
+> stub locale.dayNames value=["Monday"]
+> deliver d4 to=s message=badResult
+> pump clock=2026-10-02T12:00:00Z
+call s/r4.c1 op=loc.dayNames args=[] error={}
+call-failed s/r4.c1 op=loc.dayNames
+raise s/r4 code="host error" at=s:26 pos=12:3
+seg s/r4 start delivery=d4 handler=badResult clause=1 fuel=25 alloc=0 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=badResult error={code: "host error", capability: "loc", operation: "dayNames", at: {unit: "s", handler: "badResult", line: 12, column: 3}} fuel=25 alloc=0
+pumped state=idle fuel=25
+> stub locale.tag error={code: "bad locale", locale: "en-GB"}
+> deliver d5 to=s message=badFailure
+> pump clock=2026-10-02T12:00:00Z
+call s/r5.c1 op=loc.tag args=[] error={code: "bad locale", locale: "en-GB"}
+call-failed s/r5.c1 op=loc.tag
+raise s/r5 code="host error" at=s:31 pos=15:3
+seg s/r5 start delivery=d5 handler=badFailure clause=1 fuel=25 alloc=0 state=0 end=error
+run s/r5 outcome=errored delivery=d5 handler=badFailure error={code: "host error", capability: "loc", operation: "tag", at: {unit: "s", handler: "badFailure", line: 15, column: 3}} fuel=25 alloc=0
+pumped state=idle fuel=25
+> vars
+vars s

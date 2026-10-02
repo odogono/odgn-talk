@@ -1,0 +1,17 @@
+script variable seen = []
+on go
+  ask loc to compare "file 9", "file 10", {numeric: true}, "en"
+  put it after seen
+  ask loc to upper "i", "tr"
+  put it after seen
+  ask loc to lower "I", "tr"
+  put it after seen
+  ask loc to numberSymbols
+  put it after seen
+  ask loc to monthNames {width: "short"}
+  put it after seen
+  ask loc to dayNames nothing, "en"
+  put it after seen
+  ask loc to tag "qzz-QZ"
+  put it after seen
+end

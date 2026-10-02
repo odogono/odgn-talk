@@ -1,0 +1,23 @@
+# Locale data and fallback belong to the Host; the Core checks fixed declarations.
+> load s identity=2e492ee40d30d10db3ffe593cb26e8f535210b6d9e617c85c1d3c919b0155c50
+> stub locale.compare value=-1
+> stub locale.upper value="İ"
+> stub locale.lower value="ı"
+> stub locale.numberSymbols value={decimal: ".", group: ",", minus: "-", digits: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"], primaryGroup: 3, secondaryGroup: 3, minGrouping: 1}
+> stub locale.monthNames value=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+> stub locale.dayNames value=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+> stub locale.tag value="und"
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r1.c1 op=loc.compare args=["file 9", "file 10", {numeric: true}, "en"] result=-1
+call s/r1.c2 op=loc.upper args=["i", "tr"] result="İ"
+call s/r1.c3 op=loc.lower args=["I", "tr"] result="ı"
+call s/r1.c4 op=loc.numberSymbols args=[] result={decimal: ".", group: ",", minus: "-", digits: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"], primaryGroup: 3, secondaryGroup: 3, minGrouping: 1}
+call s/r1.c5 op=loc.monthNames args=[{width: "short"}] result=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+call s/r1.c6 op=loc.dayNames args=[nothing, "en"] result=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+call s/r1.c7 op=loc.tag args=["qzz-QZ"] result="und"
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=259 alloc=2685 state=1326 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=259 alloc=2685
+pumped state=idle fuel=259
+> vars
+vars s seen=[-1, "İ", "ı", {decimal: ".", group: ",", minus: "-", digits: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"], primaryGroup: 3, secondaryGroup: 3, minGrouping: 1}, ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "und"]

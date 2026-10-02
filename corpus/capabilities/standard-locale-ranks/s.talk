@@ -1,0 +1,8 @@
+use sortBy from list
+script variable seen = []
+on go
+  put ["b", "A", "a", "b"] into words
+  ask loc to rank words, {sensitivity: "base"}
+  put it into ranks
+  put sortBy(words, given word: the (word) of ranks) into seen
+end

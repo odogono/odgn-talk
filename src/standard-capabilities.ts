@@ -29,7 +29,7 @@ export type TimerImpl = {
   ): void;
 };
 
-const costOf = (costs: Costs, name: string): Cost => {
+export const costOf = (costs: Costs, name: string): Cost => {
   const cost = costs && Object.hasOwn(costs, name) ? costs[name] : undefined;
   if (
     !cost ||
@@ -46,7 +46,7 @@ const costOf = (costs: Costs, name: string): Cost => {
   });
 };
 
-const fixed = <B>(capability: CapabilityDef<B>): CapabilityDef<B> => {
+export const fixed = <B>(capability: CapabilityDef<B>): CapabilityDef<B> => {
   for (const op of capability.operations.values()) {
     Object.freeze(op.args);
     Object.freeze(op.errors);

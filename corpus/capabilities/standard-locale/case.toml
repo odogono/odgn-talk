@@ -1,0 +1,11 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "locale"
+costs = { compare = { fuel = 7 }, rank = { fuel = 7 }, upper = { fuel = 7 }, lower = { fuel = 7 }, numberSymbols = { fuel = 7 }, monthNames = { fuel = 7 }, dayNames = { fuel = 7 }, tag = { fuel = 7 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { loc = { capability = "locale", ops = "all", binding = "en-GB" } }
