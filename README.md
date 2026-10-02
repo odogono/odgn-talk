@@ -4,7 +4,7 @@ A HyperTalk-descended scripting language for running untrusted end-user Scripts 
 
 NorthTalk originates with ODGN (Open Door Go North). Scripts use `.talk` files; the repository remains `odogono/odgn-talk`. The [naming decision](docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md) records the package and tooling names and preliminary clash checks.
 
-The TS Core implements pinned Unicode, immutable text/value foundations and a lossless lexer/parser for [#126](https://github.com/odogono/odgn-talk/issues/126). See [the implementation guide](impl/ts/README.md) for the supported API, checks, corpus selection and remaining work. Scripts run in the TS REPL, below.
+The TS Core parses and checks source, runs Scripts through the embedding API, and provides a Session Host for the REPL and Transcript replay. See [the implementation guide](impl/ts/README.md) for supported behavior and limitations, and its [task navigation table](impl/ts/README.md#task-navigation) for source, Spec and test entry points.
 
 Notable implementation changes are recorded in the [changelog](impl/ts/CHANGELOG.md).
 
