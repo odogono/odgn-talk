@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Group-level regression tests for the `initialiser failed` load diagnostic and the `duplicate object id` Host error, from the [#126](https://github.com/odogono/odgn-talk/issues/126) embedding API and diagnostic audit. The audit's remaining interface gaps are #196 to #200, recorded in the implementation guide.
+
 - TS Core `Script.counters()` and public `Counters`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Seventeen tests and three Trace Cases cover live, parked, completed and discarded work, faults, cleanup, event tests, Reissue, code changes and restore. Chapter 9 settles counting rules and chapter 11 adds `counters` input/output records.
 
 - Queued Host Object messages follow the live Message Path at dispatch, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-four regression tests and three Trace Cases cover mailbox transfers, ordering, Requests and Script sends, Decisions, cancellation, receiver limits, path continuation, disposal and save/restore. `wait for … from` now supports evaluated object filters as well as named senders, including block waits and retained state accounting.
@@ -95,6 +97,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Wait-for event-test work now counts in a Pump's `fuelUsed`, the receiving Script's Fuel Slice and debt, and the Group Fuel cap ([#193](https://github.com/odogono/odgn-talk/issues/193)). Regression tests and three Trace Cases cover slice debt, the Group cap and faulting on resume.
 
 - Corpus restore replay drops withheld Libraries from its current registry, so a later full restore uses the restored Group's Library set.
 
