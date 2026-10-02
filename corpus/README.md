@@ -29,7 +29,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 
 ## Seed blessing
 
-All 146 current corpus cases execute; all Trace Cases are blessed by the TS Core, the only available Core. The last five seeds now have explicit Cost Model derivations in their headers: `fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`. Their first blessing awaits human review.
+All 146 current corpus cases execute, and every Trace Case is blessed by the TS Core, the only available Core. Every first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 

@@ -92,6 +92,8 @@ tracked separately in the Spec's Data Files.
 
 ### Changed
 
+- TS Core step 1 ([#126](https://github.com/odogono/odgn-talk/issues/126)) is complete: the last five seed blessings and the four Value Encoding cases have had their human review. Stale "isn't blessed" and "Unblessed" headers in ten Text Pattern cases and the encoding cases are corrected, and the implementation guide and corpus README record the step's acceptance.
+
 - Host reports and Inspection now match `talk.ts`, completing [#196](https://github.com/odogono/odgn-talk/issues/196). A `run end`'s `error` is a `ScriptError` (code, text message, other fields as `data`) rather than the raw map, and it carries `at` (code unit, Handler, instruction index and source position) for `errored` and `limit fault`; `limit` and `cleanupFailed` use the Trace's limit names. `unhandled` carries its `target` object. Suspended Runs in an Inspection give `wait`, `until` and `calls`, and mailbox entries omit absent `delivery`/`from` instead of `null`. `ScriptError.data` is now a `Value` (Nothing by default), so a rejected Request's `send failed` gives its reason as a map. Chapter 9 settles which instruction `at` names and what `until` covers. Twelve tests cover the reports and Inspection; Trace output is unchanged.
 
 - `v as n bytes` in a build lowers to its value, its size and `bytes-sized`, so its size is kept.

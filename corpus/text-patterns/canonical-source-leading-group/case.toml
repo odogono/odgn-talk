@@ -1,5 +1,4 @@
-# canonical-source-leading-group: a Text Pattern case (spec chapters 4 and 11). It isn't
-# blessed, and its figures are estimates unless case.trace pins one.
+# canonical-source-leading-group: a Text Pattern case (spec chapters 4 and 11), blessed by the TS Core.
 
 kind = "trace"
 

@@ -2,7 +2,8 @@
 # built through the Host's text constructor, which normalises it to NFC, and
 # encoded. The encoded text is written as raw UTF-8, since the Value Encoding
 # escapes only `"`, `\` and U+0000 to U+001F.
-# Unblessed: the bytes are written by hand, not by bless.
+# The bytes were written by hand from chapter 9, and the TS Core reproduces
+# them exactly.
 #
 # "e" then U+0301 COMBINING ACUTE ACCENT composes to U+00E9.
 "e" & fromCodePoint(769) => "é"
