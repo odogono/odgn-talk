@@ -46,6 +46,8 @@ type Pairs = readonly (readonly [string, Value])[];
 export type FunctionRef = {
   readonly captures: Pairs;
   readonly code: unknown;
+  /** The extension unit used in the display form, while home remains the Script. */
+  readonly displayHome?: string;
   readonly home: string;
   /** Equal for the same Lambda or named function in the same Home Script. */
   readonly identity: string;
@@ -411,7 +413,7 @@ export class Value {
         }
         case 'function': {
           const fn = next.asFunction()!;
-          output.push(`<function ${fn.home}:${fn.place}`);
+          output.push(`<function ${fn.displayHome ?? fn.home}:${fn.place}`);
           pending.push('>');
           if (fn.captures.length) {
             pending.push(makeValue('map', fn.captures), ' ');

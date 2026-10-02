@@ -39,6 +39,7 @@ export {
   Script as ScriptHandle,
   type GroupOptions,
   type CancellationOptions,
+  type CarryOver,
   type Inspection,
   type LoadOptions,
   type Message,

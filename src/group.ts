@@ -36,7 +36,14 @@ import {
   type ObjectState,
 } from './objects';
 import type { GrantDecls } from './effects';
+import type { SemanticTree } from './semantic';
+import type { ExistingName } from './checker';
+import type { Code } from './machine';
+import { viewSource } from './view';
+import { sha256 } from './sha256';
 import {
+  codeIdentity,
+  replacementLibraries,
   identityOf,
   linksOf,
   loadOrReject,
@@ -79,6 +86,7 @@ export type Decided = {
 };
 export type Deciding = { decided: Promise<Decided>; id: string };
 export type Requested = { id: string; result: Promise<Value> };
+export type CarryOver = 'reset variables' | 'carry variables';
 export type CancellationOptions = { signal?: AbortSignal };
 export type PumpOptions = { fuelCap?: number; fuelSlice?: number };
 export type RunOutcome =
@@ -217,6 +225,12 @@ type Pending = {
   s: ScriptState;
   timer: Timer;
 };
+type SourceUnit = {
+  identity: string;
+  imports: readonly Library[];
+  source: string;
+  tree: SemanticTree;
+};
 type ScriptState = {
   debt: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
@@ -238,6 +252,7 @@ type ScriptState = {
   stopReason?: string;
   /** Its suspended Runs, which Persistent State counts. */
   suspended: Set<Running>;
+  units: SourceUnit[];
   /** Its pending `wait for`s, in the order the waits began. */
   waiters: { running: Running; timers: Timer[] }[];
 };
@@ -288,6 +303,12 @@ export class Script {
     const delivery = this.group.queueDelivery('request', this.name, m, settle);
     this.group.watchCancellation(delivery, o?.signal);
     return { id: delivery.id!, result };
+  }
+  reload(source: string, carry: CarryOver): Report[] {
+    return this.group.reload(this.name, source, carry);
+  }
+  extend(source: string): void {
+    this.group.extend(this.name, source);
   }
   stop(reason: string): void {
     this.group.queueStop(this.name, reason);
@@ -475,6 +496,7 @@ export class Group {
       return;
     }
     s.stopped = true;
+    s.loaded.live = false;
     s.stopReason = reason;
     const runs = this.runsOf(s);
     const messages = s.queue.filter((q): q is Delivery => !('run' in q));
@@ -605,35 +627,7 @@ export class Group {
     );
     this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
     const limits = { ...defaultLimits, ...o.limits };
-    let loaded: Loaded;
-    try {
-      if (p.diagnostics) {
-        throw new LoadError(p.diagnostics);
-      }
-      loaded = loadOrReject(o.name, () =>
-        loadScript(
-          lowerTree(p.checked.tree!, { name: o.name, unit: 'script' }),
-          limits,
-          linksOf(p.imports),
-        ),
-      );
-    } catch (error) {
-      if (error instanceof LoadError) {
-        for (const d of error.diagnostics) {
-          this.trace(
-            recordLine(
-              'diag',
-              [o.name],
-              [
-                ['code', JSON.stringify(d.code)],
-                ['pos', `${d.line}:${d.col}`],
-              ],
-            ),
-          );
-        }
-      }
-      throw error;
-    }
+    const loaded = this.loadPrepared(o.name, p, limits);
     const handle = new Script(this, o.name);
     if (owner) {
       owner.owner = o.name;
@@ -654,8 +648,302 @@ export class Group {
       incoming: 0,
       parked: [],
       stopped: false,
+      units: [
+        {
+          source: o.source,
+          tree: p.checked.tree!,
+          imports: p.imports,
+          identity: p.identity,
+        },
+      ],
     });
     return handle;
+  }
+
+  private loadPrepared(
+    name: string,
+    p: ReturnType<typeof prepare>,
+    limits: Limits,
+    existing?: { home: Loaded; links: ReadonlyMap<string, Code> },
+  ): Loaded {
+    try {
+      if (p.diagnostics) {
+        throw new LoadError(p.diagnostics);
+      }
+      const loaded = loadOrReject(name, () =>
+        loadScript(
+          lowerTree(p.checked.tree!, {
+            name,
+            unit: 'script',
+            existingVariables: existing?.home.variableNames,
+          }),
+          limits,
+          new Map([...(existing?.links ?? []), ...linksOf(p.imports)]),
+          existing?.home.variables,
+          existing?.home,
+        ),
+      );
+      loaded.identity = p.identity;
+      return loaded;
+    } catch (error) {
+      this.writeDiagnostics(error);
+      throw error;
+    }
+  }
+
+  private writeDiagnostics(error: unknown) {
+    if (error instanceof LoadError) {
+      for (const d of error.diagnostics) {
+        this.trace(
+          recordLine(
+            'diag',
+            [d.unit],
+            [
+              ['code', JSON.stringify(d.code)],
+              ['pos', `${d.line}:${d.col}`],
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  private replacement(
+    s: ScriptState,
+    source: string,
+    carry: CarryOver,
+    libraries = this.libraries,
+    extensions: readonly string[] = [],
+  ) {
+    const p = prepare(
+      'script',
+      s.name,
+      source,
+      libraries,
+      [...Object.keys(s.objects), ...this.scripts.map(other => other.name)],
+      declarationsOf(s.grants),
+    );
+    const loaded = this.loadPrepared(s.name, p, s.limits);
+    const staged: ScriptState = {
+      ...s,
+      loaded,
+      queue: [],
+      suspended: new Set(),
+      parked: [],
+      waiters: [],
+      units: [
+        {
+          source,
+          tree: p.checked.tree!,
+          imports: p.imports,
+          identity: p.identity,
+        },
+      ],
+    };
+    for (const entry of extensions) {
+      this.applyExtension(
+        staged,
+        entry,
+        this.extension(staged, entry, libraries),
+      );
+    }
+    if (carry === 'carry variables') {
+      for (const [i, name] of loaded.variableNames.entries()) {
+        const old = s.loaded.variableNames.indexOf(name);
+        if (old >= 0) {
+          loaded.variables[i] = s.loaded.variables[old]!;
+        }
+      }
+      if (loaded.variablesSize() > s.limits.persistentState) {
+        this.trace(
+          recordLine(
+            'refused',
+            [],
+            [['code', JSON.stringify('state too large')]],
+          ),
+        );
+        throw new HostError('state too large');
+      }
+    }
+    return { loaded, units: staged.units };
+  }
+
+  /** Worker. Check and initialise before discarding any old work. */
+  reload(name: string, source: string, carry: CarryOver): Report[] {
+    this.worker();
+    const s = this.scripts.find(s => s.name === name)!;
+    const p = prepare('script', name, source, this.libraries);
+    this.trace(
+      recordLine(
+        'reload',
+        [name],
+        [
+          ['carry', carry === 'carry variables' ? 'yes' : 'no'],
+          ['source', JSON.stringify(source)],
+          ['identity', p.identity],
+        ],
+        true,
+      ),
+    );
+    const replacement = this.replacement(s, source, carry);
+    return this.replaceScripts([{ s, ...replacement }]);
+  }
+
+  private extension(
+    s: ScriptState,
+    source: string,
+    libraries = this.libraries,
+  ) {
+    const name = `${s.name}+${s.units.length}`;
+    const existing: Record<string, ExistingName> = {};
+    const links = new Map<string, Code>();
+    for (const [i, unit] of s.units.entries()) {
+      const code = s.loaded.units[i]!;
+      const key = `@${code.name}`;
+      links.set(key, code);
+      for (const [library, linked] of code.libraries) {
+        links.set(library, linked);
+      }
+      for (const binding of unit.tree.scopes[0]!.bindings) {
+        if (binding.span === null) {
+          continue;
+        }
+        existing[binding.name] = {
+          kind: binding.kind,
+          contract: binding.contract,
+          importedFrom:
+            binding.kind === 'script variable'
+              ? undefined
+              : (binding.importedFrom ?? { library: key, name: binding.name }),
+          maySuspend:
+            binding.kind === 'handler' &&
+            (binding.importedFrom
+              ? code
+                  .library(
+                    `${binding.importedFrom.library}:${binding.importedFrom.name}`,
+                  )
+                  .code.clauses.get(binding.importedFrom.name)
+                  ?.some(b => b.maySuspend)
+              : code.clauses.get(binding.name)?.some(b => b.maySuspend)),
+        };
+      }
+    }
+    const p = prepare(
+      'script',
+      name,
+      source,
+      libraries,
+      [...Object.keys(s.objects), ...this.scripts.map(other => other.name)],
+      declarationsOf(s.grants),
+      existing,
+    );
+    const identity = codeIdentity(
+      'extension',
+      s.name,
+      source,
+      p.imports.map(identityOf),
+    );
+    const extendedIdentity = sha256(
+      `${s.loaded.identity}\nextend\n${identity}\n`,
+    );
+    return { p: { ...p, identity }, extendedIdentity, links, existing, name };
+  }
+
+  private applyExtension(
+    s: ScriptState,
+    source: string,
+    prepared = this.extension(s, source),
+  ) {
+    const { p, links, existing, name, extendedIdentity } = prepared;
+    for (const decl of p.checked.tree ? viewSource(p.checked.tree.root) : []) {
+      const names =
+        decl.k === 'use'
+          ? decl.imports.map(i => i.local.text)
+          : decl.k === 'handler' || decl.k === 'function'
+            ? [decl.name]
+            : [decl.name.text];
+      if (
+        names.some(
+          n => Object.hasOwn(existing, n) || Object.hasOwn(s.objects, n),
+        )
+      ) {
+        this.trace(
+          recordLine('refused', [], [['code', JSON.stringify('name reused')]]),
+        );
+        throw new HostError('name reused');
+      }
+    }
+    const extension = this.loadPrepared(name, p, s.limits, {
+      home: s.loaded,
+      links,
+    });
+    const state =
+      this.persistentState(s) -
+      s.loaded.variablesSize() +
+      extension.variablesSize();
+    if (state > s.limits.persistentState) {
+      this.trace(
+        recordLine(
+          'refused',
+          [],
+          [['code', JSON.stringify('state too large')]],
+        ),
+      );
+      throw new HostError('state too large');
+    }
+    const added = extension.variables.slice(s.loaded.variables.length);
+    for (const r of this.runsOf(s)) {
+      r.run.segmentBase.push(...added);
+    }
+    s.loaded.attach(extension);
+    s.loaded.identity = extendedIdentity;
+    s.units.push({
+      source,
+      tree: p.checked.tree!,
+      imports: p.imports,
+      identity: p.identity,
+    });
+  }
+
+  /** Worker. Existing code units and Runs remain untouched. */
+  extend(name: string, source: string): void {
+    this.worker();
+    const s = this.scripts.find(s => s.name === name)!;
+    const p = this.extension(s, source);
+    this.trace(
+      recordLine(
+        'extend',
+        [name],
+        [
+          ['source', JSON.stringify(source)],
+          ['identity', p.extendedIdentity],
+        ],
+        true,
+      ),
+    );
+    this.applyExtension(s, source, p);
+  }
+
+  private replaceScripts(
+    replacements: { loaded: Loaded; s: ScriptState; units: SourceUnit[] }[],
+  ): Report[] {
+    const previous = this.drainReports;
+    const reports: Report[] = [];
+    this.drainReports = reports;
+    try {
+      for (const { s } of replacements) {
+        this.stopState(s, 'reload');
+      }
+      for (const { s, loaded, units } of replacements) {
+        s.loaded = loaded;
+        s.units = units;
+        s.stopped = false;
+        delete s.stopReason;
+      }
+    } finally {
+      this.drainReports = previous;
+    }
+    return reports;
   }
 
   /**
@@ -688,6 +976,70 @@ export class Group {
       }
     }
     this.libraries.set(l.name, l);
+  }
+
+  /** Worker. Prepare every dependent before changing the Group. */
+  replaceLibrary(l: Library, carry: CarryOver): Report[] {
+    this.worker();
+    this.trace(
+      recordLine(
+        'replace-library',
+        [l.name],
+        [
+          ['carry', carry === 'carry variables' ? 'yes' : 'no'],
+          ['source', JSON.stringify(l.source)],
+          ['identity', identityOf(l)],
+        ],
+        true,
+      ),
+    );
+    const refuse = (code: HostErrorCode): never => {
+      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      throw new HostError(code);
+    };
+    if (stdlibNames.has(l.name)) {
+      refuse('reserved name');
+    }
+    if (!this.libraries.has(l.name)) {
+      refuse('library mismatch');
+    }
+    for (const imported of l.imports.filter(i => !stdlibNames.has(i.name))) {
+      const held = this.libraries.get(imported.name);
+      if (!held || identityOf(held) !== identityOf(imported)) {
+        refuse('library mismatch');
+      }
+    }
+    let libraries: Map<string, Library>;
+    try {
+      libraries = replacementLibraries(this.libraries, l);
+    } catch (error) {
+      this.writeDiagnostics(error);
+      throw error;
+    }
+    const affected = new Set(
+      [...libraries]
+        .filter(([name, library]) => library !== this.libraries.get(name))
+        .map(([name]) => name),
+    );
+    affected.add(l.name);
+    const replacements = this.scripts
+      .filter(s => s.units.some(u => u.imports.some(i => affected.has(i.name))))
+      .map(s => ({
+        s,
+        ...this.replacement(
+          s,
+          s.units[0]!.source,
+          carry,
+          libraries,
+          s.units.slice(1).map(u => u.source),
+        ),
+      }));
+    const reports = this.replaceScripts(replacements);
+    this.libraries.clear();
+    for (const [name, library] of libraries) {
+      this.libraries.set(name, library);
+    }
+    return reports;
   }
 
   // What a Run of the Script reaches outside it through (machine.ts).
@@ -2165,7 +2517,7 @@ export class Group {
     this.worker();
     this.trace(recordLine('vars', [], [], true));
     const scripts = this.scripts.map(s => {
-      const vars = s.loaded.unit.variables.map(
+      const vars = s.loaded.variableNames.map(
         (n, i) => [n, s.loaded.variables[i] ?? nothing] as [string, Value],
       );
       this.trace(

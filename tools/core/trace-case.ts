@@ -3,6 +3,7 @@
 // the case's, ignoring comments and blank lines. Bless writes the Core's
 // Trace back, keeping each comment and blank line before the Host Input line
 // it preceded.
+import { replacementLibraries } from '../../src/library';
 import corpus from '../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -552,6 +553,7 @@ export const replay = (
     order.push(index);
   }
   order.push(...refused);
+  let registered = new Map<string, Library>();
   for (const index of order) {
     const line = lines[index]!;
     if (crossingLines.has(index)) {
@@ -605,6 +607,42 @@ export const replay = (
             throw l;
           }
           group.addLibrary(l);
+          registered.set(l.name, l);
+          break;
+        }
+        case 'reload':
+          group
+            .script(r.ids[0]!)!
+            .reload(
+              read(r.fields.get('source')!).asText()!,
+              r.fields.get('carry') === 'yes'
+                ? 'carry variables'
+                : 'reset variables',
+            );
+          break;
+        case 'extend':
+          group
+            .script(r.ids[0]!)!
+            .extend(read(r.fields.get('source')!).asText()!);
+          break;
+        case 'replace-library': {
+          const name = r.ids[0]!;
+          const previous = registered.get(name)!;
+          const library = compileLibrary(
+            {
+              name,
+              version: previous.version,
+              source: read(r.fields.get('source')!).asText()!,
+            },
+            [...registered.values()],
+          );
+          group.replaceLibrary(
+            library,
+            r.fields.get('carry') === 'yes'
+              ? 'carry variables'
+              : 'reset variables',
+          );
+          registered = replacementLibraries(registered, library);
           break;
         }
         case 'set-parent': {
