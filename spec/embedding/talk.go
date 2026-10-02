@@ -562,7 +562,7 @@ type LoadOptions struct {
 	// be granted twice under two names with different bindings.
 	Grants map[string]*Grant
 	// GrantsAsUsed keeps only the granted Operations that the Script and its
-	// Libraries use, and makes no unused Grant visible to it.
+	// Libraries use, trimming once at Load; discarded Operations cannot be regained.
 	GrantsAsUsed bool
 	Owner        *Object            // the Script becomes its Owning Script
 	Objects      map[string]*Object // well-known objects, bound by name
@@ -747,7 +747,7 @@ type Script struct { /* opaque */
 }
 
 func (s *Script) Name() string
-func (s *Script) Grants() map[string][]string // the Operations kept for each granted name
+func (s *Script) Grants() map[string][]string // worker; a fresh map of kept names, including revoked Grants
 func (s *Script) Counters() Counters          // worker, between Pumps
 
 // Reload is stop-and-reload (ADR 0005), a worker call. It returns the

@@ -370,6 +370,7 @@ export interface LoadOptions {
   source: string;
   /** Keyed by the name the Script uses. */
   grants: Record<string, Grant<any>>;
+  /** Trim once at Load, including Library needs; discarded Operations cannot be regained. */
   grantsAsUsed?: boolean;
   owner?: HostObject;
   objects?: Record<string, HostObject>;
@@ -488,6 +489,7 @@ export interface Counters {
 
 export interface Script {
   readonly name: string;
+  /** Worker. A fresh map of kept names and Operations, including revoked Grants. */
   grants(): Record<string, string[]>;
   counters(): Counters;
   /** Worker. Throws LoadError. */
