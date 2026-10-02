@@ -1,0 +1,28 @@
+# Revoking does not abandon the pending call: its answer still resumes
+# the Run. The next call raises capability revoked before reaching the Host.
+# A rejected Reload keeps the old code and revoked Grant. A successful
+# Reload without its calls removes that Grant.
+> load s identity=c406683c74a2309f35e6350f738a651ec4b9f7074d95ee42a1caac4922824aa4
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=io.pause args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=24 alloc=0 state=304 end=ask-wait
+pumped state=idle fuel=24 next=2026-09-30T10:00:30Z
+> revoke s grant=io
+> answer s/r1.c1 value=8
+> pump clock=2026-09-30T10:00:01Z
+raise s/r1 code="capability revoked" at=s:10 pos=7:5
+seg s/r1 resume fuel=25 alloc=58 state=74 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
+pumped state=idle fuel=25
+> reload s carry=yes source="on go" & newline & "  ask io to pause and wait" & newline & "end go" identity=753359139e0b2d9faf71226f3530592a05d297dc27949b554a5a8097cfdc11e0
+diag s code="unknown operation" pos=2:7
+> reload s carry=yes source="script variable answer = 0" & newline & "script variable seen = []" & newline & "on go" & newline & "  return answer" & newline & "end go" identity=3b35837c7fad40d25432d6ad0ff0796914e69c2c041a66791128ce6447b721b5
+stopped s reason="reload"
+> deliver d2 to=s message=go
+> pump clock=2026-09-30T10:00:02Z
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=7 alloc=0 state=74 end=return
+run s/r2 outcome=completed delivery=d2 handler=go value=8 fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars s answer=8 seen=["capability revoked"]

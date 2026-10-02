@@ -1,0 +1,11 @@
+script variable answer = 0
+script variable seen = []
+on go
+  ask io to pause and wait
+  put it into answer
+  try
+    ask io to pause and wait
+  catch {code: code}
+    put code after seen
+  end try
+end go

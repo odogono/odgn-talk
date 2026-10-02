@@ -1,0 +1,5 @@
+use fetch from helper
+script variable seen = []
+on go
+  put fetch() after seen
+end go

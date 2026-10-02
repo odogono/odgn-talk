@@ -507,6 +507,7 @@ export type RunHost = {
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
+  isUnbound?(name: string): boolean;
   /** The object the Script owns, or Nothing. */
   readonly me: Value;
   readonly now: bigint;
@@ -734,7 +735,7 @@ export class Run {
     if (!reissue) {
       return { call };
     }
-    if (this.host!.isRevoked?.(grantName)) {
+    if (this.host!.isUnbound?.(grantName)) {
       return {
         call,
         failure: { k: 'restore-fail', code: 'capability revoked' },

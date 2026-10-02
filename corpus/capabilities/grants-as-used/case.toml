@@ -1,0 +1,25 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "io"
+name = "read"
+mode = "immediate"
+result = "number"
+cost = { fuel = 10 }
+[[operations]]
+capability = "io"
+name = "unused"
+mode = "immediate"
+result = "number"
+cost = { fuel = 10 }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { io = { ops = "all" }, spare = { capability = "io", ops = "all" } }

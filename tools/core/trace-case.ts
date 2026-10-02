@@ -622,10 +622,7 @@ export const replay = (
           if (!script) {
             throw new Error(`case.toml has no Script ${r.ids[0]}`);
           }
-          if (script.grantsAsUsed) {
-            throw new DeferredCaseError('grantsAsUsed');
-          }
-          const grants: Record<string, Grant<unknown>> = {};
+          const grants: Record<string, Grant<unknown>> = Object.create(null);
           for (const [granted, g] of Object.entries(script.grants ?? {})) {
             const capability = capabilities.get(g.capability ?? granted);
             if (!capability) {
@@ -638,6 +635,7 @@ export const replay = (
           bound.set(script.name, grants);
           group.load({
             grants,
+            grantsAsUsed: script.grantsAsUsed,
             name: script.name,
             source: readFileSync(resolve(dir, script.source), 'utf8'),
             limits: script.limits,
@@ -756,6 +754,9 @@ export const replay = (
           group
             .script(r.ids[0]!)!
             .stop(value(r.fields.get('reason')!).asText()!);
+          break;
+        case 'revoke':
+          group.script(r.ids[0]!)!.revoke(r.fields.get('grant')!);
           break;
         case 'save': {
           const bytes = group.save();
