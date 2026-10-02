@@ -1,0 +1,26 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "count"
+mode = "immediate"
+args = ["number", { optional = "text" }, { optional = "number" }]
+result = "number"
+cost = { fuel = 7, alloc = 2 }
+[[operations]]
+capability = "api"
+name = "note"
+mode = "fire-and-forget"
+args = [{ optional = "text" }]
+cost = { fuel = 2 }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { api = { ops = "all" } }

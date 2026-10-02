@@ -1,0 +1,11 @@
+use fetch from helper
+script variable counts = []
+on go
+  put fetch() after counts
+  ask api to count 1, "zone"
+  put it after counts
+  ask api to count 1, nothing, 3
+  put it after counts
+  tell api to note
+  tell api to note nothing
+end

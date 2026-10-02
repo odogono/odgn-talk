@@ -1,0 +1,19 @@
+# Join members keep distinct supplied argument lists, including during
+# save/restore replay. Answers still collect in member start order.
+> load s identity=372e7797996e75b9e2c161d450383778de719629d50eacbb0e7e3f902552cf1e
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T14:00:00Z
+call s/r1.c1 op=api.read args=[]
+call s/r1.c2 op=api.read args=[nothing]
+call s/r1.c3 op=api.read args=["x"]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=62 alloc=0 state=336 end=join-end
+pumped state=idle fuel=62 next=2026-10-02T14:00:30Z
+> answer s/r1.c3 value=2
+> answer s/r1.c1 value=0
+> answer s/r1.c2 value=1
+> pump clock=2026-10-02T14:00:01Z
+seg s/r1 resume fuel=10 alloc=136 state=88 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=72 alloc=136
+pumped state=idle fuel=10
+> vars
+vars s seen=[0, 1, 2]

@@ -1,8 +1,9 @@
 // The load-time checks of `ask`, `tell` and `say` against a Script's Grants
 // (chapter 2, Load-time diagnostics; chapter 9, Shapes): the Grant and
 // Operation exist, the call fits the Operation's mode, it passes as many
-// arguments as the Operation takes, and each literal argument fits its Shape.
-import type { Shape } from './capabilities';
+// arguments as its required and Optional positions permit, and each literal
+// argument fits its Shape.
+import { acceptsArgumentCount, type Shape } from './capabilities';
 import type { Report } from './control';
 import type {
   SemanticElement,
@@ -222,7 +223,10 @@ export const checkEffectCall = (
   }
   const list = nodesOf(node, 'ExpressionList')[0];
   const args = list ? nodesOf(list, 'Expression') : [];
-  if (args.length !== decl.args.length) {
+  if (
+    (say && args.length !== 1) ||
+    !acceptsArgumentCount(decl.args, args.length)
+  ) {
     report('wrong argument count', op);
     return;
   }

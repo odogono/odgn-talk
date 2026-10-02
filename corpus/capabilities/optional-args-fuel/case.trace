@@ -1,0 +1,11 @@
+# Omission does not waive the declared cost. Cutoff happens before any
+# Host call, and the Segment's variable change rolls back.
+> load s identity=17cfa59521f9ad456c539935fcb90306e4f1abcf797f345674a53e6c1dd7ecfb
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T14:00:00Z
+fault s/r1 limit=fuel at=s:10 pos=4:3 rollback=[touched]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=14 alloc=16 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=14 alloc=16
+pumped state=idle fuel=14
+> vars
+vars s touched=0

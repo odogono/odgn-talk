@@ -1,0 +1,16 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "check"
+mode = "immediate"
+args = [{ optional = "text" }]
+result = "number"
+cost = { fuel = 100 }
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { fuelPerRun = 40 }
+grants = { api = { ops = "all" } }
