@@ -5,6 +5,7 @@ import {
   defineCapability,
   shape,
   type Call,
+  type CapabilityDef,
   type Grant,
   type Operation,
 } from '../capabilities';
@@ -14,6 +15,7 @@ import { HostError, LoadError, type LoadDiagnostic } from '../errors';
 import {
   newGroup,
   observeRuns,
+  restore,
   type Group,
   type Inspection,
   type LimitOverride,
@@ -23,10 +25,11 @@ import {
   type Script,
 } from '../group';
 import { defaultLimits } from '../machine';
+import { compileLibrary, type Library } from '../library';
 import { textForm, waitNs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
 import type { SemanticElement } from '../semantic';
-import { consoleCapability } from '../standard-capabilities';
+import { clockCapability, consoleCapability } from '../standard-capabilities';
 import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
@@ -36,8 +39,12 @@ import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
 export type SessionEnvironment = {
   /** A real Clock reading, in epoch nanoseconds. */
   now(): bigint;
+  /** A user Library's source, for `:library` given a path. */
+  readFile?(path: string): string;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
+  /** Writes a file of `:export`, given a directory. */
+  writeFile?(directory: string, file: string, text: string): void;
 };
 
 /** What the Session Host waits for before it returns the prompt. */
@@ -59,6 +66,10 @@ export type Mock = {
   operation: string;
 };
 const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
+// The Capabilities this Session Host has built in, for `:grant`.
+const BUILT_IN = new Set(['clock']);
+// A user Library's version; replacing one keeps it.
+const LIBRARY_VERSION = '1';
 // The limits a Delivery may override, by their `ts` names (chapter 12, `:limits`).
 const OVERRIDABLE = [
   'fuelPerRun',
@@ -67,6 +78,29 @@ const OVERRIDABLE = [
   'maxJoin',
 ] as const;
 const NAME_TEXT = /^[\p{L}_][\p{L}\p{N}_]*$/u;
+
+// What `:save` keeps: the Group's save, and the Session Host's own state.
+type Saved = {
+  bytes: Uint8Array;
+  deadline: bigint | undefined;
+  declarations: Declaration[];
+  expressions: Set<string>;
+  implicit: Set<string>;
+  lastClock: bigint | null;
+  lastEntry: number;
+  lastSeg: Map<string, Extract<RunEvent, { k: 'seg' }>>;
+  latest: { delivery: string; run?: string } | null;
+  limits: LimitOverride;
+  placements: Map<string, Placement>;
+  stubs: Stubs;
+  units: number;
+  virtual: bigint | null;
+};
+
+// A Library file's source as a Transcript can record it: its lines, each
+// ended by an LF.
+const librarySource = (file: string): string =>
+  file.endsWith('\n') ? file : `${file}\n`;
 
 // A refused Session Command or Entry (chapter 12, Output).
 class RefusedError extends Error {}
@@ -116,7 +150,7 @@ export class SessionHost {
   private readonly mocks: Mock[] = [];
   // Each Grant `:grant` and `:mock` made, by name, and the Capability it grants.
   private readonly granted = new Map<string, string>();
-  private readonly stubs = new Stubs();
+  private stubs = new Stubs();
   // Mock calls, whose `call` lines print at their `call` records.
   private mockCalls = new Map<string, { args: Value[]; operation: string }>();
   // Suspending mock calls waiting for `:answer` or `:fail`.
@@ -127,6 +161,15 @@ export class SessionHost {
   private limits: LimitOverride = {};
   // The latest Entry's Delivery, and its Run once it starts.
   private latest: { delivery: string; run?: string } | null = null;
+  // The Session Script's Grants by name, fixed when the session starts.
+  private grantsByName: Record<string, Grant<unknown>> = {};
+  private declarations0: Record<string, CapabilityDef<unknown>> = {};
+  // User Libraries, in the order added: each as added, and as it is now.
+  private readonly libraries = new Map<
+    string,
+    { added: string; library: Library }
+  >();
+  private readonly saves = new Map<string, Saved>();
 
   constructor(private readonly env: SessionEnvironment) {}
 
@@ -223,20 +266,41 @@ export class SessionHost {
       },
       { write: { fuel: 0 }, read: { fuel: 0 } },
     );
+    const capabilities = this.mockCapabilities();
+    capabilities.set('console', console);
+    if ([...this.granted.values()].includes('clock')) {
+      capabilities.set('clock', clockCapability({ now: { fuel: 0 } }));
+    }
     const grants: Record<string, Grant<unknown>> = {
       console: console.grant('all', undefined),
     };
-    const capabilities = this.mockCapabilities();
     for (const [name, capability] of this.granted) {
       grants[name] = capabilities.get(capability)!.grant('all', undefined);
     }
+    this.grantsByName = grants;
+    this.declarations0 = Object.fromEntries(capabilities);
     this.group = group;
     this.script = group.load({ name: NAME, source: '', grants });
   }
 
+  // What the Library compiler checks a Library's Capability calls against.
+  private libraryDeclarations() {
+    return Object.fromEntries(
+      Object.entries(this.declarations0).map(([name, capability]) => [
+        name,
+        Object.fromEntries(
+          [...capability.operations].map(([operation, op]) => [
+            operation,
+            { args: op.args ?? [], mode: op.mode },
+          ]),
+        ),
+      ]),
+    );
+  }
+
   // Each mocked Capability: its Operations take up to eight arguments, give
   // any result and cost nothing, and each call prints a `call` line.
-  private mockCapabilities() {
+  private mockCapabilities(): Map<string, CapabilityDef<unknown>> {
     const operations = new Map<string, Record<string, Operation<unknown>>>();
     for (const { capability, operation, mode } of this.mocks) {
       const key = `${capability}.${operation}`;
@@ -312,6 +376,18 @@ export class SessionHost {
       case 'cancel':
         this.start();
         return this.cancel(rest);
+      case 'save':
+        this.start();
+        return this.save(words(rest, rest.trim() ? 1 : 0)[0] ?? 'default');
+      case 'restore':
+        this.start();
+        return this.restore(words(rest, rest.trim() ? 1 : 0)[0] ?? 'default');
+      case 'library':
+        this.start();
+        return this.library(rest);
+      case 'export':
+        this.start();
+        return this.export(words(rest, rest.trim() ? 1 : 0)[0]);
       case 'runs':
       case 'mailbox':
       case 'vars':
@@ -336,7 +412,10 @@ export class SessionHost {
     if (
       !NAME_TEXT.test(name!) ||
       name === 'console' ||
-      !this.mocks.some(m => m.capability === capability)
+      !(
+        BUILT_IN.has(capability!) ||
+        this.mocks.some(m => m.capability === capability)
+      )
     ) {
       refuse('bad arguments');
     }
@@ -352,6 +431,7 @@ export class SessionHost {
       !NAME_TEXT.test(capability ?? '') ||
       !NAME_TEXT.test(operation ?? '') ||
       capability === 'console' ||
+      BUILT_IN.has(capability!) ||
       !MODES.has(mode!)
     ) {
       refuse('bad arguments');
@@ -593,6 +673,186 @@ export class SessionHost {
     }
     this.script!.cancelRun(run!);
     return this.pump();
+  }
+
+  // ------------------------------------------------------------- saving
+
+  private save(name: string): string[] {
+    const bytes = this.group!.save();
+    this.saves.set(name, {
+      bytes,
+      declarations: [...this.declarations],
+      implicit: new Set(this.implicit),
+      lastEntry: this.lastEntry,
+      units: this.units,
+      placements: new Map(this.placements),
+      expressions: new Set(this.expressions),
+      lastSeg: new Map(this.lastSeg),
+      latest: this.latest && { ...this.latest },
+      limits: { ...this.limits },
+      virtual: this.virtual,
+      lastClock: this.lastClock,
+      deadline: this.deadline,
+      stubs: this.stubs.clone(),
+    });
+    return [`saved ${name}`];
+  }
+
+  // The session's Group is replaced by one restored with RejectMismatch, and
+  // every pending call is adopted.
+  private restore(name: string): string[] {
+    const saved = this.saves.get(name);
+    if (!saved) {
+      return refuse('no such save');
+    }
+    let restored: ReturnType<typeof restore>;
+    try {
+      restored = restore(saved.bytes, {
+        name: NAME,
+        trace: line => this.env.trace?.(line),
+        libraries: [...this.libraries.values()].map(l => l.library),
+        grants: (_, grant) => this.grantsByName[grant],
+        resolve: () => undefined,
+        onMismatch: 'reject',
+      });
+    } catch (error) {
+      if (error instanceof HostError) {
+        return refuse(error.code);
+      }
+      throw error;
+    }
+    const { group, result } = restored;
+    group[observeRuns](e => this.events.push(e));
+    this.group = group;
+    this.script = group.script(NAME)!;
+    this.declarations = [...saved.declarations];
+    this.implicit = new Set(saved.implicit);
+    this.lastEntry = saved.lastEntry;
+    this.units = saved.units;
+    this.placements = new Map(saved.placements);
+    this.expressions = new Set(saved.expressions);
+    this.lastSeg = new Map(saved.lastSeg);
+    this.latest = saved.latest && { ...saved.latest };
+    this.limits = { ...saved.limits };
+    this.virtual = saved.virtual;
+    this.lastClock = saved.lastClock;
+    this.deadline = saved.deadline;
+    this.stubs = saved.stubs.clone();
+    this.foreground = null;
+    this.state = { k: 'prompt' };
+    this.writes.clear();
+    this.reads.clear();
+    this.pending.clear();
+    this.mockCalls.clear();
+    for (const call of result.pending) {
+      const adopted = group.settle(call.id, { adopt: true })!;
+      const run = call.id.slice(0, call.id.lastIndexOf('.'));
+      if (call.grant === 'console') {
+        this.reads.set(call.id, { call: adopted, run });
+      } else {
+        this.pending.set(call.id, adopted);
+      }
+    }
+    for (const run of result.discardedRuns) {
+      this.lastSeg.delete(run);
+    }
+    return [
+      `restored ${name}`,
+      ...result.discardedRuns.map(run => `! discarded ${run}`),
+    ];
+  }
+
+  // ------------------------------------------------------------- libraries
+
+  // `:library add <name> <path>`, or as a Transcript records it, the
+  // Library's source on the lines after `:library add <name>`.
+  private library(rest: string): string[] {
+    const newline = rest.indexOf('\n');
+    const head = newline < 0 ? rest : rest.slice(0, newline);
+    const [how, name, path, more] = head.trim().split(/\s+/u);
+    if (
+      (how !== 'add' && how !== 'replace') ||
+      !NAME_TEXT.test(name ?? '') ||
+      more !== undefined ||
+      newline < 0 === (path === undefined)
+    ) {
+      refuse('bad arguments');
+    }
+    let source: string;
+    if (newline >= 0) {
+      source = `${rest.slice(newline + 1)}\n`;
+    } else {
+      try {
+        source = librarySource(this.env.readFile!(path!));
+      } catch {
+        return refuse('bad arguments');
+      }
+    }
+    // Known here, so neither reaches the Core.
+    const held = this.libraries.get(name!);
+    if (how === 'add' && held) {
+      refuse('name reused');
+    }
+    if (how === 'replace' && !held) {
+      refuse('library mismatch');
+    }
+    let library: Library;
+    try {
+      library = compileLibrary(
+        { name: name!, version: LIBRARY_VERSION, source },
+        [...this.libraries.values()]
+          .filter(l => l.library.name !== name)
+          .map(l => l.library),
+        this.libraryDeclarations(),
+      );
+    } catch (error) {
+      if (error instanceof LoadError) {
+        return error.diagnostics.map(
+          d => `! ${d.code} at ${d.unit}:${d.line}:${d.col}`,
+        );
+      }
+      throw error;
+    }
+    let reports: Report[] = [];
+    try {
+      if (how === 'add') {
+        this.group!.addLibrary(library);
+      } else {
+        reports = this.group!.replaceLibrary(library, 'carry variables');
+      }
+    } catch (error) {
+      return this.refused(error, { line: 0, col: 0 });
+    }
+    this.libraries.set(name!, { added: held?.added ?? source, library });
+    return this.discarded(reports);
+  }
+
+  /** Each user Library as `:library add` gave it, in the order added. */
+  get userLibraries(): { name: string; source: string; version: string }[] {
+    return [...this.libraries].map(([name, l]) => ({
+      name,
+      source: l.added,
+      version: LIBRARY_VERSION,
+    }));
+  }
+
+  private export(directory: string | undefined): string[] {
+    if (directory === undefined) {
+      return lines(this.source).slice(0, -1);
+    }
+    if (!this.env.writeFile) {
+      refuse('bad arguments');
+    }
+    const files: [string, string][] = [
+      ['session.talk', this.source],
+      ...[...this.libraries].map(
+        ([name, l]) => [`${name}.talk`, l.library.source] as [string, string],
+      ),
+    ];
+    for (const [file, text] of files) {
+      this.env.writeFile!(directory, file, text);
+    }
+    return files.map(([file]) => `wrote ${file}`);
   }
 
   // `:runs`, `:mailbox` and `:vars` render `Inspect()`, the Host Input `vars`.

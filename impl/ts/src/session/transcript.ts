@@ -144,6 +144,8 @@ export const replayTranscript = (
       return at;
     },
     ...(options.trace ? { trace: options.trace } : {}),
+    // Replaying never writes a file: `:export` writes to a scratch directory.
+    writeFile: () => {},
   });
   const print = (lines: readonly string[]) => {
     items.push(...lines.map(text => ({ k: 'output' as const, text })));

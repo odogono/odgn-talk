@@ -1,0 +1,43 @@
+# `:save` and `:restore` wrap the same-core save: the Session Host's own
+# state comes back with the Group, a pending call is adopted and answered
+# after the restore, and an unknown save is refused.
+> :mock http.fetch suspending
+> :clock virtual 2026-09-30T10:00:00Z
+> put 1 into n
+> on fetch
+|   ask http to fetch and wait
+|   say "got " & it
+| end fetch
+> send fetch to session
+[session/r3] call session/r3.c1 http.fetch []
+> on nap
+|   wait 5 s
+|   say "woke " & n
+| end nap
+> send nap to session
+> :save
+saved default
+> put 99 into n
+> function late
+|   return 0
+| end late
+> :restore
+restored default
+# The function entered after the save is gone with it.
+> n
+1
+> late()
+! unknown name at 1:1
+> :runs
+session/r3 suspended fetch ask-wait session/r3.c1
+session/r5 suspended nap wait until 2026-09-30T10:00:05Z
+> :answer session/r3.c1 "body"
+[session/r3] got body
+> :clock advance 5 s
+[session/r5] woke 1
+> :restore nope
+! no such save
+> :save checkpoint
+saved checkpoint
+> :restore checkpoint
+restored checkpoint

@@ -154,7 +154,13 @@ type OperationSpec = {
 };
 type ObjectRefSpec = { id: string; kind: string };
 export type Setup = {
-  libraries?: { name: string; source: string; version: string }[];
+  /** Each Library's source file, or with `text`, the source itself. */
+  libraries?: {
+    name: string;
+    source: string;
+    text?: string;
+    version: string;
+  }[];
   objectKinds?: {
     name: string;
     parentKinds?: string[];
@@ -542,7 +548,9 @@ const compileLibraries = (
           compileLibrary(
             {
               ...library,
-              source: readFileSync(resolve(dir, library.source), 'utf8'),
+              source:
+                library.text ??
+                readFileSync(resolve(dir, library.source), 'utf8'),
             },
             done,
             declarations,

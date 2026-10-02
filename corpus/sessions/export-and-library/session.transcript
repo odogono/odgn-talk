@@ -1,0 +1,50 @@
+# User Libraries recorded with their source as `|` lines, replaced with
+# Script Variables carried over, and `:export` of the session source.
+> :library add greet
+| function shout t
+|   return t & "!"
+| end shout
+> use shout from greet
+> put "hi" into word
+@ 2026-09-30T09:59:59Z
+> shout(word)
+@ 2026-09-30T10:00:00Z
+"hi!"
+> :library replace greet
+| function shout t
+|   return t & "!!"
+| end shout
+> shout(word)
+@ 2026-09-30T10:00:01Z
+"hi!!"
+> :library add greet
+| function other
+|   return 1
+| end other
+! name reused
+> :library replace nope
+| function f
+|   return 1
+| end f
+! library mismatch
+> :library add broken
+| function f
+|   return nope
+| end f
+! unknown name at broken:2:10
+> :library add greet
+! bad arguments
+> on hello
+|
+|   say shout("hello")
+| end hello
+> :export
+use shout from greet
+script variable word
+on hello
+'
+  say shout("hello")
+end hello
+> :export out
+wrote session.talk
+wrote greet.talk

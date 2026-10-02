@@ -599,7 +599,16 @@ const checkCase = (dir: string) => {
   const scripts = new Set<string>(
     setup.kind === 'transcript' ? ['session'] : [],
   );
-  const libraries = new Set<string>();
+  // Its user Libraries are the ones its `:library add` lines add.
+  const libraries = new Set<string>(
+    setup.kind === 'transcript' && existsSync(join(dir, 'session.transcript'))
+      ? [
+          ...readFileSync(join(dir, 'session.transcript'), 'utf8').matchAll(
+            /^> :library add (\S+)$/gmu,
+          ),
+        ].map(m => m[1]!)
+      : [],
+  );
   for (const s of setup.scripts ?? []) {
     scripts.add(s.name);
     if (!existsSync(join(dir, s.source))) {

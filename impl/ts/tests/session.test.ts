@@ -420,3 +420,94 @@ describe('The Clock, limits and Runs', () => {
     expect(host.input(':vars now')).toEqual(['! bad arguments']);
   });
 });
+
+describe('Saves, Libraries and export', () => {
+  test(':save and :restore keep the Session Host’s own state', () => {
+    const { host } = session();
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    host.input('put 1 into n');
+    expect(host.input(':save')).toEqual(['saved default']);
+    host.input('put 2 into n');
+    host.input('function f\n  return 0\nend f');
+    host.input(':limits maxJoin 2');
+    host.input(':clock advance 10 s');
+    expect(host.input(':restore')).toEqual(['restored default']);
+    expect(host.input('n')).toEqual(['1']);
+    expect(host.source).toBe('script variable n\n');
+    expect(host.input(':limits')).toContain('maxJoin 16');
+    expect(host.input(':clock')).toEqual(['virtual 2026-09-30T10:00:00Z']);
+    expect(host.input(':restore other')).toEqual(['! no such save']);
+  });
+
+  test(':library reads a file given a path, and records its source', () => {
+    const files = new Map([
+      ['lib.talk', 'function twice x\n  return x * 2\nend twice'],
+    ]);
+    const host = new SessionHost({
+      now: () => start,
+      readFile: path => {
+        const text = files.get(path);
+        if (text === undefined) {
+          throw new Error('no file');
+        }
+        return text;
+      },
+    });
+    expect(host.input(':library add maths lib.talk')).toEqual([]);
+    expect(host.userLibraries).toEqual([
+      {
+        name: 'maths',
+        version: '1',
+        source: 'function twice x\n  return x * 2\nend twice\n',
+      },
+    ]);
+    host.input('use twice from maths');
+    expect(host.input('twice(4)')).toEqual(['8']);
+    expect(host.input(':library add maths lib.talk')).toEqual([
+      '! name reused',
+    ]);
+    expect(host.input(':library add other missing.talk')).toEqual([
+      '! bad arguments',
+    ]);
+    expect(
+      host.input(
+        ':library replace maths\nfunction twice x\n  return x + x\nend twice',
+      ),
+    ).toEqual([]);
+    expect(host.input('twice(5)')).toEqual(['10']);
+  });
+
+  test(':export prints the session source, or writes it and each Library', () => {
+    const written: string[] = [];
+    const host = new SessionHost({
+      now: () => start,
+      writeFile: (directory, file, text) =>
+        written.push(`${directory}/${file}=${text}`),
+    });
+    host.input(':library add lib\nconstant k = 1');
+    host.input('use k from lib');
+    host.input('put k into v');
+    expect(host.input(':export')).toEqual([
+      'use k from lib',
+      'script variable v',
+    ]);
+    expect(host.input(':export out')).toEqual([
+      'wrote session.talk',
+      'wrote lib.talk',
+    ]);
+    expect(written).toEqual([
+      'out/session.talk=use k from lib\nscript variable v\n',
+      'out/lib.talk=constant k = 1\n',
+    ]);
+  });
+
+  test('grants the built-in clock, which reads the Pump’s Clock', () => {
+    const { host } = session();
+    expect(host.input(':grant time clock')).toEqual([]);
+    expect(host.input(':mock clock.now immediate')).toEqual([
+      '! bad arguments',
+    ]);
+    host.input('function now\n  ask time to now\n  return it\nend now');
+    expect(host.input('now()')).toEqual(['2026-09-30T10:00:00Z']);
+  });
+});

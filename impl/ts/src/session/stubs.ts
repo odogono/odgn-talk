@@ -32,6 +32,14 @@ export const stubLine = (operation: string, stub: Stub): string =>
 export class Stubs {
   private readonly queues = new Map<string, Stub[]>();
 
+  clone(): Stubs {
+    const copy = new Stubs();
+    for (const [operation, queue] of this.queues) {
+      copy.queues.set(operation, [...queue]);
+    }
+    return copy;
+  }
+
   add(operation: string, stub: Stub): void {
     this.queues.set(operation, [...(this.queues.get(operation) ?? []), stub]);
   }

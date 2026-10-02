@@ -15,7 +15,9 @@ Commands in this guide run from `impl/ts/`. The spec-level generators and checks
 - **Session Transcripts:** `parseTranscript`, `writeTranscript` and `replayTranscript` read, write and replay chapter 12's lines. Replaying gives each `@` reading to the Pump the line before it causes, and makes a Pump at each other `@`. `bun run corpus:run` runs each `kind = "transcript"` case through a fresh Session Host, matching its output lines and its Trace, and then replays its `case.trace` as a Trace Case, in both replays, with the Session Script and a free `console` as its setup. `--bless` fills in the output lines and writes `case.trace`.
 - **Mocks:** `:mock`, `:grant`, `:stub`, `:answer` and `:fail` work as chapter 12 says. A mock Operation declares eight Optional `any` arguments and no error codes, and costs nothing. Its Stubs come from `Stubs` in `src/session/stubs.ts`, which the Trace Case runner uses too, and each `:stub` writes its `stub` line into the Trace. A Transcript's Trace Case setup adds each mock Operation and Grant the session started with.
 - **The Clock, limits and Runs:** `:clock` shows the Clock, switches it between real and virtual, and advances a virtual one and pumps; a virtual Clock is read by every Pump, and a foreground deadline wait returns the prompt at once. `:limits` tightens the override later Entries are requested with. `:cancel` cancels the latest Entry's Run or a named one and pumps. `:runs`, `:mailbox` and `:vars` render `inspect()`, so each is a `vars` Host Input.
-- **Still to come:** `:save`, `:restore`, `:library` and `:export` (each is refused as `unknown command`), built-in Capabilities for `:grant` with their `~` answers, and the `northtalk` REPL.
+- **Saves, Libraries and export:** `:save` keeps the Group's save with the Session Host's own state in memory, and `:restore` restores it with RejectMismatch and adopts every pending call. `:library` compiles a user Library from a file (the environment's `readFile`) or from the source lines a Transcript records, at version `1`. `:export` prints the session source, or writes it and each user Library through the environment's `writeFile`. A Transcript's Trace Case setup adds each user Library as it was added.
+- **Built-in Capabilities:** `:grant <name> clock` grants the Standard `clock`, which reads the Pump's Clock and costs nothing, so it needs no `~` answers.
+- **Still to come:** `calendar` and `locale` as built-in Capabilities, with their `~` answers, and the `northtalk` REPL.
 
 ## Process-wide Core and Host Manifests
 
@@ -279,7 +281,7 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining Core work
 
-All 153 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed except the Session Transcripts'. The corpus is not a complete conformance test.
+All 155 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed except the Session Transcripts'. The corpus is not a complete conformance test.
 
 [#126](https://github.com/odogono/odgn-talk/issues/126)'s acceptance is met: the corpus runs through the public embedding interface and reproduces each complete Trace, the pinned Unicode data passes, diagnostics, canonical disassembly and the display and Value Encoding round trips are checked, and Fuel and allocation follow Cost Model 0. Later Appendix B steps continue under [#127](https://github.com/odogono/odgn-talk/issues/127) to [#131](https://github.com/odogono/odgn-talk/issues/131).
 
