@@ -79,12 +79,19 @@
     const ran = talk.deliver(machine, "go", [talk.text("a👩\u200d👩\u200d👧q\u0301b")]).finish();
     assert(ran.kind === "completed" && ran.result.toString() === '["👩‍👩‍👧", false, [{text: "cat,", range: 1..4, captures: {}, ranges: {}}, {text: "dog", range: 6..8, captures: {}, ranges: {}}], 0.3333333333333333333333333333333333]' && machine.variables[0].toString() === "4", "Abstract Machine");
     const lines = [];
-    const group = talk.newGroup({ name: "smoke", trace: line => lines.push(line) });
+    const core = talk.createCore();
+    const group = core.newGroup({ name: "smoke", trace: line => lines.push(line) });
     group.load({ name: "a", source: "script variable n = 0\non bump\n  add 1 to n\nend bump" }).deliver({ name: "bump" });
     group.pump(talk.parseInstant("2026-09-30T09:00:00Z"));
     group.inspect();
     assert(lines[0] === "> load a identity=" + talk.codeIdentity("script", "a", "script variable n = 0\non bump\n  add 1 to n\nend bump") && lines.at(-1) === "vars a n=1" && lines.includes("pumped state=idle fuel=17"), "Group and Trace");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, plain JSON, Core versions, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine and the Group in a browser";
+    const restored = core.restore(group.save(), { name: "copy", libraries: [], onMismatch: "reject", grants: () => undefined, resolve: () => undefined });
+    assert(restored.group.inspect().scripts[0].vars[0][1].toString() === "1", "Core restore");
+    const library = core.compileLibrary({ name: "helpers", version: "1", source: "function double x\n  return x * 2\nend double" });
+    const console = core.consoleCapability({ write() { throw new Error("Manifest called the Host"); }, read() { throw new Error("Manifest called the Host"); } }, { write: { fuel: 1 }, read: { fuel: 1 } });
+    const manifest = talk.exportManifest({ kind: "smoke", version: "1", grants: { console: console.grant(["write"], { secret: "host-only" }) }, libraries: [library] });
+    assert(!manifest.includes("host-only") && manifest.endsWith("\n") && JSON.parse(manifest).libraries[0].source === library.source, "Host Manifest");
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, plain JSON, Core versions, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine, the Group, Core restore and Host Manifests in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;

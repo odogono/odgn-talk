@@ -2,6 +2,12 @@
 
 This guide covers the TS Core built under [#126](https://github.com/odogono/odgn-talk/issues/126), Appendix B's step 1, and the step 3 to 5 work that landed with it, as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. Step 1 is complete. It is not yet a conforming Core: the embedding interface has the gaps below, and the Session Host and REPL of step 6 are still to come.
 
+## Process-wide Core and Host Manifests
+
+`createCore()` returns the process-wide `Core` from chapter 9: Capability and Object Kind definitions, the five Standard Capability factories, Library compilation, Group creation and restore. Existing free-function helpers remain available and share that Core's definitions and compilation caches. Script code is cached by code identity across Groups, reloads and restores, while each load still checks its Grants and limits and initialises separate Script state. Extension code is cached by the complete extended Script identity, since its bindings and variable slots depend on earlier definitions. Library compilation already shares code by identity; its Host version remains metadata.
+
+`exportManifest({ kind, version, grants, libraries, messages, objectKinds, objects })` returns compact JSON with one trailing LF for the Host to write to `<kind>.talk-manifest.json`. Optional collections default to empty arrays. Declarations, receiving kinds and parent kinds are sorted in code-point order; argument Shapes, map fields and alternatives retain declaration order. Properties include `name`, `shape` (default `"value"`), `readOnly`, `getCost` and `setCost` (default zero Fuel and allocation). Operation Declarations use the same data helpers as saves and Group Fingerprints. Bindings, native objects and executable Host callbacks never appear, and export never calls them. The manifest is tooling-only and outside Trace parity.
+
 ## Public values
 
 Under Bun, import from the package:
@@ -266,6 +272,5 @@ An audit of the public package against [`talk.ts`](../spec/embedding/talk.ts), c
 
 - **`onReady`** ([#197](https://github.com/odogono/odgn-talk/issues/197)) is never called.
 - **`shape.object(kind)`** ([#198](https://github.com/odogono/odgn-talk/issues/198)) is missing.
-- **`createCore()`/`Core` with its compile cache, and `exportManifest`** ([#200](https://github.com/odogono/odgn-talk/issues/200)) are missing; the package exposes free functions instead.
 
 A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. Session Hosts, REPLs and the Go Core are later Appendix B work.

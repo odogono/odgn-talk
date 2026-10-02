@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Process-wide `createCore()`/`Core` and deterministic `exportManifest`, completing [#200](https://github.com/odogono/odgn-talk/issues/200). Existing free-function helpers share the Core's compile caches and definitions. Scripts reuse compilation across Groups, reloads and restores while retaining separate state and per-load checks; extension caching covers complete Script history. Host Manifests export sorted declarations and Shapes without bindings or executable Host callbacks.
+
 - Host-side `decodeJson`, `encodeJson`, `coreVersions` and `Versions`, completing [#199](https://github.com/odogono/odgn-talk/issues/199). Plain JSON preserves exact decimal digits and scale, NFC strings and member order, with shared Host/Library tests for values and errors. Version metadata reads the generated language, Cost Model and Unicode pins and the save-format constant used by save and restore.
 
 - Regression tests that a Limit Fault is never caught (no `catch` or `finally` runs) and that a runaway Script's fault leaves the other Scripts in its Group, and its own rolled-back state, intact, completing [#129](https://github.com/odogono/odgn-talk/issues/129)'s acceptance.

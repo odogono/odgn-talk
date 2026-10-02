@@ -11,6 +11,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk`, with the public pac
 ## The shape
 
 - **`Core`** is process-wide. It holds the compile cache, so a Script or Library with the same code identity compiles once. It defines Capabilities and Object Kinds, compiles Libraries, and makes and restores Groups.
+  - **TS helpers:** `createCore()` returns the process-wide Core. The package also keeps its free-function helpers (`defineCapability`, `compileLibrary`, `newGroup`, `restore` and the Capability factories); they use the same process-wide definitions and compile caches. Creating a Core does not reset those definitions or caches. Each Group still owns its live state.
 - **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, decide, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint and an Inspection. Host Objects are made per Group, since parents and disposal belong to it.
 - **`Script`** is a handle for calls addressed to one Script: reload, extend, stop, cancel a Run, revoke a Grant, counters, and deliver, request or decide to the Script itself.
 
