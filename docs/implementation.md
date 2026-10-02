@@ -1,6 +1,16 @@
 # TS Core foundations
 
-This guide covers the TS Core built under [#126](https://github.com/odogono/odgn-talk/issues/126), Appendix B's step 1, and the step 3 to 5 work that landed with it, as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. Step 1 is complete. It is not yet a conforming Core: the embedding interface has the gaps below, and the Session Host and REPL of step 6 are still to come.
+This guide covers the TS Core built under [#126](https://github.com/odogono/odgn-talk/issues/126), Appendix B's step 1, and the step 3 to 5 work that landed with it, as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. Step 1 is complete. It is not yet a conforming Core: the embedding interface has the gaps below, and step 6's Session Host is under way under [#131](https://github.com/odogono/odgn-talk/issues/131), without its Session Commands, Session Transcripts or REPL yet.
+
+## The Session Host
+
+`@odgn/northtalk/session` exports `SessionHost`, chapter 12's Session Host. It does no I/O of its own: its environment supplies the Clock and takes the Trace, and each call returns the lines the session printed.
+
+- **Entries:** `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines.
+- **Implicit Script Variables** are the Container roots an Entry puts into, and the names its binding Captures bind. A pattern's names stay the Run's locals, since a pattern may not bind a Script Variable.
+- **Following Runs:** the Session Host follows its Runs through a TS-internal hook that gives the Trace's `seg`, `call`, `run` and `unhandled` records as typed values ([ADR 0045](adr/0045-the-session-host-follows-its-runs-through-the-trace.md)). It never calls `inspect()` to decide what to print.
+- **The foreground:** `waiting` says whether the Foreground Run waits on `read`, which `read()` answers, or only for a deadline, at which the caller `tick()`s; otherwise the Run goes on in the background, and its lines are printed after `[<run>] `.
+- **Still to come:** Session Commands (each is refused as `unknown command`), Session Transcripts and their corpus runner, mocks, the virtual Clock and the `northtalk` REPL.
 
 ## Process-wide Core and Host Manifests
 

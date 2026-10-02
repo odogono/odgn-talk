@@ -101,6 +101,32 @@ export type GroupOptions = {
   /** Receives each Trace line, without its LF. */
   trace?: (line: string) => void;
 };
+/**
+ * TS-internal, and not exported from the package: the Trace records a
+ * Session Host follows its Runs through (ADR 0045), as typed values.
+ */
+export type RunEvent =
+  | {
+      /** Suspended: the calls, replies or Join Members it still waits for. */
+      calls: string[];
+      /** At a start, its Delivery. */
+      delivery?: string;
+      end: string;
+      how: 'start' | 'resume' | 'continue';
+      k: 'seg';
+      run: string;
+      until?: bigint;
+    }
+  | { call: string; k: 'call'; run: string }
+  | { args: Value[]; k: 'unhandled'; message: string; run?: string }
+  | {
+      delivery?: string;
+      error?: Value;
+      k: 'run';
+      outcome: string;
+      run: string;
+    };
+export const observeRuns = Symbol('observeRuns');
 export type LoadOptions = {
   /** Its Grants, by the name the Script uses for each. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
@@ -545,6 +571,12 @@ export class Group {
     null;
   private activeStop: (() => void) | null = null;
   private drainingTrace: string[] | null = null;
+  private observer: ((r: RunEvent) => void) | null = null;
+
+  /** TS-internal: receives the records a Session Host follows (ADR 0045). */
+  [observeRuns](observer: ((r: RunEvent) => void) | null): void {
+    this.observer = observer;
+  }
 
   /** Worker. A Fingerprint covers code, declarations and limits, never state. */
   fingerprint(): Uint8Array {
@@ -2900,7 +2932,7 @@ export class Group {
 
   // A message past the last Owning Script: `unhandled`, and a `send … and
   // wait` or Request for it fails with `send failed`.
-  private unhandled(delivery: Delivery, reports: Report[]) {
+  private unhandled(delivery: Delivery, reports: Report[], run?: string) {
     this.trace(
       recordLine(
         'unhandled',
@@ -2918,6 +2950,12 @@ export class Group {
         ],
       ),
     );
+    this.observer?.({
+      k: 'unhandled',
+      ...(run ? { run } : {}),
+      message: delivery.message,
+      args: delivery.args,
+    });
     if (delivery.id) {
       reports.push({
         kind: 'unhandled',
@@ -3380,6 +3418,18 @@ export class Group {
       !running.delivery.fn && s.loaded.clauses.has(running.delivery.message)
         ? running.delivery.message
         : null;
+    const observe = (end: string, until?: bigint) =>
+      this.observer?.({
+        k: 'seg',
+        run: running.id,
+        how,
+        ...(how === 'start' && running.delivery.id
+          ? { delivery: running.delivery.id }
+          : {}),
+        end,
+        ...(until === undefined ? {} : { until }),
+        calls: end === 'stop' ? [] : (this.waitView(running).calls ?? []),
+      });
     const start: [string, string | null][] =
       how === 'start'
         ? [
@@ -3417,6 +3467,7 @@ export class Group {
           ],
         ),
       );
+      observe('stop');
       this.activeStop?.();
       this.activeStop = null;
       return;
@@ -3436,6 +3487,7 @@ export class Group {
           ],
         ),
       );
+      observe('park');
       return;
     }
     if (!outcome && run.suspended) {
@@ -3458,6 +3510,12 @@ export class Group {
             ['until', deadline === null ? null : formatInstant(deadline)],
           ],
         ),
+      );
+      observe(
+        run.suspended.k === 'wait-for' && run.suspended.any
+          ? 'wait-for-any'
+          : suspendReasons[run.suspended.k],
+        deadline ?? undefined,
       );
       this.seal(running.delivery, { verdict: 'allowed' });
       run.openVerdict = false;
@@ -3495,6 +3553,7 @@ export class Group {
         ],
       ),
     );
+    observe(endReason(outcome));
     if (outcome.kind === 'completed' && !outcome.passed) {
       this.seal(
         running.delivery,
@@ -3562,6 +3621,12 @@ export class Group {
             ],
           ),
         );
+        this.observer?.({
+          k: 'unhandled',
+          run: running.id,
+          message: rec.message ?? '',
+          args: rec.args,
+        });
         continue;
       }
       if (rec.kind === 'prop') {
@@ -3594,6 +3659,7 @@ export class Group {
             ],
           ),
         );
+        this.observer?.({ k: 'call', call: rec.id, run: running.id });
         continue;
       }
       if (rec.kind === 'call-failed') {
@@ -3688,6 +3754,13 @@ export class Group {
         ],
       ),
     );
+    this.observer?.({
+      k: 'run',
+      run: running.id,
+      outcome: word,
+      ...(delivery.id ? { delivery: delivery.id } : {}),
+      ...(error ? { error } : {}),
+    });
     reports.push({
       kind: 'run end',
       script: s.name,
@@ -3783,14 +3856,14 @@ export class Group {
       // received it, to the next Owning Script up (chapter 5).
       const next = this.route(delivery.at?.parent ?? null);
       if (!next) {
-        this.unhandled(delivery, reports);
+        this.unhandled(delivery, reports, running.id);
         return;
       }
       const waiting =
         next.s.queue.filter(item => !('run' in item)).length + next.s.incoming;
       if (waiting >= next.s.limits.mailboxDepth) {
         this.trace(recordLine('note', [running.id], [['kind', 'climb-full']]));
-        this.unhandled(delivery, reports);
+        this.unhandled(delivery, reports, running.id);
         return;
       }
       next.s.queue.push({

@@ -87,6 +87,33 @@ const CONTINUING_WORDS = new Set([
   'be',
 ]);
 
+// Chapter 2, Entries: the words that start a declaration, and the Reserved
+// Words that start a statement.
+const DECLARATION_WORDS = ['on', 'function', 'private', 'use', 'constant'];
+const STATEMENT_WORDS = new Set([
+  ...BLOCK_KEYWORDS,
+  'add',
+  'ask',
+  'delete',
+  'divide',
+  'exit',
+  'let',
+  'multiply',
+  'pass',
+  'put',
+  'replace',
+  'return',
+  'send',
+  'set',
+  'subtract',
+  'tell',
+  'throw',
+  'veto',
+]);
+
+/** What an Entry is, decided on its first token (chapter 2, Entries). */
+export type EntryKind = 'declaration' | 'statement' | 'expression';
+
 type ParseFrame = {
   children: SyntaxElement[];
   rule: SyntaxRule;
@@ -410,6 +437,49 @@ class Parser {
       }
       this.next(); // EOF owns any trailing trivia.
       return out;
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // An Entry at a Session prompt. A Name starts a Command Call only if it
+  // names one of the Session Script's Handlers, or is `say`.
+  *entry(isHandler: (name: string) => boolean): ParseTask<EntryKind | null> {
+    const frame = this.enter('Entry');
+    try {
+      this.skipNL();
+      const t = this.peek(0);
+      let kind: EntryKind | null = null;
+      if (t.t === 'eof') {
+        // Nothing but blank lines and comments.
+      } else if (
+        this.isWord(t, ...DECLARATION_WORDS) ||
+        (this.isWord(t, 'script') &&
+          this.isWord(this.la2('script-variable'), 'variable'))
+      ) {
+        kind = 'declaration';
+        yield this.declaration();
+      } else if (
+        t.t === 'word' &&
+        (STATEMENT_WORDS.has(t.v) ||
+          (t.v === 'next' && this.isWord(this.la2('next-repeat'), 'repeat')) ||
+          (this.isName(t) && (t.v === 'say' || isHandler(t.v))))
+      ) {
+        kind = 'statement';
+        yield this.statement();
+        this.endOfStatement();
+      } else {
+        kind = 'expression';
+        yield this.expr();
+        this.endOfStatement();
+      }
+      this.skipNL();
+      const end = this.peek(0);
+      if (end.t !== 'eof') {
+        this.fail(end, 'the end of the Entry');
+      }
+      this.next(); // EOF owns any trailing trivia.
+      return kind;
     } finally {
       this.leave(frame);
     }
@@ -2419,6 +2489,36 @@ export const parseSource = (source: string): ParseResult => {
   } catch (error) {
     if (error instanceof ParseError) {
       return { tree: null, error };
+    }
+    throw error;
+  }
+};
+
+export type EntryResult =
+  | { error: null; kind: EntryKind | null; tree: SyntaxNode }
+  | {
+      error: ParseError;
+      /** The source ended before the Entry did, so more lines may finish it. */
+      incomplete: boolean;
+      tree: null;
+    };
+
+/**
+ * Parse an Entry at a Session prompt (chapter 2, Entries). Its kind is null
+ * when it holds only blank lines and comments. Invalid scalar source throws
+ * HostError.
+ */
+export const parseEntry = (
+  source: string,
+  isHandler: (name: string) => boolean,
+): EntryResult => {
+  const parser = new Parser(source);
+  try {
+    const kind = runTask(parser.entry(isHandler));
+    return { tree: parser.tree, kind, error: null };
+  } catch (error) {
+    if (error instanceof ParseError) {
+      return { tree: null, error, incomplete: error.tok.t === 'eof' };
     }
     throw error;
   }
