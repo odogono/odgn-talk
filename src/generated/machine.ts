@@ -1530,6 +1530,10 @@ export const costModel = {
       "fuel": "2",
       "alloc": "0"
     },
+    "builtin.objectKind": {
+      "fuel": "2",
+      "alloc": "size(result)"
+    },
     "builtin.rangeStart": {
       "fuel": "2",
       "alloc": "0"

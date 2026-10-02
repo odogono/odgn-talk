@@ -894,6 +894,7 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `lower` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
 | `offset` | `4 + steps` | 0 |  |
 | `isDisposed` | `2` | 0 |  |
+| `objectKind` | `2` | `size(result)` |  |
 | `rangeStart` | `2` | 0 |  |
 | `rangeEnd` | `2` | 0 |  |
 | `kindOf` | `2` | `size(result)` |  |

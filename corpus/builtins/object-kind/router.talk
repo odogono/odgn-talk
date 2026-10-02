@@ -1,0 +1,27 @@
+-- router.talk: the object-kind case's Script.
+
+script variable log = []
+
+on go
+  put [objectKind(gate), objectKind(key), kindOf(gate), kindOf(key)] after log
+  put [the id of gate = the id of key, gate = key] after log
+  put [[objectKind(gate), the id of gate], [objectKind(key), the id of key]] after log
+  put [use(gate), use(key)] after log
+  try
+    put objectKind("door") into k
+  catch e
+    put e after log
+  end try
+end go
+
+on later
+  put [isDisposed(key), objectKind(key), the id of key, use(key)] after log
+end later
+
+on use o where objectKind(o) is "door"
+  return "a door"
+end use
+
+on use o
+  return "something else"
+end use

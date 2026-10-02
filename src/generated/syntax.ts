@@ -734,6 +734,14 @@ export const builtins = [
     }
   },
   {
+    "name": "objectKind",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
+  },
+  {
     "name": "rangeStart",
     "kind": "function",
     "contract": {

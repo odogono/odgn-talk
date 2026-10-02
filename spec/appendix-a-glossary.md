@@ -438,6 +438,10 @@ _Avoid_: dimension, suffix
 A number together with its Unit, e.g. `5 kg`. The Unit is part of the value, so `5 kg` and `5` are different values.
 _Avoid_: measurement, unit value, tagged number
 
+**Object Kind**:
+A family of Host Objects the Host defines once per process, with its properties, such as `door` or `item`. Every Host Object is made with one, and `objectKind` gives its name. Not a Kind: every Host Object's Kind is `object`.
+_Avoid_: object type, class
+
 **Unit Kind**:
 The family of Units that convert into one another because they measure the same thing, e.g. mass (`kg`, `lb`) or volume (`L`, `m^3`). Exact and calendar durations are separate Kinds, and each currency is a Kind of its own.
 _Avoid_: dimension, unit type

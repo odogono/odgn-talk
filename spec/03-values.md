@@ -478,7 +478,8 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
 
 - **A Host Object** is a handle to something the Host owns. Two are equal only when they are the same object ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md)).
 - **Its id** is held by the Core, so `the id of o` reads it without calling the Host.
-- **Disposed:** a disposed object stays an ordinary value, with its id and its equality. The Built-in `isDisposed(o)` tests it.
+- **Its Object Kind** is held by the Core beside its id, and the Built-in `objectKind(o)` reads it without calling the Host. An id is unique only within its Object Kind, so the two together name one object in a Group ([ADR 0044](../docs/adr/0044-a-host-objects-object-kind-is-read-with-a-built-in.md)). Its kind, as `kindOf` gives it, is always `"object"`.
+- **Disposed:** a disposed object stays an ordinary value, with its id, its Object Kind and its equality. The Built-in `isDisposed(o)` tests it.
 - **Properties** are read with `the p of o` and written with `set`. Each is a call into the Host ([chapter 9](09-embedding.md)).
 
 ## Outside parity

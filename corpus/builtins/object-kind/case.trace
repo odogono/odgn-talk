@@ -1,0 +1,19 @@
+# object-kind: a door and an item share the id "x1". The item is disposed
+# between the two Deliveries. Its Fuel, allocation and state figures are
+# Cost Model 0's, as the TS Core blessed them.
+
+> load router identity=050a979c1e4c910dcd1dd2fedb5633033fb3b74eaf94cadee817e80196b37ae1
+> deliver d1 to=router message=go
+> pump clock=2026-10-02T09:00:00Z
+raise router/r1 code="wrong kind" at=router:59 pos=11:9
+seg router/r1 start delivery=d1 handler=go clause=1 fuel=183 alloc=1755 state=1031 end=return
+run router/r1 outcome=completed delivery=d1 handler=go fuel=183 alloc=1755
+pumped state=idle fuel=183
+> dispose object=<object item "x1">
+> deliver d2 to=router message=later
+> pump clock=2026-10-02T09:00:01Z
+seg router/r2 start delivery=d2 handler=later clause=1 fuel=62 alloc=296 state=1163 end=return
+run router/r2 outcome=completed delivery=d2 handler=later fuel=62 alloc=296
+pumped state=idle fuel=62
+> vars
+vars router log=[["door", "item", "object", "object"], [true, false], [["door", "x1"], ["item", "x1"]], ["a door", "something else"], {code: "wrong kind", expected: "object", got: "text", value: "door", at: {unit: "router", handler: "go", line: 11, column: 9}}, [true, "item", "x1", "something else"]]
