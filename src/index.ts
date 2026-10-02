@@ -147,6 +147,8 @@ export {
 
 export type { GrantDecls } from './effects';
 export {
+  calendarCapability,
+  type CalendarImpl,
   clockCapability,
   consoleCapability,
   timerCapability,

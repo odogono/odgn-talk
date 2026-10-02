@@ -1,0 +1,9 @@
+on dateOnly
+  ask cal to toInstant "2026-10-02" as civil date
+end
+on badWord
+  ask cal to toInstant "2026-10-02T13:00:00" as civil date, "UTC", "Europe/London"
+end
+on badResult
+  ask cal to today
+end

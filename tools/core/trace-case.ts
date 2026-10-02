@@ -13,6 +13,7 @@ import {
   defineCapability,
   clockCapability,
   consoleCapability,
+  calendarCapability,
   timerCapability,
   defineObjectKind,
   type HostObject,
@@ -423,6 +424,28 @@ const capabilitiesOf = (
           {
             schedule: call => fireStub(stubs, 'timer.schedule', call, crossing),
             cancel: call => fireStub(stubs, 'timer.cancel', call, crossing),
+          },
+          costs,
+        ),
+      );
+    } else if (capability === 'calendar') {
+      const answer = (operation: string, call: Call<string>): Value => {
+        try {
+          return takeStub(stubs, `calendar.${operation}`, call, true);
+        } finally {
+          crossing(call.id);
+        }
+      };
+      out.set(
+        capability,
+        calendarCapability(
+          {
+            today: call => answer('today', call),
+            now: call => answer('now', call),
+            toCivil: call => answer('toCivil', call),
+            toInstant: call => answer('toInstant', call),
+            offset: call => answer('offset', call),
+            zone: call => answer('zone', call),
           },
           costs,
         ),

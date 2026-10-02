@@ -1,0 +1,25 @@
+# Domain checks precede Host calls; result refinements reject a date-time from today.
+> load s identity=23e5566f59e6db0a55aed606e2547c1ce248e2c668dd6c130182ef4c1de5ca57
+> deliver d1 to=s message=dateOnly
+> pump clock=2026-10-02T12:00:00Z
+raise s/r1 code="out of domain" at=s:4 pos=2:3
+seg s/r1 start delivery=d1 handler=dateOnly clause=1 fuel=15 alloc=16 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=dateOnly error={code: "out of domain", function: "toInstant", value: 2026-10-02, at: {unit: "s", handler: "dateOnly", line: 2, column: 3}} fuel=15 alloc=16
+pumped state=idle fuel=15
+> deliver d2 to=s message=badWord
+> pump clock=2026-10-02T12:00:00Z
+raise s/r2 code="out of domain" at=s:13 pos=5:3
+seg s/r2 start delivery=d2 handler=badWord clause=1 fuel=18 alloc=16 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=badWord error={code: "out of domain", function: "toInstant", value: "UTC", at: {unit: "s", handler: "badWord", line: 5, column: 3}} fuel=18 alloc=16
+pumped state=idle fuel=18
+> stub calendar.today value=2026-10-02T13:00:00
+> deliver d3 to=s message=badResult
+> pump clock=2026-10-02T12:00:00Z
+call s/r3.c1 op=cal.today args=[] error={}
+call-failed s/r3.c1 op=cal.today
+raise s/r3 code="host error" at=s:18 pos=8:3
+seg s/r3 start delivery=d3 handler=badResult clause=1 fuel=25 alloc=0 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=badResult error={code: "host error", capability: "cal", operation: "today", at: {unit: "s", handler: "badResult", line: 8, column: 3}} fuel=25 alloc=0
+pumped state=idle fuel=25
+> vars
+vars s

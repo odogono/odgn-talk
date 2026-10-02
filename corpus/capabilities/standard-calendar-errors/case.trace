@@ -1,0 +1,29 @@
+# Declared Calendar failures are checked against catalogue fields.
+> load s identity=6c1b7f3699eef7d9dc4580e08c652e12a92b56ea1f1fa85ee20bd12f1ca32a1e
+> stub calendar.toInstant error={code: "ambiguous time", civil: 2026-10-25T01:30:00, zone: "Europe/London"}
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r1.c1 op=cal.toInstant args=[2026-10-25T01:30:00, "reject", "Europe/London"] error={code: "ambiguous time", civil: 2026-10-25T01:30:00, zone: "Europe/London"}
+raise s/r1 code="ambiguous time" at=s:6 pos=2:3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=39 alloc=134 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "ambiguous time", civil: 2026-10-25T01:30:00, zone: "Europe/London", capability: "cal", operation: "toInstant", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=39 alloc=134
+pumped state=idle fuel=39
+> stub calendar.toInstant error={code: "unknown zone", zone: "Mars"}
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r2.c1 op=cal.toInstant args=[2026-10-25T01:30:00, "reject", "Europe/London"] error={code: "unknown zone", zone: "Mars"}
+raise s/r2 code="unknown zone" at=s:6 pos=2:3
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=37 alloc=80 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=go error={code: "unknown zone", zone: "Mars", capability: "cal", operation: "toInstant", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=37 alloc=80
+pumped state=idle fuel=37
+> stub calendar.toInstant error={code: "ambiguous time", civil: "bad", zone: "Europe/London"}
+> deliver d3 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r3.c1 op=cal.toInstant args=[2026-10-25T01:30:00, "reject", "Europe/London"] error={code: "ambiguous time", civil: "bad", zone: "Europe/London"}
+call-failed s/r3.c1 op=cal.toInstant
+raise s/r3 code="host error" at=s:6 pos=2:3
+seg s/r3 start delivery=d3 handler=go clause=1 fuel=35 alloc=16 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=go error={code: "host error", capability: "cal", operation: "toInstant", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=35 alloc=16
+pumped state=idle fuel=35
+> vars
+vars s

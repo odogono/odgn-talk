@@ -1,0 +1,15 @@
+script variable seen = []
+on go
+  ask cal to today
+  put it after seen
+  ask cal to now "Europe/London"
+  put it after seen
+  ask cal to toCivil "2026-10-02T12:00:00Z" as instant, "Europe/London"
+  put it after seen
+  ask cal to toInstant "2026-10-02T13:00:00" as civil date, "Europe/London"
+  put it after seen
+  ask cal to offset "2026-10-02T12:00:00Z" as instant
+  put it after seen
+  ask cal to zone nothing
+  put it after seen
+end

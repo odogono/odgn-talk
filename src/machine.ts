@@ -56,6 +56,7 @@ import {
   wrongKind,
 } from './operations';
 import { readDisplay } from './readers';
+import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
   LimitReached,
@@ -1911,6 +1912,7 @@ export class Run {
             true,
           );
     });
+    standardChecks(op)?.arguments?.(args);
     const declared = op.cost.fuel;
     this.pay(key, { declared });
     this.payAmount(0, op.cost.alloc ?? 0);
@@ -2024,7 +2026,11 @@ export class Run {
       this.recordCrossing({ ...record, charged });
       return nothing;
     }
-    if (!Value.isValue(result) || (op.result && mismatch(result, op.result))) {
+    if (
+      !Value.isValue(result) ||
+      (op.result && mismatch(result, op.result)) ||
+      standardChecks(op)?.result?.(result) === false
+    ) {
       this.recordCrossing({ ...record, charged, error: map([]) });
       throw this.hostError(ctx);
     }
@@ -2091,7 +2097,8 @@ export class Run {
     record(failed);
     const declaredCodes = ctx.op.errors?.map(e => e.code);
     if (
-      error.code in errorMessages ||
+      (error.code in errorMessages &&
+        !standardChecks(ctx.op)?.error?.(error.code, data)) ||
       data.entries().some(([k]) => reservedKeys.has(k)) ||
       (declaredCodes && !declaredCodes.includes(error.code))
     ) {
