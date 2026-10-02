@@ -322,7 +322,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `join-start` |  | 0 | 0 | Starts a Join |  |
 | `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked` |
 | `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind` |
-| `join-end` (suspends) |  | 0 | 1 | `end wait`: suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
+| `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
 | `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
 | `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path |  |
 

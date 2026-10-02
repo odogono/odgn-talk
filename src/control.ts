@@ -239,7 +239,7 @@ export const checkControl = (
         if (unit === 'library' && word(next, 'for')) {
           report('not in a library', head as Leaf);
         }
-        // `end wait` is a Join's only Suspension Point (chapter 5, Joins).
+        // A Join's closing `end` is its only Suspension Point (chapter 5, Joins).
         if (context.join !== null) {
           report('not in a join', head as Leaf);
         }

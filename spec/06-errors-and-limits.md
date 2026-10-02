@@ -107,7 +107,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 
 ### Joins
 
-- **Fail fast:** the first Join Member failure to arrive resumes the Run and is raised at `end wait`, as the member's own error map plus `index`, its 1-based start position. A failed send member raises `send failed`, plus `index`.
+- **Fail fast:** the first Join Member failure to arrive resumes the Run and is raised at the Join's closing `end`, as the member's own error map plus `index`, its 1-based start position. A failed send member raises `send failed`, plus `index`.
 - **`index`** is added only when it is missing, so a rethrow keeps it. It is a reserved key.
 - **The rest** of the pending members are abandoned ([chapter 5](05-handlers-messages-and-scheduling.md#joins)).
 

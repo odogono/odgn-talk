@@ -58,6 +58,10 @@ const SIZE_UNITS = new Set<string>(grammar.binary_patterns.size_units);
 const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
+// Statement blocks' ending keywords, which never follow a Lambda's `end`.
+const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
+const endSuffixExpected = (name: string, at: Token) =>
+  `end of line or \`${name}\` after \`end\` (closing line ${at.line})`;
 // The operand-starting Reserved Words.
 const OPERAND_WORDS = new Set([
   'the',
@@ -369,10 +373,15 @@ class Parser {
       this.next();
     }
   }
-  endName(name: string, at: Token) {
+  // A bare `end`, or `end` and the Name or keyword of the block opened at
+  // `at`.
+  endSuffix(name: string, at: Token) {
     const t = this.peek(0);
+    if (t.t === 'nl' || t.t === 'eof') {
+      return;
+    }
     if (!this.isWord(t, name)) {
-      this.fail(t, `\`end ${name}\` (for line ${at.line})`);
+      this.fail(t, endSuffixExpected(name, at));
     }
     this.next();
   }
@@ -546,7 +555,7 @@ class Parser {
         fin = (yield this.block(['end'])) as Node[];
       }
       const end = this.expectWord('end');
-      this.endName(name, on);
+      this.endSuffix(name, on);
       this.endOfStatement();
       return {
         k: 'Handler',
@@ -601,7 +610,7 @@ class Parser {
       this.endOfStatement();
       const body = (yield this.block(['end'])) as Node[];
       const end = this.expectWord('end');
-      this.endName(name, fn);
+      this.endSuffix(name, fn);
       this.endOfStatement();
       return {
         k: 'Function',
@@ -955,7 +964,7 @@ class Parser {
         this.endOfStatement();
         const body = (yield this.block(['end'])) as Node[];
         this.expectWord('end');
-        this.endName('wait', w);
+        this.endSuffix('wait', w);
         return { k: 'Join', body };
       }
       if (this.atEnd('operand')) {
@@ -990,7 +999,7 @@ class Parser {
             });
           } else if (this.isWord(t, 'end')) {
             this.next();
-            this.endName('wait', w);
+            this.endSuffix('wait', w);
             return { k: 'WaitForBlock', branches };
           } else {
             this.fail(t, '`when`, `after` or `end wait`');
@@ -1091,7 +1100,7 @@ class Parser {
         break;
       }
       this.expectWord('end');
-      this.endName('if', at);
+      this.endSuffix('if', at);
       return { k: 'If', cond, then, elses, else: els, block: true };
     } finally {
       this.leave(frame);
@@ -1124,7 +1133,7 @@ class Parser {
       this.endOfStatement();
       const body = (yield this.block(['end'])) as Node[];
       this.expectWord('end');
-      this.endName('repeat', at);
+      this.endSuffix('repeat', at);
       return { k: 'Repeat', head, body };
     } finally {
       this.leave(frame);
@@ -1178,7 +1187,7 @@ class Parser {
           });
         } else if (this.isWord(t, 'end')) {
           this.next();
-          this.endName('match', at);
+          this.endSuffix('match', at);
           return { k: 'Match', subject, ignoringCase, branches };
         } else {
           this.fail(
@@ -1224,7 +1233,7 @@ class Parser {
         fin = (yield this.block(['end'])) as Node[];
       }
       this.expectWord('end');
-      this.endName('try', at);
+      this.endSuffix('try', at);
       return { k: 'Try', body, catches, finally: fin };
     } finally {
       this.leave(frame);
@@ -1291,7 +1300,7 @@ class Parser {
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
-  // statements, then `end given`.
+  // statements, then `end` with an optional `given`.
   *lambda(): ParseTask<Node> {
     const frame = this.enter('Lambda');
     try {
@@ -1325,8 +1334,20 @@ class Parser {
     this.endOfStatement();
     const body = (yield this.block(['end'])) as Node[];
     const end = this.expectWord('end');
-    this.endName('given', at);
+    // Restore enclosing bracket continuations before peeking past a bare end.
     this.nlBase.pop();
+    // The enclosing expression may continue after a bare `end` on its line,
+    // but another block's keyword can't.
+    const suffix = this.peek(0, 'operator');
+    if (
+      suffix.line === end.line &&
+      this.isWord(suffix, 'given', ...BLOCK_KEYWORDS)
+    ) {
+      if (!this.isWord(suffix, 'given')) {
+        this.fail(suffix, endSuffixExpected('given', at));
+      }
+      this.next('operator');
+    }
     return {
       k: 'LambdaBlock',
       params,

@@ -223,7 +223,7 @@ A `use … from …` line naming the definitions a Script or Library takes from 
 _Avoid_: include, require
 
 **Lambda**:
-A `given` expression that makes a Function Value, e.g. `given r: the wind of r > 10`, or a `given r … end given` block.
+A `given` expression that makes a Function Value, e.g. `given r: the wind of r > 10`, or a `given r … end` block whose ending may also be written `end given`.
 _Avoid_: anonymous function, block, arrow function, closure
 
 **Match**:
@@ -245,7 +245,7 @@ _Avoid_: advanced mode, extension, expert feature
 ## Handlers
 
 **Handler**:
-An `on <message> … end <message>` block that runs when its message or event reaches the Script.
+An `on <message> … end` block that runs when its message or event reaches the Script. Its ending may repeat the message name as `end <message>`.
 _Avoid_: callback, listener, function
 
 **Handler Clause**:
@@ -265,15 +265,15 @@ One execution of a Handler, from the message that starts it to its end, possibly
 _Avoid_: activation, invocation, task, thread, process
 
 **Suspension Point**:
-A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, a Function Value called with `and wait`, or the end of a Join. Each is written with `wait` in the source. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
+A place where a Run may pause and let other Runs of the same Script proceed: a `wait`, a call to a Suspending Capability, a call to a Handler that may reach one, a Function Value called with `and wait`, or the end of a Join. Each is marked by `wait` in the source, with a Join marked by its `wait for all` head. Code between two Suspension Points runs without interruption, and every Suspension Point is known when the Script loads.
 _Avoid_: await, yield point
 
 **Join**:
-A `wait for all … end wait` block. It starts every Join Member it reaches without waiting, then suspends once, at `end wait`, until all of them answer. `it` then holds their answers as a list, in the order they were started. The first failure to arrive is raised, and the members still pending are abandoned.
+A `wait for all … end` block whose ending may also be written `end wait`. It starts every Join Member it reaches without waiting, then suspends once, at its closing `end`, until all of them answer. `it` then holds their answers as a list, in the order they were started. The first failure to arrive is raised, and the members still pending are abandoned.
 _Avoid_: parallel block, gather, fan-out, Promise.all
 
 **Join Member**:
-An `ask … and wait` or `send … and wait` inside a Join. It is started where it stands and answered at the Join's `end wait`.
+An `ask … and wait` or `send … and wait` inside a Join. It is started where it stands and answered at the Join's closing `end`.
 _Avoid_: branch, task, future
 
 **Suspending Capability**:

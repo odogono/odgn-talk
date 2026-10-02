@@ -446,7 +446,7 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 | `wait` | the Run suspended at `wait` |
 | `wait-for` | the Run suspended at `wait for` |
 | `wait-for-any` | the Run suspended at a block `wait for` |
-| `join-end` | the Run suspended at a Join's `end wait` |
+| `join-end` | the Run suspended at a Join's closing `end` |
 
 <!-- end -->
 

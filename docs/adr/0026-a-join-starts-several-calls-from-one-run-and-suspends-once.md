@@ -84,3 +84,4 @@ We chose this because a join can't be stdlib: Libraries can't `send` and Built-i
   - A deadline for the whole Join.
 - Settled by #69: a Handler leaves early with a bare `return` (ADR 0019), which is already a load error inside a Join. There is no `exit` for the enclosing Handler.
 - Settled by #79: a call that fails with `timeout` is abandoned too, with its own `abandon` record, so the Host can stop the work.
+- Narrowed by [ADR 0042](0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md) (#179): a Join may close with a bare `end` as well as `end wait`. Its closing `end`, in either spelling, is still the one Suspension Point, and its `wait for all` head marks the waiting block.

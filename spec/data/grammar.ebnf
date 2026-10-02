@@ -45,8 +45,8 @@ Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
-Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name NL
-                   /* the Name after `end` is the function's name */
+Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name? NL
+                   /* a Name after `end`, if present, is the function's name */
 Parameter      ::= Name ( '=' Expression )?
                    /* a default; only trailing parameters may have one */
 Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
@@ -54,8 +54,8 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 
 /* ## handlers */
 
-Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name NL
-                   /* the Name after `end` is the Handler's name */
+Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
+                   /* a Name after `end`, if present, is the Handler's name */
 HandlerHead    ::= ( Pattern ( ',' Pattern )* )? Guard? ( ',' Suffix )*
 Suffix         ::= 'queued' | 'dropping' | 'replacing' | 'deciding' | 'during' Name
 Guard          ::= 'where' Expression
@@ -98,17 +98,17 @@ ExpressionList ::= Expression ( ',' Expression )*
 
 If             ::= 'if' Expression 'then'
                    ( Inline ( 'else' Inline )?
-                   | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if' )
+                   | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if'? )
 Repeat         ::= 'repeat' ( 'for' 'each' Pattern 'in' Expression | 'while' Expression
                             | 'until' Expression | 'forever' | Expression 'times' )
-                   NL Block 'end' 'repeat'
-Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'
+                   NL Block 'end' 'repeat'?
+Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'?
 When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
 Body           ::= Inline NL | NL Block
-Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'
+Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'?
 Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
-Join           ::= 'all' NL Block 'end' 'wait'
-WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'
+Join           ::= 'all' NL Block 'end' 'wait'?
+WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
 Event          ::= MessageName ( Pattern ( ',' Pattern )* )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
@@ -116,7 +116,7 @@ Timeout        ::= 'or' Expression
 /* ## expressions */
 
 Expression     ::= Lambda | Or
-Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given' )
+Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
 Not            ::= 'not' Not | Comparison
