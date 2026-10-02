@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
   codeIdentity,
+  defineObjectKind,
   HostError,
   LoadError,
   MailboxFull,
@@ -47,6 +48,30 @@ describe('loading', () => {
     expect(withoutIdentity(lines)).toEqual([
       '> load bad',
       'diag bad code="unknown name" pos=2:10',
+    ]);
+    expect(g.script('bad')).toBeUndefined();
+  });
+
+  test('a failing initialiser is the diagnostic `initialiser failed` at the raising instruction', () => {
+    const { g, lines } = group();
+    let error: unknown;
+    try {
+      g.load({ name: 'bad', source: 'constant x = 1 / 0\non go\nend go' });
+    } catch (error_) {
+      error = error_;
+    }
+    expect(error).toBeInstanceOf(LoadError);
+    expect(
+      (error as LoadError).diagnostics.map(d => [
+        d.code,
+        d.unit,
+        d.line,
+        d.col,
+      ]),
+    ).toEqual([['initialiser failed', 'bad', 1, 16]]);
+    expect(withoutIdentity(lines)).toEqual([
+      '> load bad',
+      'diag bad code="initialiser failed" pos=1:16',
     ]);
     expect(g.script('bad')).toBeUndefined();
   });
@@ -246,6 +271,18 @@ describe('Host errors and refusals', () => {
     const { g } = group();
     g.pump(later(5));
     expect(() => g.pump(clock)).toThrow('clock backwards');
+  });
+
+  test('a Host Object id is unique within its kind in a Group', () => {
+    const { g } = group();
+    const door = defineObjectKind({ name: 'door', props: {} });
+    const item = defineObjectKind({ name: 'item', props: {} });
+    g.object(door, 'd1', null);
+    expect(() => g.object(door, 'd1', null)).toThrow(
+      expect.objectContaining({ code: 'duplicate object id' }),
+    );
+    expect(g.object(item, 'd1', null).id).toBe('d1');
+    expect(newGroup({ name: 'other' }).object(door, 'd1', null).id).toBe('d1');
   });
 
   test('Inspect reads Script Variables in declaration order, with no other effect', () => {

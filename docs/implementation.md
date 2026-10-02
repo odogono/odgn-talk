@@ -256,8 +256,14 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining Core work
 
-All existing corpus cases now execute, but the corpus is not a complete conformance test. Counter coverage exposed one further accounting gap to address in a focused slice:
+All existing corpus cases now execute, but the corpus is not a complete conformance test.
 
-- **Event-test Pump accounting:** event Pattern/Guard work contributes to Run and Script totals, but the Pump currently omits it from `fuelUsed`; its cap and Fuel Slice accounting need comparison against the Spec ([#193](https://github.com/odogono/odgn-talk/issues/193)).
+An audit of the public package against [`talk.ts`](../spec/embedding/talk.ts), chapter 9 and [`diagnostics.toml`](../spec/data/diagnostics.toml) found the load-time diagnostics and the Host error catalogue complete: every code is raised and has a regression test. The embedding interface still has these gaps, tracked under [#128](https://github.com/odogono/odgn-talk/issues/128):
 
-The remaining API and diagnostic surface still needs a systematic comparison with the embedding reference and Data Files. A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. #126 stays open while the known gaps and that coverage audit remain. Session Hosts, REPLs and the Go Core are later Appendix B work.
+- **Reports and Inspection** ([#196](https://github.com/odogono/odgn-talk/issues/196)): no `call failed` report; `run end` lacks `at` and gives its error as a map; `unhandled` lacks `target`; `PumpResult` lacks `nextDeadline`; suspended Runs lack `wait`, `until` and `calls`.
+- **`onReady`** ([#197](https://github.com/odogono/odgn-talk/issues/197)) is never called.
+- **`shape.object(kind)`** ([#198](https://github.com/odogono/odgn-talk/issues/198)) is missing.
+- **Host-side `decodeJson`, `encodeJson` and `coreVersions`** ([#199](https://github.com/odogono/odgn-talk/issues/199)) are missing.
+- **`createCore()`/`Core` with its compile cache, and `exportManifest`** ([#200](https://github.com/odogono/odgn-talk/issues/200)) are missing; the package exposes free functions instead.
+
+A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. Session Hosts, REPLs and the Go Core are later Appendix B work.
