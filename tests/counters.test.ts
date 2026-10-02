@@ -348,7 +348,7 @@ describe('Script counters', () => {
     expect(s.counters().allocTotal).toBeGreaterThan(0);
   });
 
-  test('Library replacement retires live costs and keeps fault totals', () => {
+  test('Library replacement retires live costs and keeps lifetime totals', () => {
     const g = newGroup({ name: 'g' });
     g.addLibrary(
       compileLibrary({
@@ -412,7 +412,7 @@ describe('Script counters', () => {
       grants: { api: cap.grant('all', undefined) },
     });
     s.deliver({ name: 'go' });
-    g.pump(0n);
+    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'completed' }]);
     expect(s.counters().runs).toBe(1);
   });
 });
