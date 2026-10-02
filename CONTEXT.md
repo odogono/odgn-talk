@@ -396,6 +396,10 @@ _Avoid_: bitstring, binary match, byte pattern, Text Pattern on bytes
 The rule that no Script-created value (text, number, list, map) is ever both shared and changeable: changing a value through one name is never visible through another.
 _Avoid_: immutability, copy-on-write (those are ways to implement it)
 
+**Kind**:
+The category every value belongs to, one of fourteen (`nothing`, `number`, `map`, `function`, `object`, …). It is what `is a` tests and `kindOf` gives. Not a Unit Kind or an Object Kind, which group Units and Host Objects.
+_Avoid_: type
+
 **Function Value**:
 A value that can be called: made by a Lambda or by naming a Script or Library function, and holding its Home Script, its code and the values it captured.
 _Avoid_: closure, callback, function object, lambda (that's the literal)

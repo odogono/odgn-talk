@@ -1,0 +1,24 @@
+# kind-of: `kindOf(x)` gives the kind name of every kind, the same names an
+# error's `got` field holds. A whole number is a `number`, since `integer` is
+# a test and not a kind, and a Host Object is an `object`, whatever its Object
+# Kind. A Guard may call it (spec chapter 7, Values; ADR 0043).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "state", shape = "text" }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"' }
+
+[[scripts]]
+name = "kinds"
+source = "kinds.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

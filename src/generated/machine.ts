@@ -1538,6 +1538,18 @@ export const costModel = {
       "fuel": "2",
       "alloc": "0"
     },
+    "builtin.kindOf": {
+      "fuel": "2",
+      "alloc": "size(result)"
+    },
+    "builtin.functionArity": {
+      "fuel": "2",
+      "alloc": "size(result)"
+    },
+    "builtin.functionName": {
+      "fuel": "2",
+      "alloc": "size(result)"
+    },
     "builtin.abs": {
       "fuel": "3",
       "alloc": "size(result)"

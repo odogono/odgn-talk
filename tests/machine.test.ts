@@ -325,6 +325,28 @@ describe('Lambdas and Function Values', () => {
       ),
     ).toBe('[8, <function test:twice>]');
   });
+
+  test('kindOf, functionArity and functionName', () => {
+    expect(
+      value(
+        '  return [kindOf(nothing), kindOf(3), kindOf(3 kg), kindOf([]), kindOf("2026-09-27" as civil date), kindOf(given x: x)]',
+      ),
+    ).toBe(
+      '["nothing", "number", "quantity", "list", "civil date", "function"]',
+    );
+    expect(
+      value(
+        '  put given a, b: a into both\n  return [functionArity(twice), functionName(twice), functionArity(both), functionName(both), functionArity(none)]',
+        'function twice x, y = 2\n  return x * y\nend twice\nfunction none\n  return 0\nend none',
+      ),
+    ).toBe('[1..2, "twice", 2..2, nothing, 0..0]');
+    expect(value('  return functionArity(3)')).toContain(
+      'expected: "function", got: "number"',
+    );
+    expect(value('  return functionName("f")')).toContain(
+      'expected: "function", got: "text"',
+    );
+  });
 });
 
 describe('Text Patterns', () => {

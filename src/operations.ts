@@ -19,6 +19,7 @@ import {
   ArithmeticError,
   type Dec,
 } from './decimal';
+import { arityOf, type Body } from './code-unit';
 import { itemsOf } from './costs';
 import { BINARY32, BINARY64, readFloat, writeFloat } from './floats';
 import {
@@ -1923,6 +1924,23 @@ export const builtin = (
       }
       const { from, to } = x!.asRange()!;
       return { result: name === 'rangeStart' ? from : to };
+    }
+    case 'kindOf':
+      return { result: text(kindName(x!)) };
+    case 'functionArity':
+    case 'functionName': {
+      if (x!.kind !== 'function') {
+        throw wrongKind('function', x!);
+      }
+      // A stale Function Value still holds its code, so both still answer.
+      const { body } = x!.asFunction()!.code as { body: Body };
+      if (name === 'functionName') {
+        return { result: body.kind === 'lambda' ? nothing : text(body.name) };
+      }
+      const { min, max } = arityOf(body);
+      return {
+        result: range(integerValue(BigInt(min)), integerValue(BigInt(max))),
+      };
     }
     case 'isDisposed':
       if (x!.kind !== 'object') {

@@ -403,6 +403,21 @@ key = "builtin.rangeEnd"
 fuel = "2"
 
 [[rate]]
+key = "builtin.kindOf"
+fuel = "2"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.functionArity"
+fuel = "2"
+alloc = "size(result)"
+
+[[rate]]
+key = "builtin.functionName"
+fuel = "2"
+alloc = "size(result)"
+
+[[rate]]
 key = "builtin.abs"
 fuel = "3"
 alloc = "size(result)"

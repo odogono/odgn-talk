@@ -896,6 +896,9 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `isDisposed` | `2` | 0 |  |
 | `rangeStart` | `2` | 0 |  |
 | `rangeEnd` | `2` | 0 |  |
+| `kindOf` | `2` | `size(result)` |  |
+| `functionArity` | `2` | `size(result)` |  |
+| `functionName` | `2` | `size(result)` |  |
 | `abs` | `3` | `size(result)` |  |
 | `floor` | `3 + digits(x1) / 8` | `size(result)` |  |
 | `ceiling` | `3 + digits(x1) / 8` | `size(result)` |  |

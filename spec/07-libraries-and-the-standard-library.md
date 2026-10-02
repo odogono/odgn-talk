@@ -157,6 +157,9 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 | `isDisposed(o)` | Whether the Host Object `o` has been disposed |  |
 | `rangeStart(r)` | The first end of the range `r`, as written |  |
 | `rangeEnd(r)` | The second end of the range `r`, as written |  |
+| `kindOf(x)` | The name of the kind of `x`, as text, such as `"number"` or `"civil date"` |  |
+| `functionArity(f)` | The range of argument counts the Function Value `f` accepts, from its required parameters to all of them |  |
+| `functionName(f)` | The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda |  |
 
 <!-- end -->
 
@@ -167,6 +170,10 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 - **`offset(needle, s)`** gives 0 when there is no match, so a Guard can test it without a failure. An empty text needle matches at 1.
 - **`rangeStart(r)` and `rangeEnd(r)`** give a range's two ends exactly as written, for any range, so `rangeStart(5..4)` is `5`, and `rangeEnd(3 m/s..7 m/s)` is `7 m/s`. An empty match's range, `p..p-1`, has no items, and `rangeStart` is how to read where it was ([ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md)).
 - **`isDisposed(o)`** takes a Host Object, and anything else raises `wrong kind`. Guards use it to skip a disposed object at dispatch, as in `where not isDisposed(u)`.
+- **`kindOf(x)`** gives the kind name of any value, one of the names in [chapter 3's Kinds table](03-values.md#kinds), the same names an error's `got` field holds. It never raises. A whole number gives `"number"`, since `integer` is a test and not a kind, and a Host Object gives `"object"`, whatever its Object Kind ([ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md)).
+- **`functionArity(f)`** gives the range of argument counts `f` accepts, the range `wrong arity` checks: from a named function's required parameters to all of them ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)), or `n..n` for a Lambda with `n` parameters. So a function with no parameters gives `0..0`, and `2 is in functionArity(f)` tests a call before it is made.
+- **`functionName(f)`** gives the name of the named function `f` was made from, as the code unit that defines it writes it, or Nothing for a Lambda, a Library's included. An Import renamed with `use … as` keeps its Library name, so after `use pad from text as padLeft`, `functionName(padLeft)` is `"pad"`.
+- **`functionArity` and `functionName`** take a Function Value, and anything else raises `wrong kind`. They read data the value holds, so a stale Function Value still answers both, and only calling it raises `function gone` ([chapter 3](03-values.md#function-values)).
 
 ### Numbers
 

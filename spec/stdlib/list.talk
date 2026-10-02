@@ -281,23 +281,6 @@ end indexOf
 -- catalogue errors of chapter 6. The Core adds each one's `message` and
 -- points its `at` at the Script's call (ADR 0037).
 
-private function kindOf v
-  if v is nothing then return "nothing"
-  if v is a boolean then return "boolean"
-  if v is a number then return "number"
-  if v is a quantity then return "quantity"
-  if v is a text then return "text"
-  if v is a bytes then return "bytes"
-  if v is a list then return "list"
-  if v is a map then return "map"
-  if v is a range then return "range"
-  if v is an instant then return "instant"
-  if v is a civil date then return "civil date"
-  if v is a pattern then return "pattern"
-  if v is a function then return "function"
-  return "object"
-end kindOf
-
 private function wrongKind expected, v
   put kindOf(v) into got
   throw {code: "wrong kind", expected: expected, got: got, value: v}

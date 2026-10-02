@@ -1,0 +1,23 @@
+# function-values: six Function Values in turn, `is in` over an arity, the
+# two `wrong kind` errors, then a Reload that leaves `kept` stale and still
+# answering. Its Fuel, allocation and state figures are Cost Model 0's, as
+# the TS Core blessed them.
+
+> add-library tools identity=c5766bcd3f453d3fa9791ea75e4438ba99fd52e36af9b979fa7c757f9d736851
+> load probe identity=0817ecff333e9dc97a0a6087974c71fde1182efa32e37a629255f80c5870afda
+> deliver d1 to=probe message=go
+> pump clock=2026-10-02T09:00:00Z
+raise probe/r1 code="wrong kind" at=probe:59 pos=24:9
+raise probe/r1 code="wrong kind" at=probe:76 pos=29:9
+seg probe/r1 start delivery=d1 handler=go clause=1 fuel=270 alloc=3436 state=1818 end=return
+run probe/r1 outcome=completed delivery=d1 handler=go fuel=270 alloc=3436
+pumped state=idle fuel=270
+> reload probe carry=yes source="script variable log = []" & newline & "script variable kept = nothing" & newline & "on inspect" & newline & "  put [functionArity(kept), functionName(kept)] after log" & newline & "end inspect" & newline identity=1887966822097fe7358d20b07506138b6d1b1b81912e896fc85810e056132b19
+stopped probe reason="reload"
+> deliver d2 to=probe message=inspect
+> pump clock=2026-10-02T09:00:01Z
+seg probe/r2 start delivery=d2 handler=inspect clause=1 fuel=26 alloc=273 state=1925 end=return
+run probe/r2 outcome=completed delivery=d2 handler=inspect fuel=26 alloc=273
+pumped state=idle fuel=26
+> vars
+vars probe log=[[0..0, "zero"], [1..2, "tax"], [2..2, nothing], [2..3, "pad"], [2..3, "pad"], [1..1, nothing], [true, false], {code: "wrong kind", expected: "function", got: "number", value: 3, at: {unit: "probe", handler: "go", line: 24, column: 9}}, {code: "wrong kind", expected: "function", got: "text", value: "tax", at: {unit: "probe", handler: "go", line: 29, column: 9}}, [1..2, "tax"]] kept=<function probe:tax>

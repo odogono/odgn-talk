@@ -1,0 +1,12 @@
+# kind-of: one value of each of the 14 kinds, with 2.5 beside 3, then a
+# Guard that selects the map. Its Fuel, allocation and state figures are
+# Cost Model 0's, as the TS Core blessed them.
+
+> load kinds identity=8229e8bd630078fbf4c729417a669d8884b62df5d44b95dabcb4f72afb1d94b0
+> deliver d1 to=kinds message=go
+> pump clock=2026-10-02T09:00:00Z
+seg kinds/r1 start delivery=d1 handler=go clause=1 fuel=412 alloc=1912 state=560 end=return
+run kinds/r1 outcome=completed delivery=d1 handler=go fuel=412 alloc=1912
+pumped state=idle fuel=412
+> vars
+vars kinds log=["nothing", "boolean", "number", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object", ["a map", "something else"]]

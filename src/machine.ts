@@ -16,7 +16,7 @@ import {
 } from './binary';
 import { charge, partSize, sizeOf, type Measured } from './costs';
 import type { Body, CodeUnit, Instruction } from './code-unit';
-import { instructionSpec } from './code-unit';
+import { arityOf, instructionSpec } from './code-unit';
 import { errorMessages, limitDefaults } from './generated/machine';
 import { builtins } from './generated/syntax';
 import {
@@ -2933,14 +2933,8 @@ export class Run {
           );
         }
         const { code: home, body } = ref.code as FunctionCode;
-        const required = body.defaults.filter(
-          d => d === null || d === undefined,
-        ).length;
-        const ok =
-          body.kind === 'lambda'
-            ? n === body.params.length
-            : n >= required && n <= body.params.length;
-        if (!ok) {
+        const arity = arityOf(body);
+        if (n < arity.min || n > arity.max) {
           throw new ScriptError('wrong arity');
         }
         const filled =
