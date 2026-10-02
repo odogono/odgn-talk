@@ -9,6 +9,9 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Reload, Extend and atomic Library replacement with transitive importers, variable carry/reset, separate extension code units and stale Function Values, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-one tests, five `reload/` Trace Cases and the newly supported `pattern-size-literal-limit` seed cover the changes.
+- Spec rules for the extension Persistent State cap, inherited tables and links in extension lowering, and preserving exact source scalars in Trace inputs.
+
 - TS Core Broadcasts, AbortSignal cancellation for Requests and Decisions, CancelRun, sticky Stop Script and owner disposal, plus clause-level `queued`, `dropping` and `replacing` policies, continuing [#126](https://github.com/odogono/odgn-talk/issues/126).
 - Cancellation cleanup with Segment rollback, call abandonment, a separate Cleanup Budget, Fuel Slices and cap preemption, and `cleanupFailed` reports; six cancellation Trace Cases and four newly supported seeds.
 - Spec rules for post-Stop Deliveries and Group state, the cleanup-failure report shape, ready-state accounting and abandonment after preempted cleanup; replay handles Stops and CancelRun inside Host crossings and mailbox refusals ahead of queued inputs.
@@ -66,6 +69,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Existing Script names no longer overwrite declared bindings during checking. Decision checks include calls from extensions into older vetoing Handlers, and Function Values receive immutable code identities before initialisers run.
 
 - Persistent State counts ready Runs and their retained answers, as well as parked Runs and cancellation cleanup. Seven existing Trace Cases have corrected state figures; Cost Model rates are unchanged.
 

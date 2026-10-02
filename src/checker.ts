@@ -29,7 +29,13 @@ export type Diagnostic = {
   message: string;
   span: SourceSpan;
 };
+export type ExistingName = Pick<
+  Binding,
+  'kind' | 'contract' | 'importedFrom'
+> & { maySuspend?: boolean };
 export type CheckOptions = {
+  /** Names in older code units when checking a Script extension. */
+  existing?: Readonly<Record<string, ExistingName>>;
   /** A Script's Grants, to check its Capability calls against; none checks none. */
   grants?: GrantDecls;
   /** Exports supplied by the Library loader; kind-only entries defer call-count checks. */
@@ -269,6 +275,13 @@ export const checkSyntax = (
       binding.contract = builtin.contract;
     }
     native.set(builtin.name, binding);
+  }
+  for (const [name, previous] of Object.entries(options.existing ?? {})) {
+    unit.bindings.set(name, {
+      ...makeBinding(name, previous.kind, unit, null),
+      contract: previous.contract,
+      importedFrom: previous.importedFrom,
+    });
   }
   for (const name of options.objects ?? []) {
     unit.bindings.set(name, makeBinding(name, 'object', unit, null));
@@ -877,8 +890,9 @@ export const checkSyntax = (
           ? binding?.kind === 'builtin function'
           : binding?.kind === 'builtin constant' ||
             (binding?.kind === 'constant' &&
-              binding.span !== null &&
-              binding.span.start < before);
+              (binding.span === null
+                ? Object.hasOwn(options.existing ?? {}, binding.name)
+                : binding.span.start < before));
       if (!allowed) {
         report('not constant', element);
         return;
@@ -977,7 +991,10 @@ export const checkSyntax = (
   const importedSuspension = (binding: Binding) => {
     const from = binding.importedFrom!;
     const exp = options.libraries?.[from.library]?.[from.name];
-    return typeof exp === 'object' && exp.maySuspend === true;
+    return (
+      options.existing?.[binding.name]?.maySuspend === true ||
+      (typeof exp === 'object' && exp.maySuspend === true)
+    );
   };
   const may = checkSuspension(root, importedSuspension, reportAt);
   checkDecisions(

@@ -65,4 +65,4 @@ raised_when = "`Settle` names a call id that isn't pending or one already settle
 
 [[error]]
 code = "state too large"
-raised_when = "The Script Variables a Reload or a variables-only restore carries over would exceed the Persistent State cap"
+raised_when = "The state an extension adds, or the Script Variables a Reload or a variables-only restore carries over, would exceed the Persistent State cap"

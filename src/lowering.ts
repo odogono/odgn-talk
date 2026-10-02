@@ -167,7 +167,21 @@ class UnitLowering {
     readonly name: string,
     readonly kind: 'script' | 'library',
     readonly scopes: readonly SemanticScope[],
-  ) {}
+    existingVariables: readonly string[] = [],
+  ) {
+    this.variables = [...existingVariables];
+    for (const binding of scopes[0]!.bindings) {
+      if (binding.kind === 'script variable' && binding.span === null) {
+        this.variableOf.set(binding, this.variables.indexOf(binding.name));
+      } else if (
+        binding.kind === 'constant' &&
+        binding.importedFrom &&
+        binding.span === null
+      ) {
+        this.definition(binding, importName(binding));
+      }
+    }
+  }
 
   constant(display: string): number {
     let i = this.constantIndex.get(display);
@@ -2183,12 +2197,15 @@ export const importsOf = (tree: SemanticTree): string[] => [
 /** Lower a checked semantic tree into its code unit. */
 export const lowerTree = (
   tree: SemanticTree,
-  options: Pick<CompileOptions, 'name' | 'unit'>,
+  options: Pick<CompileOptions, 'name' | 'unit'> & {
+    existingVariables?: readonly string[];
+  },
 ): CodeUnit => {
   const unit = new UnitLowering(
     options.name,
     options.unit ?? 'script',
     tree.scopes,
+    options.existingVariables,
   );
   runTask(unit.lower(viewSource(tree.root)));
   return unit.finish();

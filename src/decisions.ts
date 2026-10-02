@@ -181,13 +181,7 @@ class Flow {
   }
 }
 
-export const checkDecisions = (
-  root: SemanticNode,
-  maySuspend: (
-    binding: NonNullable<import('./semantic').SemanticName['binding']>,
-  ) => boolean,
-  report: Report,
-): void => {
+const decisionFacts = (root: SemanticNode) => {
   const leaves = new Map<string, Leaf>();
   const called = new Set<string>();
   const vetoes: { deciding: boolean; handler: string | null; leaf: Leaf }[] =
@@ -224,7 +218,8 @@ export const checkDecisions = (
       if (
         head?.kind === 'name' &&
         head.binding?.kind === 'handler' &&
-        !head.binding.importedFrom
+        (!head.binding.importedFrom ||
+          head.binding.importedFrom.library.startsWith('@'))
       ) {
         called.add(head.binding.name);
       }
@@ -234,7 +229,8 @@ export const checkDecisions = (
       if (
         head?.kind === 'name' &&
         head.binding?.kind === 'handler' &&
-        !head.binding.importedFrom
+        (!head.binding.importedFrom ||
+          head.binding.importedFrom.library.startsWith('@'))
       ) {
         called.add(head.binding.name);
       }
@@ -243,11 +239,36 @@ export const checkDecisions = (
       work.push({ element: child, deciding, handler });
     }
   }
-  for (const v of vetoes) {
-    if (!v.deciding || (v.handler && called.has(v.handler))) {
-      report('veto outside a decision', v.leaf);
+  return { leaves, called, vetoes };
+};
+
+/** Validate local Handler calls across all of a Script's unchanged code units. */
+export const checkDecisionCalls = (
+  units: readonly { report: Report; root: SemanticNode }[],
+) => {
+  const facts = units.map(unit => ({
+    ...decisionFacts(unit.root),
+    report: unit.report,
+  }));
+  const called = new Set(facts.flatMap(f => [...f.called]));
+  for (const unit of facts) {
+    for (const v of unit.vetoes) {
+      if (!v.deciding || (v.handler && called.has(v.handler))) {
+        unit.report('veto outside a decision', v.leaf);
+      }
     }
   }
+};
+
+export const checkDecisions = (
+  root: SemanticNode,
+  maySuspend: (
+    binding: NonNullable<import('./semantic').SemanticName['binding']>,
+  ) => boolean,
+  report: Report,
+): void => {
+  checkDecisionCalls([{ root, report }]);
+  const { leaves } = decisionFacts(root);
   const leafAt = (p: Pos) => leaves.get(`${p.line}:${p.col}`)!;
   for (const decl of viewSource(root)) {
     if (decl.k !== 'handler' || !decl.deciding) {

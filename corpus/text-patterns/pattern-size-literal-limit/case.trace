@@ -4,17 +4,16 @@
 # Compiling). With patternSize 50, `<49 digits>` (49 `class digit` and a
 # `match`, 50 instructions) loads, and `<50 digits>` (51) doesn't. The
 # diagnostic is pinned, and the Script is left unchanged.
-# Unblessed: the output lines are written by hand, not by bless.
 #
 # The diagnostic is `pattern too large`, at the literal's opening `<`
 # (chapter 2, Load-time diagnostics). The oversized literal is in a Reload's
 # source, rather than a Script that fails its first Load, so the Group
 # still holds the Script at `> vars`.
 
-> load sized
+> load sized identity=ecd560bbd56ec517ab1f4c33ba1c8d7229ee0cb3df3b243e8a90dfa701da9eee
 
 # A LoadError leaves the Script unchanged (chapter 10, Reload).
-> reload sized carry=yes source="script variable p = <50 digits>"
+> reload sized carry=yes source="script variable p = <50 digits>" identity=d13e4d02246d4a060b6562dbcf71bd1b537e60d761b48c94fb3370be541dfb9f
 diag sized code="pattern too large" pos=1:21
 
 > vars

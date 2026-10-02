@@ -1,0 +1,14 @@
+# extension-state-cap: An extension over Persistent State is refused atomically. Its unit number is not consumed; a later fault names s+1.
+
+> load s identity=633441289bbf99c43e7c0476826dd40be17ebeac8c95e55125f6cd5f8b921048
+> extend s source="script variable fresh = " & quote & "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" & quote identity=a8248a4198db49c1aa3af317ba945008144dbbe6ebf289b841f430fd09c6ab19
+refused code="state too large"
+> extend s source="script variable fresh = 2" & newline & "on go" & newline & "  return 1 / 0" & newline & "end go" identity=c15a9d1caeceaaa9a1952abfc516bd1d799c25877fd4fa393c51fb4e20f5e5c4
+> deliver d1 to=s message=go
+> pump clock=1970-01-01T00:00:00Z
+raise s/r1 code="division by zero" at=s+1:6 pos=3:12
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=13 alloc=0 state=42 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "division by zero", at: {unit: "s+1", handler: "go", line: 3, column: 12}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> vars
+vars s n="abcdefghij" fresh=2

@@ -237,7 +237,7 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `invalid save` | `Restore` is given bytes this Core can't read: another Core family's save, a save format it no longer reads, or corrupt bytes |
 | `save mismatch` | A save's versions, Libraries or Grants don't match, and the Host's policy is to reject |
 | `unknown call` | `Settle` names a call id that isn't pending or one already settled, or is made once the first Pump has started |
-| `state too large` | The Script Variables a Reload or a variables-only restore carries over would exceed the Persistent State cap |
+| `state too large` | The state an extension adds, or the Script Variables a Reload or a variables-only restore carries over, would exceed the Persistent State cap |
 
 <!-- end -->
 

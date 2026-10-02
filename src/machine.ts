@@ -149,7 +149,10 @@ export class Code {
   /** Whether it is a stdlib Library's, whose errors name the caller (ADR 0037). */
   stdlib = false;
 
-  constructor(readonly unit: CodeUnit) {
+  constructor(
+    readonly unit: CodeUnit,
+    readonly identity = '',
+  ) {
     this.constants = unit.constants.map((display, i) => {
       const els = unit.patterns.get(i);
       if (els) {
@@ -226,13 +229,32 @@ export class Code {
 /** A loaded Script: its code, and its Script Variables. */
 export class Script extends Code {
   variables: Value[];
+  live = true;
+  readonly units: Code[] = [this];
+  variableNames: string[];
 
   constructor(
     unit: CodeUnit,
     readonly limits: Limits = defaultLimits,
+    readonly home?: Script,
+    identity = '',
   ) {
-    super(unit);
+    super(unit, identity);
+    this.variableNames = [...unit.variables];
     this.variables = unit.variables.map(() => nothing);
+  }
+
+  codeFor(body: Body): Code {
+    return this.units.find(code => code.unit.bodies.includes(body)) ?? this;
+  }
+
+  attach(extension: Script) {
+    this.units.push(extension);
+    this.variableNames = [...extension.variableNames];
+    this.variables = [...extension.variables];
+    for (const [name, clauses] of extension.clauses) {
+      this.clauses.set(name, clauses);
+    }
   }
 
   /** The Script Variables' share of Persistent State. */
@@ -267,8 +289,19 @@ export const loadScript = (
   unit: CodeUnit,
   limits: Partial<Limits> = {},
   libraries: ReadonlyMap<string, Code> = new Map(),
+  initialVariables: readonly Value[] = [],
+  home?: Script,
+  identity = '',
 ): Script => {
-  const script = new Script(unit, { ...defaultLimits, ...limits });
+  const script = new Script(
+    unit,
+    { ...defaultLimits, ...limits },
+    home,
+    identity,
+  );
+  initialVariables.forEach((value, i) => {
+    script.variables[i] = value;
+  });
   script.link(libraries);
   unit.constants.forEach((_, i) => {
     const c = script.constants[i]!;
@@ -310,7 +343,8 @@ export const loadScript = (
 export const loadLibrary = (
   unit: CodeUnit,
   libraries: ReadonlyMap<string, Code>,
-): Code => loadScript(unit, {}, libraries);
+  identity = '',
+): Code => loadScript(unit, {}, libraries, [], undefined, identity);
 
 // ---------------------------------------------------------------------------
 // Runs
@@ -334,7 +368,7 @@ type Replacement = {
 };
 type Item = Value | Iterator | Replacement | Reader | Receiver;
 // A Function Value's code: the code unit its body is in, and the body.
-type FunctionCode = { body: Body; code: Code };
+type FunctionCode = { body: Body; code: Code; home: Script };
 type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
 type Frame = {
   body: Body;
@@ -423,6 +457,7 @@ export type Suspension =
 export type WaitFor = {
   afters: { branch: number; ns: bigint }[];
   any: boolean;
+  code: Code;
   k: 'wait-for';
   timeout: bigint | null;
   whens: {
@@ -822,7 +857,7 @@ export class Run {
     }
     this.frames.push({
       body,
-      code,
+      code: code === this.script ? this.script.codeFor(body) : code,
       pc: body.start,
       locals,
       stack: [],
@@ -1130,7 +1165,7 @@ export class Run {
           continue;
         }
       } else {
-        const body = this.script.unit.bodies[when.body]!;
+        const body = s.code.unit.bodies[when.body]!;
         if (body.params.length !== args.length) {
           continue;
         }
@@ -1379,7 +1414,7 @@ export class Run {
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
     this.faultAbandons = this.abandonJoin();
     const code = this.frame.code;
-    const rollback = this.script.unit.variables.filter(
+    const rollback = this.script.variableNames.filter(
       (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
     );
     this.script.variables = [...this.segmentBase];
@@ -1599,18 +1634,21 @@ export class Run {
     ins: Instruction,
   ): Value {
     const lambda = body.kind === 'lambda';
-    const own = code === this.script;
+    const home = this.script.home ?? this.script;
+    const own = home.units.includes(code) || code === this.script;
+    const placeHome = own && lambda ? code.name : home.name;
     const where = own ? '' : `${code.name}:`;
     const ref: FunctionRef = {
-      home: this.script.name,
+      home: home.name,
+      displayHome: placeHome,
       place: where + (lambda ? `${ins.line}:${ins.col}` : body.name),
-      identity: `${this.script.name}#${where}${body.index}`,
+      identity: `${home.name}#${code.identity || code.name}#${body.index}`,
       maySuspend: body.maySuspend,
       captures: captures.map((v, i) => [
         body.locals[body.captureStart + i]!,
         v,
       ]),
-      code: { code, body } satisfies FunctionCode,
+      code: { code, body, home } satisfies FunctionCode,
     };
     return functionValue(ref);
   }
@@ -2442,6 +2480,7 @@ export class Run {
         const items = frame.stack.slice(frame.stack.length - count);
         let i = 0;
         const sus: WaitFor = {
+          code,
           k: 'wait-for',
           any: ins.op === 'wait-for-any',
           whens: [],
@@ -2684,6 +2723,9 @@ export class Run {
         const ref = fn.asFunction();
         if (!ref) {
           throw wrongKind('function', fn);
+        }
+        if (!(ref.code as FunctionCode).home.live) {
+          throw new ScriptError('function gone');
         }
         if (
           ref.home !== this.script.name ||

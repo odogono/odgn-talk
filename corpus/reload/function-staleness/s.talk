@@ -1,0 +1,7 @@
+script variable callback = nothing
+on make
+  put (given x: x + 1) into callback
+end make
+on go
+  return callback(2)
+end go

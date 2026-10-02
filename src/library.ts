@@ -2,7 +2,7 @@
 // added to any number of Groups, and linked into each Script and Library
 // that imports it. A unit's code identity covers the identities of the
 // Libraries it imports directly.
-import { checkSource, type CheckResult } from './checker';
+import { checkSource, type CheckResult, type ExistingName } from './checker';
 import type { GrantDecls } from './effects';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
@@ -12,6 +12,7 @@ import { loadLibrary, UnitLoadError, type Code } from './machine';
 import { stdlibSources } from './generated/stdlib';
 import type { LibraryExport } from './semantic';
 import { sha256 } from './sha256';
+import { viewSource } from './view';
 
 export type OperationRef = { capability: string; operation: string };
 export type LibrarySource = { name: string; source: string; version: string };
@@ -33,7 +34,7 @@ export const stdlibNames: ReadonlySet<string> = new Set(
 
 /** A unit's code identity, given its direct imports' identities (chapter 9). */
 export const codeIdentity = (
-  unit: 'script' | 'library',
+  unit: 'script' | 'library' | 'extension',
   name: string,
   source: string,
   imports: readonly string[] = [],
@@ -104,9 +105,11 @@ export const prepare = (
   available: ReadonlyMap<string, Library>,
   objects?: readonly string[],
   grants?: GrantDecls,
+  existing?: Readonly<Record<string, ExistingName>>,
 ) => {
   const checked = checkSource(source, {
     unit,
+    existing,
     objects,
     grants,
     libraries: Object.fromEntries(
@@ -190,6 +193,7 @@ const build = (
         loadLibrary(
           lowerTree(tree, { name: src.name, unit: 'library' }),
           linksOf(p.imports),
+          p.identity,
         ),
       ),
     };
@@ -206,4 +210,67 @@ const build = (
   });
   compiled.set(library, { ...entry, hex: p.identity });
   return library;
+};
+
+/** Recompile the complete dependent Library graph without changing its registrations. */
+export const replacementLibraries = (
+  available: ReadonlyMap<string, Library>,
+  replacement: Library,
+): Map<string, Library> => {
+  const affected = new Set([replacement.name]);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const held of available.values()) {
+      if (
+        !affected.has(held.name) &&
+        held.imports.some(i => affected.has(i.name))
+      ) {
+        affected.add(held.name);
+        changed = true;
+      }
+    }
+  }
+  const cyclic = replacement.imports.find(i => affected.has(i.name));
+  if (cyclic) {
+    const p = prepare(
+      'library',
+      replacement.name,
+      replacement.source,
+      new Map(replacement.imports.map(i => [i.name, i])),
+    );
+    const use = viewSource(p.checked.tree!.root).find(
+      d => d.k === 'use' && d.library === cyclic.name,
+    );
+    const line = use?.k === 'use' ? use.imports[0]!.local.span.line : 1;
+    throw new LoadError([
+      {
+        code: 'import cycle',
+        unit: replacement.name,
+        line,
+        col: 1,
+        message: 'import cycle',
+      },
+    ]);
+  }
+  const libraries = new Map(available);
+  libraries.set(replacement.name, replacement);
+  const pending = [...available.values()].filter(
+    i => i.name !== replacement.name && affected.has(i.name),
+  );
+  const rebuilt = new Set([replacement.name]);
+  while (pending.length) {
+    const at = pending.findIndex(i =>
+      i.imports.every(d => !affected.has(d.name) || rebuilt.has(d.name)),
+    );
+    const old = pending.splice(at, 1)[0]!;
+    libraries.set(
+      old.name,
+      compileLibrary(
+        { name: old.name, source: old.source, version: old.version },
+        [...libraries.values()],
+      ),
+    );
+    rebuilt.add(old.name);
+  }
+  return libraries;
 };

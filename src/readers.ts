@@ -283,6 +283,14 @@ export const readDisplay = (
   return value;
 };
 
+/** Display-form source text preserves its exact scalars for code identity. */
+export const readDisplayText = (source: string): string => {
+  const reader = new DisplayReader(source);
+  const text = reader.textPieces();
+  reader.done();
+  return text;
+};
+
 // Preserve raw JSON structure until tag processing: arrays for objects avoid
 // JS's numeric-key ordering and make duplicate keys detectable before NFC.
 type Json = null | boolean | string | JsonNumber | Json[] | JsonObject;

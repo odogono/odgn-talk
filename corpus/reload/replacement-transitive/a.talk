@@ -1,0 +1,9 @@
+use total from middle
+script variable callback = nothing
+on make
+  put total into callback
+  wait 1 s
+end make
+on go
+  return callback()
+end go
