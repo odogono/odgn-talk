@@ -92,13 +92,35 @@ test('selecting a Trace Case with a deferred input exits with a clear failure', 
 });
 
 test('an unblessed Trace Case runs when named, and reports its first divergence', () => {
-  const dir = resolve(import.meta.dir, '../corpus/limits/fuel-alloc-minimums');
-  const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
-  const result = runTraceCase(dir, setup as never);
-  // The hand-written state leaves out the message still in the mailbox.
-  expect(result.lines).toBe(8);
-  expect(result.divergence?.expected).toEndWith('state=16 end=return');
-  expect(result.divergence?.actual).toEndWith('state=48 end=return');
+  const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-unblessed-'));
+  try {
+    cpSync(
+      resolve(import.meta.dir, '../corpus/limits/fuel-alloc-minimums'),
+      dir,
+      {
+        recursive: true,
+      },
+    );
+    const trace = resolve(dir, 'case.trace');
+    // Keep divergence coverage independent of the real case's blessing.
+    writeFileSync(
+      trace,
+      '# Unblessed: deliberate test fixture.\n' +
+        readFileSync(trace, 'utf8').replace(
+          'state=48 end=return',
+          'state=16 end=return',
+        ),
+    );
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+    );
+    const result = runTraceCase(dir, setup as never);
+    expect(result.lines).toBe(8);
+    expect(result.divergence?.expected).toEndWith('state=16 end=return');
+    expect(result.divergence?.actual).toEndWith('state=48 end=return');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the blessed text-model Trace Cases reproduce exactly', () => {

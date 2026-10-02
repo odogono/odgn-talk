@@ -6,15 +6,18 @@
 # form in `vars` is read with chapter 2's Text Pattern grammar, and a
 # literal written the same way is equal to the spliced pattern, since
 # equality compares canonical sources (chapter 3, Text Patterns). The
-# values are pinned. Fuel, allocation and state are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# values are pinned. The programs of unit, first and only have 5, 6 and 5
+# instructions, so their sizes are 56, 64 and 56. With same's 8, state
+# is 184. The two make-pattern instructions cost 32 + 30 Fuel and
+# allocate 64 + 56 = 120; dispatch and the other instructions cost 19,
+# giving 81 Fuel (chapter 8, Cost Model 0).
 
-> load leading
+> load leading identity=caef8757781735599b058bc8c53fe82699b376ae94792589d6e8d68561867390
 > deliver d1 to=leading message=go
 > pump clock=2026-09-30T09:00:00Z
-seg leading/r1 start delivery=d1 handler=go clause=1 fuel=34 alloc=120 state=150 end=return
-run leading/r1 outcome=completed delivery=d1 handler=go fuel=34 alloc=120
-pumped state=idle fuel=34
+seg leading/r1 start delivery=d1 handler=go clause=1 fuel=81 alloc=120 state=184 end=return
+run leading/r1 outcome=completed delivery=d1 handler=go fuel=81 alloc=120
+pumped state=idle fuel=81
 
 > vars
 vars leading unit=<4 digits> first=< <4 digits>, "x"> only=< <4 digits>> same=true

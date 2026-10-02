@@ -12,12 +12,15 @@
 # short.
 #
 # Pinned here: the state at the cap, the fault and its instruction, and the
-# rollback. Fuel and allocation figures are estimates (`fill`'s are summed
-# over its 22 passes from Cost Model 0's rates: `iterate-times` 24, and
-# each pass's two appends 8 + size(s) each).
-# Unblessed: the output lines are written by hand, not by bless.
+# rollback. `fill` sums 22 passes: `iterate-times` allocates 24 and
+# each pass's two appends allocate 8 + size(s) each. Its Fuel is 16777650
+# and allocation 134218776. `grow`'s append costs 3 + ceil(67108849/16)
+# = 4194307 Fuel and 8 + size("x") = 25 allocation. Dispatch and its
+# other instructions before return cost 11 Fuel, for 4194318 total.
+# The Run-ending return checks Persistent State before its 2-Fuel charge;
+# that charge is not made when the cap is exceeded (chapter 8, Charging).
 
-> load hoard
+> load hoard identity=d83a79b09187dc55876e233662514416750b4b84e00604f259c55f54b214c985
 
 > deliver d1 to=hoard message=fill
 > pump clock=2026-09-28T09:00:00Z
@@ -29,9 +32,9 @@ pumped state=idle fuel=16777650
 > deliver d2 to=hoard message=grow
 > pump clock=2026-09-28T09:00:01Z
 fault hoard/r2 limit=persistent at=hoard:38 pos=21:1 rollback=[big]
-seg hoard/r2 start delivery=d2 handler=grow clause=1 fuel=4194320 alloc=25 state=67108864 end=fault
-run hoard/r2 outcome=limit-fault delivery=d2 handler=grow limit=persistent fuel=4194320 alloc=25
-pumped state=idle fuel=4194320
+seg hoard/r2 start delivery=d2 handler=grow clause=1 fuel=4194318 alloc=25 state=67108864 end=fault
+run hoard/r2 outcome=limit-fault delivery=d2 handler=grow limit=persistent fuel=4194318 alloc=25
+pumped state=idle fuel=4194318
 
 > deliver d3 to=hoard message=clear
 > pump clock=2026-09-28T09:00:02Z

@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- The final five seed Trace Cases are blessed by the TS Core and join the default CI replay: Fuel/allocation minimums, the Persistent State minimum, matching Fuel exhaustion, leading-group canonical patterns and empty-match replacement. Their headers derive the corrected figures and position from the Spec. All existing corpus cases now execute; the implementation guide records the remaining Core gaps for [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - TS Core Locale Standard Capability factory and `LocaleImpl`, completing all five Standard Capability factories for [#126](https://github.com/odogono/odgn-talk/issues/126). Thirteen tests and three Trace Cases cover eight Operations, tag syntax, option defaults, dense ranks, result validation, Fuel, Library needs and save/restore replay. The Spec settles optional arguments, validation order and the syntax-only RFC 5646 contract.
 
 - TS Core Calendar Standard Capability factory and `CalendarImpl`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Ten tests and three Trace Cases cover six Operations, optional zones and disambiguation, domain and result checks, declared catalogue failures, Fuel rollback, Library needs and save/restore replay. The Spec settles Nothing defaults and invalid three-argument disambiguation.
@@ -85,6 +87,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- The Spec now states that Run-ending `return`, `pass` and `veto` check Persistent State before their own charge, matching the Core and the corrected minimum-limit Trace. Suspension checks follow the charged instruction and any Host effect.
 
 - Spec rules for Optional Capability argument omission: only an outer Optional suffix may be omitted, explicit Nothing remains supplied, and no placeholders or defaults are inserted. Declared costs still apply; `say` keeps exactly one source argument. No syntax or Cost Model rate changes.
 

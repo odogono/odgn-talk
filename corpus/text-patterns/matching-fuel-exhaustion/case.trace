@@ -3,9 +3,8 @@
 # cover the steps faults at `match-all` itself (spec chapter 8, Running and
 # Charging; chapter 6, Limit Faults). This case pins the Fuel through
 # `match-all`, and so its steps, by bracketing it with two limits.
-# Unblessed: the output lines are written by hand, not by bless.
 #
-# The working, from Cost Model 0 and `bun tools/machine/check.ts --dis`:
+# The working, from Cost Model 0 and the Core's canonical disassembly:
 #
 #   `<"$", digits>` is 0 char "$", 1 class digit, 2 split 1 3, 3 match.
 #   The first search over "$895" takes 10 steps (chapter 8's own example)
@@ -24,10 +23,12 @@
 # So with fuelPerRun 22 the Run faults at `match-all`, and with 23 it
 # covers `match-all` exactly and faults at the `store-var` after it. A
 # faulting instruction's charge isn't made, so a faulting Run's Fuel is what
-# it spent before it: 6 under 22, and 23 under 23. The allocation and state
-# figures are estimates.
+# it spent before it: 6 under 22, and 23 under 23. The Match list's
+# logical size is 259, its allocation and final state. Nothing is 8.
+# The store-var is placed at the statement's put (8:3), not its target
+# hits (8:51), by chapter 8's Container-write position rule.
 
-> load search
+> load search identity=f583396fdbd132dde3ed5b223049328eb2bf971ad8e47e332da45de9673b1ffb
 
 # 6 Fuel used, and `match-all` needs 17 more: 23 is past 22.
 > deliver d1 to=search message=go limits={fuelPerRun: 22}
@@ -42,7 +43,7 @@ pumped state=idle fuel=6
 # `hits` is written, and nothing is rolled back.
 > deliver d2 to=search message=go limits={fuelPerRun: 23}
 > pump clock=2026-09-30T09:00:01Z
-fault search/r2 limit=fuel at=search:7 pos=8:51
+fault search/r2 limit=fuel at=search:7 pos=8:3
 seg search/r2 start delivery=d2 handler=go clause=1 fuel=23 alloc=259 state=8 end=fault
 run search/r2 outcome=limit-fault delivery=d2 handler=go limit=fuel fuel=23 alloc=259
 pumped state=idle fuel=23
