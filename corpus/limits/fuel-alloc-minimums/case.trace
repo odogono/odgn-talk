@@ -16,9 +16,10 @@
 # store 1, load-var 1, load 1, then `add` (4) at ticker:8, source 6:3, which
 # would make 12, so it faults having spent 8. `ticks` isn't written yet, so
 # there is no rollback. The first Run's 17 Fuel is exact too.
-# Unblessed: the output lines are written by hand, not by bless.
+# At its end, ticks counts 16 and d2 is still a 32-byte mailbox message,
+# so state is 48. After d2 faults the mailbox is empty and state is 16.
 
-> load ticker
+> load ticker identity=9a3714f918324088ca393462700269d9c1863404991f5daa0079141aab080eb8
 
 > deliver to=ticker message=tick limits={fuelPerRun: 1000000001}
 refused code="invalid value"
@@ -28,7 +29,7 @@ refused code="invalid value"
 > deliver d1 to=ticker message=tick limits={fuelPerRun: 1000000000, allocPerRun: 268435456}
 > deliver d2 to=ticker message=tick limits={fuelPerRun: 10}
 > pump clock=2026-09-28T09:00:00Z
-seg ticker/r1 start delivery=d1 handler=tick clause=1 fuel=17 alloc=16 state=16 end=return
+seg ticker/r1 start delivery=d1 handler=tick clause=1 fuel=17 alloc=16 state=48 end=return
 run ticker/r1 outcome=completed delivery=d1 handler=tick fuel=17 alloc=16
 fault ticker/r2 limit=fuel at=ticker:8 pos=6:3
 seg ticker/r2 start delivery=d2 handler=tick clause=1 fuel=8 alloc=0 state=16 end=fault

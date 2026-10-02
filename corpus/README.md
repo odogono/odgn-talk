@@ -25,7 +25,9 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`builtins/`](builtins/) | reading a value's kind with `kindOf`, and a Function Value's arity and name with `functionArity` and `functionName`, stale ones included, and a Host Object's Object Kind with `objectKind`, disposed ones included ([chapter 7](../spec/07-libraries-and-the-standard-library.md#values), [ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md), [ADR 0044](../docs/adr/0044-a-host-objects-object-kind-is-read-with-a-built-in.md)) |
 | [`disassembly/`](disassembly/) | Disassembly Cases: the lowering of expressions, Containers, Destructuring, control flow and `try`, calls and Lambdas, and messages and waiting, which between them emit every instruction ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#the-lowering)) |
 
-## Unblessed seed cases
+## Seed blessing
+
+All current Trace Cases are blessed by the TS Core, the only available Core. The last five seeds now have explicit Cost Model derivations in their headers: `fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`. Their first blessing awaits human review.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -54,7 +56,8 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
-The Trace Cases in [`text-model/`](text-model/), [`quantities/`](quantities/), [`bytes/`](bytes/), [`dates/`](dates/), [`math/`](math/), [`libraries/`](libraries/), [`stdlib/`](stdlib/), [`capabilities/`](capabilities/), [`suspension/`](suspension/), [`objects/`](objects/), [`cancellation/`](cancellation/), [`reload/`](reload/), [`builtins/`](builtins/) and all eleven cases in [`save-restore/`](save-restore/) are blessed by the TS Core, the only Core available, so their Fuel, allocation and Persistent State figures are Cost Model 0's. So are thirty-four more: `allow-at-the-first-suspension-point`, `broadcast-decision-reports-every-veto`, `broadcast-outcomes`, `dispatch-and-waits`, `fault-before-seal`, `pass-up-the-message-path`, `undecided-on-an-error`, `undecided-on-cancel-delivery`, `undecided-when-dropped`, `verdict-behind-a-fuel-slice` and `veto-ends-the-decision` in [`decisions/`](decisions/); `fail-error-map` in [`errors/`](errors/), `orders-pricing` in [`examples/`](examples/), `alloc-exhaustion-point`, `call-depth-minimum`, `cleanup-budget-minimum`, `fault-at-dispatch`, `fuel-exhaustion-point`, `host-mailbox-depth`, `mailbox-depth`, `max-join-minimum`, `max-wait-minimum`, `pattern-size-minimum`, `rollback-after-suspension`, `wait-deadline` and `wait-zero-next-pump` in [`limits/`](limits/), and `empty-match-skipped-after-match`, `empty-matches-step-one-character`, `greedy-by-default`, `lazily-prefers-fewer`, `lazily-stays-on-its-element`, `or-is-leftmost-first` `pattern-size-literal-limit` and `pattern-size-made-at-run-time` in [`text-patterns/`](text-patterns/). The Go Core must agree before they count as blessed by both.
+Every current Trace Case runs in CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. The Go Core must agree before a case counts as blessed by both.
+
 
 ## The Disassembly Cases
 

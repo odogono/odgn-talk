@@ -3,19 +3,23 @@
 # before "a", the "-", and the empty match at the end, but not the empty
 # match straight after the "-", where the last match ended. "a-b" becomes
 # "+a+b+", not the "+a++b+" some regex engines give (spec chapter 4,
-# `replace` and Matches). The result is pinned. Fuel, allocation and state
-# are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# `replace` and Matches). The replacement's logical size is 745: 32
+# overhead, the subject's 19, and three Matches of 231, 232 and 231.
+# Three replace-put instructions allocate 24 each; replace-end builds
+# the 21-byte result. Total allocation is 745 + 72 + 21 = 838. The four
+# replace-next executions allocate nothing (chapter 8's next rate).
+# Fuel is 4 dispatch + 2 constants + 20 matching + 8 next + 15 across
+# the three replacement bodies + 4 finish + 2 store-var + 3 ending = 58.
 
-> load edit
+> load edit identity=3ea9cbcb5a5b0299059f3ea9156492f99ae08b18212d47907fdacc8908e38fc4
 
 # Matches, with positions 0 to 3 between the Characters of "a-b": empty at
 # 0, "-" from 1 to 2, the empty match at 2 discarded, and empty at 3. 14
 # steps at `replace-start`.
 > deliver d1 to=edit message=go
 > pump clock=2026-09-30T09:00:00Z
-seg edit/r1 start delivery=d1 handler=go clause=1 fuel=58 alloc=934 state=21 end=return
-run edit/r1 outcome=completed delivery=d1 handler=go fuel=58 alloc=934
+seg edit/r1 start delivery=d1 handler=go clause=1 fuel=58 alloc=838 state=21 end=return
+run edit/r1 outcome=completed delivery=d1 handler=go fuel=58 alloc=838
 pumped state=idle fuel=58
 
 > vars
