@@ -237,6 +237,64 @@ describe('Deliveries and Pumps', () => {
   });
 });
 
+describe('a runaway Script', () => {
+  test('ends in its own Limit Fault, leaving the other Scripts and its own state intact', async () => {
+    const { g, lines } = group();
+    const spin = g.load({
+      name: 'spin',
+      source:
+        'script variable n = 0\non go\n  repeat forever\n    add 1 to n\n  end repeat\nend go\non read\n  return n\nend read',
+    });
+    const steady = g.load({
+      name: 'steady',
+      source:
+        'script variable count = 0\non tick\n  add 1 to count\n  return count\nend tick',
+    });
+    spin.deliver({ name: 'go', limits: { fuelPerRun: 500 } });
+    steady.deliver({ name: 'tick' });
+    steady.deliver({ name: 'tick' });
+    const first = g.pump(clock).reports;
+    expect(
+      first.map(
+        r =>
+          r.kind === 'run end' && [r.script, r.outcome, r.result?.toString()],
+      ),
+    ).toEqual([
+      ['spin', 'limit fault', undefined],
+      ['steady', 'completed', '1'],
+      ['steady', 'completed', '2'],
+    ]);
+    // The Segment's writes to `n` are rolled back; nothing else is touched.
+    expect(lines.find(l => l.startsWith('fault spin/r1'))).toEndWith(
+      'rollback=[n]',
+    );
+    expect(spin.counters().faults).toBe(1);
+    expect(steady.counters().faults).toBe(0);
+    // Both Scripts go on running normally.
+    const read = spin.request({ name: 'read' });
+    steady.deliver({ name: 'tick' });
+    const second = g.pump(later(1)).reports;
+    expect(
+      second.map(
+        r =>
+          r.kind === 'run end' && [r.script, r.outcome, r.result?.toString()],
+      ),
+    ).toEqual([
+      ['spin', 'completed', '0'],
+      ['steady', 'completed', '3'],
+    ]);
+    expect(await read.result).toEqual(num(0));
+    expect(
+      g
+        .inspect()
+        .scripts.map(s => [s.name, s.vars.map(([k, v]) => `${k}=${v}`)]),
+    ).toEqual([
+      ['spin', ['n=0']],
+      ['steady', ['count=3']],
+    ]);
+  });
+});
+
 describe('Host errors and refusals', () => {
   test('an override that loosens a limit is refused at the call, with no id', () => {
     const { g, lines } = group();
