@@ -22,7 +22,9 @@
     "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
     "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
-    "corpus:run": "bun run --cwd impl/ts corpus:run"
+    "corpus:run": "bun run --cwd impl/ts corpus:run",
+    "repl": "bun tooling/cli/src/main.ts",
+    "northtalk": "bun tooling/cli/src/main.ts"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",

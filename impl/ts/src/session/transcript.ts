@@ -130,6 +130,7 @@ export const replayTranscript = (
   recorded: readonly TranscriptItem[],
   options: ReplayOptions = {},
 ): Replayed => {
+  // What the Session Host records as it replays, with the comments kept.
   const items: TranscriptItem[] = [];
   // The reading the next Pump takes, if a recorded `@` line gave one.
   let offered: bigint | null = null;
@@ -140,16 +141,13 @@ export const replayTranscript = (
       }
       const at = offered;
       offered = null;
-      items.push({ k: 'clock', at });
       return at;
     },
+    record: item => items.push(item),
     ...(options.trace ? { trace: options.trace } : {}),
     // Replaying never writes a file: `:export` writes to a scratch directory.
     writeFile: () => {},
   });
-  const print = (lines: readonly string[]) => {
-    items.push(...lines.map(text => ({ k: 'output' as const, text })));
-  };
   // The first `@` after a line is the reading of the Pump that line causes.
   // One the line didn't use is a Pump the Session Host made at a deadline.
   const reading = (i: number) => {
@@ -159,27 +157,25 @@ export const replayTranscript = (
   };
   const deadline = () => {
     if (offered !== null) {
-      print(host.tick());
+      host.tick();
     }
   };
   for (let i = 0; i < recorded.length; i++) {
     const item = recorded[i]!;
     switch (item.k) {
       case 'input':
-        items.push(item);
         i = reading(i);
-        print(host.input(item.source));
+        host.input(item.source);
         deadline();
         break;
       case 'read':
-        items.push(item);
         i = reading(i);
-        print(host.read(item.line));
+        host.read(item.line);
         deadline();
         break;
       case 'clock':
         offered = item.at;
-        print(host.tick());
+        host.tick();
         offered = null;
         break;
       case 'answer':

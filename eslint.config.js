@@ -38,13 +38,21 @@ export default [
       'import-x/resolver': {
         typescript: {
           noWarnOnMultipleProjects: true,
-          project: ['./impl/ts/tsconfig.json', './tools/tsconfig.json'],
+          project: [
+            './impl/ts/tsconfig.json',
+            './tools/tsconfig.json',
+            './tooling/cli/tsconfig.json',
+          ],
         },
       },
     },
   },
   {
-    files: ['tools/**/*.ts', 'impl/ts/tools/**/*.ts'],
+    files: [
+      'tools/**/*.ts',
+      'impl/ts/tools/**/*.ts',
+      'tooling/cli/src/**/*.ts',
+    ],
     rules: {
       // These command-line Hosts print their reports and diagnostics.
       'no-console': 'off',

@@ -3,7 +3,9 @@ import { parseInstant } from '../src/index';
 import {
   parseTranscript,
   replayTranscript,
+  SessionHost,
   writeTranscript,
+  type TranscriptItem,
 } from '../src/session';
 
 const at = (s: string) => parseInstant(`2026-09-30T10:00:${s}Z`);
@@ -119,5 +121,65 @@ describe('Session Transcripts', () => {
     expect(() => replayTranscript(parseTranscript('> 1 + 1\n'))).toThrow(
       'no `@` reading',
     );
+  });
+});
+
+describe('Recording', () => {
+  test('records a live session in a form that replays the same', () => {
+    let now = parseInstant('2026-09-30T10:00:00Z');
+    const items: TranscriptItem[] = [];
+    const host = new SessionHost({
+      now: () => now,
+      record: item => items.push(item),
+      readFile: () => 'constant k = 7',
+    });
+    host.input(':mock db.get immediate');
+    host.input(':stub db.get 1');
+    host.input(':library add lib lib.talk');
+    host.input('on nap\n  wait 2 s\n  say "rested"\nend nap');
+    host.input('nap and wait');
+    expect(host.waiting.k).toBe('deadline');
+    now += 2_000_000_000n;
+    host.tick();
+    host.input(
+      'on echo\n  ask console to read and wait\n  say "got " & it\nend echo',
+    );
+    host.input('echo and wait');
+    now += 1_000_000_000n;
+    host.read('');
+    host.input(':clock virtual');
+    host.input('say "> virtual"');
+    const text = writeTranscript(items);
+    expect(text).toBe(
+      [
+        '> :mock db.get immediate',
+        '> :stub db.get 1',
+        '> :library add lib',
+        '| constant k = 7',
+        '> on nap',
+        '|   wait 2 s',
+        '|   say "rested"',
+        '| end nap',
+        '> nap and wait',
+        '@ 2026-09-30T10:00:00Z',
+        '@ 2026-09-30T10:00:02Z',
+        'rested',
+        '> on echo',
+        '|   ask console to read and wait',
+        '|   say "got " & it',
+        '| end echo',
+        '> echo and wait',
+        '@ 2026-09-30T10:00:02Z',
+        '<',
+        '@ 2026-09-30T10:00:03Z',
+        'got ',
+        '> :clock virtual 2026-09-30T10:00:03Z',
+        '> say "> virtual"',
+        "'> virtual",
+        '',
+      ].join('\n'),
+    );
+    const replayed = replayTranscript(parseTranscript(text));
+    expect(writeTranscript(replayed.items)).toBe(text);
   });
 });

@@ -15,6 +15,15 @@
     "impl/ts": {
       "name": "@odgn/northtalk",
     },
+    "tooling/cli": {
+      "name": "@odgn/northtalk-cli",
+      "bin": {
+        "northtalk": "./src/main.ts",
+      },
+      "dependencies": {
+        "@odgn/northtalk": "workspace:*",
+      },
+    },
     "tools": {
       "name": "@odgn/northtalk-spec-tools",
       "devDependencies": {
@@ -106,6 +115,8 @@
     "@nkzw/eslint-plugin": ["@nkzw/eslint-plugin@2.0.0", "", { "peerDependencies": { "eslint": ">= 9" } }, "sha512-IoU8kOqHfnf7se2dGxMD/7RPm6WVjzjOjWSo7FulRx3lJzuZvXioSkT5Nd82l66DH3Pl2whw74lPT1di3KMwFA=="],
 
     "@odgn/northtalk": ["@odgn/northtalk@workspace:impl/ts"],
+
+    "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
 
     "@odgn/northtalk-spec-tools": ["@odgn/northtalk-spec-tools@workspace:tools"],
 
