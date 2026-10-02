@@ -17,6 +17,7 @@ import {
   defaultLimits,
   deliver as dispatch,
   loadScript,
+  type CodePosition,
   type LimitName,
   type Limits,
   type Outcome,
@@ -153,24 +154,43 @@ export type RunOutcome =
   | 'cancelled'
   | 'unhandled'
   | 'dropped';
+/** The Trace's name for a limit a Limit Fault or failed cleanup passed. */
+export type LimitWord =
+  'fuel' | 'alloc' | 'persistent' | 'depth' | 'pattern' | 'join' | 'cleanup';
+/** Where a Run ended: a code position and its source position. */
+export type Location = {
+  col: number;
+  handler: string;
+  line: number;
+  pc: number;
+  unit: string;
+};
 export type Report =
   | {
       alloc: number;
+      /** `errored`: the raise no Unwind Table entry caught; `limit fault`: the faulting instruction. */
+      at?: Location;
       broadcast?: string;
-      cleanupFailed?: { code: string } | { limit: string };
+      cleanupFailed?: { code: string } | { limit: Exclude<LimitWord, 'fuel'> };
       delivery?: string;
-      error?: Value;
+      error?: ScriptError;
       fn?: Value;
       fuel: number;
       handler?: string;
       kind: 'run end';
-      limit?: string;
+      limit?: LimitWord;
       outcome: RunOutcome;
       result?: Value;
       run?: string;
       script: string;
     }
-  | { delivery: string; kind: 'unhandled'; message: Message }
+  | {
+      delivery: string;
+      kind: 'unhandled';
+      message: Message;
+      /** The object it was delivered to; absent when addressed to a Script. */
+      target?: HostObject;
+    }
   | {
       call: string;
       /** What the Host did wrong; the Script saw only `host error`. */
@@ -204,26 +224,35 @@ export type Counters = {
   persistentState: number;
   runs: number;
 };
+export type RunView = {
+  /** Suspended: the calls, replies or Join Members it still waits for. */
+  calls?: string[];
+  handler: string;
+  id: string;
+  status: 'preempted' | 'ready' | 'suspended' | 'parked';
+  /** Suspended: its deadline, as its `seg` record's `until` gives it. */
+  until?: bigint;
+  /** Suspended: the `seg` end reason it suspended at. */
+  wait?: string;
+};
+export type MessageView = {
+  /** Absent for a message a Script sent. */
+  delivery?: string;
+  /** For a message a Script sent, the call or Run that sent it. */
+  from?: string;
+  message: Message;
+};
 export type Inspection = {
   scripts: {
-    /** A Delivery's id, or for a message a Script sent, the sending Run. */
-    mailbox: {
-      delivery: string | null;
-      from: string | null;
-      message: Message;
-    }[];
+    mailbox: MessageView[];
     name: string;
-    runs: {
-      handler: string;
-      id: string;
-      status: 'preempted' | 'ready' | 'suspended' | 'parked';
-    }[];
+    runs: RunView[];
     vars: [string, Value][];
   }[];
 };
 
 // The Trace's names for the limits a Limit Fault can pass (chapter 11).
-const faultNames: Partial<Record<LimitName, string>> = {
+const faultNames: Partial<Record<LimitName, LimitWord>> = {
   cleanupBudget: 'cleanup',
   fuelPerRun: 'fuel',
   allocPerRun: 'alloc',
@@ -231,6 +260,13 @@ const faultNames: Partial<Record<LimitName, string>> = {
   callDepth: 'depth',
   patternSize: 'pattern',
   maxJoin: 'join',
+};
+const limitWord = (limit: LimitName): LimitWord => {
+  const word = faultNames[limit];
+  if (!word) {
+    throw new Error(`no Limit Fault passes ${limit}`);
+  }
+  return word;
 };
 const overridable = new Set([
   'fuelPerRun',
@@ -2844,6 +2880,7 @@ export class Group {
         kind: 'unhandled',
         delivery: delivery.id,
         message: { name: delivery.message, args: delivery.args },
+        ...(delivery.target ? { target: delivery.target.handle } : {}),
       });
     }
     this.seal(delivery, { verdict: 'allowed' });
@@ -2878,7 +2915,7 @@ export class Group {
           new ScriptError(
             'send failed',
             `No answer came: the receiver's Run ended ${reason}`,
-            { reason },
+            map([['reason', text(reason)]]),
           ),
         );
       }
@@ -3586,9 +3623,7 @@ export class Group {
     const result = outcome.kind === 'completed' ? outcome.result : null;
     const error = outcome.kind === 'errored' ? outcome.error : null;
     const limit =
-      outcome.kind === 'limit fault'
-        ? (faultNames[outcome.limit] ?? outcome.limit)
-        : null;
+      outcome.kind === 'limit fault' ? limitWord(outcome.limit) : null;
     this.trace(
       recordLine(
         'run',
@@ -3624,16 +3659,22 @@ export class Group {
               'code' in outcome.cleanupFailed
                 ? outcome.cleanupFailed
                 : {
-                    limit:
-                      faultNames[outcome.cleanupFailed.limit] ??
-                      outcome.cleanupFailed.limit,
+                    limit: limitWord(outcome.cleanupFailed.limit) as Exclude<
+                      LimitWord,
+                      'fuel'
+                    >,
                   },
           }
         : {}),
       outcome: outcome.kind,
       ...(result ? { result } : {}),
-      ...(error ? { error } : {}),
+      ...(error ? { error: hostError(error) } : {}),
       ...(limit ? { limit } : {}),
+      ...(outcome.kind === 'errored'
+        ? { at: location(outcome.at) }
+        : outcome.kind === 'limit fault'
+          ? { at: location(outcome) }
+          : {}),
       fuel: run.fuel,
       alloc: run.alloc,
     });
@@ -3760,6 +3801,43 @@ export class Group {
   }
 
   /** Worker, and the Host Input `vars`: the Group, read without changing it. */
+  // What a suspended Run waits for, as its `seg` record wrote it.
+  private waitView(
+    running: Running,
+  ): Pick<RunView, 'calls' | 'until' | 'wait'> {
+    const sus = running.run.suspended;
+    if (!sus) {
+      return {};
+    }
+    const deadlines = this.timers
+      .filter(
+        t =>
+          t.live &&
+          t.running === running &&
+          (t.action.k === 'wake' || t.action.k === 'event'),
+      )
+      .map(t => t.deadline);
+    const until = deadlines.length
+      ? deadlines.reduce((a, b) => (b < a ? b : a))
+      : undefined;
+    const calls =
+      sus.k === 'ask'
+        ? [sus.call.id]
+        : sus.k === 'send' || sus.k === 'call-value'
+          ? [sus.id]
+          : sus.k === 'join'
+            ? sus.members.map(m => m.id).filter(id => this.pending.has(id))
+            : [];
+    return {
+      wait:
+        sus.k === 'wait-for' && sus.any
+          ? 'wait-for-any'
+          : suspendReasons[sus.k],
+      ...(until === undefined ? {} : { until }),
+      ...(calls.length ? { calls } : {}),
+    };
+  }
+
   inspect(): Inspection {
     this.worker();
     this.trace(recordLine('vars', [], [], true));
@@ -3787,14 +3865,15 @@ export class Group {
                 ? ('ready' as const)
                 : ('preempted' as const),
           handler: item.delivery.fn?.toString() ?? item.delivery.message,
+          ...(s.suspended.has(item) ? this.waitView(item) : {}),
         })),
-        mailbox: s.queue.flatMap(item =>
+        mailbox: s.queue.flatMap((item): MessageView[] =>
           'run' in item
             ? []
             : [
                 {
-                  delivery: item.id,
-                  from: item.from,
+                  ...(item.id === null ? {} : { delivery: item.id }),
+                  ...(item.from === null ? {} : { from: item.from }),
                   message: {
                     name: item.fn?.toString() ?? item.message,
                     args: item.args,
@@ -3817,6 +3896,28 @@ const suspendReasons: Record<Suspension['k'], string> = {
   join: 'join-end',
   'wait-for': 'wait-for',
 };
+// A Run's error map as the Host reads it: its code and text message, and
+// every other field as its data.
+const hostError = (error: Value): ScriptError => {
+  const message = error.get('message');
+  const textMessage = message.kind === 'text';
+  return new ScriptError(
+    error.get('code').asText() ?? '',
+    textMessage ? message.asText()! : '',
+    map(
+      error
+        .entries()
+        .filter(([k]) => k !== 'code' && !(k === 'message' && textMessage)),
+    ),
+  );
+};
+const location = (at: CodePosition): Location => ({
+  unit: at.unit,
+  line: at.line,
+  col: at.col,
+  handler: at.handler,
+  pc: at.pc,
+});
 // A `Fail` as the Trace's `fail` line writes it: `{}` for what isn't a Script error.
 const failMap = (error: HostScriptError | null): Value =>
   error

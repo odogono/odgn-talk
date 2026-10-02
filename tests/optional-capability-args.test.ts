@@ -230,9 +230,9 @@ test('supplied dynamic Optional values are checked before charging or reaching t
   }).deliver({ name: 'go', args: [num(2)] });
   const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
   expect(reached).toBe(false);
-  expect(report.error?.get('code').asText()).toBe('wrong kind');
-  expect(report.error?.get('argument').toString()).toBe('2');
-  expect(report.error?.get('expected').asText()).toBe('text or nothing');
+  expect(report.error?.code).toBe('wrong kind');
+  expect(report.error?.data.get('argument').toString()).toBe('2');
+  expect(report.error?.data.get('expected').asText()).toBe('text or nothing');
 });
 
 test('an omitted Optional argument still pays declared Fuel before a Host call and rolls back on cutoff', () => {

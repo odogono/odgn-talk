@@ -227,8 +227,8 @@ test('Locale rejects malformed explicit and default tags before Host execution o
         tag,
       );
       expect(called).toBe(false);
-      expect(result.report.error?.get('code').asText()).toBe('bad locale');
-      expect(result.report.error?.get('locale').asText()).toBe(tag);
+      expect(result.report.error?.code).toBe('bad locale');
+      expect(result.report.error?.data.get('locale').asText()).toBe(tag);
       expect(result.lines.some(line => line.startsWith('call '))).toBe(false);
     }
   }
@@ -249,7 +249,7 @@ test('Locale checks option words and rejects two tag positions before reaching t
     'ask loc to compare "a", "b", "de", "fr"',
   ]) {
     const result = run(body);
-    expect(result.report.error?.get('code').asText()).toBe('out of domain');
+    expect(result.report.error?.code).toBe('out of domain');
     expect(result.lines.some(line => line.startsWith('call '))).toBe(false);
   }
 });
@@ -315,7 +315,7 @@ test('Locale rank accepts exactly the distinct texts with dense positive integer
     });
     expect(result.report.outcome).toBe(valid ? 'completed' : 'errored');
     if (!valid) {
-      expect(result.report.error?.get('code').asText()).toBe('host error');
+      expect(result.report.error?.code).toBe('host error');
     }
   }
   expect(run('ask loc to rank []').seen.toString()).toBe('{}');
@@ -345,9 +345,8 @@ test('Locale checks compare range, name counts, symbols and returned tag syntax'
     ['upper', ' "i"', num(1)],
   ] as const) {
     expect(
-      run(`ask loc to ${op}${args}`, { ...impl, [op]: () => answer })
-        .report.error?.get('code')
-        .asText(),
+      run(`ask loc to ${op}${args}`, { ...impl, [op]: () => answer }).report
+        .error?.code,
     ).toBe('host error');
   }
   expect(
@@ -369,9 +368,7 @@ test('Locale Host failures cannot claim bad locale or other catalogue errors', (
           map([['locale', text('en')]]),
         );
       },
-    })
-      .report.error?.get('code')
-      .asText(),
+    }).report.error?.code,
   ).toBe('host error');
 });
 
@@ -400,11 +397,11 @@ test('Locale enforces Grants, modes, arities and option Shapes at load and runti
     'put {unknown: "x"} into bad\nask loc to monthNames bad',
     'put {numeric: "yes"} into bad\nask loc to compare "a", "b", bad',
   ]) {
-    expect(run(body).report.error?.get('code').asText()).toBe('wrong kind');
+    expect(run(body).report.error?.code).toBe('wrong kind');
   }
   const result = run('put ["a", 1] into badTexts\nask loc to rank badTexts');
-  expect(result.report.error?.get('code').asText()).toBe('wrong kind');
-  expect(result.report.error?.get('path').toString()).toBe('[2]');
+  expect(result.report.error?.code).toBe('wrong kind');
+  expect(result.report.error?.data.get('path').toString()).toBe('[2]');
   expect(result.lines.some(line => line.startsWith('call '))).toBe(false);
 });
 
@@ -484,11 +481,7 @@ test('Locale Library needs and result checks survive Restore', () => {
   expect(copy.fingerprint()).toEqual(g.fingerprint());
   copy.script('s')!.deliver({ name: 'go' });
   expect(
-    copy
-      .pump(now)
-      .reports.find(r => r.kind === 'run end')!
-      .error?.get('code')
-      .asText(),
+    copy.pump(now).reports.find(r => r.kind === 'run end')!.error?.code,
   ).toBe('host error');
 });
 
@@ -507,8 +500,6 @@ test('Locale rank uses exact normalized keys including object-prototype names', 
     run('ask loc to rank ["a"]', {
       ...impl,
       rank: () => map([['a', dec('1000000000000000000000000000000000')]]),
-    })
-      .report.error?.get('code')
-      .asText(),
+    }).report.error?.code,
   ).toBe('host error');
 });

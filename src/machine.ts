@@ -683,11 +683,24 @@ const reservedKeys = new Set([
 
 // A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
 type Receiver = { k: 'receiver'; name: string };
+/** An instruction's code position and source position (chapter 9, Reports). */
+export type CodePosition = {
+  col: number;
+  /** The frame's Handler, as an error's `at` names it. */
+  handler: string;
+  line: number;
+  pc: number;
+  /** The code unit the instruction is in. */
+  unit: string;
+};
 export type Outcome =
   | { kind: 'completed'; passed?: boolean; result: Value; veto?: Value }
-  | { error: Value; kind: 'errored' }
+  /** `at` is the raise that no Unwind Table entry caught. */
+  | { at: CodePosition; error: Value; kind: 'errored' }
   | {
       col: number;
+      /** The faulting frame's Handler. */
+      handler: string;
       kind: 'limit fault';
       limit: LimitName;
       line: number;
@@ -1302,7 +1315,17 @@ export class Run {
           col: ins.col,
         });
         this.frames = [];
-        this.outcome = { kind: 'errored', error };
+        this.outcome = {
+          kind: 'errored',
+          error,
+          at: {
+            unit: frame.code.name,
+            handler: frame.handler,
+            pc: frame.pc,
+            line: ins.line,
+            col: ins.col,
+          },
+        };
         return;
       }
       if (resumption) {
@@ -1772,6 +1795,7 @@ export class Run {
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
     this.faultAbandons = this.abandonJoin();
     const code = this.frame.code;
+    const handler = this.frame.handler;
     const rollback = this.script.variableNames.filter(
       (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
     );
@@ -1787,6 +1811,7 @@ export class Run {
       limit,
       rollback,
       unit: code.name,
+      handler,
       pc: code.unit.code.indexOf(ins),
       line: ins.line,
       col: ins.col,
@@ -1847,22 +1872,30 @@ export class Run {
     ]);
   }
 
-  private record(error: Value, ins: Instruction, skip: boolean) {
+  private record(error: Value, ins: Instruction, skip: boolean): CodePosition {
     // A Guard that gives something other than a boolean is a skip with its value.
     const notBoolean =
       skip &&
       (ins.op === 'branch-false' || ins.op === 'branch-true') &&
       textForm(error.get('code')) === 'wrong kind';
+    const at: CodePosition = {
+      unit: this.frame.code.name,
+      handler: this.frame.handler,
+      pc: this.frame.code.unit.code.indexOf(ins),
+      line: ins.line,
+      col: ins.col,
+    };
     this.records.push({
       kind: skip ? 'guard-skip' : 'raise',
       ...(notBoolean
         ? { value: error.get('value') }
         : { code: textForm(error.get('code')) }),
-      unit: this.frame.code.name,
-      pc: this.frame.code.unit.code.indexOf(ins),
-      line: ins.line,
-      col: ins.col,
+      unit: at.unit,
+      pc: at.pc,
+      line: at.line,
+      col: at.col,
     });
+    return at;
   }
 
   /**
@@ -1891,7 +1924,7 @@ export class Run {
       }
       popped++;
     }
-    this.record(error, ins, found?.kind === 'guard');
+    const at = this.record(error, ins, found?.kind === 'guard');
     this.leaveJoin(found ? this.frames.length - 1 - popped : -1, found?.target);
     if (popped) {
       try {
@@ -1935,7 +1968,7 @@ export class Run {
         throw error_;
       }
       this.frames = [];
-      this.outcome = { kind: 'errored', error };
+      this.outcome = { kind: 'errored', error, at };
       return;
     }
     this.frames.length = handler + 1;

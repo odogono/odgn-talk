@@ -7,6 +7,7 @@ import {
   functionValue,
   listValues,
   map,
+  nothing,
   Value,
   type FunctionRef,
 } from './values';
@@ -274,7 +275,14 @@ export const restoreGraph = (
       case 'error':
         child(n.data as Atom, v => {
           const e = v as { code: string; data: unknown; message: string };
-          finish(new ScriptError(e.code, e.message, e.data));
+          // A save from before Host errors had Value data holds null.
+          finish(
+            new ScriptError(
+              e.code,
+              e.message,
+              Value.isValue(e.data) ? e.data : nothing,
+            ),
+          );
         });
         break;
       case 'run': {

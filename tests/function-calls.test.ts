@@ -19,6 +19,17 @@ import {
   type Value,
 } from '../src/index';
 
+// A Request or Call that rejects with `send failed`, giving the reason in its data.
+const expectSendFailed = async (result: Promise<unknown>, reason: string) => {
+  const error = await result.then(
+    () => null,
+    (error_: unknown) => error_,
+  );
+  expect(error).toBeInstanceOf(ScriptError);
+  expect((error as ScriptError).code).toBe('send failed');
+  expect((error as ScriptError).data.get('reason').asText()).toBe(reason);
+};
+
 const clock = parseInstant('2026-09-30T09:00:00Z');
 const setup = (source: string, options: Partial<LoadOptions> = {}) => {
   const lines: string[] = [];
@@ -98,13 +109,11 @@ describe('Function Value calls', () => {
     const { group, fn } = setup(named);
     const requested = caller(group, fn, '');
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
-    expect(
-      report?.kind === 'run end' && report.error?.get('code').asText(),
-    ).toBe('would suspend');
+    expect(report?.kind === 'run end' && report.error?.code).toBe(
+      'would suspend',
+    );
   });
 
   test('Group ownership is checked even when Scripts have the same name', () => {
@@ -120,10 +129,7 @@ describe('Function Value calls', () => {
     const requested = group.call(fn, [num(1)]);
     home.reload(named, 'carry variables');
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      code: 'send failed',
-      data: { reason: 'function gone' },
-    });
+    await expectSendFailed(requested.result, 'function gone');
     expect(reports.filter(r => r.kind === 'run end')).toEqual([]);
     expect(lines).toContain(`note ${requested.id} kind=function-gone`);
   });
@@ -191,9 +197,7 @@ describe('Function call lifecycle', () => {
     const requested = group.call(fn, [], { limits: { fuelPerRun: 4 } });
     expect(() => group.call(fn, [])).toThrow(MailboxFull);
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'limit fault' },
-    });
+    await expectSendFailed(requested.result, 'limit fault');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'limit fault', fn, limit: 'fuel' }),
     );
@@ -208,30 +212,26 @@ describe('Function call lifecycle', () => {
     });
     const requested = script.request({ name: 'go', args: [fn] });
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     expect(reports).toContainEqual(
       expect.objectContaining({ error: expect.anything(), script: 'caller' }),
     );
     expect(lines.some(line => line.startsWith('send '))).toBe(false);
     const report = reports.find(r => r.kind === 'run end');
-    expect(
-      report?.kind === 'run end' && report.error?.get('code').asText(),
-    ).toBe('wrong arity');
+    expect(report?.kind === 'run end' && report.error?.code).toBe(
+      'wrong arity',
+    );
   });
 
   test('Host arity errors do not enter the function body', async () => {
     const { group, fn } = setup(named);
     const requested = group.call(fn, [num(1), num(2)]);
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
-    expect(
-      report?.kind === 'run end' && report.error?.get('code').asText(),
-    ).toBe('wrong arity');
+    expect(report?.kind === 'run end' && report.error?.code).toBe(
+      'wrong arity',
+    );
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('0');
   });
 
@@ -241,18 +241,16 @@ describe('Function call lifecycle', () => {
     );
     const requested = caller(group, fn);
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     const report = reports.find(
       r => r.kind === 'run end' && r.script === 'caller',
     );
     expect(
-      report?.kind === 'run end' && report.error?.get('reason').asText(),
+      report?.kind === 'run end' && report.error?.data.get('reason').asText(),
     ).toBe('errored');
     expect(
       report?.kind === 'run end' &&
-        report.error?.get('error').get('code').asText(),
+        report.error?.data.get('error').get('code').asText(),
     ).toBe('division by zero');
   });
 
@@ -260,9 +258,7 @@ describe('Function call lifecycle', () => {
     const { group, fn } = setup(named, { limits: { fuelPerRun: 10 } });
     const requested = caller(group, fn);
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     expect(reports).toContainEqual(
       expect.objectContaining({ script: 'home', outcome: 'limit fault', fn }),
     );
@@ -275,9 +271,7 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     group.script('caller')!.cancelRun('caller/r1');
     group.pump(clock);
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(requested.result, 'cancelled');
     expect(lines).toContain('abandon caller/r1.c1');
     const reports = group.pump(clock + 1_000_000_000n).reports;
     expect(reports).toContainEqual(
@@ -296,13 +290,9 @@ describe('Function call lifecycle', () => {
     const requested = script.request({ name: 'go', args: [fn] });
     group.pump(clock);
     const reports = group.pump(clock + 10_000_000n).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
-    expect(
-      report?.kind === 'run end' && report.error?.get('code').asText(),
-    ).toBe('timeout');
+    expect(report?.kind === 'run end' && report.error?.code).toBe('timeout');
     expect(lines).toContain('abandon caller/r1.c1');
     group.pump(clock + 1_000_000_000n);
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('7');
@@ -317,9 +307,7 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     controller.abort();
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'cancelled', fn }),
     );
@@ -335,9 +323,7 @@ describe('Function call lifecycle', () => {
     const requested = group.call(fn, [], { signal: controller.signal });
     controller.abort();
     const reports = group.pump(clock).reports;
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'cancelled', fn, fuel: 0 }),
     );
@@ -352,9 +338,7 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     home.stop('finished');
     group.pump(clock);
-    await expect(requested.result).rejects.toMatchObject({
-      data: { reason: 'errored' },
-    });
+    await expectSendFailed(requested.result, 'errored');
   });
 
   test('Function Value Runs are concurrent even with an existing queued Handler', async () => {
@@ -443,13 +427,9 @@ test('a Host arity failure is outside the function body and spends no execution 
   );
   const requested = group.call(fn, []);
   const reports = group.pump(clock).reports;
-  await expect(requested.result).rejects.toMatchObject({
-    data: { reason: 'errored' },
-  });
+  await expectSendFailed(requested.result, 'errored');
   const report = reports.find(r => r.kind === 'run end');
-  expect(report?.kind === 'run end' && report.error?.get('code').asText()).toBe(
-    'wrong arity',
-  );
+  expect(report?.kind === 'run end' && report.error?.code).toBe('wrong arity');
   expect(report?.kind === 'run end' && report.fuel).toBe(0);
 });
 
@@ -565,9 +545,7 @@ test('uncaught Function call errors expose fn and arguments through during', asy
   );
   const requested = group.call(fn, [num(4)]);
   group.pump(clock);
-  await expect(requested.result).rejects.toMatchObject({
-    data: { reason: 'errored' },
-  });
+  await expectSendFailed(requested.result, 'errored');
   const failed = group.inspect().scripts[0]!.vars[0]![1];
   expect(failed.get('fn')).toBe(fn);
   expect(failed.get('args').toString()).toBe('[4]');
@@ -638,13 +616,11 @@ describe('Function ownership at Host boundaries', () => {
       });
       const request = home.request({ name: 'go' });
       const reports = group.pump(clock).reports;
-      await expect(request.result).rejects.toMatchObject({
-        data: { reason: 'errored' },
-      });
+      await expectSendFailed(request.result, 'errored');
       const report = reports.find(r => r.kind === 'run end');
-      expect(
-        report?.kind === 'run end' && report.error?.get('code').asText(),
-      ).toBe('host error');
+      expect(report?.kind === 'run end' && report.error?.code).toBe(
+        'host error',
+      );
     });
   }
 
@@ -752,9 +728,7 @@ test('Host Call MaxWait overrides apply to foreign callbacks', async () => {
       error: expect.anything(),
     }),
   );
-  await expect(request.result).rejects.toMatchObject({
-    data: { reason: 'errored' },
-  });
+  await expectSendFailed(request.result, 'errored');
   expect(
     group.inspect().scripts.find(s => s.name === 'remote')!.runs[0]!.status,
   ).toBe('suspended');
@@ -805,9 +779,9 @@ for (const reissue of [false, true]) {
       await new Promise(resolve => setTimeout(resolve, 0));
       const reports = group.pump(clock).reports;
       const report = reports.find(r => r.kind === 'run end');
-      expect(
-        report?.kind === 'run end' && report.error?.get('code').asText(),
-      ).toBe('host error');
+      expect(report?.kind === 'run end' && report.error?.code).toBe(
+        'host error',
+      );
       expect(group.inspect().scripts[0]!.runs).toHaveLength(0);
     });
   }

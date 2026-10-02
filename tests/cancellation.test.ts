@@ -6,7 +6,19 @@ import {
   nothing,
   num,
   type Call,
+  ScriptError,
 } from '../src/index';
+
+// A Request or Call that rejects with `send failed`, giving the reason in its data.
+const expectSendFailed = async (result: Promise<unknown>, reason: string) => {
+  const error = await result.then(
+    () => null,
+    (error_: unknown) => error_,
+  );
+  expect(error).toBeInstanceOf(ScriptError);
+  expect((error as ScriptError).code).toBe('send failed');
+  expect((error as ScriptError).data.get('reason').asText()).toBe(reason);
+};
 
 const setup = () => {
   const trace: string[] = [];
@@ -81,10 +93,7 @@ describe('Broadcast and cancellation', () => {
       ['n', '0'],
       ['clean', '[1, 2]'],
     ]);
-    await expect(request.result).rejects.toMatchObject({
-      code: 'send failed',
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(request.result, 'cancelled');
   });
 
   test('suspended cancellation preserves committed writes, abandons calls, and ignores late answers', () => {
@@ -173,9 +182,7 @@ describe('Broadcast and cancellation', () => {
         droppedMessages: ['d2'],
       },
     ]);
-    await expect(request.result).rejects.toMatchObject({
-      data: { reason: 'stopped' },
-    });
+    await expectSendFailed(request.result, 'stopped');
     s.deliver({ name: 'go' });
     expect(g.pump(2_000_000_000n).state).toBe('stopped');
     expect(vars(g)).toEqual([['n', '0']]);
@@ -501,9 +508,7 @@ describe('cancellation boundaries', () => {
     expect(g.pump(0n).reports).toMatchObject([
       { script: 'front', outcome: 'cancelled' },
     ]);
-    await expect(request.result).rejects.toMatchObject({
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(request.result, 'cancelled');
     expect(trace).toContain('abandon front/r1.c1');
     expect(g.pump(1_000_000_000n).reports).toMatchObject([
       { script: 'back', outcome: 'completed' },

@@ -1040,7 +1040,7 @@ export const replay = (
                 receive(report.result);
               }
               if (report.error) {
-                receive(report.error);
+                receive(report.error.data);
               }
             }
           }

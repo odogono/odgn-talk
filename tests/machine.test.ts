@@ -123,6 +123,7 @@ describe('Cost Model 0', () => {
     expect(r.outcome).toEqual({
       kind: 'limit fault',
       unit: 'test',
+      handler: 'go',
       limit: 'fuelPerRun',
       pc: 7,
       line: 4,

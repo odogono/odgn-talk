@@ -162,7 +162,12 @@ describe('wait-for event-test Fuel', () => {
       expect(group.pump(0n).fuelUsed).toBe(fuel);
       expect(script.counters().fuelTotal - before).toBe(fuel);
       expect(group.inspect().scripts[1]!.runs).toEqual([
-        { id: 's/r1', status: 'suspended', handler: 'watch' },
+        {
+          id: 's/r1',
+          status: 'suspended',
+          handler: 'watch',
+          wait: 'wait-for-any',
+        },
       ]);
     },
   );

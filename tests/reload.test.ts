@@ -139,9 +139,7 @@ describe('Reload', () => {
     s.deliver({ name: 'useit' });
     const r = g.pump(0n).reports[0]!;
     expect(r).toMatchObject({ outcome: 'errored' });
-    expect('error' in r && r.error!.get('code').toString()).toBe(
-      '"function gone"',
-    );
+    expect('error' in r && r.error!.code).toBe('function gone');
     s.deliver({ name: 'make' });
     g.pump(0n);
     s.deliver({ name: 'useit' });
@@ -357,7 +355,7 @@ describe('code-change boundaries', () => {
     s.extend('on go\n  return 1 / 0\nend go');
     s.deliver({ name: 'go' });
     const r = g.pump(0n).reports[0]!;
-    expect('error' in r && r.error!.get('at').get('unit').toString()).toBe(
+    expect('error' in r && r.error!.data.get('at').get('unit').toString()).toBe(
       '"s+1"',
     );
   });

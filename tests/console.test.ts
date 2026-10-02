@@ -163,8 +163,8 @@ test('value Shapes admit Function Values while any data Shapes still refuse them
   }).deliver({ name: 'go' });
   const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
   expect(seen).toHaveLength(1);
-  expect(report.error?.get('code').asText()).toBe('not encodable');
-  expect(report.error?.get('path').toString()).toBe('[1, 1, "callback"]');
+  expect(report.error?.code).toBe('not encodable');
+  expect(report.error?.data.get('path').toString()).toBe('[1, 1, "callback"]');
 });
 
 test('read suspends and resumes on a queued text answer, including an empty line and late Fuel', () => {
@@ -223,7 +223,7 @@ test('Console read uses its human-input timeout instead of a shorter Script MaxW
   const report = g
     .pump(now + 2_147_483_647_000_000n)
     .reports.find(r => r.kind === 'run end')!;
-  expect(report.error?.get('code').asText()).toBe('timeout');
+  expect(report.error?.code).toBe('timeout');
 });
 
 test('cancelling a pending Console read aborts its Call and ignores a late answer', () => {
@@ -285,7 +285,7 @@ test('Console result Shape and undeclared failures become host error', () => {
       calls[0]!.fail(new ScriptError('refused', 'no'));
     }
     const report = g.pump(now + 1n).reports.find(r => r.kind === 'run end')!;
-    expect(report.error?.get('code').asText()).toBe('host error');
+    expect(report.error?.code).toBe('host error');
   }
 });
 

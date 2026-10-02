@@ -438,7 +438,5 @@ test('restore keeps a Library import valid when its saved Grant is rebound as re
   copy.script('s')!.deliver({ name: 'go' });
   const report = copy.pump(0n).reports[0]!;
   expect(report).toMatchObject({ outcome: 'errored' });
-  expect('error' in report && report.error!.get('code').toString()).toBe(
-    '"capability revoked"',
-  );
+  expect('error' in report && report.error!.code).toBe('capability revoked');
 });
