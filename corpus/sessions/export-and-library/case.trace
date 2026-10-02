@@ -1,0 +1,26 @@
+> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
+> add-library greet identity=9696537d4fa0ba02aa754e5eb19c886e545f919568c7a5850e494273bf0f6480
+> extend session source="use shout from greet" identity=4a40859c5ae75456b4dd39205a1d5073c71984e73fdc8a775336be4b3b27bda0
+> extend session source="script variable word" & newline & "on entry1" & newline & "put " & quote & "hi" & quote & " into word" & newline & "end entry1" & newline identity=5b7ccd88e8bc7dc697d835f8ff33a6337144b01047f5a2ab388b531375e514ad
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T09:59:59Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=18 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
+pumped state=idle fuel=10
+> extend session source="on entry2" & newline & "return shout(word)" & newline & "end entry2" & newline identity=97817f758be8ef31f56b219b2d6969eccdf801298125a39472919ae7921ab4e5
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=23 alloc=19 state=18 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 value="hi!" fuel=23 alloc=19
+pumped state=idle fuel=23
+> replace-library greet carry=yes source="function shout t" & newline & "  return t & " & quote & "!!" & quote & newline & "end shout" & newline identity=a54d199829c5d478cceb4597b7ad04c014a62117db303173763eeb5065a8f83e
+stopped session reason="reload"
+> extend session source="on entry3" & newline & "return shout(word)" & newline & "end entry3" & newline identity=2ec221f918b6f21c7ac427cb54f673ba96a39598b286ce86a073dbd301b210e9
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:01Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=23 alloc=20 state=18 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value="hi!!" fuel=23 alloc=20
+pumped state=idle fuel=23
+> extend session source="on hello" & newline & newline & "  say shout(" & quote & "hello" & quote & ")" & newline & "end hello" identity=b30e3c3d3e52f309046f26f61c566fd61fd2a94717c67f26cc4630a916b08c5f
+> vars
+vars session word="hi"

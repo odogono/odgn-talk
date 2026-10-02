@@ -1,0 +1,61 @@
+> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
+> extend session source="script variable n" & newline & "on entry1" & newline & "put 1 into n" & newline & "end entry1" & newline identity=ad67f063ffa6e558642aaf1e11cf2a8ddf60a7a0465e4fbe5c4193120428dab2
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
+pumped state=idle fuel=10
+> extend session source="on fetch" & newline & "  ask http to fetch and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end fetch" identity=911026e44e79c4b2bba631448b586c0975ee42f5983cf3398bc2f01815e0fb8c
+> extend session source="on entry2" & newline & "send fetch to session" & newline & "end entry2" & newline identity=d6ec015d6d67e0be618ed5b0ec5b14f64bd8de62725f1b6e442ab7fb9f68d06d
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+send session/r2 to=session message=fetch
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=29 alloc=32 state=48 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=29 alloc=32
+call session/r3.c1 op=http.fetch args=[]
+seg session/r3 start from=session/r2 handler=fetch clause=1 fuel=14 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=43 next=2026-09-30T10:00:30Z
+> extend session source="on nap" & newline & "  wait 5 s" & newline & "  say " & quote & "woke " & quote & " & n" & newline & "end nap" identity=7f6d9fe0117bb0ab40ab95e719b6b4278b23caf4bcd615910e97911789a39950
+> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=62ed086708fa0aac1664f7fb29baaa01102f413792c83c5c47a1bfcc62516ca9
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+send session/r4 to=session message=nap
+seg session/r4 start delivery=d3 handler=entry3 clause=1 fuel=29 alloc=32 state=272 end=return
+run session/r4 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
+seg session/r5 start from=session/r4 handler=nap clause=1 fuel=15 alloc=0 state=416 end=wait until=2026-09-30T10:00:05Z
+pumped state=idle fuel=44 next=2026-09-30T10:00:05Z
+> save s1
+> extend session source="on entry4" & newline & "put 99 into n" & newline & "end entry4" & newline identity=b403d1b59c0aebcef9afd9260c78916057647dab4270d45ea4f102dfdeae03bb
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:00Z
+seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=10 alloc=0 state=416 end=return
+run session/r6 outcome=completed delivery=d4 handler=entry4 fuel=10 alloc=0
+pumped state=idle fuel=10 next=2026-09-30T10:00:05Z
+> extend session source="function late" & newline & "  return 0" & newline & "end late" identity=9c09924ffed78eac90f07ac1c3f3fe6ef55a08bb08fa0f1f6c39290d27a9da7b
+> restore from=s1 fingerprint=35913a7bf0a23439837321aabb92c94805d75658ab5bb45834e175f7f80df5c8 mode=full pending=[session/r3.c1]
+> extend session source="on entry4" & newline & "return n" & newline & "end entry4" & newline identity=1c29095440bc9acdb505486e5ecf27c2332435874caeea4aa3ecd8865d77c340
+> settle session/r3.c1 how=adopt
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:00Z
+seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=7 alloc=0 state=416 end=return
+run session/r6 outcome=completed delivery=d4 handler=entry4 value=1 fuel=7 alloc=0
+pumped state=idle fuel=7 next=2026-09-30T10:00:05Z
+> extend session source="on entry5" & newline & "return late()" & newline & "end entry5" & newline identity=74730f45106d48ce775a34c6395dc042104cd4dde79af1a62acaa1b48356000f
+diag session+7 code="unknown name" pos=2:8
+> vars
+vars session n=1
+> answer session/r3.c1 value="body"
+> pump clock=2026-09-30T10:00:00Z
+call session/r3.c2 op=console.write args=["got body"]
+seg session/r3 resume fuel=21 alloc=44 state=192 end=return
+run session/r3 outcome=completed handler=fetch fuel=35 alloc=44
+pumped state=idle fuel=21 next=2026-09-30T10:00:05Z
+> pump clock=2026-09-30T10:00:05Z
+call session/r5.c1 op=console.write args=["woke 1"]
+seg session/r5 resume fuel=19 alloc=22 state=16 end=return
+run session/r5 outcome=completed handler=nap fuel=34 alloc=22
+pumped state=idle fuel=19
+> save s2
+> restore from=s2 fingerprint=eaeeb697a55bb442c7348e0640737f58b7a22c8b1b26af2488ecafbbff44e953 mode=full
+> vars
+vars session n=1
