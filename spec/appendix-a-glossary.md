@@ -166,6 +166,14 @@ _Avoid_: session (as a language concept), shell, kernel
 One unit of input at a REPL or Playground prompt: one declaration, one statement or one expression. A statement or expression executes as a Run of an implicit Handler of the Session Script.
 _Avoid_: line, cell, command, input
 
+**Session Source**:
+The Session Script's declarations, in the order they were entered, with each redefinition in its place. It is what an export of the session writes, and what every Reload of the Session Script loads, so a session means exactly what its export means as a file.
+_Avoid_: history, buffer
+
+**Foreground Run**:
+The Run of the latest Entry, while the Session Host keeps the prompt for it: its console output is printed plainly, the user's typed lines answer its `read`, and an interrupt cancels it. Every other Run is in the background, and its output is printed with its run id.
+_Avoid_: current run, active run
+
 **Session Command**:
 A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command

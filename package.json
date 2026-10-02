@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./session": "./src/session/index.ts"
   },
   "scripts": {
     "spec:gen": "bun tools/spec/generate.ts",
