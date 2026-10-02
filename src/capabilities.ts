@@ -3,6 +3,7 @@
 // argument against its Shape before the Host function runs, and each result
 // after (chapter 6, Errors from Capabilities).
 import { HostError, type ScriptError as HostScriptError } from './errors';
+import type { ObjectKind } from './objects';
 import { parseUnit, unitEntry, unitText } from './units';
 import { nothing, type Value } from './values';
 
@@ -10,6 +11,7 @@ export type Shape =
   | { k: 'any' }
   | { k: 'value' }
   | { k: 'kind'; kind: string }
+  | { k: 'object'; kind: string }
   | { k: 'quantity'; unit: string }
   | { k: 'unitKind'; kind: string }
   | { k: 'list'; of: Shape }
@@ -50,6 +52,10 @@ export const shape = {
   range: kind('range'),
   pattern: kind('pattern'),
   function: kind('function'),
+  object: <N>(kind: ObjectKind<N>): Shape => ({
+    k: 'object',
+    kind: kind.name,
+  }),
   quantityOf: (unit: string): Shape => ({
     k: 'quantity',
     unit: unitText(parseUnit(unit)),
@@ -81,6 +87,7 @@ export const expectedOf = (s: Shape): string => {
     case 'value':
       return 'value';
     case 'kind':
+    case 'object':
       return s.kind;
     case 'quantity':
       return s.unit;
@@ -134,6 +141,8 @@ export const mismatch = (
         : deepFunction(v, path);
     case 'kind':
       return v.kind === s.kind ? null : wrong();
+    case 'object':
+      return v.asObjectRef()?.kind === s.kind ? null : wrong();
     case 'quantity': {
       const q = v.asQuantityRef();
       return q && unitText(q.unit) === s.unit ? null : wrong();

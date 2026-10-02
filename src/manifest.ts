@@ -11,6 +11,8 @@ export const shapeData = (shape: Shape): unknown => {
       return 'value';
     case 'kind':
       return shape.kind;
+    case 'object':
+      return { object: shape.kind };
     case 'quantity':
       return { quantity: shape.unit };
     case 'unitKind':
