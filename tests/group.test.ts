@@ -295,6 +295,27 @@ describe('a runaway Script', () => {
   });
 });
 
+describe('a Limit Fault', () => {
+  test('is never caught: no catch or finally runs, and the Segment rolls back', () => {
+    const { g, lines } = group();
+    const s = g.load({
+      name: 's',
+      source:
+        'script variable seen = []\non go\n  put "started" after seen\n  try\n    repeat forever\n      put "loop" into last\n    end repeat\n  catch e\n    put "caught" after seen\n  finally\n    put "finally" after seen\n  end try\nend go',
+    });
+    s.deliver({ name: 'go', limits: { fuelPerRun: 300 } });
+    const [end] = g.pump(clock).reports;
+    expect(end).toMatchObject({ outcome: 'limit fault', limit: 'fuel' });
+    expect(lines.some(l => l.startsWith('raise '))).toBe(false);
+    expect(lines.find(l => l.startsWith('fault s/r1'))).toEndWith(
+      'rollback=[seen]',
+    );
+    expect(g.inspect().scripts[0]!.vars.map(([k, v]) => `${k}=${v}`)).toEqual([
+      'seen=[]',
+    ]);
+  });
+});
+
 describe('Host errors and refusals', () => {
   test('an override that loosens a limit is refused at the call, with no id', () => {
     const { g, lines } = group();
