@@ -1,0 +1,4 @@
+use fetch from base
+function label key
+  return fetch(key)
+end label

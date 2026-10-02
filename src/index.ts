@@ -144,3 +144,5 @@ export {
   type SyntaxErrorCode,
   type Trivia,
 } from './syntax';
+
+export type { GrantDecls } from './effects';

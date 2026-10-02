@@ -1,0 +1,18 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "io"
+name = "pause"
+mode = "suspending"
+result = "number"
+cost = { fuel = 10 }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { io = { ops = ["pause"] } }

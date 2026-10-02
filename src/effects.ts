@@ -144,12 +144,8 @@ const fits = (l: Literal, s: Shape): boolean => {
   }
 };
 
-/** Check every Capability call in a Script against its Grants. */
-export const checkEffects = (
-  root: SemanticNode,
-  grants: GrantDecls,
-  report: Report,
-) => {
+const effectNodes = (root: SemanticNode): SemanticNode[] => {
+  const found: SemanticNode[] = [];
   const work: SemanticNode[] = [root];
   while (work.length) {
     const node = work.pop()!;
@@ -159,56 +155,91 @@ export const checkEffects = (
         work.push(child);
       }
     }
+    if (
+      node.rule === 'AskTell' ||
+      (node.rule === 'SimpleStatement' &&
+        node.children[0]?.kind === 'name' &&
+        node.children[0].text === 'say')
+    ) {
+      found.push(node);
+    }
+  }
+  return found;
+};
+
+/** Operation references in source order, retaining the call for import checks. */
+export const operationUses = (root: SemanticNode) =>
+  effectNodes(root).flatMap(node => {
     if (node.rule === 'SimpleStatement') {
-      const [head] = node.children;
-      // `say x` is `tell console to write x` (chapter 12).
-      if (head?.kind === 'name' && head.text === 'say') {
-        if (!grants.console?.write) {
-          report('unknown operation', head);
-        }
-      }
-      continue;
+      return [{ capability: 'console', operation: 'write', node }];
     }
-    if (node.rule !== 'AskTell') {
-      continue;
-    }
-    const head = node.children[0] as SemanticToken;
     const target = node.children[1];
-    const grant = target && firstLeaf(target);
     const op = node.children[3];
-    if (!grant || !isLeaf(op)) {
-      continue;
+    const grant = target && firstLeaf(target);
+    return grant && isLeaf(op)
+      ? [{ capability: grant.text, operation: op.text, node }]
+      : [];
+  });
+
+/** Check one call without revisiting any Lambda inside its arguments. */
+export const checkEffectCall = (
+  node: SemanticNode,
+  grants: GrantDecls,
+  report: Report,
+) => {
+  const say = node.rule === 'SimpleStatement';
+  if (!say && node.rule !== 'AskTell') {
+    return;
+  }
+  const head = node.children[0] as Leaf;
+  const target = node.children[1];
+  const grant = say ? head : target && firstLeaf(target);
+  const op = say ? head : node.children[3];
+  if (!grant || !isLeaf(op)) {
+    return;
+  }
+  const grantName = say ? 'console' : grant.text;
+  const operation = say ? 'write' : op.text;
+  const ops = Object.hasOwn(grants, grantName) ? grants[grantName] : null;
+  if (!ops) {
+    report('unknown operation', grant);
+    return;
+  }
+  const decl = Object.hasOwn(ops, operation) ? ops[operation] : null;
+  if (!decl) {
+    report('unknown operation', op);
+    return;
+  }
+  const wait = nodesOf(node, 'AndWait').length > 0;
+  const asked = !say && head.text === 'ask';
+  const fitsMode = asked
+    ? decl.mode === (wait ? 'suspending' : 'immediate')
+    : decl.mode === 'fire-and-forget';
+  if (!fitsMode) {
+    report('wrong mode', head);
+    return;
+  }
+  const list = nodesOf(node, 'ExpressionList')[0];
+  const args = list ? nodesOf(list, 'Expression') : [];
+  if (args.length !== decl.args.length) {
+    report('wrong argument count', op);
+    return;
+  }
+  args.forEach((arg, i) => {
+    const literal = literalOf(arg);
+    if (literal && !fits(literal, decl.args[i]!)) {
+      report('wrong argument', firstLeaf(arg)!);
     }
-    const ops = Object.hasOwn(grants, grant.text) ? grants[grant.text] : null;
-    if (!ops) {
-      report('unknown operation', grant);
-      continue;
-    }
-    const decl = Object.hasOwn(ops, op.text) ? ops[op.text] : null;
-    if (!decl) {
-      report('unknown operation', op);
-      continue;
-    }
-    const wait = nodesOf(node, 'AndWait').length > 0;
-    const asked = head.text === 'ask';
-    const fitsMode = asked
-      ? decl.mode === (wait ? 'suspending' : 'immediate')
-      : decl.mode === 'fire-and-forget';
-    if (!fitsMode) {
-      report('wrong mode', head);
-      continue;
-    }
-    const list = nodesOf(node, 'ExpressionList')[0];
-    const args = list ? nodesOf(list, 'Expression') : [];
-    if (args.length !== decl.args.length) {
-      report('wrong argument count', op);
-      continue;
-    }
-    args.forEach((arg, i) => {
-      const literal = literalOf(arg);
-      if (literal && !fits(literal, decl.args[i]!)) {
-        report('wrong argument', firstLeaf(arg)!);
-      }
-    });
+  });
+};
+
+/** Check every Capability call in a Script against its Grants. */
+export const checkEffects = (
+  root: SemanticNode,
+  grants: GrantDecls,
+  report: Report,
+) => {
+  for (const node of effectNodes(root)) {
+    checkEffectCall(node, grants, report);
   }
 };

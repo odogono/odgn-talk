@@ -1,0 +1,18 @@
+# Importing wrapper requires base's io.read, even though the Script calls
+# no Capability directly. A missing Grant rejects at the Script's use line.
+# With the Grant, the Library executes inside the caller's Run and pays its
+# declared Operation cost once.
+> add-library base identity=e531758f665352b6f033b715b5f173688f7afe203e85802ec6c072cf06bf245c
+> add-library wrapper identity=9efe880a7c47fb0930549287b7ff40d3bcf6cdb51695ca5765e0c90d6d2eb451
+> load missing identity=f59b052ae8003a0cc99b538c0690c4f1481d8555dae0204c57b93b67b20eac4d
+diag missing code="missing grant" pos=1:1
+> load s identity=95f8864701a3564cef615d24668643c673c47585d903caacc59a9a9f796bcc0e
+> stub io.read value=7
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=io.read args=["key"] result=7
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=52 alloc=16 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=7 fuel=52 alloc=16
+pumped state=idle fuel=52
+> vars
+vars s

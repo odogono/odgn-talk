@@ -3,10 +3,12 @@
 // that imports it. A unit's code identity covers the identities of the
 // Libraries it imports directly.
 import { checkSource, type CheckResult, type ExistingName } from './checker';
-import type { GrantDecls } from './effects';
+import { checkEffectCall, operationUses, type GrantDecls } from './effects';
+import type { SemanticNode } from './semantic';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
-import { libraryExports } from './generated/syntax';
+import { libraryExports, diagnosticCodes } from './generated/syntax';
+import { compareText } from './text';
 import { exportsOf, importsOf, lowerTree } from './lowering';
 import { loadLibrary, UnitLoadError, type Code } from './machine';
 import { stdlibSources } from './generated/stdlib';
@@ -52,14 +54,23 @@ export const codeIdentity = (
     ].join('\n'),
   );
 
+type CallSite = {
+  capability: string;
+  identity: string;
+  node: SemanticNode;
+  operation: string;
+  unit: string;
+};
 type Compiled = {
   code: Code;
+  declarations: GrantDecls;
   exports: Record<string, LibraryExport>;
   hex: string;
+  sites: readonly CallSite[];
 };
 const compiled = new WeakMap<Library, Compiled>();
 // The compile cache: one code unit per code identity, for the process.
-const cache = new Map<string, Omit<Compiled, 'hex'>>();
+const cache = new Map<string, Pick<Compiled, 'code' | 'exports'>>();
 
 const bytesOfHex = (hex: string) =>
   Uint8Array.from(hex.match(/../g)!, pair => Number.parseInt(pair, 16));
@@ -93,6 +104,64 @@ const diagnosticsOf = (
   return null;
 };
 
+/** Check a Library's original call sites in the importing Script's context. */
+const checkLibraryNeeds = (
+  name: string,
+  root: SemanticNode,
+  available: ReadonlyMap<string, Library>,
+  grants: GrantDecls,
+): LoadDiagnostic[] => {
+  const diagnostics: LoadDiagnostic[] = [];
+  const uses = new Map(
+    viewSource(root).flatMap(d =>
+      d.k === 'use'
+        ? [[d.imports[0]!.local.span.line, d.library] as const]
+        : [],
+    ),
+  );
+  const work = [root];
+  while (work.length) {
+    const use = work.pop()!;
+    for (let i = use.children.length - 1; i >= 0; i--) {
+      const child = use.children[i]!;
+      if (child.kind === 'node') {
+        work.push(child);
+      }
+    }
+    if (use.rule !== 'Use') {
+      continue;
+    }
+    const library = available.get(uses.get(use.span.line) ?? '');
+    if (!library) {
+      continue;
+    }
+    const missing = new Set<string>();
+    for (const site of compiled.get(library)!.sites) {
+      const reference = `${site.capability}.${site.operation}`;
+      const report = (code: string) =>
+        diagnostics.push({
+          code,
+          unit: name,
+          line: use.span.line,
+          col: use.span.col,
+          message: `${code}: ${reference} at ${site.unit}:${site.node.span.line}:${site.node.span.col}`,
+        });
+      const operations = Object.hasOwn(grants, site.capability)
+        ? grants[site.capability]
+        : undefined;
+      if (!operations || !Object.hasOwn(operations, site.operation)) {
+        if (!missing.has(reference)) {
+          report('missing grant');
+          missing.add(reference);
+        }
+      } else {
+        checkEffectCall(site.node, grants, code => report(code));
+      }
+    }
+  }
+  return diagnostics;
+};
+
 /**
  * Check a Script's or Library's source against the Libraries it may import,
  * and work out its direct imports and code identity. A source that doesn't
@@ -116,14 +185,27 @@ export const prepare = (
       [...available.values()].map(l => [l.name, compiled.get(l)!.exports]),
     ),
   });
-  const diagnostics = diagnosticsOf(checked, name);
+  const diagnostics = diagnosticsOf(checked, name) ?? [];
+  if (unit === 'script' && grants && checked.tree) {
+    diagnostics.push(
+      ...checkLibraryNeeds(name, checked.tree.root, available, grants),
+    );
+  }
   const names = checked.tree ? importsOf(checked.tree) : [];
   const imports = names.flatMap(
     n => available.get(n) ?? (stdlibNames.has(n) ? [stdlibLibrary(n)] : []),
   );
   return {
     checked,
-    diagnostics,
+    diagnostics: diagnostics.length
+      ? diagnostics.sort(
+          (a, b) =>
+            a.line - b.line ||
+            a.col - b.col ||
+            (diagnosticCodes as readonly string[]).indexOf(a.code) -
+              (diagnosticCodes as readonly string[]).indexOf(b.code),
+        )
+      : null,
     imports,
     identity: codeIdentity(unit, name, source, imports.map(identityOf)),
   };
@@ -157,7 +239,8 @@ export const loadOrReject = <T>(name: string, load: () => T): T => {
 export const compileLibrary = (
   src: LibrarySource,
   imports: readonly Library[] = [],
-): Library => build(src, imports, false);
+  declarations: GrantDecls = {},
+): Library => build(src, imports, false, declarations);
 
 const stdlib = new Map<string, Library>();
 /** A stdlib Library, compiled from its normative source on first use. */
@@ -178,9 +261,17 @@ const build = (
   src: LibrarySource,
   imports: readonly Library[],
   isStdlib: boolean,
+  declarations: GrantDecls = {},
 ): Library => {
   const available = new Map(imports.map(l => [l.name, l]));
-  const p = prepare('library', src.name, src.source, available);
+  const p = prepare(
+    'library',
+    src.name,
+    src.source,
+    available,
+    undefined,
+    declarations,
+  );
   if (p.diagnostics) {
     throw new LoadError(p.diagnostics);
   }
@@ -200,15 +291,50 @@ const build = (
     entry.code.stdlib = isStdlib;
     cache.set(p.identity, entry);
   }
+  const sites: CallSite[] = operationUses(p.checked.tree!.root).map(site => ({
+    ...site,
+    unit: src.name,
+    identity: p.identity,
+  }));
+  const seen = new Set(
+    sites.map(site => `${site.identity}:${site.node.span.start}`),
+  );
+  for (const imported of p.imports) {
+    for (const site of compiled.get(imported)!.sites) {
+      const key = `${site.identity}:${site.node.span.start}`;
+      if (!seen.has(key)) {
+        sites.push(site);
+        seen.add(key);
+      }
+    }
+  }
+  const needed = new Map<string, OperationRef>();
+  for (const site of sites) {
+    needed.set(
+      `${site.capability}\u0000${site.operation}`,
+      Object.freeze({ capability: site.capability, operation: site.operation }),
+    );
+  }
   const library: Library = Object.freeze({
     name: src.name,
     version: src.version,
     source: src.source,
     identity: bytesOfHex(p.identity),
     imports: Object.freeze([...p.imports]),
-    needs: Object.freeze([]),
+    needs: Object.freeze(
+      [...needed.values()].sort(
+        (a, b) =>
+          compareText(a.capability, b.capability) ||
+          compareText(a.operation, b.operation),
+      ),
+    ),
   });
-  compiled.set(library, { ...entry, hex: p.identity });
+  compiled.set(library, {
+    ...entry,
+    hex: p.identity,
+    sites: Object.freeze(sites),
+    declarations,
+  });
   return library;
 };
 
@@ -268,6 +394,7 @@ export const replacementLibraries = (
       compileLibrary(
         { name: old.name, source: old.source, version: old.version },
         [...libraries.values()],
+        compiled.get(old)!.declarations,
       ),
     );
     rebuilt.add(old.name);

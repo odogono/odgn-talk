@@ -510,6 +510,13 @@ type TraceSink interface{ Record(line string) }
 // Libraries (ADR 0020; #71)
 // ---------------------------------------------------------------------------
 
+// GrantDecls gives compile-time modes and argument Shapes by the Grant name in source.
+type OperationCheck struct {
+	Mode Mode
+	Args []Shape
+}
+type GrantDecls map[string]map[string]OperationCheck
+
 type LibrarySource struct {
 	Name    string
 	Version string // the Host's own label
@@ -519,7 +526,7 @@ type LibrarySource struct {
 // CompileLibrary parses and checks a Library once per process. imports must
 // hold every Library its `use` lines name. A missing one, or a cycle, is a
 // LoadError.
-func (c *Core) CompileLibrary(src LibrarySource, imports []*Library) (*Library, error)
+func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error)
 
 type Library struct { /* opaque */
 }
