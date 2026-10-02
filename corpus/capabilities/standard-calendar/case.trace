@@ -1,0 +1,22 @@
+# Calendar's fixed declarations, all six Operations and optional arguments.
+# Named-zone answers belong to the Host and are replayed as Stubs.
+> load s identity=d6c83628555b9a3f89e662dcf3f5bf2b87cd08e78eb41a3fe059ce41241c9f29
+> stub calendar.today value=2026-10-02
+> stub calendar.now value=2026-10-02T13:00:00
+> stub calendar.toCivil value=2026-10-02T13:00:00
+> stub calendar.toInstant value=2026-10-02T12:00:00Z
+> stub calendar.offset value=3600 s
+> stub calendar.zone value="Europe/London"
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T12:00:00Z
+call s/r1.c1 op=cal.today args=[] result=2026-10-02
+call s/r1.c2 op=cal.now args=["Europe/London"] result=2026-10-02T13:00:00
+call s/r1.c3 op=cal.toCivil args=[2026-10-02T12:00:00Z, "Europe/London"] result=2026-10-02T13:00:00
+call s/r1.c4 op=cal.toInstant args=[2026-10-02T13:00:00, "Europe/London"] result=2026-10-02T12:00:00Z
+call s/r1.c5 op=cal.offset args=[2026-10-02T12:00:00Z] result=3600 s
+call s/r1.c6 op=cal.zone args=[nothing] result="Europe/London"
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=203 alloc=330 state=181 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=203 alloc=330
+pumped state=idle fuel=203
+> vars
+vars s seen=[2026-10-02, 2026-10-02T13:00:00, 2026-10-02T13:00:00, 2026-10-02T12:00:00Z, 3600 s, "Europe/London"]

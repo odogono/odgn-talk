@@ -637,10 +637,11 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 <!-- end -->
 
+- **Shapes:** `today`, `now` and `zone` take one Optional text; `toCivil` and `offset` take an Instant and one Optional text; `toInstant` takes a Civil Date and two Optional texts. An omitted or Nothing zone uses the Grant's default. The factory passes that as an absent zone to the Host, which reads its binding. The supplied argument list, including Nothing, remains unchanged in the Trace.
 - **Zones:** the Grant binds a default IANA zone id, and every Operation takes an optional trailing zone id that overrides it. An unknown zone makes the Host fail with `unknown zone`, with `{zone}`.
-- **`toInstant c [, disambiguation] [, zone]`:** `c` is a date-time. A second argument that is one of `"compatible"`, `"earlier"`, `"later"` and `"reject"` is the disambiguation, and any other text is a zone.
+- **`toInstant c [, disambiguation] [, zone]`:** `c` is a date-time; a date-only value raises `out of domain`, with `function: "toInstant"` and `value: c`. With two supplied arguments, a second argument that is one of `"compatible"`, `"earlier"`, `"later"` and `"reject"` is the disambiguation, and any other text is a zone. With three supplied arguments, the second is the disambiguation and the third the zone; an unrecognised disambiguation raises `out of domain`, with `function: "toInstant"` and `value` the second argument. Omitted or Nothing disambiguation means `"compatible"`. These domain checks follow Shape checks, before charging the call or running the Host function.
 - **Gaps and overlaps:** `"compatible"`, the default, moves a time in a DST gap forward by the gap's length, and takes the earlier Instant for a time in an overlap. `"earlier"` and `"later"` take that Instant in both cases. `"reject"` makes the Host fail with `ambiguous time`, with `{civil, zone}`.
-- **Results:** `today` gives a date-only value, and `now` and `toCivil` a date-time. `offset` gives an exact duration in `s`, and `zone` the IANA id in use.
+- **Results:** `today` gives a date-only value, and `now` and `toCivil` a date-time. `toInstant` gives an Instant. `offset` gives an exact duration in `s`, and `zone` text naming the IANA id in use. The Core checks these result kinds, the presence or absence of a Civil Date's time, and the exact `s` Unit; a mismatch becomes `host error`. The Host supplies zone data and applies the gap/overlap rules.
 
 > **Example.**
 >

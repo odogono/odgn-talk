@@ -362,7 +362,8 @@ type Costs map[string]Cost
 func (c *Core) ClockCapability(costs Costs) (*CapabilityDef, error)
 
 // calendar: the binding is the default IANA zone. zone is "" when the call
-// names none. An unknown zone fails with ScriptError `unknown zone` and Data
+// names none or Nothing. ToInstant receives a resolved disambiguation,
+// defaulting to "compatible". An unknown zone fails with ScriptError `unknown zone` and Data
 // {zone}, and ToInstant with "reject" in a gap or overlap fails with
 // `ambiguous time` and Data {civil, zone}. These declarations list both codes,
 // and the Core checks the fields (ADR 0033).

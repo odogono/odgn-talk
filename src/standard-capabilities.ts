@@ -5,10 +5,13 @@ import {
   type Call,
   type CapabilityDef,
   type Cost,
+  type Operation,
   type Shape,
 } from './capabilities';
 import { HostError } from './errors';
-import { instant, type Value } from './values';
+import { ScriptError } from './operations';
+import { registerStandardChecks } from './standard-capability-checks';
+import { instant, text, type Value } from './values';
 
 export type Costs = Readonly<Record<string, Cost>>;
 export type ConsoleImpl = {
@@ -139,4 +142,153 @@ export const consoleCapability = (
       },
     }),
   );
+};
+
+export type CalendarImpl = {
+  now(call: Call<string>, zone?: string): Value;
+  offset(call: Call<string>, instant: Value, zone?: string): Value;
+  toCivil(call: Call<string>, instant: Value, zone?: string): Value;
+  today(call: Call<string>, zone?: string): Value;
+  toInstant(
+    call: Call<string>,
+    civil: Value,
+    disambiguation: string,
+    zone?: string,
+  ): Value;
+  zone(call: Call<string>, zone?: string): Value;
+};
+const civilShape: Shape = Object.freeze({ k: 'kind', kind: 'civil date' });
+const optionalTextShape: Shape = Object.freeze({
+  k: 'optional',
+  of: textShape,
+});
+const secondsShape: Shape = Object.freeze({ k: 'quantity', unit: 's' });
+const disambiguations = new Set(['compatible', 'earlier', 'later', 'reject']);
+const zoneText = (value: Value | undefined): string | undefined =>
+  value?.asText();
+const calendarError = (code: string, data: Value): boolean =>
+  data.get('zone').kind === 'text' &&
+  (code === 'unknown zone' ||
+    (code === 'ambiguous time' && data.get('civil').kind === 'civil date'));
+const checkToInstant = (args: readonly Value[]): void => {
+  const civil = args[0]!;
+  const disambiguation = zoneText(args[1]);
+  const bad = !('hour' in civil.asCivilDate()!)
+    ? civil
+    : args.length === 3 &&
+        disambiguation !== undefined &&
+        !disambiguations.has(disambiguation)
+      ? args[1]
+      : undefined;
+  if (bad) {
+    throw new ScriptError(
+      'out of domain',
+      [
+        ['function', text('toInstant')],
+        ['value', bad],
+      ],
+      true,
+    );
+  }
+};
+
+/** The Host owns zone data; the Grant binding supplies its default zone. */
+export const calendarCapability = (
+  impl: CalendarImpl,
+  costs: Costs,
+): CapabilityDef<string> => {
+  for (const name of [
+    'today',
+    'now',
+    'toCivil',
+    'toInstant',
+    'offset',
+    'zone',
+  ] as const) {
+    if (!impl || typeof impl[name] !== 'function') {
+      throw new HostError('invalid value', `Calendar needs ${name}`);
+    }
+  }
+  const unknownZone = [{ code: 'unknown zone', fields: { zone: textShape } }];
+  const operations: Record<string, Operation<string>> = {
+    today: {
+      mode: 'immediate',
+      args: [optionalTextShape],
+      result: civilShape,
+      errors: unknownZone,
+      cost: costOf(costs, 'today'),
+      do: (call, zone) => impl.today(call, zoneText(zone)),
+    },
+    now: {
+      mode: 'immediate',
+      args: [optionalTextShape],
+      result: civilShape,
+      errors: unknownZone,
+      cost: costOf(costs, 'now'),
+      do: (call, zone) => impl.now(call, zoneText(zone)),
+    },
+    toCivil: {
+      mode: 'immediate',
+      args: [instantShape, optionalTextShape],
+      result: civilShape,
+      errors: unknownZone,
+      cost: costOf(costs, 'toCivil'),
+      do: (call, value, zone) => impl.toCivil(call, value!, zoneText(zone)),
+    },
+    toInstant: {
+      mode: 'immediate',
+      args: [civilShape, optionalTextShape, optionalTextShape],
+      result: instantShape,
+      errors: [
+        ...unknownZone,
+        {
+          code: 'ambiguous time',
+          fields: { civil: civilShape, zone: textShape },
+        },
+      ],
+      cost: costOf(costs, 'toInstant'),
+      do: (call, ...args) => {
+        const second = zoneText(args[1]);
+        const isZone =
+          args.length === 2 &&
+          second !== undefined &&
+          !disambiguations.has(second);
+        return impl.toInstant(
+          call,
+          args[0]!,
+          isZone ? 'compatible' : (second ?? 'compatible'),
+          isZone ? second : zoneText(args[2]),
+        );
+      },
+    },
+    offset: {
+      mode: 'immediate',
+      args: [instantShape, optionalTextShape],
+      result: secondsShape,
+      errors: unknownZone,
+      cost: costOf(costs, 'offset'),
+      do: (call, value, zone) => impl.offset(call, value!, zoneText(zone)),
+    },
+    zone: {
+      mode: 'immediate',
+      args: [optionalTextShape],
+      result: textShape,
+      errors: unknownZone,
+      cost: costOf(costs, 'zone'),
+      do: (call, zone) => impl.zone(call, zoneText(zone)),
+    },
+  };
+  for (const [name, op] of Object.entries(operations)) {
+    registerStandardChecks(op, {
+      error: calendarError,
+      ...(name === 'toInstant' ? { arguments: checkToInstant } : {}),
+      ...(['today', 'now', 'toCivil'].includes(name)
+        ? {
+            result: (value: Value) =>
+              !('hour' in value.asCivilDate()!) === (name === 'today'),
+          }
+        : {}),
+    });
+  }
+  return fixed(defineCapability('calendar', operations));
 };

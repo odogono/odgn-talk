@@ -1,0 +1,11 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "calendar"
+costs = { today = { fuel = 7 }, now = { fuel = 7 }, toCivil = { fuel = 7 }, toInstant = { fuel = 7 }, offset = { fuel = 7 }, zone = { fuel = 7 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { cal = { capability = "calendar", ops = "all" } }

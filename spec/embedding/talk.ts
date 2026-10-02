@@ -239,6 +239,8 @@ export interface Call<B> {
 export type Costs = Readonly<Record<string, Cost>>;
 
 /**
+ * The binding is the default zone; an omitted or Nothing zone is undefined.
+ * toInstant receives a resolved disambiguation, defaulting to "compatible".
  * Throw ScriptError `unknown zone` {zone} for an unknown zone, and
  * `ambiguous time` {civil, zone} from toInstant with "reject" (ADR 0033).
  */

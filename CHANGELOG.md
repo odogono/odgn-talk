@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Calendar Standard Capability factory and `CalendarImpl`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Ten tests and three Trace Cases cover six Operations, optional zones and disambiguation, domain and result checks, declared catalogue failures, Fuel rollback, Library needs and save/restore replay. The Spec settles Nothing defaults and invalid three-argument disambiguation.
+
 - TS Core trailing Optional Capability arguments, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twelve regression tests and three Trace Cases cover all Operation modes, Joins, literal and dynamic checks, Library compilation and imports, code changes, costs and save/restore settlement. The Host and Trace retain the supplied argument list.
 
 - TS Core Console Standard Capability factory, `ConsoleImpl` and `shape.value`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Ten regression tests and three Console Trace Cases cover `say`, nested Function Values, Library needs, reads with extra Fuel, cancellation, the human-input timeout, Host failures and save/restore replay. The corpus runner supports Console through `[[standard]]`.
