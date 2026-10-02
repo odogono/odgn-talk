@@ -3,9 +3,9 @@
 import type { Value } from './values';
 
 type Checks = {
-  arguments?: (args: readonly Value[]) => void;
+  arguments?: (args: readonly Value[], binding: unknown) => void;
   error?: (code: string, data: Value) => boolean;
-  result?: (value: Value) => boolean;
+  result?: (value: Value, args: readonly Value[]) => boolean;
 };
 const checks = new WeakMap<object, Checks>();
 export const registerStandardChecks = (op: object, rules: Checks): void => {

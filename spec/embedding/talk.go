@@ -378,10 +378,12 @@ type CalendarImpl interface {
 
 func (c *Core) CalendarCapability(impl CalendarImpl, costs Costs) (*CapabilityDef, error)
 
-// locale: the binding is the default BCP 47 tag. tag is "" when the call
-// names none, and opts is Nothing when it passes no options map. The Core
-// raises `bad locale` for a tag that isn't well-formed BCP 47 before these
-// run.
+// locale: the binding is the default BCP 47 tag. Options contain all keys,
+// with defaults filled in. The Core checks the effective tag's RFC 5646 syntax;
+// the Host owns lookup and fallback. Every Host failure becomes host error.
+// tag is "" when the call omits its tag or supplies Nothing. Omitted or
+// Nothing options become the complete default map. The Core raises
+// `bad locale` for malformed tags before these run.
 type LocaleImpl interface {
 	Compare(c *Call, a, b, opts Value, tag string) (Value, error)
 	Rank(c *Call, texts, opts Value, tag string) (Value, error)

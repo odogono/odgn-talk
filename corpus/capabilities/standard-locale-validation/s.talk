@@ -1,0 +1,16 @@
+on badTag
+  ask loc to tag "en_US"
+end
+on badWord
+  ask loc to monthNames {width: "wide"}
+end
+on badShape
+  put {numeric: "yes"} into options
+  ask loc to compare "a", "b", options
+end
+on badResult
+  ask loc to dayNames
+end
+on badFailure
+  ask loc to tag
+end

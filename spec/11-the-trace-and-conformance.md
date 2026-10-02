@@ -543,7 +543,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[libraries]` | `source` | the file that holds its source | trace, disassembly |
 | `[scripts]` | `name` | a Script's name | trace, disassembly |
 | `[scripts]` | `source` | the file that holds its source | trace, disassembly |
-| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name | trace, disassembly |
+| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding) | trace, disassembly |
 | `[scripts]` | `grantsAsUsed` | `true` to keep only the granted Operations the Script uses | trace |
 | `[scripts]` | `owner` | the Host Object it owns, as `{kind, id}` | trace |
 | `[scripts]` | `objects` | its well-known objects, a table from name to `{kind, id}` | trace, disassembly |

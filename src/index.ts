@@ -156,3 +156,5 @@ export {
   type ConsoleImpl,
   type TimerImpl,
 } from './standard-capabilities';
+
+export { localeCapability, type LocaleImpl } from './locale-capability';

@@ -14,6 +14,7 @@ import {
   clockCapability,
   consoleCapability,
   calendarCapability,
+  localeCapability,
   timerCapability,
   defineObjectKind,
   type HostObject,
@@ -167,7 +168,10 @@ type Setup = {
   objects?: { id: string; kind: string; props?: Record<string, string> }[];
   operations?: OperationSpec[];
   scripts?: {
-    grants?: Record<string, { capability?: string; ops: string[] | 'all' }>;
+    grants?: Record<
+      string,
+      { binding?: string; capability?: string; ops: string[] | 'all' }
+    >;
     grantsAsUsed?: boolean;
     limits?: Partial<Limits>;
     name: string;
@@ -446,6 +450,30 @@ const capabilitiesOf = (
             toInstant: call => answer('toInstant', call),
             offset: call => answer('offset', call),
             zone: call => answer('zone', call),
+          },
+          costs,
+        ),
+      );
+    } else if (capability === 'locale') {
+      const answer = (operation: string, call: Call<string>): Value => {
+        try {
+          return takeStub(stubs, `locale.${operation}`, call, true);
+        } finally {
+          crossing(call.id);
+        }
+      };
+      out.set(
+        capability,
+        localeCapability(
+          {
+            compare: call => answer('compare', call),
+            rank: call => answer('rank', call),
+            upper: call => answer('upper', call),
+            lower: call => answer('lower', call),
+            numberSymbols: call => answer('numberSymbols', call),
+            monthNames: call => answer('monthNames', call),
+            dayNames: call => answer('dayNames', call),
+            tag: call => answer('tag', call),
           },
           costs,
         ),
@@ -746,7 +774,10 @@ export const replay = (
                 `the Standard Capability ${g.capability ?? granted}`,
               );
             }
-            grants[granted] = capability.grant(g.ops, undefined);
+            grants[granted] = capability.grant(
+              g.ops,
+              g.binding ?? (capability.name === 'locale' ? 'und' : undefined),
+            );
           }
           bound.set(script.name, grants);
           group.load({

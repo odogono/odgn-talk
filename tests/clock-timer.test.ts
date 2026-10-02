@@ -280,6 +280,9 @@ test('standard Trace setup refuses duplicate declarations and Clock Stubs', () =
   ).toThrow('clock.now uses the Pump Clock, not a Stub');
   expect(() =>
     replay('.', { standard: [{ capability: 'locale', costs: {} }] }, []),
+  ).toThrow('Invalid or missing cost for compare');
+  expect(() =>
+    replay('.', { standard: [{ capability: 'unknown', costs: {} }] }, []),
   ).toThrow(DeferredCaseError);
 });
 
