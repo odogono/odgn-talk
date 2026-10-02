@@ -1,0 +1,4 @@
+use count from base
+function total
+  return count() + 10
+end total

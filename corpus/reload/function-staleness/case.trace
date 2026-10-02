@@ -1,0 +1,26 @@
+# function-staleness: An identical-source Reload still makes carried Function Values stale. A newly made value works, and staleness does not change the display form.
+
+> load s identity=220629bb80838530104ff511dcdfa6e7209e0869fa852d34c9c70c68a575a6d1
+> deliver d1 to=s message=make
+> pump clock=1970-01-01T00:00:00Z
+seg s/r1 start delivery=d1 handler=make clause=1 fuel=13 alloc=32 state=32 end=return
+run s/r1 outcome=completed delivery=d1 handler=make fuel=13 alloc=32
+pumped state=idle fuel=13
+> reload s carry=yes source="script variable callback = nothing" & newline & "on make" & newline & "  put (given x: x + 1) into callback" & newline & "end make" & newline & "on go" & newline & "  return callback(2)" & newline & "end go" & newline identity=220629bb80838530104ff511dcdfa6e7209e0869fa852d34c9c70c68a575a6d1
+stopped s reason="reload"
+> deliver d2 to=s message=go
+> pump clock=1970-01-01T00:00:00Z
+raise s/r2 code="function gone" at=s:11 pos=6:10
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=18 alloc=0 state=32 end=error
+run s/r2 outcome=errored delivery=d2 handler=go error={code: "function gone", at: {unit: "s", handler: "go", line: 6, column: 10}} fuel=18 alloc=0
+pumped state=idle fuel=18
+> deliver d3 to=s message=make
+> deliver d4 to=s message=go
+> pump clock=1970-01-01T00:00:00Z
+seg s/r3 start delivery=d3 handler=make clause=1 fuel=13 alloc=32 state=64 end=return
+run s/r3 outcome=completed delivery=d3 handler=make fuel=13 alloc=32
+seg s/r4 start delivery=d4 handler=go clause=1 fuel=24 alloc=16 state=32 end=return
+run s/r4 outcome=completed delivery=d4 handler=go value=3 fuel=24 alloc=16
+pumped state=idle fuel=37
+> vars
+vars s callback=<function s:3:8>

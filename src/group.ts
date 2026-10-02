@@ -41,6 +41,7 @@ import type { ExistingName } from './checker';
 import type { Code } from './machine';
 import { viewSource } from './view';
 import { sha256 } from './sha256';
+import { checkDecisionCalls } from './decisions';
 import {
   codeIdentity,
   replacementLibraries,
@@ -53,7 +54,7 @@ import {
 } from './library';
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
-import { listValues, map, nothing, text, Value } from './values';
+import { displayText, listValues, map, nothing, text, Value } from './values';
 
 export type GroupOptions = {
   name: string;
@@ -235,6 +236,7 @@ type ScriptState = {
   debt: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
   handle: Script;
+  identity: string;
   /** Deliveries queued to it that the next Pump drains. */
   incoming: number;
   limits: Limits;
@@ -602,10 +604,7 @@ export class Group {
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
   load(o: LoadOptions): Script {
     this.worker();
-    const objects = [
-      ...Object.keys(o.objects ?? {}),
-      ...this.scripts.map(s => s.name),
-    ];
+    const objects = Object.keys(o.objects ?? {});
     const owner = o.owner ? this.held(o.owner) : null;
     if (owner?.owner) {
       throw new HostError(
@@ -641,6 +640,7 @@ export class Group {
       grants,
       handle,
       loaded,
+      identity: p.identity,
       limits,
       queue: [],
       runs: 0,
@@ -681,9 +681,9 @@ export class Group {
           new Map([...(existing?.links ?? []), ...linksOf(p.imports)]),
           existing?.home.variables,
           existing?.home,
+          p.identity,
         ),
       );
-      loaded.identity = p.identity;
       return loaded;
     } catch (error) {
       this.writeDiagnostics(error);
@@ -720,13 +720,14 @@ export class Group {
       s.name,
       source,
       libraries,
-      [...Object.keys(s.objects), ...this.scripts.map(other => other.name)],
+      Object.keys(s.objects),
       declarationsOf(s.grants),
     );
     const loaded = this.loadPrepared(s.name, p, s.limits);
     const staged: ScriptState = {
       ...s,
       loaded,
+      identity: p.identity,
       queue: [],
       suspended: new Set(),
       parked: [],
@@ -745,6 +746,7 @@ export class Group {
         staged,
         entry,
         this.extension(staged, entry, libraries),
+        false,
       );
     }
     if (carry === 'carry variables') {
@@ -754,18 +756,21 @@ export class Group {
           loaded.variables[i] = s.loaded.variables[old]!;
         }
       }
-      if (loaded.variablesSize() > s.limits.persistentState) {
-        this.trace(
-          recordLine(
-            'refused',
-            [],
-            [['code', JSON.stringify('state too large')]],
-          ),
-        );
-        throw new HostError('state too large');
-      }
     }
-    return { loaded, units: staged.units };
+    if (
+      (carry === 'carry variables' || extensions.length > 0) &&
+      loaded.variablesSize() > s.limits.persistentState
+    ) {
+      this.trace(
+        recordLine(
+          'refused',
+          [],
+          [['code', JSON.stringify('state too large')]],
+        ),
+      );
+      throw new HostError('state too large');
+    }
+    return { loaded, units: staged.units, identity: staged.identity };
   }
 
   /** Worker. Check and initialise before discarding any old work. */
@@ -779,7 +784,7 @@ export class Group {
         [name],
         [
           ['carry', carry === 'carry variables' ? 'yes' : 'no'],
-          ['source', JSON.stringify(source)],
+          ['source', displayText(source)],
           ['identity', p.identity],
         ],
         true,
@@ -833,7 +838,7 @@ export class Group {
       name,
       source,
       libraries,
-      [...Object.keys(s.objects), ...this.scripts.map(other => other.name)],
+      Object.keys(s.objects),
       declarationsOf(s.grants),
       existing,
     );
@@ -843,16 +848,59 @@ export class Group {
       source,
       p.imports.map(identityOf),
     );
-    const extendedIdentity = sha256(
-      `${s.loaded.identity}\nextend\n${identity}\n`,
-    );
-    return { p: { ...p, identity }, extendedIdentity, links, existing, name };
+    const diagnostics = [...(p.diagnostics ?? [])];
+    if (p.checked.tree) {
+      const units = [
+        ...s.units.map((unit, i) => ({
+          root: unit.tree.root,
+          name: s.loaded.units[i]!.name,
+        })),
+        { root: p.checked.tree.root, name },
+      ];
+      checkDecisionCalls(
+        units.map(unit => ({
+          root: unit.root,
+          report: (code, leaf) => {
+            if (
+              !diagnostics.some(
+                d =>
+                  d.unit === unit.name &&
+                  d.code === code &&
+                  d.line === leaf.span.line &&
+                  d.col === leaf.span.col,
+              )
+            ) {
+              diagnostics.push({
+                code,
+                unit: unit.name,
+                line: leaf.span.line,
+                col: leaf.span.col,
+                message: code,
+              });
+            }
+          },
+        })),
+      );
+    }
+    const extendedIdentity = sha256(`${s.identity}\nextend\n${identity}\n`);
+    return {
+      p: {
+        ...p,
+        identity,
+        diagnostics: diagnostics.length ? diagnostics : null,
+      },
+      extendedIdentity,
+      links,
+      existing,
+      name,
+    };
   }
 
   private applyExtension(
     s: ScriptState,
     source: string,
     prepared = this.extension(s, source),
+    checkState = true,
   ) {
     const { p, links, existing, name, extendedIdentity } = prepared;
     for (const decl of p.checked.tree ? viewSource(p.checked.tree.root) : []) {
@@ -881,7 +929,7 @@ export class Group {
       this.persistentState(s) -
       s.loaded.variablesSize() +
       extension.variablesSize();
-    if (state > s.limits.persistentState) {
+    if (checkState && state > s.limits.persistentState) {
       this.trace(
         recordLine(
           'refused',
@@ -896,7 +944,7 @@ export class Group {
       r.run.segmentBase.push(...added);
     }
     s.loaded.attach(extension);
-    s.loaded.identity = extendedIdentity;
+    s.identity = extendedIdentity;
     s.units.push({
       source,
       tree: p.checked.tree!,
@@ -915,7 +963,7 @@ export class Group {
         'extend',
         [name],
         [
-          ['source', JSON.stringify(source)],
+          ['source', displayText(source)],
           ['identity', p.extendedIdentity],
         ],
         true,
@@ -925,7 +973,12 @@ export class Group {
   }
 
   private replaceScripts(
-    replacements: { loaded: Loaded; s: ScriptState; units: SourceUnit[] }[],
+    replacements: {
+      identity: string;
+      loaded: Loaded;
+      s: ScriptState;
+      units: SourceUnit[];
+    }[],
   ): Report[] {
     const previous = this.drainReports;
     const reports: Report[] = [];
@@ -934,8 +987,9 @@ export class Group {
       for (const { s } of replacements) {
         this.stopState(s, 'reload');
       }
-      for (const { s, loaded, units } of replacements) {
+      for (const { s, loaded, units, identity } of replacements) {
         s.loaded = loaded;
+        s.identity = identity;
         s.units = units;
         s.stopped = false;
         delete s.stopReason;
@@ -987,7 +1041,7 @@ export class Group {
         [l.name],
         [
           ['carry', carry === 'carry variables' ? 'yes' : 'no'],
-          ['source', JSON.stringify(l.source)],
+          ['source', displayText(l.source)],
           ['identity', identityOf(l)],
         ],
         true,

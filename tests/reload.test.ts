@@ -4,8 +4,12 @@ import {
   defineCapability,
   newGroup,
   num,
+  readDisplay,
   type Call,
 } from '../src/index';
+
+import { readDisplayText } from '../src/readers';
+import { parseRecord } from '../tools/core/trace-case';
 
 const setup = () => {
   const trace: string[] = [];
@@ -124,7 +128,7 @@ describe('Reload', () => {
     expect(vars(g)).toEqual([['n', '"abcdefghij"']]);
   });
 
-  test('carried Function Values become stale, including identical-source reloads and Stop', () => {
+  test('carried Function Values become stale even after an identical-source reload', () => {
     const { g } = setup();
     const source =
       'script variable callback = nothing\non make\n  put (given x: x + 1) into callback\nend make\non useit\n  return callback(2)\nend useit';
@@ -396,4 +400,132 @@ describe('code-change boundaries', () => {
     const r = g.pump(0n).reports[0]!;
     expect('result' in r && r.result!.toString()).toBe('1');
   });
+});
+
+describe('review regressions', () => {
+  test('replacement measures carried values after replaying every extension initialiser', () => {
+    const { g } = setup();
+    const old = compileLibrary({
+      name: 'base',
+      version: '1',
+      source: 'constant start = ""',
+    });
+    g.addLibrary(old);
+    const s = g.load({
+      name: 's',
+      limits: { persistentState: 100 },
+      source: 'script variable n = ""',
+    });
+    s.extend('use start from base\nscript variable fresh = start');
+    const next = compileLibrary({
+      name: 'base',
+      version: '2',
+      source: 'constant start = "' + 'x'.repeat(150) + '"',
+    });
+    expect(() => g.replaceLibrary(next, 'carry variables')).not.toThrow();
+    expect(vars(g)).toEqual([
+      ['n', '""'],
+      ['fresh', '""'],
+    ]);
+  });
+
+  test('Script names remain unresolved receiver names and cannot replace existing definitions', () => {
+    const { g } = setup();
+    const s = g.load({
+      name: 's',
+      source: 'script variable n = 5\nscript variable s = 7',
+    });
+    g.load({ name: 'n', source: '' });
+    s.extend('on go\n  return n + s\nend go');
+    s.deliver({ name: 'go' });
+    let r = g.pump(0n).reports[0]!;
+    expect('result' in r && r.result!.toString()).toBe('12');
+    s.reload(
+      'script variable n = 1\nscript variable s = 2\non go\n  return n + s\nend go',
+      'carry variables',
+    );
+    s.deliver({ name: 'go' });
+    r = g.pump(0n).reports[0]!;
+    expect('result' in r && r.result!.toString()).toBe('12');
+  });
+
+  test('extension calls into older vetoing Handlers are rejected at their veto', () => {
+    const { g } = setup();
+    const s = g.load({
+      name: 's',
+      source: 'on decideit, deciding\n  veto "no"\nend decideit',
+    });
+    expect(() => s.extend('on caller\n  decideit\nend caller')).toThrow(
+      'veto outside a decision',
+    );
+    expect(() =>
+      s.extend('on caller\n  return decideit()\nend caller'),
+    ).toThrow('veto outside a decision');
+    expect(g.inspect().scripts[0]!.vars).toEqual([]);
+  });
+
+  test('initializer-created values from different code are unequal, while extension preserves old literal equality', () => {
+    const { g } = setup();
+    const s = g.load({
+      name: 's',
+      source:
+        'script variable f = (given x: x + 1)\non getit\n  return f\nend getit',
+    });
+    s.deliver({ name: 'getit' });
+    const old = g.pump(0n).reports[0]!;
+    s.reload(
+      'script variable f = (given x: x + 2)\non getit\n  return f\nend getit',
+      'reset variables',
+    );
+    s.deliver({ name: 'getit' });
+    const fresh = g.pump(0n).reports[0]!;
+    expect(
+      'result' in old && 'result' in fresh && old.result!.equals(fresh.result!),
+    ).toBe(false);
+    s.reload(
+      'script variable f = nothing\nfunction increment x\n  return x + 1\nend increment\non same\n  return f is increment\nend same\non named\n  put increment into f\nend named',
+      'reset variables',
+    );
+    s.deliver({ name: 'named' });
+    s.deliver({ name: 'same' });
+    let r = g.pump(0n).reports[1]!;
+    expect('result' in r && r.result!.toString()).toBe('true');
+    s.extend('on fresh\n  return 1\nend fresh');
+    s.deliver({ name: 'same' });
+    r = g.pump(0n).reports[0]!;
+    expect('result' in r && r.result!.toString()).toBe('true');
+  });
+
+  test('named extension functions display their Home Script, while Lambdas display the extension unit', () => {
+    const { g } = setup();
+    const s = g.load({ name: 's', source: '' });
+    s.extend(
+      'function plus x\n  return x + 1\nend plus\non getfn\n  return [plus, (given x: x + 1)]\nend getfn',
+    );
+    s.deliver({ name: 'getfn' });
+    const r = g.pump(0n).reports[0]!;
+    expect('result' in r && r.result!.toString()).toBe(
+      '[<function s:plus>, <function s+1:5:18>]',
+    );
+  });
+});
+
+test('code-change source fields use the display form and replay embedded quotes and newlines', () => {
+  const { g, trace } = setup();
+  const s = g.load({ name: 's', source: '' });
+  const source =
+    'script variable caption = "hello"\non go\n  return caption\nend go';
+  s.extend(source);
+  const record = parseRecord(trace.find(l => l.startsWith('> extend'))!);
+  expect(readDisplay(record.fields.get('source')!).asText()).toBe(source);
+});
+
+test('source replay preserves the scalar sequence its code identity hashes', () => {
+  const { g, trace } = setup();
+  const s = g.load({ name: 's', source: '' });
+  const source = 'script variable caption = "e\u0301"';
+  s.extend(source);
+  const record = parseRecord(trace.find(l => l.startsWith('> extend'))!);
+  expect(readDisplayText(record.fields.get('source')!)).toBe(source);
+  expect(vars(g)).toEqual([['caption', '"é"']]);
 });

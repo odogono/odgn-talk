@@ -148,9 +148,11 @@ export class Code {
   readonly libraries = new Map<string, Code>();
   /** Whether it is a stdlib Library's, whose errors name the caller (ADR 0037). */
   stdlib = false;
-  identity = '';
 
-  constructor(readonly unit: CodeUnit) {
+  constructor(
+    readonly unit: CodeUnit,
+    readonly identity = '',
+  ) {
     this.constants = unit.constants.map((display, i) => {
       const els = unit.patterns.get(i);
       if (els) {
@@ -235,8 +237,9 @@ export class Script extends Code {
     unit: CodeUnit,
     readonly limits: Limits = defaultLimits,
     readonly home?: Script,
+    identity = '',
   ) {
-    super(unit);
+    super(unit, identity);
     this.variableNames = [...unit.variables];
     this.variables = unit.variables.map(() => nothing);
   }
@@ -288,8 +291,14 @@ export const loadScript = (
   libraries: ReadonlyMap<string, Code> = new Map(),
   initialVariables: readonly Value[] = [],
   home?: Script,
+  identity = '',
 ): Script => {
-  const script = new Script(unit, { ...defaultLimits, ...limits }, home);
+  const script = new Script(
+    unit,
+    { ...defaultLimits, ...limits },
+    home,
+    identity,
+  );
   initialVariables.forEach((value, i) => {
     script.variables[i] = value;
   });
@@ -334,7 +343,8 @@ export const loadScript = (
 export const loadLibrary = (
   unit: CodeUnit,
   libraries: ReadonlyMap<string, Code>,
-): Code => loadScript(unit, {}, libraries);
+  identity = '',
+): Code => loadScript(unit, {}, libraries, [], undefined, identity);
 
 // ---------------------------------------------------------------------------
 // Runs
@@ -1626,7 +1636,7 @@ export class Run {
     const lambda = body.kind === 'lambda';
     const home = this.script.home ?? this.script;
     const own = home.units.includes(code) || code === this.script;
-    const placeHome = own ? code.name : home.name;
+    const placeHome = own && lambda ? code.name : home.name;
     const where = own ? '' : `${code.name}:`;
     const ref: FunctionRef = {
       home: home.name,

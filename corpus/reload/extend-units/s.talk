@@ -1,0 +1,11 @@
+script variable n = 1
+script variable callback = nothing
+constant offset = 2
+function plus x, y = 3
+  return x + y + offset
+end plus
+on old
+  put (given x: plus(x)) into callback
+  wait 1 s
+  put n + 1 into n
+end old

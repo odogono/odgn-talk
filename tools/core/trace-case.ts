@@ -3,6 +3,7 @@
 // the case's, ignoring comments and blank lines. Bless writes the Core's
 // Trace back, keeping each comment and blank line before the Host Input line
 // it preceded.
+import { readDisplayText } from '../../src/readers';
 import { replacementLibraries } from '../../src/library';
 import corpus from '../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -614,7 +615,7 @@ export const replay = (
           group
             .script(r.ids[0]!)!
             .reload(
-              read(r.fields.get('source')!).asText()!,
+              readDisplayText(r.fields.get('source')!),
               r.fields.get('carry') === 'yes'
                 ? 'carry variables'
                 : 'reset variables',
@@ -623,7 +624,7 @@ export const replay = (
         case 'extend':
           group
             .script(r.ids[0]!)!
-            .extend(read(r.fields.get('source')!).asText()!);
+            .extend(readDisplayText(r.fields.get('source')!));
           break;
         case 'replace-library': {
           const name = r.ids[0]!;
@@ -632,7 +633,7 @@ export const replay = (
             {
               name,
               version: previous.version,
-              source: read(r.fields.get('source')!).asText()!,
+              source: readDisplayText(r.fields.get('source')!),
             },
             [...registered.values()],
           );

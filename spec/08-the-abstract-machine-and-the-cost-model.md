@@ -28,7 +28,7 @@ The state is defined abstractly. A Core may represent it any way it likes, as lo
 
 ## Code units
 
-A code unit is the compiled form of one Script or Library. It holds, in order:
+A code unit is the compiled form of one Script, Library or Script extension. It holds, in order:
 
 1. **The constant pool:** each distinct constant, in the order the lowering first uses it. A Lambda's or an event test's body is lowered where its construct appears, so its constants are numbered there. A constant is a number, a Quantity, a text, `true`, `false` or `nothing`, a Built-in Constant by name, a list of map keys, a Text Pattern with no splices, a Text Pattern template whose splices are numbered `(1)`, `(2)`, …, a list of bit-field widths, or the empty Bytes `<<>>`.
 2. **The definitions:** first each Constant that a `use` line imports or the unit declares, in source order, then each function parameter's default, in source order. The initialiser computes the unit's own ones when the unit loads.
@@ -41,6 +41,8 @@ A code unit is the compiled form of one Script or Library. It holds, in order:
 
 - **Code positions:** a code position is a code unit and an instruction index in it, so a Run paused inside Library code is still a position a Snapshot can hold ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 - **Code identity** covers the source, the language and Cost Model versions, and the identities of the Libraries it imports ([chapter 7](07-libraries-and-the-standard-library.md)).
+
+An extension keeps the older code units unchanged. Its variables table starts with all existing Script Variables in declaration order, followed by its new ones. Its definitions start with the existing Constants in declaration order across the Script and its extensions, followed by its own definitions in the order above. Existing local functions, Handlers and Constants are linked as imports from `@<unit>`, where `<unit>` is the code unit that declares them; names already imported from a Library keep that Library link. Calls and Function Values use the same imported-call and imported-function instructions as Library imports, with the same charges. The extension's initialiser computes only its new definitions and variables ([chapter 10](10-save-and-restore.md#extend-script)).
 
 ### Bodies
 

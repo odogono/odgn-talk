@@ -1,0 +1,23 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "base"
+version = "1"
+source = "base.talk"
+
+[[libraries]]
+name = "middle"
+version = "1"
+source = "middle.talk"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

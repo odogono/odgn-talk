@@ -1,0 +1,29 @@
+# replacement-transitive: A failed dependent Library changes nothing. Successful replacement rebuilds transitive importers and extensions, discards old work in load order, and leaves carried Function Values stale.
+
+> add-library base identity=bcf4db92cf71ee41c20e4f2128d7f0b4e859d02ab35e8f76c90e10bbd2b1ac99
+> add-library middle identity=abeba12741f533223127e1a4f2b4e85c899177b99f252e33e4d81a59132acc55
+> load a identity=0ee6603c29e172b588fb361bb6a691b9819db82669039a9e8a9c7d4e5bdae455
+> load b identity=c456f23ae1753e9f6423f98807ae53b24b49aebcf57518a2aebd025fa25081b7
+> extend b source="use count from base" & newline & "script variable fresh = 3" & newline & "on go" & newline & "  return count() + n + fresh" & newline & "end go" identity=423bca864ceb847345c803ac16a7c8a289ce8032a327d1670c0b6fa704780226
+> deliver d1 to=a message=make
+> pump clock=1970-01-01T00:00:00Z
+seg a/r1 start delivery=d1 handler=make clause=1 fuel=21 alloc=32 state=208 end=wait until=1970-01-01T00:00:01Z
+pumped state=idle fuel=21 next=1970-01-01T00:00:01Z
+> replace-library base carry=yes source="function other" & newline & "  return 2" & newline & "end other" identity=0586744bf6d2adde733598c30046fa85f50adc9c27b63c0ffed3b710dedd1397
+diag middle code="unknown import" pos=1:5
+diag middle code="unknown name" pos=3:10
+> replace-library base carry=yes source="function count" & newline & "  return 7" & newline & "end count" identity=5544f6c53648e18396e14d93f0d41a4aca68010c033da783eb73ad9a34295519
+stopped a reason="reload" discarded=[a/r1]
+stopped b reason="reload"
+> deliver d2 to=a message=go
+> deliver d3 to=b message=go
+> pump clock=1970-01-01T00:00:00Z
+raise a/r2 code="function gone" at=a:12 pos=8:10
+seg a/r2 start delivery=d2 handler=go clause=1 fuel=17 alloc=0 state=32 end=error
+run a/r2 outcome=errored delivery=d2 handler=go error={code: "function gone", at: {unit: "a", handler: "go", line: 8, column: 10}} fuel=17 alloc=0
+seg b/r1 start delivery=d3 handler=go clause=1 fuel=27 alloc=32 state=32 end=return
+run b/r1 outcome=completed delivery=d3 handler=go value=12 fuel=27 alloc=32
+pumped state=idle fuel=44
+> vars
+vars a callback=<function a:middle:total>
+vars b n=2 fresh=3

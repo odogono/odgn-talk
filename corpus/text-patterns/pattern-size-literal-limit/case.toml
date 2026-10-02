@@ -1,5 +1,4 @@
-# pattern-size-literal-limit: a Text Pattern case (spec chapters 4 and 8). It isn't
-# blessed, and its figures are estimates unless case.trace pins one.
+# pattern-size-literal-limit: a Text Pattern load limit and atomic Reload case.
 
 kind = "trace"
 

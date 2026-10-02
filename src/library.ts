@@ -193,11 +193,11 @@ const build = (
         loadLibrary(
           lowerTree(tree, { name: src.name, unit: 'library' }),
           linksOf(p.imports),
+          p.identity,
         ),
       ),
     };
     entry.code.stdlib = isStdlib;
-    entry.code.identity = p.identity;
     cache.set(p.identity, entry);
   }
   const library: Library = Object.freeze({
