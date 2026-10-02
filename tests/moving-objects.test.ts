@@ -7,7 +7,19 @@ import {
   restore,
   type Group,
   type Inspection,
+  ScriptError,
 } from '../src/index';
+
+// A Request or Call that rejects with `send failed`, giving the reason in its data.
+const expectSendFailed = async (result: Promise<unknown>, reason: string) => {
+  const error = await result.then(
+    () => null,
+    (error_: unknown) => error_,
+  );
+  expect(error).toBeInstanceOf(ScriptError);
+  expect((error as ScriptError).code).toBe('send failed');
+  expect((error as ScriptError).data.get('reason').asText()).toBe(reason);
+};
 
 const clock = parseInstant('2026-09-30T09:00:00Z');
 const room = defineObjectKind<null>({ name: 'room', props: {} });
@@ -89,10 +101,7 @@ describe('moving Host Object messages', () => {
     const request = group.request(leaf, { name: 'ping', args: [num(1)] });
     group.setParent(leaf, undefined);
     const result = group.pump(clock);
-    await expect(request.result).rejects.toMatchObject({
-      code: 'send failed',
-      data: { reason: 'unhandled' },
-    });
+    await expectSendFailed(request.result, 'unhandled');
     expect(lines).toContain(
       '> set-parent object=<object room "leaf"> parent=nothing',
     );
@@ -102,6 +111,7 @@ describe('moving Host Object messages', () => {
         kind: 'unhandled',
         delivery: request.id,
         message: { name: 'ping', args: [num(1)] },
+        target: leaf,
       },
     ]);
   });
@@ -139,9 +149,7 @@ describe('moving Host Object messages', () => {
     });
     group.setParent(leaf, small);
     const reports = group.pump(clock).reports;
-    await expect(request.result).rejects.toMatchObject({
-      data: { reason: 'limit fault' },
-    });
+    await expectSendFailed(request.result, 'limit fault');
     expect(reports).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
@@ -244,9 +252,7 @@ describe('wait for Host Object targets', () => {
       .load({ name: 'watcher', source: waitSource('7') })
       .deliver({ name: 'watch' });
     const report = group.pump(clock).reports.find(r => r.kind === 'run end');
-    expect(
-      report?.kind === 'run end' && report.error?.get('code').asText(),
-    ).toBe('wrong kind');
+    expect(report?.kind === 'run end' && report.error?.code).toBe('wrong kind');
   });
 
   test('a saved object filter retains its identity after restore', () => {
@@ -356,9 +362,7 @@ describe('moving message lifecycle', () => {
     pumpUntil(group, state => hasMessage(state, 'next', 'ping'));
     abort.abort();
     const reports = group.pump(clock).reports;
-    await expect(request.result).rejects.toMatchObject({
-      data: { reason: 'cancelled' },
-    });
+    await expectSendFailed(request.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({
         kind: 'run end',

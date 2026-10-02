@@ -191,11 +191,9 @@ test('Revoke drains in order, affects one Script alias and leaves its fingerprin
   other.deliver({ name: 'go' });
   const reports = g.pump(0n).reports.filter(r => r.kind === 'run end');
   expect(reports.map(r => r.outcome)).toEqual(['errored', 'completed']);
-  expect(reports[0]!.error?.get('code').toString()).toBe(
-    '"capability revoked"',
-  );
-  expect(reports[0]!.error?.get('capability').toString()).toBe('"io"');
-  expect(reports[0]!.error?.get('operation').toString()).toBe('"read"');
+  expect(reports[0]!.error?.code).toBe('capability revoked');
+  expect(reports[0]!.error?.data.get('capability').toString()).toBe('"io"');
+  expect(reports[0]!.error?.data.get('operation').toString()).toBe('"read"');
   expect(s.grants()).toEqual({
     io: ['read', 'write'],
     other: ['read', 'write'],
@@ -455,7 +453,7 @@ test('Restore retains a __proto__ Grant alias and its revoked placeholder', () =
     if (offered) {
       expect(report.result?.toString()).toBe('7');
     } else {
-      expect(report.error?.get('code').toString()).toBe('"capability revoked"');
+      expect(report.error?.code).toBe('capability revoked');
     }
   }
 });
@@ -508,6 +506,6 @@ test('Restore can reissue a revoked in-flight call only when the Host rebinds it
   });
   unbound.settle('s/r1.c1', { reissue: true });
   const failed = unbound.pump(2n).reports.find(r => r.kind === 'run end')!;
-  expect(failed.error?.get('code').toString()).toBe('"capability revoked"');
+  expect(failed.error?.code).toBe('capability revoked');
   expect(calls).toHaveLength(2);
 });

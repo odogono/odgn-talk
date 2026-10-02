@@ -1,3 +1,5 @@
+import { nothing, type Value } from './values';
+
 // The catalogue is deliberately open to the later embedding implementation.
 export type HostErrorCode =
   | 'clock backwards'
@@ -50,12 +52,15 @@ export class MailboxFull extends Error {
   override name = 'MailboxFull';
 }
 
-/** A Script-level error as the Host sees it, such as a Request's `send failed`. */
+/**
+ * A Script-level error as the Host sees it, such as a Request's `send failed`
+ * or a `run end`'s error. Its `data` is a map, or Nothing.
+ */
 export class ScriptError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly data: unknown = null,
+    readonly data: Value = nothing,
   ) {
     super(message);
     this.name = 'ScriptError';

@@ -260,7 +260,6 @@ All existing corpus cases now execute, but the corpus is not a complete conforma
 
 An audit of the public package against [`talk.ts`](../spec/embedding/talk.ts), chapter 9 and [`diagnostics.toml`](../spec/data/diagnostics.toml) found the load-time diagnostics and the Host error catalogue complete: every code is raised and has a regression test. The embedding interface still has these gaps, tracked under [#128](https://github.com/odogono/odgn-talk/issues/128):
 
-- **Reports and Inspection** ([#196](https://github.com/odogono/odgn-talk/issues/196)): no `call failed` report; `run end` lacks `at` and gives its error as a map; `unhandled` lacks `target`; `PumpResult` lacks `nextDeadline`; suspended Runs lack `wait`, `until` and `calls`.
 - **`onReady`** ([#197](https://github.com/odogono/odgn-talk/issues/197)) is never called.
 - **`shape.object(kind)`** ([#198](https://github.com/odogono/odgn-talk/issues/198)) is missing.
 - **Host-side `decodeJson`, `encodeJson` and `coreVersions`** ([#199](https://github.com/odogono/odgn-talk/issues/199)) are missing.

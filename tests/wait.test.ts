@@ -166,7 +166,13 @@ describe('suspending Operations from the Host', () => {
     s.deliver({ name: 'go' });
     group.pump(at(0));
     expect(group.inspect().scripts[0]!.runs).toEqual([
-      { id: 's/r1', status: 'suspended', handler: 'go' },
+      {
+        id: 's/r1',
+        status: 'suspended',
+        handler: 'go',
+        wait: 'ask-wait',
+        calls: ['s/r1.c1'],
+      },
     ]);
     started[0]!.answer(text('given'));
     group.pump(at(1));

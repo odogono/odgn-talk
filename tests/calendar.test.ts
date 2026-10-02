@@ -156,7 +156,7 @@ test('Calendar rejects date-only conversion and an invalid three-argument disamb
       },
     });
     expect(called).toBe(false);
-    expect(result.report.error?.get('code').asText()).toBe('out of domain');
+    expect(result.report.error?.code).toBe('out of domain');
     expect(result.lines.some(line => line.startsWith('call '))).toBe(false);
   }
 });
@@ -180,9 +180,7 @@ test('Calendar enforces civil result refinements and exact seconds offsets', () 
       run(`ask cal to ${operation}${args}`, {
         ...impl,
         [operation]: () => value,
-      })
-        .report.error?.get('code')
-        .asText(),
+      }).report.error?.code,
     ).toBe('host error');
   }
 });
@@ -219,9 +217,9 @@ test('Calendar admits only its declared catalogue errors with valid fields', () 
         },
       },
     );
-    expect(result.report.error?.get('code').asText()).toBe(expected);
+    expect(result.report.error?.code).toBe(expected);
     if (expected !== 'host error') {
-      expect(result.report.error?.get('capability').asText()).toBe('cal');
+      expect(result.report.error?.data.get('capability').asText()).toBe('cal');
     }
   }
   expect(
@@ -237,9 +235,7 @@ test('Calendar admits only its declared catalogue errors with valid fields', () 
           ]),
         );
       },
-    })
-      .report.error?.get('code')
-      .asText(),
+    }).report.error?.code,
   ).toBe('host error');
 });
 
@@ -253,8 +249,8 @@ test('Calendar rejects dynamic argument kinds without reaching the Host or charg
     },
   });
   expect(called).toBe(false);
-  expect(result.report.error?.get('code').asText()).toBe('wrong kind');
-  expect(result.report.error?.get('argument').toString()).toBe('1');
+  expect(result.report.error?.code).toBe('wrong kind');
+  expect(result.report.error?.data.get('argument').toString()).toBe('1');
   expect(result.lines.some(line => line.startsWith('call '))).toBe(false);
 });
 
@@ -310,13 +306,9 @@ test('ordinary Capabilities cannot impersonate Calendar catalogue failures', () 
     source: 'on go\nask calendar to today\nend',
     grants: { calendar: calendar.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(
-    g
-      .pump(now)
-      .reports.find(r => r.kind === 'run end')!
-      .error?.get('code')
-      .asText(),
-  ).toBe('host error');
+  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.error?.code).toBe(
+    'host error',
+  );
 });
 
 test('Calendar calls from a Library retain their refinements and grants across Restore', () => {
@@ -356,10 +348,6 @@ test('Calendar calls from a Library retain their refinements and grants across R
   expect(copy.fingerprint()).toEqual(g.fingerprint());
   copy.script('s')!.deliver({ name: 'go' });
   expect(
-    copy
-      .pump(now)
-      .reports.find(r => r.kind === 'run end')!
-      .error?.get('code')
-      .asText(),
+    copy.pump(now).reports.find(r => r.kind === 'run end')!.error?.code,
   ).toBe('host error');
 });

@@ -263,9 +263,9 @@ test('a dynamic timer Shape mismatch never reaches the Host or charges its cost'
   s.deliver({ name: 'go', args: [num(1)] });
   const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
   expect(calls).toBe(0);
-  expect(report.error?.get('code').toString()).toBe('"wrong kind"');
-  expect(report.error?.get('operation').toString()).toBe('"cancel"');
-  expect(report.error?.get('argument').toString()).toBe('1');
+  expect(report.error?.code).toBe('wrong kind');
+  expect(report.error?.data.get('operation').toString()).toBe('"cancel"');
+  expect(report.error?.data.get('argument').toString()).toBe('1');
 });
 
 test('standard Trace setup refuses duplicate declarations and Clock Stubs', () => {
@@ -303,7 +303,7 @@ test('timer Host failures remain host error and no custom Script codes are decla
     grants: { timer: timers.grant('all', undefined) },
   }).deliver({ name: 'go' });
   const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
-  expect(report.error?.get('code').toString()).toBe('"host error"');
+  expect(report.error?.code).toBe('host error');
   expect(timers.operations.get('cancel')!.errors).toEqual([]);
 });
 
