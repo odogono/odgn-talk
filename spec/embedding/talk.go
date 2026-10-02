@@ -510,6 +510,13 @@ type TraceSink interface{ Record(line string) }
 // Libraries (ADR 0020; #71)
 // ---------------------------------------------------------------------------
 
+// GrantDecls gives compile-time modes and argument Shapes by the Grant name in source.
+type OperationCheck struct {
+	Mode Mode
+	Args []Shape
+}
+type GrantDecls map[string]map[string]OperationCheck
+
 type LibrarySource struct {
 	Name    string
 	Version string // the Host's own label
@@ -519,7 +526,7 @@ type LibrarySource struct {
 // CompileLibrary parses and checks a Library once per process. imports must
 // hold every Library its `use` lines name. A missing one, or a cycle, is a
 // LoadError.
-func (c *Core) CompileLibrary(src LibrarySource, imports []*Library) (*Library, error)
+func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error)
 
 type Library struct { /* opaque */
 }
@@ -555,7 +562,7 @@ type LoadOptions struct {
 	// be granted twice under two names with different bindings.
 	Grants map[string]*Grant
 	// GrantsAsUsed keeps only the granted Operations that the Script and its
-	// Libraries use, and makes no unused Grant visible to it.
+	// Libraries use, trimming once at Load; discarded Operations cannot be regained.
 	GrantsAsUsed bool
 	Owner        *Object            // the Script becomes its Owning Script
 	Objects      map[string]*Object // well-known objects, bound by name
@@ -740,7 +747,7 @@ type Script struct { /* opaque */
 }
 
 func (s *Script) Name() string
-func (s *Script) Grants() map[string][]string // the Operations kept for each granted name
+func (s *Script) Grants() map[string][]string // worker; a fresh map of kept names, including revoked Grants
 func (s *Script) Counters() Counters          // worker, between Pumps
 
 // Reload is stop-and-reload (ADR 0005), a worker call. It returns the

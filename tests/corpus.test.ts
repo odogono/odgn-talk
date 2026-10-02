@@ -80,7 +80,7 @@ test('selecting a Trace Case with a deferred input exits with a clear failure', 
       resolve(dir, 'case.toml'),
       'kind = "trace"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n',
     );
-    writeFileSync(resolve(dir, 'case.trace'), '> revoke s grant=api\n');
+    writeFileSync(resolve(dir, 'case.trace'), '> unsupported-input\n');
     const result = Bun.spawnSync([process.execPath, runner, dir]);
     expect(result.exitCode).toBe(1);
     expect(new TextDecoder().decode(result.stderr)).toContain(

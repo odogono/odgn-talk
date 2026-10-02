@@ -1,0 +1,23 @@
+# GrantsAsUsed counts Library needs, trims io.unused and removes spare.
+# Extend cannot regain a discarded Operation. The runner's save/restore
+# replay rebinds the original wider template but keeps only io.read.
+> add-library helper identity=b9bb261f55629938425d91839560c3f69c9fff00db2bd757fd8608b2601c6f7c
+> load s identity=06a71442e103aa64a87daf2571a1ee7429b196a1e2cb3baf31cc1d10206fc88f
+> extend s source="on extra" & newline & "  ask io to unused" & newline & "end extra" identity=a26a065e765a4124daf7b1e911488bc63ba0b9b5d2da3151c41b63b0a6358f61
+diag s+1 code="unknown operation" pos=2:13
+> stub io.read value=7
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=io.read args=[] result=7
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=48 alloc=40 state=40 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=48 alloc=40
+pumped state=idle fuel=48
+> stub io.read value=8
+> deliver d2 to=s message=go
+> pump clock=2026-09-30T10:00:01Z
+call s/r2.c1 op=io.read args=[] result=8
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=48 alloc=40 state=64 end=return
+run s/r2 outcome=completed delivery=d2 handler=go fuel=48 alloc=40
+pumped state=idle fuel=48
+> vars
+vars s seen=[7, 8]

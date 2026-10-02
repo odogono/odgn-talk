@@ -1,0 +1,4 @@
+use label from wrapper
+on go
+  return label("key")
+end go

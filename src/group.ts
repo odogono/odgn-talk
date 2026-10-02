@@ -52,7 +52,7 @@ import {
   type ObjectKind,
   type ObjectState,
 } from './objects';
-import type { GrantDecls } from './effects';
+import { operationUses, type GrantDecls } from './effects';
 import type { SemanticTree } from './semantic';
 import type { ExistingName } from './checker';
 import type { Code } from './machine';
@@ -72,6 +72,7 @@ import {
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
 import { displayText, listValues, map, nothing, text, Value } from './values';
+import { compareText } from './text';
 
 export type GroupOptions = {
   name: string;
@@ -82,6 +83,8 @@ export type LoadOptions = {
   /** Its Grants, by the name the Script uses for each. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
   grants?: Readonly<Record<string, Grant<any>>>;
+  /** Keep only Operations used by this source and its Libraries. */
+  grantsAsUsed?: boolean;
   limits?: Partial<Limits>;
   name: string;
   /** Its well-known Host Objects, by the name the Script uses. */
@@ -308,6 +311,8 @@ type ScriptState = {
   stopReason?: string;
   /** Its suspended Runs, which Persistent State counts. */
   suspended: Set<Running>;
+  /** Grant names without a Host implementation in this restored Group. */
+  unbound: Set<string>;
   units: SourceUnit[];
   /** Its pending `wait for`s, in the order the waits began. */
   waiters: { running: Running; timers: Timer[] }[];
@@ -316,6 +321,7 @@ type InputAction =
   | { id: string; k: 'cancel-delivery' }
   | { id: string; k: 'cancel-run'; name: string }
   | { k: 'stop'; name: string; reason: string }
+  | { grant: string; k: 'revoke'; name: string }
   | { fuel: number; id: string; k: 'answer'; value: Value }
   | { error: HostScriptError | null; id: string; k: 'fail' }
   | {
@@ -356,12 +362,40 @@ const declarationsOf = (
     ]),
   );
 
+const keepOperations = (
+  grant: Grant<unknown>,
+  names: ReadonlySet<string>,
+): Grant<unknown> => ({
+  ...grant,
+  ops: new Set([...grant.ops].filter(name => names.has(name))),
+});
+
+const usedOperations = (tree: SemanticTree, imports: readonly Library[]) => {
+  const used = new Map<string, Set<string>>();
+  for (const { capability, operation } of [
+    ...operationUses(tree.root),
+    ...imports.flatMap(library => library.needs),
+  ]) {
+    const operations = used.get(capability) ?? new Set<string>();
+    operations.add(operation);
+    used.set(capability, operations);
+  }
+  return used;
+};
+
+const availableGrants = (s: ScriptState) =>
+  new Map([...s.grants].filter(([name]) => !s.revoked.has(name)));
+
 /** A handle for calls addressed to one Script. */
 export class Script {
   constructor(
     private readonly group: Group,
     readonly name: string,
   ) {}
+  /** Worker. A snapshot of kept Operations, including revoked Grants. */
+  grants(): Record<string, string[]> {
+    return this.group.scriptGrants(this.name);
+  }
   /** Queued. Returns the delivery id. */
   deliver(m: Message): string {
     return this.group.queueDelivery('deliver', this.name, m, null).id!;
@@ -393,6 +427,10 @@ export class Script {
   }
   cancelRun(runId: string): void {
     this.group.queueCancelRun(this.name, runId);
+  }
+  /** Queued. In-flight calls are left to the Host. */
+  revoke(grantName: string): void {
+    this.group.queueRevoke(this.name, grantName);
   }
 }
 
@@ -617,10 +655,16 @@ export class Group {
       );
     let loadFailure: LoadError | undefined;
     for (const script of saved.scripts) {
-      const grants: Record<string, Grant<unknown>> = {};
+      const grants: Record<string, Grant<unknown>> = Object.create(null);
       const revoked = new Set<string>();
       for (const grant of script.grants) {
-        const rebound = o.grants(script.name, grant.name);
+        const offered = o.grants(script.name, grant.name);
+        const rebound = offered
+          ? keepOperations(
+              offered,
+              new Set(grant.operations.map(op => op.name)),
+            )
+          : undefined;
         const placeholder = defineCapability(
           grant.capability,
           Object.fromEntries(
@@ -658,10 +702,11 @@ export class Group {
           ),
         });
         const state = group.scripts.at(-1)!;
-        state.revoked = revoked;
         for (const source of script.sources.slice(1)) {
           group.applyExtension(state, source, undefined, false);
         }
+        state.revoked = revoked;
+        state.unbound = new Set(revoked);
       } catch (error) {
         if (!(error instanceof LoadError)) {
           throw error;
@@ -1120,8 +1165,22 @@ export class Group {
     });
   }
 
+  queueRevoke(name: string, grant: string): void {
+    this.inputs.push({
+      line: recordLine('revoke', [name], [['grant', grant]], true),
+      action: { k: 'revoke', name, grant },
+    });
+  }
+
   private applyInput(action: InputAction) {
     switch (action.k) {
+      case 'revoke': {
+        const s = this.scripts.find(s => s.name === action.name)!;
+        if (s.grants.has(action.grant)) {
+          s.revoked.add(action.grant);
+        }
+        break;
+      }
       case 'settle':
         this.applySettlement(action.id, action.settlement);
         break;
@@ -1353,6 +1412,15 @@ export class Group {
     }
   }
 
+  scriptGrants(name: string): Record<string, string[]> {
+    this.worker();
+    return Object.fromEntries(
+      [...this.scripts.find(s => s.name === name)!.grants]
+        .sort(([a], [b]) => compareText(a, b))
+        .map(([name, grant]) => [name, [...grant.ops].sort(compareText)]),
+    );
+  }
+
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
   load(o: LoadOptions): Script {
     this.worker();
@@ -1379,6 +1447,18 @@ export class Group {
     this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
     const limits = { ...defaultLimits, ...o.limits };
     const loaded = this.loadPrepared(o.name, p, limits);
+    const used = o.grantsAsUsed
+      ? usedOperations(p.checked.tree!, p.imports)
+      : undefined;
+    const kept = new Map(
+      [...grants].flatMap(([name, grant]) => {
+        const bound = keepOperations(
+          grant,
+          used?.get(name) ?? (used ? new Set() : grant.ops),
+        );
+        return used && bound.ops.size === 0 ? [] : [[name, bound] as const];
+      }),
+    );
     const handle = new Script(this, o.name);
     if (owner) {
       owner.owner = o.name;
@@ -1387,9 +1467,10 @@ export class Group {
       name: o.name,
       waiters: [],
       suspended: new Set(),
+      unbound: new Set(),
       objects: o.objects ?? {},
       owner,
-      grants,
+      grants: kept,
       revoked: new Set(),
       handle,
       loaded,
@@ -1468,17 +1549,21 @@ export class Group {
     libraries = this.libraries,
     extensions: readonly string[] = [],
   ) {
+    const grants = availableGrants(s);
     const p = prepare(
       'script',
       s.name,
       source,
       libraries,
       Object.keys(s.objects),
-      declarationsOf(s.grants),
+      declarationsOf(grants),
     );
     const loaded = this.loadPrepared(s.name, p, s.limits);
     const staged: ScriptState = {
       ...s,
+      grants,
+      revoked: new Set(),
+      unbound: new Set(),
       loaded,
       identity: p.identity,
       queue: [],
@@ -1523,7 +1608,7 @@ export class Group {
       );
       throw new HostError('state too large');
     }
-    return { loaded, units: staged.units, identity: staged.identity };
+    return { loaded, units: staged.units, identity: staged.identity, grants };
   }
 
   /** Worker. Check and initialise before discarding any old work. */
@@ -1592,7 +1677,7 @@ export class Group {
       source,
       libraries,
       Object.keys(s.objects),
-      declarationsOf(s.grants),
+      declarationsOf(availableGrants(s)),
       existing,
     );
     const identity = codeIdentity(
@@ -1727,6 +1812,7 @@ export class Group {
 
   private replaceScripts(
     replacements: {
+      grants: ReadonlyMap<string, Grant<unknown>>;
       identity: string;
       loaded: Loaded;
       s: ScriptState;
@@ -1740,10 +1826,13 @@ export class Group {
       for (const { s } of replacements) {
         this.stopState(s, 'reload');
       }
-      for (const { s, loaded, units, identity } of replacements) {
+      for (const { s, loaded, units, identity, grants } of replacements) {
         s.loaded = loaded;
         s.identity = identity;
         s.units = units;
+        s.grants = grants;
+        s.revoked.clear();
+        s.unbound.clear();
         s.stopped = false;
         delete s.stopReason;
       }
@@ -1862,6 +1951,7 @@ export class Group {
         return s.stopped || (!cancelling && run.cancelling);
       },
       grants: s.grants,
+      isUnbound: name => s.unbound.has(name),
       isRevoked: name => s.revoked.has(name),
       get now() {
         return group.lastClock!;

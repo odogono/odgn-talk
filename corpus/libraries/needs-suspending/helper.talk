@@ -1,0 +1,4 @@
+on hold
+  ask io to pause and wait
+  return it
+end hold

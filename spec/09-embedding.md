@@ -22,7 +22,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk`, with the public pac
 - **Cancelling a Request:** cancelling its context or signal queues `cancel-delivery`. It cancels the Run the Delivery started. A Delivery still in the mailbox is removed instead, and reported as a `run end` with outcome `cancelled` and no run or Handler.
 - **Durations:** `MaxPending` and `MaxWait` are whole milliseconds. Go refuses a finer `time.Duration`, and TS a fraction, as `invalid value`.
 - **Synchronous errors:** a queued call returns an error only for facts known at the call, such as a full mailbox, a value from another Group, a limit override that loosens, or a settlement for a call that isn't pending. Anything else is known only when the queue is drained, and comes back as a report.
-- **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Fingerprint`, `Inspect` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
+- **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Fingerprint`, `Inspect`, `Grants` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
 - **Reentry:** a worker call made from inside the Group's own Pump, from an Operation function say, is the Host error `reentrant call` in both Cores.
 - **Operation functions:** these are the only Host code that runs inside a Pump, along with property `Get` and `Set`. They may make queued calls.
 
@@ -88,7 +88,9 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
   - **Immediate:** `Do` runs at the call, inside the Run, and returns the result.
   - **Suspending:** `Start` runs at the call and returns at once, and the Host answers later with `Answer`, `AnswerWithCost` or `Fail`, from any thread.
   - **Fire-and-forget:** `Fire` runs at the call, in order, and its result is dropped. Only these can be called with `tell`.
-- **Grants:** a Grant is a set of a Capability's Operations with the Host's own binding data, which each call reads. `Load` binds Grants by the name the Script uses, so one Capability can be granted twice under two names with different bindings. With `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use.
+- **Grants:** a Grant is a set of a Capability's Operations with the Host's own binding data, which each call reads. `Load` binds Grants by the name the Script uses, so one Capability can be granted twice under two names with different bindings. Each Load copies its kept Operation set without changing the reusable Grant template.
+- **Grants as used:** with `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use, including unused definitions, Lambda bodies and every imported Library's `needs`; `say` uses `console.write`. This trimming happens once at Load, after validation, and removes names whose kept set is empty. Reload, Extend and Library replacement cannot regain an Operation it discarded.
+- **Grant inspection:** the Script's `Grants` returns a fresh map of its kept names to Operation names, including Grants that are revoked but not yet removed by Reload. Each Operation list is sorted in Unicode code-point order. Map-key enumeration follows the Host language: Go maps have no iteration order, and TS records enumerate integer-like names numerically before other names.
 - **Standard Capabilities:** `clock`, `calendar`, `locale`, `timer` and `console` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). The Host supplies the implementation and a cost for each Operation.
 - **The call:** a Host function gets a `Call`, which gives the call id, the Script's name, the Grant's binding, the Pump's Clock reading, and a context or signal that is cancelled when the call is abandoned. It never reads the Host's own time.
 - **Charging:**
@@ -99,7 +101,7 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
 - **Failing:** a `Fail`, or a returned `ScriptError`, raises its code in the Script, with its message and its `Data`'s entries as fields ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). A catalogue code the Operation doesn't declare, a code outside a declared list, or a `Data` key that is reserved, becomes `host error`. So does any other error the Host function returns.
 - **Waiting:** a suspending call past its `maxPending`, or else the Script's `MaxWait`, fails with `timeout` and is abandoned. An answer or failure for a call that isn't pending, because it was abandoned, its Run has ended or a restore discarded it, is recorded and ignored.
 - **A `Call` belongs to its Group:** its `Answer` and `Fail` reach only the Group that made it, never a Group restored from a save of it. A restored Group is answered through the `Call`s that `Settle` returns, and only the message layer's `answer` and `fail`, which name the Group and the call id, can reach it for a call it no longer holds ([chapter 10](10-save-and-restore.md#variables-only-restore)).
-- **Revoking:** `Revoke` makes later calls through the named Grant raise `capability revoked` until the next Reload, and makes them load errors after it. Calls in flight are left to the Host.
+- **Revoking:** `Revoke` takes effect when its queued input is drained. It affects only that Script's named Grant, makes later calls through it raise `capability revoked` until the next Reload, and makes them load errors after it. Calls in flight and their cancellation signals are left to the Host. Repeated revocation and revocation of a name the Script doesn't keep do nothing, but are still recorded. Reload validates with revoked Grants removed, and removes them only if it succeeds; a rejected Reload leaves the old code, kept Grants and revocation state intact. Library replacement applies this same rule at each affected Script's Reload boundary. Extend leaves existing code and Grants intact, but checks the new source against unrevoked Grants.
 
 ## Host Objects
 
@@ -112,7 +114,7 @@ An Operation Declaration gives a Shape for each argument and for its result. Sha
 ## Loading and Libraries
 
 - **`Load`** compiles a Script, checks it against its Grants, Libraries and well-known objects, runs its initialiser and adds it to the Group. A rejected Script is a `LoadError`, with its diagnostics ([chapter 2](02-grammar.md#load-time-diagnostics)).
-- **Libraries:** `CompileLibrary` compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **Libraries:** `CompileLibrary(src, imports, declarations)` checks Capability calls against explicit Operation modes and argument Shapes, and compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
 - **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)).
@@ -187,7 +189,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `standard-capability` | `name`, `costs` | – | `ClockCapability` and the others |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
 | `grant` | `capability`, `ops`: names, or `"all"` | `grant`: a handle | `Grant`, `GrantAll` |
-| `compile-library` | `name`, `version`, `source`, `imports`: identities | `identity`, `needs` | `CompileLibrary` |
+| `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
 | `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` | `AddLibrary`, `ReplaceLibrary` |

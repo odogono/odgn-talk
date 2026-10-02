@@ -507,6 +507,7 @@ export type RunHost = {
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
+  isUnbound?(name: string): boolean;
   /** The object the Script owns, or Nothing. */
   readonly me: Value;
   readonly now: bigint;
@@ -734,7 +735,7 @@ export class Run {
     if (!reissue) {
       return { call };
     }
-    if (this.host!.isRevoked?.(grantName)) {
+    if (this.host!.isUnbound?.(grantName)) {
       return {
         call,
         failure: { k: 'restore-fail', code: 'capability revoked' },
@@ -1872,8 +1873,8 @@ export class Run {
       ? grant.capability.operations.get(opName)
       : undefined;
     if (!grant || !op || (op.args ?? []).length !== args.length) {
-      // Only Library code gets here: its `needs` aren't checked at load yet.
-      throw new NotImplementedError("checking a Library's needs");
+      // Script and Library calls were checked against these Grants at load.
+      throw new Error('A Capability call was not validated at load');
     }
     const named: [string, Value][] = [
       ['capability', text(grantName)],

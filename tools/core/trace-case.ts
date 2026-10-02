@@ -18,6 +18,7 @@ import {
   type Call,
   type FieldShape,
   type Grant,
+  type GrantDecls,
   type Operation,
   type Shape,
   HostError,
@@ -360,6 +361,21 @@ const capabilitiesOf = (
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
+const operationDeclarations = (setup: Setup): GrantDecls => {
+  const declarations: Record<
+    string,
+    Record<string, { args: Shape[]; mode: OperationSpec['mode'] }>
+  > = Object.create(null);
+  for (const op of setup.operations ?? []) {
+    declarations[op.capability] ??= Object.create(null);
+    declarations[op.capability]![op.name] = {
+      args: (op.args ?? []).map(shapeOf),
+      mode: op.mode,
+    };
+  }
+  return declarations;
+};
+
 // Every Library case.toml names, compiled once each Library it imports is, so
 // in any order; one that never compiles keeps its LoadError.
 const compileLibraries = (
@@ -383,6 +399,7 @@ const compileLibraries = (
               source: readFileSync(resolve(dir, library.source), 'utf8'),
             },
             done,
+            operationDeclarations(setup),
           ),
         );
       } catch (error) {
@@ -605,10 +622,7 @@ export const replay = (
           if (!script) {
             throw new Error(`case.toml has no Script ${r.ids[0]}`);
           }
-          if (script.grantsAsUsed) {
-            throw new DeferredCaseError('grantsAsUsed');
-          }
-          const grants: Record<string, Grant<unknown>> = {};
+          const grants: Record<string, Grant<unknown>> = Object.create(null);
           for (const [granted, g] of Object.entries(script.grants ?? {})) {
             const capability = capabilities.get(g.capability ?? granted);
             if (!capability) {
@@ -621,6 +635,7 @@ export const replay = (
           bound.set(script.name, grants);
           group.load({
             grants,
+            grantsAsUsed: script.grantsAsUsed,
             name: script.name,
             source: readFileSync(resolve(dir, script.source), 'utf8'),
             limits: script.limits,
@@ -671,6 +686,7 @@ export const replay = (
               source: readDisplayText(r.fields.get('source')!),
             },
             [...registered.values()],
+            operationDeclarations(setup),
           );
           group.replaceLibrary(
             library,
@@ -738,6 +754,9 @@ export const replay = (
           group
             .script(r.ids[0]!)!
             .stop(value(r.fields.get('reason')!).asText()!);
+          break;
+        case 'revoke':
+          group.script(r.ids[0]!)!.revoke(r.fields.get('grant')!);
           break;
         case 'save': {
           const bytes = group.save();

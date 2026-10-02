@@ -9,6 +9,10 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core `GrantsAsUsed`, kept-Grant inspection and queued revocation, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Fourteen regression tests and three Capability Trace Cases cover caller aliases, Library needs, pending calls, code changes and save/restore replay.
+
+- Library `needs` in the TS Core: explicit compilation declarations, direct and transitive Operation discovery, `missing grant` and imported-call mode/count/Shape checks, with caller bindings and suspension. Replacement retains dependent compilation declarations. Twelve regression tests and two Library Trace Cases continue [#126](https://github.com/odogono/odgn-talk/issues/126).
+
 - TS Core same-family Save and Restore, Group Fingerprints, full and variables-only restores, Host rebinding and pending-call Answer, Fail, Reissue and Adopt, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-seven regression tests, nine blessed save/restore seeds and two new reissue Trace Cases cover the changes; every implemented Trace Case also runs with save/restore between eligible Pumps.
 
 - TS Core Reload, Extend and atomic Library replacement with transitive importers, variable carry/reset, separate extension code units and stale Function Values, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Twenty-one tests, five `reload/` Trace Cases and the newly supported `pattern-size-literal-limit` seed cover the changes.
@@ -71,6 +75,10 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Restoring retains each Grant's saved Operation set even when the Host rebinds a wider template, and preserves aliases such as `__proto__`. Existing extension calls reconstruct before revocation state applies. Reissue keeps revoked pending calls under Host control when their Grants rebind. Rejected Reloads and Library replacements keep old code, Grants and revocation state. The Spec fixes one-time Grant trimming, inspection, revocation no-ops and code-change boundaries; Cost Model rates are unchanged.
+
+- Library Capability validation runs before code-cache reuse and on every Script import, including Reload, Extend, replacement and restore. Nested Lambda calls are checked once at their own sites. The Spec now fixes declaration input, needs ordering, alias names and import diagnostics; Cost Model rates are unchanged.
 
 - Reissue Fuel cutoff preserves committed state and abandons only pending calls, including partially answered Joins. Backwards Pumps write their refusal while retaining queued inputs.
 - Spec gaps in canonical Fingerprint declarations, Save id counters, numeric call-id ordering, reissue Fuel accounting and discarded Broadcast Decisions are settled. Cost Model rates are unchanged.
