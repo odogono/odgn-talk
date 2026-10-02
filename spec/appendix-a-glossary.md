@@ -38,6 +38,10 @@ _Avoid_: permission, API access
 A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer` and `console`.
 _Avoid_: built-in capability, system capability, core capability
 
+**Store**:
+A Host-kept collection of named values that outlives any one Script load, reached through the planned `store` Standard Capability. It holds data values under text keys, never Function Values or Host Objects, and its changes commit or roll back with the Segment that made them.
+_Avoid_: storage, database, cache, persistent state
+
 **Locale**:
 A BCP 47 tag naming the conventions of a language and region, e.g. `"de-CH"`, which the Host resolves to the nearest one it supports.
 _Avoid_: language, culture
