@@ -24,7 +24,10 @@
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
     "corpus:run": "bun run --cwd impl/ts corpus:run",
     "repl": "bun tooling/cli/src/main.ts",
-    "northtalk": "bun tooling/cli/src/main.ts"
+    "northtalk": "bun tooling/cli/src/main.ts",
+    "grammar:check": "bun run --cwd tools grammar:check",
+    "machine:check": "bun run --cwd tools machine:check",
+    "corpus:check": "bun run --cwd tools corpus:check"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",

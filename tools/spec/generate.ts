@@ -8,11 +8,13 @@
 // spec/. Its name picks a view below, and `ebnf.<section>` shows a section of
 // grammar.ebnf or trace.ebnf. Both modes also validate each Data File against
 // its schema, run the cross-file checks, check grammar.ebnf against grammar.toml
-// and check every relative link in the repo's Markdown files.
+// and check relative links and script references in the repo's Markdown files.
 
 import Ajv2020 from 'ajv/dist/2020';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+
+import { checkCommands } from './commands';
 
 const ROOT = resolve(import.meta.dir, '../..');
 const SPEC = join(ROOT, 'spec');
@@ -1458,7 +1460,23 @@ const anchors = (text: string): Set<string> => {
   return out;
 };
 
-const checkLinks = async (regenerated: Map<string, string>) => {
+const packageScripts = new Map<string, Set<string>>();
+const scriptsAt = (directory: string): Set<string> | undefined => {
+  const path = resolve(ROOT, directory, 'package.json');
+  if (!existsSync(path)) {
+    return undefined;
+  }
+  let scripts = packageScripts.get(path);
+  if (!scripts) {
+    scripts = new Set(
+      Object.keys(JSON.parse(readFileSync(path, 'utf8')).scripts ?? {}),
+    );
+    packageScripts.set(path, scripts);
+  }
+  return scripts;
+};
+
+const checkDocumentation = async (regenerated: Map<string, string>) => {
   const listed = Bun.spawnSync(
     ['git', 'ls-files', '-co', '--exclude-standard', '*.md'],
     { cwd: ROOT },
@@ -1475,6 +1493,11 @@ const checkLinks = async (regenerated: Map<string, string>) => {
       continue;
     }
     const text = await read(file);
+    problems.push(
+      ...checkCommands(text, scriptsAt).map(
+        problem => `${relative(ROOT, file)}: ${problem}`,
+      ),
+    );
     for (const href of links(text)) {
       if (/^[a-z][\d+.a-z-]*:/i.test(href)) {
         continue;
@@ -1514,7 +1537,7 @@ ebnfCheck(data, ebnf);
 traceEbnfCheck(traceEbnf, ebnf);
 corpusCheck(data);
 const regenerated = await fillRegions(data);
-await checkLinks(regenerated);
+await checkDocumentation(regenerated);
 
 if (problems.length) {
   for (const p of problems) {

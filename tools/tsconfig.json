@@ -3,6 +3,8 @@
   "include": [
     "unicode",
     "syntax",
-    "../impl/ts/types"
+    "../impl/ts/types",
+    "spec/commands.ts",
+    "spec/commands.test.ts"
   ]
 }

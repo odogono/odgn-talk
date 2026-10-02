@@ -30,3 +30,11 @@ Run commands from this clone so `gh` infers `odogono/odgn-talk`.
 - Frontier: take the first open, unassigned child in map order with no open blocker.
 - Claim: `gh issue edit <n> --add-assignee @me` before work.
 - Resolve: comment with the answer, close the child, then add a context pointer and link to the map's Decisions-so-far.
+
+## Specification handoffs
+
+Before handing an implementation issue to another agent, identify its specification commit or PR, the required base branch or commit, and the relevant spec sections. Record dependencies on unmerged specification work in the issue.
+
+If the design is uncommitted, mark it as uncommitted and give its worktree and exact file list. Prefer committing the design before handoff; carrying uncommitted files requires an explicit handoff naming those files.
+
+At the start of implementation, compare the checkout's branch and revision with the issue's required base and confirm the referenced specification is present. Resolve a mismatch before treating absent files as missing design or implementation. Preserve unrelated work when changing branches or carrying a design forward.

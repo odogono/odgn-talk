@@ -1,8 +1,21 @@
 # TS Core foundations
 
-This guide covers the TS Core built under [#126](https://github.com/odogono/odgn-talk/issues/126), Appendix B's step 1, and the step 3 to 5 work that landed with it, as ordered by [Appendix B](../../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. Step 1 is complete. It is not yet a conforming Core: the embedding interface has the gaps below, and step 6's Session Host is under way under [#131](https://github.com/odogono/odgn-talk/issues/131), without its Session Commands, Session Transcripts or REPL yet.
+The TS Core constructs and encodes values, parses and checks source, lowers it to the Abstract Machine, and runs Scripts through the embedding API. Its Session Host supports Entries, Session Commands, Transcript recording and replay; the CLI provides the REPL. The Spec and Data Files remain the authority; limitations are described beside each feature below.
 
-Commands in this guide run from `impl/ts/`. The spec-level generators and checks (`syntax:*`, `unicode:*`, `spec:*`), `lint` and `format` run from the repository root, which also aggregates `typecheck`, `test` and `build`.
+Run commands in this guide from the repository root. Workspace-only scripts select their package explicitly with `--cwd`.
+
+## Task navigation
+
+| Task | Implementation | Rules | Tests and cases |
+| --- | --- | --- | --- |
+| Parsing and name/binding checks | [parser](src/parser.ts), [checker](src/checker.ts) | [grammar](../../spec/02-grammar.md) | [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts) |
+| Lowering and execution | [lowering](src/lowering.ts), [machine](src/machine.ts) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](tests/lowering.test.ts), [disassembly cases](../../corpus/disassembly/) |
+| Scheduling and Capabilities | [Group](src/group.ts), [Capabilities](src/capabilities.ts) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts) |
+| Save and restore | [snapshot](src/snapshot.ts), [Group](src/group.ts) | [save and restore](../../spec/10-save-and-restore.md) | [save/restore tests](tests/save-restore.test.ts) |
+| Sessions, Transcripts and CLI | [Session Host](src/session/host.ts), [Transcript codec/replay](src/session/transcript.ts), [CLI](../../tooling/cli/) | [sessions and tooling](../../spec/12-sessions-and-tooling.md) | [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session corpus](../../corpus/sessions/) |
+| Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Unicode tests](tests/unicode.test.ts) |
+
+The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
 
 ## The Session Host
 
@@ -50,7 +63,7 @@ console.log(readDisplay(values.toString()).equals(values)); // true
 
 The implemented portion of [the embedding declarations](../../spec/embedding/talk.ts) is `HostError`, `Value`, `Decimal`, `nothing`, `bool`, `text`, `num`, `dec`, `list`, `map`, `record`, `quantity`, `bytes`, `instant`, `civilDate`, `range`, `encodeValue` and `decodeValue`, plus `readDisplay`, the display reader required by chapter 11. Implemented kinds are Nothing, booleans, numbers, Quantities, text, Bytes, lists, maps, ranges, Instants and Civil Dates. `quantity(dec("2.50"), "GBP")` takes a number and a Unit spelled as a Script spells it, and `asQuantity()` reads back the number and the Unit in normal form. A Quantity is `{"$quantity":["2.50","GBP"]}` in the Value Encoding, with every word Unit singular, and a range `{"$range":[from,to]}`. `bytes(u8)` copies a `Uint8Array` in, and `asBytes()` copies one out. Bytes display as `<<0x0D, 0x0A>>` and encode as `{"$bytes":"DQo="}`, canonical padded Base64. `instant(epochNanos)` takes a bigint, and `civilDate` takes fields or text in the `as civil date` form; both refuse dates outside 0001-01-01 to 9999-12-31. They encode as `{"$instant":"2026-09-27T13:30:00Z"}` and `{"$date":"2026-09-27"}`. `Value` supports the accessors for those kinds, structural `equals` and display-form `toString`. Construction is opaque; invalid inputs throw `HostError` with code `invalid value`. `decodeValue` retains the resolver parameter for later Host Object support. Unsupported kinds and tags are refused explicitly.
 
-Text is checked for lone surrogates and normalized to NFC at construction. Lists and maps snapshot their input; map keys are normalized, checked for duplicates and kept in insertion order. `record` refuses JS array-index keys; use `map` to specify their order. Number constructors retain trailing zeros, expand a float's shortest round-trip digits and refuse values requiring rounding or exceeding the spec's limits. `Decimal` supports canonical text, exact integer reads and lossy float reads. Arithmetic follows in a later slice.
+Text is checked for lone surrogates and normalized to NFC at construction. Lists and maps snapshot their input; map keys are normalized, checked for duplicates and kept in insertion order. `record` refuses JS array-index keys; use `map` to specify their order. Number constructors retain trailing zeros, expand a float's shortest round-trip digits and refuse values requiring rounding or exceeding the spec's limits. `Decimal` supports canonical text, exact integer reads and lossy float reads. Arithmetic is implemented by the [decimal operations](src/decimal.ts) used by the Abstract Machine.
 
 `src/unicode.ts` and `src/text.ts` provide internal foundations for Character segmentation, simple folding, default full case mapping (including final sigma), scalar ordering, NFC joins, whole-Character literal searches, and character/code-point/word/line/item splitting. They are not additions to the public embedding interface. They charge no Fuel outside a Run; the Abstract Machine must charge Cost Model 0 when it calls them. This slice adds no language-level execution or resource-accounting claims.
 
@@ -77,7 +90,7 @@ The low-level `Lexer` is also exported. Call `lex(offset, mode)` at a token boun
 ```sh
 bun run syntax:generate
 bun run syntax:check
-bun test tests/lexer.test.ts tests/parser.test.ts tests/syntax-fixtures.test.ts
+bun test impl/ts/tests/lexer.test.ts impl/ts/tests/parser.test.ts impl/ts/tests/syntax-fixtures.test.ts
 ```
 
 The generator copies the syntax lists from `grammar.toml`, Unit spellings and Unit Kinds from `units.toml`, and the instruction set from `machine.toml` into browser-safe TS tables. The check reproduces those tables byte for byte and runs in CI, tests and builds. Core tests independently exercise authored first-error fixtures, every corpus Script, Standard Library, syntax sketch and `talk` documentation example. They also check every token/trivia span and exact source reconstruction. These parser checks do not establish execution, lowering or Trace conformance.
@@ -119,7 +132,7 @@ A construct pass walks the semantic tree for load rules local to one construct. 
 Pass `{ objects: ['button'], libraries: { helpers: { double: { kind: 'function', contract: { required: 1, total: 1 } } } } }` to either checker to supply well-known Host Object names and registered Library exports. Kind-only entries (`function`, `handler` or `constant`) remain accepted and defer function argument-count checks until the Library loader supplies a contract. Standard Library metadata is known by default; a supplied entry overrides one Library's exports. The Group and Library loaders add graph/cycle checks, Grants, constant/default evaluation, effects, Suspension Point, Join, decision, Library-only and Text Pattern size checks. Host Object property-kind diagnostics still need a coverage audit; a successful standalone checker result does not establish that a Group can load or execute the code.
 
 ```sh
-bun test tests/checker.test.ts
+bun test impl/ts/tests/checker.test.ts
 ```
 
 Core tests check exact authored codes, scalar positions, diagnostic ordering, bindings and capture identities, all binding forms, function contracts, initializer/default references, control flow across nested Lambdas, loops and `finally` blocks, Handler suffixes, Guards, literal, kind, chunk and pattern rules, and deep input. The browser smoke test also exercises name resolution, binding/function contracts, control-flow and construct checks with platform Unicode functions disabled.
@@ -146,7 +159,7 @@ The lowering follows chapter 8 rule by rule over the semantic tree's bindings, s
 Some constructs check without error but chapter 8 doesn't settle their lowering, so `compileSource` throws `LoweringError` at them: a bit field whose width isn't an integer literal, a Container rooted in a well-known object, and a Container level that is a Built-in property. A `delete` of a delimited `item` evaluates `delimited by` twice, as chapter 8's rule is written.
 
 ```sh
-bun test tests/lowering.test.ts
+bun test impl/ts/tests/lowering.test.ts
 bun run corpus:run disassembly
 bun run corpus:run --bless disassembly/expressions
 ```
@@ -185,10 +198,10 @@ Instants are epoch nanoseconds, and Civil Dates a date with an optional time of 
 
 The number functions `sqrt`, `exp`, `ln`, `log10`, `power` and the trigonometric functions are correctly rounded (`src/math.ts`). `sqrt` is exact from the integer square root. The others work in BigInt fixed point to a precision with a known error bound and raise it until both ends of the bound round to the same number, after first finding the values that could sit exactly on a rounding boundary: `exp(0)`, `ln(1)`, a power of ten's `log10`, a rational `power` and the trigonometric zeros. The Float Built-ins read and write IEEE 754 bits exactly, with no Host float rounding (`src/floats.ts`). This slice settled, as Spec fixes, the `value` of `power`'s and `atan2`'s `out of domain`, which of two shortest decimals a float reads as, and the sign of a float written for a number too small.
 
-What a later slice adds is raised as `NotImplemented`, never as a Script error. The remaining embedding work is listed below.
+What a later slice adds is raised as `NotImplemented`, never as a Script error. Outstanding work is tracked in GitHub Issues.
 
 ```sh
-bun test tests/machine.test.ts
+bun test impl/ts/tests/machine.test.ts
 ```
 
 Core tests run every text-model seed case's Script through the machine and reproduce its hand-written Script Variables and `raise` records, including instruction indexes and positions. They also hand-check Cost Model 0 charges, Fuel, allocation and call depth faults with rollback, unwind charges, error maps, `finally` and `during`, clause dispatch and Guards, decimal arithmetic, chunks, Lambdas, and Text Pattern matching, including chapter 8's table of runs and their steps.
@@ -249,7 +262,7 @@ The Host-side `decodeJson` and `encodeJson` follow chapter 7's plain JSON mappin
 `corpus:run` replays a Trace Case's Host Input lines through the Group and compares the Trace it writes, ignoring comments and blank lines. It also compares a replay with save/restore between eligible Pumps, adopting pending Calls; boundaries that require old Host handles are skipped as chapter 11 specifies. A Host Input line may leave out its `filled` keys and the ids the Core assigns. A case that needs a Host Input or a feature this Core doesn't implement yet is reported as deferred. The default selection runs only blessed Trace Cases, and an unblessed seed case still says `# Unblessed:` in its header. Name an unblessed case to replay it and see its first divergence. All current Trace Cases are blessed by the TS Core and run in CI, including every `limits/` and `text-patterns/` seed. `--bless` writes a Trace Case's Trace from this Core, keeping each comment and blank line before the Host Input line it preceded. The final five seed corrections are derived in their headers: queued-message state, uncharged Run-ending Persistent State failure, statement-based Container positions, compiled-pattern sizes and allocation-free `replace-next`. Their first blessing awaits human review.
 
 ```sh
-bun test tests/group.test.ts tests/corpus.test.ts
+bun test impl/ts/tests/group.test.ts tests/corpus.test.ts
 bun run corpus:run text-model/host-text-joins-in-nfc
 ```
 
@@ -284,19 +297,12 @@ Record notable implementation changes under the appropriate Added, Changed, Depr
 
 Tests cover every row and all five NFC columns of the pinned NormalizationTest, identity normalization for every unlisted scalar, every GraphemeBreakTest row, every C/S folding mapping, UnicodeData and unconditional SpecialCasing mappings, final-sigma contexts, text searches/chunks, constructor refusal paths, immutable containers, insertion order, display/encoding round trips and deep values without a reader-only nesting limit.
 
-The execution runner is separate from `corpus:check`, the existing format checker. Its default selection is every case of a kind the Core implements: the Value Encoding cases `text-model/host-text-normalised-to-nfc`, `quantities/value-encoding`, `bytes/value-encoding` and `dates/value-encoding`, which run their encoding lines through public Host constructors and `encodeValue`, and the Disassembly Cases under `disassembly/`, which compile each case's Libraries, then its Scripts (whose well-known objects are their `objects` and the case's other Scripts), and compare each pinned unit's disassembly byte for byte. Paths are relative to `corpus/`, or absolute. `--list` marks every existing case supported or deferred. Explicitly selecting deferred case kinds fails; nothing is silently skipped. A mismatch identifies the case, the file and line, the first differing UTF-8 byte, and the expected and actual text. `--bless` writes the named Disassembly or Trace Cases from this Core, the only one available, for human review. It refuses encoding cases.
+The execution runner is separate from `corpus:check`, the format checker. Its default selection includes Value Encoding and Disassembly Cases, plus Trace Cases and Session Transcripts that already have expected Traces. Paths are relative to `corpus/`, or absolute; naming a case selects it even before its first blessing. `--list` marks each case supported or deferred. Explicitly selecting a deferred case kind fails. A mismatch identifies the case and the differing output. `--bless` requires named cases and writes their expected disassembly, Trace or Transcript output for human review; it refuses encoding cases. See the [corpus guide](../../corpus/README.md) for blessing rules.
 
-`bun run build` verifies the pins and builds `dist/index.js`, an ES module usable in a browser without Bun or Node dependencies. To check it in a real browser, run `bun run test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing, syntax and load diagnostics, and lowering and disassembly. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
+`bun run build` verifies the pins and builds `impl/ts/dist/index.js`, an ES module usable in a browser without Bun or Node dependencies. To check it in a real browser, run `bun run --cwd impl/ts test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing, syntax and load diagnostics, and lowering and disassembly. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
 
-## Remaining Core work
+## Outstanding work
 
-All 155 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed except the Session Transcripts'. The corpus is not a complete conformance test.
+[GitHub Issues](https://github.com/odogono/odgn-talk/issues) track outstanding work and acceptance criteria. [Appendix B](../../spec/appendix-b-implementation-order.md) explains the implementation order. The [corpus guide](../../corpus/README.md) describes coverage and blessing; passing the available corpus does not establish complete conformance.
 
-[#126](https://github.com/odogono/odgn-talk/issues/126)'s acceptance is met: the corpus runs through the public embedding interface and reproduces each complete Trace, the pinned Unicode data passes, diagnostics, canonical disassembly and the display and Value Encoding round trips are checked, and Fuel and allocation follow Cost Model 0. Later Appendix B steps continue under [#127](https://github.com/odogono/odgn-talk/issues/127) to [#131](https://github.com/odogono/odgn-talk/issues/131).
-
-An audit of the public package against [`talk.ts`](../../spec/embedding/talk.ts), chapter 9 and [`diagnostics.toml`](../../spec/data/diagnostics.toml) found the load-time diagnostics and the Host error catalogue complete: every code is raised and has a regression test. The embedding interface still has these gaps, tracked under [#128](https://github.com/odogono/odgn-talk/issues/128):
-
-- **`onReady`** ([#197](https://github.com/odogono/odgn-talk/issues/197)) is never called.
-- **`shape.object(kind)`** ([#198](https://github.com/odogono/odgn-talk/issues/198)) is missing.
-
-A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. Session Hosts, REPLs and the Go Core are later Appendix B work.
+A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs.

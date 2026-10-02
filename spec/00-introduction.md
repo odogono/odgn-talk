@@ -59,8 +59,10 @@ The Spec is handed off as language 1.0-rc with a provisional Cost Model 0. Langu
 
 A region written as `<!-- generated: name -->` … `<!-- end -->` is filled from the Data Files, or from [`CONTEXT.md`](../CONTEXT.md) for Appendix A, so it is never edited by hand. The generator lives in [`tools/spec/`](../tools/spec/generate.ts).
 
-- `bun run spec:gen` validates each Data File against its schema in [`spec/data/schema/`](data/schema/), runs the checks between Data Files, checks every relative link in the repo's Markdown files, and rewrites every region.
+- `bun run spec:gen` validates each Data File against its schema in [`spec/data/schema/`](data/schema/), runs the checks between Data Files, checks every relative link and literal `bun run` script reference in the repo's Markdown files, and rewrites every region.
 - `bun run spec:check` runs the same checks, and fails if any region is out of date instead of rewriting it. CI runs it on every pull request.
+
+Documentation commands run from the repository root. For a workspace-only script, use `bun run --cwd path/to/workspace <script>`. Script-reference validation checks literal names against that directory's `package.json`; it does not execute examples or interpret shell state such as `cd`, variables or pipelines.
 
 ## Outside parity
 
