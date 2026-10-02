@@ -9,18 +9,21 @@ import {
   type Operation,
 } from '../capabilities';
 import { checkSource } from '../checker';
+import { formatInstant, parseInstant } from '../dates';
 import { HostError, LoadError, type LoadDiagnostic } from '../errors';
 import {
   newGroup,
   observeRuns,
   type Group,
   type Inspection,
+  type LimitOverride,
   type Location,
   type Report,
   type RunEvent,
   type Script,
 } from '../group';
-import { textForm } from '../operations';
+import { defaultLimits } from '../machine';
+import { textForm, waitNs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
 import type { SemanticElement } from '../semantic';
 import { consoleCapability } from '../standard-capabilities';
@@ -56,6 +59,13 @@ export type Mock = {
   operation: string;
 };
 const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
+// The limits a Delivery may override, by their `ts` names (chapter 12, `:limits`).
+const OVERRIDABLE = [
+  'fuelPerRun',
+  'allocPerRun',
+  'maxWaitMs',
+  'maxJoin',
+] as const;
 const NAME_TEXT = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 
 // A refused Session Command or Entry (chapter 12, Output).
@@ -111,6 +121,12 @@ export class SessionHost {
   private mockCalls = new Map<string, { args: Value[]; operation: string }>();
   // Suspending mock calls waiting for `:answer` or `:fail`.
   private readonly pending = new Map<string, Call<unknown>>();
+  // A virtual Clock's instant, or null for the real Clock.
+  private virtual: bigint | null = null;
+  // The limit override later Entries are requested with.
+  private limits: LimitOverride = {};
+  // The latest Entry's Delivery, and its Run once it starts.
+  private latest: { delivery: string; run?: string } | null = null;
 
   constructor(private readonly env: SessionEnvironment) {}
 
@@ -287,6 +303,23 @@ export class SessionHost {
       case 'fail':
         this.start();
         return this.settle(name, rest);
+      case 'clock':
+        this.start();
+        return this.clock(rest);
+      case 'limits':
+        this.start();
+        return this.limit(rest);
+      case 'cancel':
+        this.start();
+        return this.cancel(rest);
+      case 'runs':
+      case 'mailbox':
+      case 'vars':
+        if (rest.trim()) {
+          refuse('bad arguments');
+        }
+        this.start();
+        return this.inspected(name);
       default:
         return refuse('unknown command');
     }
@@ -480,12 +513,127 @@ export class SessionHost {
     return this.discarded(reports);
   }
 
+  private clock(rest: string): string[] {
+    const [word = '', arg = ''] = split(rest);
+    if (word === '') {
+      return [
+        this.virtual === null
+          ? `real${this.lastClock === null ? '' : ` ${formatInstant(this.lastClock)}`}`
+          : `virtual ${formatInstant(this.virtual)}`,
+      ];
+    }
+    if (word === 'real' && !arg) {
+      this.virtual = null;
+      return [];
+    }
+    if (word === 'virtual') {
+      let at: bigint;
+      try {
+        at = arg ? parseInstant(arg) : (this.lastClock ?? this.env.now());
+      } catch {
+        return refuse('bad arguments');
+      }
+      if (this.lastClock !== null && at < this.lastClock) {
+        refuse('clock backwards');
+      }
+      this.virtual = at;
+      return [];
+    }
+    if (word === 'advance') {
+      if (this.virtual === null) {
+        refuse('clock is real');
+      }
+      let ns: bigint;
+      try {
+        ns = waitNs(display(arg));
+      } catch {
+        return refuse('bad arguments');
+      }
+      if (ns < 0n) {
+        refuse('bad arguments');
+      }
+      this.virtual! += ns;
+      return this.pump();
+    }
+    return refuse('bad arguments');
+  }
+
+  private limit(rest: string): string[] {
+    const w = rest.trim().split(/\s+/u).filter(Boolean);
+    if (!w.length) {
+      return OVERRIDABLE.map(
+        name => `${name} ${this.limits[name] ?? defaultLimits[name]}`,
+      );
+    }
+    if (w.length === 1 && w[0] === 'reset') {
+      this.limits = {};
+      return [];
+    }
+    const [name, value] = w as [(typeof OVERRIDABLE)[number], string];
+    if (
+      w.length !== 2 ||
+      !OVERRIDABLE.includes(name) ||
+      !/^\d+$/u.test(value)
+    ) {
+      refuse('bad arguments');
+    }
+    const n = Number(value);
+    if (!Number.isSafeInteger(n) || n > defaultLimits[name]) {
+      refuse('invalid value');
+    }
+    this.limits = { ...this.limits, [name]: n };
+    return [];
+  }
+
+  private cancel(rest: string): string[] {
+    const named = words(rest, rest.trim() ? 1 : 0)[0];
+    const run = named ?? this.latest?.run;
+    if (!run || !this.lastSeg.has(run)) {
+      refuse('no such run');
+    }
+    this.script!.cancelRun(run!);
+    return this.pump();
+  }
+
+  // `:runs`, `:mailbox` and `:vars` render `Inspect()`, the Host Input `vars`.
+  private inspected(what: 'runs' | 'mailbox' | 'vars'): string[] {
+    const script = this.group!.inspect().scripts.find(s => s.name === NAME)!;
+    if (what === 'vars') {
+      return script.vars.map(
+        ([name, value]) => `${name} = ${value.toString()}`,
+      );
+    }
+    if (what === 'mailbox') {
+      return script.mailbox.map(
+        m =>
+          `${m.delivery ?? m.from} ${m.message.name} ${listValues(m.message.args ?? []).toString()}`,
+      );
+    }
+    return script.runs.map(r =>
+      [
+        r.id,
+        r.status,
+        r.handler,
+        ...(r.status === 'suspended'
+          ? [
+              r.wait,
+              ...(r.until === undefined
+                ? []
+                : ['until', formatInstant(r.until)]),
+              ...(r.calls ?? []),
+            ]
+          : []),
+      ].join(' '),
+    );
+  }
+
   private discarded(reports: readonly Report[]): string[] {
     const out: string[] = [];
     for (const r of reports) {
       if (r.kind === 'stop') {
         for (const run of r.discardedRuns) {
           out.push(`! discarded ${run}`);
+          this.lastSeg.delete(run);
           if (this.foreground?.run === run) {
             this.foreground = null;
             this.state = { k: 'prompt' };
@@ -556,8 +704,12 @@ export class SessionHost {
         source: `script variable ${v}`,
       });
     }
-    const { id } = this.script!.request({ name: handler });
+    const { id } = this.script!.request({
+      name: handler,
+      ...(Object.keys(this.limits).length ? { limits: this.limits } : {}),
+    });
     this.foreground = { delivery: id };
+    this.latest = { delivery: id };
     if (expression) {
       this.expressions.add(id);
     }
@@ -612,7 +764,7 @@ export class SessionHost {
   // ------------------------------------------------------------- pumping
 
   private pump(): string[] {
-    const reading = this.env.now();
+    const reading = this.virtual ?? this.env.now();
     const now =
       this.lastClock !== null && reading < this.lastClock
         ? this.lastClock
@@ -638,6 +790,9 @@ export class SessionHost {
       if (e.k === 'seg' && e.delivery) {
         if (this.foreground?.delivery === e.delivery) {
           this.foreground.run = e.run;
+        }
+        if (this.latest?.delivery === e.delivery) {
+          this.latest.run = e.run;
         }
       }
     }
@@ -736,7 +891,9 @@ export class SessionHost {
       return;
     }
     const seg = this.lastSeg.get(run)!;
+    // Under a virtual Clock, a deadline wait returns the prompt at once.
     if (
+      this.virtual === null &&
       ['wait', 'wait-for', 'wait-for-any'].includes(seg.end) &&
       seg.calls.length === 0 &&
       seg.until !== undefined

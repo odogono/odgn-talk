@@ -1,0 +1,43 @@
+# `:runs`, `:mailbox` and `:vars` render Inspect(), each a `vars` Host
+# Input, and `:limits` shows and tightens the limits later Entries run with.
+> :clock virtual 2026-09-30T10:00:00Z
+> :vars
+> put 1 into a
+> put "two" into b
+> :vars
+a = 1
+b = "two"
+> on nap
+|   wait 30 s
+| end nap
+> send nap to session
+> :runs
+session/r4 suspended nap wait until 2026-09-30T10:00:30Z
+> :mailbox
+> :limits
+fuelPerRun 10000000
+allocPerRun 16777216
+maxWaitMs 30000
+maxJoin 16
+> :limits fuelPerRun 100
+> :limits
+fuelPerRun 100
+allocPerRun 16777216
+maxWaitMs 30000
+maxJoin 16
+> repeat forever
+|   add 1 to a
+| end repeat
+! limit fault fuel at 2:3
+> :limits fuelPerRun 20000000
+! invalid value
+> :limits depth 3
+! bad arguments
+> :limits reset
+> :limits
+fuelPerRun 10000000
+allocPerRun 16777216
+maxWaitMs 30000
+maxJoin 16
+> :clock advance 30 s
+> :runs
