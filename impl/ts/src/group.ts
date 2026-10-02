@@ -3664,6 +3664,7 @@ export class Group {
       }
       if (rec.kind === 'call-failed') {
         this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
+        this.observer?.({ k: 'call', call: rec.id, run: running.id });
         this.drainReports.push(this.callFailed(run.script.name, rec));
         continue;
       }

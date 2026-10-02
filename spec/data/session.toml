@@ -22,7 +22,7 @@ before = true
 [[command]]
 name = ":mock"
 usage = ":mock <capability>.<operation> <mode>"
-does = "Defines a mock Operation, with any arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget`"
+does = "Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget`"
 before = true
 
 [[command]]

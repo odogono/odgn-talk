@@ -279,3 +279,72 @@ describe('The Session Host', () => {
     expect(host.input(':nope')).toEqual(['! unknown command']);
   });
 });
+
+describe('Mock Operations', () => {
+  test('are defined and granted only before the session starts', () => {
+    const { host } = session();
+    expect(host.input(':mock db.get immediate')).toEqual([]);
+    expect(host.input(':grant store db')).toEqual([]);
+    expect(host.input(':grant other nope')).toEqual(['! bad arguments']);
+    expect(host.input(':mock db.get sometimes')).toEqual(['! bad arguments']);
+    expect(host.input(':mock console.write immediate')).toEqual([
+      '! bad arguments',
+    ]);
+    host.input('1');
+    expect(host.input(':mock db.put immediate')).toEqual(['! session started']);
+    expect(host.input(':grant again db')).toEqual(['! session started']);
+    expect(host.grants).toEqual({
+      granted: { db: 'db', store: 'db' },
+      mocks: [{ capability: 'db', operation: 'get', mode: 'immediate' }],
+    });
+  });
+
+  test('take up to eight arguments, and print each call', () => {
+    const { host } = session();
+    host.input(':mock log.write fire-and-forget');
+    expect(host.input('tell log to write')).toEqual([
+      'call session/r1.c1 log.write []',
+    ]);
+    expect(host.input('tell log to write 1, 2, 3, 4, 5, 6, 7, 8')).toEqual([
+      'call session/r2.c1 log.write [1, 2, 3, 4, 5, 6, 7, 8]',
+    ]);
+    expect(host.input('tell log to write 1, 2, 3, 4, 5, 6, 7, 8, 9')).toEqual([
+      '! wrong argument count at 1:13',
+    ]);
+  });
+
+  test('answer immediate calls from Stubs, which the Trace records', () => {
+    const { host, trace } = session();
+    host.input(':mock db.get immediate');
+    expect(host.input(':stub db.get [1, 2]')).toEqual([]);
+    expect(trace.at(-1)).toBe('> stub db.get value=[1, 2]');
+    expect(host.input(':stub db.get fail {code: 7}')).toEqual([
+      '! bad arguments',
+    ]);
+    expect(host.input(':stub db.nope 1')).toEqual(['! bad arguments']);
+    host.input('function get\n  ask db to get\n  return it\nend get');
+    expect(host.input('get()')).toEqual([
+      'call session/r1.c1 db.get []',
+      '[1, 2]',
+    ]);
+  });
+
+  test('settle suspending calls with :answer and :fail', () => {
+    const { host } = session();
+    host.input(':mock http.fetch suspending');
+    host.input('on fetch\n  ask http to fetch and wait\n  say it\nend fetch');
+    expect(host.input('send fetch to session')).toEqual([
+      '[session/r2] call session/r2.c1 http.fetch []',
+    ]);
+    expect(host.input(':answer session/r2.c1 "ok"')).toEqual([
+      '[session/r2] ok',
+    ]);
+    expect(host.input(':answer session/r2.c1 "ok"')).toEqual([
+      '! no such call',
+    ]);
+    host.input('send fetch to session');
+    expect(host.input(':fail session/r4.c1 {code: "down"}')).toEqual([
+      '[session/r4] ! error {code: "down", capability: "http", operation: "fetch"} at session+1:2:3',
+    ]);
+  });
+});

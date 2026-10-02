@@ -97,7 +97,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 | Command | Written | Does | Notes |
 | --- | --- | --- | --- |
 | `:grant` | `:grant <name> <capability>` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>` | before the session starts |
-| `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with any arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
+| `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
 | `:stub` | `:stub <capability>.<operation> <value> \| :stub <capability>.<operation> fail <error>` | Queues the result of the next call of a mock immediate Operation, or an error map to fail it with |  |
 | `:answer` | `:answer <call> <value>` | Answers a pending call of a mock suspending Operation |  |
 | `:fail` | `:fail <call> <error>` | Fails a pending call of a mock suspending Operation with an error map |  |
@@ -117,7 +117,8 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 <!-- end -->
 
 - **Values** in a command, such as a Stub's value or an error map, are written in the display form ([chapter 11](11-the-trace-and-conformance.md#the-display-form)). An error map needs a text `code`.
-- **Mocks:** `:mock` defines an Operation whose arguments and result have the `any` Shape. A call to one prints a `call` line. An immediate one takes the next `:stub` queued for it, as a Trace Case's runner does ([chapter 11](11-the-trace-and-conformance.md#stubs)), and with none fails as `host error`. A suspending one waits for `:answer` or `:fail`, and a fire-and-forget one just succeeds.
+- **Mocks:** `:mock` defines an Operation whose result has the `any` Shape, and which declares eight arguments, each an Optional `any`, so a call may give from none to eight. It declares no error codes. A call to one prints a `call` line, which names it by its Capability, whichever Grant the call goes through, and lists the arguments the call gave. An immediate one takes the next `:stub` queued for it, as a Trace Case's runner does ([chapter 11](11-the-trace-and-conformance.md#stubs)), and with none fails as `host error`. A suspending one waits for `:answer` or `:fail`, and a fire-and-forget one just succeeds.
+- **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
 - **`:clock`:**
   - `:clock` prints `real <instant>` or `virtual <instant>`, the last Pump's reading.

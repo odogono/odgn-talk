@@ -4,6 +4,7 @@
 // Trace back, keeping each comment and blank line before the Host Input line
 // it preceded.
 import { readDisplayText } from '../src/readers';
+import { Stubs } from '../src/session/stubs';
 import { replacementLibraries } from '../src/library';
 import corpus from '../../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -278,64 +279,27 @@ const shapeOf = (s: ShapeSpec): Shape => {
   throw new DeferredCaseError('Host Objects');
 };
 
-type Stub = { charge: number; error?: Value; value?: Value };
-// The next Stub for an Operation: its value or its failure, after its charge.
-const takeStub = (
-  stubs: Map<string, Stub[]>,
-  key: string,
-  call: { charge(fuel: number): void },
-  needed: boolean,
-): Value => {
-  const stub = stubs.get(key)?.shift();
-  if (!stub) {
-    if (needed) {
-      throw new Error(`No Stub for ${key}`);
-    }
-    return nothing;
-  }
-  if (stub.charge) {
-    call.charge(stub.charge);
-  }
-  if (stub.error) {
-    const entries = stub.error.entries();
-    if (!entries.length) {
-      throw new Error(`The Stub for ${key} fails`);
-    }
-    const code = stub.error.get('code').asText() ?? '';
-    const message = stub.error.get('message').asText() ?? '';
-    throw new ScriptError(
-      code,
-      message,
-      map(entries.filter(([k]) => k !== 'code' && k !== 'message')),
-    );
-  }
-  return stub.value ?? nothing;
-};
-
 const fireStub = (
-  stubs: Map<string, Stub[]>,
+  stubs: Stubs,
   key: string,
   call: Call<unknown>,
   crossing: (id: string) => void,
 ) => {
   try {
-    takeStub(stubs, key, call, false);
+    stubs.take(key, call, false);
   } finally {
     crossing(call.id);
   }
 };
 
 const startStub = (
-  stubs: Map<string, Stub[]>,
+  stubs: Stubs,
   key: string,
   call: Call<unknown>,
   calls: Map<string, Call<unknown>>,
   crossing: (id: string) => void,
 ) => {
-  const stub = stubs.get(key)?.shift();
-  if (stub?.charge) {
-    call.charge(stub.charge);
-  }
+  stubs.start(key, call);
   calls.set(call.id, call);
   crossing(call.id);
 };
@@ -345,7 +309,7 @@ const startStub = (
 // there is one.
 const capabilitiesOf = (
   setup: Setup,
-  stubs: Map<string, Stub[]>,
+  stubs: Stubs,
   calls: Map<string, Call<unknown>>,
   crossing: (id: string) => void,
   receive: (value: Value) => void,
@@ -403,7 +367,7 @@ const capabilitiesOf = (
                 do: (call, ...args) => {
                   args.forEach(receive);
                   try {
-                    return takeStub(stubs, key, call, true);
+                    return stubs.take(key, call, true);
                   } finally {
                     crossing(call.id);
                   }
@@ -471,7 +435,7 @@ const capabilitiesOf = (
     } else if (capability === 'calendar') {
       const answer = (operation: string, call: Call<string>): Value => {
         try {
-          return takeStub(stubs, `calendar.${operation}`, call, true);
+          return stubs.take(`calendar.${operation}`, call, true);
         } finally {
           crossing(call.id);
         }
@@ -493,7 +457,7 @@ const capabilitiesOf = (
     } else if (capability === 'locale') {
       const answer = (operation: string, call: Call<string>): Value => {
         try {
-          return takeStub(stubs, `locale.${operation}`, call, true);
+          return stubs.take(`locale.${operation}`, call, true);
         } finally {
           crossing(call.id);
         }
@@ -759,7 +723,7 @@ export const replay = (
         )
       : undefined,
   });
-  const stubs = new Map<string, Stub[]>();
+  const stubs = new Stubs();
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
   const capabilities = capabilitiesOf(setup, stubs, calls, crossing, receive);
@@ -1163,18 +1127,15 @@ export const replay = (
           ) {
             throw new Error('clock.now uses the Pump Clock, not a Stub');
           }
-          stubs.set(op, [
-            ...(stubs.get(op) ?? []),
-            {
-              charge: Number(r.fields.get('charge') ?? 0),
-              ...(r.fields.has('value')
-                ? { value: value(r.fields.get('value')!) }
-                : {}),
-              ...(r.fields.has('error')
-                ? { error: value(r.fields.get('error')!) }
-                : {}),
-            },
-          ]);
+          stubs.add(op, {
+            charge: Number(r.fields.get('charge') ?? 0),
+            ...(r.fields.has('value')
+              ? { value: value(r.fields.get('value')!) }
+              : {}),
+            ...(r.fields.has('error')
+              ? { error: value(r.fields.get('error')!) }
+              : {}),
+          });
           trace.push(line);
           break;
         }

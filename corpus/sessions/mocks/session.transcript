@@ -1,0 +1,59 @@
+# Mock Operations in each mode: `:stub` results and failures, a missing Stub
+# failing as `host error`, `:answer` and `:fail` for suspending calls, a
+# `call` line for each call, and refused mock commands.
+> :mock db.get immediate
+> :mock db.put fire-and-forget
+> :mock http.fetch suspending
+> :grant store db
+> :grant other nope
+! bad arguments
+> :mock db
+! bad arguments
+> :mock console.write immediate
+! bad arguments
+> :stub db.get {name: "Ann"}
+> :stub db.get fail {code: "missing", key: "k"}
+> :mock db.del immediate
+! session started
+> function lookup key
+|   ask db to get key
+|   return it
+| end lookup
+> lookup("a")
+@ 2026-09-30T10:00:00Z
+call session/r1.c1 db.get ["a"]
+{name: "Ann"}
+# A Stub queues for its Operation, whichever Grant the call goes through.
+> ask store to get "b"
+@ 2026-09-30T10:00:01Z
+call session/r2.c1 db.get ["b"]
+! error {code: "missing", key: "k", capability: "store", operation: "get"} at 1:1
+> lookup("c")
+@ 2026-09-30T10:00:02Z
+call session/r3.c1 db.get ["c"]
+! error {code: "host error", capability: "db", operation: "get"} at session+1:2:3
+> tell db to put "k", 1
+@ 2026-09-30T10:00:03Z
+call session/r4.c1 db.put ["k", 1]
+> :stub db.put 1
+! bad arguments
+> on fetch url
+|   ask http to fetch url and wait
+|   say "fetched " & it
+| end fetch
+> send fetch "u1" to session
+! unexpected token at 1:12
+@ 2026-09-30T10:00:04Z
+> :answer session/r6.c1 "body"
+! no such call
+@ 2026-09-30T10:00:05Z
+> :answer session/r6.c1 "again"
+! no such call
+> send fetch "u2" to session
+! unexpected token at 1:12
+@ 2026-09-30T10:00:06Z
+> :fail session/r8.c1 {}
+! bad arguments
+> :fail session/r8.c1 {code: "timeout"}
+! no such call
+@ 2026-09-30T10:00:07Z
