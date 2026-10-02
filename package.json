@@ -8,6 +8,8 @@
     "tools"
   ],
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "changelog": "bun run --cwd tools changelog",
     "check": "bun run --cwd tools check",
     "spec:gen": "bun run --cwd tools spec:gen",
     "spec:check": "bun run --cwd tools spec:check",

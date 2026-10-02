@@ -1,0 +1,3 @@
+#!/bin/sh
+# Checks the commit message's format. See docs/agents/commits.md.
+exec bun tools/commits/check.ts message "$1"
