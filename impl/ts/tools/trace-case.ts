@@ -28,6 +28,7 @@ import {
   type CapabilityDef,
   type Operation,
   type Shape,
+  type ScopeDecl,
   HostError,
   LoadError,
   type Library,
@@ -151,6 +152,8 @@ type OperationSpec = {
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
   name: string;
   result?: ShapeSpec;
+  scope?: ScopeDecl;
+  segmentBound?: boolean;
 };
 type ObjectRefSpec = { id: string; kind: string };
 export type Setup = {
@@ -334,6 +337,10 @@ const capabilitiesOf = (
       const key = `${name}.${op.name}`;
       const base = {
         args: (op.args ?? []).map(shapeOf),
+        ...(op.scope === undefined ? {} : { scope: op.scope }),
+        ...(op.segmentBound === undefined
+          ? {}
+          : { segmentBound: op.segmentBound }),
         cost: { fuel: op.cost?.fuel ?? 0, alloc: op.cost?.alloc ?? 0 },
         ...(op.result === undefined ? {} : { result: shapeOf(op.result) }),
         ...(op.errors

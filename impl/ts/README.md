@@ -26,6 +26,14 @@ Commands in this guide run from `impl/ts/`. The spec-level generators and checks
 
 `exportManifest({ kind, version, grants, libraries, messages, objectKinds, objects })` returns compact JSON with one trailing LF for the Host to write to `<kind>.talk-manifest.json`. Optional collections default to empty arrays. Declarations, receiving kinds and parent kinds are sorted in code-point order; argument Shapes, map fields and alternatives retain declaration order. Properties include `name`, `shape` (default `"value"`), `readOnly`, `getCost` and `setCost` (default zero Fuel and allocation). Operation Declarations use the same data helpers as saves and Group Fingerprints. Bindings, native objects and executable Host callbacks never appear, and export never calls them. The manifest is tooling-only and outside Trace parity.
 
+## Capability Scopes
+
+Immediate Operations support `scope: { opens, abandon }` and `scope: { closes }` from [the lifecycle contract](../../spec/embedding/scoped-effects.md). Grant the abandonment Operation along with its opener; `grantsAsUsed` retains this dependency. Host Calls identify resources by `group` instance, `scriptName`, `runId`, `grantName` and `scopeName`, with `segmentId` identifying the current Segment.
+
+Run termination attempts remaining abandonment in reverse opening order, after plain-scope Script `finally` blocks where those run. Automatic Calls use `automatic: true`, a fresh signal and no Script budgets; their `charge`, `answer` and `fail` methods are unavailable. Failure emits an `effect failure` report and disables that named Grant. `inspect().scripts[].disabledGrants` exposes disablement, which survives Reload, Library replacement and both Restore policies. A fresh Script load is the recovery boundary.
+
+An open scope prevents suspension-producing boundaries and Join entry, while Fuel Slice preemption still works. Save refuses live scopes with `effects pending`. Segment-bound Operations remain explicitly unsupported: `segmentBound: true` is rejected at definition until [#221](https://github.com/odogono/odgn-talk/issues/221) implements their participant lifecycle. The recording-Host tests in `tests/scopes.test.ts` verify ownership and ordering; these do not claim Go conformance.
+
 ## Public values
 
 Under Bun, import from the package:
