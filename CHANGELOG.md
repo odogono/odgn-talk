@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- Host-side `decodeJson`, `encodeJson`, `coreVersions` and `Versions`, completing [#199](https://github.com/odogono/odgn-talk/issues/199). Plain JSON preserves exact decimal digits and scale, NFC strings and member order, with shared Host/Library tests for values and errors. Version metadata reads the generated language, Cost Model and Unicode pins and the save-format constant used by save and restore.
+
 - Regression tests that a Limit Fault is never caught (no `catch` or `finally` runs) and that a runaway Script's fault leaves the other Scripts in its Group, and its own rolled-back state, intact, completing [#129](https://github.com/odogono/odgn-talk/issues/129)'s acceptance.
 
 - `call failed` Host reports and `PumpResult.nextDeadline`, part of [#196](https://github.com/odogono/odgn-talk/issues/196). A `host error` now reports its call id, `{capability, operation}` and the Host-side detail (a thrown error, a result that breaks its Shape, or a refused failure code or key) beside its `call-failed` Trace record; the Script still sees no detail. `nextDeadline` is the `pumped` record's `next`. Five tests cover immediate and suspending calls, declared failures and deadlines.

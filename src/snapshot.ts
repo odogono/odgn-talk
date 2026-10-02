@@ -16,6 +16,8 @@ import { Run, coreRaised, loadScript } from './machine';
 import { checkSource } from './checker';
 import { lowerTree } from './lowering';
 
+export const saveFormatVersion = 2;
+
 type Atom = boolean | number | string | null | [string, (string | number)?];
 type Node = { data: unknown; kind: string };
 export type Graph = { nodes: Node[]; root: Atom };

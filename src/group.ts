@@ -42,6 +42,7 @@ import {
   reference,
   saveGraph,
   restoreGraph,
+  saveFormatVersion,
   type Graph,
   type References,
 } from './snapshot';
@@ -649,7 +650,7 @@ export class Group {
     };
     const saved: SavedGroup = {
       family: 'odgn-talk-ts',
-      format: 2,
+      format: saveFormatVersion,
       language: languageVersion,
       costModel: costModel.version,
       fingerprint: hexOf(this.fingerprint()),
@@ -734,7 +735,7 @@ export class Group {
       group.libraries.set(library.name, library);
     }
     let mismatch =
-      saved.format !== 2 ||
+      saved.format !== saveFormatVersion ||
       saved.language !== languageVersion ||
       saved.costModel !== costModel.version ||
       saved.libraries.some(
@@ -4081,7 +4082,7 @@ const readSave = (bytes: Uint8Array): SavedGroup => {
     const saved = JSON.parse(outer.payload) as SavedGroup;
     if (
       saved.family !== 'odgn-talk-ts' ||
-      saved.format !== 2 ||
+      saved.format !== saveFormatVersion ||
       !/^s[1-9]\d*$/.test(saved.id) ||
       !Array.isArray(saved.scripts) ||
       !Array.isArray(saved.objects) ||

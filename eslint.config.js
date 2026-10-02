@@ -63,7 +63,12 @@ export default [
     },
   },
   {
-    files: ['src/encoding.ts', 'src/readers.ts', 'tools/corpus/check.ts'],
+    files: [
+      'src/encoding.ts',
+      'src/json.ts',
+      'src/readers.ts',
+      'tools/corpus/check.ts',
+    ],
     rules: {
       // JSON/display readers must recognize the Spec's exact control-character ranges.
       'no-control-regex': 'off',
