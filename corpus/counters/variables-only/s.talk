@@ -1,0 +1,4 @@
+on go n, queued
+  wait 1 s
+  return n
+end go

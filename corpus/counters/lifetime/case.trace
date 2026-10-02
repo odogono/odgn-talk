@@ -1,0 +1,45 @@
+# Live work carries across full restore, Stop, Reload and Extend.
+> load s identity=c90b0b593dd638c95e2ccaa250575b8c5c936b6f1cd108dbfe209a5ec0a527c8
+> counters s
+counters s fuel=0 alloc=0 runs=0 faults=0 state=0 mailbox=0
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T09:00:00Z fuel-cap=1
+preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=5 alloc=0
+pumped state=sliced fuel=5
+> counters s
+counters s fuel=5 alloc=0 runs=1 faults=0 state=200 mailbox=0
+> pump clock=2026-10-02T09:00:00Z
+seg s/r1 continue fuel=10 alloc=0 state=176 end=wait until=2026-10-02T09:00:01Z
+pumped state=idle fuel=10 next=2026-10-02T09:00:01Z
+> counters s
+counters s fuel=15 alloc=0 runs=1 faults=0 state=176 mailbox=0
+> save s1
+> restore from=s1 fingerprint=b4ad1a74f48f3212a313478b52dc319e8156822b0df0c267b08d1d7039fbcd2b mode=full
+> counters s
+counters s fuel=15 alloc=0 runs=1 faults=0 state=176 mailbox=0
+> pump clock=2026-10-02T09:00:01Z
+seg s/r1 resume fuel=9 alloc=64 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=[1, 2] fuel=24 alloc=64
+pumped state=idle fuel=9
+> counters s
+counters s fuel=24 alloc=64 runs=1 faults=0 state=0 mailbox=0
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T09:00:01Z
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-02T09:00:02Z
+pumped state=idle fuel=15 next=2026-10-02T09:00:02Z
+> counters s
+counters s fuel=39 alloc=64 runs=2 faults=0 state=176 mailbox=0
+> stop s reason="done"
+> pump clock=2026-10-02T09:00:01Z
+stopped s reason="done" discarded=[s/r2]
+pumped state=stopped fuel=0
+> counters s
+counters s fuel=39 alloc=64 runs=2 faults=0 state=0 mailbox=0
+> reload s carry=no source="script variable n = 1" identity=b7d37f72d615a777baf8a47e027712d45bfc53fafe94ee0ff3793a8ac447fefd
+> counters s
+counters s fuel=39 alloc=64 runs=2 faults=0 state=16 mailbox=0
+> extend s source="script variable xs = [1, 2]" identity=e8e580754a17a5c38d0ed1e62dc154a285e153042306478254ec2c7c8c2cf034
+> counters s
+counters s fuel=39 alloc=64 runs=2 faults=0 state=80 mailbox=0
+> vars
+vars s n=1 xs=[1, 2]

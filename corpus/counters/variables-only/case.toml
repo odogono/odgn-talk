@@ -1,0 +1,11 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
