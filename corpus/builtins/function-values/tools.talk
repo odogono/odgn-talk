@@ -1,0 +1,9 @@
+-- tools.talk: a Library of the function-values case.
+
+function pad t, width, fill = " "
+  return t
+end pad
+
+function maker
+  return given x: x
+end maker

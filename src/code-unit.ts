@@ -36,6 +36,14 @@ export type Body = {
   policy?: 'queued' | 'dropping' | 'replacing';
   start: number;
 };
+/** The argument counts a function body accepts: `wrong arity` and `functionArity` read the same range. */
+export const arityOf = (body: Body): { max: number; min: number } =>
+  body.kind === 'lambda'
+    ? { min: body.params.length, max: body.params.length }
+    : {
+        min: body.defaults.filter(d => d === null || d === undefined).length,
+        max: body.params.length,
+      };
 export type UnwindEntry = {
   depth: number;
   /** One past the range's last instruction. */

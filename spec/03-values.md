@@ -26,6 +26,7 @@ Every value has exactly one kind:
 | `object` | a Host Object | the Host only |
 
 - **Kind names:** the names in the first column are what `is a` tests, what `as` and `can be` convert to where a conversion exists, and what an error's `expected` and `got` fields hold ([chapter 6](06-errors-and-limits.md)). `integer` is also allowed after `is a` or `is not a`, and as `expected` where an integer is needed ([below](#integers)). After `as` and `can be`, so is a Unit. Any other name there is a load error.
+- **Reading a kind:** the Built-in `kindOf(x)` gives the kind name of any value as text, so `kindOf(3)` is `"number"` ([chapter 7](07-libraries-and-the-standard-library.md#values), [ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md)).
 - **No value changes kind by itself** ([ADR 0003](../docs/adr/0003-no-implicit-coercion.md)). A Script converts with `as`. The one automatic conversion is to text, by `&`, `put`, `say` and `format` ([the text form](#the-text-form)).
 - **Plain data:** every kind except `object` is plain data. It has no identity, and a Script Snapshot saves it as it is ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).
 
@@ -471,6 +472,7 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
 - **A Function Value** is plain data: its Home Script, the Lambda or named function it came from, and the values it captured ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)). Calling one is in [chapter 4](04-expressions-and-statements.md#calls).
 - **Its display form** names the Home Script, the Lambda's position and the captures, as in `<function weather:12:3 {n: 3}>`.
 - **Stale:** once its Home Script stops or reloads, or its code is replaced, it is stale, and calling it raises `function gone`. It stays an ordinary value, and still compares by the rule above.
+- **Its arity and name:** the Built-ins `functionArity(f)` and `functionName(f)` read the argument counts it accepts and the name of the function it came from, so Scripts never need to read its display form ([chapter 7](07-libraries-and-the-standard-library.md#values), [ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md)).
 
 ## Host Objects
 

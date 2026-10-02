@@ -107,6 +107,24 @@ call = "rangeEnd(r)"
 gives = "The second end of the range `r`, as written"
 
 [[builtin]]
+name = "kindOf"
+group = "values"
+call = "kindOf(x)"
+gives = "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`"
+
+[[builtin]]
+name = "functionArity"
+group = "values"
+call = "functionArity(f)"
+gives = "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them"
+
+[[builtin]]
+name = "functionName"
+group = "values"
+call = "functionName(f)"
+gives = "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda"
+
+[[builtin]]
 name = "abs"
 group = "numbers"
 call = "abs(x)"

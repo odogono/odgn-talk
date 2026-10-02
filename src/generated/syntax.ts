@@ -750,6 +750,30 @@ export const builtins = [
     }
   },
   {
+    "name": "kindOf",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
+  },
+  {
+    "name": "functionArity",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
+  },
+  {
+    "name": "functionName",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
+  },
+  {
     "name": "abs",
     "kind": "function",
     "contract": {

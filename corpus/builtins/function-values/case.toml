@@ -1,0 +1,21 @@
+# function-values: `functionArity(f)` gives the range of argument counts a
+# Function Value accepts, the range `wrong arity` checks, and `functionName(f)`
+# the name of the function it was made from, as its code unit defines it, or
+# Nothing for a Lambda. A renamed import keeps its Library name, a Library's
+# Lambda has no name, a stale Function Value still answers both, and anything
+# but a Function Value raises `wrong kind` (spec chapter 7, Values; ADR 0043).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[libraries]]
+name = "tools"
+version = "1"
+source = "tools.talk"
+
+[[scripts]]
+name = "probe"
+source = "probe.talk"
