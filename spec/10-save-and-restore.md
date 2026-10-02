@@ -15,14 +15,14 @@ A Host can save a whole Group between Pumps and restore it later on the same Cor
 
 - **When:** `Save` is a worker call, legal whenever the Group is Quiescent, which is always between Pumps. A save can only be attempted during a Pump from inside it, which is the Host error `reentrant call`. The Core has no notion of paused.
 - **Preempted Runs** can be saved. A Run a Fuel Slice or the Group's Fuel cap cut mid-Segment is saved mid-Segment, with its segment base, so a later Limit Fault still rolls it back correctly ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
-- **Unobservable:** saving charges nothing, changes nothing, and appears in the Trace only as a `save` record ([chapter 11](11-the-trace-and-conformance.md)).
-- **The bytes:** the same Group state gives the same bytes on the same Core version, so two saves can be compared.
+- **Unobservable:** saving charges nothing and changes only the Trace save id counter. It appears in the Trace only as a `save` record ([chapter 11](11-the-trace-and-conformance.md)).
+- **The bytes:** the same complete Group state, including its Trace save id counter, gives the same bytes on the same Core version. Consecutive saves advance that counter and therefore differ; saving never changes Script state or scheduling.
 
 ### What a save holds
 
 A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-model.md#the-machines-state), as plain data:
 
-- **The Group:** its name, its Scripts in load order, the identity of each of its Libraries, the last Clock reading, and the counters that assign delivery ids, Broadcast ids, run ids and call ids.
+- **The Group:** its name, its Scripts in load order, the identity of each of its Libraries, the last Clock reading, and the counters that assign delivery ids, Broadcast ids, run ids, call ids and Trace save ids.
 - **The input queue:** every Host Input queued since the last Pump, in call order, with the delivery id each was given. A Host Input only a Host function could make, such as `Answer` from one, is saved like any other.
 - **Each Broadcast in progress:** its id, its recipients, and for a Broadcast Decision, which recipients have sealed and the vetoes so far ([chapter 5](05-handlers-messages-and-scheduling.md#decisions)).
 - **The versions:** the language version, the Cost Model version, the save-format version and the Group Fingerprint ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)).
@@ -42,7 +42,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - its wait, with each deadline as an absolute Instant and its place in the order waits began
   - its pending calls, and its Join's members with the answers that have arrived
   - its cleanup stack
-- **Each pending call:** its call id, its Run, its Grant name and Operation, its arguments and its `maxPending` or `MaxWait` deadline. Its declared cost has always been charged by then.
+- **Each pending call:** its call id, its Run, its Grant name and Operation, its arguments and its `maxPending` or `MaxWait` deadline. Its declared cost has always been charged by then. In TS it also records whether the original call used `start` or `run`, which decides Adopt eligibility independently of the rebound Host implementation.
 - **Each Host Object:** its kind, its id, its parent, and whether it is disposed. Native objects are never saved.
 - **Function Values:** their Home Script, body and captured values, as plain data ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).
 - **Text Patterns:** their canonical source, and no compiled program.
@@ -57,7 +57,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 `Core.Restore(save, options)` builds a new Group from a save. It hasn't been pumped, and it is ready for Host Inputs. Restoring takes these steps, in order, and if any step fails, nothing is made:
 
-1. **Reading:** a save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
+1. **Reading:** the TS Core reads its format 1 only. A save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
 2. **Libraries:** the Host passes compiled Libraries for the saved identities. The Core matches them by identity, and a Library it needs that isn't given is a mismatch.
 3. **Grants:** the Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
 4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts and limits, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one and the save-format version is its own, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, and `VariablesOnly` does a [variables-only restore](#variables-only-restore).
@@ -77,10 +77,10 @@ Each pending call is a suspending Operation call that hadn't been answered when 
 
 - **Answer:** the call succeeds with the value, as `Answer` would. Converting it is charged when the Run resumes.
 - **Fail:** the call fails with the error, as `Fail` would.
-- **Reissue:** the Operation's `Start` runs again, with the saved arguments and binding, under the same call id. It runs when the first Pump drains the settlement, so `Now` is that Pump's Clock reading. Its declared cost isn't charged again, since it was charged before the save. `Charge` draws Fuel from the Run as it would at the call, and converting the answer is charged as usual.
+- **Reissue:** the Operation's `Start` runs again, with the saved arguments and binding, under the same call id. It runs when the first Pump drains the settlement, so `Now` is that Pump's Clock reading. Its declared cost isn't charged again, since it was charged before the save. `Charge` draws Fuel from the Run as it would at the call, counts toward that Pump's Fuel cap and the Script's Fuel Slice and debt, and converting the answer is charged as usual.
 - **Adopt:** the Host still has the call in progress, and will answer it under the same call id. It costs nothing. `Settle` returns a new `Call` for it, which the Host answers or fails through. A TS `run` call can't be adopted, since its Promise belonged to the old Group, and adopting one is the Host error `not adoptable`.
 
-- **In order:** the settlements are Host Inputs, queued, and drained by the first Pump in the order they were made, at step 2 ([chapter 5](05-handlers-messages-and-scheduling.md#a-pump)). Then every call still unsettled fails in its Script with `call lost`, in call id order, before any timer fires. So an unsettled call is `call lost` even when its deadline has also passed.
+- **In order:** the settlements are Host Inputs, queued, and drained by the first Pump in the order they were made, at step 2 ([chapter 5](05-handlers-messages-and-scheduling.md#a-pump)). Then every call still unsettled fails in its Script with `call lost`, in call id order (Script name first, then numeric Run counter, then numeric call counter), before any timer fires. The pending and abandoned call lists use this order too. So an unsettled call is `call lost` even when its deadline has also passed.
 - **Deadlines:** a settled call's `maxPending` or `MaxWait` deadline keeps its saved Instant. A reissued or adopted call overdue at the first Pump times out at step 3, unless it has been answered by then.
 - **Misuse:** settling a call id that isn't pending, settling one twice, or settling once the first Pump has started, is the Host error `unknown call`. Each is known at the call, so `Settle` returns it, and nothing is queued.
 
@@ -100,7 +100,7 @@ A variables-only restore rebuilds each Script from its saved source and then eac
 - **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked Grants. Host Objects are kept, and resolved as for a full restore.
 - **Discarded:** every Run, suspended, parked or preempted, the mailbox, the work queue, the input queue, each Broadcast in progress and the Fuel Slice debt. Runs are discarded with no `finally`. The result lists the discarded Runs in `DiscardedRuns`, the dropped Deliveries (the mailboxes' and the input queue's) in `DroppedMessages`, and the abandoned calls in `AbandonedCalls`, so the Host can cancel the ones it still has. `Pending` is empty.
 - **Late answers:** an answer or failure for an abandoned call is recorded and ignored, as for any call that isn't pending ([chapter 9](09-embedding.md#capabilities)). A Host reaches the restored Group with one only over the message layer, since a `Call` from before the save answers into the Group that made it.
-- **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, undecided, `cancelled` ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
+- **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, with each unsealed recipient undecided, `cancelled`, naming its Script and its Run if it had begun. A Broadcast keeps already sealed ballots and aggregates them by the ordinary Verdict rule; a dropped Broadcast not yet given recipients is undecided with empty lists. These deferred reports are saved if the Host saves again before the first Pump ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **Function Values** are kept, but they are stale: calling one raises `function gone` ([chapter 3](03-values.md#function-values)).
 - **Failing as a whole:** if any Script no longer loads, the restore fails with its `LoadError`. If any Script's carried-over Script Variables would exceed its Persistent State cap, the restore fails with the Host error `state too large`. Either way, nothing is made.
 - **Id counters** carry over, so no delivery id, run id or call id is reused.

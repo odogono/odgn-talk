@@ -36,6 +36,11 @@ export {
 export {
   Group,
   newGroup,
+  restore,
+  type RestoreOptions,
+  type RestoreResult,
+  type PendingCall,
+  type Settlement,
   Script as ScriptHandle,
   type GroupOptions,
   type CancellationOptions,

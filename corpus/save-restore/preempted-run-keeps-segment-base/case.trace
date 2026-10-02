@@ -16,9 +16,8 @@
 # `jump` can't be covered: the fault is at counter:10, pos 9:3.
 # Allocation is the one number `add` builds (16), and the state figure is
 # `n` alone once the Run has ended (a number, 16).
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load counter
+> load counter identity=8b522a8adb8828f3c6a21c1d61f64c1c097280d521532ee56febc12e32ec562e
 
 # The slice cuts the Run in the middle of its first Segment.
 > deliver d1 to=counter message=spin
@@ -29,7 +28,7 @@ pumped state=sliced fuel=100
 # Saved while preempted. Nothing is pending, so the restore lists nothing to
 # settle.
 > save s1
-> restore from=s1 mode=full
+> restore from=s1 fingerprint=c0ab181159ec508af5057176ac8fe7020fd6e0fadfb8990a1fbfa14d75e2be9e mode=full
 
 # No slice now. The Run continues from the instruction it was cut before, on
 # the Fuel it had left (1000 - 100), and faults. `rollback=[n]` shows the

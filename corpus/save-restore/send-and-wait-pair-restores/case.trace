@@ -8,30 +8,28 @@
 # - After the restore, back/r1's overdue `wait` fires, its result goes to
 #   front/r1 as the reply, and front/r1 resumes with it in `it`, in the same
 #   Pump.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load front
-> load back
+> load front identity=0a012795050b3272f1c9f09c7322ad7aa511a7c42f6d22defd56a25ab1945af0
+> load back identity=e10efc740c86006fb010a1c697e2df4decb3580cdb1d76047604aa1a1ae720dc
 
 > deliver d1 to=front message=order args=["A1"]
 > pump clock=2026-09-30T10:00:00Z
 send front/r1.c1 to=back message=quote args=["A1"] wait=yes
-seg front/r1 start delivery=d1 handler=order clause=1 fuel=27 alloc=56 state=200 end=send-wait
-seg back/r1 start from=front/r1.c1 handler=quote clause=1 fuel=16 alloc=0 state=176 end=wait until=2026-09-30T10:00:05Z
+seg front/r1 start delivery=d1 handler=order clause=1 fuel=28 alloc=50 state=258 end=send-wait
+seg back/r1 start from=front/r1.c1 handler=quote clause=1 fuel=15 alloc=0 state=202 end=wait until=2026-09-30T10:00:05Z
 pumped state=idle fuel=43 next=2026-09-30T10:00:05Z
 
 # Saved with both ends waiting.
 > save s1
-> restore from=s1 mode=full
+> restore from=s1 fingerprint=c82a2eeb0b38c5072d28daa8e815c7bf670cb403ad388fab31f85dbe3742b692 mode=full
 
 # back's wait is overdue at 10:00:06, well inside front's MaxWait (10:00:30).
 > pump clock=2026-09-30T10:00:06Z
-seg back/r1 resume fuel=10 alloc=32 state=0 end=return
-run back/r1 outcome=completed handler=quote value="A1: 3 left" fuel=26 alloc=32
-seg front/r1 resume fuel=6 alloc=0 state=48 end=return
-run front/r1 outcome=completed delivery=d1 handler=order fuel=33 alloc=56
-pumped state=idle fuel=16
+seg back/r1 resume fuel=8 alloc=26 state=0 end=return
+run back/r1 outcome=completed handler=quote value="A1: 3 left" fuel=23 alloc=26
+seg front/r1 resume fuel=7 alloc=0 state=26 end=return
+run front/r1 outcome=completed delivery=d1 handler=order fuel=35 alloc=50
+pumped state=idle fuel=15
 
 > vars
 vars front reply="A1: 3 left"

@@ -10,22 +10,20 @@
 # - Both calls keep their saved MaxWait deadline, 10:00:30 (30 s after the
 #   Pump they started in), not 30 s after the restore or the reissue. So the
 #   reissued call, still unanswered, times out at 10:00:30.
-# Fuel, allocation and state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
 
-> load shop
+> load shop identity=ae9ef0eea18dc285b985ce5305fc1cb2c15b66ff8de9e87bcb9cb9e6914c6fcb
 
 > deliver d1 to=shop message=check args=["A1"]
 > deliver d2 to=shop message=check args=["B2"]
 > pump clock=2026-09-30T10:00:00Z
 call shop/r1.c1 op=stock.check args=["A1"]
-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=240 end=ask-wait
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
 call shop/r2.c1 op=stock.check args=["B2"]
-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=464 end=ask-wait
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
 pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
 
 > save s1
-> restore from=s1 mode=full pending=[shop/r1.c1, shop/r2.c1]
+> restore from=s1 fingerprint=4fadf12a3bb913538a409e9d27cdbaf5080604cda5e602a1c9a5a61c322ac799 mode=full pending=[shop/r1.c1, shop/r2.c1]
 
 # The reissue crosses to the Host again as the first Pump drains it. Neither
 # call is answered yet, so nothing runs, and the next deadline is still the
@@ -42,13 +40,13 @@ pumped state=idle fuel=0 next=2026-09-30T10:00:30Z
 # raises `timeout` at the `ask … and wait` and its call is abandoned.
 > answer shop/r2.c1 value=7
 > pump clock=2026-09-30T10:00:31Z
-seg shop/r2 resume fuel=24 alloc=88 state=312 end=return
-run shop/r2 outcome=completed delivery=d2 handler=check fuel=139 alloc=88
+seg shop/r2 resume fuel=21 alloc=156 state=340 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=136 alloc=156
 raise shop/r1 code="timeout" at=shop:5 pos=9:5
 abandon shop/r1.c1
-seg shop/r1 resume fuel=62 alloc=240 state=128 end=return
-run shop/r1 outcome=completed delivery=d1 handler=check fuel=177 alloc=240
-pumped state=idle fuel=86
+seg shop/r1 resume fuel=26 alloc=154 state=171 end=return
+run shop/r1 outcome=completed delivery=d1 handler=check fuel=141 alloc=154
+pumped state=idle fuel=47
 
 > vars
 vars shop results=[["B2", 7], ["A1", "timeout"]]

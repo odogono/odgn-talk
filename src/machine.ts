@@ -353,7 +353,6 @@ export const loadLibrary = (
 type Iterator = {
   at: number;
   count: number;
-  item: (i: number) => Value;
   k: 'iterator';
   source: Value | null;
 };
@@ -434,6 +433,7 @@ export type RunRecord =
 
 // A call in flight: what its answer or failure needs at the call.
 type CallContext = {
+  adoptable?: boolean;
   declared: number;
   id: string;
   key: string;
@@ -481,6 +481,7 @@ export type Member = {
 /** What resumes a suspended Run. */
 export type Resumption =
   | { k: 'wake' }
+  | { code: 'call lost' | 'capability revoked'; k: 'restore-fail' }
   | { fuel: number; k: 'answer'; value: Value }
   | { error: HostScriptError | null; k: 'fail' }
   | { after: number; k: 'timeout' }
@@ -503,6 +504,7 @@ export type RunHost = {
   /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
   fail(id: string, error: HostScriptError | null): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
+  isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
   /** The object the Script owns, or Nothing. */
@@ -594,6 +596,19 @@ class LimitFaultError extends Error {
     super(limit);
   }
 }
+const iteratorItem = (source: Value | null, at: number): Value => {
+  if (!source) {
+    return nothing;
+  }
+  if (source.kind === 'list') {
+    return source.index(at);
+  }
+  const start = BigInt(
+    source.asRange()!.from.asDecimal()!.toString().split('.')[0]!,
+  );
+  return dec(String(start + BigInt(at - 1)));
+};
+
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 
 export class Run {
@@ -640,6 +655,168 @@ export class Run {
   private cleanupFuel = 0;
   /** Calls abandoned when cancellation landed, traced after the cancel Segment. */
   cancellationAbandons: string[] = [];
+
+  rebindCalls(): void {
+    const s = this.suspended;
+    const contexts =
+      s?.k === 'ask'
+        ? [s.call]
+        : s?.k === 'join'
+          ? s.members.flatMap(m => (m.call ? [m.call] : []))
+          : [];
+    for (const context of contexts) {
+      const [grant, operation] = context.opName.split('.');
+      context.op = this.host!.grants.get(grant!)!.capability.operations.get(
+        operation!,
+      )!;
+    }
+  }
+
+  callAdoptable(id: string): boolean {
+    const s = this.suspended;
+    const context =
+      s?.k === 'ask'
+        ? s.call
+        : s?.k === 'join'
+          ? s.members.find(m => m.id === id)?.call
+          : undefined;
+    return context?.adoptable === true;
+  }
+
+  /** Reconnect the Host side of a saved suspending Operation. */
+  restoredCall(
+    id: string,
+    grantName: string,
+    args: Value[],
+    reissue: boolean,
+  ): { call: Call<unknown>; failure?: Resumption } {
+    const suspension = this.suspended!;
+    const context =
+      suspension.k === 'ask'
+        ? suspension.call
+        : (suspension as Extract<Suspension, { k: 'join' }>).members.find(
+            m => m.id === id,
+          )!.call!;
+    const abort =
+      suspension.k === 'ask'
+        ? suspension.abort
+        : (suspension as Extract<Suspension, { k: 'join' }>).members.find(
+            m => m.id === id,
+          )!.abort!;
+    const grant = this.host!.grants.get(grantName)!;
+    let starting = false;
+    let charged = 0;
+    let reached = false;
+    const call: Call<unknown> = {
+      id,
+      scriptName: this.script.name,
+      binding: grant.binding,
+      signal: abort.signal,
+      get now() {
+        return run.host!.now;
+      },
+      answer: (value, cost) => this.host!.answer(id, value, cost?.fuel ?? 0),
+      fail: error =>
+        this.host!.fail(id, error instanceof HostScriptError ? error : null),
+      charge: fuel => {
+        if (!starting || !Number.isSafeInteger(fuel) || fuel < 0) {
+          throw new HostError('invalid value');
+        }
+        if (this.fuel + fuel > this.limits.fuelPerRun) {
+          reached = true;
+          throw new LimitReached();
+        }
+        this.fuel += fuel;
+        charged += fuel;
+      },
+    };
+    const run = this;
+    if (!reissue) {
+      return { call };
+    }
+    if (this.host!.isRevoked?.(grantName)) {
+      return {
+        call,
+        failure: { k: 'restore-fail', code: 'capability revoked' },
+      };
+    }
+    const op = grant.capability.operations.get(
+      context.opName.slice(grantName.length + 1),
+    )!;
+    context.op = op;
+    const record = { kind: 'call' as const, id, op: context.opName, args };
+    starting = true;
+    let failure: Resumption | undefined;
+    try {
+      if (op.mode !== 'suspending') {
+        throw new Error('A saved call is not suspending');
+      }
+      if (op.start) {
+        op.start(call, ...args);
+      } else {
+        op.run!(call, ...args).then(
+          value => call.answer(value),
+          (error: unknown) =>
+            this.host!.fail(
+              id,
+              error instanceof HostScriptError ? error : null,
+            ),
+        );
+      }
+      this.records.push({ ...record, charged });
+    } catch (error) {
+      this.records.push({
+        ...record,
+        charged,
+        ...(reached
+          ? {}
+          : {
+              error:
+                error instanceof HostScriptError
+                  ? Value.isValue(error.data) && error.data.kind === 'map'
+                    ? error.data
+                    : map([])
+                  : map([]),
+            }),
+      });
+      if (!reached) {
+        failure = {
+          k: 'fail',
+          error: error instanceof HostScriptError ? error : null,
+        };
+      }
+    } finally {
+      starting = false;
+    }
+    if (reached) {
+      // The saved suspension committed its Segment. Reissue can't roll it back.
+      this.segmentBase = [...this.script.variables];
+      this.fault('fuelPerRun', this.frame.code.unit.code[this.frame.pc]!);
+      if (suspension.k === 'ask') {
+        abort.abort();
+        this.faultAbandons.push(id);
+      }
+      failure = { k: 'wake' };
+    }
+    return { call, ...(failure ? { failure } : {}) };
+  }
+
+  /** The plain machine state, without its Group's Host functions. */
+  snapshot(): Record<string, unknown> {
+    const { host: _host, persistentState: _state, ...state } = this;
+    return state;
+  }
+
+  /** Allocate before linking shared frames and Join state from a save. */
+  static empty(): Run {
+    return Object.create(Run.prototype) as Run;
+  }
+
+  restore(state: Record<string, unknown>): void {
+    Object.assign(this, state);
+    this.host = null;
+    this.persistentState = () => this.script.variablesSize();
+  }
 
   get cancelling(): boolean {
     return this.cancellation !== null;
@@ -1086,6 +1263,8 @@ export class Run {
     switch (r.k) {
       case 'wake':
         return nothing;
+      case 'restore-fail':
+        throw new ScriptError(r.code, call?.named ?? [], true);
       case 'reply':
         return r.value;
       case 'send failed':
@@ -1402,7 +1581,9 @@ export class Run {
 
   // Abandon the open Join's members, signalling their Capability calls.
   private abandonJoin(): string[] {
-    const members = this.join?.members ?? [];
+    const members = (this.join?.members ?? []).filter(
+      member => member.answer === undefined,
+    );
     this.join = null;
     for (const member of members) {
       member.abort?.abort();
@@ -1676,6 +1857,16 @@ export class Run {
     if (!host) {
       throw new NotImplementedError('a Capability call outside a Group');
     }
+    if (host.isRevoked?.(grantName)) {
+      throw new ScriptError(
+        'capability revoked',
+        [
+          ['capability', text(grantName)],
+          ['operation', text(opName)],
+        ],
+        true,
+      );
+    }
     const grant = host.grants.get(grantName);
     const op = grant?.ops.has(opName)
       ? grant.capability.operations.get(opName)
@@ -1729,6 +1920,7 @@ export class Run {
       named,
       declared,
       opName: `${grantName}.${opName}`,
+      adoptable: op.mode === 'suspending' && !!op.start,
     };
     let charged = 0;
     let reached = false;
@@ -2878,7 +3070,6 @@ export class Run {
             source: v,
             at: 0,
             count: v.length,
-            item: i => v.index(i),
           };
         } else if (v.kind === 'range') {
           const { from, to } = v.asRange()!;
@@ -2886,14 +3077,12 @@ export class Run {
           if (!whole(from) || !whole(to)) {
             throw wrongKind('integer', whole(from) ? to : from);
           }
-          const start = BigInt(from.asDecimal()!.toString().split('.')[0]!);
           const items = property('length', v);
           iterator = {
             k: 'iterator',
             source: v,
             at: 0,
             count: Number(items.asDecimal()!.toString()),
-            item: i => dec(String(start + BigInt(i - 1))),
           };
         } else {
           throw wrongKind('list', v);
@@ -2922,7 +3111,6 @@ export class Run {
           source: null,
           at: 0,
           count: Number(n),
-          item: () => nothing,
         });
         return next();
       }
@@ -2933,7 +3121,7 @@ export class Run {
           return jump(a as number);
         }
         it.at++;
-        frame.stack.push(it.item(it.at));
+        frame.stack.push(iteratorItem(it.source, it.at));
         return next();
       }
 

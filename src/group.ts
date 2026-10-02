@@ -27,9 +27,26 @@ import {
   type Suspension,
   type Script as Loaded,
 } from './machine';
-import type { Grant } from './capabilities';
+import {
+  defineCapability,
+  type Grant,
+  type Call,
+  type Operation,
+} from './capabilities';
+import { languageVersion, costModel } from './generated/machine';
+import { canonicalJSON, grantData } from './manifest';
+import {
+  references,
+  reference,
+  saveGraph,
+  restoreGraph,
+  type Graph,
+  type References,
+} from './snapshot';
 import {
   makeObject,
+  objectKind,
+  rebindObject,
   stateOf,
   type HostObject,
   type ObjectKind,
@@ -87,6 +104,32 @@ export type Decided = {
 };
 export type Deciding = { decided: Promise<Decided>; id: string };
 export type Requested = { id: string; result: Promise<Value> };
+export type RestoreOptions = GroupOptions & {
+  grants(script: string, name: string): Grant<unknown> | undefined;
+  libraries: readonly Library[];
+  onMismatch: 'reject' | 'variables only';
+  resolve(kind: string, id: string): { native: unknown } | undefined;
+};
+export type PendingCall = {
+  args: Value[];
+  grant: string;
+  id: string;
+  operation: { capability: string; operation: string };
+  script: string;
+};
+export type RestoreResult = {
+  abandonedCalls: string[];
+  discardedRuns: string[];
+  disposed: [string, string][];
+  droppedMessages: string[];
+  pending: PendingCall[];
+  variablesOnly: boolean;
+};
+export type Settlement =
+  | { answer: Value }
+  | { fail: HostScriptError }
+  | { reissue: true }
+  | { adopt: true };
 export type CarryOver = 'reset variables' | 'carry variables';
 export type CancellationOptions = { signal?: AbortSignal };
 export type PumpOptions = { fuelCap?: number; fuelSlice?: number };
@@ -166,6 +209,7 @@ const overridable = new Set([
 type Decision = {
   ballots: Ballot[];
   broadcast: boolean;
+  discarded?: boolean;
   id: string;
   resolve: (v: Decided) => void;
   settled?: boolean;
@@ -211,9 +255,18 @@ type Running = {
   selected?: boolean;
 };
 // A timer (chapter 5, A Pump): fired in deadline order, then set order.
+type TimerAction =
+  | { k: 'wake'; running: Running; s: ScriptState }
+  | {
+      branch: number;
+      k: 'event';
+      s: ScriptState;
+      waiter: ScriptState['waiters'][number];
+    }
+  | { abort?: AbortController; id: string; k: 'call'; ms: number };
 type Timer = {
+  action: TimerAction;
   deadline: bigint;
-  fire: () => void;
   live: boolean;
   running?: Running;
   seq: number;
@@ -249,6 +302,7 @@ type ScriptState = {
   parked: Running[];
   /** Messages waiting for dispatch, and a preempted Run at its head. */
   queue: (Delivery | Running)[];
+  revoked: Set<string>;
   runs: number;
   stopped: boolean;
   stopReason?: string;
@@ -258,8 +312,30 @@ type ScriptState = {
   /** Its pending `wait for`s, in the order the waits began. */
   waiters: { running: Running; timers: Timer[] }[];
 };
+type InputAction =
+  | { id: string; k: 'cancel-delivery' }
+  | { id: string; k: 'cancel-run'; name: string }
+  | { k: 'stop'; name: string; reason: string }
+  | { fuel: number; id: string; k: 'answer'; value: Value }
+  | { error: HostScriptError | null; id: string; k: 'fail' }
+  | {
+      delivery: Delivery;
+      k: 'delivery';
+      state: ScriptState | null;
+      to: string | ObjectState;
+    }
+  | {
+      decision?: Decision;
+      id: string;
+      k: 'broadcast';
+      m: Message;
+      recipients?: { delivery: Delivery; s: ScriptState }[];
+    }
+  | { child: ObjectState; k: 'set-parent'; up: ObjectState | null }
+  | { k: 'dispose'; state: ObjectState }
+  | { id: string; k: 'settle'; settlement: Settlement };
 type QueuedInput = {
-  apply: () => void;
+  action: InputAction;
   line: string | (() => string);
   urgent?: boolean;
 };
@@ -334,12 +410,624 @@ export class Group {
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private broadcasts = 0;
+  private saves = 0;
   private lastClock: bigint | null = null;
   private pumping = false;
   private active: { records: number; running: Running; s: ScriptState } | null =
     null;
   private activeStop: (() => void) | null = null;
   private drainingTrace: string[] | null = null;
+
+  /** Worker. A Fingerprint covers code, declarations and limits, never state. */
+  fingerprint(): Uint8Array {
+    this.worker();
+    const scripts = [...this.scripts].sort(byName).map(s => ({
+      name: s.name,
+      identity: s.identity,
+      grants: Object.fromEntries(
+        [...s.grants]
+          .sort(([a], [b]) => compareNames(a, b))
+          .map(([name, grant]) => [name, grantData(grant)]),
+      ),
+      limits: Object.fromEntries(
+        Object.keys(defaultLimits).map(name => [
+          name,
+          s.limits[name as LimitName],
+        ]),
+      ),
+    }));
+    return hexBytes(
+      sha256(
+        canonicalJSON({
+          language: languageVersion,
+          costModel: costModel.version,
+          libraries: [...this.libraries.values()]
+            .sort(byName)
+            .map(l => [l.name, identityOf(l)]),
+          scripts,
+        }),
+      ),
+    );
+  }
+
+  private snapshotReferences(): References {
+    const refs = references();
+    const code = (key: string, unit: Code) => {
+      if (refs.byObject.has(unit)) {
+        return;
+      }
+      reference(refs, key, unit);
+      unit.unit.bodies.forEach((body, i) =>
+        reference(refs, `${key}/body/${i}`, body),
+      );
+      unit.unit.unwind.forEach((entry, i) =>
+        reference(refs, `${key}/unwind/${i}`, entry),
+      );
+      for (const [name, imported] of unit.libraries) {
+        code(`library/${name}`, imported);
+      }
+    };
+    for (const s of this.scripts) {
+      reference(refs, `script/${s.name}`, s);
+      s.loaded.units.forEach((unit, i) => code(`code/${s.name}/${i}`, unit));
+      for (const [name, grant] of s.grants) {
+        for (const op of grant.ops) {
+          reference(
+            refs,
+            `operation/${s.name}/${name}/${op}`,
+            grant.capability.operations.get(op)!,
+          );
+        }
+      }
+    }
+    for (const [key, object] of this.objects) {
+      reference(refs, `object/${key}`, object);
+    }
+    return refs;
+  }
+
+  /** Worker. Host callbacks, bindings and native objects aren't in the bytes. */
+  save(): Uint8Array {
+    this.worker();
+    const id = `s${++this.saves}`;
+    const state = {
+      scripts: this.scripts.map(s => ({
+        name: s.name,
+        variables: s.loaded.variables,
+        variableNames: s.loaded.variableNames,
+        definitions: s.loaded.units.map(unit => unit.definitions),
+        live: s.loaded.live,
+        debt: s.debt,
+        incoming: s.incoming,
+        parked: s.parked,
+        queue: s.queue,
+        runs: s.runs,
+        stopped: s.stopped,
+        stopReason: s.stopReason,
+        suspended: s.suspended,
+        waiters: s.waiters,
+        revoked: s.revoked,
+      })),
+      inputs: this.inputs.map(input => ({
+        action: input.action,
+        urgent: input.urgent,
+        line: typeof input.line === 'string' ? input.line : undefined,
+      })),
+      timers: this.timers.filter(t => t.live),
+      pending: this.pending,
+      deliveries: this.deliveries,
+      broadcasts: this.broadcasts,
+      timerSeq: this.timerSeq,
+      lastClock: this.lastClock,
+      discardedDecisions: this.discardedDecisions,
+    };
+    const saved: SavedGroup = {
+      family: 'odgn-talk-ts',
+      format: 1,
+      language: languageVersion,
+      costModel: costModel.version,
+      fingerprint: hexOf(this.fingerprint()),
+      name: this.name,
+      id,
+      libraries: [...this.libraries.values()].map(l => [l.name, identityOf(l)]),
+      objects: [...this.objects].map(([key, o]) => ({
+        key,
+        kind: o.handle.kind.name,
+        id: o.handle.id,
+        disposed: o.disposed,
+        owner: o.owner,
+        parent: o.parent
+          ? `${o.parent.handle.kind.name}\u0000${o.parent.handle.id}`
+          : null,
+      })),
+      scripts: this.scripts.map(s => ({
+        name: s.name,
+        sources: s.units.map(unit => unit.source),
+        limits: s.limits,
+        grants: [...s.grants].map(([name, grant]) => ({
+          name,
+          capability: grant.capability.name,
+          operations: [...grant.ops].map(name => ({
+            name,
+            declaration: savedOperation(grant.capability.operations.get(name)!),
+          })),
+        })),
+        objects: Object.entries(s.objects).map(([name, o]) => [
+          name,
+          `${o.kind.name}\u0000${o.id}`,
+        ]),
+        owner: s.owner
+          ? `${s.owner.handle.kind.name}\u0000${s.owner.handle.id}`
+          : null,
+      })),
+      graph: saveGraph(state, this.snapshotReferences()),
+    };
+    const payload = JSON.stringify(saved);
+    this.trace(recordLine('save', [id], [], true));
+    return new TextEncoder().encode(
+      JSON.stringify({ hash: sha256(payload), payload }),
+    );
+  }
+
+  /** Build and check the complete replacement before publishing the Group. */
+  static restore(
+    bytes: Uint8Array,
+    o: RestoreOptions,
+  ): { group: Group; result: RestoreResult } {
+    const saved = readSave(bytes);
+    let emitting = false;
+    const group = new Group({
+      name: o.name,
+      trace: line => {
+        if (emitting) {
+          o.trace?.(line);
+        }
+      },
+    });
+    const disposed: [string, string][] = [];
+    const unbound: string[] = [];
+    for (const object of saved.objects) {
+      const kind = objectKind(object.kind);
+      if (!kind) {
+        throw new HostError(
+          'save mismatch',
+          `Unknown Object Kind ${object.kind}`,
+        );
+      }
+      const state = makeObject(kind, object.id, undefined);
+      state.disposed = object.disposed;
+      group.objects.set(object.key, state);
+    }
+    for (const object of saved.objects) {
+      group.objects.get(object.key)!.parent = object.parent
+        ? group.objects.get(object.parent)!
+        : null;
+    }
+    for (const library of o.libraries) {
+      group.libraries.set(library.name, library);
+    }
+    let mismatch =
+      saved.format !== 1 ||
+      saved.language !== languageVersion ||
+      saved.costModel !== costModel.version ||
+      saved.libraries.some(
+        ([name, identity]) =>
+          !group.libraries.has(name) ||
+          identityOf(group.libraries.get(name)!) !== identity,
+      );
+    let loadFailure: LoadError | undefined;
+    for (const script of saved.scripts) {
+      const grants: Record<string, Grant<unknown>> = {};
+      const revoked = new Set<string>();
+      for (const grant of script.grants) {
+        const rebound = o.grants(script.name, grant.name);
+        const placeholder = defineCapability(
+          grant.capability,
+          Object.fromEntries(
+            grant.operations.map(op => [op.name, op.declaration]),
+          ),
+        ).grant('all', undefined);
+        if (!rebound) {
+          revoked.add(grant.name);
+          unbound.push(`${script.name}.${grant.name}`);
+        } else if (
+          canonicalJSON(grantData(rebound)) !==
+          canonicalJSON(grantData(placeholder))
+        ) {
+          mismatch = true;
+        }
+        grants[grant.name] = rebound ?? placeholder;
+      }
+      if (loadFailure) {
+        continue;
+      }
+      try {
+        group.load({
+          name: script.name,
+          source: script.sources[0]!,
+          limits: script.limits,
+          grants,
+          owner: script.owner
+            ? group.objects.get(script.owner)!.handle
+            : undefined,
+          objects: Object.fromEntries(
+            script.objects.map(([name, key]) => [
+              name,
+              group.objects.get(key)!.handle,
+            ]),
+          ),
+        });
+        const state = group.scripts.at(-1)!;
+        state.revoked = revoked;
+        for (const source of script.sources.slice(1)) {
+          group.applyExtension(state, source, undefined, false);
+        }
+      } catch (error) {
+        if (!(error instanceof LoadError)) {
+          throw error;
+        }
+        loadFailure = error;
+      }
+    }
+    for (const object of saved.objects) {
+      group.objects.get(object.key)!.owner = object.owner;
+    }
+    mismatch ||= hexOf(group.fingerprint()) !== saved.fingerprint;
+    const restoreLine = (result?: RestoreResult) =>
+      recordLine(
+        'restore',
+        [],
+        [
+          ['from', saved.id],
+          [
+            'mismatch',
+            o.onMismatch === 'variables only' ? 'variables-only' : null,
+          ],
+          ['unbound', unbound.length ? idList(unbound) : null],
+          [
+            'withheld',
+            saved.libraries.filter(([name]) => !group.libraries.has(name))
+              .length
+              ? idList(
+                  saved.libraries
+                    .filter(([name]) => !group.libraries.has(name))
+                    .map(([name]) => name),
+                )
+              : null,
+          ],
+          ['fingerprint', saved.fingerprint],
+          [
+            'mode',
+            result ? (result.variablesOnly ? 'variables-only' : 'full') : null,
+          ],
+          [
+            'pending',
+            result?.pending.length
+              ? idList(result.pending.map(p => p.id))
+              : null,
+          ],
+          [
+            'disposed',
+            disposed.length
+              ? traceValue(
+                  listValues(
+                    disposed.map(
+                      ([kind, id]) =>
+                        group.objects.get(`${kind}\u0000${id}`)!.handle.value,
+                    ),
+                  ),
+                )
+              : null,
+          ],
+          [
+            'discarded',
+            result?.discardedRuns.length ? idList(result.discardedRuns) : null,
+          ],
+          [
+            'dropped',
+            result?.droppedMessages.length
+              ? idList(result.droppedMessages)
+              : null,
+          ],
+          [
+            'abandoned',
+            result?.abandonedCalls.length
+              ? idList(result.abandonedCalls)
+              : null,
+          ],
+        ],
+        true,
+      );
+    if (mismatch && o.onMismatch === 'reject') {
+      o.trace?.(restoreLine());
+      o.trace?.(recordLine('refused', [], [['code', '"save mismatch"']]));
+      throw new HostError('save mismatch');
+    }
+    if (loadFailure) {
+      throw loadFailure;
+    }
+    for (const object of saved.objects) {
+      const resolved = o.resolve(object.kind, object.id);
+      const state = group.objects.get(object.key)!;
+      rebindObject(state, resolved?.native);
+      state.disposed = object.disposed || !resolved;
+      if (!resolved) {
+        disposed.push([object.kind, object.id]);
+      }
+    }
+    for (const [i, script] of saved.scripts.entries()) {
+      group.scripts[i]!.objects = Object.fromEntries(
+        script.objects.map(([name, key]) => [
+          name,
+          group.objects.get(key)!.handle,
+        ]),
+      );
+    }
+    const state = restoreGraph(
+      saved.graph,
+      group.snapshotReferences(),
+      mismatch,
+    ) as SavedState;
+    const result: RestoreResult = {
+      variablesOnly: mismatch,
+      pending: [],
+      disposed,
+      discardedRuns: [],
+      droppedMessages: [],
+      abandonedCalls: [],
+    };
+    group.discardedDecisions = state.discardedDecisions;
+    group.deliveries = state.deliveries;
+    group.broadcasts = state.broadcasts;
+    group.lastClock = state.lastClock;
+    group.timerSeq = state.timerSeq;
+    group.saves = Number(saved.id.slice(1));
+    for (const [i, runtime] of state.scripts.entries()) {
+      const script = group.scripts[i]!;
+      script.runs = runtime.runs;
+      for (const name of runtime.revoked) {
+        script.revoked.add(name);
+      }
+      script.loaded.variables = script.loaded.variableNames.map((name, j) => {
+        const old = runtime.variableNames.indexOf(name);
+        return old >= 0 ? runtime.variables[old]! : script.loaded.variables[j]!;
+      });
+      if (mismatch) {
+        result.discardedRuns.push(...savedRuns(runtime).map(r => r.id));
+        result.droppedMessages.push(
+          ...runtime.queue
+            .filter((q): q is Delivery => !('run' in q))
+            .flatMap(d => (d.id ? [d.id] : [])),
+        );
+        for (const running of savedRuns(runtime)) {
+          group.discardDecision(running.delivery, script.name, running.id);
+        }
+        for (const item of runtime.queue) {
+          if (!('run' in item)) {
+            group.discardDecision(item, script.name);
+          }
+        }
+        script.stopped = false;
+        if (script.loaded.variablesSize() > script.limits.persistentState) {
+          throw new HostError('state too large');
+        }
+      } else {
+        Object.assign(script, {
+          debt: runtime.debt,
+          incoming: runtime.incoming,
+          parked: runtime.parked,
+          queue: runtime.queue,
+          stopped: runtime.stopped,
+          stopReason: runtime.stopReason,
+          suspended: runtime.suspended,
+          waiters: runtime.waiters,
+        });
+        script.loaded.live = runtime.live;
+        runtime.definitions.forEach((values, j) => {
+          script.loaded.units[j]!.definitions.splice(
+            0,
+            values.length,
+            ...values,
+          );
+        });
+        for (const running of group.runsOf(script)) {
+          running.run.host = group.hostFor(script, running.run);
+          running.run.rebindCalls();
+          running.run.persistentState = () => group.persistentState(script, 1);
+        }
+      }
+    }
+    if (mismatch) {
+      result.abandonedCalls = [...state.pending.keys()].sort(compareCallIds);
+      for (const input of state.inputs) {
+        if (input.action.k === 'delivery') {
+          const delivery = input.action.delivery;
+          if (delivery.id) {
+            result.droppedMessages.push(delivery.id);
+          }
+          const action = input.action;
+          const name =
+            action.state?.name ??
+            (typeof action.to === 'string' ? action.to : action.to.owner) ??
+            '';
+          group.discardDecision(delivery, name);
+        } else if (input.action.k === 'broadcast' && input.action.decision) {
+          input.action.decision.discarded = true;
+          group.discardedDecisions.push(input.action.decision);
+        }
+      }
+    } else {
+      for (const [id, pending] of state.pending) {
+        group.pending.set(id, pending);
+      }
+      group.timers = state.timers;
+      group.inputs = state.inputs.map(input => ({
+        ...input,
+        line:
+          input.line ??
+          (() =>
+            group.broadcastLine(
+              input.action as Extract<InputAction, { k: 'broadcast' }>,
+            )),
+      }));
+      result.pending = group.pendingOperations();
+      const settled = new Set(
+        state.inputs.flatMap(input =>
+          input.action.k === 'settle' ? [input.action.id] : [],
+        ),
+      );
+      group.unsettled = new Set(
+        result.pending.map(p => p.id).filter(id => !settled.has(id)),
+      );
+      group.restored = true;
+    }
+    emitting = true;
+    o.trace?.(restoreLine(result));
+    return { group, result };
+  }
+
+  private discardedDecisions: Decision[] = [];
+  private unsettled = new Set<string>();
+  private restored = false;
+
+  private discardDecision(delivery: Delivery, script: string, run?: string) {
+    const ballot = delivery.ballot;
+    if (!ballot || ballot.result) {
+      return;
+    }
+    ballot.result = {
+      verdict: 'undecided',
+      undecided: { script, ...(run ? { run } : {}), outcome: 'cancelled' },
+    };
+    ballot.decision.discarded = true;
+    if (!this.discardedDecisions.includes(ballot.decision)) {
+      this.discardedDecisions.push(ballot.decision);
+    }
+  }
+
+  private drainCharges = new Map<ScriptState, number>();
+
+  /** Queued, and accepted only before the restored Group's first Pump. */
+  settle(id: string, settlement: Settlement): Call<unknown> | undefined {
+    const line = recordLine(
+      'settle',
+      [id],
+      [
+        [
+          'how',
+          'answer' in settlement
+            ? 'answer'
+            : 'fail' in settlement
+              ? 'fail'
+              : 'reissue' in settlement
+                ? 'reissue'
+                : 'adopt',
+        ],
+        [
+          'value',
+          'answer' in settlement ? traceValue(settlement.answer) : null,
+        ],
+        [
+          'error',
+          'fail' in settlement ? traceValue(failMap(settlement.fail)) : null,
+        ],
+      ],
+      true,
+    );
+    const pending = this.pending.get(id);
+    if (!this.restored || !this.unsettled.has(id) || !pending) {
+      this.trace(line);
+      this.trace(recordLine('refused', [], [['code', '"unknown call"']]));
+      throw new HostError('unknown call');
+    }
+    const operation = this.pendingOperations().find(p => p.id === id)!;
+    if ('adopt' in settlement && !pending.running.run.callAdoptable(id)) {
+      this.trace(line);
+      this.trace(recordLine('refused', [], [['code', '"not adoptable"']]));
+      throw new HostError('not adoptable');
+    }
+    this.unsettled.delete(id);
+    this.inputs.push({ line, action: { k: 'settle', id, settlement } });
+    return 'adopt' in settlement
+      ? pending.running.run.restoredCall(
+          id,
+          operation.grant,
+          operation.args,
+          false,
+        ).call
+      : undefined;
+  }
+
+  private applySettlement(id: string, settlement: Settlement) {
+    if ('answer' in settlement) {
+      this.settleReply(id, { k: 'answer', value: settlement.answer, fuel: 0 });
+      return;
+    }
+    if ('fail' in settlement) {
+      this.settleReply(id, { k: 'fail', error: settlement.fail });
+      return;
+    }
+    if ('adopt' in settlement) {
+      return;
+    }
+    const pending = this.pending.get(id);
+    if (!pending) {
+      return;
+    }
+    const operation = this.pendingOperations().find(p => p.id === id)!;
+    const records = pending.running.run.records.length;
+    const before = pending.running.run.fuel;
+    const failure = pending.running.run.restoredCall(
+      id,
+      operation.grant,
+      operation.args,
+      true,
+    ).failure;
+    this.drainCharges.set(
+      pending.s,
+      (this.drainCharges.get(pending.s) ?? 0) +
+        pending.running.run.fuel -
+        before,
+    );
+    this.writeRecords(pending.running, records);
+    this.landUrgentInputs();
+    if (failure) {
+      this.settleReply(id, failure);
+    }
+  }
+
+  private pendingOperations(): PendingCall[] {
+    return [...this.pending]
+      .sort(([a], [b]) => compareCallIds(a, b))
+      .flatMap(([id, pending]) => {
+        const suspension = pending.running.run.suspended;
+        const context =
+          suspension?.k === 'ask'
+            ? suspension.call
+            : suspension?.k === 'join'
+              ? suspension.members.find(m => m.id === id)?.call
+              : null;
+        if (!context) {
+          return [];
+        }
+        const [grant, operation] = context.opName.split('.');
+        const args = pending.running.run.records.find(
+          r => r.kind === 'call' && r.id === id,
+        );
+        return [
+          {
+            id,
+            script: pending.s.name,
+            grant: grant!,
+            operation: {
+              capability: pending.s.grants.get(grant!)!.capability.name,
+              operation: operation!,
+            },
+            args: args?.kind === 'call' ? args.args : [],
+          },
+        ];
+      });
+  }
 
   /** A Request's signal lives until its Run ends; a Decision's until its seal. */
   watchCancellation(delivery: Delivery, signal?: AbortSignal) {
@@ -362,63 +1050,59 @@ export class Group {
   cancelDelivery(id: string): void {
     this.inputs.push({
       line: recordLine('cancel-delivery', [id], [], true),
-      apply: () => {
-        for (const s of this.scripts) {
-          for (const item of [...s.queue, ...s.suspended, ...s.parked]) {
-            const d = 'run' in item ? item.delivery : item;
-            if ((d.id !== id && d.broadcast !== id) || d.ballot?.result) {
-              continue;
-            }
-            if ('run' in item) {
-              this.cancelRunning(s, item);
-            } else {
-              s.queue = s.queue.filter(q => q !== item);
-              d.unsubscribe?.();
-              this.trace(
-                recordLine(
-                  'run',
-                  [],
-                  [
-                    ['outcome', 'cancelled'],
-                    ['delivery', d.id],
-                    ['broadcast', d.broadcast ?? null],
-                    ['fuel', '0'],
-                    ['alloc', '0'],
-                  ],
-                ),
-              );
-              this.drainReports.push({
-                kind: 'run end',
-                script: s.name,
-                ...(d.id ? { delivery: d.id } : {}),
-                ...(d.broadcast ? { broadcast: d.broadcast } : {}),
-                outcome: 'cancelled',
-                fuel: 0,
-                alloc: 0,
-              });
-              this.seal(d, {
-                verdict: 'undecided',
-                undecided: { script: s.name, outcome: 'cancelled' },
-              });
-              this.answer(d, { kind: 'cancelled' });
-            }
-          }
-        }
-      },
+      action: { k: 'cancel-delivery', id },
     });
+  }
+
+  private cancelDeliveryNow(id: string) {
+    for (const s of this.scripts) {
+      for (const item of [...s.queue, ...s.suspended, ...s.parked]) {
+        const d = 'run' in item ? item.delivery : item;
+        if ((d.id !== id && d.broadcast !== id) || d.ballot?.result) {
+          continue;
+        }
+        if ('run' in item) {
+          this.cancelRunning(s, item);
+        } else {
+          s.queue = s.queue.filter(q => q !== item);
+          d.unsubscribe?.();
+          this.trace(
+            recordLine(
+              'run',
+              [],
+              [
+                ['outcome', 'cancelled'],
+                ['delivery', d.id],
+                ['broadcast', d.broadcast ?? null],
+                ['fuel', '0'],
+                ['alloc', '0'],
+              ],
+            ),
+          );
+          this.drainReports.push({
+            kind: 'run end',
+            script: s.name,
+            ...(d.id ? { delivery: d.id } : {}),
+            ...(d.broadcast ? { broadcast: d.broadcast } : {}),
+            outcome: 'cancelled',
+            fuel: 0,
+            alloc: 0,
+          });
+          this.seal(d, {
+            verdict: 'undecided',
+            undecided: { script: s.name, outcome: 'cancelled' },
+          });
+          this.answer(d, { kind: 'cancelled' });
+        }
+      }
+    }
   }
 
   queueCancelRun(name: string, id: string): void {
     this.inputs.push({
       urgent: true,
       line: recordLine('cancel-run', [id], [], true),
-      apply: () => {
-        const s = this.scripts.find(s => s.name === name)!;
-        const running = this.runsOf(s).find(r => r.id === id);
-        if (running) {
-          this.cancelRunning(s, running);
-        }
-      },
+      action: { k: 'cancel-run', name, id },
     });
   }
 
@@ -432,12 +1116,80 @@ export class Group {
         [['reason', JSON.stringify(reason)]],
         true,
       ),
-      apply: () =>
-        this.stopState(
-          this.scripts.find(s => s.name === name)!,
-          reason,
-        ),
+      action: { k: 'stop', name, reason },
     });
+  }
+
+  private applyInput(action: InputAction) {
+    switch (action.k) {
+      case 'settle':
+        this.applySettlement(action.id, action.settlement);
+        break;
+      case 'cancel-delivery':
+        this.cancelDeliveryNow(action.id);
+        break;
+      case 'cancel-run': {
+        const s = this.scripts.find(s => s.name === action.name)!;
+        const running = this.runsOf(s).find(r => r.id === action.id);
+        if (running) {
+          this.cancelRunning(s, running);
+        }
+        break;
+      }
+      case 'stop':
+        this.stopState(
+          this.scripts.find(s => s.name === action.name)!,
+          action.reason,
+        );
+        break;
+      case 'answer':
+        this.settleReply(action.id, {
+          k: 'answer',
+          value: action.value,
+          fuel: action.fuel,
+        });
+        break;
+      case 'fail':
+        this.settleReply(action.id, { k: 'fail', error: action.error });
+        break;
+      case 'delivery': {
+        const { state, to, delivery } = action;
+        if (state) {
+          state.incoming--;
+        }
+        if (typeof to === 'string') {
+          this.acceptDelivery(state!, delivery);
+          break;
+        }
+        const r = this.route(to);
+        if (!r) {
+          this.unhandled(delivery, this.drainReports);
+        } else {
+          this.acceptDelivery(r.s, { ...delivery, at: r.at });
+        }
+        break;
+      }
+      case 'broadcast':
+        for (const { s, delivery } of action.recipients!) {
+          s.queue.push(delivery);
+        }
+        if (action.decision && !action.recipients!.length) {
+          this.reportDecision(action.decision);
+        }
+        break;
+      case 'set-parent':
+        action.child.parent = action.up;
+        break;
+      case 'dispose':
+        action.state.disposed = true;
+        if (action.state.owner) {
+          this.stopState(
+            this.scripts.find(s => s.name === action.state.owner)!,
+            'owner disposed',
+          );
+        }
+        break;
+    }
   }
 
   private runsOf(s: ScriptState): Running[] {
@@ -575,7 +1327,7 @@ export class Group {
       this.inputs = this.inputs.filter(i => !i.urgent);
       for (const input of urgent) {
         this.trace(typeof input.line === 'string' ? input.line : input.line());
-        input.apply();
+        this.applyInput(input.action);
       }
     }
   }
@@ -638,6 +1390,7 @@ export class Group {
       objects: o.objects ?? {},
       owner,
       grants,
+      revoked: new Set(),
       handle,
       loaded,
       identity: p.identity,
@@ -1109,6 +1862,7 @@ export class Group {
         return s.stopped || (!cancelling && run.cancelling);
       },
       grants: s.grants,
+      isRevoked: name => s.revoked.has(name),
       get now() {
         return group.lastClock!;
       },
@@ -1173,7 +1927,7 @@ export class Group {
             ],
             true,
           ),
-          apply: () => this.settle(id, { k: 'answer', value, fuel }),
+          action: { k: 'answer', id, value, fuel },
         }),
       fail: (id, error) =>
         this.inputs.push({
@@ -1183,7 +1937,7 @@ export class Group {
             [['error', traceValue(failMap(error))]],
             true,
           ),
-          apply: () => this.settle(id, { k: 'fail', error }),
+          action: { k: 'fail', id, error },
         }),
     };
   }
@@ -1205,10 +1959,34 @@ export class Group {
     receiver.queue.push(delivery);
   }
 
-  private timer(deadline: bigint, fire: () => void, running?: Running): Timer {
-    const t = { deadline, fire, live: true, seq: this.timerSeq++, running };
+  private timer(
+    deadline: bigint,
+    action: TimerAction,
+    running?: Running,
+  ): Timer {
+    const t = { deadline, action, live: true, seq: this.timerSeq++, running };
     this.timers.push(t);
     return t;
+  }
+
+  private fireTimer(timer: Timer) {
+    const action = timer.action;
+    switch (action.k) {
+      case 'wake':
+        this.ready(action.s, action.running, { k: 'wake' });
+        break;
+      case 'event':
+        this.endWaiter(action.s, action.waiter);
+        this.ready(action.s, action.waiter.running, {
+          k: 'event-timeout',
+          branch: action.branch,
+        });
+        break;
+      case 'call':
+        action.abort?.abort();
+        this.settleReply(action.id, { k: 'timeout', after: action.ms });
+        break;
+    }
   }
 
   // A suspended Run made ready: it joins the back of its Script's queue.
@@ -1220,7 +1998,7 @@ export class Group {
   }
 
   // A call's answer or failure, or a reply; one no longer pending is noted.
-  private settle(id: string, r: Resumption) {
+  private settleReply(id: string, r: Resumption) {
     const p = this.pending.get(id);
     if (!p) {
       if (r.k === 'answer' || r.k === 'fail') {
@@ -1293,20 +2071,19 @@ export class Group {
     s.suspended.add(running);
     const now = this.lastClock!;
     if (sus.k === 'wait') {
-      return this.timer(
-        now + sus.ns,
-        () => this.ready(s, running, { k: 'wake' }),
-        running,
-      ).deadline;
+      return this.timer(now + sus.ns, { k: 'wake', s, running }, running)
+        .deadline;
     }
     if (sus.k === 'wait-for') {
       // A timeout, and each `after` branch, is a timer; the first to fire
       // ends the wait, as a matching message does.
       const waiter = { running, timers: [] as Timer[] };
-      const fire = (branch: number) => () => {
-        this.endWaiter(s, waiter);
-        this.ready(s, running, { k: 'event-timeout', branch });
-      };
+      const fire = (branch: number): TimerAction => ({
+        k: 'event',
+        s,
+        waiter,
+        branch,
+      });
       if (sus.timeout !== null) {
         waiter.timers.push(this.timer(now + sus.timeout, fire(0), running));
       }
@@ -1330,7 +2107,7 @@ export class Group {
       for (const m of sus.members) {
         const timer = this.timer(
           now + BigInt(m.ms) * 1_000_000n,
-          () => this.settle(m.id, { k: 'timeout', after: m.ms }),
+          { k: 'call', id: m.id, ms: m.ms },
           running,
         );
         this.pending.set(m.id, { s, running, timer, join });
@@ -1341,13 +2118,7 @@ export class Group {
     const ms = sus.k === 'ask' ? sus.ms : s.limits.maxWaitMs;
     const timer = this.timer(
       now + BigInt(ms) * 1_000_000n,
-      () => {
-        this.pending.delete(id);
-        if (sus.k === 'ask') {
-          sus.abort.abort();
-        }
-        this.ready(s, running, { k: 'timeout', after: ms });
-      },
+      { k: 'call', id, ms, ...(sus.k === 'ask' ? { abort: sus.abort } : {}) },
       running,
     );
     this.pending.set(id, { s, running, timer });
@@ -1414,22 +2185,7 @@ export class Group {
     }
     this.inputs.push({
       line: this.deliveryLine(record, delivery.id, toText, m),
-      apply: () => {
-        if (state) {
-          state.incoming--;
-        }
-        if (named) {
-          this.acceptDelivery(state!, delivery);
-          return;
-        }
-        // An object's message is routed by the parents as they are now.
-        const r = this.route(to);
-        if (!r) {
-          this.unhandled(delivery, this.drainReports);
-          return;
-        }
-        this.acceptDelivery(r.s, { ...delivery, at: r.at });
-      },
+      action: { k: 'delivery', to, state: state ?? null, delivery },
     });
     return delivery;
   }
@@ -1512,73 +2268,70 @@ export class Group {
         );
       }
     }
-    let recipients: { delivery: Delivery; s: ScriptState }[] = [];
-    this.inputs.push({
-      line: () => {
-        recipients = this.scripts
-          .filter(
-            s =>
-              !s.stopped &&
-              (s.loaded.clauses.has(m.name) ||
-                s.waiters.some(
-                  w =>
-                    w.running.run.suspended?.k === 'wait-for' &&
-                    w.running.run.suspended.whens.some(
-                      b => b.message === m.name,
-                    ),
-                )),
-          )
-          .map(s => {
-            const ballot: Ballot | undefined = decision
-              ? { decision }
-              : undefined;
-            if (ballot) {
-              decision!.ballots.push(ballot);
-            }
-            return {
-              s,
-              delivery: {
-                ballot,
-                broadcast: id,
-                id: `d${++this.deliveries}`,
-                from: null,
-                at: s.owner,
-                target: null,
-                reply: null,
-                request: null,
-                message: m.name,
-                args: m.args ?? [],
-                limits: Object.fromEntries(
-                  Object.entries(m.limits ?? {}).map(([name, value]) => [
-                    name,
-                    Math.min(value!, s.limits[name as LimitName]),
-                  ]),
-                ),
-              },
-            };
-          });
-        return recordLine(
-          record,
-          [id],
-          [
-            ...messageFields(m),
-            [
-              'recipients',
-              idList(recipients.map(r => `${r.s.name}:${r.delivery.id}`)),
-            ],
-          ],
-          true,
-        );
-      },
-      apply: () => {
-        for (const { s, delivery } of recipients) {
-          s.queue.push(delivery);
+    const action: Extract<InputAction, { k: 'broadcast' }> = {
+      k: 'broadcast',
+      m,
+      id,
+      decision,
+    };
+    this.inputs.push({ action, line: () => this.broadcastLine(action) });
+  }
+
+  private broadcastLine(
+    action: Extract<InputAction, { k: 'broadcast' }>,
+  ): string {
+    const { m, id, decision } = action;
+    const record = decision ? 'decide-broadcast' : 'broadcast';
+    action.recipients = this.scripts
+      .filter(
+        s =>
+          !s.stopped &&
+          (s.loaded.clauses.has(m.name) ||
+            s.waiters.some(
+              w =>
+                w.running.run.suspended?.k === 'wait-for' &&
+                w.running.run.suspended.whens.some(b => b.message === m.name),
+            )),
+      )
+      .map(s => {
+        const ballot: Ballot | undefined = decision ? { decision } : undefined;
+        if (ballot) {
+          decision!.ballots.push(ballot);
         }
-        if (decision && !recipients.length) {
-          this.reportDecision(decision);
-        }
-      },
-    });
+        return {
+          s,
+          delivery: {
+            ballot,
+            broadcast: id,
+            id: `d${++this.deliveries}`,
+            from: null,
+            at: s.owner,
+            target: null,
+            reply: null,
+            request: null,
+            message: m.name,
+            args: m.args ?? [],
+            limits: Object.fromEntries(
+              Object.entries(m.limits ?? {}).map(([name, value]) => [
+                name,
+                Math.min(value!, s.limits[name as LimitName]),
+              ]),
+            ),
+          },
+        };
+      });
+    return recordLine(
+      record,
+      [id],
+      [
+        ...messageFields(m),
+        [
+          'recipients',
+          idList(action.recipients.map(r => `${r.s.name}:${r.delivery.id}`)),
+        ],
+      ],
+      true,
+    );
   }
 
   private seal(delivery: Delivery, result: NonNullable<Ballot['result']>) {
@@ -1610,7 +2363,9 @@ export class Group {
         ? 'vetoed'
         : undecided.length
           ? 'undecided'
-          : 'allowed',
+          : decision.discarded
+            ? 'undecided'
+            : 'allowed',
       vetoes,
       undecided,
     };
@@ -1658,7 +2413,7 @@ export class Group {
       ),
     );
     this.drainReports.push({ kind: 'decided', ...result });
-    decision.resolve(result);
+    decision.resolve?.(result);
   }
 
   /** Queued. Routes to the object's nearest Owning Script; returns the delivery id. */
@@ -1689,6 +2444,11 @@ export class Group {
     const state = makeObject(kind, id, native);
     this.objects.set(key, state);
     return state.handle as HostObject<N>;
+  }
+
+  /** TS helper for reaching a handle that was reconstructed by Restore. */
+  objectById(kind: string, id: string): HostObject | undefined {
+    return this.objects.get(`${kind}\u0000${id}`)?.handle;
   }
 
   // The Group's state of a handle, which must be one of its own.
@@ -1725,9 +2485,7 @@ export class Group {
     }
     this.inputs.push({
       line,
-      apply: () => {
-        child.parent = up;
-      },
+      action: { k: 'set-parent', child, up },
     });
   }
 
@@ -1741,15 +2499,7 @@ export class Group {
         [['object', traceValue(state.handle.value)]],
         true,
       ),
-      apply: () => {
-        state.disposed = true;
-        if (state.owner) {
-          this.stopState(
-            this.scripts.find(s => s.name === state.owner)!,
-            'owner disposed',
-          );
-        }
-      },
+      action: { k: 'dispose', state },
     });
   }
 
@@ -1804,7 +2554,7 @@ export class Group {
   private answer(delivery: Delivery, outcome: Outcome | { kind: 'stopped' }) {
     delivery.unsubscribe?.();
     if (delivery.reply) {
-      this.settle(
+      this.settleReply(
         delivery.reply,
         outcome.kind === 'completed'
           ? { k: 'reply', value: outcome.result }
@@ -1845,6 +2595,19 @@ export class Group {
   pump(now: bigint, o: PumpOptions = {}): PumpResult {
     this.worker();
     if (this.lastClock !== null && now < this.lastClock) {
+      this.trace(
+        recordLine(
+          'pump',
+          [],
+          [
+            ['clock', formatInstant(now)],
+            ['fuel-slice', o.fuelSlice ? String(o.fuelSlice) : null],
+            ['fuel-cap', o.fuelCap ? String(o.fuelCap) : null],
+          ],
+          true,
+        ),
+      );
+      this.trace(recordLine('refused', [], [['code', '"clock backwards"']]));
       throw new HostError('clock backwards');
     }
     this.pumping = true;
@@ -1859,6 +2622,9 @@ export class Group {
 
   private pumpAtClock(now: bigint, o: PumpOptions): PumpResult {
     this.lastClock = now;
+    this.drainCharges.clear();
+    const firstRestorePump = this.restored;
+    this.restored = false;
     const slice = o.fuelSlice ?? 0;
     const cap = o.fuelCap ?? 0;
     const drained = this.inputs;
@@ -1873,7 +2639,7 @@ export class Group {
         inputLines.push(
           typeof input.line === 'string' ? input.line : input.line(),
         );
-        input.apply();
+        this.applyInput(input.action);
       }
     } finally {
       this.drainingTrace = null;
@@ -1896,6 +2662,26 @@ export class Group {
     for (const line of outputLines) {
       this.trace(line);
     }
+    if (firstRestorePump) {
+      for (const id of [...this.unsettled].sort(compareCallIds)) {
+        this.settleReply(id, { k: 'restore-fail', code: 'call lost' });
+      }
+      this.unsettled.clear();
+    }
+    for (const decision of this.discardedDecisions.sort(
+      (a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)),
+    )) {
+      for (const ballot of decision.ballots) {
+        if (!ballot.result) {
+          ballot.result = {
+            verdict: 'undecided',
+            undecided: { script: '', outcome: 'cancelled' },
+          };
+        }
+      }
+      this.reportDecision(decision);
+    }
+    this.discardedDecisions = [];
     // Due timers fire in deadline order, then in the order they were set.
     const due = this.timers
       .filter(t => t.live && t.deadline <= now)
@@ -1909,16 +2695,19 @@ export class Group {
     for (const t of due) {
       if (t.live) {
         t.live = false;
-        t.fire();
+        this.fireTimer(t);
       }
     }
     this.timers = this.timers.filter(t => t.live);
-    let fuel = 0;
+    let fuel = [...this.drainCharges.values()].reduce(
+      (sum, cost) => sum + cost,
+      0,
+    );
     // Each Script's Fuel this Pump, against its slice less any debt.
     const spent = new Map<ScriptState, number>();
     const allowance = new Map<ScriptState, number>();
     for (const s of this.scripts) {
-      spent.set(s, 0);
+      spent.set(s, this.drainCharges.get(s) ?? 0);
       if (slice) {
         const available = slice - s.debt;
         allowance.set(s, Math.max(0, available));
@@ -2651,6 +3440,128 @@ const endReason = (outcome: Outcome): string => {
   }
 };
 
+type SavedGrant = {
+  capability: string;
+  name: string;
+  operations: { declaration: Operation<unknown>; name: string }[];
+};
+type SavedGroup = {
+  costModel: number;
+  family: string;
+  fingerprint: string;
+  format: number;
+  graph: Graph;
+  id: string;
+  language: string;
+  libraries: [string, string][];
+  name: string;
+  objects: {
+    disposed: boolean;
+    id: string;
+    key: string;
+    kind: string;
+    owner: string | null;
+    parent: string | null;
+  }[];
+  scripts: {
+    grants: SavedGrant[];
+    limits: Limits;
+    name: string;
+    objects: [string, string][];
+    owner: string | null;
+    sources: string[];
+  }[];
+};
+type SavedScriptState = Pick<
+  ScriptState,
+  | 'name'
+  | 'debt'
+  | 'incoming'
+  | 'parked'
+  | 'queue'
+  | 'runs'
+  | 'stopped'
+  | 'stopReason'
+  | 'suspended'
+  | 'waiters'
+  | 'revoked'
+> & {
+  definitions: Value[][];
+  live: boolean;
+  variableNames: string[];
+  variables: Value[];
+};
+type SavedState = {
+  broadcasts: number;
+  deliveries: number;
+  discardedDecisions: Decision[];
+  inputs: { action: InputAction; line?: string; urgent?: boolean }[];
+  lastClock: bigint | null;
+  pending: Map<string, Pending>;
+  scripts: SavedScriptState[];
+  timers: Timer[];
+  timerSeq: number;
+};
+const compareNames = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+const compareCallIds = (a: string, b: string) => {
+  const left = /^(.*)\/r(\d+)\.c(\d+)$/.exec(a);
+  const right = /^(.*)\/r(\d+)\.c(\d+)$/.exec(b);
+  if (!left || !right) {
+    return compareNames(a, b);
+  }
+  return (
+    compareNames(left[1]!, right[1]!) ||
+    Number(left[2]) - Number(right[2]) ||
+    Number(left[3]) - Number(right[3])
+  );
+};
+const byName = (a: { name: string }, b: { name: string }) =>
+  compareNames(a.name, b.name);
+const hexBytes = (hex: string) =>
+  Uint8Array.from(hex.match(/../g)!, byte => Number.parseInt(byte, 16));
+const hexOf = (bytes: Uint8Array) =>
+  [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+const savedRuns = (s: SavedScriptState) =>
+  [
+    ...s.queue.filter((q): q is Running => 'run' in q),
+    ...s.suspended,
+    ...s.parked,
+  ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
+const savedOperation = (op: Operation<unknown>): Operation<unknown> =>
+  Object.fromEntries(
+    Object.entries(op).filter(
+      ([key]) => !['do', 'fire', 'run', 'start'].includes(key),
+    ),
+  ) as Operation<unknown>;
+const readSave = (bytes: Uint8Array): SavedGroup => {
+  try {
+    const outer = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+    ) as { hash: string; payload: string };
+    if (
+      typeof outer.payload !== 'string' ||
+      sha256(outer.payload) !== outer.hash
+    ) {
+      throw new Error('Corrupt save');
+    }
+    const saved = JSON.parse(outer.payload) as SavedGroup;
+    if (
+      saved.family !== 'odgn-talk-ts' ||
+      saved.format !== 1 ||
+      !/^s[1-9]\d*$/.test(saved.id) ||
+      !Array.isArray(saved.scripts) ||
+      !Array.isArray(saved.objects) ||
+      !Array.isArray(saved.libraries) ||
+      !Array.isArray(saved.graph.nodes)
+    ) {
+      throw new Error('Unreadable save');
+    }
+    return saved;
+  } catch {
+    throw new HostError('invalid save');
+  }
+};
+
 const validOverride = (name: string, value: unknown, cap: number): boolean =>
   overridable.has(name) &&
   typeof value === 'number' &&
@@ -2673,3 +3584,6 @@ const messageFields = (m: Message): [string, string | null][] => {
 };
 
 export const newGroup = (o: GroupOptions): Group => new Group(o);
+
+export const restore = (bytes: Uint8Array, options: RestoreOptions) =>
+  Group.restore(bytes, options);

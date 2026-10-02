@@ -584,6 +584,7 @@ Every Trace Case is also run a second way, to check that save then restore is un
 - **Between each pair of Pumps,** after each `pumped` record, the runner saves the Group and restores it, on the same Core, with a `RejectMismatch` policy, every Grant re-bound and every Host Object resolved. It settles each pending call by adopting it, and goes on replaying into the restored Group.
 - **The same Trace:** the Trace must equal the case's, once the `save`, `restore` and adopting `settle` lines are left out.
 - **Futures don't survive:** a Host-held Function Value, the context or signal that cancels a Delivery, and the `Call` of a call that isn't pending, belong to the old Group ([chapter 9](09-embedding.md#capabilities)). So the runner skips the save and restore at any point where a later `call-value`, `cancel-delivery`, `answer` or `fail` line needs one made before it, such as an `answer` to a call that had already timed out.
+- **Explicit save/restore boundaries** in a case use its own records and settlements; the runner omits the extra hidden round-trip there, so automatic Adopt inputs cannot enter a visible save.
 - **Hand-written cases** cover what this can't reach: settling by answer, fail and reissue, variables-only restores, and restoring with Grants, Libraries or Host Objects the Host no longer has ([chapter 10](10-save-and-restore.md)).
 
 ## Other case kinds
