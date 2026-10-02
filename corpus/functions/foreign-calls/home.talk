@@ -1,0 +1,9 @@
+script variable total = 0
+on begin
+  put given n
+    wait 1 s
+    put n into total
+    return total
+  end given into callback
+  send execute with callback to caller
+end begin

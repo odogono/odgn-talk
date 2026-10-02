@@ -1,0 +1,22 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[operations]]
+capability = "callbacks"
+name = "get"
+mode = "immediate"
+args = []
+result = "value"
+cost = { fuel = 1 }
+[[operations]]
+capability = "callbacks"
+name = "fetch"
+mode = "suspending"
+args = []
+result = "value"
+cost = { fuel = 1 }
+[[scripts]]
+name = "home"
+source = "home.talk"
+grants = { callbacks = { ops = "all" } }

@@ -76,7 +76,7 @@ export {
   record,
 } from './values';
 export { encodeValue } from './encoding';
-export { readDisplay, decodeValue } from './readers';
+export { readDisplay, decodeValue, type FunctionResolver } from './readers';
 export { Lexer, type Mode, type Token, type TokType } from './lexer';
 export { parseSource, ParseError, type ParseResult } from './parser';
 export {

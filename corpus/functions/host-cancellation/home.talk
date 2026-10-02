@@ -1,0 +1,11 @@
+script variable cleaned = false
+on exported
+  return given n
+    try
+      wait 1 s
+      return n
+    finally
+      put true into cleaned
+    end try
+  end given
+end exported

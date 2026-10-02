@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Function Value calls across Scripts and from the Host through `group.call`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Forty-one tests and four Trace Cases cover mailbox Runs, replies, defaults, captures, Home Script Grants and limits, cancellation, timeouts, stale handles and save/restore. Library Constant callbacks bind to the importing Script; display-form readers and corpus replay resolve earlier Host-held handles. The Spec settles foreign charging, Host arity failures, callback Constants/defaults and Function call inspection/error labels.
+
 - TS Core fractional-exponent `^`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). It uses the correctly rounded `power` math while preserving the operator's Fuel, allocation, overflow fields and integer/Quantity rules. Regression tests and two Trace Cases cover results, domain errors, underflow, limits and rollback; the Spec clarifies operator diagnostics and charging.
 
 - The final five seed Trace Cases are blessed by the TS Core and join the default CI replay: Fuel/allocation minimums, the Persistent State minimum, matching Fuel exhaustion, leading-group canonical patterns and empty-match replacement. Their headers derive the corrected figures and position from the Spec. All existing corpus cases now execute; the implementation guide records the remaining Core gaps for [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -89,6 +91,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Function ownership is validated at inbound Host boundaries, including nested results, answers, failure Data and properties. Automatic Promise forwarding settles refused results as `host error`, including after Reissue. Foreign reply timers respect each Run’s MaxWait override. Corpus Stubs and answers resolve previously exported Function handles.
 
 - The Spec now states that Run-ending `return`, `pass` and `veto` check Persistent State before their own charge, matching the Core and the corrected minimum-limit Trace. Suspension checks follow the charged instruction and any Host effect.
 

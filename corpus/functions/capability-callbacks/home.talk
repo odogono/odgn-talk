@@ -1,0 +1,17 @@
+script variable total = 0
+on exported
+  return twice
+end exported
+function twice n
+  return n * 2
+end twice
+on immediate
+  ask callbacks to get
+  put it into fn
+  put fn(3) into total
+end immediate
+on pending
+  ask callbacks to fetch and wait
+  put it into fn
+  put fn(5) into total
+end pending

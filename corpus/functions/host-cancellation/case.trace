@@ -1,0 +1,21 @@
+# Cancelling a Host call by delivery id runs the Home Script cleanup.
+> load home identity=f07a2977817c2bc17a38163c384d5f1fdbe2855455621f90f4e66b557e9ae6ea
+> request d1 to=home message=exported
+> pump clock=2026-09-30T09:00:00Z
+seg home/r1 start delivery=d1 handler=exported clause=1 fuel=10 alloc=32 state=8 end=return
+run home/r1 outcome=completed delivery=d1 handler=exported value=<function home:3:10> fuel=10 alloc=32
+pumped state=idle fuel=10
+
+> call-value d2 fn=<function home:3:10> args=[7]
+> pump clock=2026-09-30T09:00:00Z
+seg home/r2 start delivery=d2 fn=<function home:3:10> fuel=11 alloc=0 state=224 end=wait until=2026-09-30T09:00:01Z
+pumped state=idle fuel=11 next=2026-09-30T09:00:01Z
+
+> cancel-delivery d2
+> pump clock=2026-09-30T09:00:00Z
+seg home/r2 resume fuel=5 alloc=0 state=8 end=cancel
+run home/r2 outcome=cancelled delivery=d2 fn=<function home:3:10> fuel=16 alloc=0
+pumped state=idle fuel=5
+
+> vars
+vars home cleaned=true

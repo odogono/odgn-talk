@@ -1,0 +1,26 @@
+# Previously exported callbacks may return through immediate results and answers.
+> load home identity=73a6282299019ca743334d7bf86b1aab8dc1273a737fbca0cc952bbb02cf5ef4
+> deliver d1 to=home message=exported
+> pump clock=2026-09-30T09:00:00Z
+seg home/r1 start delivery=d1 handler=exported clause=1 fuel=10 alloc=32 state=16 end=return
+run home/r1 outcome=completed delivery=d1 handler=exported value=<function home:twice> fuel=10 alloc=32
+pumped state=idle fuel=10
+> stub callbacks.get value=<function home:twice>
+> deliver d2 to=home message=immediate
+> pump clock=2026-09-30T09:00:00Z
+call home/r2.c1 op=callbacks.get args=[] result=<function home:twice>
+seg home/r2 start delivery=d2 handler=immediate clause=1 fuel=42 alloc=48 state=16 end=return
+run home/r2 outcome=completed delivery=d2 handler=immediate fuel=42 alloc=48
+pumped state=idle fuel=42
+> deliver d3 to=home message=pending
+> pump clock=2026-09-30T09:00:00Z
+call home/r3.c1 op=callbacks.fetch args=[]
+seg home/r3 start delivery=d3 handler=pending clause=1 fuel=15 alloc=0 state=256 end=ask-wait
+pumped state=idle fuel=15 next=2026-09-30T09:00:30Z
+> answer home/r3.c1 value=<function home:twice>
+> pump clock=2026-09-30T09:00:00Z
+seg home/r3 resume fuel=27 alloc=48 state=16 end=return
+run home/r3 outcome=completed delivery=d3 handler=pending fuel=42 alloc=48
+pumped state=idle fuel=27
+> vars
+vars home total=10

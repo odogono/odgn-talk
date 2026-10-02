@@ -185,13 +185,35 @@ type Setup = {
   }[];
 };
 
+const rememberFunctions = (value: Value, functions: Map<string, Value>) => {
+  const work = [value];
+  while (work.length) {
+    const current = work.pop()!;
+    if (current.kind === 'function') {
+      functions.set(current.toString(), current);
+      for (const [, value] of current.asFunction()!.captures) {
+        work.push(value);
+      }
+    } else if (current.kind === 'list') {
+      for (const value of valuesOf(current)) {
+        work.push(value);
+      }
+    } else if (current.kind === 'map') {
+      for (const [, value] of current.entries()) {
+        work.push(value);
+      }
+    }
+  }
+};
+
 // A value in the display form, or a deferral for a kind this Core can't read yet.
 const read = (
   text: string,
   resolve?: (kind: string, id: string) => HostObject | undefined,
+  resolveFunction?: (display: string) => Value | undefined,
 ): Value => {
   try {
-    return readDisplay(text, resolve);
+    return readDisplay(text, resolve, resolveFunction);
   } catch (error) {
     throw new DeferredCaseError(
       `a value it can't read yet, ${text}: ${(error as Error).message}`,
@@ -320,6 +342,7 @@ const capabilitiesOf = (
   stubs: Map<string, Stub[]>,
   calls: Map<string, Call<unknown>>,
   crossing: (id: string) => void,
+  receive: (value: Value) => void,
 ): Map<string, ReturnType<typeof defineCapability>> => {
   const byCapability = new Map<string, OperationSpec[]>();
   for (const op of setup.operations ?? []) {
@@ -362,13 +385,17 @@ const capabilitiesOf = (
                 ? {}
                 : { maxPendingMs: op.maxPending }),
               // Only a Stub's charge; `answer` and `fail` lines settle it.
-              start: call => startStub(stubs, key, call, calls, crossing),
+              start: (call, ...args) => {
+                args.forEach(receive);
+                startStub(stubs, key, call, calls, crossing);
+              },
             }
           : op.mode === 'immediate'
             ? {
                 ...base,
                 mode: 'immediate',
-                do: call => {
+                do: (call, ...args) => {
+                  args.forEach(receive);
                   try {
                     return takeStub(stubs, key, call, true);
                   } finally {
@@ -379,7 +406,10 @@ const capabilitiesOf = (
             : {
                 ...base,
                 mode: 'fire-and-forget',
-                fire: call => fireStub(stubs, key, call, crossing),
+                fire: (call, ...args) => {
+                  args.forEach(receive);
+                  fireStub(stubs, key, call, crossing);
+                },
               };
     }
     out.set(name, defineCapability(name, operations));
@@ -483,7 +513,10 @@ const capabilitiesOf = (
         capability,
         consoleCapability(
           {
-            write: call => fireStub(stubs, 'console.write', call, crossing),
+            write: (call, value) => {
+              receive(value);
+              fireStub(stubs, 'console.write', call, crossing);
+            },
             read: call =>
               startStub(stubs, 'console.read', call, calls, crossing),
           },
@@ -597,6 +630,8 @@ export const replay = (
     }
     trace.push(line);
   };
+  const functions = new Map<string, Value>();
+  const receive = (value: Value) => rememberFunctions(value, functions);
   let group = newGroup({ name: 'case', trace: writeTrace });
   // A Stop or CancelRun after a crossing is made from that Host function,
   // rather than a second time by the outer replay loop (chapter 11).
@@ -645,7 +680,8 @@ export const replay = (
   const made = new Map<string, HostObject>();
   const props = new Map<string, Map<string, Value>>();
   const resolveObject = (kind: string, id: string) => made.get(`${kind} ${id}`);
-  const value = (text: string) => read(text, resolveObject);
+  const value = (text: string) =>
+    read(text, resolveObject, display => functions.get(display));
   const objectOf = (o: ObjectRefSpec): HostObject => {
     const found = resolveObject(o.kind, o.id);
     if (!found) {
@@ -720,7 +756,7 @@ export const replay = (
   const stubs = new Map<string, Stub[]>();
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
-  const capabilities = capabilitiesOf(setup, stubs, calls, crossing);
+  const capabilities = capabilitiesOf(setup, stubs, calls, crossing, receive);
   const declarations = operationDeclarations(capabilities);
   const compiled = compileLibraries(dir, setup, declarations);
   // A mailbox refusal is written before the accepted inputs still waiting
@@ -855,6 +891,11 @@ export const replay = (
         case 'dispose':
           group.dispose(value(r.fields.get('object')!).asObject()!);
           break;
+        case 'call-value': {
+          const m = messageOf(r);
+          group.call(value(r.fields.get('fn')!), m.args, { limits: m.limits });
+          break;
+        }
         case 'deliver':
         case 'request':
         case 'decide': {
@@ -981,8 +1022,8 @@ export const replay = (
           }
           break;
         }
-        case 'pump':
-          group.pump(parseInstant(r.fields.get('clock')!), {
+        case 'pump': {
+          const pumped = group.pump(parseInstant(r.fields.get('clock')!), {
             fuelSlice: r.fields.has('fuel-slice')
               ? Number(r.fields.get('fuel-slice'))
               : 0,
@@ -990,6 +1031,16 @@ export const replay = (
               ? Number(r.fields.get('fuel-cap'))
               : 0,
           });
+          for (const report of pumped.reports) {
+            if (report.kind === 'run end') {
+              if (report.result) {
+                receive(report.result);
+              }
+              if (report.error) {
+                receive(report.error);
+              }
+            }
+          }
           if (
             restoreBetweenPumps &&
             lines.slice(index + 1).some(line => line.startsWith('> pump ')) &&
@@ -1016,7 +1067,8 @@ export const replay = (
                   line.startsWith('> answer ') ||
                   line.startsWith('> fail ') ||
                   line.startsWith('> cancel-delivery ') ||
-                  line.startsWith('> call-value '),
+                  line.startsWith('> call-value ') ||
+                  (line.startsWith('> ') && line.includes('<function ')),
               );
             hidden = true;
             const bytes = group.save();
@@ -1037,6 +1089,7 @@ export const replay = (
                 line =>
                   line.startsWith('> cancel-delivery ') ||
                   line.startsWith('> call-value ') ||
+                  line.includes('<function ') ||
                   !pending.has(parseRecord(line).ids[0]!),
               )
             ) {
@@ -1051,8 +1104,13 @@ export const replay = (
             }
           }
           break;
+        }
         case 'vars':
-          group.inspect();
+          for (const script of group.inspect().scripts) {
+            for (const [, value] of script.vars) {
+              receive(value);
+            }
+          }
           break;
         case 'answer':
         case 'fail': {
@@ -1063,11 +1121,11 @@ export const replay = (
           if (r.name === 'answer') {
             const fuel = Number(r.fields.get('fuel') ?? 0);
             call.answer(
-              read(r.fields.get('value')!),
+              value(r.fields.get('value')!),
               fuel ? { fuel } : undefined,
             );
           } else {
-            const error = read(r.fields.get('error')!);
+            const error = value(r.fields.get('error')!);
             const entries = error.entries();
             call.fail(
               entries.length
@@ -1097,10 +1155,10 @@ export const replay = (
             {
               charge: Number(r.fields.get('charge') ?? 0),
               ...(r.fields.has('value')
-                ? { value: read(r.fields.get('value')!) }
+                ? { value: value(r.fields.get('value')!) }
                 : {}),
               ...(r.fields.has('error')
-                ? { error: read(r.fields.get('error')!) }
+                ? { error: value(r.fields.get('error')!) }
                 : {}),
             },
           ]);

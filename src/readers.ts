@@ -61,22 +61,47 @@ export type ObjectResolver = (
 const resolved = (r: ReturnType<ObjectResolver>): Value | undefined =>
   r ? (Value.isValue(r) ? r : r.value) : undefined;
 
+export type FunctionResolver = (display: string) => Value | undefined;
+
 class DisplayReader extends Reader {
   constructor(
     source: string,
     private readonly resolve?: ObjectResolver,
+    private readonly resolveFunction?: FunctionResolver,
   ) {
     super(source);
   }
   value(): Value {
     type Frame =
+      | { kind: 'function'; start: number }
       | { kind: 'list'; values: Value[] }
       | { key: string; kind: 'map'; pairs: [string, Value][] };
     const frames: Frame[] = [];
     let value: Value | undefined;
     for (;;) {
       if (!value) {
-        if (this.peek('[')) {
+        if (this.peek('<function ')) {
+          const start = this.i;
+          this.eat('<function ');
+          if (
+            !this.match(
+              /[A-Z_a-z][\w-]*(?:\+\d+)?:(?:[A-Z_a-z][\w-]*:)?(?:\d+:\d+|[A-Z_a-z][\w-]*)/y,
+            )
+          ) {
+            this.fail('Expected a Function Value location');
+          }
+          if (this.peek('>')) {
+            this.eat('>');
+            value = this.functionValue(start);
+          } else {
+            this.eat(' ');
+            if (!this.peek('{')) {
+              this.fail('Expected Function Value captures');
+            }
+            frames.push({ kind: 'function', start });
+            continue;
+          }
+        } else if (this.peek('[')) {
           this.eat('[');
           if (this.peek(']')) {
             this.eat(']');
@@ -102,6 +127,15 @@ class DisplayReader extends Reader {
       if (!parent) {
         return value;
       }
+      if (parent.kind === 'function') {
+        if (value.kind !== 'map') {
+          this.fail('Expected Function Value captures');
+        }
+        this.eat('>');
+        frames.pop();
+        value = this.functionValue(parent.start);
+        continue;
+      }
       if (parent.kind === 'list') {
         parent.values.push(value);
       } else {
@@ -122,6 +156,14 @@ class DisplayReader extends Reader {
             : map(parent.pairs);
       }
     }
+  }
+  private functionValue(start: number): Value {
+    const display = this.source.slice(start, this.i);
+    const value = this.resolveFunction?.(display);
+    if (value?.kind !== 'function' || value.toString() !== display) {
+      return this.fail(`No Host-held Function Value ${display}`);
+    }
+    return value;
   }
   private mapKey(): string {
     const key = this.peek('"')
@@ -276,8 +318,9 @@ class DisplayReader extends Reader {
 export const readDisplay = (
   source: string,
   resolve?: ObjectResolver,
+  resolveFunction?: FunctionResolver,
 ): Value => {
-  const reader = new DisplayReader(source, resolve);
+  const reader = new DisplayReader(source, resolve, resolveFunction);
   const value = reader.value();
   reader.done();
   return value;

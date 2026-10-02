@@ -1,0 +1,37 @@
+# Host calls have no clause charge. tally costs 11 Fuel and allocates one number.
+# An invalid Host argument count never enters the body or spends execution Fuel.
+> load home identity=61bafa66a365d7549ecd26ec8ae1f6d248907acb45de9ec5a6a4affb94535375
+> request d1 to=home message=exported
+> pump clock=2026-09-30T09:00:00Z
+seg home/r1 start delivery=d1 handler=exported clause=1 fuel=10 alloc=32 state=16 end=return
+run home/r1 outcome=completed delivery=d1 handler=exported value=<function home:tally> fuel=10 alloc=32
+pumped state=idle fuel=10
+
+> call-value d2 fn=<function home:tally>
+> call-value d3 fn=<function home:tally> args=[2]
+> call-value d4 fn=<function home:tally> args=[1, 2]
+> pump clock=2026-09-30T09:00:00Z
+seg home/r2 start delivery=d2 fn=<function home:tally> fuel=11 alloc=16 state=192 end=return
+run home/r2 outcome=completed delivery=d2 fn=<function home:tally> value=5 fuel=11 alloc=16
+seg home/r3 start delivery=d3 fn=<function home:tally> fuel=11 alloc=16 state=112 end=return
+run home/r3 outcome=completed delivery=d3 fn=<function home:tally> value=7 fuel=11 alloc=16
+raise home/r4 code="wrong arity" at=home:11 pos=6:7
+seg home/r4 start delivery=d4 fn=<function home:tally> fuel=0 alloc=0 state=16 end=error
+run home/r4 outcome=errored delivery=d4 fn=<function home:tally> error={code: "wrong arity", at: {unit: "home", handler: "tally", line: 6, column: 7}} fuel=0 alloc=0
+pumped state=idle fuel=22
+
+> vars
+vars home total=7
+> call-value d5 fn=<function home:tally> args=[1]
+> stop home reason="gone"
+> pump clock=2026-09-30T09:00:00Z
+stopped home reason="gone" dropped=[d5]
+pumped state=stopped fuel=0
+
+> call-value d6 fn=<function home:tally>
+> pump clock=2026-09-30T09:00:00Z
+note d6 kind=function-gone
+pumped state=stopped fuel=0
+
+> vars
+vars home total=7

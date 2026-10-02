@@ -149,9 +149,11 @@ The Host function receives only the arguments supplied, in order. The Core inser
 ## Function Values
 
 - **What the Host holds:** a Function Value is an ordinary `Value` of kind `function`. The Host can read only its Home Script and its display form, and it can't build one.
-- **Bound to its Group:** passing it into another Group is `wrong group`. It lives as long as the Host holds it, and nothing needs releasing.
+- **Bound to its Group:** passing it into another Group is `wrong group`, including inside lists, maps and Function captures. Host message inputs, Call answers/failures and restored settlements refuse these values before accepting them. An immediate or automatically forwarded Promise result, property result or raised Capability failure containing such a value gives `host error`, like an invalid result or failure. This also applies when a restored Operation is reissued. It lives as long as the Host holds it, and nothing needs releasing.
 - **Calling it:** `group.Call` has the shape of `Request`. It is a Delivery to the Home Script, recorded in the Trace as a `call-value` Host Input ([chapter 11](11-the-trace-and-conformance.md#host-inputs)).
 - **Staleness:** checked when the queue is drained. A stale value rejects with `send failed`, reason `function gone`, and nothing runs.
+- **Argument count:** a live Host call starts a Run without a Handler Clause. Before entering its body, the Run checks the Function Value's arity. A mismatch ends it `errored` with `wrong arity` at the body's first instruction, without executing or charging that instruction or unwinding a frame; the function's `catch` and `finally` regions do not apply. The Request rejects with `send failed`, reason `errored`. Defaults and captures are bound in the value's own code unit.
+- **Inspection:** a pending Function Value call uses its display form as the mailbox Message's `name`; its Run's `handler` readout uses the same display form. These are inspection labels, not Handler dispatch names.
 - **Taking one as an argument:** an Operation that accepts a Function Value declares the `function` Shape, or `value` when it accepts all values. Lists and maps can declare fields or items with these Shapes too.
 - **Not durable:** Host storage can't encode it, and a Host-held handle doesn't survive save and restore. Only the message layer carries it, as a reference form (below). A callback that must survive a save should be an ordinary message, as the `timer` Capability's are.
 
