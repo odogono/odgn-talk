@@ -70,6 +70,7 @@ import {
   bool,
   dec,
   functionValue,
+  functionsBelongTo,
   listValues,
   map,
   nothing,
@@ -214,15 +215,16 @@ export class Code {
   }
 
   /** Link the Libraries it imports, and take the Constants it imports from them. */
-  link(libraries: ReadonlyMap<string, Code>) {
+  link(libraries: ReadonlyMap<string, Code>, home?: Script) {
     for (const [name, code] of libraries) {
       this.libraries.set(name, code);
     }
     this.unit.definitions.forEach((name, i) => {
       if (/^[^.]*:/.test(name)) {
         const { code, name: constant } = this.library(name);
-        this.definitions[i] =
+        const value =
           code.definitions[code.unit.definitions.indexOf(constant)]!;
+        this.definitions[i] = home ? homeConstant(value, home) : value;
       }
     });
   }
@@ -231,6 +233,8 @@ export class Code {
 /** A loaded Script: its code, and its Script Variables. */
 export class Script extends Code {
   variables: Value[];
+  functionGroup?: object;
+  readonly boundConstants = new Map<Value, Value>();
   live = true;
   readonly units: Code[] = [this];
   variableNames: string[];
@@ -294,6 +298,7 @@ export const loadScript = (
   initialVariables: readonly Value[] = [],
   home?: Script,
   identity = '',
+  functionGroup?: object,
 ): Script => {
   const script = new Script(
     unit,
@@ -301,10 +306,11 @@ export const loadScript = (
     home,
     identity,
   );
+  script.functionGroup = functionGroup ?? home?.functionGroup;
   initialVariables.forEach((value, i) => {
     script.variables[i] = value;
   });
-  script.link(libraries);
+  script.link(libraries, script.home ?? script);
   unit.constants.forEach((_, i) => {
     const c = script.constants[i]!;
     if (c.k === 'value' && c.value.kind === 'pattern') {
@@ -368,6 +374,78 @@ type Replacement = {
   subject: Value;
 };
 type Item = Value | Iterator | Replacement | Reader | Receiver;
+// A Library Constant's Function Values are templates until used by a Script.
+// Walk explicitly so nested constants and captures do not grow the JS stack.
+const homeConstant = (root: Value, home: Script): Value => {
+  if (root.kind !== 'function' && root.kind !== 'list' && root.kind !== 'map') {
+    return root;
+  }
+  const values = home.boundConstants;
+  const work = [{ value: root, ready: false }];
+  while (work.length) {
+    const { value, ready } = work.pop()!;
+    if (values.has(value)) {
+      continue;
+    }
+    const ref = value.asFunction();
+    if (
+      ref &&
+      (ref.group !== undefined ||
+        (ref.code as FunctionCode).home === home ||
+        !(ref.code as FunctionCode).home.live)
+    ) {
+      values.set(value, value);
+      continue;
+    }
+    const children =
+      value.kind === 'list'
+        ? listItems(value)
+        : value.kind === 'map'
+          ? value.entries().map(([, value]) => value)
+          : ref
+            ? ref.captures.map(([, value]) => value)
+            : [];
+    if (!ready && children.length) {
+      work.push({ value, ready: true });
+      for (const value of children) {
+        work.push({ value, ready: false });
+      }
+      continue;
+    }
+    const get = (value: Value) => values.get(value)!;
+    if (ref) {
+      const { code, body } = ref.code as FunctionCode;
+      const place =
+        body.kind === 'lambda'
+          ? ref.place.split(':').slice(-2).join(':')
+          : body.name;
+      values.set(
+        value,
+        functionValue({
+          ...ref,
+          group: home.functionGroup,
+          home: home.name,
+          displayHome: home.name,
+          place: `${code.name}:${place}`,
+          identity: `${home.name}#${code.identity || code.name}#${body.index}`,
+          captures: ref.captures.map(([name, value]) => [name, get(value)]),
+          code: { code, body, home } satisfies FunctionCode,
+        }),
+      );
+    } else if (children.some(value => get(value) !== value)) {
+      values.set(
+        value,
+        value.kind === 'list'
+          ? listValues(children.map(get))
+          : map(value.entries().map(([name, value]) => [name, get(value)])),
+      );
+    } else {
+      values.set(value, value);
+    }
+  }
+  return values.get(root)!;
+};
+
 // A Function Value's code: the code unit its body is in, and the body.
 type FunctionCode = { body: Body; code: Code; home: Script };
 type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
@@ -424,12 +502,13 @@ export type RunRecord =
     }
   | {
       args: Value[];
+      fn?: Value;
       /** The call id of a send that waits for its reply. */
       id?: string;
       /** A Join Member's send. */
       join?: boolean;
       kind: 'send';
-      message: string;
+      message?: string;
       to: string;
     };
 
@@ -449,6 +528,7 @@ export type Suspension =
   | { k: 'wait'; ns: bigint }
   | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
   | { args: Value[]; id: string; k: 'send'; message: string; to: string }
+  | { args: Value[]; fn: Value; id: string; k: 'call-value'; to: string }
   | { k: 'join'; members: Member[] }
   | WaitFor;
 /**
@@ -501,6 +581,8 @@ export type Resumption =
 export type RunHost = {
   /** Queues a suspending call's answer, as the Host Input `answer`. */
   answer(id: string, value: Value, fuel: number): void;
+  /** Queues a foreign Function Value in its Home Script's mailbox. */
+  callValue(fn: Value, args: Value[], reply: string): string;
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
   /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
@@ -650,6 +732,7 @@ export class Run {
   segmentBase: Value[];
   private cleanups: Cleanup[] = [];
   private outcome: Outcome | null = null;
+  private entryError: 'wrong arity' | null = null;
   private m: Measured = {};
   private clause = 0;
   private during: Value = nothing;
@@ -757,14 +840,7 @@ export class Run {
       if (op.start) {
         op.start(call, ...args);
       } else {
-        op.run!(call, ...args).then(
-          value => call.answer(value),
-          (error: unknown) =>
-            this.host!.fail(
-              id,
-              error instanceof HostScriptError ? error : null,
-            ),
-        );
+        this.forwardResult(op.run!(call, ...args), call);
       }
       this.records.push({ ...record, charged });
     } catch (error) {
@@ -865,7 +941,7 @@ export class Run {
     if (pending?.k === 'ask') {
       pending.abort.abort();
       ids.push(pending.call.id);
-    } else if (pending?.k === 'send') {
+    } else if (pending?.k === 'send' || pending?.k === 'call-value') {
       ids.push(pending.id);
     }
     this.suspended = null;
@@ -952,14 +1028,41 @@ export class Run {
     entry: Body | Body[],
     args: Value[],
     readonly limits: Limits = script.limits,
+    code: Code = script,
   ) {
     this.segmentBase = [...script.variables];
     const clauses = Array.isArray(entry) ? entry : [entry];
     if (!Array.isArray(entry)) {
-      this.push(script, entry, args, null);
+      this.push(code, entry, args, null);
     } else if (!this.dispatch({ clauses, code: script, next: 0, args })) {
       this.outcome = { kind: 'unhandled' };
     }
+  }
+
+  /** A mailbox call has no Handler Clause and starts in the value's code unit. */
+  static fromFunction(
+    script: Script,
+    fn: Value,
+    args: Value[],
+    limits: Limits,
+  ): Run {
+    const ref = fn.asFunction()!;
+    const { code, body } = ref.code as FunctionCode;
+    const arity = arityOf(body);
+    const run = new Run(script, body, args, limits, code);
+    if (args.length < arity.min || args.length > arity.max) {
+      run.entryError = 'wrong arity';
+    } else {
+      const filled =
+        body.kind === 'lambda' ? args : run.fillDefaults(code, body, args);
+      filled.forEach((value, i) => {
+        run.frame.locals[i + 1] = value;
+      });
+      ref.captures.forEach(([, value], i) => {
+        run.frame.locals[body.captureStart + i] = value;
+      });
+    }
+    return run;
   }
 
   /** The clause number the Run's dispatch chose, or is trying. */
@@ -1152,6 +1255,24 @@ export class Run {
     const resumption = this.resumption;
     this.resumption = null;
     try {
+      if (this.entryError) {
+        const code = this.entryError;
+        this.entryError = null;
+        // The function was never entered: its catch/finally regions cannot
+        // see an invalid Host argument count, and no instruction is charged.
+        const error = this.errorMap(code, [], ins);
+        this.records.push({
+          kind: 'raise',
+          code,
+          unit: frame.code.name,
+          pc: frame.pc,
+          line: ins.line,
+          col: ins.col,
+        });
+        this.frames = [];
+        this.outcome = { kind: 'errored', error };
+        return;
+      }
       if (resumption) {
         this.resume(resumption);
       } else {
@@ -1250,7 +1371,11 @@ export class Run {
     }
     if (r.k === 'timeout') {
       this.abandoning =
-        s.k === 'ask' ? [s.call.id] : s.k === 'send' ? [s.id] : [];
+        s.k === 'ask'
+          ? [s.call.id]
+          : s.k === 'send' || s.k === 'call-value'
+            ? [s.id]
+            : [];
     }
     const value = this.settled(s.k === 'ask' ? s.call : null, r);
     if (s.k !== 'wait') {
@@ -1291,7 +1416,10 @@ export class Run {
       case 'fail':
         throw this.failure(call!, r.error, () => {});
       case 'answer':
-        if (call!.op.result && mismatch(r.value, call!.op.result)) {
+        if (
+          !functionsBelongTo([r.value], this.script.functionGroup) ||
+          (call!.op.result && mismatch(r.value, call!.op.result))
+        ) {
           throw this.hostError(call!);
         }
         this.payConversion(call!, r.value, r.fuel);
@@ -1424,6 +1552,7 @@ export class Run {
     }
     if (
       !Value.isValue(result) ||
+      !functionsBelongTo([result], this.script.functionGroup) ||
       (prop.shape && mismatch(result, prop.shape))
     ) {
       this.recordCrossing({
@@ -1540,7 +1669,7 @@ export class Run {
     const s = this.suspended ?? this.waitedOn;
     if (this.resumption) {
       calls = resumptionSize(this.resumption);
-    } else if (s?.k === 'ask' || s?.k === 'send') {
+    } else if (s?.k === 'ask' || s?.k === 'send' || s?.k === 'call-value') {
       calls = partSize('pending call', 0, 0);
     } else if (s?.k === 'wait-for') {
       for (const when of s.whens) {
@@ -1804,7 +1933,12 @@ export class Run {
   private fillDefaults(code: Code, body: Body, args: Value[]): Value[] {
     const filled = [...args];
     for (let i = args.length; i < body.params.length; i++) {
-      filled.push(code.definitions[body.defaults[i]!]!);
+      filled.push(
+        homeConstant(
+          code.definitions[body.defaults[i]!]!,
+          this.script.home ?? this.script,
+        ),
+      );
     }
     return filled;
   }
@@ -1823,6 +1957,7 @@ export class Run {
     const placeHome = own && lambda ? code.name : home.name;
     const where = own ? '' : `${code.name}:`;
     const ref: FunctionRef = {
+      group: home.functionGroup,
       home: home.name,
       displayHome: placeHome,
       place: where + (lambda ? `${ins.line}:${ins.col}` : body.name),
@@ -1980,13 +2115,7 @@ export class Run {
       } else if (op.start) {
         op.start(call, ...args);
       } else {
-        op.run!(call, ...args).then(
-          v => call.answer(v),
-          (error: unknown) =>
-            error instanceof HostScriptError
-              ? call.fail(error)
-              : host.fail(id, null),
-        );
+        this.forwardResult(op.run!(call, ...args), call);
       }
     } catch (error) {
       starting = false;
@@ -2028,6 +2157,7 @@ export class Run {
     }
     if (
       !Value.isValue(result) ||
+      !functionsBelongTo([result], this.script.functionGroup) ||
       (op.result && mismatch(result, op.result)) ||
       standardChecks(op)?.result?.(result, args) === false
     ) {
@@ -2037,6 +2167,21 @@ export class Run {
     this.recordCrossing({ ...record, charged, result });
     this.payConversion(ctx, result, 0);
     return result;
+  }
+
+  // Promise-returning Operations automatically forward their result. A refused
+  // answer or failure must settle the wait, rather than reject an unobserved Promise.
+  private forwardResult(result: Promise<Value>, call: Call<unknown>) {
+    result
+      .then(
+        value => call.answer(value),
+        (error: unknown) =>
+          this.host!.fail(
+            call.id,
+            error instanceof HostScriptError ? error : null,
+          ),
+      )
+      .catch(() => this.host!.fail(call.id, null));
   }
 
   private recordCrossing(
@@ -2094,6 +2239,10 @@ export class Run {
         : []),
       ...data.entries(),
     ]);
+    if (!functionsBelongTo([data], this.script.functionGroup)) {
+      record(map([]));
+      return this.hostError(ctx);
+    }
     record(failed);
     const declaredCodes = ctx.op.errors?.map(e => e.code);
     if (
@@ -2163,7 +2312,12 @@ export class Run {
         return next();
       case 'load-definition':
         this.pay(key);
-        frame.stack.push(code.definitions[a as number]!);
+        frame.stack.push(
+          homeConstant(
+            code.definitions[a as number]!,
+            this.script.home ?? this.script,
+          ),
+        );
         return next();
       case 'store-definition':
         this.pay(key);
@@ -2928,21 +3082,24 @@ export class Run {
         if (!(ref.code as FunctionCode).home.live) {
           throw new ScriptError('function gone');
         }
-        if (
-          ref.home !== this.script.name ||
-          (ref.maySuspend && ins.op === 'call-value')
-        ) {
-          if (ins.op === 'call-value') {
-            throw new ScriptError('would suspend');
-          }
-          throw new NotImplementedError(
-            'a call to a Function Value in another Script',
-          );
+        const foreign = (ref.code as FunctionCode).home !== this.script;
+        if (ins.op === 'call-value' && (foreign || ref.maySuspend)) {
+          throw new ScriptError('would suspend');
         }
         const { code: home, body } = ref.code as FunctionCode;
         const arity = arityOf(body);
         if (n < arity.min || n > arity.max) {
           throw new ScriptError('wrong arity');
+        }
+        if (foreign) {
+          this.pay(key);
+          const id = `${this.id}.c${this.calls + 1}`;
+          const to = this.host!.callValue(fn, args, id);
+          this.calls++;
+          frame.stack.length -= n + 1;
+          this.records.push({ kind: 'send', id, to, fn, args });
+          this.suspend({ k: 'call-value', id, to, fn, args });
+          return;
         }
         const filled =
           body.kind === 'lambda' ? args : this.fillDefaults(home, body, args);

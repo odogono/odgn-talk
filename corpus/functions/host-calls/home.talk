@@ -1,0 +1,8 @@
+script variable total = 0
+on exported
+  return tally
+end exported
+function tally n = 5
+  put total + n into total
+  return total
+end tally

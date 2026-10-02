@@ -19,6 +19,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`capabilities/`](capabilities/) | immediate and fire-and-forget Capability calls through Grants, Stubs and `Charge`, argument Shapes and trailing Optional arguments, Host failures and `host error`, the load checks of `ask`, `tell` and `say`, Grant trimming with Library needs, revocation during a pending call, all five Standard Capabilities, and faults at a call ([chapter 9](../spec/09-embedding.md#capabilities)) |
 | [`stdlib/`](stdlib/) | calls into the stdlib Libraries with no `add-library` line, and errors raised in stdlib code naming the Script's call ([chapter 7](../spec/07-libraries-and-the-standard-library.md#the-standard-library), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)) |
 | [`math/`](math/) | the correctly rounded number functions and fractional `^`, the Float Built-ins, and their domain errors ([chapter 7](../spec/07-libraries-and-the-standard-library.md#numbers)) |
+| [`functions/`](functions/) | Host and foreign Function Value calls, defaults, Capability callbacks, replies, staleness and cancellation ([chapters 5](../spec/05-handlers-messages-and-scheduling.md#function-values-in-another-script) and [9](../spec/09-embedding.md#function-values)) |
 | [`decisions/`](decisions/) | Decisions: first-Segment seals across preemption, veto and pass, dispatch and pending waits, undecided errors and faults, and Broadcast recipient aggregation ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
 | [`cancellation/`](cancellation/) | Broadcast recipients, Queueing Policies, cancelled cleanup and its failures, Host crossings, owner disposal and sticky Stop ([chapters 5 and 6](../spec/06-errors-and-limits.md#cancellation-and-stop)) |
 | [`reload/`](reload/) | Reload carry/reset and discarded Runs, extension code units and their state cap, transitive Library replacement, and stale Function Values ([chapter 10](../spec/10-save-and-restore.md#reload-and-extend)) |
@@ -41,6 +42,8 @@ The seed cases were written before any Core existed. Until a case is blessed, it
 - **Instruction indices** in `at=` come from `bun tools/machine/check.ts --dis <file>`, which isn't normative. Blessing checks them against a Core.
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
+
+The four `functions/` cases cover Host and foreign calls, cancellation, defaults and previously exported callbacks returned through Capability Stubs and answers.
 
 The two `needs-*` cases in `libraries/` cover missing transitive Grants and suspension through a Library frame.
 

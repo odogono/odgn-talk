@@ -12,7 +12,7 @@ This chapter states what Libraries are and how they are used, then every Built-i
 
 - **A Library** is a unit of source code that the Host registers on a Script Group. It holds Handlers, functions and Constants, and nothing else ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 - **It isn't a Script.** It has no Script Variables, no `me`, no mailbox, no Grants and no Owning Script role. It is never loaded, messaged or run on its own. A top-level `script variable` in a Library is a load error.
-- **Constants:** `constant name = expr` declares a Constant. Its initialiser may use only literals, other Constants and Built-ins, so evaluating it has no effects. Scripts may declare Constants too.
+- **Constants:** `constant name = expr` declares a Constant. Its initialiser may use only literals, other Constants and Built-ins, so evaluating it has no effects. Scripts may declare Constants too. A Function Value in a Library Constant, including nested ones and captures, takes the importing or calling Script as its Home Script when the Constant is bound or read there; its code and display position still name the Library. This also applies to Library parameter defaults. The compiled Library does not bind these values to one Group.
 - **Exports:** every top-level definition of a Library is exported unless it starts with `private`. `private` in a Script is a load error.
 - **No re-exports:** a name a Library imports isn't exported again, so a `use … from` line always names the Library that defines the name.
 

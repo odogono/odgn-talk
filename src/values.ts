@@ -48,6 +48,8 @@ export type FunctionRef = {
   readonly code: unknown;
   /** The extension unit used in the display form, while home remains the Script. */
   readonly displayHome?: string;
+  /** The Core's Group identity; rebound by same-family restore. */
+  readonly group?: object;
   readonly home: string;
   /** Equal for the same Lambda or named function in the same Home Script. */
   readonly identity: string;
@@ -769,4 +771,38 @@ const displayKey = (key: string): string => {
   }
   const display = displayText(key);
   return display.startsWith('"') ? display : `"" & ${display}`;
+};
+
+/** Every Function reachable through a Host value must belong to its receiving Group. */
+export const functionsBelongTo = (
+  values: readonly Value[],
+  group: object | undefined,
+): boolean => {
+  const work = [...values];
+  const seen = new Set<Value>();
+  while (work.length) {
+    const value = work.pop()!;
+    if (seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    if (value.kind === 'function') {
+      const fn = value.asFunction()!;
+      if (fn.group !== group) {
+        return false;
+      }
+      for (const [, capture] of fn.captures) {
+        work.push(capture);
+      }
+    } else if (value.kind === 'list') {
+      for (let i = 1; i <= value.length; i++) {
+        work.push(value.index(i));
+      }
+    } else if (value.kind === 'map') {
+      for (const [, entry] of value.entries()) {
+        work.push(entry);
+      }
+    }
+  }
+  return true;
 };

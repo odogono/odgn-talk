@@ -1018,7 +1018,7 @@ pops = "count + 1"
 pushes = 1
 suspends = true
 cost = "call"
-errors = ["wrong kind", "function gone", "wrong arity", "send failed", "timeout"]
+errors = ["wrong kind", "function gone", "wrong arity", "mailbox full", "send failed", "timeout"]
 does = "`f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits"
 
 [[instruction]]

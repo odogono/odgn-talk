@@ -1,0 +1,5 @@
+script variable answer
+on execute callback
+  callback(7) and wait
+  put it into answer
+end execute

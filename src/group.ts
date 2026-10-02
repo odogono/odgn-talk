@@ -22,7 +22,7 @@ import {
   type Outcome,
   type Member,
   type Resumption,
-  type Run,
+  Run,
   type RunHost,
   type Suspension,
   type Script as Loaded,
@@ -71,7 +71,15 @@ import {
 } from './library';
 import { idList, recordLine, traceValue } from './trace';
 import { ScriptError as OpScriptError } from './operations';
-import { displayText, listValues, map, nothing, text, Value } from './values';
+import {
+  functionsBelongTo,
+  displayText,
+  listValues,
+  map,
+  nothing,
+  text,
+  Value,
+} from './values';
 import { compareText } from './text';
 
 export type GroupOptions = {
@@ -150,6 +158,7 @@ export type Report =
       cleanupFailed?: { code: string } | { limit: string };
       delivery?: string;
       error?: Value;
+      fn?: Value;
       fuel: number;
       handler?: string;
       kind: 'run end';
@@ -234,6 +243,7 @@ type Delivery = {
   broadcast?: string;
   /** The failed message, for an internal `error` Delivery. */
   during?: Value;
+  fn?: Value;
   /** For a message a Script sent, the sending Run. */
   from: string | null;
   /** The delivery id; a message a Script sent has none. */
@@ -440,6 +450,7 @@ export class Group {
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
   private readonly pending = new Map<string, Pending>();
+  private readonly functionGroup = {};
   private readonly objects = new Map<string, ObjectState>();
   // The reports of the Pump draining the input queue.
   private drainReports: Report[] = [];
@@ -490,6 +501,7 @@ export class Group {
 
   private snapshotReferences(): References {
     const refs = references();
+    reference(refs, 'function-group', this.functionGroup);
     const code = (key: string, unit: Code) => {
       if (refs.byObject.has(unit)) {
         return;
@@ -991,6 +1003,14 @@ export class Group {
       this.trace(recordLine('refused', [], [['code', '"not adoptable"']]));
       throw new HostError('not adoptable');
     }
+    this.checkFunctionGroups(
+      'answer' in settlement
+        ? [settlement.answer]
+        : 'fail' in settlement
+          ? [failMap(settlement.fail)]
+          : [],
+      line,
+    );
     this.unsettled.delete(id);
     this.inputs.push({ line, action: { k: 'settle', id, settlement } });
     return 'adopt' in settlement
@@ -1119,6 +1139,7 @@ export class Group {
                 ['outcome', 'cancelled'],
                 ['delivery', d.id],
                 ['broadcast', d.broadcast ?? null],
+                ['fn', d.fn ? traceValue(d.fn) : null],
                 ['fuel', '0'],
                 ['alloc', '0'],
               ],
@@ -1129,6 +1150,7 @@ export class Group {
             script: s.name,
             ...(d.id ? { delivery: d.id } : {}),
             ...(d.broadcast ? { broadcast: d.broadcast } : {}),
+            ...(d.fn ? { fn: d.fn } : {}),
             outcome: 'cancelled',
             fuel: 0,
             alloc: 0,
@@ -1215,6 +1237,16 @@ export class Group {
         const { state, to, delivery } = action;
         if (state) {
           state.incoming--;
+        }
+        if (
+          delivery.fn &&
+          !(delivery.fn.asFunction()!.code as { home: Loaded }).home.live
+        ) {
+          this.trace(
+            recordLine('note', [delivery.id], [['kind', 'function-gone']]),
+          );
+          this.answer(delivery, { kind: 'function gone' });
+          break;
         }
         if (typeof to === 'string') {
           this.acceptDelivery(state!, delivery);
@@ -1516,6 +1548,7 @@ export class Group {
           existing?.home.variables,
           existing?.home,
           p.identity,
+          this.functionGroup,
         ),
       );
       return loaded;
@@ -1962,6 +1995,24 @@ export class Group {
       object: name =>
         Object.hasOwn(s.objects, name) ? s.objects[name]!.value : undefined,
       isScript: name => this.scripts.some(other => other.name === name),
+      callValue: (fn, args, reply) => {
+        const receiver = this.scripts.find(
+          other => other.name === fn.homeScript(),
+        )!;
+        this.enqueue(receiver, receiver.name, {
+          fn,
+          args,
+          reply,
+          from: reply,
+          id: null,
+          at: null,
+          target: null,
+          message: '',
+          limits: {},
+          request: null,
+        });
+        return receiver.name;
+      },
       send: (to, message, args, reply) => {
         // A Script, or the nearest Owning Script of an object (chapter 5).
         const r =
@@ -2006,29 +2057,30 @@ export class Group {
         });
         return r.s.name;
       },
-      answer: (id, value, fuel) =>
-        this.inputs.push({
-          line: recordLine(
-            'answer',
-            [id],
-            [
-              ['value', traceValue(value)],
-              ['fuel', fuel ? String(fuel) : null],
-            ],
-            true,
-          ),
-          action: { k: 'answer', id, value, fuel },
-        }),
-      fail: (id, error) =>
-        this.inputs.push({
-          line: recordLine(
-            'fail',
-            [id],
-            [['error', traceValue(failMap(error))]],
-            true,
-          ),
-          action: { k: 'fail', id, error },
-        }),
+      answer: (id, value, fuel) => {
+        const line = recordLine(
+          'answer',
+          [id],
+          [
+            ['value', traceValue(value)],
+            ['fuel', fuel ? String(fuel) : null],
+          ],
+          true,
+        );
+        this.checkFunctionGroups([value], line);
+        this.inputs.push({ line, action: { k: 'answer', id, value, fuel } });
+      },
+      fail: (id, error) => {
+        const value = failMap(error);
+        const line = recordLine(
+          'fail',
+          [id],
+          [['error', traceValue(value)]],
+          true,
+        );
+        this.checkFunctionGroups([value], line);
+        this.inputs.push({ line, action: { k: 'fail', id, error } });
+      },
     };
   }
 
@@ -2205,7 +2257,7 @@ export class Group {
       return null;
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
-    const ms = sus.k === 'ask' ? sus.ms : s.limits.maxWaitMs;
+    const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
     const timer = this.timer(
       now + BigInt(ms) * 1_000_000n,
       { k: 'call', id, ms, ...(sus.k === 'ask' ? { abort: sus.abort } : {}) },
@@ -2215,13 +2267,24 @@ export class Group {
     return null;
   }
 
+  private checkFunctionGroups(values: readonly Value[], line?: string) {
+    if (!functionsBelongTo(values, this.functionGroup)) {
+      if (line) {
+        this.trace(line);
+        this.trace(recordLine('refused', [], [['code', '"wrong group"']]));
+      }
+      throw new HostError('wrong group');
+    }
+  }
+
   /** A queued Delivery: its id now, its line and its mailbox entry at the next Pump. */
   queueDelivery(
-    record: 'deliver' | 'request' | 'decide',
+    record: 'deliver' | 'request' | 'decide' | 'call-value',
     to: string | ObjectState,
     m: Message,
     request: Delivery['request'],
     ballot?: Ballot,
+    fn?: Value,
   ): Delivery {
     const named = typeof to === 'string';
     const toText = named ? to : traceValue(to.handle.value);
@@ -2235,10 +2298,18 @@ export class Group {
     }
     // A Host Input refused at the call is written, with no ids, then `refused`.
     const refuse = (code: string, error: Error): never => {
-      this.trace(this.deliveryLine(record, null, toText, m));
+      this.trace(this.deliveryLine(record, null, toText, m, fn));
       this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw error;
     };
+    try {
+      this.checkFunctionGroups(m.args ?? []);
+    } catch (error) {
+      if (!(error instanceof HostError)) {
+        throw error;
+      }
+      refuse(error.code, error);
+    }
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       const limit = (state?.limits ?? defaultLimits)[name as LimitName];
       if (!validOverride(name, value, limit)) {
@@ -2260,6 +2331,7 @@ export class Group {
     }
     const delivery: Delivery = {
       ...(ballot ? { ballot } : {}),
+      ...(fn ? { fn } : {}),
       id: `d${++this.deliveries}`,
       from: null,
       at: named ? state!.owner : null,
@@ -2274,7 +2346,7 @@ export class Group {
       state.incoming++;
     }
     this.inputs.push({
-      line: this.deliveryLine(record, delivery.id, toText, m),
+      line: this.deliveryLine(record, delivery.id, toText, m, fn),
       action: { k: 'delivery', to, state: state ?? null, delivery },
     });
     return delivery;
@@ -2348,6 +2420,10 @@ export class Group {
 
   private queueBroadcast(m: Message, id: string, decision?: Decision) {
     const record = decision ? 'decide-broadcast' : 'broadcast';
+    this.checkFunctionGroups(
+      m.args ?? [],
+      recordLine(record, [], messageFields(m), true),
+    );
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       if (!validOverride(name, value, defaultLimits[name as LimitName])) {
         this.trace(recordLine(record, [], messageFields(m), true));
@@ -2522,6 +2598,46 @@ export class Group {
     return { id: delivery.id!, result };
   }
 
+  /** Queued. Calls a Function Value as a Request to its Home Script. */
+  call(
+    fn: Value,
+    args: Value[],
+    o?: CancellationOptions & { limits?: LimitOverride },
+  ): Requested {
+    const ref = fn.asFunction();
+    if (!ref || ref.group !== this.functionGroup) {
+      const code = ref ? 'wrong group' : 'invalid value';
+      this.trace(
+        recordLine(
+          'call-value',
+          [],
+          [
+            ['fn', traceValue(fn)],
+            ['args', traceValue(listValues(args))],
+          ],
+          true,
+        ),
+      );
+      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      throw new HostError(code);
+    }
+    let settle!: Delivery['request'];
+    const result = new Promise<Value>((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+    result.catch(() => {});
+    const delivery = this.queueDelivery(
+      'call-value',
+      ref.home,
+      { name: '', args, limits: o?.limits },
+      settle,
+      undefined,
+      fn,
+    );
+    this.watchCancellation(delivery, o?.signal);
+    return { id: delivery.id!, result };
+  }
+
   /** Makes a handle for a Host-owned thing, the first time it crosses in. */
   object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N> {
     const key = `${kind.name}\u0000${id}`;
@@ -2641,7 +2757,10 @@ export class Group {
   }
 
   // Settle what waits on a message's Run: a sender's reply, or a Request.
-  private answer(delivery: Delivery, outcome: Outcome | { kind: 'stopped' }) {
+  private answer(
+    delivery: Delivery,
+    outcome: Outcome | { kind: 'stopped' | 'function gone' },
+  ) {
     delivery.unsubscribe?.();
     if (delivery.reply) {
       this.settleReply(
@@ -2677,7 +2796,19 @@ export class Group {
     id: string | null,
     to: string,
     m: Message,
+    fn?: Value,
   ) {
+    if (fn) {
+      return recordLine(
+        record,
+        [id],
+        [
+          ['fn', traceValue(fn)],
+          ...messageFields(m).filter(([key]) => key !== 'message'),
+        ],
+        true,
+      );
+    }
     return recordLine(record, [id], [['to', to], ...messageFields(m)], true);
   }
 
@@ -2879,17 +3010,19 @@ export class Group {
     let how: 'start' | 'continue' | 'resume' = 'continue';
     if (!('run' in head)) {
       const delivery = head;
-      this.observe(s, delivery);
+      if (!delivery.fn) {
+        this.observe(s, delivery);
+      }
       if (delivery.during && !s.loaded.clauses.has('error')) {
         s.queue.shift();
         return;
       }
-      const run = dispatch(
-        s.loaded,
-        delivery.message,
-        delivery.args,
-        delivery.limits,
-      );
+      const run = delivery.fn
+        ? Run.fromFunction(s.loaded, delivery.fn, delivery.args, {
+            ...s.limits,
+            ...delivery.limits,
+          })
+        : dispatch(s.loaded, delivery.message, delivery.args, delivery.limits);
       // At this Run's end, the rest of the queue is what the Script keeps.
       run.persistentState = () => this.persistentState(s, 1);
       head = {
@@ -2905,7 +3038,9 @@ export class Group {
       }
       // The object it was delivered to, or for a message to a Script, the
       // Script's owner (chapter 5, `the target`).
-      run.target = (delivery.target ?? s.owner)?.handle.value ?? nothing;
+      run.target = delivery.fn
+        ? nothing
+        : ((delivery.target ?? s.owner)?.handle.value ?? nothing);
       s.queue[0] = head;
       how = 'start';
     }
@@ -3026,9 +3161,10 @@ export class Group {
         ),
       );
     }
-    const handler = s.loaded.clauses.has(running.delivery.message)
-      ? running.delivery.message
-      : null;
+    const handler =
+      !running.delivery.fn && s.loaded.clauses.has(running.delivery.message)
+        ? running.delivery.message
+        : null;
     const start: [string, string | null][] =
       how === 'start'
         ? [
@@ -3042,6 +3178,10 @@ export class Group {
               run.clauseNumber && outcome?.kind !== 'unhandled'
                 ? String(run.clauseNumber)
                 : null,
+            ],
+            [
+              'fn',
+              running.delivery.fn ? traceValue(running.delivery.fn) : null,
             ],
           ]
         : [];
@@ -3177,7 +3317,7 @@ export class Group {
             'unhandled',
             [],
             [
-              ['message', rec.message],
+              ['message', rec.message ?? null],
               [
                 'args',
                 rec.args.length ? traceValue(listValues(rec.args)) : null,
@@ -3231,7 +3371,8 @@ export class Group {
             [rec.id ?? running.id],
             [
               ['to', rec.to],
-              ['message', rec.message],
+              ['message', rec.message ?? null],
+              ['fn', rec.fn ? traceValue(rec.fn) : null],
               [
                 'args',
                 rec.args.length ? traceValue(listValues(rec.args)) : null,
@@ -3296,6 +3437,7 @@ export class Group {
           ['delivery', delivery.id],
           ['broadcast', delivery.broadcast ?? null],
           ['handler', handler],
+          ['fn', delivery.fn ? traceValue(delivery.fn) : null],
           [
             'value',
             result && result.kind !== 'nothing' ? traceValue(result) : null,
@@ -3314,6 +3456,7 @@ export class Group {
       ...(delivery.id ? { delivery: delivery.id } : {}),
       ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
       ...(handler ? { handler } : {}),
+      ...(delivery.fn ? { fn: delivery.fn } : {}),
       ...(outcome.kind === 'cancelled' && outcome.cleanupFailed
         ? {
             cleanupFailed:
@@ -3364,7 +3507,9 @@ export class Group {
           reply: null,
           request: null,
           during: map([
-            ['name', text(delivery.message)],
+            delivery.fn
+              ? ['fn', delivery.fn]
+              : ['name', text(delivery.message)],
             ['args', listValues(delivery.args)],
           ]),
         });
@@ -3411,6 +3556,8 @@ export class Group {
 
   private releaseParked(s: ScriptState, ended: Running) {
     const sameClause = (r: Running) =>
+      !r.delivery.fn &&
+      !ended.delivery.fn &&
       r.delivery.message === ended.delivery.message &&
       r.run.clauseNumber === ended.run.clauseNumber;
     if (this.runsOf(s).some(r => !r.parked && sameClause(r))) {
@@ -3439,7 +3586,8 @@ export class Group {
           : partSize(
               'message',
               0,
-              item.args.reduce((sum, v) => sum + sizeOf(v), 0),
+              item.args.reduce((sum, v) => sum + sizeOf(v), 0) +
+                (item.fn ? sizeOf(item.fn) : 0),
             );
     }
     return total;
@@ -3472,7 +3620,7 @@ export class Group {
               : item.resuming
                 ? ('ready' as const)
                 : ('preempted' as const),
-          handler: item.delivery.message,
+          handler: item.delivery.fn?.toString() ?? item.delivery.message,
         })),
         mailbox: s.queue.flatMap(item =>
           'run' in item
@@ -3481,7 +3629,10 @@ export class Group {
                 {
                   delivery: item.id,
                   from: item.from,
-                  message: { name: item.message, args: item.args },
+                  message: {
+                    name: item.fn?.toString() ?? item.message,
+                    args: item.args,
+                  },
                 },
               ],
         ),
@@ -3496,6 +3647,7 @@ const suspendReasons: Record<Suspension['k'], string> = {
   wait: 'wait',
   ask: 'ask-wait',
   send: 'send-wait',
+  'call-value': 'call-value-wait',
   join: 'join-end',
   'wait-for': 'wait-for',
 };
