@@ -532,8 +532,8 @@ end lambdasTour
 
 -- 14. Joins (ADR 0026) --------------------------------------------------------
 
--- A Join starts several requests at once and suspends once, at `end wait`.
--- Each `… and wait` it reaches is a Join Member.
+-- A Join starts several requests at once and suspends once, at its closing
+-- `end`. Each `… and wait` it reaches is a Join Member.
 on compare stations
   wait for all
     repeat for each s in stations
@@ -542,9 +542,9 @@ on compare stations
   end wait
   put it into perStation            -- one answer per member, in start order
 end compare
--- The first member to fail raises its own Error at `end wait`, with `index`
--- (its start position) added, so `catch {code: "timeout", index: i}` works
--- around the whole Join.
+-- The first member to fail raises its own Error at the closing `end`, with
+-- `index` (its start position) added, so `catch {code: "timeout", index: i}`
+-- works around the whole Join.
 
 -- 15. Binary Patterns (ADR 0013) ----------------------------------------------
 

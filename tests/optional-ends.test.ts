@@ -57,6 +57,14 @@ const explicitSources: readonly (readonly [string, string])[] = [
     'on h\n  put {f: given x\n    return x\n  end given} into m\nend h',
   ],
   [
+    'Lambda list with trailing comment and newline',
+    'on h\n  put [given x\n    return x\n  end given -- close\n  ] into ys\nend h',
+  ],
+  [
+    'Lambda map with trailing comment and newline',
+    'on h\n  put {f: given x\n    return x\n  end given -- close\n  } into m\nend h',
+  ],
+  [
     'Lambda grouping and comparison',
     'on h\n  put (given x\n    return x\n  end given\n  ) = nothing into y\nend h',
   ],
@@ -69,10 +77,28 @@ const explicitSources: readonly (readonly [string, string])[] = [
 const bareEnds = (source: string) =>
   source.replaceAll(/^(\s*end) [a-z]+/gm, '$1');
 
+// Mixed spellings: bare inner endings with an explicit outermost one, and the
+// reverse.
+const mixedEnds = (source: string) => {
+  const lines = source.split('\n');
+  const last = lines.map(line => /^\s*end [a-z]+/.test(line)).lastIndexOf(true);
+  const keepLast = lines
+    .map((line, i) => (i === last ? line : bareEnds(line)))
+    .join('\n');
+  const bareLast = lines
+    .map((line, i) => (i === last ? bareEnds(line) : line))
+    .join('\n');
+  return [keepLast, bareLast];
+};
+
 describe('optional block endings', () => {
   for (const [label, explicit] of explicitSources) {
-    test(`bare and explicit endings preserve ${label}`, () => {
-      for (const source of [explicit, bareEnds(explicit)]) {
+    test(`bare, explicit and mixed endings preserve ${label}`, () => {
+      for (const source of [
+        explicit,
+        bareEnds(explicit),
+        ...mixedEnds(explicit),
+      ]) {
         const core = parseSource(source);
         expect(core.error).toBeNull();
         expect(syntaxText(core.tree!)).toBe(source);
@@ -127,6 +153,25 @@ describe('optional block endings', () => {
       for (const result of [parseSource(source), parse(source)]) {
         expect(result.error?.code).toBe('unexpected token');
         expect(result.error?.tok).toMatchObject({ line, col });
+      }
+    });
+  }
+
+  for (const [label, source, message] of [
+    [
+      'wrong block keyword',
+      'on h\nif true then\nend repeat\nend',
+      'expected end of line or `if` after `end` (closing line 2), found `repeat`',
+    ],
+    [
+      'wrong Lambda keyword',
+      'on h\nput given x\nreturn x\nend if into f\nend',
+      'expected end of line or `given` after `end` (closing line 2), found `if`',
+    ],
+  ] as const) {
+    test(`names the open block for ${label}`, () => {
+      for (const result of [parseSource(source), parse(source)]) {
+        expect(result.error?.message).toBe(message);
       }
     });
   }
