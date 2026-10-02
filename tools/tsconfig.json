@@ -5,6 +5,7 @@
     "syntax",
     "../impl/ts/types",
     "spec/commands.ts",
-    "spec/commands.test.ts"
+    "spec/commands.test.ts",
+    "commits"
   ]
 }

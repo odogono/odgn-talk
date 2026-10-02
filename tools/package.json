@@ -14,7 +14,9 @@
     "syntax:generate": "bun syntax/generate.ts",
     "syntax:check": "bun syntax/generate.ts --check",
     "typecheck": "tsc",
-    "test": "bun test spec/commands.test.ts"
+    "test": "bun test spec/commands.test.ts commits/",
+    "commits:check": "bun commits/check.ts",
+    "changelog": "bun commits/changelog.ts"
   },
   "devDependencies": {
     "ajv": "^8"

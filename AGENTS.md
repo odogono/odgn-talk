@@ -4,6 +4,10 @@
 
 Issues and specs live in GitHub Issues. See `docs/agents/issue-tracker.md`.
 
+### Commits
+
+PR titles follow Conventional Commits, and `feat`, `fix`, `perf` and breaking changes add a changelog fragment. See `docs/agents/commits.md`.
+
 ### Triage labels
 
 Use the five default triage labels. See `docs/agents/triage-labels.md`.
