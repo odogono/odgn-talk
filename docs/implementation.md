@@ -258,6 +258,6 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 All existing corpus cases now execute, but the corpus is not a complete conformance test. Counter coverage exposed one further accounting gap to address in a focused slice:
 
-- **Event-test Pump accounting:** event Pattern/Guard work contributes to Run and Script totals, but the Pump currently omits it from `fuelUsed`; its cap and Fuel Slice accounting need comparison against the Spec.
+- **Event-test Pump accounting:** event Pattern/Guard work contributes to Run and Script totals, but the Pump currently omits it from `fuelUsed`; its cap and Fuel Slice accounting need comparison against the Spec ([#193](https://github.com/odogono/odgn-talk/issues/193)).
 
 The remaining API and diagnostic surface still needs a systematic comparison with the embedding reference and Data Files. A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. #126 stays open while the known gaps and that coverage audit remain. Session Hosts, REPLs and the Go Core are later Appendix B work.
