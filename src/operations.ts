@@ -669,12 +669,10 @@ export const arithmetic = (op: string, a: Value, b: Value): Value => {
       case 'mod':
         return numberValue(mod(x, y));
       case 'power':
-        if (!isInteger(y)) {
-          throw new NotImplementedError(
-            '`^` with a non-integer exponent (power)',
-          );
+        if (!inDomain('power', x, y)) {
+          throw outOfDomain('power', a);
         }
-        return numberValue(powerInteger(x, integerOf(y)));
+        return numberValue(power(x, y));
     }
   } catch (error) {
     throw arithmeticRaise(error, symbols[op]!);
@@ -1788,8 +1786,10 @@ const unary: Record<string, (x: Dec) => Dec> = {
   atan,
 };
 const ONE: Dec = { negative: false, coefficient: 1n, exponent: 0 };
-const inDomain = (name: string, x: Dec): boolean => {
+const inDomain = (name: string, x: Dec, y?: Dec): boolean => {
   switch (name) {
+    case 'power':
+      return !x.negative || isInteger(y!);
     case 'sqrt':
       return !x.negative;
     case 'ln':
@@ -1804,10 +1804,10 @@ const inDomain = (name: string, x: Dec): boolean => {
 const numberFunction = (name: string, args: readonly Value[]): Value => {
   const [x, y] = args.map(numberOperand) as [Dec, Dec | undefined];
   try {
+    if (!inDomain(name, x, y)) {
+      throw outOfDomain(name, args[0]!);
+    }
     if (name === 'power') {
-      if (x.negative && !isInteger(y!)) {
-        throw outOfDomain(name, args[0]!);
-      }
       return numberValue(power(x, y!));
     }
     if (name === 'atan2') {
@@ -1815,9 +1815,6 @@ const numberFunction = (name: string, args: readonly Value[]): Value => {
         throw outOfDomain(name, args[0]!);
       }
       return numberValue(atan2(x, y!));
-    }
-    if (!inDomain(name, x)) {
-      throw outOfDomain(name, args[0]!);
     }
     return numberValue(unary[name]!(x));
   } catch (error) {

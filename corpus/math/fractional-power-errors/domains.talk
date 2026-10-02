@@ -1,0 +1,15 @@
+on base
+  return (-8) ^ 0.5
+end base
+
+on reciprocal
+  return 0 ^ -0.5
+end reciprocal
+
+on large
+  return 10 ^ 34.001
+end large
+
+on measure
+  return (4 m) ^ 0.5
+end measure

@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core fractional-exponent `^`, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). It uses the correctly rounded `power` math while preserving the operator's Fuel, allocation, overflow fields and integer/Quantity rules. Regression tests and two Trace Cases cover results, domain errors, underflow, limits and rollback; the Spec clarifies operator diagnostics and charging.
+
 - The final five seed Trace Cases are blessed by the TS Core and join the default CI replay: Fuel/allocation minimums, the Persistent State minimum, matching Fuel exhaustion, leading-group canonical patterns and empty-match replacement. Their headers derive the corrected figures and position from the Spec. All existing corpus cases now execute; the implementation guide records the remaining Core gaps for [#126](https://github.com/odogono/odgn-talk/issues/126).
 
 - TS Core Locale Standard Capability factory and `LocaleImpl`, completing all five Standard Capability factories for [#126](https://github.com/odogono/odgn-talk/issues/126). Thirteen tests and three Trace Cases cover eight Operations, tag syntax, option defaults, dense ranks, result validation, Fuel, Library needs and save/restore replay. The Spec settles optional arguments, validation order and the syntax-only RFC 5646 contract.

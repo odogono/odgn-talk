@@ -1,0 +1,14 @@
+# Fractional number powers: half-even results, exact roots and underflow.
+# Every number result is 16 allocation bytes. Integer and Quantity powers
+# keep their existing exponents and Units.
+# The four assignments cost 242 + 65 + 96 + 48 Fuel, plus clause 4 and ending 3.
+# Their allocation is 136 + 192 + 248 + 168; retained list sizes sum to 432.
+> load powers identity=b62a39c1a01aabf3b457601100a72864ab21b27400a17bc5aa2ec319d6283d96
+> deliver d1 to=powers message=go
+> pump clock=2026-09-30T09:00:00Z
+seg powers/r1 start delivery=d1 handler=go clause=1 fuel=458 alloc=744 state=432 end=return
+run powers/r1 outcome=completed delivery=d1 handler=go fuel=458 alloc=744
+pumped state=idle fuel=458
+
+> vars
+vars powers roots=[1.414213562373095048801688724209698, 9772372209558106826970760069615612, 1.999999999861370563892815468255625] exact=[2, 8, 1.728, 8] preserved=[6.2500, 0.000729000000, -8, 1, 4 m^2] underflow=[0, 1, 0]
