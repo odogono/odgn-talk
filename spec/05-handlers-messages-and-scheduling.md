@@ -18,6 +18,7 @@ This chapter says how a message reaches a Handler, how Runs of one Script interl
 | `completed` | reached the end of its Handler, a `return`, a `veto` or a `pass` |
 | `errored` | ended with an uncaught error ([chapter 6](06-errors-and-limits.md#uncaught-errors)) |
 | `limit fault` | exceeded a resource limit ([chapter 6](06-errors-and-limits.md#limit-faults)) |
+| `effect failed` | a definite failure prevented Segment participant commit ([chapter 6](06-errors-and-limits.md#effect-failures)) |
 | `cancelled` | was cancelled by `, replacing`, `CancelRun` or `cancel-delivery` ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)) |
 | `unhandled` | found no Handler Clause that matched its message |
 | `dropped` | was ended at dispatch by a `, dropping` clause |
@@ -100,7 +101,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 - **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
 - **Naming a Script:** in a `send`'s receiver, a Name that resolves to nothing else ([chapter 4](04-expressions-and-statements.md#resolving-a-name)) names a Script of the Group by its name, even one loaded later. Whether the Group holds it is checked when the message is sent.
 - **A disposed object:** a `send` to a disposed Host Object raises `object gone`, with `object`, before anything is sent. So does a `send` to a Script the Group doesn't hold, with `object` its name as text.
-- **`send … and wait`** sends the same way, then suspends until the message is ended. The reply is left in `it`. If no reply comes, the Run raises `send failed`, with `reason`: the outcome of the receiver's Run (`errored`, `limit fault`, `cancelled`, `unhandled` or `dropped`), or `stopped`. For `errored`, `error` is the receiver's error map ([chapter 6](06-errors-and-limits.md#errors-across-scripts)).
+- **`send … and wait`** sends the same way, then suspends until the message is ended. The reply is left in `it`. If no reply comes, the Run raises `send failed`, with `reason`: the outcome of the receiver's Run (`errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled` or `dropped`), or `stopped`. For `errored`, `error` is the receiver's error map ([chapter 6](06-errors-and-limits.md#errors-across-scripts)).
 - **The receiver's limits:** a Run started by a Script's own `send` runs on the receiving Script's limits.
 - **Cancelling the sender** never cancels the receiver. It keeps running, and its reply is dropped. The same holds when the sender's wait runs out with `timeout`, or when the send is an abandoned Join Member.
 

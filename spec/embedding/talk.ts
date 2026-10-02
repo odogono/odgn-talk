@@ -39,7 +39,8 @@ export type HostErrorCode =
   | "clock backwards" | "parent cycle" | "duplicate object id" | "name reused"
   | "reentrant call" | "wrong group" | "library mismatch"
   | "reserved name" | "not adoptable" | "invalid value"
-  | "invalid save" | "save mismatch" | "unknown call" | "state too large";
+  | "invalid save" | "save mismatch" | "unknown call" | "state too large"
+  | "effects pending" | "effect state unknown";
 
 /** Host misuse, refused at the call that made it (09-embedding.md). */
 export declare class HostError extends Error {
@@ -181,8 +182,34 @@ interface OpBase {
   cost: Cost;
   errors?: ErrorDecl[];
 }
+export type ScopeDecl =
+  | { opens: string; abandon: string; closes?: never }
+  | { closes: string; opens?: never; abandon?: never };
+
+/** Synchronous, unmetered Host lifecycle work; see embedding/scoped-effects.md. */
+export interface SegmentContext<B> {
+  readonly group: Group; // identity namespace, not just its name
+  readonly scriptName: string;
+  readonly runId: string;
+  readonly grantName: string;
+  readonly segmentId: string;
+  readonly binding: B;
+  readonly now: bigint;
+}
+export interface EffectResult {
+  status: "ok" | "failed" | "unknown";
+  detail?: string; // Host-only, not covered by parity
+}
+export interface SegmentLifecycle<B> {
+  begin(context: SegmentContext<B>): EffectResult;
+  commit(context: SegmentContext<B>): EffectResult;
+  rollback(context: SegmentContext<B>): EffectResult;
+}
+
 export interface ImmediateOp<B> extends OpBase {
   mode: "immediate";
+  scope?: ScopeDecl;
+  segmentBound?: boolean; // absent/false: ordinary immediate effects
   /** Return a Value, or throw ScriptError, LimitReached, or anything else as `host error`. */
   do(call: Call<B>, ...args: Value[]): Value;
 }
@@ -212,12 +239,18 @@ export interface CapabilityDef<B> {
 export interface Grant<B> { readonly binding: B }
 
 export interface Call<B> {
+  readonly group: Group; // worker calls remain forbidden in callbacks
   readonly id: string;         // unique within the Group ("pricing/r1.c1")
   readonly scriptName: string;
+  readonly runId: string;
+  readonly grantName: string;
+  readonly segmentId: string;
+  readonly scopeName?: string;
+  readonly automatic: boolean; // true only for Core-triggered abandonment
   readonly binding: B;
-  readonly now: bigint;        // the Pump's Clock reading
+  readonly now: bigint;        // the last observed Clock reading
   readonly signal: AbortSignal; // aborted when the call is abandoned, including by a timeout
-  /** Legal only while starting. Throws LimitReached. */
+  /** Legal only while starting a Script call; forbidden for automatic abandonment. Throws LimitReached. */
   charge(fuel: number): void;
   /**
    * Queued, into the Group that made this Call, never one restored from it.
@@ -366,7 +399,7 @@ export interface Library {
 
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
-  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>): CapabilityDef<B>;
+  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B>): CapabilityDef<B>;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   clockCapability(costs: Costs): CapabilityDef<void>;
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone
@@ -389,7 +422,7 @@ export interface LoadOptions {
   source: string;
   /** Keyed by the name the Script uses. */
   grants: Record<string, Grant<any>>;
-  /** Trim once at Load, including Library needs; discarded Operations cannot be regained. */
+  /** Trim once at Load, including Library needs and implicit abandonment dependencies. */
   grantsAsUsed?: boolean;
   owner?: HostObject;
   objects?: Record<string, HostObject>;
@@ -462,6 +495,7 @@ export interface Group {
   call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
   /** Worker. Synchronous. now is epoch nanoseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
+  /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
   save(): Uint8Array;
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
@@ -479,6 +513,7 @@ export interface Inspection {
 }
 export interface ScriptView {
   name: string;
+  disabledGrants?: string[]; // disabled named Grants, in code-point order; absent when empty
   vars: [string, Value][]; // its Script Variables, in declaration order
   runs: RunView[];         // every Run that hasn't ended, in the order they started
   mailbox: MessageView[];  // in mailbox order
@@ -508,7 +543,7 @@ export interface Counters {
 
 export interface Script {
   readonly name: string;
-  /** Worker. A fresh map of kept names and Operations, including revoked Grants. */
+  /** Worker. A fresh map of kept names and Operations, including revoked and disabled Grants. */
   grants(): Record<string, string[]>;
   /** Worker. Fresh snapshot; chapter 9 defines lifetime totals and current state. */
   counters(): Counters;
@@ -531,9 +566,20 @@ export interface Script {
 
 export type Outcome =
   | "completed" | "errored" | "limit fault" | "cancelled"
-  | "unhandled" | "dropped";
+  | "unhandled" | "dropped" | "effect failed";
 
 export interface Location { unit: string; line: number; col: number; handler: string; pc: number }
+
+export interface EffectFailure {
+  script: string;
+  run: string;
+  grant: string;
+  segment: string;
+  phase: "abandon" | "begin" | "commit" | "rollback";
+  status: "failed" | "unknown";
+  scope?: string; // abandonment only
+  detail?: string; // Host-only, not covered by parity
+}
 
 export type Report =
   | {
@@ -544,6 +590,7 @@ export type Report =
       broadcast?: string;
       handler?: string; // absent with run
       outcome: Outcome;
+      effect?: EffectFailure; // effect failed: the failure that prevented commit
       cleanupFailed?: { code: string } | { limit: "cleanup" | "alloc" | "persistent" | "depth" | "pattern" | "join" };
       result?: Value;
       error?: ScriptError;
@@ -561,6 +608,7 @@ export type Report =
       pendingCalls: string[];
     }
   | { kind: "unhandled"; delivery: string; message: Message; target?: HostObject }
+  | ({ kind: "effect failure" } & EffectFailure)
   | { kind: "call failed"; script: string; call: string; operation: OperationRef; detail: string }
   | ({ kind: "decided" } & Decided);
 

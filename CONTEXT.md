@@ -48,8 +48,16 @@ _Avoid_: alphabetical order, sort order (unqualified)
 One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
 _Avoid_: method, command, endpoint
 
+**Capability Scope**:
+A resource lifetime owned by one Run through a named Grant, opened and closed by declared Operations and abandoned by the Core if still open when its Run ends. It does not by itself make effects reversible.
+_Avoid_: transaction (for all scopes), lexical scope, using block
+
+**Segment-bound Operation**:
+An Operation whose Host effects belong to the calling Segment and remain provisional until that Segment commits or rolls back.
+_Avoid_: scoped Operation (for atomic effects), transactional Run
+
 **Operation Declaration**:
-The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget) and longest time pending. The same form serves Hosts, the Conformance Corpus and tooling.
+The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional Capability Scope and Segment-bound behavior. The same form serves Hosts, the Conformance Corpus and tooling.
 _Avoid_: signature, schema, spec (unqualified)
 
 **Value Encoding**:

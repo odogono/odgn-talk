@@ -1299,7 +1299,13 @@ export const errorMessages = {
   "bad locale": "{locale} isn't a well-formed locale tag",
   "object gone": "{object} has been disposed",
   "read only": "That property is read-only",
-  "call lost": "The call was lost in a restore"
+  "call lost": "The call was lost in a restore",
+  "scope already open": "The scope {scope} on {capability} is already open",
+  "scope not open": "The scope {scope} on {capability} is not open",
+  "scope open": "The scope {scope} on {capability} must close before waiting",
+  "scope in join": "The scope {scope} cannot open inside a Join",
+  "segment participant conflict": "The Segment already participates through {participant}, so {capability} cannot join",
+  "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called"
 };
 export const limitDefaults = {
   "fuelPerRun": 10000000,

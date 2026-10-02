@@ -9,13 +9,13 @@ A Host can save a whole Group between Pumps and restore it later on the same Cor
 **Save then restore is unobservable** ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)). A restored Group, given the same later Host Inputs, Clock readings and Fuel Slices, gives the same results and reports, and the same Trace apart from the save and restore records, as the Group that was never saved. It uses the same Fuel and faults at the same instruction. Resetting any counter would let a Script launder Fuel through a save.
 
 - **Same Core family only:** a save from the TS Core never restores on the Go Core, and the other way round. The format is each Core's own, and there is no stable cross-Core format ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md)).
-- **Checked on every case:** every Conformance Corpus case is also replayed with a save and a restore between each pair of Pumps, and must give identical output ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [chapter 11](11-the-trace-and-conformance.md)).
+- **Checked on every case:** every Conformance Corpus case is also replayed with a save and a restore between each pair of Pumps where Save succeeds; live-effect boundaries instead check `effects pending` refusal and continue the original Group, and both paths must give identical execution output ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [chapter 11](11-the-trace-and-conformance.md)).
 
 ## Saving
 
-- **When:** `Save` is a worker call, legal whenever the Group is Quiescent, which is always between Pumps. A save can only be attempted during a Pump from inside it, which is the Host error `reentrant call`. The Core has no notion of paused.
-- **Preempted Runs** can be saved. A Run a Fuel Slice or the Group's Fuel cap cut mid-Segment is saved mid-Segment, with its segment base, so a later Limit Fault still rolls it back correctly ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
-- **Unobservable:** saving charges nothing and changes only the Trace save id counter. It appears in the Trace only as a `save` record ([chapter 11](11-the-trace-and-conformance.md)).
+- **When:** `Save` is a worker call, attempted whenever the Group is Quiescent, which is always between Pumps. If any Capability Scope or Segment participant is live, or fatal effect uncertainty stopped the Group, it returns Host Error `effects pending`, produces no snapshot and does not drain inputs, close resources or advance execution ([ADR 0049](../docs/adr/0049-live-host-effects-prevent-saving.md)). A save can only be attempted during a Pump from inside it, which is the Host error `reentrant call`. The Core has no notion of paused.
+- **Preempted Runs** can be saved when they hold no live scopes or participants. A Run a Fuel Slice or the Group's Fuel cap cut mid-Segment is saved mid-Segment, with its segment base, so a later Limit Fault still rolls it back correctly ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
+- **Unobservable:** saving charges nothing and changes only the Trace save id counter. A successful save appears in the Trace only as a `save` record; a refused attempt writes `save` then `refused code="effects pending"`, allocating an attempt id but no restorable snapshot ([chapter 11](11-the-trace-and-conformance.md)).
 - **The bytes:** the same complete Group state, including its Trace save id counter, gives the same bytes on the same Core version. Consecutive saves advance that counter and therefore differ; saving never changes Script state or scheduling.
 
 ### What a save holds
@@ -31,12 +31,12 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - its owner and its well-known objects, by Host Object id
   - its Script Variables, its definitions' values, its mailbox and work queue in order, and each clause's queue of parked Runs
   - its counters (`FuelTotal`, `AllocTotal`, `Runs`, `Faults`) and its Persistent State size
-  - its Fuel Slice debt, the Grants the Host has revoked, and whether it has been stopped
+  - its Fuel Slice debt, the Grants the Host has revoked or disabled, and whether it has been stopped
   - each message in its mailbox with its delivery id, its limit override and the reply it owes, if any
 - **Each Run:** everything [chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-machines-state) lists, including:
   - its frames, each with its code position (a code unit's identity, a body and a pc), its locals and its operand stack
   - its run id, its status, its limits with its Delivery's override applied, the Fuel and allocation it has used, and the Cleanup Budget it has spent
-  - its segment base, its Delivery and open Verdict, and its dispatch in progress
+  - its segment base and Segment ordinal, its Delivery and open Verdict, and its dispatch in progress
   - the reply it owes: to the Run waiting in a `send … and wait` or a Function Value call, or to the Host's `Request`, `Call` or `Decide`
   - the reply it waits for, if it waits in a `send … and wait` or a Function Value call to another Script
   - its wait, with each deadline as an absolute Instant and its place in the order waits began
@@ -59,7 +59,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 1. **Reading:** the TS Core reads its format 2 only (format 1 lacked completed Run totals). A save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
 2. **Libraries:** the Host passes compiled Libraries for the saved identities. The Core matches them by identity, and a Library it needs that isn't given is a mismatch.
-3. **Grants:** the Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. Only the saved Operation set is retained; additional Operations the Host offers, and their declarations, are ignored. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. The Core reconstructs all saved source units before applying revocation state, so an existing extension may still call a revoked Grant. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
+3. **Grants:** disabled status is preserved, including with variables-only policy, independently of rebinding. The Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. Only the saved Operation set is retained; additional Operations the Host offers, and their declarations, are ignored. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. The Core reconstructs all saved source units before applying revocation state, so an existing extension may still call a revoked Grant. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
 4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts and limits, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one and the save-format version is its own, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, and `VariablesOnly` does a [variables-only restore](#variables-only-restore).
 5. **Host Objects:** the Host's `Resolve` function turns each saved `(kind, id)` into a native object. An id it can't resolve restores as a disposed Host Object, and its `[kind, id]` is listed in the result's `Disposed`.
 6. **Text Patterns** are recompiled from their source, charging nothing.
@@ -98,7 +98,7 @@ Each pending call is a suspending Operation call that hadn't been answered when 
 
 A variables-only restore rebuilds each Script from its saved source and then each of its extensions in the order they were made, against the Core's current versions, the Libraries given and the Grants re-bound, and keeps only its Script Variables. It follows the Reload rule, [carrying variables over](#carrying-variables-over) for every Script at once.
 
-- **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked Grants. Host Objects are kept, and resolved as for a full restore.
+- **Kept:** each Script's Script Variables whose names it still declares, its counters, its owner and well-known objects, its limits, and its revoked and disabled Grants. Host Objects are kept, and resolved as for a full restore.
 - **Discarded:** every Run, suspended, parked or preempted, the mailbox, the work queue, the input queue, each Broadcast in progress and the Fuel Slice debt. Runs are discarded with no `finally`. The result lists the discarded Runs in `DiscardedRuns`, the dropped Deliveries (the mailboxes' and the input queue's) in `DroppedMessages`, and the abandoned calls in `AbandonedCalls`, so the Host can cancel the ones it still has. `Pending` is empty.
 - **Late answers:** an answer or failure for an abandoned call is recorded and ignored, as for any call that isn't pending ([chapter 9](09-embedding.md#capabilities)). A Host reaches the restored Group with one only over the message layer, since a `Call` from before the save answers into the Group that made it.
 - **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, with each unsealed recipient undecided, `cancelled`, naming its Script and its Run if it had begun. A Broadcast keeps already sealed ballots and aggregates them by the ordinary Verdict rule; a dropped Broadcast not yet given recipients is undecided with empty lists. These deferred reports are saved if the Host saves again before the first Pump ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
@@ -118,8 +118,8 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 `Script.Reload(source, carry)` is stop-and-reload.
 
 1. **Checking:** the new source is loaded against the Script's Grants, Libraries and well-known objects, and its initialiser runs, into new Script Variables. A LoadError leaves the Script unchanged.
-2. **Carrying:** with `ResetVariables`, the Script Variables are the new initialiser's values. With `CarryVariables`, they are [carried over](#carrying-variables-over). A carry that would exceed the Persistent State cap is the Host error `state too large`, and leaves the Script unchanged.
-3. **Stopping:** only now, the Script is stopped as Stop Script is ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)), with reason `reload`. Its running, parked and suspended Runs are discarded with no `finally`, the messages in its mailbox are dropped, and their senders get `send failed`, reason `stopped`. Pending calls are abandoned. The `stop` report lists what was discarded.
+2. **Carrying:** with `ResetVariables`, the Script Variables are the new initialiser's values. With `CarryVariables`, they are [carried over](#carrying-variables-over) from the prospective post-rollback bindings: use an active Segment's base for variables it would restore when the old Run stops. Compute and validate this view without yet changing the old Run or calling the Host. A carry that would exceed the Persistent State cap is the Host error `state too large`, and leaves the Script unchanged.
+3. **Stopping:** only now, the Script is stopped as Stop Script is ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)), with reason `reload`. Its running, parked and suspended Runs are discarded with no `finally`, the messages in its mailbox are dropped, and their senders get `send failed`, reason `stopped`. Pending calls and live scopes are abandoned, and the current participant is rolled back before replacement. Disabled Grants remain disabled. A fatal lifecycle failure stops the Group and prevents replacement; completed external cleanup is not undone. The `stop` report lists what was discarded.
 4. **Replacing:** the new code and Script Variables replace the old, all at once. Every Function Value whose Home Script is this Script becomes stale.
 
 `Reload` returns the reports for the Runs it discarded. Unlike Stop Script, it isn't sticky: the reloaded Script takes new messages at once.
@@ -128,7 +128,7 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 
 ### Carrying variables over
 
-- **By name:** after the new initialiser runs, each Script Variable that the old code and the new code both declare takes its old value. One the new code doesn't declare is dropped, and one only the new code declares keeps its initial value.
+- **By name:** after the new initialiser runs, each Script Variable that the old code and the new code both declare takes its old value from the prospective post-rollback view. A stopped preempted Run's provisional writes are not carried into new code. A variables-only restore applies the same rule to discarded active Segments. One the new code doesn't declare is dropped, and one only the new code declares keeps its initial value.
 - **As they are:** a value is carried as it is, whatever its kind. A carried Function Value whose Home Script is the reloaded Script is stale.
 - **The cap:** the Script's Persistent State, measured with the carried values, must fit its cap ([chapter 6](06-errors-and-limits.md#limits)).
 
@@ -145,7 +145,7 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 
 ## Host errors
 
-These are the Host errors this chapter adds to [the catalogue](09-embedding.md#host-error-catalogue): `invalid save`, `save mismatch`, `unknown call` and `state too large`. `reentrant call`, `clock backwards`, `name reused` and `not adoptable` are the ones already there.
+These are the Host errors this chapter adds to [the catalogue](09-embedding.md#host-error-catalogue): `invalid save`, `save mismatch`, `unknown call`, `state too large` and `effects pending`. `reentrant call`, `clock backwards`, `name reused` and `not adoptable` are the ones already there.
 
 ## Outside parity
 

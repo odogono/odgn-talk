@@ -72,3 +72,5 @@ A Trace case is a directory. `case.toml` holds the setup: versions, limits, Oper
 - Narrowed by ADR 0030: the Corpus keeps the display form. The tagged-JSON **Value Encoding** exists only for the message layer and Host storage, and a Value Encoding case pairs a display-form value with its expected encoding bytes, so encoder parity is checked without a decoder in the Corpus.
 - Settled by #79: `cancel-delivery <delivery-id>` joins the control Host Inputs, beside `cancel-run`, for a Request cancelled from outside, including one still in the mailbox. An `abandon <call-id>` record also follows a `timeout`.
 - Narrowed by [ADR 0031](0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md) (#80): the Host Input records gain `decide` and `decide-broadcast`, the output records gain `decided`, the `seg` end reason gains `veto`, and `cancel-delivery` also takes a broadcast id.
+
+- Narrowed by [ADR 0049](0049-live-host-effects-prevent-saving.md): the save/restore replay checks `effects pending` refusal at live-effect boundaries and continues the original Group there.

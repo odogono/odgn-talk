@@ -29,7 +29,7 @@ raised_when = "extend Script reuses a name, or a Library name is added twice"
 
 [[error]]
 code = "reentrant call"
-raised_when = "A worker call is made from inside the Group's own Pump"
+raised_when = "A worker call is made from inside the Group's own Pump or a scope/Segment lifecycle callback"
 
 [[error]]
 code = "wrong group"
@@ -66,3 +66,11 @@ raised_when = "`Settle` names a call id that isn't pending or one already settle
 [[error]]
 code = "state too large"
 raised_when = "The state an extension adds, or the Script Variables a Reload or a variables-only restore carries over, would exceed the Persistent State cap"
+
+[[error]]
+code = "effects pending"
+raised_when = "Save is attempted while a Capability Scope or Segment participant is live, or after fatal effect uncertainty stopped the Group"
+
+[[error]]
+code = "effect state unknown"
+raised_when = "Load, Reload, Extend or ReplaceLibrary attempts to change a Group stopped by fatal effect uncertainty"
