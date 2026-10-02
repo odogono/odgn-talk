@@ -395,6 +395,11 @@ key = "builtin.isDisposed"
 fuel = "2"
 
 [[rate]]
+key = "builtin.objectKind"
+fuel = "2"
+alloc = "size(result)"
+
+[[rate]]
 key = "builtin.rangeStart"
 fuel = "2"
 

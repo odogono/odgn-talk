@@ -14,7 +14,7 @@
 - **A Library-qualified name, such as `"text:pad"`:** text with a separator in it invites parsing, which is the fragility these Built-ins remove. The Library can get its own Built-in if a Script ever needs it.
 - **The local name of a renamed Import:** it exists only in the importing Script's source, and two Scripts importing the same function under different names would get different answers for equal values.
 - **`"integer"` for whole numbers:** `integer` isn't a kind, and `kindOf` would then disagree with `got`.
-- **The Object Kind for a Host Object:** it would make `kindOf` give names outside the Kinds table. Reading an Object Kind is a separate question.
+- **The Object Kind for a Host Object:** it would make `kindOf` give names outside the Kinds table. Reading an Object Kind is a separate question, settled by ADR 0044 with the Built-in `objectKind`.
 - **The names `kindOf` and `arity`:** `functionArity` and `functionName` follow `rangeStart` and `rangeEnd` (ADR 0036) in naming the kind they read.
 
 ## Consequences

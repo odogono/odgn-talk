@@ -1942,6 +1942,12 @@ export const builtin = (
         result: range(integerValue(BigInt(min)), integerValue(BigInt(max))),
       };
     }
+    case 'objectKind':
+      if (x!.kind !== 'object') {
+        throw wrongKind('object', x!);
+      }
+      // The Core holds the kind beside the id, so a disposed object answers.
+      return { result: text(x!.asObjectRef()!.kind) };
     case 'isDisposed':
       if (x!.kind !== 'object') {
         throw wrongKind('object', x!);

@@ -95,6 +95,12 @@ call = "isDisposed(o)"
 gives = "Whether the Host Object `o` has been disposed"
 
 [[builtin]]
+name = "objectKind"
+group = "values"
+call = "objectKind(o)"
+gives = "The name of the Object Kind of the Host Object `o`, as text"
+
+[[builtin]]
 name = "rangeStart"
 group = "values"
 call = "rangeStart(r)"

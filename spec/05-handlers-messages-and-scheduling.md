@@ -31,7 +31,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 - **No match:** if no clause matches, the Run ends as `unhandled`, and the message goes on along the [Message Path](#the-message-path).
 - **Charged to the Run:** dispatch is the Run's own code, so every clause it tries is charged to it by the Cost Model ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)), even when no clause matches.
 - **Never suspends:** dispatch, Guards and the walk along the Message Path never suspend.
-- **Guards** may call Built-ins, and nothing else: no Script or Library function and no Function Value. Of a Host Object's properties, a Guard may read only its id (`where the id of item is "object-slot-183"`), and it may call `isDisposed`. The loader checks this.
+- **Guards** may call Built-ins, and nothing else: no Script or Library function and no Function Value. Of a Host Object's properties, a Guard may read only its id (`where the id of item is "object-slot-183"`), and it may call `isDisposed` and `objectKind`. The loader checks this.
 - **An error in a Guard** skips the clause, and dispatch goes on to the next one. `try`, `on error` and the reports never see it. The Trace records the skip and the error's code.
 - **Imported Handlers are never entry points:** a message never runs a Handler a Script imported from a Library, and a Library never joins a Message Path ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 

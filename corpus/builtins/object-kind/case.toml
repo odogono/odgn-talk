@@ -1,0 +1,34 @@
+# object-kind: `objectKind(o)` gives the name of a Host Object's Object Kind,
+# which `kindOf` doesn't, and a Guard may route on it. Two objects of
+# different kinds may share an id, and the kind tells them apart. A disposed
+# object still answers, and anything but a Host Object raises `wrong kind`
+# (spec chapter 7, Values; ADR 0044).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[objectKinds]]
+name = "door"
+props = [{ name = "open", shape = "boolean" }]
+
+[[objectKinds]]
+name = "item"
+props = [{ name = "label", shape = "text" }]
+
+[[objects]]
+kind = "door"
+id = "x1"
+props = { open = "false" }
+
+[[objects]]
+kind = "item"
+id = "x1"
+props = { label = '"key"' }
+
+[[scripts]]
+name = "router"
+source = "router.talk"
+objects = { gate = { kind = "door", id = "x1" }, key = { kind = "item", id = "x1" } }
