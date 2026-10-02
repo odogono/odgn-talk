@@ -13,7 +13,7 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
-- The Session Host of chapter 12 in `@odgn/northtalk/session`, and the `northtalk` REPL in `tooling/cli`, for [#131](https://github.com/odogono/odgn-talk/issues/131). Entries, Session Commands, mocks, the virtual Clock, saves, user Libraries and export run as the Spec says. The Session Host records the session through its environment's `record`, and `replayTranscript` replays one, comparing what it records. `corpus:run` runs the Session Transcripts in `corpus/sessions/`, and replays each one's `case.trace` as a Trace Case in both replays.
+- The Session Host of chapter 12 in `@odgn/northtalk/session`, and the `northtalk` REPL in `tooling/cli`, for [#131](https://github.com/odogono/odgn-talk/issues/131). Entries, Session Commands, mocks, the virtual Clock, saves, user Libraries, export and the built-in `clock`, `calendar` and `locale` run as the Spec says, with each built-in answer recorded as a `~` line. The Session Host records the session through its environment's `record`, and `replayTranscript` replays one, comparing what it records. `corpus:run` runs the Session Transcripts in `corpus/sessions/`, and replays each one's `case.trace` as a Trace Case in both replays.
 
 - Process-wide `createCore()`/`Core` and deterministic `exportManifest`, completing [#200](https://github.com/odogono/odgn-talk/issues/200). Existing free-function helpers share the Core's compile caches and definitions. Scripts reuse compilation across Groups, reloads and restores while retaining separate state and per-load checks; extension caching covers complete Script history. Host Manifests export sorted declarations and Shapes without bindings or executable Host callbacks.
 

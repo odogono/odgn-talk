@@ -1,7 +1,12 @@
 // Chapter 12, Session Transcripts: reading and writing their lines, and
 // replaying one through a fresh Session Host.
 import { formatInstant, parseInstant } from '../dates';
+import type { LocaleImpl } from '../locale-capability';
+import { readDisplay } from '../readers';
+import type { CalendarImpl } from '../standard-capabilities';
+import type { Value } from '../values';
 import { SessionHost } from './host';
+import { hostFailure } from './stubs';
 
 /** One line of a Transcript, with an Entry's further lines folded in. */
 export type TranscriptItem =
@@ -132,6 +137,31 @@ export const replayTranscript = (
 ): Replayed => {
   // What the Session Host records as it replays, with the comments kept.
   const items: TranscriptItem[] = [];
+  // Each built-in Capability's answers, by call, in place of the Capability.
+  const answers = new Map<string, string[]>();
+  for (const item of recorded) {
+    if (item.k === 'answer') {
+      answers.set(item.call, [...(answers.get(item.call) ?? []), item.answer]);
+    }
+  }
+  const answer = (call: { id: string }): Value => {
+    const recorded = answers.get(call.id)?.shift();
+    if (recorded === undefined) {
+      throw new Error(`The Transcript has no \`~\` answer for ${call.id}`);
+    }
+    if (!recorded.startsWith('fail ')) {
+      return readDisplay(recorded);
+    }
+    const error = readDisplay(recorded.slice(5));
+    if (!error.entries().length) {
+      throw new Error(
+        `${call.id} fails with an error that isn't a Script error`,
+      );
+    }
+    throw hostFailure(error);
+  };
+  const builtIn = (operations: readonly string[]) =>
+    Object.fromEntries(operations.map(op => [op, answer]));
   // The reading the next Pump takes, if a recorded `@` line gave one.
   let offered: bigint | null = null;
   const host = new SessionHost({
@@ -144,6 +174,26 @@ export const replayTranscript = (
       return at;
     },
     record: item => items.push(item),
+    builtIns: {
+      calendar: builtIn([
+        'today',
+        'now',
+        'toCivil',
+        'toInstant',
+        'offset',
+        'zone',
+      ]) as unknown as CalendarImpl,
+      locale: builtIn([
+        'compare',
+        'rank',
+        'upper',
+        'lower',
+        'numberSymbols',
+        'monthNames',
+        'dayNames',
+        'tag',
+      ]) as unknown as LocaleImpl,
+    },
     ...(options.trace ? { trace: options.trace } : {}),
     // Replaying never writes a file: `:export` writes to a scratch directory.
     writeFile: () => {},
@@ -179,7 +229,8 @@ export const replayTranscript = (
         offered = null;
         break;
       case 'answer':
-        throw new Error('A Transcript answer for a built-in Capability');
+        // The built-in Capability's call takes it from `answers`.
+        break;
       case 'comment':
         items.push(item);
         break;

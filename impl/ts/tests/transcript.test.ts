@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseInstant } from '../src/index';
+import { map, parseInstant, ScriptError, text } from '../src/index';
 import {
   parseTranscript,
   replayTranscript,
@@ -181,5 +181,66 @@ describe('Recording', () => {
     );
     const replayed = replayTranscript(parseTranscript(text));
     expect(writeTranscript(replayed.items)).toBe(text);
+  });
+});
+
+describe('Built-in Capabilities', () => {
+  // A Host whose `calendar` knows one zone, and whose `locale` uppercases.
+  const builtIns = {
+    calendar: {
+      zone: (call: { binding: string }, zone?: string) => {
+        if ((zone ?? call.binding) !== 'UTC') {
+          throw new ScriptError(
+            'unknown zone',
+            'no such zone',
+            map([['zone', text(zone!)]]),
+          );
+        }
+        return text('UTC');
+      },
+    },
+    locale: {
+      upper: (_: unknown, s: { asText(): string }) =>
+        text(s.asText().toUpperCase()),
+    },
+  } as unknown as ConstructorParameters<typeof SessionHost>[0]['builtIns'];
+
+  test('record each answer as a `~` line, which a replay answers from', () => {
+    const items: TranscriptItem[] = [];
+    const host = new SessionHost({
+      now: () => parseInstant('2026-09-30T10:00:00Z'),
+      record: item => items.push(item),
+      builtIns,
+    });
+    expect(host.input(':grant cal calendar UTC')).toEqual([]);
+    expect(host.input(':grant loc locale')).toEqual([]);
+    host.input('function zone z\n  ask cal to zone z\n  return it\nend zone');
+    expect(host.input('zone(nothing)')).toEqual(['"UTC"']);
+    expect(host.input('zone("Mars/Base")')).toEqual([
+      '! error {code: "unknown zone", zone: "Mars/Base", capability: "cal", operation: "zone"} at session+1:2:3',
+    ]);
+    const recorded = writeTranscript(items);
+    expect(recorded).toContain('~ session/r1.c1 "UTC"\n');
+    expect(recorded).toContain(
+      '~ session/r2.c1 fail {code: "unknown zone", message: "no such zone", zone: "Mars/Base"}\n',
+    );
+    // The replay has no Host of its own: every answer comes from the lines.
+    const trace: string[] = [];
+    const replayed = replayTranscript(parseTranscript(recorded), {
+      trace: line => trace.push(line),
+    });
+    expect(writeTranscript(replayed.items)).toBe(recorded);
+  });
+
+  test('a binding goes only with calendar and locale, and only built-ins can be granted', () => {
+    const host = new SessionHost({ now: () => 0n });
+    expect(host.input(':grant cal calendar')).toEqual(['! bad arguments']);
+    expect(host.input(':grant c clock UTC')).toEqual(['! bad arguments']);
+    expect(host.input(':grant c clock')).toEqual([]);
+    const offered = new SessionHost({ now: () => 0n, builtIns });
+    expect(offered.input(':grant cal calendar Europe/London')).toEqual([]);
+    expect(offered.input(':mock locale.upper immediate')).toEqual([
+      '! bad arguments',
+    ]);
   });
 });
