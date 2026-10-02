@@ -1,0 +1,9 @@
+script variable n = 0
+on go, deciding
+  try
+    put 9 into n
+    put the value of switcher into n
+  finally
+    put 99 into n
+  end try
+end go

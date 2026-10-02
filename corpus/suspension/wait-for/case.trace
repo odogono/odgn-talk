@@ -26,7 +26,7 @@ run till/r4 outcome=completed handler=paid fuel=24 alloc=58
 send bank/r2 to=till message=paid args=[{order: 7, amount: 120}]
 seg bank/r2 start delivery=d4 handler=settle clause=1 fuel=41 alloc=246 state=0 end=return
 run bank/r2 outcome=completed delivery=d4 handler=settle fuel=41 alloc=246
-seg till/r5 start from=bank/r2 handler=paid clause=1 fuel=24 alloc=58 state=570 end=return
+seg till/r5 start from=bank/r2 handler=paid clause=1 fuel=24 alloc=58 state=1041 end=return
 run till/r5 outcome=completed handler=paid fuel=24 alloc=58
 seg till/r1 resume fuel=19 alloc=550 state=849 end=return
 run till/r1 outcome=completed delivery=d1 handler=await fuel=72 alloc=590

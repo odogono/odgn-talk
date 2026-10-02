@@ -798,18 +798,24 @@ const (
 )
 
 type RunEnd struct {
-	Script    string
-	Run       RunID       // empty for a Delivery cancelled before it started
-	Delivery  DeliveryID  // empty for a Run started by another Script's send
-	Broadcast BroadcastID // empty unless the Delivery was a Broadcast's
-	Handler   string
-	Outcome   Outcome
-	Result    Value        // Completed
-	Error     *ScriptError // Errored
-	Limit     string       // LimitFault: "fuel", "alloc", "persistent", "depth", "pattern", "join"; "cleanup" for cleanup that failed
-	At        Location
-	Fuel      int64
-	Alloc     int64
+	Script        string
+	Run           RunID       // empty for a Delivery cancelled before it started
+	Delivery      DeliveryID  // empty for a Run started by another Script's send
+	Broadcast     BroadcastID // empty unless the Delivery was a Broadcast's
+	Handler       string
+	Outcome       Outcome
+	CleanupFailed *CleanupFailure // Cancelled, only when its cleanup failed
+	Result        Value           // Completed
+	Error         *ScriptError    // Errored
+	Limit         string          // LimitFault: "fuel", "alloc", "persistent", "depth", "pattern", "join"
+	At            Location
+	Fuel          int64
+	Alloc         int64
+}
+
+type CleanupFailure struct {
+	Code  string // the error's code, or empty when a limit ended cleanup
+	Limit string // "cleanup", "alloc", "persistent", "depth", "pattern", "join", or empty for an error
 }
 
 type Stop struct {

@@ -38,6 +38,7 @@ export {
   newGroup,
   Script as ScriptHandle,
   type GroupOptions,
+  type CancellationOptions,
   type Inspection,
   type LoadOptions,
   type Message,

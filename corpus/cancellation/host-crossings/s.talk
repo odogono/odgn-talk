@@ -1,0 +1,10 @@
+script variable n = 0
+on go
+  try
+    put 9 into n
+    ask api to cancel
+    put 99 into n
+  finally
+    add 1 to n
+  end try
+end go

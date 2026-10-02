@@ -23,16 +23,15 @@
 # 6, Cancellation and Stop). Each suspended Run becomes ready when it is
 # cancelled, and its cleanup runs in `holder`'s turns, r1's first. The
 # allocation is `iterate-times`'s 24 and the concat's text, 16 + 14. The
-# state figures are estimates.
-# Unblessed: the output lines are written by hand, not by bless.
+# state figures are Cost Model 0's.
 
-> load holder
+> load holder identity=532b4423e55da81bb301c07f27f59723e598e47df5adce50aa68b8e50ca9ee5d
 
 > deliver d1 to=holder message=hold args=[249994]
 > deliver d2 to=holder message=hold args=[249995]
 > pump clock=2026-09-28T09:00:00Z
-seg holder/r1 start delivery=d1 handler=hold clause=1 fuel=15 alloc=0 state=184 end=wait until=2026-09-28T09:01:00Z
-seg holder/r2 start delivery=d2 handler=hold clause=1 fuel=15 alloc=0 state=368 end=wait until=2026-09-28T09:01:00Z
+seg holder/r1 start delivery=d1 handler=hold clause=1 fuel=15 alloc=0 state=248 end=wait until=2026-09-28T09:01:00Z
+seg holder/r2 start delivery=d2 handler=hold clause=1 fuel=15 alloc=0 state=400 end=wait until=2026-09-28T09:01:00Z
 pumped state=idle fuel=30 next=2026-09-28T09:01:00Z
 
 # Both are cancelled before their waits fire.
@@ -40,7 +39,7 @@ pumped state=idle fuel=30 next=2026-09-28T09:01:00Z
 > cancel-run holder/r2
 > pump clock=2026-09-28T09:00:01Z
 call holder/r1.c1 op=log.write args=["cleaned 249994"]
-seg holder/r1 resume fuel=1000000 alloc=54 state=184 end=cancel
+seg holder/r1 resume fuel=1000000 alloc=54 state=200 end=cancel
 run holder/r1 outcome=cancelled delivery=d1 handler=hold fuel=1000015 alloc=54
 cleanup-failed holder/r2 limit=cleanup
 seg holder/r2 resume fuel=999992 alloc=54 state=0 end=cancel

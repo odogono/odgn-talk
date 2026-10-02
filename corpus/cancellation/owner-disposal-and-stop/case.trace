@@ -1,0 +1,24 @@
+# Disposal discards suspended, parked and preempted Runs, and queued Decisions.
+> load s identity=d99a5daea7f584be2307b7692f50f6695de3e3c76c8e6ecb0272e9c95207a31f
+> request d1 to=s message=go
+> deliver d2 to=s message=go
+> decide d3 to=s message=decide
+> decide d4 to=s message=decide
+> pump clock=2026-10-01T09:00:00Z fuel-slice=40
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=15 alloc=0 state=288 end=wait until=2026-10-01T09:00:01Z
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=4 alloc=0 state=432 end=park
+preempt s/r3 start delivery=d3 handler=decide clause=1 by=slice fuel=21 alloc=0
+pumped state=sliced fuel=40 next=2026-10-01T09:00:01Z
+> dispose object=<object widget "w">
+> pump clock=2026-10-01T09:00:00Z
+stopped s reason="owner disposed" discarded=[s/r1, s/r2, s/r3] dropped=[d4]
+decided d3 verdict=undecided undecided=[{script: "s", run: "s/r3", outcome: "cancelled"}]
+decided d4 verdict=undecided undecided=[{script: "s", outcome: "cancelled"}]
+pumped state=stopped fuel=0
+# Stop stays sticky and later accepted messages are dropped at drain.
+> request d5 to=s message=go
+> pump clock=2026-10-01T09:00:02Z
+stopped s reason="owner disposed" dropped=[d5]
+pumped state=stopped fuel=0
+> vars
+vars s n=0

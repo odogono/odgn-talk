@@ -273,6 +273,7 @@ const capabilitiesOf = (
   setup: Setup,
   stubs: Map<string, Stub[]>,
   calls: Map<string, Call<unknown>>,
+  crossing: (id: string) => void,
 ): Map<string, ReturnType<typeof defineCapability>> => {
   const byCapability = new Map<string, OperationSpec[]>();
   for (const op of setup.operations ?? []) {
@@ -321,18 +322,31 @@ const capabilitiesOf = (
                   call.charge(stub.charge);
                 }
                 calls.set(call.id, call);
+                crossing(call.id);
               },
             }
           : op.mode === 'immediate'
             ? {
                 ...base,
                 mode: 'immediate',
-                do: call => takeStub(stubs, key, call, true),
+                do: call => {
+                  try {
+                    return takeStub(stubs, key, call, true);
+                  } finally {
+                    crossing(call.id);
+                  }
+                },
               }
             : {
                 ...base,
                 mode: 'fire-and-forget',
-                fire: call => void takeStub(stubs, key, call, false),
+                fire: call => {
+                  try {
+                    takeStub(stubs, key, call, false);
+                  } finally {
+                    crossing(call.id);
+                  }
+                },
               };
     }
     out.set(name, defineCapability(name, operations));
@@ -392,6 +406,48 @@ export const replay = (
 ): string[] => {
   const trace: string[] = [];
   const group = newGroup({ name: 'case', trace: line => trace.push(line) });
+  // A Stop or CancelRun after a crossing is made from that Host function,
+  // rather than a second time by the outer replay loop (chapter 11).
+  const atCrossings = new Map<string, Parsed[][]>();
+  const crossingLines = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i]!.startsWith('call ') && !lines[i]!.startsWith('prop ')) {
+      continue;
+    }
+    const record = parseRecord(lines[i]!);
+    const key =
+      record.name === 'call'
+        ? record.ids[0]!
+        : `${record.fields.get('object')}:${record.fields.get('name')}:${record.fields.get('op')}`;
+    const inputs: Parsed[] = [];
+    let j = i + 1;
+    while (j < lines.length) {
+      const line = lines[j]!;
+      if (!line || line.startsWith('#')) {
+        j++;
+        continue;
+      }
+      if (!line.startsWith('> stop ') && !line.startsWith('> cancel-run ')) {
+        break;
+      }
+      inputs.push(parseRecord(line));
+      crossingLines.add(j++);
+    }
+    const queue = atCrossings.get(key) ?? [];
+    queue.push(inputs);
+    atCrossings.set(key, queue);
+  }
+  const crossing = (key: string) => {
+    for (const r of atCrossings.get(key)?.shift() ?? []) {
+      if (r.name === 'stop') {
+        group
+          .script(r.ids[0]!)!
+          .stop(readDisplay(r.fields.get('reason')!).asText()!);
+      } else {
+        group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
+      }
+    }
+  };
   const compiled = compileLibraries(dir, setup);
   // The Host Objects case.toml lists, made before the first Host Input, with
   // their properties' values, which the runner's Get reads and Set writes.
@@ -419,13 +475,16 @@ export const replay = (
               ...(p.shape === undefined ? {} : { shape: shapeOf(p.shape) }),
               ...(p.getCost ? { getCost: p.getCost } : {}),
               ...(p.setCost ? { setCost: p.setCost } : {}),
-              get: (o: HostObject<null>) =>
-                props.get(o)?.get(p.name) ?? nothing,
+              get: (o: HostObject<null>) => {
+                crossing(`${o.value}:${p.name}:get`);
+                return props.get(o)?.get(p.name) ?? nothing;
+              },
               ...(p.readOnly
                 ? {}
                 : {
                     set: (o: HostObject<null>, v: Value) => {
                       props.get(o)!.set(p.name, v);
+                      crossing(`${o.value}:${p.name}:set`);
                     },
                   }),
             },
@@ -468,8 +527,36 @@ export const replay = (
   const stubs = new Map<string, Stub[]>();
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
-  const capabilities = capabilitiesOf(setup, stubs, calls);
-  for (const line of lines) {
+  const capabilities = capabilitiesOf(setup, stubs, calls, crossing);
+  // A mailbox refusal is written before the accepted inputs still waiting
+  // for the Pump. Replay those first so the same depth check can refuse it.
+  const order: number[] = [];
+  let refused: number[] = [];
+  for (const [index, line] of lines.entries()) {
+    let following = index + 1;
+    while (
+      following < lines.length &&
+      (!lines[following] || lines[following]!.startsWith('#'))
+    ) {
+      following++;
+    }
+    const next = lines[following];
+    if (line.startsWith('> ') && next === 'refused code="mailbox full"') {
+      refused.push(index);
+      continue;
+    }
+    if (line.startsWith('> pump ')) {
+      order.push(...refused);
+      refused = [];
+    }
+    order.push(index);
+  }
+  order.push(...refused);
+  for (const index of order) {
+    const line = lines[index]!;
+    if (crossingLines.has(index)) {
+      continue;
+    }
     if (!line.startsWith('> ')) {
       continue;
     }
@@ -563,6 +650,20 @@ export const replay = (
         }
         case 'decide-broadcast':
           group.decideBroadcast(messageOf(r));
+          break;
+        case 'broadcast':
+          group.broadcast(messageOf(r));
+          break;
+        case 'cancel-delivery':
+          group.cancelDelivery(r.ids[0]!);
+          break;
+        case 'cancel-run':
+          group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
+          break;
+        case 'stop':
+          group
+            .script(r.ids[0]!)!
+            .stop(value(r.fields.get('reason')!).asText()!);
           break;
         case 'pump':
           group.pump(parseInstant(r.fields.get('clock')!), {

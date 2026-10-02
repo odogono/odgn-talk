@@ -1,0 +1,10 @@
+script variable n = 0
+on go
+  try
+    ask api to hold and wait
+  finally
+    repeat 10 times
+      add 1 to n
+    end repeat
+  end try
+end go

@@ -21,7 +21,7 @@ seg napper/r3 start delivery=d3 handler=month clause=1 fuel=32 alloc=547 state=1
 run napper/r3 outcome=completed delivery=d3 handler=month fuel=32 alloc=547
 pumped state=idle fuel=110 next=2026-09-30T09:00:01Z
 > pump clock=2026-09-30T09:00:01Z
-seg napper/r1 resume fuel=65 alloc=112 state=611 end=return
+seg napper/r1 resume fuel=65 alloc=112 state=915 end=return
 run napper/r1 outcome=completed delivery=d1 handler=go fuel=98 alloc=136
 seg napper/r2 resume fuel=24 alloc=24 state=947 end=wait until=2026-09-30T09:00:02Z
 pumped state=idle fuel=89 next=2026-09-30T09:00:02Z

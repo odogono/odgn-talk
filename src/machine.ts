@@ -463,6 +463,8 @@ export type Resumption =
 export type RunHost = {
   /** Queues a suspending call's answer, as the Host Input `answer`. */
   answer(id: string, value: Value, fuel: number): void;
+  /** Land Stop and CancelRun after the crossing record, before conversion. */
+  crossing?(): boolean;
   /** Queues its failure, as `fail`; null fails with what isn't a Script error. */
   fail(id: string, error: HostScriptError | null): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
@@ -543,7 +545,11 @@ export type Outcome =
       /** The code unit the faulting instruction is in. */
       unit: string;
     }
-  | { kind: 'unhandled' };
+  | { kind: 'unhandled' | 'dropped' }
+  | {
+      cleanupFailed?: { code: string } | { limit: LimitName };
+      kind: 'cancelled';
+    };
 
 class LimitFaultError extends Error {
   constructor(
@@ -575,6 +581,7 @@ export class Run {
   // What a woken Run had suspended on, until its resume.
   private waitedOn: Suspension | null = null;
   private calls = 0;
+  private crossingCall: { abort: AbortController; id: string } | null = null;
   frames: Frame[] = [];
   fuel = 0;
   alloc = 0;
@@ -593,6 +600,127 @@ export class Run {
   private m: Measured = {};
   private clause = 0;
   private during: Value = nothing;
+  private cancellation:
+    { entry: CodeUnit['unwind'][number]; frame: Frame }[] | null = null;
+  private cleanupFuel = 0;
+  /** Calls abandoned when cancellation landed, traced after the cancel Segment. */
+  cancellationAbandons: string[] = [];
+
+  get cancelling(): boolean {
+    return this.cancellation !== null;
+  }
+
+  /** Drop a new Run immediately after dispatch, without entering its body. */
+  drop() {
+    if (this.charging && this.persistentState() > this.limits.persistentState) {
+      this.fault('persistentState', this.frame.code.unit.code[this.frame.pc]!);
+      return;
+    }
+    this.frames = [];
+    this.outcome = { kind: 'dropped' };
+  }
+
+  /** Roll back the active Segment and abandon every pending call without unwinding. */
+  discard(betweenSegments = false): string[] {
+    if (!betweenSegments && !this.suspended && !this.resumption && !this.done) {
+      this.script.variables = [...this.segmentBase];
+    }
+    const pending = this.suspended;
+    const members = this.resumption
+      ? []
+      : (this.join?.members.filter(m => m.answer === undefined) ?? []);
+    this.join = null;
+    for (const member of members) {
+      member.abort?.abort();
+    }
+    // Fail-fast abandonment happened at input drain, but its records would
+    // normally wait for resume. Keep them when that resume is discarded.
+    const ids = [
+      ...this.cancellationAbandons,
+      ...(this.resumption?.k === 'join-failed'
+        ? this.resumption.abandon
+        : members.map(m => m.id)),
+    ];
+    this.cancellationAbandons = [];
+    if (this.crossingCall) {
+      this.crossingCall.abort.abort();
+      ids.push(this.crossingCall.id);
+      this.crossingCall = null;
+    }
+    if (pending?.k === 'ask') {
+      pending.abort.abort();
+      ids.push(pending.call.id);
+    } else if (pending?.k === 'send') {
+      ids.push(pending.id);
+    }
+    this.suspended = null;
+    this.resumption = null;
+    this.waitedOn = null;
+    this.frames = [];
+    this.cleanups = [];
+    this.cancellation = null;
+    return ids;
+  }
+
+  /** Cancellation lands here; only finally copies are kept for the next turn. */
+  cancel(betweenSegments = false) {
+    if (this.cancelling || this.done) {
+      return;
+    }
+    const blocks = this.frames
+      .slice()
+      .reverse()
+      .flatMap(frame =>
+        frame.code.unit.unwind
+          .filter(
+            entry =>
+              entry.kind === 'finally' &&
+              frame.pc >= entry.start &&
+              frame.pc < entry.end,
+          )
+          .map(entry => ({ frame, entry })),
+      );
+    this.cancellationAbandons = this.discard(betweenSegments);
+    this.cancellation = blocks;
+    this.cleanups = [];
+    this.frames = [];
+    this.beginCleanupSegment();
+    this.nextCancellationCleanup();
+  }
+
+  /** Other Runs may have committed since cancellation made this Run ready. */
+  beginCleanupSegment() {
+    this.segmentBase = [...this.script.variables];
+  }
+
+  /** A parked Run resumes after dispatch, with no resumption instruction. */
+  beginReadySegment() {
+    if (!this.resumption) {
+      this.segmentBase = [...this.script.variables];
+    }
+  }
+
+  park(): boolean {
+    if (this.persistentState() + this.size() > this.limits.persistentState) {
+      this.fault('persistentState', this.frame.code.unit.code[this.frame.pc]!);
+      return false;
+    }
+    return true;
+  }
+
+  private nextCancellationCleanup() {
+    const block = this.cancellation!.shift();
+    if (!block) {
+      this.frames = [];
+      this.outcome = { kind: 'cancelled' };
+      return;
+    }
+    const { frame, entry } = block;
+    frame.pc = entry.target;
+    frame.stack.length = entry.depth;
+    frame.clauseCharge = false;
+    this.frames = [frame];
+  }
 
   /** The failed Run’s message for an internally queued error Delivery. */
   setDuring(value: Value) {
@@ -628,6 +756,30 @@ export class Run {
   get selectedClause(): Body | null {
     const f = this.frames[0];
     return f && f.pc === f.body.acceptedAt ? f.body : null;
+  }
+
+  /** Empty parameter/Guard regions still pay the clause's dispatch rate. */
+  acceptClause(dispatchOnly: boolean): boolean {
+    if (this.frame.clauseCharge) {
+      try {
+        const fuel = charge('clause').fuel;
+        if (this.fuel + fuel > this.limits.fuelPerRun) {
+          throw new LimitFaultError('fuelPerRun', this.frame.pc);
+        }
+        // A body instruction pays the clause rate alongside its own cost;
+        // parking and dropping have no body instruction to pay it.
+        if (dispatchOnly) {
+          this.payAmount(fuel, 0);
+        }
+      } catch (error) {
+        if (!(error instanceof LimitFaultError)) {
+          throw error;
+        }
+        this.fault(error.limit, this.frame.code.unit.code[this.frame.pc]!);
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Run to the end of the Run. */
@@ -721,14 +873,24 @@ export class Run {
       return;
     }
     const frame = this.frame;
-    if (this.fuel + fuel > this.limits.fuelPerRun) {
-      throw new LimitFaultError('fuelPerRun', frame.pc);
+    if (
+      this.cancelling
+        ? this.cleanupFuel + fuel > this.limits.cleanupBudget
+        : this.fuel + fuel > this.limits.fuelPerRun
+    ) {
+      throw new LimitFaultError(
+        this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
+        frame.pc,
+      );
     }
     if (this.alloc + alloc > this.limits.allocPerRun) {
       throw new LimitFaultError('allocPerRun', frame.pc);
     }
     frame.clauseCharge = false;
     this.fuel += fuel;
+    if (this.cancelling) {
+      this.cleanupFuel += fuel;
+    }
     this.alloc += alloc;
   }
 
@@ -781,7 +943,9 @@ export class Run {
         this.execute(ins, key);
       }
     } catch (error) {
-      if (error instanceof ScriptError) {
+      if (error instanceof CrossingInterruptedError) {
+        // Cancellation has already installed cleanup, or Stop discarded the Run.
+      } else if (error instanceof ScriptError) {
         this.raiseCore(error, ins, key);
       } else if (error instanceof ThrownError) {
         this.unwind(error.error, ins);
@@ -1032,7 +1196,7 @@ export class Run {
         ctx,
         error instanceof HostScriptError ? error : null,
         failed =>
-          this.records.push({
+          this.recordCrossing({
             kind: 'prop',
             object: v,
             name,
@@ -1045,7 +1209,7 @@ export class Run {
       !Value.isValue(result) ||
       (prop.shape && mismatch(result, prop.shape))
     ) {
-      this.records.push({
+      this.recordCrossing({
         kind: 'prop',
         object: v,
         name,
@@ -1054,7 +1218,7 @@ export class Run {
       });
       throw this.hostError(ctx);
     }
-    this.records.push({
+    this.recordCrossing({
       kind: 'prop',
       object: v,
       name,
@@ -1100,7 +1264,7 @@ export class Run {
         ctx,
         error instanceof HostScriptError ? error : null,
         failed =>
-          this.records.push({
+          this.recordCrossing({
             kind: 'prop',
             object: v,
             name,
@@ -1110,7 +1274,7 @@ export class Run {
           }),
       );
     }
-    this.records.push({ kind: 'prop', object: v, name, op: 'set', value });
+    this.recordCrossing({ kind: 'prop', object: v, name, op: 'set', value });
   }
 
   // A property call's context, for its failures and conversion: as an
@@ -1143,7 +1307,11 @@ export class Run {
   /** Its logical size, as Persistent State counts a suspended Run (chapter 8). */
   size(): number {
     let frames = 0;
-    for (const f of this.frames) {
+    const retained = new Set([
+      ...this.frames,
+      ...(this.cancellation ?? []).map(c => c.frame),
+    ]);
+    for (const f of retained) {
       let contents = f.locals.reduce((t, v) => t + sizeOf(v), 0);
       for (const item of f.stack) {
         contents += itemSize(item);
@@ -1152,8 +1320,10 @@ export class Run {
     }
     // Each pending call, and a Join's early answers.
     let calls = 0;
-    const s = this.suspended;
-    if (s?.k === 'ask' || s?.k === 'send') {
+    const s = this.suspended ?? this.waitedOn;
+    if (this.resumption) {
+      calls = resumptionSize(this.resumption);
+    } else if (s?.k === 'ask' || s?.k === 'send') {
       calls = partSize('pending call', 0, 0);
     } else if (s?.k === 'wait-for') {
       for (const when of s.whens) {
@@ -1213,6 +1383,11 @@ export class Run {
       (_, i) => !this.script.variables[i]!.equals(this.segmentBase[i]!),
     );
     this.script.variables = [...this.segmentBase];
+    if (this.cancelling) {
+      this.frames = [];
+      this.outcome = { kind: 'cancelled', cleanupFailed: { limit } };
+      return;
+    }
     this.frames = [];
     this.outcome = {
       kind: 'limit fault',
@@ -1303,6 +1478,15 @@ export class Run {
    * for the frames popped, then continue there.
    */
   private unwind(error: Value, ins: Instruction) {
+    if (this.cancelling) {
+      this.record(error, ins, false);
+      this.frames = [];
+      this.outcome = {
+        kind: 'cancelled',
+        cleanupFailed: { code: textForm(error.get('code')) },
+      };
+      return;
+    }
     let popped = 0;
     let found: CodeUnit['unwind'][number] | undefined;
     // Each frame unwinds through its own code unit's Unwind Table.
@@ -1512,6 +1696,9 @@ export class Run {
     let reached = false;
     let starting = true;
     const abort = new AbortController();
+    if (op.mode === 'suspending') {
+      this.crossingCall = { abort, id };
+    }
     const call: Call<unknown> = {
       id,
       scriptName: this.script.name,
@@ -1522,11 +1709,19 @@ export class Run {
         if (!starting) {
           throw new HostError('invalid value', 'Charge only while starting');
         }
-        if (this.charging && this.fuel + fuel > this.limits.fuelPerRun) {
+        if (
+          this.charging &&
+          (this.cancelling
+            ? this.cleanupFuel + fuel > this.limits.cleanupBudget
+            : this.fuel + fuel > this.limits.fuelPerRun)
+        ) {
           reached = true;
           throw new LimitReached('the Run can’t cover this charge');
         }
         this.fuel += fuel;
+        if (this.cancelling) {
+          this.cleanupFuel += fuel;
+        }
         charged += fuel;
       },
       answer: (v: Value, late?: { fuel: number }) =>
@@ -1563,22 +1758,28 @@ export class Run {
       starting = false;
       if (reached) {
         // Cut off by its own `Charge`: neither a result nor a failure.
-        this.records.push({ ...record, charged });
-        throw new LimitFaultError('fuelPerRun', this.frame.pc);
+        this.recordCrossing({ ...record, charged });
+        throw new LimitFaultError(
+          this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
+          this.frame.pc,
+        );
       }
       throw this.failure(
         ctx,
         error instanceof HostScriptError ? error : null,
-        failed => this.records.push({ ...record, charged, error: failed }),
+        failed => this.recordCrossing({ ...record, charged, error: failed }),
       );
     }
     starting = false;
     if (reached) {
-      this.records.push({ ...record, charged });
-      throw new LimitFaultError('fuelPerRun', this.frame.pc);
+      this.recordCrossing({ ...record, charged });
+      throw new LimitFaultError(
+        this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
+        this.frame.pc,
+      );
     }
     if (op.mode === 'suspending') {
-      this.records.push({ ...record, charged });
+      this.recordCrossing({ ...record, charged });
       const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
       if (member) {
         this.join!.members.push({ id, call: ctx, abort, ms });
@@ -1588,16 +1789,26 @@ export class Run {
       return nothing;
     }
     if (op.mode === 'fire-and-forget') {
-      this.records.push({ ...record, charged });
+      this.recordCrossing({ ...record, charged });
       return nothing;
     }
     if (!Value.isValue(result) || (op.result && mismatch(result, op.result))) {
-      this.records.push({ ...record, charged, error: map([]) });
+      this.recordCrossing({ ...record, charged, error: map([]) });
       throw this.hostError(ctx);
     }
-    this.records.push({ ...record, charged, result });
+    this.recordCrossing({ ...record, charged, result });
     this.payConversion(ctx, result, 0);
     return result;
+  }
+
+  private recordCrossing(
+    record: Extract<RunRecord, { kind: 'call' | 'prop' }>,
+  ) {
+    this.records.push(record);
+    if (this.host?.crossing?.()) {
+      throw new CrossingInterruptedError();
+    }
+    this.crossingCall = null;
   }
 
   // `host error` for a call, with its `call-failed` record.
@@ -2727,6 +2938,10 @@ export class Run {
       }
       case 'end-cleanup': {
         this.pay(key);
+        if (this.cancelling) {
+          this.checkState();
+          return this.nextCancellationCleanup();
+        }
         const cleanup = this.cleanups.pop()!;
         throw new ThrownError(cleanup.error);
       }
@@ -2754,6 +2969,28 @@ const widthsOf = (v: Value): number[] =>
         .toString(),
     ),
   );
+
+class CrossingInterruptedError extends Error {}
+
+const resumptionSize = (r: Resumption): number => {
+  switch (r.k) {
+    case 'answer':
+    case 'reply':
+      return sizeOf(r.value);
+    case 'event':
+      return sizeOf(r.message) + r.binds.reduce((sum, v) => sum + sizeOf(v), 0);
+    case 'joined':
+      return r.answers.reduce((sum, answer) => sum + resumptionSize(answer), 0);
+    case 'join-failed':
+      return resumptionSize(r.failure);
+    case 'fail':
+      return Value.isValue(r.error?.data) ? sizeOf(r.error.data) : 0;
+    case 'send failed':
+      return r.error ? sizeOf(r.error) : 0;
+    default:
+      return 0;
+  }
+};
 
 // An error a `throw`, `rethrow`, `raise` or `end-cleanup` raises, already a map.
 class ThrownError extends Error {

@@ -1,0 +1,14 @@
+script variable n = 0
+on go
+  try
+    try
+      put 9 into n
+      wait 1 s
+    finally
+      put 1 into n
+      throw "broken cleanup"
+    end try
+  finally
+    put 2 into n
+  end try
+end go

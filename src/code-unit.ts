@@ -33,6 +33,7 @@ export type Body = {
   name: string;
   /** Each parameter's name, or `…` for a pattern. */
   params: string[];
+  policy?: 'queued' | 'dropping' | 'replacing';
   start: number;
 };
 export type UnwindEntry = {

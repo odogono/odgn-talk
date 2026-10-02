@@ -1,0 +1,15 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+[[scripts]]
+name = "b"
+source = "b.talk"
+[[scripts]]
+name = "c"
+source = "a.talk"

@@ -1,6 +1,6 @@
 # undecided-when-dropped: a `, dropping` clause that drops a new Decision
 # leaves it undecided, with outcome `dropped` (ADR 0031). Its figures are
-# estimates, so it isn't blessed.
+# Cost Model 0's, blessed by the TS Core.
 
 kind = "trace"
 

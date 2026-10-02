@@ -1,0 +1,14 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "error"
+source = "cleanup.talk"
+
+[[scripts]]
+name = "limited"
+source = "cleanup.talk"
+limits = { cleanupBudget = 8 }

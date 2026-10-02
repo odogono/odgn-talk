@@ -1,0 +1,32 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "cancel"
+mode = "immediate"
+result = "number"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["cancel"] } }
+
+[[objectKinds]]
+name = "switch"
+[[objectKinds.props]]
+name = "value"
+readOnly = true
+
+[[objects]]
+kind = "switch"
+id = "w"
+props = { value = "1" }
+
+[[scripts]]
+name = "t"
+source = "t.talk"
+objects = { switcher = { kind = "switch", id = "w" } }
