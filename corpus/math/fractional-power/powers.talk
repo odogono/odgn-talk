@@ -1,0 +1,11 @@
+script variable roots
+script variable exact
+script variable preserved
+script variable underflow
+
+on go
+  put [2 ^ 0.5, 10 ^ 33.99, 8 ^ 0.3333333333] into roots
+  put [4.00 ^ 0.5, 0.25 ^ -1.5, 1.44 ^ 1.5, 16 ^ 0.75] into exact
+  put [2.50 ^ 2.0, 0.30 ^ 6, (-2) ^ 3, 0 ^ 0, (2 m) ^ 2] into preserved
+  put [0 ^ 0.5, 1.00 ^ -0.5, 10 ^ -6176.5] into underflow
+end go

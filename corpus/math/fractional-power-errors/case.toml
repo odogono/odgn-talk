@@ -1,0 +1,11 @@
+# Fractional ^ errors: function power for the domain, operator ^ for overflow,
+# and wrong kind for a Quantity raised to a noninteger exponent.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "domains"
+source = "domains.talk"

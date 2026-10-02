@@ -177,7 +177,7 @@ Each operator's result is found in three steps:
 
 - **Division:** `a / b`, `a div b` and `a mod b` raise `division by zero` when `b` is zero.
 - **`div` and `mod`:** `a div b` is the integer part of the exact quotient, rounding toward zero. `a mod b` is the exact value of `a - (a div b) * b`, so it has the sign of `a`: `7 mod 3` is `1`, `-7 mod 3` is `-1` and `7.5 mod 2` is `1.5`.
-- **`^`:** `a ^ n` for an integer `n` is the exact power, found by the steps above, and `a ^ 0` is `1`. A negative `n` gives `1 / (a ^ -n)`, so `0 ^ -1` raises `division by zero`. For any other exponent, `a ^ b` is `power(a, b)` ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **`^`:** `a ^ n` for an integer `n` is the exact power, found by the steps above, and `a ^ 0` is `1`. A negative `n` gives `1 / (a ^ -n)`, so `0 ^ -1` raises `division by zero`. For any other exponent, `a ^ b` has the result and domain of `power(a, b)` ([chapter 7](07-libraries-and-the-standard-library.md)): a negative base raises `out of domain` with `function` `"power"` and the base as `value`. Overflow still names `"^"` as `operator`, and every `^` uses the machine's `power` cost key, not `builtin.power` ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#charging)).
 - **Kinds:** these operators take numbers. [Quantities](#quantity-arithmetic) and [dates](#date-arithmetic) have their own rules, and any other operand raises `wrong kind`, as `"007" + 1` does.
 
 > **Example.**

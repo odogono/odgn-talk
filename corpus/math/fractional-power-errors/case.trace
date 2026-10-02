@@ -1,0 +1,25 @@
+# No result means only the power base rate (8 Fuel), no result allocation.
+# The negative operand in base and reciprocal adds negate (2 Fuel, 16 bytes).
+# Each error pops one frame (4 Fuel), and dispatch costs 4 Fuel.
+> load domains identity=d6fba10770b729214933e96b87c621f0b000d0bf35972d2552408343f726e17e
+> deliver d1 to=domains message=base
+> deliver d2 to=domains message=reciprocal
+> deliver d3 to=domains message=large
+> deliver d4 to=domains message=measure
+> pump clock=2026-09-30T09:00:00Z
+raise domains/r1 code="out of domain" at=domains:5 pos=2:15
+seg domains/r1 start delivery=d1 handler=base clause=1 fuel=20 alloc=16 state=96 end=error
+run domains/r1 outcome=errored delivery=d1 handler=base error={code: "out of domain", function: "power", value: -8, at: {unit: "domains", handler: "base", line: 2, column: 15}} fuel=20 alloc=16
+raise domains/r2 code="division by zero" at=domains:13 pos=6:12
+seg domains/r2 start delivery=d2 handler=reciprocal clause=1 fuel=20 alloc=16 state=583 end=error
+run domains/r2 outcome=errored delivery=d2 handler=reciprocal error={code: "division by zero", at: {unit: "domains", handler: "reciprocal", line: 6, column: 12}} fuel=20 alloc=16
+raise domains/r3 code="overflow" at=domains:20 pos=10:13
+seg domains/r3 start delivery=d3 handler=large clause=1 fuel=18 alloc=0 state=962 end=error
+run domains/r3 outcome=errored delivery=d3 handler=large error={code: "overflow", operator: "^", at: {unit: "domains", handler: "large", line: 10, column: 13}} fuel=18 alloc=0
+raise domains/r4 code="wrong kind" at=domains:27 pos=14:16
+seg domains/r4 start delivery=d4 handler=measure clause=1 fuel=18 alloc=0 state=1391 end=error
+run domains/r4 outcome=errored delivery=d4 handler=measure error={code: "wrong kind", expected: "integer", got: "number", value: 0.5, at: {unit: "domains", handler: "measure", line: 14, column: 16}} fuel=18 alloc=0
+pumped state=idle fuel=76
+
+> vars
+vars domains

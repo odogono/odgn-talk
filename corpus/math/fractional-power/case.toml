@@ -1,0 +1,11 @@
+# Fractional ^ has power's mathematical result and domain, but uses the
+# operator's rate: 8 + 2 * digits(result), and size(result) allocation.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "powers"
+source = "powers.talk"
