@@ -1,7 +1,13 @@
 // Chapter 12: the Session Host, an ordinary Host that turns Entries into
 // Host Inputs on one Session Script, and prints what comes back. It does no
 // I/O of its own: its Environment supplies the Clock and takes the Trace.
-import type { Call } from '../capabilities';
+import {
+  defineCapability,
+  shape,
+  type Call,
+  type Grant,
+  type Operation,
+} from '../capabilities';
 import { checkSource } from '../checker';
 import { HostError, LoadError, type LoadDiagnostic } from '../errors';
 import {
@@ -19,8 +25,10 @@ import { parseEntry, parseSource } from '../parser';
 import type { SemanticElement } from '../semantic';
 import { consoleCapability } from '../standard-capabilities';
 import type { SyntaxNode } from '../syntax';
+import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
 import { viewSource } from '../view';
+import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
 
 export type SessionEnvironment = {
   /** A real Clock reading, in epoch nanoseconds. */
@@ -38,6 +46,23 @@ export type Waiting =
   | { at: bigint; k: 'deadline' };
 
 const NAME = 'session';
+/** How many arguments a mock Operation takes, each an Optional `any`. */
+export const MOCK_ARGUMENTS = 8;
+
+/** A mock Operation `:mock` defined (chapter 12, Session Commands). */
+export type Mock = {
+  capability: string;
+  mode: 'immediate' | 'suspending' | 'fire-and-forget';
+  operation: string;
+};
+const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
+const NAME_TEXT = /^[\p{L}_][\p{L}\p{N}_]*$/u;
+
+// A refused Session Command or Entry (chapter 12, Output).
+class RefusedError extends Error {}
+const refuse = (reason: string): never => {
+  throw new RefusedError(reason);
+};
 
 // One declaration of the session source, with the names it declares.
 type Declaration = {
@@ -78,6 +103,14 @@ export class SessionHost {
   // The Script's code units: an extension is named after their count.
   private units = 1;
   private deadline: bigint | undefined;
+  private readonly mocks: Mock[] = [];
+  // Each Grant `:grant` and `:mock` made, by name, and the Capability it grants.
+  private readonly granted = new Map<string, string>();
+  private readonly stubs = new Stubs();
+  // Mock calls, whose `call` lines print at their `call` records.
+  private mockCalls = new Map<string, { args: Value[]; operation: string }>();
+  // Suspending mock calls waiting for `:answer` or `:fail`.
+  private readonly pending = new Map<string, Call<unknown>>();
 
   constructor(private readonly env: SessionEnvironment) {}
 
@@ -96,10 +129,22 @@ export class SessionHost {
     return this.deadline;
   }
 
+  /** The mock Operations, and every Grant by name, the session started with. */
+  get grants(): { granted: Record<string, string>; mocks: readonly Mock[] } {
+    return { granted: Object.fromEntries(this.granted), mocks: this.mocks };
+  }
+
   /** An Entry or a Session Command. Returns the lines it printed. */
   input(source: string): string[] {
     if (source.startsWith(':')) {
-      return ['! unknown command'];
+      try {
+        return this.command(source);
+      } catch (error) {
+        if (error instanceof RefusedError) {
+          return [`! ${error.message}`];
+        }
+        throw error;
+      }
     }
     this.start();
     const parsed = parseEntry(source, name => this.isHandler(name));
@@ -162,12 +207,168 @@ export class SessionHost {
       },
       { write: { fuel: 0 }, read: { fuel: 0 } },
     );
+    const grants: Record<string, Grant<unknown>> = {
+      console: console.grant('all', undefined),
+    };
+    const capabilities = this.mockCapabilities();
+    for (const [name, capability] of this.granted) {
+      grants[name] = capabilities.get(capability)!.grant('all', undefined);
+    }
     this.group = group;
-    this.script = group.load({
-      name: NAME,
-      source: '',
-      grants: { console: console.grant('all', undefined) },
-    });
+    this.script = group.load({ name: NAME, source: '', grants });
+  }
+
+  // Each mocked Capability: its Operations take up to eight arguments, give
+  // any result and cost nothing, and each call prints a `call` line.
+  private mockCapabilities() {
+    const operations = new Map<string, Record<string, Operation<unknown>>>();
+    for (const { capability, operation, mode } of this.mocks) {
+      const key = `${capability}.${operation}`;
+      const base = {
+        args: Array.from({ length: MOCK_ARGUMENTS }, () =>
+          shape.optional(shape.any),
+        ),
+        cost: { fuel: 0 },
+      };
+      const op: Operation<unknown> =
+        mode === 'immediate'
+          ? {
+              ...base,
+              mode,
+              result: shape.any,
+              do: (call, ...args) => {
+                this.mockCalls.set(call.id, { operation: key, args });
+                return this.stubs.take(key, call, true);
+              },
+            }
+          : mode === 'suspending'
+            ? {
+                ...base,
+                mode,
+                result: shape.any,
+                start: (call, ...args) => {
+                  this.mockCalls.set(call.id, { operation: key, args });
+                  this.pending.set(call.id, call);
+                },
+              }
+            : {
+                ...base,
+                mode,
+                fire: (call, ...args) => {
+                  this.mockCalls.set(call.id, { operation: key, args });
+                },
+              };
+      operations.set(capability, {
+        ...operations.get(capability),
+        [operation]: op,
+      });
+    }
+    return new Map(
+      [...operations].map(([name, ops]) => [
+        name,
+        defineCapability<unknown>(name, ops),
+      ]),
+    );
+  }
+
+  // ------------------------------------------------------------- commands
+
+  private command(source: string): string[] {
+    const [, name = '', rest = ''] = /^:(\S*)\s*(.*)$/su.exec(source) ?? [];
+    switch (name) {
+      case 'grant':
+        return this.grant(words(rest, 2));
+      case 'mock':
+        return this.mock(words(rest, 2));
+      case 'stub':
+        this.start();
+        return this.stub(rest);
+      case 'answer':
+      case 'fail':
+        this.start();
+        return this.settle(name, rest);
+      default:
+        return refuse('unknown command');
+    }
+  }
+
+  private beforeStart() {
+    if (this.group) {
+      refuse('session started');
+    }
+  }
+
+  private grant([name, capability]: string[]): string[] {
+    this.beforeStart();
+    if (
+      !NAME_TEXT.test(name!) ||
+      name === 'console' ||
+      !this.mocks.some(m => m.capability === capability)
+    ) {
+      refuse('bad arguments');
+    }
+    this.granted.set(name!, capability!);
+    return [];
+  }
+
+  private mock([target, mode]: string[]): string[] {
+    this.beforeStart();
+    const [capability, operation, more] = target!.split('.');
+    if (
+      more !== undefined ||
+      !NAME_TEXT.test(capability ?? '') ||
+      !NAME_TEXT.test(operation ?? '') ||
+      capability === 'console' ||
+      !MODES.has(mode!)
+    ) {
+      refuse('bad arguments');
+    }
+    const mock = { capability, operation, mode } as Mock;
+    const i = this.mocks.findIndex(
+      m => m.capability === capability && m.operation === operation,
+    );
+    if (i < 0) {
+      this.mocks.push(mock);
+    } else {
+      this.mocks[i] = mock;
+    }
+    this.granted.set(capability!, capability!);
+    return [];
+  }
+
+  private stub(rest: string): string[] {
+    const [target = '', after = ''] = split(rest);
+    const mock = this.mocks.find(
+      m => `${m.capability}.${m.operation}` === target,
+    );
+    if (mock?.mode !== 'immediate') {
+      refuse('bad arguments');
+    }
+    const [word, error] = split(after);
+    const stub: Stub =
+      word === 'fail'
+        ? { charge: 0, error: errorMap(error!) }
+        : { charge: 0, value: display(after) };
+    this.stubs.add(target, stub);
+    this.env.trace?.(stubLine(target, stub));
+    return [];
+  }
+
+  private settle(how: 'answer' | 'fail', rest: string): string[] {
+    const [id = '', value = ''] = split(rest);
+    const call = this.pending.get(id);
+    const settled =
+      how === 'answer' ? display(value) : hostFailure(errorMap(value));
+    if (!call || call.signal.aborted) {
+      return refuse('no such call');
+    }
+    this.pending.delete(id);
+    if (settled instanceof Error) {
+      call.fail(settled);
+    } else {
+      call.answer(settled);
+    }
+    return this.pump();
   }
 
   // ------------------------------------------------------------- names
@@ -445,6 +646,13 @@ export class SessionHost {
       if (e.k === 'seg') {
         this.lastSeg.set(e.run, e);
       } else if (e.k === 'call') {
+        const mock = this.mockCalls.get(e.call);
+        if (mock) {
+          this.mockCalls.delete(e.call);
+          out.push(
+            `${this.prefix(e.run)}call ${e.call} ${mock.operation} ${listValues(mock.args).toString()}`,
+          );
+        }
         const written = this.writes.get(e.call);
         if (written) {
           this.writes.delete(e.call);
@@ -587,4 +795,34 @@ const where = (
   }
   const col = line === 1 ? Math.max(1, at.col - placement.col) : at.col;
   return `${line}:${col}`;
+};
+
+// A command's first words, split on spaces, and refused unless exactly `n`.
+const words = (rest: string, n: number): string[] => {
+  const w = rest.trim().split(/\s+/u).filter(Boolean);
+  return w.length === n ? w : refuse('bad arguments');
+};
+
+// A command's first word, and the text after it.
+const split = (rest: string): [string, string] => {
+  const m = /^(\S+)\s*(.*)$/su.exec(rest.trim());
+  return m ? [m[1]!, m[2]!] : ['', ''];
+};
+
+// A value written in a Session Command, in the display form.
+const display = (source: string): Value => {
+  try {
+    return readDisplay(source);
+  } catch {
+    return refuse('bad arguments');
+  }
+};
+
+// An error map in a Session Command, which needs a text `code`.
+const errorMap = (source: string): Value => {
+  const error = display(source);
+  if (error.kind !== 'map' || error.get('code').kind !== 'text') {
+    refuse('bad arguments');
+  }
+  return error;
 };

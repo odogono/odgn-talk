@@ -1,0 +1,46 @@
+> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
+> stub db.get value={name: "Ann"}
+> stub db.get error={code: "missing", key: "k"}
+> extend session source="function lookup key" & newline & "  ask db to get key" & newline & "  return it" & newline & "end lookup" identity=9e8001526055191dee7ddbadc28a796ddd09fc1bc7c51e279fb1ed8b63c39865
+> extend session source="on entry1" & newline & "return lookup(" & quote & "a" & quote & ")" & newline & "end entry1" & newline identity=5a090389d021e83a3bf44e790546b4755d5146d9732c1bbdfdc6f01e9fbad93d
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=db.get args=["a"] result={name: "Ann"}
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=32 alloc=63 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 value={name: "Ann"} fuel=32 alloc=63
+pumped state=idle fuel=32
+> extend session source="on entry2" & newline & "ask store to get " & quote & "b" & quote & newline & "end entry2" & newline identity=a65fcb1f05043bed66e5a3c1f50b7bf8dc6ffa1d1e5025dc8b944d8bbd85267f
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:01Z
+call session/r2.c1 op=store.get args=["b"] error={code: "missing", key: "k"}
+raise session/r2 code="missing" at=session+3:3 pos=2:1
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=21 alloc=60 state=0 end=error
+run session/r2 outcome=errored delivery=d2 handler=entry2 error={code: "missing", key: "k", capability: "store", operation: "get", at: {unit: "session+3", handler: "entry2", line: 2, column: 1}} fuel=21 alloc=60
+pumped state=idle fuel=21
+> extend session source="on entry3" & newline & "return lookup(" & quote & "c" & quote & ")" & newline & "end entry3" & newline identity=27ccfc508bd687c7a51708ec3559a5fa1ef660815d9439f96a5c259120845021
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:02Z
+call session/r3.c1 op=db.get args=["c"] error={}
+call-failed session/r3.c1 op=db.get
+raise session/r3 code="host error" at=session+1:3 pos=2:3
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=32 alloc=0 state=0 end=error
+run session/r3 outcome=errored delivery=d3 handler=entry3 error={code: "host error", capability: "db", operation: "get", at: {unit: "session+1", handler: "lookup", line: 2, column: 3}} fuel=32 alloc=0
+pumped state=idle fuel=32
+> extend session source="on entry4" & newline & "tell db to put " & quote & "k" & quote & ", 1" & newline & "end entry4" & newline identity=0a2796579487cb9761fad8ae3e5334e77cf3fb2191747060a5bc11607f282119
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:03Z
+call session/r4.c1 op=db.put args=["k", 1]
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=19 alloc=0 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=19 alloc=0
+pumped state=idle fuel=19
+> extend session source="on fetch url" & newline & "  ask http to fetch url and wait" & newline & "  say " & quote & "fetched " & quote & " & it" & newline & "end fetch" identity=2bfd29f2376c41f61e931630750b8da8888441aaad76a6864aacc38ec23f51cd
+> pump clock=2026-09-30T10:00:04Z
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:05Z
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:06Z
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:07Z
+pumped state=idle fuel=0
+> vars
+vars session

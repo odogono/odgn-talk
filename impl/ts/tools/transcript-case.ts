@@ -4,9 +4,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  MOCK_ARGUMENTS,
   parseTranscript,
   replayTranscript,
   writeTranscript,
+  type SessionHost,
 } from '../src/session';
 import {
   blessed,
@@ -17,14 +19,31 @@ import {
 } from './trace-case';
 
 // The Session Host's Group, as a Trace Case sets it up: the Session Script
-// loaded from empty source, granted `console`, whose Operations cost nothing.
-const sessionSetup: Setup = {
+// loaded from empty source, granted `console`, whose Operations cost nothing,
+// and each mock Operation, under every name it was granted.
+const sessionSetup = ({ granted, mocks }: SessionHost['grants']): Setup => ({
+  operations: mocks.map(m => ({
+    capability: m.capability,
+    name: m.operation,
+    mode: m.mode,
+    args: Array.from({ length: MOCK_ARGUMENTS }, () => ({ optional: 'any' })),
+    ...(m.mode === 'fire-and-forget' ? {} : { result: 'any' }),
+    cost: { fuel: 0 },
+  })),
   scripts: [
     {
       name: 'session',
       source: '(empty)',
       text: '',
-      grants: { console: { ops: 'all' } },
+      grants: {
+        console: { ops: 'all' },
+        ...Object.fromEntries(
+          Object.entries(granted).map(([name, capability]) => [
+            name,
+            { capability, ops: 'all' as const },
+          ]),
+        ),
+      },
     },
   ],
   standard: [
@@ -33,7 +52,7 @@ const sessionSetup: Setup = {
       costs: { write: { fuel: 0 }, read: { fuel: 0 } },
     },
   ],
-};
+});
 
 export type TranscriptDivergence = TraceDivergence & {
   file: 'session.transcript' | 'case.trace';
@@ -112,7 +131,7 @@ export const runTranscriptCase = (
     }
   }
   // The Trace replays without the Session Host that took it.
-  const replayed = runTraceCase(dir, sessionSetup);
+  const replayed = runTraceCase(dir, sessionSetup(host.grants));
   if (replayed.divergence) {
     return {
       lines: replayed.lines,
