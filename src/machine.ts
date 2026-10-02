@@ -533,7 +533,7 @@ export type Suspension =
   | WaitFor;
 /**
  * A `wait for`, one-line or block: its `when` branches with their `from`
- * Scripts and captures, its `after` branches' durations and its timeout,
+ * Scripts or objects and captures, its `after` branches' durations and its timeout,
  * each branch numbered from 1 in source order.
  */
 export type WaitFor = {
@@ -547,7 +547,7 @@ export type WaitFor = {
     body: number | null;
     branch: number;
     captures: Value[];
-    from: string | null;
+    from: string | Value | null;
     message: string;
   }[];
 };
@@ -1457,6 +1457,7 @@ export class Run {
     message: string,
     args: Value[],
     from: string | null,
+    target: Value = nothing,
   ): Extract<Resumption, { k: 'event' }> | null {
     const s = this.suspended;
     if (s?.k !== 'wait-for') {
@@ -1465,7 +1466,10 @@ export class Run {
     for (const when of s.whens) {
       if (
         when.message !== message ||
-        (when.from !== null && when.from !== from)
+        (when.from !== null &&
+          (typeof when.from === 'string'
+            ? when.from !== from
+            : !when.from.equals(target)))
       ) {
         continue;
       }
@@ -1673,6 +1677,9 @@ export class Run {
       calls = partSize('pending call', 0, 0);
     } else if (s?.k === 'wait-for') {
       for (const when of s.whens) {
+        if (Value.isValue(when.from)) {
+          calls += sizeOf(when.from);
+        }
         calls += when.captures.reduce((t, v) => t + sizeOf(v), 0);
       }
     } else if (s?.k === 'join') {
@@ -2847,13 +2854,21 @@ export class Run {
             sus.afters.push({ branch: n + 1, ns: waitNs(items[i++] as Value) });
             return;
           }
-          let from: string | null = null;
+          let from: string | Value | null = null;
           if (br.from) {
             const x = items[i++]!;
-            if (isValue(x) || x.k !== 'receiver') {
-              throw new NotImplementedError('`from` a Host Object');
+            if (isValue(x)) {
+              if (x.kind !== 'object') {
+                throw wrongKind('object', x);
+              }
+              from = x;
+            } else if (x.k === 'receiver') {
+              from = x.name;
+            } else {
+              throw new Error(
+                'A from expression must produce a receiver or Value',
+              );
             }
-            from = x.name;
           }
           sus.whens.push({
             branch: n + 1,

@@ -1,0 +1,4 @@
+script variable handled = []
+on ping n
+  put n after handled
+end ping

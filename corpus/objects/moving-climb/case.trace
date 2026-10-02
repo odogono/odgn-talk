@@ -1,0 +1,20 @@
+# The child's pass spends 24 Fuel. At the cap, its climb is still in the old mailbox.
+# Moving the child then resumes from its current parent, without a second child Run.
+> load child identity=2c34f27b50dec4a4f1d023c50894befa65ad3c93a172497f642c569cc163e418
+> load old identity=b2734f3d18572a104b784ed73c1f814776a9dfd3243f8d597780f876b913c1b9
+> load next identity=25fe93634bc093c6dfda050212b11f006cb34769bfdba03a7443835737a264a7
+> set-parent object=<object room "child"> parent=<object room "old">
+> request d1 to=child message=ping
+> pump clock=2026-09-30T09:00:00Z fuel-cap=24
+seg child/r1 start delivery=d1 handler=ping clause=1 fuel=24 alloc=0 state=0 end=pass
+run child/r1 outcome=completed delivery=d1 handler=ping fuel=24 alloc=0
+pumped state=sliced fuel=24
+> set-parent object=<object room "child"> parent=<object room "new">
+> pump clock=2026-09-30T09:00:00Z
+seg next/r1 start delivery=d1 handler=ping clause=1 fuel=19 alloc=29 state=45 end=return
+run next/r1 outcome=completed delivery=d1 handler=ping fuel=19 alloc=29
+pumped state=idle fuel=19
+> vars
+vars child
+vars old seen=[]
+vars next seen=["child"]

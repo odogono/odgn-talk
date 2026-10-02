@@ -1,0 +1,9 @@
+script variable seen = []
+on ping n
+  put n after seen
+end ping
+on hold
+  repeat 2 times
+    put 1 into x
+  end repeat
+end hold

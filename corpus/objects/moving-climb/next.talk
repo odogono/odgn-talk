@@ -1,0 +1,4 @@
+script variable seen = []
+on ping
+  put the id of the target after seen
+end ping

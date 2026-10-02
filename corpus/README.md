@@ -14,7 +14,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 | [`errors/`](errors/) | whole error maps, with their keys in order ([chapter 6](../spec/06-errors-and-limits.md#errors)) |
 | [`dates/`](dates/) | Civil Date and Instant arithmetic, offsets, the date Built-ins and their errors, and the Value Encoding of dates ([chapter 3](../spec/03-values.md#dates-and-times)) |
 | [`libraries/`](libraries/) | calls into Libraries, their defaults, Constants, Handlers and Function Values, errors and Limit Faults in Library code, adding Libraries to a Group, and direct/transitive `needs` with caller Grants and suspension ([chapter 7](../spec/07-libraries-and-the-standard-library.md#libraries)) |
-| [`objects/`](objects/) | Host Objects: Deliveries routed by parents, `pass` and climbing, `the target`, sends to objects and up the Message Path, and properties ([chapter 5](../spec/05-handlers-messages-and-scheduling.md#the-message-path)) |
+| [`objects/`](objects/) | Host Objects: Deliveries routed by parents, `pass` and climbing, `the target`, sends to objects and up the Message Path, moving mailbox messages, object event filters and properties ([chapter 5](../spec/05-handlers-messages-and-scheduling.md#the-message-path)) |
 | [`suspension/`](suspension/) | `wait`, `wait for` and its block form, Joins with their answers, failures and abandoned members, suspending Operations with their answers, failures and `maxPending`, `send … and wait` with its reply, `send failed` and `MaxWait`, waits inside called Handlers and Lambdas, and Persistent State at a suspension ([chapter 5](../spec/05-handlers-messages-and-scheduling.md#suspension-points)) |
 | [`capabilities/`](capabilities/) | immediate and fire-and-forget Capability calls through Grants, Stubs and `Charge`, argument Shapes and trailing Optional arguments, Host failures and `host error`, the load checks of `ask`, `tell` and `say`, Grant trimming with Library needs, revocation during a pending call, all five Standard Capabilities, and faults at a call ([chapter 9](../spec/09-embedding.md#capabilities)) |
 | [`stdlib/`](stdlib/) | calls into the stdlib Libraries with no `add-library` line, and errors raised in stdlib code naming the Script's call ([chapter 7](../spec/07-libraries-and-the-standard-library.md#the-standard-library), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)) |
@@ -28,7 +28,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 
 ## Seed blessing
 
-All current Trace Cases are blessed by the TS Core, the only available Core. The last five seeds now have explicit Cost Model derivations in their headers: `fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`. Their first blessing awaits human review.
+All 140 current corpus cases execute; all Trace Cases are blessed by the TS Core, the only available Core. The last five seeds now have explicit Cost Model derivations in their headers: `fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`. Their first blessing awaits human review.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -42,6 +42,8 @@ The seed cases were written before any Core existed. Until a case is blessed, it
 - **Instruction indices** in `at=` come from `bun tools/machine/check.ts --dis <file>`, which isn't normative. Blessing checks them against a Core.
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
+
+The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation.
 
 The four `functions/` cases cover Host and foreign calls, cancellation, defaults and previously exported callbacks returned through Capability Stubs and answers.
 

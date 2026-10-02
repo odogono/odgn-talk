@@ -1,5 +1,5 @@
 # message-path: a Delivery to a Host Object goes to its Owning Script, or to
-# its nearest ancestor's, by the parents the Core holds when it is drained.
+# its nearest ancestor's, by the parents the Core holds, rechecked at dispatch.
 # `pass` sends the message on up from the owner's parent, and `the target`
 # stays the object it was addressed to. A message past the last Owning
 # Script is `unhandled`, with its `target` (spec chapter 5, The Message

@@ -250,6 +250,8 @@ type Delivery = {
   id: string | null;
   limits: LimitOverride;
   message: string;
+  /** The current path starts here; a climb excludes the last owner that handled it. */
+  path?: { after: boolean; from: ObjectState };
   /** For a `send … and wait`, the sender's call id, which the Run's end settles. */
   reply: string | null;
   request: { reject: (e: Error) => void; resolve: (v: Value) => void } | null;
@@ -2029,7 +2031,10 @@ export class Group {
           id: null,
           from: reply ?? run.id,
           at: r.at,
-          target: typeof to === 'string' ? null : to,
+          target: typeof to === 'string' ? r.at : to,
+          ...(typeof to === 'string'
+            ? {}
+            : { path: { after: false, from: to } }),
           message,
           args,
           limits: {},
@@ -2049,6 +2054,7 @@ export class Group {
           from: reply ?? run.id,
           at: r.at,
           target: s.owner,
+          path: { after: true, from: s.owner! },
           message,
           args,
           limits: {},
@@ -2199,6 +2205,7 @@ export class Group {
         delivery.message,
         delivery.args,
         from,
+        (delivery.target ?? s.owner)?.handle.value ?? nothing,
       );
       if (fired) {
         this.endWaiter(s, waiter);
@@ -2335,7 +2342,8 @@ export class Group {
       id: `d${++this.deliveries}`,
       from: null,
       at: named ? state!.owner : null,
-      target: named ? null : to,
+      target: named ? state!.owner : to,
+      ...(named ? {} : { path: { after: false, from: to } }),
       reply: null,
       message: m.name,
       args: m.args ?? [],
@@ -2675,7 +2683,7 @@ export class Group {
       [],
       [
         ['object', traceValue(child.handle.value)],
-        ['parent', up ? traceValue(up.handle.value) : null],
+        ['parent', up ? traceValue(up.handle.value) : 'nothing'],
       ],
       true,
     );
@@ -2995,6 +3003,31 @@ export class Group {
     return { state, fuelUsed: fuel, reports };
   }
 
+  // An admitted message follows its live path before any dispatch or observation.
+  // Moving is no new admission: it joins the destination tail even past its depth.
+  private moveDelivery(
+    s: ScriptState,
+    delivery: Delivery,
+    reports: Report[],
+  ): boolean {
+    const path = delivery.path;
+    if (!path) {
+      return false;
+    }
+    const next = this.route(path.after ? path.from.parent : path.from);
+    if (next?.s === s) {
+      delivery.at = next.at;
+      return false;
+    }
+    s.queue.shift();
+    if (next) {
+      this.acceptDelivery(next.s, { ...delivery, at: next.at });
+    } else {
+      this.unhandled(delivery, reports);
+    }
+    return true;
+  }
+
   // A Script's turn: its queue's head runs until it ends or is preempted.
   private turn(
     s: ScriptState,
@@ -3010,6 +3043,9 @@ export class Group {
     let how: 'start' | 'continue' | 'resume' = 'continue';
     if (!('run' in head)) {
       const delivery = head;
+      if (this.moveDelivery(s, delivery, reports)) {
+        return;
+      }
       if (!delivery.fn) {
         this.observe(s, delivery);
       }
@@ -3017,12 +3053,18 @@ export class Group {
         s.queue.shift();
         return;
       }
+      const limits = Object.fromEntries(
+        Object.entries(delivery.limits).map(([name, value]) => [
+          name,
+          Math.min(value!, s.limits[name as LimitName]),
+        ]),
+      );
       const run = delivery.fn
         ? Run.fromFunction(s.loaded, delivery.fn, delivery.args, {
             ...s.limits,
-            ...delivery.limits,
+            ...limits,
           })
-        : dispatch(s.loaded, delivery.message, delivery.args, delivery.limits);
+        : dispatch(s.loaded, delivery.message, delivery.args, limits);
       // At this Run's end, the rest of the queue is what the Script keeps.
       run.persistentState = () => this.persistentState(s, 1);
       head = {
@@ -3548,7 +3590,12 @@ export class Group {
         this.unhandled(delivery, reports);
         return;
       }
-      next.s.queue.push({ ...delivery, at: next.at });
+      next.s.queue.push({
+        ...delivery,
+        at: next.at,
+        target: delivery.target ?? s.owner,
+        path: { after: true, from: delivery.at! },
+      });
       return;
     }
     this.answer(delivery, outcome);

@@ -1,0 +1,15 @@
+script variable handled = []
+script variable observed = []
+on watch
+  wait for
+    when ping n from decoy then
+      put -1 after observed
+    when ping n from watched where n > 0 then
+      put n after observed
+    after 1 s then
+      put 0 after observed
+  end wait
+end watch
+on ping n
+  put n after handled
+end ping
