@@ -1,0 +1,9 @@
+on watch
+  wait for
+    when ping n where n > 0 then
+      return n
+  end wait
+end watch
+
+on ping n
+end ping

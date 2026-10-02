@@ -1,0 +1,11 @@
+# Observation Fuel spends the receiving Script's slice, even on failed
+# Guards. Overrun debt survives idle Pumps and save/restore (chapter 5).
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

@@ -1,0 +1,15 @@
+# A Delivery observes all its waiting Runs before cap preemption; another
+# Script's queued work is left for the next Pump (chapter 5).
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+
+[[scripts]]
+name = "other"
+source = "other.talk"

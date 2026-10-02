@@ -1,0 +1,11 @@
+# Event tests are uncapped against the waiting Run, and fault only at its
+# next resumed instruction, even if its limit was exceeded while waiting.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
