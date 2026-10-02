@@ -212,6 +212,8 @@ The Group follows `talk.ts` for the subset implemented so far:
 
 Instants are epoch nanoseconds, written in the display form. Code identities use a bundled synchronous SHA-256, so the Group stays browser-safe.
 
+The Host-side `decodeJson` and `encodeJson` follow chapter 7's plain JSON mapping, with a shared test table against the `json` Library. Numbers are read from their digits, keeping scale and applying JSON exponents exactly. Invalid JSON throws `ScriptError` with `can't decode` and `{format, offset}`; unsupported value kinds throw `not encodable` with `{kind, path}`. The exported `coreVersions` (`Versions`) reads the generated language, Cost Model and Unicode pins, and the save-format constant shared by save and restore; `core` is the informational TS implementation version.
+
 `corpus:run` replays a Trace Case's Host Input lines through the Group and compares the Trace it writes, ignoring comments and blank lines. It also compares a replay with save/restore between eligible Pumps, adopting pending Calls; boundaries that require old Host handles are skipped as chapter 11 specifies. A Host Input line may leave out its `filled` keys and the ids the Core assigns. A case that needs a Host Input or a feature this Core doesn't implement yet is reported as deferred. The default selection runs only blessed Trace Cases, and an unblessed seed case still says `# Unblessed:` in its header. Name an unblessed case to replay it and see its first divergence. All current Trace Cases are blessed by the TS Core and run in CI, including every `limits/` and `text-patterns/` seed. `--bless` writes a Trace Case's Trace from this Core, keeping each comment and blank line before the Host Input line it preceded. The final five seed corrections are derived in their headers: queued-message state, uncharged Run-ending Persistent State failure, statement-based Container positions, compiled-pattern sizes and allocation-free `replace-next`. Their first blessing awaits human review.
 
 ```sh
@@ -264,7 +266,6 @@ An audit of the public package against [`talk.ts`](../spec/embedding/talk.ts), c
 
 - **`onReady`** ([#197](https://github.com/odogono/odgn-talk/issues/197)) is never called.
 - **`shape.object(kind)`** ([#198](https://github.com/odogono/odgn-talk/issues/198)) is missing.
-- **Host-side `decodeJson`, `encodeJson` and `coreVersions`** ([#199](https://github.com/odogono/odgn-talk/issues/199)) are missing.
 - **`createCore()`/`Core` with its compile cache, and `exportManifest`** ([#200](https://github.com/odogono/odgn-talk/issues/200)) are missing; the package exposes free functions instead.
 
 A `NotImplementedError` fallback by itself does not establish missing language behavior: unsupported constant, Library and kind branches can also guard unreachable or invalid inputs. Session Hosts, REPLs and the Go Core are later Appendix B work.

@@ -27,6 +27,15 @@
     for (let i = 0; i < 3000; i++) deep = i % 2 ? talk.list(deep) : talk.map([["$deep", deep]]);
     assert(talk.readDisplay(deep.toString()).equals(deep), "Deep display round trip");
     assert(talk.decodeValue(talk.encodeValue(deep), () => undefined).equals(deep), "Deep encoding round trip");
+    assert(talk.encodeJson(talk.decodeJson('{"2":2.50,"1":1e5,"$dec":"e\\u0301"}')) === '{"2":2.50,"1":100000,"$dec":"é"}', "Plain JSON digits, NFC and order");
+    assert(talk.decodeJson(talk.encodeJson(deep)).equals(deep), "Deep plain JSON round trip");
+    refused = false;
+    try { talk.decodeJson('{"é":1,"e\\u0301":2}'); } catch (error) { refused = error instanceof talk.ScriptError && error.code === "can't decode" && error.data.get("offset").toString() === "8"; }
+    assert(refused, "Plain JSON duplicate key refusal");
+    refused = false;
+    try { talk.encodeJson(talk.list(talk.bytes(new Uint8Array()))); } catch (error) { refused = error instanceof talk.ScriptError && error.code === "not encodable" && error.data.get("path").toString() === "[1]"; }
+    assert(refused, "Plain JSON unsupported kind path");
+    assert(talk.coreVersions.language === "1.0-rc" && talk.coreVersions.costModel === "0" && talk.coreVersions.unicode === "18.0.0" && talk.coreVersions.saveFormat === "2", "Core versions");
     const source = '\ufeff-- 😀 comment\r\non t\r\n put ["e\u0301", -- list\r\n 2] into xs\r\nend t -- eof';
     const parsed = talk.parseSource(source);
     assert(parsed.error === null && talk.syntaxText(parsed.tree) === source, "Lossless Core parser");
@@ -75,7 +84,7 @@
     group.pump(talk.parseInstant("2026-09-30T09:00:00Z"));
     group.inspect();
     assert(lines[0] === "> load a identity=" + talk.codeIdentity("script", "a", "script variable n = 0\non bump\n  add 1 to n\nend bump") && lines.at(-1) === "vars a n=1" && lines.includes("pumped state=idle fuel=17"), "Group and Trace");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine and the Group in a browser";
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, plain JSON, Core versions, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine and the Group in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
