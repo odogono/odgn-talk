@@ -87,6 +87,11 @@ import { compareText } from './text';
 
 export type GroupOptions = {
   name: string;
+  /**
+   * Called once per queued Host Input. Don't pump inside it.
+   * Inputs queued during a Pump notify in a microtask after it returns.
+   */
+  onReady?(): void;
   /** Receives each Trace line, without its LF. */
   trace?: (line: string) => void;
 };
@@ -514,6 +519,7 @@ export class Script {
 export class Group {
   readonly name: string;
   private readonly trace: (line: string) => void;
+  private readonly onReady: (() => void) | undefined;
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
   private readonly pending = new Map<string, Pending>();
@@ -698,6 +704,7 @@ export class Group {
     let emitting = false;
     const group = new Group({
       name: o.name,
+      onReady: o.onReady,
       trace: line => {
         if (emitting) {
           o.trace?.(line);
@@ -1086,7 +1093,7 @@ export class Group {
       line,
     );
     this.unsettled.delete(id);
-    this.inputs.push({ line, action: { k: 'settle', id, settlement } });
+    this.queueInput({ line, action: { k: 'settle', id, settlement } });
     return 'adopt' in settlement
       ? pending.running.run.restoredCall(
           id,
@@ -1187,7 +1194,7 @@ export class Group {
 
   /** Replay hook for the Host Input produced by aborting a Request or Decision. */
   cancelDelivery(id: string): void {
-    this.inputs.push({
+    this.queueInput({
       line: recordLine('cancel-delivery', [id], [], true),
       action: { k: 'cancel-delivery', id },
     });
@@ -1240,7 +1247,7 @@ export class Group {
   }
 
   queueCancelRun(name: string, id: string): void {
-    this.inputs.push({
+    this.queueInput({
       urgent: true,
       line: recordLine('cancel-run', [id], [], true),
       action: { k: 'cancel-run', name, id },
@@ -1249,7 +1256,7 @@ export class Group {
 
   queueStop(name: string, reason: string): void {
     reason = text(reason).asText()!;
-    this.inputs.push({
+    this.queueInput({
       urgent: true,
       line: recordLine(
         'stop',
@@ -1262,7 +1269,7 @@ export class Group {
   }
 
   queueRevoke(name: string, grant: string): void {
-    this.inputs.push({
+    this.queueInput({
       line: recordLine('revoke', [name], [['grant', grant]], true),
       action: { k: 'revoke', name, grant },
     });
@@ -1504,6 +1511,7 @@ export class Group {
 
   constructor(options: GroupOptions) {
     this.name = options.name;
+    this.onReady = options.onReady;
     this.trace = line => {
       if (this.drainingTrace) {
         this.drainingTrace.push(line);
@@ -1515,6 +1523,20 @@ export class Group {
 
   script(name: string): Script | undefined {
     return this.scripts.find(s => s.name === name)?.handle;
+  }
+
+  // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
+  private queueInput(input: QueuedInput): void {
+    this.inputs.push(input);
+    if (this.onReady) {
+      if (this.pumping) {
+        // Operation and property callbacks may queue inputs. Let the Pump return
+        // before calling Host code, so a readiness callback cannot reenter it.
+        queueMicrotask(() => this.onReady?.());
+      } else {
+        this.onReady();
+      }
+    }
   }
 
   private worker() {
@@ -2192,7 +2214,7 @@ export class Group {
           true,
         );
         this.checkFunctionGroups([value], line);
-        this.inputs.push({ line, action: { k: 'answer', id, value, fuel } });
+        this.queueInput({ line, action: { k: 'answer', id, value, fuel } });
       },
       fail: (id, error, detail) => {
         const value = failMap(error);
@@ -2203,7 +2225,7 @@ export class Group {
           true,
         );
         this.checkFunctionGroups([value], line);
-        this.inputs.push({ line, action: { k: 'fail', id, error, detail } });
+        this.queueInput({ line, action: { k: 'fail', id, error, detail } });
       },
     };
   }
@@ -2475,7 +2497,7 @@ export class Group {
     if (state) {
       state.incoming++;
     }
-    this.inputs.push({
+    this.queueInput({
       line: this.deliveryLine(record, delivery.id, toText, m, fn),
       action: { k: 'delivery', to, state: state ?? null, delivery },
     });
@@ -2570,7 +2592,7 @@ export class Group {
       id,
       decision,
     };
-    this.inputs.push({ action, line: () => this.broadcastLine(action) });
+    this.queueInput({ action, line: () => this.broadcastLine(action) });
   }
 
   private broadcastLine(
@@ -2819,7 +2841,7 @@ export class Group {
         );
       }
     }
-    this.inputs.push({
+    this.queueInput({
       line,
       action: { k: 'set-parent', child, up },
     });
@@ -2828,7 +2850,7 @@ export class Group {
   /** Queued. Disposes an object: it stays a value, and sends to it raise `object gone`. */
   dispose(o: HostObject): void {
     const state = this.held(o);
-    this.inputs.push({
+    this.queueInput({
       line: recordLine(
         'dispose',
         [],
