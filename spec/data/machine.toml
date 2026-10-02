@@ -1018,7 +1018,7 @@ pops = "count + 1"
 pushes = 1
 suspends = true
 cost = "call"
-errors = ["wrong kind", "function gone", "wrong arity", "mailbox full", "send failed", "timeout"]
+errors = ["wrong kind", "function gone", "wrong arity", "mailbox full", "send failed", "timeout", "scope open"]
 does = "`f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits"
 
 [[instruction]]
@@ -1309,7 +1309,7 @@ pops = "count"
 pushes = 1
 suspends = false
 cost = "capability"
-errors = ["wrong kind", "capability revoked", "host error"]
+errors = ["wrong kind", "capability revoked", "host error", "capability disabled", "scope already open", "scope not open", "scope in join", "segment participant conflict"]
 does = "Calls an immediate Operation, and pushes its result"
 
 [[instruction]]
@@ -1320,7 +1320,7 @@ pops = "count"
 pushes = 1
 suspends = true
 cost = "capability"
-errors = ["wrong kind", "capability revoked", "host error", "timeout"]
+errors = ["wrong kind", "capability revoked", "host error", "timeout", "capability disabled", "scope open"]
 does = "Calls a suspending Operation, and suspends until it answers"
 
 [[instruction]]
@@ -1331,7 +1331,7 @@ pops = "count"
 pushes = 0
 suspends = false
 cost = "capability"
-errors = ["wrong kind", "capability revoked", "host error"]
+errors = ["wrong kind", "capability revoked", "host error", "capability disabled"]
 does = "Calls a fire-and-forget Operation"
 
 [[instruction]]
@@ -1353,7 +1353,7 @@ pops = "count + 1"
 pushes = 1
 suspends = true
 cost = "send"
-errors = ["mailbox full", "object gone", "wrong kind", "send failed", "timeout"]
+errors = ["mailbox full", "object gone", "wrong kind", "send failed", "timeout", "scope open"]
 does = "Sends as `send` does, then suspends until the reply"
 
 [[instruction]]
@@ -1375,7 +1375,7 @@ pops = "count"
 pushes = 1
 suspends = true
 cost = "send"
-errors = ["mailbox full", "send failed", "timeout"]
+errors = ["mailbox full", "send failed", "timeout", "scope open"]
 does = "`name args and wait` with no Handler: sends up the Message Path and waits"
 
 [[instruction]]
@@ -1386,7 +1386,7 @@ pops = 1
 pushes = 0
 suspends = true
 cost = "wait"
-errors = ["wrong kind"]
+errors = ["wrong kind", "scope open"]
 does = "`wait d`: pops an exact duration, and suspends until it has passed"
 
 [[instruction]]
@@ -1397,7 +1397,7 @@ pops = "event"
 pushes = 1
 suspends = true
 cost = "wait"
-errors = ["wrong kind"]
+errors = ["wrong kind", "scope open"]
 does = "Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout"
 
 [[instruction]]
@@ -1408,7 +1408,7 @@ pops = "event"
 pushes = 2
 suspends = true
 cost = "wait"
-errors = ["wrong kind"]
+errors = ["wrong kind", "scope open"]
 does = "The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number"
 
 [[instruction]]
@@ -1420,6 +1420,7 @@ pushes = 0
 suspends = false
 cost = "join"
 does = "Starts a Join"
+errors = ["scope open"]
 
 [[instruction]]
 name = "join-ask"
@@ -1429,7 +1430,7 @@ pops = "count"
 pushes = 0
 suspends = false
 cost = "capability"
-errors = ["wrong kind", "capability revoked"]
+errors = ["wrong kind", "capability revoked", "capability disabled"]
 does = "Starts a suspending Operation as a Join Member"
 
 [[instruction]]

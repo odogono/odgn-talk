@@ -738,6 +738,13 @@ type = "count"
 optional = true
 is = "the Fuel `Charge` drew"
 
+[[record.key]]
+key = "automatic"
+type = "word"
+optional = true
+words = ["yes"]
+is = "Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies"
+
 [[record]]
 name = "prop"
 input = false
@@ -930,7 +937,7 @@ is = "a `run end` report; the id is absent for a Delivery cancelled before it st
 [[record.key]]
 key = "outcome"
 type = "word"
-words = ["completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"]
+words = ["completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped", "effect-failed"]
 is = "its outcome"
 
 [[record.key]]
@@ -975,6 +982,12 @@ type = "word"
 optional = true
 words = ["fuel", "alloc", "persistent", "depth", "pattern", "join"]
 is = "for `limit-fault`, the limit"
+
+[[record.key]]
+key = "effect"
+type = "value"
+optional = true
+is = "for effect-failed, a map {grant, segment, phase, status} identifying the failure that prevented commit; scope follows status for abandonment"
 
 [[record.key]]
 key = "fuel"
@@ -1442,3 +1455,116 @@ table = "disassembly"
 key = "expected"
 is = "the file that holds its expected canonical disassembly"
 kinds = ["disassembly"]
+
+[[record]]
+name = "stub-effect"
+input = true
+ids = ["grant"]
+is = "queues a synchronous lifecycle hook result for <script>.<granted name>; a runner input, not a queued Core input"
+
+[[record.key]]
+key = "phase"
+type = "word"
+words = ["begin", "commit", "rollback"]
+is = "the hook"
+
+[[record.key]]
+key = "status"
+type = "word"
+words = ["ok", "failed", "unknown"]
+is = "the definite or uncertain Host outcome"
+
+[[record]]
+name = "scope"
+input = false
+ids = ["call"]
+is = "the scope transition acknowledged by this Host call, before result validation, conversion or interruption"
+
+[[record.key]]
+key = "grant"
+type = "id"
+is = "the named Grant"
+
+[[record.key]]
+key = "name"
+type = "id"
+is = "the declared scope name"
+
+[[record.key]]
+key = "action"
+type = "word"
+words = ["opened", "closed", "abandoned", "failed"]
+is = "opened/closed on Host success, abandoned on automatic success, or failed on automatic abandonment failure"
+
+[[record]]
+name = "effect"
+input = false
+ids = ["segment"]
+is = "a synchronous participant hook and its result, including hooks outside a Pump"
+
+[[record.key]]
+key = "grant"
+type = "id"
+is = "the participating named Grant"
+
+[[record.key]]
+key = "phase"
+type = "word"
+words = ["begin", "commit", "rollback"]
+is = "the hook"
+
+[[record.key]]
+key = "status"
+type = "word"
+words = ["ok", "failed", "unknown"]
+is = "the Host outcome; unknown includes malformed returns and exceptions"
+
+[[record]]
+name = "effect-failure"
+input = false
+ids = ["run"]
+is = "an effect failure report; human-readable Host detail is excluded from parity"
+
+[[record.key]]
+key = "grant"
+type = "id"
+is = "the affected named Grant"
+
+[[record.key]]
+key = "segment"
+type = "id"
+is = "the affected Segment"
+
+[[record.key]]
+key = "phase"
+type = "word"
+words = ["abandon", "begin", "commit", "rollback"]
+is = "the failing lifecycle action"
+
+[[record.key]]
+key = "status"
+type = "word"
+words = ["failed", "unknown"]
+is = "the failure status"
+
+[[record.key]]
+key = "scope"
+type = "id"
+optional = true
+is = "the scope for abandonment failure"
+
+[[end]]
+word = "effect-failed"
+is = "a definite failure prevented participant commit; the Segment's Script Variables were rolled back"
+
+[[setup]]
+table = "operations"
+key = "scope"
+is = "optional {opens, abandon} or {closes}; immediate only, as specified in embedding/scoped-effects.md"
+kinds = ["trace", "disassembly"]
+
+[[setup]]
+table = "operations"
+key = "segmentBound"
+is = "optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks"
+kinds = ["trace", "disassembly"]

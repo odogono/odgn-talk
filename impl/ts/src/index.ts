@@ -25,6 +25,10 @@ export {
   type Grant,
   type Operation,
   type Shape,
+  type ScopeDecl,
+  type ImmediateOp,
+  type SuspendingOp,
+  type FireOp,
 } from './capabilities';
 export {
   codeIdentity,
@@ -52,6 +56,7 @@ export {
   type PumpOptions,
   type PumpResult,
   type Report,
+  type EffectFailure,
   type Requested,
   type Decided,
   type Deciding,

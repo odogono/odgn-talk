@@ -2,10 +2,15 @@
 // per process, and Grants that bind them to a Script. The Core checks each
 // argument against its Shape before the Host function runs, and each result
 // after (chapter 6, Errors from Capabilities).
-import { HostError, type ScriptError as HostScriptError } from './errors';
+import {
+  HostError,
+  invalidValue,
+  type ScriptError as HostScriptError,
+} from './errors';
 import type { ObjectKind } from './objects';
 import { parseUnit, unitEntry, unitText } from './units';
 import { nothing, type Value } from './values';
+import type { Group } from './group';
 
 export type Shape =
   | { k: 'any' }
@@ -252,6 +257,8 @@ const deepFunction = (v: Value, path: (string | number)[]): Mismatch | null => {
   return null;
 };
 
+export type ScopeDecl = { abandon: string; opens: string } | { closes: string };
+
 export type Cost = { alloc?: number; fuel: number };
 export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
 type OpBase = {
@@ -264,18 +271,26 @@ type OpBase = {
 export type Call<B> = {
   /** Queued, for a suspending call; ignored once the call isn't pending. */
   answer(v: Value, lateCost?: { fuel: number }): void;
+  readonly automatic: boolean;
   readonly binding: B;
   /** Draws more Fuel, before the work. Throws LimitReached. */
   charge(fuel: number): void;
   fail(e: HostScriptError): void;
+  readonly grantName: string;
+  readonly group: Group;
   readonly id: string;
   readonly now: bigint;
+  readonly runId: string;
+  readonly scopeName?: string;
   readonly scriptName: string;
+  readonly segmentId: string;
   readonly signal: AbortSignal;
 };
 export type ImmediateOp<B> = OpBase & {
   do(call: Call<B>, ...args: Value[]): Value;
   mode: 'immediate';
+  scope?: ScopeDecl;
+  segmentBound?: boolean;
 };
 export type SuspendingOp<B> = OpBase & {
   maxPendingMs?: number;
@@ -308,6 +323,8 @@ export type Grant<B> = {
 };
 
 const refusedNames = new Set(['ask', 'tell', 'send', 'wait']);
+const scopeWord = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Z_a-z]\w*$/.test(value);
 
 /** Define a Capability, once per process (chapter 9, Capabilities). */
 export const defineCapability = <B = void>(
@@ -319,10 +336,85 @@ export const defineCapability = <B = void>(
       throw new HostError('invalid value', `${op} can't name an Operation`);
     }
   }
+  const scopes = new Map<string, string>();
+  for (const [opName, op] of Object.entries(ops)) {
+    const metadata = op as Operation<B> & {
+      scope?: ScopeDecl;
+      segmentBound?: boolean;
+    };
+    if (
+      metadata.segmentBound !== undefined &&
+      typeof metadata.segmentBound !== 'boolean'
+    ) {
+      invalidValue('segmentBound must be Boolean');
+    }
+    if (metadata.segmentBound) {
+      invalidValue('Segment-bound Operations are not yet supported');
+    }
+    const scope = metadata.scope;
+    if (scope === undefined) {
+      continue;
+    }
+    if (op.mode !== 'immediate' || !scope || typeof scope !== 'object') {
+      invalidValue('Scopes require immediate Operations');
+    }
+    const keys = Object.keys(scope).sort().join(',');
+    if (keys === 'abandon,opens' && 'opens' in scope) {
+      if (!scopeWord(scope.opens) || !scopeWord(scope.abandon)) {
+        invalidValue('Invalid scope name or abandonment Operation');
+      }
+      const previous = scopes.get(scope.opens);
+      if (previous && previous !== scope.abandon) {
+        invalidValue('Scope openers must agree on abandonment');
+      }
+      scopes.set(scope.opens, scope.abandon);
+    } else if (keys === 'closes' && 'closes' in scope) {
+      if (!scopeWord(scope.closes)) {
+        invalidValue('Invalid scope name');
+      }
+    } else {
+      invalidValue(`Invalid scope declaration for ${opName}`);
+    }
+  }
+  for (const [scopeName, abandon] of scopes) {
+    const op = ops[abandon];
+    if (
+      !op ||
+      op.mode !== 'immediate' ||
+      !op.scope ||
+      !('closes' in op.scope) ||
+      op.scope.closes !== scopeName ||
+      (op.args?.length ?? 0) !== 0 ||
+      op.result?.k !== 'kind' ||
+      op.result.kind !== 'nothing'
+    ) {
+      invalidValue(
+        'Abandonment must close its scope immediately, take no arguments and return Nothing',
+      );
+    }
+  }
+  for (const op of Object.values(ops)) {
+    if (
+      op.mode === 'immediate' &&
+      op.scope &&
+      'closes' in op.scope &&
+      !scopes.has(op.scope.closes)
+    ) {
+      invalidValue('A closing scope has no opener');
+    }
+  }
   const operations = new Map(
     Object.keys(ops)
       .sort()
-      .map(op => [op, ops[op]!] as const),
+      .map(op => {
+        const declaration = ops[op]!;
+        return [
+          op,
+          declaration.mode === 'immediate' && declaration.scope
+            ? { ...declaration, scope: Object.freeze({ ...declaration.scope }) }
+            : declaration,
+        ] as const;
+      }),
   );
   const def: CapabilityDef<B> = {
     name,
@@ -334,6 +426,19 @@ export const defineCapability = <B = void>(
           throw new HostError(
             'invalid value',
             `${name} has no Operation ${op}`,
+          );
+        }
+      }
+      for (const name of names) {
+        const op = operations.get(name)!;
+        if (
+          op.mode === 'immediate' &&
+          op.scope &&
+          'opens' in op.scope &&
+          !names.includes(op.scope.abandon)
+        ) {
+          invalidValue(
+            'An opener requires its abandonment Operation in the Grant',
           );
         }
       }

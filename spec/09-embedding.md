@@ -24,8 +24,8 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
 - **Durations:** `MaxPending` and `MaxWait` are whole milliseconds. Go refuses a finer `time.Duration`, and TS a fraction, as `invalid value`.
 - **Synchronous errors:** a queued call returns an error only for facts known at the call, such as a full mailbox, a value from another Group, a limit override that loosens, or a settlement for a call that isn't pending. Anything else is known only when the queue is drained, and comes back as a report.
 - **Worker calls:** `Load`, `Reload`, `Extend`, `AddLibrary`, `ReplaceLibrary`, `Pump`, `Save`, `Fingerprint`, `Inspect`, `Grants` and `Counters`. They come from the one goroutine that pumps the Group. Two made at once are undefined in Go and not detected.
-- **Reentry:** a worker call made from inside the Group's own Pump, from an Operation function say, is the Host error `reentrant call` in both Cores.
-- **Operation functions:** these are the only Host code that runs inside a Pump, along with property `Get` and `Set`. They may make queued calls.
+- **Reentry:** a worker call made from inside the Group's own Pump or a scope/Segment lifecycle callback, including cleanup outside a Pump, is the Host error `reentrant call` in both Cores.
+- **Host functions:** Operation functions, property `Get` and `Set`, and Segment lifecycle hooks run inside a Pump. Scope abandonment and Segment rollback can also run during Reload or library replacement. They may make queued calls, subject to the [lifecycle finalization rules](embedding/scoped-effects.md#segment-participant).
 
 ## Time and reports
 
@@ -36,6 +36,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
   - `stop`
   - `unhandled`
   - `call failed`, which carries the Host-side detail of a `host error` the Script saw
+  - `effect failure`, carrying Script, Run, named Grant, Segment, phase (`abandon`, `begin`, `commit`, `rollback`), status (`failed`, `unknown`), scope for abandonment, and optional Host-only detail; `effect failed` Run reports also identify the failure that prevented commit
   - `decided`, carrying a Decision's Verdict (below)
 
 ## Values at the boundary
@@ -92,14 +93,14 @@ The Host function receives only the arguments supplied, in order. The Core inser
 
 ## Capabilities
 
-- **Defining one:** `DefineCapability` takes a name and its Operations, once per process. Each Operation is a declaration (name, argument and result Shapes, cost, mode, `maxPending` and declared error codes) paired with the Host function that implements it. Declarations are ordered by name, whatever order the Host gives. `ask`, `tell`, `send` and `wait` are refused as Operation names.
+- **Defining one:** `DefineCapability` takes a name and its Operations, once per process. Each Operation is a declaration (name, argument and result Shapes, cost, mode, `maxPending`, declared error codes and optional `scope` and `segmentBound` metadata) paired with the Host function that implements it. Declarations are ordered by name, whatever order the Host gives. `ask`, `tell`, `send` and `wait` are refused as Operation names.
 - **Modes:**
   - **Immediate:** `Do` runs at the call, inside the Run, and returns the result.
   - **Suspending:** `Start` runs at the call and returns at once, and the Host answers later with `Answer`, `AnswerWithCost` or `Fail`, from any thread.
   - **Fire-and-forget:** `Fire` runs at the call, in order, and its result is dropped. Only these can be called with `tell`.
 - **Grants:** a Grant is a set of a Capability's Operations with the Host's own binding data, which each call reads. `Load` binds Grants by the name the Script uses, so one Capability can be granted twice under two names with different bindings. Each Load copies its kept Operation set without changing the reusable Grant template.
-- **Grants as used:** with `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use, including unused definitions, Lambda bodies and every imported Library's `needs`; `say` uses `console.write`. This trimming happens once at Load, after validation, and removes names whose kept set is empty. Reload, Extend and Library replacement cannot regain an Operation it discarded.
-- **Grant inspection:** the Script's `Grants` returns a fresh map of its kept names to Operation names, including Grants that are revoked but not yet removed by Reload. Each Operation list is sorted in Unicode code-point order. Map-key enumeration follows the Host language: Go maps have no iteration order, and TS records enumerate integer-like names numerically before other names.
+- **Grants as used:** with `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use, including unused definitions, Lambda bodies, every imported Library's `needs` and implicit abandonment dependencies; `say` uses `console.write`. This trimming happens once at Load, after validation, and removes names whose kept set is empty. Reload, Extend and Library replacement cannot regain an Operation it discarded.
+- **Grant inspection:** the Script's `Grants` returns a fresh map of its kept names to Operation names, including disabled Grants and Grants that are revoked but not yet removed by Reload. Each Operation list is sorted in Unicode code-point order. Map-key enumeration follows the Host language: Go maps have no iteration order, and TS records enumerate integer-like names numerically before other names.
 - **Standard Capabilities:** `clock`, `calendar`, `locale`, `timer` and `console` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). Their factories take Host implementations, except for `clock`, and a cost map keyed by Operation name. Every Operation must have its own cost entry, with Fuel required and allocation zero if absent. Both components must be whole numbers from 0 through 9,007,199,254,740,991; a missing or invalid cost is a Host Error `invalid value`. Extra Operation names in the cost map are ignored. The factory copies each declared cost, so later changes to the map or its entries do not change the declaration. A `timer` implementation must supply both `schedule` and `cancel`, and a `console` implementation both `write` and `read`, a `calendar` implementation all six of its methods, and a `locale` implementation all eight; a missing method is also `invalid value`.
 - **The call:** a Host function gets a `Call`, which gives the call id, the Script's name, the Grant's binding, the Pump's Clock reading, and a context or signal that is cancelled when the call is abandoned. It never reads the Host's own time.
 - **Charging:**
@@ -128,6 +129,12 @@ The Host function receives only the arguments supplied, in order. The Core inser
 - **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)).
 
+## Capability Scopes and Segment-bound effects
+
+[The lifecycle contract](embedding/scoped-effects.md) specifies declaration validation, Run/Grant ownership, automatic abandonment, participant hooks, failure handling, suspension guards and examples. Its rules apply to every Host interface, including the Message Layer. Lifecycle declarations are normative; executable Core support is separate implementation work.
+
+Ordinary immediate effects remain final. A scope guarantees an abandonment attempt for a still-open resource; it does not undo an explicit close or commit. Segment-bound Operations instead enlist one named Grant and defer its effects until the Segment's outcome is known. No Script syntax is added.
+
 ## Deliveries
 
 - **`Deliver`** routes a message to an object's Owning Script, or the nearest ancestor that has one, and **`Script.Deliver`** addresses a Script directly ([chapter 5](05-handlers-messages-and-scheduling.md)). Each returns a delivery id, which the Run it starts reports.
@@ -143,19 +150,19 @@ The Host function receives only the arguments supplied, in order. The Core inser
 - **Code identity:** the SHA-256 of the UTF-8 text made of these lines, each ended by LF: `odgn-talk code identity 1`, the language version, the Cost Model version, `script` or `library`, the unit's name, then the lowercase hexadecimal identity of each Library it imports directly, one per line, each once, in the order of the first `use` line that names it, then a line `source` followed by the source exactly as given. An imported Library's identity covers its own imports, so a unit's identity covers every Library it reaches ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). A source that doesn't parse names no imports, and a `use` line that names a Library the Group doesn't hold adds none, so a `load` that fails still has an identity. An extension's identity is in [chapter 10](10-save-and-restore.md#extend-script).
 - **The Group Fingerprint** is the SHA-256 of the UTF-8 JSON, with no white space, keys in the order given here, strings escaping only `"`, `\` and U+0000 to U+001F (as `\"`, `\\` and lowercase `\u00xx`), and numbers as JSON integers, of `{"language", "costModel", "libraries", "scripts"}`:
   - `libraries` is each Library the Host added, as `[name, identity]`, ordered by name. The stdlib Libraries aren't listed, since the language version fixes them.
-  - `scripts` is each Script's `{"name", "identity", "grants", "limits"}`, ordered by name. `grants` maps each granted name to its Capability's name and its Operation Declarations, in the Host Manifest's data model, ordered by name. A Grant counts whether or not it is revoked, and one a restore couldn't re-bind counts with its saved Capability and declarations, since revoking is state ([chapter 10](10-save-and-restore.md#restoring)). `limits` maps each limit's `ts` name in [`limits.toml`](data/limits.toml) to the value the Script has after defaults, durations in whole milliseconds, ordered as in `limits.toml`.
-  - Each granted name maps to `{"capability", "operations"}`. Operations are ordered by name, with keys `name`, `mode`, `args`, optional `result`, `cost`, optional `maxPending`, optional `errors`, in that order. Missing `args` is `[]`; `cost` has `fuel`, then `alloc`, with missing allocation written as `0`. `maxPending` is whole milliseconds and appears only when declared on a suspending Operation. Bindings and Host functions are excluded. Omitted `errors` stays omitted, while an explicit empty catalogue is `[]`, since these accept different failures. Errors are ordered by code, each as `{"code", "fields"}`; missing fields is `[]`, and fields retain declaration order.
+  - `scripts` is each Script's `{"name", "identity", "grants", "limits"}`, ordered by name. `grants` maps each granted name to its Capability's name and its Operation Declarations, in the Host Manifest's data model, ordered by name. A Grant counts whether or not it is revoked or disabled, and one a restore couldn't re-bind counts with its saved Capability and declarations, since revoking is state ([chapter 10](10-save-and-restore.md#restoring)). `limits` maps each limit's `ts` name in [`limits.toml`](data/limits.toml) to the value the Script has after defaults, durations in whole milliseconds, ordered as in `limits.toml`.
+  - Each granted name maps to `{"capability", "operations"}`. Operations are ordered by name, with keys `name`, `mode`, `args`, optional `result`, `cost`, optional `maxPending`, optional `errors`, optional `scope`, optional `segmentBound`, in that order. Missing `args` is `[]`; `cost` has `fuel`, then `alloc`, with missing allocation written as `0`. `maxPending` is whole milliseconds and appears only when declared on a suspending Operation. A scope writes `{"opens", "abandon"}` or `{"closes"}` in that key order; `segmentBound` appears only as `true`, with absent and false equivalent. Bindings, Host functions and lifecycle hooks are excluded. Omitted `errors` stays omitted, while an explicit empty catalogue is `[]`, since these accept different failures. Errors are ordered by code, each as `{"code", "fields"}`; missing fields is `[]`, and fields retain declaration order.
   - A scalar Shape is its kind name, or `"any"` or `"value"`. The wrappers are `{"quantity": unit}`, `{"unitKind": kind}`, `{"object": kind}`, `{"list": shape}`, `{"oneOf": [shape, …]}` and `{"optional": shape}`. The `object` wrapper names an Object Kind. A map Shape is `{"map": [field, …]}`, followed by `"open": true` only for an open map. Each field, including an error field, has `key`, `shape`, then `optional: true` only if optional; fields and alternatives retain declaration order. These are the Host Manifest's data model with explicit canonical ordering and defaults.
   - Identities are lowercase hexadecimal. The Fingerprint never covers state, so two Groups in lockstep compare it once, before they start.
-- **`Inspect()`** reads the Group without changing it, between Pumps: each Script's Script Variables in declaration order, its Runs that haven't ended, with their status, Handler and what each suspended one waits for, and the messages in its mailbox. A suspended Run's `wait` and `until` are the end reason and deadline its `seg` record wrote, so a call's `maxPending` or `MaxWait` gives no `until`, and its `calls` are the call ids, reply ids or Join Members it still waits for. It charges nothing, and is the Host Input `vars` in the Trace ([chapter 11](11-the-trace-and-conformance.md)). A REPL's `:vars`, `:runs` and `:mailbox` render it ([chapter 12](12-sessions-and-tooling.md)).
+- **`Inspect()`** exposes each Script's disabled named Grants in `disabledGrants`, sorted in Unicode code-point order and omitted when empty. It reads the Group without changing it, between Pumps: each Script's Script Variables in declaration order, its Runs that haven't ended, with their status, Handler and what each suspended one waits for, and the messages in its mailbox. A suspended Run's `wait` and `until` are the end reason and deadline its `seg` record wrote, so a call's `maxPending` or `MaxWait` gives no `until`, and its `calls` are the call ids, reply ids or Join Members it still waits for. It charges nothing, and is the Host Input `vars` in the Trace ([chapter 11](11-the-trace-and-conformance.md)). A REPL's `:vars`, `:runs` and `:mailbox` render it ([chapter 12](12-sessions-and-tooling.md)).
 
 ## Script counters
 
 `Script.Counters()` is a worker read between Pumps. It returns a fresh snapshot, charges nothing, drains no Host Inputs and changes no scheduling state. It is the Host Input `counters <script>` in the Trace, followed by one `counters` output record ([chapter 11](11-the-trace-and-conformance.md)).
 
-- **`FuelTotal`, `AllocTotal`:** all Fuel and allocation charged to the Script's Runs since load, including live Runs, event Pattern/Guard tests, Capability Charges, Reissue and cancellation cleanup. Initialisers at Load, Reload and Extend contribute nothing. A refused Charge contributes nothing. Rollback, Stop, Reload, Library replacement and either restore policy retain already charged work; a live Run's work is counted once when it ends or is discarded.
+- **`FuelTotal`, `AllocTotal`:** all Fuel and allocation charged to the Script's Runs since load, including live Runs, event Pattern/Guard tests, Capability Charges, Reissue and Script cancellation cleanup. Automatic scope abandonment and Segment lifecycle hooks charge neither Fuel nor allocation. Initialisers at Load, Reload and Extend contribute nothing. A refused Charge contributes nothing. Rollback, Stop, Reload, Library replacement and either restore policy retain already charged work; a live Run's work is counted once when it ends or is discarded.
 - **`Runs`:** Runs started since load, including a Run that parks, drops, is unhandled, errors, faults or is cancelled. Each Handler dispatch or Function Value call that starts a Run increments it once; event tests are part of the waiting Run. A Delivery cancelled before dispatch, a stale Function call, a Message Path transfer or an unhandled path with no Owning Script starts no Run. An internal `error` message with no Handler starts no Run either.
-- **`Faults`:** Runs that ended with the outcome `limit fault`, once per Run. Ordinary errors, Stop and cancellation do not increment it; a Cleanup Budget failure still ends `cancelled`.
+- **`Faults`:** Runs that ended with the outcome `limit fault`, once per Run. Ordinary errors, effect failures, Stop and cancellation do not increment it; a Cleanup Budget failure still ends `cancelled`.
 - **`PersistentState`:** current logical Persistent State in bytes, with the same accounting as the Script's cap ([chapter 6](06-errors-and-limits.md#limits)). It includes Script Variables, retained Runs and mailbox messages, and falls when work is released.
 - **`MailboxLen`:** messages currently in the Script's mailbox. It excludes preempted, ready, suspended and parked Runs and Host Inputs not yet drained. A message's transfer changes the readouts only when a Pump transfers it.
 
@@ -179,7 +186,7 @@ A Decision asks Scripts whether something may happen, such as a game move or a f
 - **The calls:** `group.Decide(ctx, to, m)`, `script.Decide(ctx, m)` and `group.DecideBroadcast(ctx, m)` are queued, like `Request`. They return an id and a `Deciding` future that settles with a `Decided`.
 - **The Verdict:** `allowed`, `vetoed` or `undecided`. `Decided` also lists every veto as `{script, run, reason}`, in recipient order, and every undecided recipient as `{script, run, outcome}`.
 - **When it settles:** at the end of the first Segment of the first `, deciding` Run that the Decision reaches. The Pump that seals it returns a `decided` report. Usually that is the Pump that drains it. Behind a Fuel Slice or a mailbox backlog it takes more, and a Host that must know now pumps again at the same Clock reading.
-- **Undecided** means the deciding Run errored, hit a Limit Fault, was cancelled, dropped or stopped before it sealed. The Core never guesses allow or refuse, so the Host chooses.
+- **Undecided** means the deciding Run errored, hit a Limit Fault, ended `effect failed`, was cancelled, dropped or stopped before it sealed. The Core never guesses allow or refuse, so the Host chooses.
 - **Deadlines are the Host's:** cancelling the context or signal before the seal queues `cancel-delivery`, and the Decision settles as undecided, `cancelled`. Cancelling after the seal does nothing, so `defer cancel()` is safe.
 - **Broadcast:** it settles once every recipient has sealed. It is vetoed if any recipient vetoed, undecided if none did but one was undecided, and allowed otherwise, including when there are no recipients.
 - **Reports alongside it:** the deciding Run still gets its own `run end`, often later than the `decided` report, since an allowed Run may go on. A Decision that reaches the end of its Message Path is allowed, and `unhandled` is reported as usual.
@@ -192,7 +199,7 @@ The message layer is the language-neutral form of this interface, for a Host tha
 ### Rules
 
 - **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use [the Value Encoding](#json-and-the-value-encoding), and declarations and Shapes use the Host Manifest's data model.
-- **The Host starts every exchange:** Host code that runs inside a Pump (an Operation function, or a property's `Get` or `Set`) comes back as an interim reply to `pump`, and the Host answers it before sending anything else to that Group. The Core never calls the Host, so a WASI build needs no reentrant imports.
+- **The Host starts every exchange:** Host code runs through interim replies: Operations, properties and lifecycle hooks reply to `pump`; scope abandonment and rollback may also reply to `reload` or `replace-library`, and the Host answers it before sending anything else to that Group. The Core never calls the Host, so a WASI build needs no reentrant imports.
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox, and it is received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Stops land at a crossing:** `stop` and `cancel-run` land at the latest at the running Pump's next `op` or `prop`, or at its end. The Trace records where.
 - **Charging:** each `op` carries the Fuel the Run has left after the declared cost. The Host's `Charge` subtracts from it locally and fails exactly when it would go below 0, and its reply carries the total `charged`.
@@ -203,12 +210,12 @@ The message layer is the language-neutral form of this interface, for a Host tha
 
 ### Messages
 
-A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's integer, which the reply echoes. A reply is `{"ref": n, "ok": {…}}` or `{"ref": n, "err": {…}}`. The error forms are `{"kind": "host error", "code", "detail"}`, `{"kind": "load error", "diagnostics": [{code, message, unit, line, col}]}` and `{"kind": "mailbox full"}`. A reply to `pump` or `restore` may be `{"ref": n, "need": {…}}` instead, which the Host answers with the matching `…-result` message under the same `ref`. Every Group message has a `group` field, and every Script message a `script` field too. (V) marks a field in the Value Encoding.
+A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's integer, which the reply echoes. A reply is `{"ref": n, "ok": {…}}` or `{"ref": n, "err": {…}}`. The error forms are `{"kind": "host error", "code", "detail"}`, `{"kind": "load error", "diagnostics": [{code, message, unit, line, col}]}` and `{"kind": "mailbox full"}`. A reply to `pump`, `restore`, `reload` or `replace-library` may be `{"ref": n, "need": {…}}` instead, which the Host answers with the matching `…-result` message under the same `ref`. Every Group message has a `group` field, and every Script message a `script` field too. (V) marks a field in the Value Encoding.
 
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
 | `hello` | `protocol` | `language`, `costModel`, `unicode`, `core`, `saveFormat` | `CoreVersions` |
-| `define-capability` | `name`, `ops`: Operation Declarations | – | `DefineCapability` |
+| `define-capability` | `name`, `ops`: Operation Declarations, optional `segmentLifecycle: true` advertising all three hooks | – | `DefineCapability` |
 | `standard-capability` | `name`, `costs` | – | `ClockCapability` and the others |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
 | `grant` | `capability`, `ops`: names, or `"all"` | `grant`: a handle | `Grant`, `GrantAll` |
@@ -226,10 +233,11 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `answer` | `call`, `value (V)`, and optionally `fuel` | – | `Answer`, `AnswerWithCost` |
 | `fail` | `call`, `error`: `{code, message, data (V)}` | – | `Fail` |
 | `pump` | `now`, `fuelSlice`, `fuelCap` | `state`, `nextDeadline`, `fuelUsed`, `reports`, `abandoned`, `trace` | `Pump` |
-| `op` (interim) | `call`, `script`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, `fuelLeft` | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
+| `op` (interim) | `call`, `script`, `run`, `segment`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, optional `scope`, `automatic`, and `fuelLeft` for Script calls only | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
+| `effect` (interim) | `script`, `run`, `segment`, `grant`, `phase`: `begin`, `commit` or `rollback`, `now` | `effect-result`: `{status: "ok" \| "failed" \| "unknown", detail?}` | Segment lifecycle hooks |
 | `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
-| `inspect` | – | `scripts`: `[{name, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
+| `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls` | `Restore` |
 | `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans | `Grants`, `Resolve` |
 | `settle` | `call`, `settlement`: `{answer (V)}`, `{fail}`, `{reissue}` or `{adopt}` | – | `Settle`; an adopted call is answered with `answer` or `fail` |
@@ -238,10 +246,12 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `counters`, `grants` | – | `Counters`, or `{name: [ops]}` | `Counters`, `Grants` |
 | `export-manifest` | the manifest's definitions, by handle | `manifest`: bytes | `ExportManifest` |
 
-- **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `outcome`, `result (V)`, `error`, `limit`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed` and `decided`.
+- **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `outcome`, `result (V)`, `error`, `limit`, `effect`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed`, `effect failure` and `decided`.
 - **Encodings:** `now` and `nextDeadline` are `$instant` text, byte strings (saves, identities, fingerprints) are `{"$bytes": …}`, durations are whole milliseconds, and every other integer is a JSON integer when its magnitude is below 2⁵³, and its decimal text in a JSON string otherwise.
 - **Traces:** when a Group was made with `trace: true`, the reply to every message that is a Host Input recorded in the Trace carries `trace`, the records it made ([chapter 11](11-the-trace-and-conformance.md)).
 - **Framing:** over WASI, the Host writes a frame into a buffer the export `talk_buffer(n)` gives, and `talk_send(n)` returns the reply's pointer and length packed as `ptr << 32 | len`. A sidecar sends each frame as a 4-byte big-endian length, then the JSON, both ways on stdio.
+
+Automatic `op` requests have `automatic: true`, no `fuelLeft`, and a zero `charged` reply. They take `args: []` and use the ordinary immediate `op-result`; an invalid result is a failed abandonment. Script requests have `automatic: false`. The Core applies acquisition/closure acknowledgements before processing result conversion or queued interruption. Lifecycle `effect-result` replies carry no Script values or charges. The enclosing worker call returns final reports only after all its interim exchanges complete. A malformed lifecycle reply is `unknown`, not an ordinary Script error.
 
 ## Host error catalogue
 
@@ -255,7 +265,7 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `parent cycle` | `setParent` would make a cycle |
 | `duplicate object id` | A Host Object id is reused within its kind in one Group |
 | `name reused` | extend Script reuses a name, or a Library name is added twice |
-| `reentrant call` | A worker call is made from inside the Group's own Pump |
+| `reentrant call` | A worker call is made from inside the Group's own Pump or a scope/Segment lifecycle callback |
 | `wrong group` | A Function Value or Host Object is passed into a Group it doesn't belong to |
 | `library mismatch` | A Library's imports aren't in the Group, or have different identities there |
 | `reserved name` | A Host registers a Library under a stdlib name |
@@ -265,6 +275,8 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `save mismatch` | A save's versions, Libraries or Grants don't match, and the Host's policy is to reject |
 | `unknown call` | `Settle` names a call id that isn't pending or one already settled, or is made once the first Pump has started |
 | `state too large` | The state an extension adds, or the Script Variables a Reload or a variables-only restore carries over, would exceed the Persistent State cap |
+| `effects pending` | Save is attempted while a Capability Scope or Segment participant is live, or after fatal effect uncertainty stopped the Group |
+| `effect state unknown` | Load, Reload, Extend or ReplaceLibrary attempts to change a Group stopped by fatal effect uncertainty |
 
 <!-- end -->
 

@@ -9,10 +9,11 @@ Every Script and Library compiles to a code unit for one Abstract Machine: a sta
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
 
 - **A Group** holds its Scripts, in the order they were loaded, and the code units of its Libraries, with the Clock reading, the input queue and the counters for ids ([chapter 5](05-handlers-messages-and-scheduling.md), [chapter 9](09-embedding.md)).
-- **A Script** holds its code unit, its Script Variables (one slot each, in declaration order), the values of its code unit's definitions, its mailbox and work queue, its Runs, and each clause's queue of parked Runs.
+- **A Script** holds its code unit, its Script Variables (one slot each, in declaration order), the values of its code unit's definitions, its mailbox and work queue, its Runs, each clause's queue of parked Runs, and the named Grants disabled by failed abandonment.
 - **A Run** holds:
   - its stack of frames, and its status: running, ready, suspended, parked or preempted
   - the Fuel and allocation it has used, and the Cleanup Budget spent
+  - its Segment ordinal, open Capability Scope slots in opening order, and optional participating named Grant ([lifecycle contract](embedding/scoped-effects.md)); bookkeeping is bounded by the finite Grants and scope names, adds no Script allocation, and prevents saving while live
   - its segment base: the Script Variables' bindings when its Segment began, for rollback ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md))
   - its Delivery: the message's name and arguments, `me`, `the target`, its delivery id, and its open Verdict, if it holds one
   - while it dispatches, the Handler and the number of the clause being tried, and the arguments
@@ -244,7 +245,7 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `call-handler-wait` (suspends) | `handler`, `count` | count | 1 | `name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does | `no match` |
 | `call-builtin` | `builtin`, `count` | count | 1 | Calls a Built-in function, charged by its own Cost Model key |  |
 | `call-value` | `count` | count + 1 | 1 | Calls the Function Value below the `count` arguments, which must run here without suspending | `wrong kind`, `function gone`, `wrong arity`, `would suspend` |
-| `call-value-wait` (suspends) | `count` | count + 1 | 1 | `f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits | `wrong kind`, `function gone`, `wrong arity`, `mailbox full`, `send failed`, `timeout` |
+| `call-value-wait` (suspends) | `count` | count + 1 | 1 | `f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits | `wrong kind`, `function gone`, `wrong arity`, `mailbox full`, `send failed`, `timeout`, `scope open` |
 | `return` |  | 1 | 0 | Ends the body with the popped value as its result |  |
 | `clause-fail` |  | 0 | 0 | Ends a failed clause, test or branch body, so the Core tries the next |  |
 
@@ -309,18 +310,18 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
-| `ask` | `grant`, `operation`, `count` | count | 1 | Calls an immediate Operation, and pushes its result | `wrong kind`, `capability revoked`, `host error` |
-| `ask-wait` (suspends) | `grant`, `operation`, `count` | count | 1 | Calls a suspending Operation, and suspends until it answers | `wrong kind`, `capability revoked`, `host error`, `timeout` |
-| `tell` | `grant`, `operation`, `count` | count | 0 | Calls a fire-and-forget Operation | `wrong kind`, `capability revoked`, `host error` |
+| `ask` | `grant`, `operation`, `count` | count | 1 | Calls an immediate Operation, and pushes its result | `wrong kind`, `capability revoked`, `host error`, `capability disabled`, `scope already open`, `scope not open`, `scope in join`, `segment participant conflict` |
+| `ask-wait` (suspends) | `grant`, `operation`, `count` | count | 1 | Calls a suspending Operation, and suspends until it answers | `wrong kind`, `capability revoked`, `host error`, `timeout`, `capability disabled`, `scope open` |
+| `tell` | `grant`, `operation`, `count` | count | 0 | Calls a fire-and-forget Operation | `wrong kind`, `capability revoked`, `host error`, `capability disabled` |
 | `send` | `message`, `count` | count + 1 | 0 | Pops the receiver and `count` arguments, and puts the message in the receiver's mailbox | `mailbox full`, `object gone`, `wrong kind` |
-| `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout` |
+| `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
 | `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full` |
-| `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout` |
-| `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind` |
-| `wait-for` (suspends) | `event` | event | 1 | Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout | `wrong kind` |
-| `wait-for-any` (suspends) | `event` | event | 2 | The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number | `wrong kind` |
-| `join-start` |  | 0 | 0 | Starts a Join |  |
-| `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked` |
+| `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open` |
+| `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind`, `scope open` |
+| `wait-for` (suspends) | `event` | event | 1 | Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout | `wrong kind`, `scope open` |
+| `wait-for-any` (suspends) | `event` | event | 2 | The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number | `wrong kind`, `scope open` |
+| `join-start` |  | 0 | 0 | Starts a Join | `scope open` |
+| `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled` |
 | `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind` |
 | `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
 | `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
@@ -750,6 +751,7 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 - **Unwinding** charges the `unwind` rate at the instruction that raised, for the frames it pops, before any of them is popped ([chapter 6](06-errors-and-limits.md)). A cancellation unwinds nothing, so it charges no `unwind` ([below](#the-unwind-table)).
 - **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
 - **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited: only its terms over `result`, since the rest was charged at the call, plus any cost that came with the answer. So a reply to `send … and wait` and the end of a `wait` charge nothing more.
+- **Lifecycle:** scope checks and suspension guards precede the guarded instruction's charge, after operand/Grant validation and any instruction-specific limit check. They add no separate rate; raised errors use normal error/unwind charges. Segment hooks and automatic abandonment consume no Script Fuel or allocation. Finalization follows the boundary's existing checks and charges ([lifecycle contract](embedding/scoped-effects.md)).
 - **Cleanup:** a cancelled Run's `finally` blocks are charged as any code is, but to its Cleanup Budget, not to its Fuel ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
 - **Not charged:** loading a code unit and running its initialiser, NFC when a Host builds a text value, and the Host's own work.
 - **Fuel Slices** count the same Fuel ([chapter 5](05-handlers-messages-and-scheduling.md#fuel-slices)).

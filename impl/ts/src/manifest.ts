@@ -77,6 +77,15 @@ export const operationData = (name: string, op: Operation<unknown>) => ({
             })),
           })),
       }),
+  ...(op.mode === 'immediate' && op.scope
+    ? {
+        scope:
+          'opens' in op.scope
+            ? { opens: op.scope.opens, abandon: op.scope.abandon }
+            : { closes: op.scope.closes },
+      }
+    : {}),
+  ...(op.mode === 'immediate' && op.segmentBound ? { segmentBound: true } : {}),
 });
 export const grantData = (grant: Grant<unknown>) => ({
   capability: grant.capability.name,

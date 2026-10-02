@@ -136,8 +136,9 @@ The Core assigns every id a Trace or a report names, the same way on both Cores.
 - **Delivery ids** are `d1`, `d2`, … in the order the Group gives them. A Delivery the Host makes (`Deliver`, `Request`, `Call` or `Decide`) gets one when the call is made, or over the message layer when the Core reads it ([chapter 9](09-embedding.md#rules)), and one refused at the call gets none. Each recipient of a Broadcast gets one when the Broadcast is drained.
 - **Broadcast ids** are `b1`, `b2`, … in the order the Group gives them, one for each Broadcast and Broadcast Decision.
 - **Run ids** are the Script's name, `/r` and a number counting that Script's Runs from 1 in the order they start, such as `orders/r2`. A Run starts when its message leaves the mailbox, so a Delivery cancelled in the mailbox has no Run.
-- **Call ids** are the Run's id, `.c` and a number counting that Run's calls from 1 in the order they start, such as `orders/r2.c1`. A call starts when it reaches its Host function or its receiver's mailbox, so one refused before that gets no id. The calls are every Capability call, every send that waits for a reply (`send … and wait`, a Command Call sent up the Message Path with `and wait`, and a call to a Function Value in another Script), and every Join Member.
-- **Save ids** are `s1`, `s2`, … in the order the Group's saves are made.
+- **Call ids** are the Run's id, `.c` and a number counting that Run's calls from 1 in the order they start, such as `orders/r2.c1`. A call starts when it reaches its Host function or its receiver's mailbox, so one refused before that gets no id. The calls are every Capability call, every send that waits for a reply (`send … and wait`, a Command Call sent up the Message Path with `and wait`, and a call to a Function Value in another Script), and every Join Member. Automatic scope abandonment also takes a call id from that Run's sequence; Segment hooks use Segment ids and consume no call ids.
+- **Segment ids** are the Run id followed by `.s1`, `.s2`, …, counting actual Segments, including cancellation cleanup, but not preemptions. They identify lifecycle hooks.
+- **Save ids** are `s1`, `s2`, … in the order the Group's save attempts are made; a refused attempt has an id but no restorable snapshot.
 - **Code units** are named by their Script or Library, and a Script's extensions by `<script>+<n>`, counting the extensions since its last Load or Reload from 1, such as `session+3`.
 - **Code positions** are a code unit's name, `:` and an instruction index in canonical text, such as `orders:17`.
 
@@ -175,6 +176,7 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 
 A record is written when what it records happens, so a Trace is in the order the Core acted:
 
+- **Lifecycle records** follow the [scope and participant ordering](embedding/scoped-effects.md). A Host-successful opening/closing `call` is followed immediately by its `scope` acknowledgement, before result conversion or interruption; a malformed result still gives a scope acknowledgement. Automatic abandonment writes `call` with `automatic=yes`, then `scope` with `abandoned` or `failed`; failure writes `effect-failure` next. Hooks write `effect`, followed by `effect-failure` on failure. These precede the affected `seg`, `run`, `decided` or `stopped` records. Host detail strings are outside parity. On a fault, the existing `fault` record precedes the resulting cleanup records.
 - **Worker calls** (`load`, `reload`, `extend`, `add-library`, `replace-library`, `save`, `restore` and `vars`) are written when they are made, followed by what they cause, such as `diag`, `stopped` or `vars` records.
 - **Queued calls** are written when the Pump that drains them has read its Clock, in the order they were made, and just before that Pump's `pump` line. So a Delivery an author writes just before a `> pump` is where the Core writes it too, and a worker call or a refused input written between them moves before it.
 - **A queued call never drained,** because a worker call discarded it first, as a variables-only restore drops the saved input queue, is written just before that worker call's line, in the order the calls were made.
@@ -222,6 +224,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
 | `counters` | `script` |  | reads the Script's Counters without draining Host Inputs; writes one `counters` record |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
+| `stub-effect` | `grant` | `phase`, `status` | queues a synchronous lifecycle hook result for <script>.<granted name>; a runner input, not a queued Core input |
 
 <!-- end -->
 
@@ -292,12 +295,15 @@ A record is written when what it records happens, so a Trace is in the order the
 | `restore` | `discarded` | `ids` | for a variables-only restore, the discarded Runs |
 | `restore` | `dropped` | `ids` | for a variables-only restore, the dropped Deliveries |
 | `restore` | `abandoned` | `ids` | for a variables-only restore, the abandoned calls |
+| `stub-effect` | `phase` | `word` | the hook: `begin`, `commit`, `rollback` |
+| `stub-effect` | `status` | `word` | the definite or uncertain Host outcome: `ok`, `failed`, `unknown` |
 
 <!-- end -->
 
 - **Sources:** `load` and `add-library` take their source and options from `case.toml`, and the Core writes the code identity, so a replay can check it has the same source. `reload`, `extend` and `replace-library` carry their source, since a setup can't know it in advance. Their `source` field uses display-form text but preserves the source's exact scalar sequence, without NFC normalization on writing or reading, since code identity hashes the source as given. The stdlib Libraries need neither a `[[libraries]]` entry nor an `add-library` line.
 - **`restore`** restores the save named by `from`, or else the latest one. The Host's side of it is in the line: `mismatch`, `unbound` and `disposed` are what the runner passes as its policy, leaves out of its `Grants` function and refuses in its `Resolve` function ([chapter 10](10-save-and-restore.md#restoring)).
 - **The Libraries a restore is passed:** for each Library name, the runner passes the version it compiled last, from `case.toml` or the latest `replace-library`, except the ones `withheld` names. So a restore after a `replace-library` isn't given the replaced version, and a `withheld` Library the save needs is a mismatch too.
+- **Lifecycle Stubs:** `stub-effect <script>.<grant> phase=begin|commit|rollback status=ok|failed|unknown` queues one result for that hook on that named Grant, in FIFO order for that phase. A hook without a Stub makes the case malformed. Ordinary `stub` supplies automatic abandonment results too; its charge must be absent or zero for automatic calls. During replay, recorded `effect` outcomes supply hook answers just as recorded `call` results supply immediate answers; no live database or file is consulted. A scope acknowledgement after `call error={}` distinguishes a Host-successful malformed result from a Host exception: replay supplies a deliberately invalid result, acknowledges the scope transition, and fails Shape validation before conversion.
 - **Answers to Standard Capabilities** come as Stubs or `answer` lines, like any other Capability's. `clock`'s `now` needs neither, since its answer is the Pump's Clock reading.
 - **`vars`** is `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)).
 
@@ -309,7 +315,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | --- | --- | --- | --- |
 | `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
 | `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
-| `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`? | a Capability call |
+| `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `automatic`? | a Capability call |
 | `prop` | `run` | `object`, `name`, `op`, `value`?, `error`? | a Host Object property call |
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
 | `raise` | `run` | `code`, `at`, `pos` | an error raised, whether or not it is caught |
@@ -318,7 +324,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `fault` | `run` | `limit`, `at`, `pos`, `rollback`? | a Limit Fault |
 | `cleanup-failed` | `run` | `code`?, `limit`? | a cancelled Run's cleanup that failed |
 | `note` | `subject` | `kind` | something the Core noted, about a Run, a call or a Delivery |
-| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fn`?, `value`?, `error`?, `limit`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
+| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fn`?, `value`?, `error`?, `limit`?, `effect`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
 | `stopped` | `script` | `reason`, `discarded`?, `dropped`?, `abandoned`? | a `stop` report |
 | `unhandled` | `delivery` (optional) | `message`, `args`?, `target`? | an `unhandled` report; the id is absent for a message a Script sent |
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
@@ -328,6 +334,9 @@ A record is written when what it records happens, so a Trace is in the order the
 | `vars` | `script` |  | a Script's Script Variables, each as `<name>=<value>`, in declaration order |
 | `pumped` |  | `state`, `fuel`, `next`? | the end of a Pump |
 | `refused` |  | `code` | the Host Input before it was refused at the call, and changed nothing |
+| `scope` | `call` | `grant`, `name`, `action` | the scope transition acknowledged by this Host call, before result validation, conversion or interruption |
+| `effect` | `segment` | `grant`, `phase`, `status` | a synchronous participant hook and its result, including hooks outside a Pump |
+| `effect-failure` | `run` | `grant`, `segment`, `phase`, `status`, `scope`? | an effect failure report; human-readable Host detail is excluded from parity |
 
 <!-- end -->
 
@@ -362,6 +371,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `call` | `result` | `value` | for an immediate call that succeeded, the Host's result |
 | `call` | `error` | `value` | for an immediate or fire-and-forget call that failed, the Host's error: a map with `code`, and any `message` and `Data` entries, or `{}` for a failure that wasn't a Script error or a result that broke its Shape; a call cut off by a `Charge` the Run can't cover has neither `result` nor `error` |
 | `call` | `charged` | `count` | the Fuel `Charge` drew |
+| `call` | `automatic` | `word` | Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies: `yes` |
 | `prop` | `object` | `value` | the object |
 | `prop` | `name` | `id` | the property |
 | `prop` | `op` | `word` | a read or a write: `get`, `set` |
@@ -386,7 +396,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `cleanup-failed` | `code` | `value` | the error that ended it, as text |
 | `cleanup-failed` | `limit` | `word` | or the limit that ended it: `cleanup`, `alloc`, `persistent`, `depth`, `pattern`, `join` |
 | `note` | `kind` | `word` | what it noted ([Notes](#notes)) |
-| `run` | `outcome` | `word` | its outcome: `completed`, `errored`, `limit-fault`, `cancelled`, `unhandled`, `dropped` |
+| `run` | `outcome` | `word` | its outcome: `completed`, `errored`, `limit-fault`, `cancelled`, `unhandled`, `dropped`, `effect-failed` |
 | `run` | `delivery` | `id` | its Delivery |
 | `run` | `broadcast` | `id` | its Broadcast |
 | `run` | `handler` | `id` | its Handler |
@@ -394,6 +404,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `run` | `value` | `value` | for `completed`, its result |
 | `run` | `error` | `value` | for `errored`, the error map |
 | `run` | `limit` | `word` | for `limit-fault`, the limit: `fuel`, `alloc`, `persistent`, `depth`, `pattern`, `join` |
+| `run` | `effect` | `value` | for effect-failed, a map {grant, segment, phase, status} identifying the failure that prevented commit; scope follows status for abandonment |
 | `run` | `fuel` | `count` | the Fuel it used over its life |
 | `run` | `alloc` | `count` | the allocation it made over its life |
 | `stopped` | `reason` | `value` | the Host's reason, or `"owner disposed"` or `"reload"` |
@@ -419,6 +430,17 @@ A record is written when what it records happens, so a Trace is in the order the
 | `pumped` | `fuel` | `count` | the Fuel the Pump used |
 | `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one |
 | `refused` | `code` | `value` | the Host error's code, or `"mailbox full"`, as text |
+| `scope` | `grant` | `id` | the named Grant |
+| `scope` | `name` | `id` | the declared scope name |
+| `scope` | `action` | `word` | opened/closed on Host success, abandoned on automatic success, or failed on automatic abandonment failure: `opened`, `closed`, `abandoned`, `failed` |
+| `effect` | `grant` | `id` | the participating named Grant |
+| `effect` | `phase` | `word` | the hook: `begin`, `commit`, `rollback` |
+| `effect` | `status` | `word` | the Host outcome; unknown includes malformed returns and exceptions: `ok`, `failed`, `unknown` |
+| `effect-failure` | `grant` | `id` | the affected named Grant |
+| `effect-failure` | `segment` | `id` | the affected Segment |
+| `effect-failure` | `phase` | `word` | the failing lifecycle action: `abandon`, `begin`, `commit`, `rollback` |
+| `effect-failure` | `status` | `word` | the failure status: `failed`, `unknown` |
+| `effect-failure` | `scope` | `id` | the scope for abandonment failure |
 
 <!-- end -->
 
@@ -455,6 +477,7 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 | `wait-for` | the Run suspended at `wait for` |
 | `wait-for-any` | the Run suspended at a block `wait for` |
 | `join-end` | the Run suspended at a Join's closing `end` |
+| `effect-failed` | a definite failure prevented participant commit; the Segment's Script Variables were rolled back |
 
 <!-- end -->
 
@@ -558,6 +581,8 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[scripts]` | `limits` | its limits, a table from each limit's `ts` name to its value; absent limits take their defaults | trace |
 | `[disassembly]` | `unit` | the Script or Library whose disassembly the case pins | disassembly |
 | `[disassembly]` | `expected` | the file that holds its expected canonical disassembly | disassembly |
+| `[operations]` | `scope` | optional {opens, abandon} or {closes}; immediate only, as specified in embedding/scoped-effects.md | trace, disassembly |
+| `[operations]` | `segmentBound` | optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks | trace, disassembly |
 
 <!-- end -->
 
@@ -594,8 +619,8 @@ An Operation's trailing `{optional = <shape>}` arguments may be omitted as [chap
 
 Every Trace Case is also run a second way, to check that save then restore is unobservable ([chapter 10](10-save-and-restore.md#the-rule)).
 
-- **Between each pair of Pumps,** after each `pumped` record, the runner saves the Group and restores it, on the same Core, with a `RejectMismatch` policy, every Grant re-bound and every Host Object resolved. It settles each pending call by adopting it, and goes on replaying into the restored Group.
-- **The same Trace:** the Trace must equal the case's, once the `save`, `restore` and adopting `settle` lines are left out.
+- **Between each pair of Pumps,** after each `pumped` record, the runner attempts Save. At a live-scope or participant boundary it requires `effects pending`, verifies no execution change, and continues the original Group; otherwise it restores the saved Group, on the same Core, with a `RejectMismatch` policy, every Grant re-bound and every Host Object resolved. It settles each pending call by adopting it, and goes on replaying into the restored Group.
+- **The same Trace:** the Trace must equal the case's, once the injected `save`, its `effects pending` refusal where applicable, `restore` and adopting `settle` lines are left out and save-attempt ids are normalized to the original sequence.
 - **Futures don't survive:** a Host-held Function Value, the context or signal that cancels a Delivery, and the `Call` of a call that isn't pending, belong to the old Group ([chapter 9](09-embedding.md#capabilities)). So the runner skips the save and restore at any point where a later `call-value`, another Host Input carrying a Function Value, `cancel-delivery`, `answer` or `fail` line needs one made before it, such as an `answer` to a call that had already timed out.
 - **Explicit save/restore boundaries** in a case use its own records and settlements; the runner omits the extra hidden round-trip there, so automatic Adopt inputs cannot enter a visible save.
 - **Hand-written cases** cover what this can't reach: settling by answer, fail and reissue, variables-only restores, and restoring with Grants, Libraries or Host Objects the Host no longer has ([chapter 10](10-save-and-restore.md)).
@@ -655,3 +680,41 @@ A Session Transcript is a case directory holding `case.toml` with `kind = "trans
 - **Early landings** of `Stop` and `CancelRun`, which a Trace records so that a replay follows them ([chapter 5](05-handlers-messages-and-scheduling.md#outside-parity)).
 - **The runners:** how each Core's corpus runner, bless tool and divergence report are built, beyond what this chapter fixes. Trace sinks that write files are helpers ([chapter 9](09-embedding.md#outside-parity)).
 - **Fuzzing:** the generator, the minimiser and the schedule.
+
+
+## Scope and Segment-effect conformance scenarios
+
+The following scenarios are required by [the lifecycle contract](embedding/scoped-effects.md). They specify the future executable corpus coverage; this design change does not claim that either Core implements them. Implement Trace Cases under `corpus/capabilities/`, using Operation and lifecycle Stubs, plus embedding tests for Host callbacks and Message Layer exchanges. Keep real filesystem/database integration tests in the relevant Example Host.
+
+| Scenario | Required observation |
+| --- | --- |
+| Explicit close, reopen, duplicate open, missing close | Only Host-successful calls change slots; invalid calls have no Host invocation or call id; reopening is allowed after closure |
+| Two differently named scopes, independent closes | An older scope may close first; remaining abandonment follows reverse opening order |
+| Two Grant aliases or two Scripts sharing a binding | Core ownership remains distinct; the Host is responsible for rejecting incompatible resource use |
+| Completion and uncaught ordinary error with open scopes | Each remaining scope abandoned once before Run/Decision reports; ordinary errors still preserve Script Variables |
+| Caught error and failed explicit close | Scope remains open and usable; subsequent close or automatic abandonment can succeed |
+| Limit Fault, Stop and owner disposal | Abandonment runs without Script finally or Script charges; participant rollback precedes subsequent execution/reporting |
+| Cancellation before/after preemption | Participating scopes abandon before original rollback; unrelated scopes remain available to finally; cleanup may enlist a fresh participant |
+| Cleanup ordinary error, limit and commit failure | Ordinary error preserves cleanup writes; limit rolls them back; definite commit failure gives effect-failed |
+| Opening Host success followed by malformed result, conversion exhaustion or Stop | Acquisition is registered before failure; exactly one abandonment occurs |
+| Closing Host success followed by conversion exhaustion | Closed scope is not abandoned again; participant still rolls back if enlisted |
+| Wait forms, waiting sends and suspending calls with open scope | scope-open before Host work, message dispatch or wait registration; a caught error leaves scopes open |
+| Wait-marked local call that never suspends | Call completes normally; only an executed suspension-producing boundary is rejected |
+| Empty/nonempty Join entry and opening inside Join | Join entry with a scope fails; opener inside any Join fails even through a local call and before the first member |
+| Fuel Slice/Group cap between open and close | Preemption remains; Save refuses without draining inputs; resuming preserves ownership and ordering |
+| Explicit close while participant remains provisional | Save still refuses; later Limit Fault rolls back Host effects and Script Variables |
+| GrantsAsUsed and missing abandonment permission | Implicit cleanup target retained; incomplete Grant refused; no other permission added |
+| Revocation or disablement before cleanup | Ordinary calls rejected; reserved automatic cleanup still invokes original binding without Fuel |
+| Failed abandonment with other scopes remaining | Failure reported, Grant disabled, remaining cleanup attempted; no automatic retry |
+| Disabled Grant through Reload, replacement and both restore policies | Disablement survives; calls fail capability-disabled; fresh Script load is the recovery boundary |
+| Participant begin definite failure, ordinary Operation error, second Grant | Begin failure invokes no Operation; Operation error leaves participant enlisted; second participant has no Host work |
+| Return/pass/veto/error and suspension boundaries | Commit follows all Script charges and state checks, before reply, forwarding, Verdict or suspension publication |
+| Explicit scope commit then later Limit Fault | Plain scoped effects stay final; Segment-bound effects roll back |
+| Failed participating abandonment before commit | Prevent commit, roll back Script Variables/participant and end effect-failed; unrelated abandonment failure does not veto commit |
+| Definite commit failure, unknown commit and failed rollback | Definite failure rolls back and ends effect-failed; uncertainty stops Group, attempts remaining cleanup, never retries commit |
+| Reload/replacement validation rejection and successful termination | Rejected validation has no hooks; CarryVariables checks and carries the prospective post-rollback state; successful termination cleans before replacement; fatal cleanup prevents replacement |
+| Message Layer cleanup outside Pump | Interim op/effect replies retain original ref and last Clock; final reports wait; reentry is rejected |
+| Fingerprints and manifests | Scope name/target or segmentBound changes identity; false equals omission; binding, hooks and disabled state do not affect identity |
+| Replay and save injection | Trace records determine lifecycle results; refused saves continue original Group; successful saves retain disabled state and Segment numbering |
+| Ordinary file writing | Fault closes handle but does not undo bytes already written |
+| Staged single-file publication | Close does not publish; successful Segment commits once; fault after close discards; abandoned unfinished file is not published |

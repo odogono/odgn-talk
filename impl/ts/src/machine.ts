@@ -64,6 +64,7 @@ import {
   type Call,
   type Grant,
   type Operation,
+  type ImmediateOp,
   type Shape,
 } from './capabilities';
 import { HostError, ScriptError as HostScriptError } from './errors';
@@ -483,12 +484,28 @@ export type RunRecord =
     }
   | {
       args: Value[];
+      automatic?: boolean;
       charged: number;
       error?: Value;
       id: string;
       kind: 'call';
       op: string;
       result?: Value;
+    }
+  | {
+      action: 'opened' | 'closed' | 'abandoned' | 'failed';
+      grant: string;
+      id: string;
+      kind: 'scope';
+      name: string;
+    }
+  | {
+      detail: string;
+      grant: string;
+      kind: 'effect-failure';
+      scope: string;
+      segment: string;
+      status: 'failed' | 'unknown';
     }
   | { detail: string; id: string; kind: 'call-failed'; op: string }
   | { id: string; kind: 'abandon' }
@@ -586,12 +603,15 @@ export type RunHost = {
   callValue(fn: Value, args: Value[], reply: string): string;
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
+  disableGrant(name: string): void;
   /**
    * Queues its failure, as `fail`; null fails with what isn't a Script error,
    * which `detail` describes for the `call failed` report.
    */
   fail(id: string, error: HostScriptError | null, detail?: string): void;
   readonly grants: ReadonlyMap<string, Grant<unknown>>;
+  readonly group: import('./group').Group;
+  isDisabled(name: string): boolean;
   isRevoked?(name: string): boolean;
   /** Whether a name is a Script of the Group. */
   isScript(name: string): boolean;
@@ -759,6 +779,144 @@ export class Run {
   // What a woken Run had suspended on, until its resume.
   private waitedOn: Suspension | null = null;
   private calls = 0;
+  private segment = 1;
+  private scopes: {
+    abandonName: string;
+    grant: Grant<unknown>;
+    grantName: string;
+    name: string;
+    op: ImmediateOp<unknown>;
+  }[] = [];
+
+  get hasOpenScopes(): boolean {
+    return this.scopes.length !== 0;
+  }
+  get segmentId(): string {
+    return `${this.id}.s${this.segment}`;
+  }
+
+  private checkScopeBoundary() {
+    const scope = this.scopes.at(-1);
+    if (scope) {
+      throw new ScriptError('scope open', [
+        ['capability', text(scope.grantName)],
+        ['scope', text(scope.name)],
+      ]);
+    }
+  }
+
+  /** Reserved Host cleanup, called by the Group before publishing termination. */
+  abandonScopes() {
+    while (this.scopes.length) {
+      const scope = this.scopes.pop()!;
+      const id = `${this.id}.c${++this.calls}`;
+      let contractFailure = false;
+      const forbidden = (): never => {
+        contractFailure = true;
+        throw new HostError(
+          'invalid value',
+          'Automatic abandonment cannot charge, answer or fail',
+        );
+      };
+      const call: Call<unknown> = {
+        id,
+        group: this.host!.group,
+        runId: this.id,
+        grantName: scope.grantName,
+        segmentId: this.segmentId,
+        scopeName: scope.name,
+        automatic: true,
+        binding: scope.grant.binding,
+        scriptName: this.script.name,
+        now: this.host!.now,
+        signal: new AbortController().signal,
+        charge: forbidden,
+        answer: forbidden,
+        fail: forbidden,
+      };
+      const record = {
+        kind: 'call' as const,
+        id,
+        op: `${scope.grantName}.${scope.abandonName}`,
+        args: [],
+        charged: 0,
+        automatic: true,
+      };
+      try {
+        const result = scope.op.do(call);
+        if (
+          contractFailure ||
+          !Value.isValue(result) ||
+          result.kind !== 'nothing'
+        ) {
+          throw new HostError(
+            'invalid value',
+            'Automatic abandonment must return Nothing',
+          );
+        }
+        this.records.push(
+          { ...record, result },
+          {
+            kind: 'scope',
+            id,
+            grant: scope.grantName,
+            name: scope.name,
+            action: 'abandoned',
+          },
+        );
+      } catch (error) {
+        this.host!.disableGrant(scope.grantName);
+        let failed = map([]);
+        let status: 'failed' | 'unknown' = 'unknown';
+        if (!contractFailure && error instanceof HostScriptError) {
+          // Retain the Host answer for replay, without Script conversion costs.
+          try {
+            const data =
+              Value.isValue(error.data) && error.data.kind === 'map'
+                ? error.data
+                : map([]);
+            if (functionsBelongTo([data], this.script.functionGroup)) {
+              failed = map([
+                ['code', text(error.code)],
+                ...(error.message
+                  ? [['message', text(error.message)] as [string, Value]]
+                  : []),
+                ...data.entries(),
+              ]);
+              if (
+                !(error.code in errorMessages) &&
+                !data.entries().some(([key]) => reservedKeys.has(key)) &&
+                (!scope.op.errors ||
+                  scope.op.errors.some(e => e.code === error.code))
+              ) {
+                status = 'failed';
+              }
+            }
+          } catch {
+            // Malformed Host failure data is itself an unknown contract failure.
+          }
+        }
+        this.records.push(
+          { ...record, error: failed },
+          {
+            kind: 'scope',
+            id,
+            grant: scope.grantName,
+            name: scope.name,
+            action: 'failed',
+          },
+          {
+            kind: 'effect-failure',
+            grant: scope.grantName,
+            segment: this.segmentId,
+            scope: scope.name,
+            status,
+            detail: hostDetail(error),
+          },
+        );
+      }
+    }
+  }
   private crossingCall: { abort: AbortController; id: string } | null = null;
   frames: Frame[] = [];
   fuel = 0;
@@ -839,6 +997,11 @@ export class Run {
     const call: Call<unknown> = {
       id,
       scriptName: this.script.name,
+      group: this.host!.group,
+      runId: this.id,
+      grantName,
+      segmentId: this.segmentId,
+      automatic: false,
       binding: grant.binding,
       signal: abort.signal,
       get now() {
@@ -1017,6 +1180,7 @@ export class Run {
           .map(entry => ({ frame, entry })),
       );
     this.cancellationAbandons = this.discard(betweenSegments);
+    this.segment++;
     this.cancellation = blocks;
     this.cleanups = [];
     this.frames = [];
@@ -1380,6 +1544,7 @@ export class Run {
   private resume(r: Resumption) {
     const s = this.waitedOn!;
     this.waitedOn = null;
+    this.segment++;
     this.segmentBase = [...this.script.variables];
     const frame = this.frame;
     if (s.k === 'wait-for') {
@@ -2073,6 +2238,16 @@ export class Run {
     if (!host) {
       throw new NotImplementedError('a Capability call outside a Group');
     }
+    if (host.isDisabled(grantName)) {
+      throw new ScriptError(
+        'capability disabled',
+        [
+          ['capability', text(grantName)],
+          ['operation', text(opName)],
+        ],
+        true,
+      );
+    }
     if (host.isRevoked?.(grantName)) {
       throw new ScriptError(
         'capability revoked',
@@ -2126,6 +2301,28 @@ export class Run {
           );
     });
     standardChecks(op)?.arguments?.(args, grant.binding);
+    if (op.mode === 'suspending') {
+      this.checkScopeBoundary();
+    }
+    const scope = op.mode === 'immediate' ? op.scope : undefined;
+    const scopeName = scope && ('opens' in scope ? scope.opens : scope.closes);
+    const slot =
+      scope &&
+      this.scopes.findIndex(
+        s => s.grantName === grantName && s.name === scopeName,
+      );
+    if (scope) {
+      const fields: [string, Value][] = [...named, ['scope', text(scopeName!)]];
+      if ('opens' in scope && this.join) {
+        throw new ScriptError('scope in join', fields);
+      }
+      if ('opens' in scope && slot! >= 0) {
+        throw new ScriptError('scope already open', fields);
+      }
+      if ('closes' in scope && slot! < 0) {
+        throw new ScriptError('scope not open', fields);
+      }
+    }
     const declared = op.cost.fuel;
     this.pay(key, { declared });
     this.payAmount(0, op.cost.alloc ?? 0);
@@ -2149,6 +2346,12 @@ export class Run {
     const call: Call<unknown> = {
       id,
       scriptName: this.script.name,
+      group: host.group,
+      runId: this.id,
+      grantName,
+      segmentId: this.segmentId,
+      scopeName,
+      automatic: false,
       binding: grant.binding,
       now: host.now,
       signal: abort.signal,
@@ -2215,8 +2418,31 @@ export class Run {
       );
     }
     starting = false;
+    let acknowledgement: Extract<RunRecord, { kind: 'scope' }> | undefined;
+    if (scope) {
+      if ('opens' in scope) {
+        this.scopes.push({
+          grantName,
+          name: scope.opens,
+          grant,
+          abandonName: scope.abandon,
+          op: grant.capability.operations.get(
+            scope.abandon,
+          )! as ImmediateOp<unknown>,
+        });
+      } else {
+        this.scopes.splice(slot!, 1);
+      }
+      acknowledgement = {
+        kind: 'scope',
+        id,
+        grant: grantName,
+        name: scopeName!,
+        action: 'opens' in scope ? 'opened' : 'closed',
+      };
+    }
     if (reached) {
-      this.recordCrossing({ ...record, charged });
+      this.recordCrossing({ ...record, charged }, acknowledgement);
       throw new LimitFaultError(
         this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
         this.frame.pc,
@@ -2242,13 +2468,16 @@ export class Run {
       (op.result && mismatch(result, op.result)) ||
       standardChecks(op)?.result?.(result, args) === false
     ) {
-      this.recordCrossing({ ...record, charged, error: map([]) });
+      this.recordCrossing(
+        { ...record, charged, error: map([]) },
+        acknowledgement,
+      );
       throw this.hostError(
         ctx,
         resultDetail(result, op.result, this.script.functionGroup),
       );
     }
-    this.recordCrossing({ ...record, charged, result });
+    this.recordCrossing({ ...record, charged, result }, acknowledgement);
     this.payConversion(ctx, result, 0);
     return result;
   }
@@ -2271,8 +2500,12 @@ export class Run {
 
   private recordCrossing(
     record: Extract<RunRecord, { kind: 'call' | 'prop' }>,
+    acknowledgement?: Extract<RunRecord, { kind: 'scope' }>,
   ) {
     this.records.push(record);
+    if (acknowledgement) {
+      this.records.push(acknowledgement);
+    }
     if (this.host?.crossing?.()) {
       throw new CrossingInterruptedError();
     }
@@ -2909,6 +3142,7 @@ export class Run {
       }
       case 'wait': {
         const ns = waitNs(this.peek());
+        this.checkScopeBoundary();
         this.pay(key);
         this.pop();
         this.suspend({ k: 'wait', ns });
@@ -2976,12 +3210,14 @@ export class Run {
         if (entry.timeout) {
           sus.timeout = waitNs(items[i++] as Value);
         }
+        this.checkScopeBoundary();
         this.pay(key);
         frame.stack.length -= count;
         this.suspend(sus);
         return;
       }
       case 'join-start':
+        this.checkScopeBoundary();
         this.pay(key);
         this.join = { frame, members: [], start: frame.pc };
         return next();
@@ -3042,6 +3278,9 @@ export class Run {
           args.reduce((sum, v) => sum + sizeOf(v), 0),
         );
         m.inputSize = size;
+        if (ins.op !== 'send' && ins.op !== 'send-up') {
+          this.checkScopeBoundary();
+        }
         this.pay(key);
         // A send that waits is a call, with an id of its own.
         const waits = ins.op !== 'send' && ins.op !== 'send-up';
@@ -3200,6 +3439,7 @@ export class Run {
           throw new ScriptError('wrong arity');
         }
         if (foreign) {
+          this.checkScopeBoundary();
           this.pay(key);
           const id = `${this.id}.c${this.calls + 1}`;
           const to = this.host!.callValue(fn, args, id);

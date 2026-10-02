@@ -26,3 +26,5 @@ This narrows ADR 0005. Every core (TS now, Go later) must be able to save a set 
 - Narrowed by ADR 0018: every corpus case is also replayed with a save and restore between each pair of Pumps, and must give identical output.
 - Narrowed by ADR 0025: a Function Value is saved as plain data (Home Script, literal, captured values). A variables-only restore keeps it, but it is stale, and calling it raises `function gone`.
 - Settled by #72: `Restore` returns the pending calls as a list rather than calling a settle callback. The Host settles each with `group.Settle` (answer, fail, reissue or adopt) before the first Pump. A call still unsettled at the first Pump fails with the new catalogue code `call lost`. The Host's `Resolve` returns the native object, and the restored Group makes the handle, since Host Objects belong to a Group. See [the embedding interface](../../spec/09-embedding.md).
+
+- Narrowed by [ADR 0049](0049-live-host-effects-prevent-saving.md): Save refuses a Group with live Capability Scopes or provisional Segment-bound effects, including at a preemption boundary. Successful save/restore remains unobservable.

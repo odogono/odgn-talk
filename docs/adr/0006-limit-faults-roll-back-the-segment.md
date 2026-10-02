@@ -19,3 +19,5 @@ Every resource a Script uses is metered by a versioned, normative Cost Model, th
 - Changing a cost is a new Cost Model version, not a silent retune.
 - Narrowed by ADR 0017: ordinary errors are caught with `try`/`catch` and roll nothing back. A cancelled Run runs its `finally` blocks after the rollback, on a separate Cleanup Budget. A Limit Fault runs none.
 - Narrowed by ADR 0026: starting a Join Member past the Host's `MaxJoin` is a Limit Fault. The Segment rolls back, and the members already started are abandoned.
+
+- Extended by [ADR 0048](0048-segment-bound-effects-use-one-host-participant.md): explicitly Segment-bound Operations enlist one Host participant whose effects follow Script Variable commit and rollback; unrelated immediate effects remain final.

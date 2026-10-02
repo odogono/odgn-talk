@@ -40,7 +40,7 @@ message = "The value doesn't match the pattern"
 code = "send failed"
 fields = ["reason"]
 optional = ["error"]
-raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored`"
+raised_when = "The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored`"
 sources = ["ADR 0015", "ADR 0017", "ADR 0025", "ADR 0026", "ADR 0031", "ADR 0033"]
 message = "No answer came: the receiver's Run ended {reason}"
 
@@ -207,3 +207,45 @@ fields = []
 raised_when = "A restored wait can't be kept: a pending call is still unsettled at the first Pump"
 sources = ["ADR 0008", "ADR 0017", "ADR 0033", "#72"]
 message = "The call was lost in a restore"
+
+[[error]]
+code = "scope already open"
+fields = ["capability", "operation", "scope"]
+raised_when = "An opening Operation finds its Run/Grant/scope slot occupied"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The scope {scope} on {capability} is already open"
+
+[[error]]
+code = "scope not open"
+fields = ["capability", "operation", "scope"]
+raised_when = "A closing Operation finds no open slot for its Run/Grant/scope"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The scope {scope} on {capability} is not open"
+
+[[error]]
+code = "scope open"
+fields = ["capability", "scope"]
+raised_when = "A suspension-producing boundary or Join entry is reached with an open Capability Scope; fields identify the newest surviving scope"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The scope {scope} on {capability} must close before waiting"
+
+[[error]]
+code = "scope in join"
+fields = ["capability", "operation", "scope"]
+raised_when = "An opening Operation executes inside a Join, including through a local call"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The scope {scope} cannot open inside a Join"
+
+[[error]]
+code = "segment participant conflict"
+fields = ["capability", "operation", "participant"]
+raised_when = "A Segment-bound Operation tries to enlist a different named Grant from the current participant"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The Segment already participates through {participant}, so {capability} cannot join"
+
+[[error]]
+code = "capability disabled"
+fields = ["capability", "operation"]
+raised_when = "A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation"
+sources = ["#219", "ADR 0047", "ADR 0048"]
+message = "The Grant for {capability} is disabled, so {operation} cannot be called"

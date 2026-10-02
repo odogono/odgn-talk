@@ -63,20 +63,22 @@ func (e *HostError) Error() string
 type HostErrorCode string
 
 const (
-	ClockBackwards    HostErrorCode = "clock backwards"
-	ParentCycle       HostErrorCode = "parent cycle"
-	DuplicateObjectID HostErrorCode = "duplicate object id"
-	NameReused        HostErrorCode = "name reused"
-	ReentrantCall     HostErrorCode = "reentrant call"
-	WrongGroup        HostErrorCode = "wrong group"
-	LibraryMismatch   HostErrorCode = "library mismatch"
-	ReservedName      HostErrorCode = "reserved name"
-	NotAdoptable      HostErrorCode = "not adoptable"
-	InvalidValue      HostErrorCode = "invalid value"
-	InvalidSave       HostErrorCode = "invalid save"
-	SaveMismatch      HostErrorCode = "save mismatch"
-	UnknownCall       HostErrorCode = "unknown call"
-	StateTooLarge     HostErrorCode = "state too large"
+	ClockBackwards     HostErrorCode = "clock backwards"
+	ParentCycle        HostErrorCode = "parent cycle"
+	DuplicateObjectID  HostErrorCode = "duplicate object id"
+	NameReused         HostErrorCode = "name reused"
+	ReentrantCall      HostErrorCode = "reentrant call"
+	WrongGroup         HostErrorCode = "wrong group"
+	LibraryMismatch    HostErrorCode = "library mismatch"
+	ReservedName       HostErrorCode = "reserved name"
+	NotAdoptable       HostErrorCode = "not adoptable"
+	InvalidValue       HostErrorCode = "invalid value"
+	InvalidSave        HostErrorCode = "invalid save"
+	SaveMismatch       HostErrorCode = "save mismatch"
+	UnknownCall        HostErrorCode = "unknown call"
+	StateTooLarge      HostErrorCode = "state too large"
+	EffectsPending     HostErrorCode = "effects pending"
+	EffectStateUnknown HostErrorCode = "effect state unknown"
 )
 
 // ErrMailboxFull is load shedding, not a bug: the Host decides whether to
@@ -294,17 +296,57 @@ type ErrorDecl struct {
 // Operation is one Operation Declaration paired with the Host function that
 // implements it. Exactly one of Do, Start and Fire is set, matching Mode.
 type Operation struct {
-	Name       string // a literal word; `ask`, `tell`, `send` and `wait` are refused
-	Args       []Shape // an Optional suffix may be omitted; Host functions receive only supplied args
-	Result     Shape
-	Cost       Cost
-	Mode       Mode
-	MaxPending time.Duration // Suspending only, whole milliseconds; 0 means the Script's MaxWait
-	Errors     []ErrorDecl
+	Name         string  // a literal word; `ask`, `tell`, `send` and `wait` are refused
+	Args         []Shape // an Optional suffix may be omitted; Host functions receive only supplied args
+	Result       Shape
+	Cost         Cost
+	Mode         Mode
+	MaxPending   time.Duration // Suspending only, whole milliseconds; 0 means the Script's MaxWait
+	Errors       []ErrorDecl
+	Scope        *ScopeDecl // immediate only
+	SegmentBound bool       // immediate only; false by default
 
 	Do    func(c *Call, args []Value) (Value, error) // Immediate: a *ScriptError, ErrLimit, or anything else as `host error`
 	Start func(c *Call, args []Value) error          // Suspending: answer later through c
 	Fire  func(c *Call, args []Value) error          // FireAndForget: runs at the call, in order; only its result is dropped
+}
+
+// ScopeDecl is exactly Opens+Abandon or Closes. The abandonment Operation
+// closes the same scope, takes no arguments and returns Nothing.
+type ScopeDecl struct {
+	Opens   string
+	Abandon string
+	Closes  string
+}
+
+// SegmentContext supplies ownership and the last observed Clock, without a
+// Script budget or a cancellable context. See embedding/scoped-effects.md.
+type SegmentContext struct {
+	Group      *Group // identity namespace, not just its name
+	ScriptName string
+	RunID      RunID
+	GrantName  string
+	SegmentID  string
+	Binding    any
+	Now        time.Time
+}
+
+type EffectStatus string
+
+const (
+	EffectOK      EffectStatus = "ok"
+	EffectFailed  EffectStatus = "failed"
+	EffectUnknown EffectStatus = "unknown"
+)
+
+type EffectResult struct {
+	Status EffectStatus
+	Detail string // Host-only; outside parity
+}
+type SegmentLifecycle struct {
+	Begin    func(SegmentContext) EffectResult
+	Commit   func(SegmentContext) EffectResult
+	Rollback func(SegmentContext) EffectResult
 }
 
 // CapabilityDef is defined once per process and reused by every Grant.
@@ -327,14 +369,20 @@ func (d *CapabilityDef) GrantAll(binding any) *Grant
 type Call struct { /* opaque */
 }
 
-func (c *Call) ID() CallID               // unique within the Group ("pricing/r1.c1")
-func (c *Call) ScriptName() string       // for Host bookkeeping; no Group calls through it
+func (c *Call) ID() CallID         // unique within the Group ("pricing/r1.c1")
+func (c *Call) ScriptName() string // for Host bookkeeping; no Group calls through it
+func (c *Call) Group() *Group      // worker calls remain forbidden in callbacks
+func (c *Call) RunID() RunID
+func (c *Call) GrantName() string
+func (c *Call) SegmentID() string
+func (c *Call) ScopeName() string        // empty for an Operation without scope metadata
+func (c *Call) Automatic() bool          // true only for Core-triggered abandonment
 func (c *Call) Binding() any             // the Grant's binding
-func (c *Call) Now() time.Time           // the Pump's Clock reading; never read the Host's own time
+func (c *Call) Now() time.Time           // the last observed Clock reading; never read the Host's own time
 func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop, a timeout)
 
 // Charge draws Fuel in proportion to work, before doing it. It is legal only
-// while the Operation is starting.
+// while a Script Operation is starting, never during automatic abandonment.
 func (c *Call) Charge(fuel int64) error
 
 // Answer, AnswerWithCost and Fail settle a Suspending call. They are safe from
@@ -495,6 +543,9 @@ type Core struct { /* opaque */
 func New() *Core
 
 func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error)
+
+// DefineSegmentCapability is DefineCapability with all three synchronous hooks.
+func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
 func (c *Core) DefineObjectKind(k ObjectKindDef) (*ObjectKind, error)
 
 type Versions struct {
@@ -577,7 +628,7 @@ type LoadOptions struct {
 	// be granted twice under two names with different bindings.
 	Grants map[string]*Grant
 	// GrantsAsUsed keeps only the granted Operations that the Script and its
-	// Libraries use, trimming once at Load; discarded Operations cannot be regained.
+	// Libraries use plus implicit abandonment dependencies, trimming once at Load.
 	GrantsAsUsed bool
 	Owner        *Object            // the Script becomes its Owning Script
 	Objects      map[string]*Object // well-known objects, bound by name
@@ -706,7 +757,8 @@ const (
 	Stopped
 )
 
-// Save is a worker call, legal between Pumps.
+// Save is a worker call between Pumps. Live scopes, an enlisted participant
+// or fatal effect uncertainty return EffectsPending without advancing execution.
 func (g *Group) Save() ([]byte, error)
 
 // Fingerprint is the Group Fingerprint (ADR 0009), the one lockstep check.
@@ -724,6 +776,7 @@ type Inspection struct {
 }
 
 type ScriptView struct {
+	DisabledGrants []string // disabled named Grants, in code-point order; empty when none
 	Name    string
 	Vars    []Pair        // its Script Variables, in declaration order
 	Runs    []RunView     // every Run that hasn't ended, in the order they started
@@ -762,7 +815,7 @@ type Script struct { /* opaque */
 }
 
 func (s *Script) Name() string
-func (s *Script) Grants() map[string][]string // worker; a fresh map of kept names, including revoked Grants
+func (s *Script) Grants() map[string][]string // worker; a fresh map of kept names, including revoked and disabled Grants
 func (s *Script) Counters() Counters          // worker, between Pumps
 
 // Reload is stop-and-reload (ADR 0005), a worker call. It returns the
@@ -802,7 +855,7 @@ type Counters struct {
 // Reports (ADR 0015)
 // ---------------------------------------------------------------------------
 
-// Report is one of *RunEnd, *Stop, *Unhandled, *CallFailed or *Decided. Hosts switch
+// Report is one of *RunEnd, *Stop, *Unhandled, *CallFailed, *EffectFailure or *Decided. Hosts switch
 // on its type.
 type Report interface{ isReport() }
 
@@ -817,6 +870,7 @@ const (
 	Cancelled
 	Unhandled
 	Dropped
+	EffectFailureOutcome // "effect failed"
 )
 
 type RunEnd struct {
@@ -826,6 +880,7 @@ type RunEnd struct {
 	Broadcast     BroadcastID // empty unless the Delivery was a Broadcast's
 	Handler       string
 	Outcome       Outcome
+	Effect        *EffectFailure  // EffectFailureOutcome
 	CleanupFailed *CleanupFailure // Cancelled, only when its cleanup failed
 	Result        Value           // Completed
 	Error         *ScriptError    // Errored
@@ -865,6 +920,18 @@ type CallFailed struct {
 	Call      CallID
 	Operation OperationRef
 	Detail    string
+}
+
+// EffectFailure reports lifecycle failure without raising a Script Error.
+type EffectFailure struct {
+	Script  string
+	Run     RunID
+	Grant   string
+	Segment string
+	Phase   string       // "abandon", "begin", "commit", "rollback"
+	Status  EffectStatus // failed or unknown
+	Scope   string       // abandonment only
+	Detail  string       // Host-only; outside parity
 }
 
 // Decided is a Decision's Verdict, returned by the Pump that sealed it

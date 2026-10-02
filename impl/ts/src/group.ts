@@ -29,12 +29,7 @@ import {
   type Suspension,
   type Script as Loaded,
 } from './machine';
-import {
-  defineCapability,
-  type Grant,
-  type Call,
-  type Operation,
-} from './capabilities';
+import { type Grant, type Call, type Operation } from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData } from './manifest';
 import {
@@ -202,7 +197,18 @@ export type Location = {
   pc: number;
   unit: string;
 };
+export type EffectFailure = {
+  detail?: string;
+  grant: string;
+  phase: 'abandon';
+  run: string;
+  scope: string;
+  script: string;
+  segment: string;
+  status: 'failed' | 'unknown';
+};
 export type Report =
+  | ({ kind: 'effect failure' } & EffectFailure)
   | {
       alloc: number;
       /** `errored`: the raise no Unwind Table entry caught; `limit fault`: the faulting instruction. */
@@ -281,6 +287,7 @@ export type MessageView = {
 };
 export type Inspection = {
   scripts: {
+    disabledGrants?: string[];
     mailbox: MessageView[];
     name: string;
     runs: RunView[];
@@ -398,6 +405,7 @@ type ScriptState = {
   /** Work charged to Runs that have ended or been discarded. */
   allocTotal: number;
   debt: number;
+  disabled: Set<string>;
   faults: number;
   fuelTotal: number;
   grants: ReadonlyMap<string, Grant<unknown>>;
@@ -475,10 +483,22 @@ const declarationsOf = (
 const keepOperations = (
   grant: Grant<unknown>,
   names: ReadonlySet<string>,
-): Grant<unknown> => ({
-  ...grant,
-  ops: new Set([...grant.ops].filter(name => names.has(name))),
-});
+): Grant<unknown> => {
+  const kept = new Set([...grant.ops].filter(name => names.has(name)));
+  for (const name of kept) {
+    const op = grant.capability.operations.get(name)!;
+    if (op.mode === 'immediate' && op.scope && 'opens' in op.scope) {
+      if (!grant.ops.has(op.scope.abandon)) {
+        throw new HostError(
+          'invalid value',
+          'An opener requires granted abandonment',
+        );
+      }
+      kept.add(op.scope.abandon);
+    }
+  }
+  return { ...grant, ops: kept };
+};
 
 const usedOperations = (tree: SemanticTree, imports: readonly Library[]) => {
   const used = new Map<string, Set<string>>();
@@ -567,6 +587,7 @@ export class Group {
   private saves = 0;
   private lastClock: bigint | null = null;
   private pumping = false;
+  private cleaning = false;
   private active: { records: number; running: Running; s: ScriptState } | null =
     null;
   private activeStop: (() => void) | null = null;
@@ -651,6 +672,17 @@ export class Group {
   save(): Uint8Array {
     this.worker();
     const id = `s${++this.saves}`;
+    if (this.scripts.some(s => this.runsOf(s).some(r => r.run.hasOpenScopes))) {
+      this.trace(recordLine('save', [id], [], true));
+      this.trace(
+        recordLine(
+          'refused',
+          [],
+          [['code', JSON.stringify('effects pending')]],
+        ),
+      );
+      throw new HostError('effects pending');
+    }
     const state = {
       scripts: this.scripts.map(s => ({
         name: s.name,
@@ -671,6 +703,7 @@ export class Group {
         suspended: s.suspended,
         waiters: s.waiters,
         revoked: s.revoked,
+        disabled: s.disabled,
       })),
       inputs: this.inputs.map(input => ({
         action: input.action,
@@ -792,12 +825,24 @@ export class Group {
               new Set(grant.operations.map(op => op.name)),
             )
           : undefined;
-        const placeholder = defineCapability(
-          grant.capability,
-          Object.fromEntries(
-            grant.operations.map(op => [op.name, op.declaration]),
-          ),
-        ).grant('all', undefined);
+        // A pruned Grant can retain a closer without its opener. These are
+        // saved declarations, not a new Host Capability definition.
+        const placeholder: Grant<unknown> = {
+          binding: undefined,
+          ops: new Set(grant.operations.map(op => op.name)),
+          capability: {
+            name: grant.capability,
+            operations: new Map(
+              grant.operations.map(op => [op.name, op.declaration]),
+            ),
+            grant: () => {
+              throw new HostError(
+                'invalid value',
+                'A saved declaration has no Host implementation',
+              );
+            },
+          },
+        };
         if (!rebound) {
           revoked.add(grant.name);
           unbound.push(`${script.name}.${grant.name}`);
@@ -960,6 +1005,7 @@ export class Group {
       script.fuelTotal = runtime.fuelTotal;
       script.allocTotal = runtime.allocTotal;
       script.faults = runtime.faults;
+      script.disabled = new Set(runtime.disabled ?? []);
       for (const name of runtime.revoked) {
         script.revoked.add(name);
       }
@@ -1474,6 +1520,7 @@ export class Group {
       pendingCalls.push(
         ...r.run.discard(r.parked || r.resuming || r.cleanupReady),
       );
+      this.abandonScopes(r);
       this.forgetWait(s, r);
     }
     s.queue = [];
@@ -1567,9 +1614,9 @@ export class Group {
   private queueInput(input: QueuedInput): void {
     this.inputs.push(input);
     if (this.onReady) {
-      if (this.pumping) {
-        // Operation and property callbacks may queue inputs. Let the Pump return
-        // before calling Host code, so a readiness callback cannot reenter it.
+      if (this.pumping || this.cleaning) {
+        // Host crossings may queue inputs. Notify after the Pump or replacement
+        // returns, so a readiness callback cannot reenter lifecycle cleanup.
         queueMicrotask(() => this.onReady?.());
       } else {
         this.onReady();
@@ -1578,8 +1625,25 @@ export class Group {
   }
 
   private worker() {
-    if (this.pumping) {
+    if (this.pumping || this.cleaning) {
       throw new HostError('reentrant call');
+    }
+  }
+
+  private abandonScopes(running: Running) {
+    if (!running.run.hasOpenScopes) {
+      return;
+    }
+    const records = running.run.records.length;
+    this.cleaning = true;
+    try {
+      running.run.abandonScopes();
+    } finally {
+      this.cleaning = false;
+    }
+    this.writeRecords(running, records);
+    if (this.active?.running === running) {
+      this.active.records = running.run.records.length;
     }
   }
 
@@ -1681,6 +1745,7 @@ export class Group {
       owner,
       grants: kept,
       revoked: new Set(),
+      disabled: new Set(),
       handle,
       loaded,
       identity: p.identity,
@@ -1790,6 +1855,7 @@ export class Group {
       ...s,
       grants,
       revoked: new Set(),
+      disabled: new Set(),
       unbound: new Set(),
       loaded,
       identity: p.identity,
@@ -1815,10 +1881,22 @@ export class Group {
       );
     }
     if (carry === 'carry variables') {
+      let variables = s.loaded.variables;
+      for (const r of this.runsOf(s)) {
+        if (
+          !r.parked &&
+          !r.resuming &&
+          !r.cleanupReady &&
+          !r.run.suspended &&
+          !r.run.done
+        ) {
+          variables = r.run.segmentBase;
+        }
+      }
       for (const [i, name] of loaded.variableNames.entries()) {
         const old = s.loaded.variableNames.indexOf(name);
         if (old >= 0) {
-          loaded.variables[i] = s.loaded.variables[old]!;
+          loaded.variables[i] = variables[old]!;
         }
       }
     }
@@ -2178,11 +2256,14 @@ export class Group {
         this.landUrgentInputs();
         return s.stopped || (!cancelling && run.cancelling);
       },
+      group,
+      disableGrant: name => s.disabled.add(name),
+      isDisabled: name => s.disabled.has(name),
       grants: s.grants,
       isUnbound: name => s.unbound.has(name),
       isRevoked: name => s.revoked.has(name),
       get now() {
-        return group.lastClock!;
+        return group.lastClock ?? 0n;
       },
       get me() {
         return s.owner?.handle.value ?? nothing;
@@ -3414,6 +3495,9 @@ export class Group {
         ),
       );
     }
+    if (outcome && !s.stopped) {
+      this.abandonScopes(running);
+    }
     const handler =
       !running.delivery.fn && s.loaded.clauses.has(running.delivery.message)
         ? running.delivery.message
@@ -3602,6 +3686,47 @@ export class Group {
     const { run } = running;
     for (let i = records0; i < run.records.length; i++) {
       const rec = run.records[i]!;
+      if (rec.kind === 'scope') {
+        this.trace(
+          recordLine(
+            'scope',
+            [rec.id],
+            [
+              ['grant', rec.grant],
+              ['name', rec.name],
+              ['action', rec.action],
+            ],
+          ),
+        );
+        continue;
+      }
+      if (rec.kind === 'effect-failure') {
+        this.trace(
+          recordLine(
+            'effect-failure',
+            [running.id],
+            [
+              ['grant', rec.grant],
+              ['segment', rec.segment],
+              ['phase', 'abandon'],
+              ['status', rec.status],
+              ['scope', rec.scope],
+            ],
+          ),
+        );
+        this.drainReports.push({
+          kind: 'effect failure',
+          script: run.script.name,
+          run: running.id,
+          grant: rec.grant,
+          segment: rec.segment,
+          phase: 'abandon',
+          status: rec.status,
+          scope: rec.scope,
+          detail: rec.detail,
+        });
+        continue;
+      }
       if (rec.kind === 'abandon') {
         this.trace(recordLine('abandon', [rec.id], []));
         continue;
@@ -3656,6 +3781,7 @@ export class Group {
               ['result', rec.result ? traceValue(rec.result) : null],
               ['error', rec.error ? traceValue(rec.error) : null],
               ['charged', rec.charged ? String(rec.charged) : null],
+              ['automatic', rec.automatic ? 'yes' : null],
             ],
           ),
         );
@@ -3971,6 +4097,9 @@ export class Group {
       );
       return {
         name: s.name,
+        ...(s.disabled.size
+          ? { disabledGrants: [...s.disabled].sort(compareText) }
+          : {}),
         vars,
         runs: this.runsOf(s).map(item => ({
           id: item.id,
@@ -4114,6 +4243,7 @@ type SavedScriptState = Pick<
   | 'suspended'
   | 'waiters'
   | 'revoked'
+  | 'disabled'
 > & {
   definitions: Value[][];
   live: boolean;

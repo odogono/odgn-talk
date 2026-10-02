@@ -15,7 +15,8 @@ export type HostErrorCode =
   | 'invalid save'
   | 'save mismatch'
   | 'unknown call'
-  | 'state too large';
+  | 'state too large'
+  | 'effects pending';
 
 export class HostError extends Error {
   constructor(
