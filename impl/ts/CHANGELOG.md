@@ -7,6 +7,10 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+### Changed
+
+- The TS Core moved to `impl/ts/`, inside a Bun workspace whose root also holds the Spec tools in `tools/` ([ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). Its corpus runner and browser smoke test are now `impl/ts/tools/`. The package and its exports are unchanged.
+
 ### Added
 
 - Process-wide `createCore()`/`Core` and deterministic `exportManifest`, completing [#200](https://github.com/odogono/odgn-talk/issues/200). Existing free-function helpers share the Core's compile caches and definitions. Scripts reuse compilation across Groups, reloads and restores while retaining separate state and per-load checks; extension caching covers complete Script history. Host Manifests export sorted declarations and Shapes without bindings or executable Host callbacks.

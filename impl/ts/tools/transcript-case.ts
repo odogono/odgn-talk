@@ -7,7 +7,7 @@ import {
   parseTranscript,
   replayTranscript,
   writeTranscript,
-} from '../../src/session';
+} from '../src/session';
 import {
   blessed,
   runTraceCase,

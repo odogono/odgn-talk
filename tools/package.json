@@ -1,0 +1,21 @@
+{
+  "name": "@odgn/northtalk-spec-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check",
+    "spec:gen": "bun spec/generate.ts",
+    "spec:check": "bun spec/generate.ts --check",
+    "grammar:check": "bun grammar/check.ts",
+    "machine:check": "bun machine/check.ts",
+    "corpus:check": "bun corpus/check.ts",
+    "unicode:generate": "bun unicode/generate.ts",
+    "unicode:check": "bun unicode/generate.ts --check",
+    "syntax:generate": "bun syntax/generate.ts",
+    "syntax:check": "bun syntax/generate.ts --check",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "ajv": "^8"
+  }
+}

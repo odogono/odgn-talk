@@ -14,18 +14,18 @@ import {
   firstLineDivergence,
   runDisassemblyCase,
   runEncodingCase,
-} from '../tools/core/corpus';
+} from '../tools/corpus';
 import {
   DeferredCaseError,
   parseRecord,
   replay,
   runTraceCase,
-} from '../tools/core/trace-case';
+} from '../tools/trace-case';
 
 test('the NFC encoding seed case executes every line through the public values', () => {
   const dir = resolve(
     import.meta.dir,
-    '../corpus/text-model/host-text-normalised-to-nfc',
+    '../../../corpus/text-model/host-text-normalised-to-nfc',
   );
   const result = runEncodingCase(dir);
   expect(result.count).toBe(5);
@@ -118,7 +118,7 @@ test('encoding selection reports the first differing source line', () => {
 });
 
 test('selecting a Trace Case with a deferred input exits with a clear failure', () => {
-  const runner = resolve(import.meta.dir, '../tools/core/corpus.ts');
+  const runner = resolve(import.meta.dir, '../tools/corpus.ts');
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-deferred-'));
   try {
     writeFileSync(
@@ -140,7 +140,7 @@ test('an unblessed Trace Case runs when named, and reports its first divergence'
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-unblessed-'));
   try {
     cpSync(
-      resolve(import.meta.dir, '../corpus/limits/fuel-alloc-minimums'),
+      resolve(import.meta.dir, '../../../corpus/limits/fuel-alloc-minimums'),
       dir,
       {
         recursive: true,
@@ -169,7 +169,7 @@ test('an unblessed Trace Case runs when named, and reports its first divergence'
 });
 
 test('the blessed text-model Trace Cases reproduce exactly', () => {
-  const root = resolve(import.meta.dir, '../corpus/text-model');
+  const root = resolve(import.meta.dir, '../../../corpus/text-model');
   for (const name of readdirSync(root)) {
     const dir = resolve(root, name);
     const setup = Bun.TOML.parse(
@@ -237,7 +237,7 @@ test('every Disassembly Case reproduces its expected text byte for byte', () => 
     'messages-and-waiting',
   ]) {
     const result = runDisassemblyCase(
-      resolve(import.meta.dir, '../corpus/disassembly', name),
+      resolve(import.meta.dir, '../../../corpus/disassembly', name),
     );
     expect(result.divergence).toBeUndefined();
     expect(result.count).toBeGreaterThan(0);
@@ -256,9 +256,13 @@ test('a Disassembly divergence names the first differing line and byte', () => {
   });
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-disassembly-'));
   try {
-    cpSync(resolve(import.meta.dir, '../corpus/disassembly/containers'), dir, {
-      recursive: true,
-    });
+    cpSync(
+      resolve(import.meta.dir, '../../../corpus/disassembly/containers'),
+      dir,
+      {
+        recursive: true,
+      },
+    );
     const expected = resolve(dir, 'writes.dis');
     const blessed = readFileSync(expected, 'utf8');
     writeFileSync(
@@ -278,7 +282,7 @@ test('a Disassembly divergence names the first differing line and byte', () => {
 });
 
 test('blessing refuses case kinds this Core does not bless', () => {
-  const runner = resolve(import.meta.dir, '../tools/core/corpus.ts');
+  const runner = resolve(import.meta.dir, '../tools/corpus.ts');
   const result = Bun.spawnSync([
     process.execPath,
     runner,
@@ -292,7 +296,7 @@ test('blessing refuses case kinds this Core does not bless', () => {
 });
 
 test("every record the Core writes has corpus.toml's ids and keys, in its order", async () => {
-  const corpus = (await import('../spec/data/corpus.toml')).default as {
+  const corpus = (await import('../../../spec/data/corpus.toml')).default as {
     record: {
       ids?: string[];
       key?: { key: string; optional?: boolean }[];
@@ -302,7 +306,7 @@ test("every record the Core writes has corpus.toml's ids and keys, in its order"
   const specs = new Map(corpus.record.map(r => [r.name, r]));
   const lines: string[] = [];
   for (const area of ['text-model', 'limits', 'text-patterns']) {
-    const root = resolve(import.meta.dir, '../corpus', area);
+    const root = resolve(import.meta.dir, '../../../corpus', area);
     for (const name of readdirSync(root)) {
       const dir = resolve(root, name);
       const setup = Bun.TOML.parse(

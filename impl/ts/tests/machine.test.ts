@@ -63,7 +63,7 @@ const value = (body: string, after = '') =>
   result(run(`on go\n${body}\nend go\n${after}`).outcome);
 
 describe('the text-model seed cases', () => {
-  const root = resolve(import.meta.dir, '../corpus/text-model');
+  const root = resolve(import.meta.dir, '../../../corpus/text-model');
   const cases = readdirSync(root).filter(name =>
     readFileSync(join(root, name, 'case.toml'), 'utf8').includes(
       'kind = "trace"',

@@ -3,9 +3,9 @@
 // the case's, ignoring comments and blank lines. Bless writes the Core's
 // Trace back, keeping each comment and blank line before the Host Input line
 // it preceded.
-import { readDisplayText } from '../../src/readers';
-import { replacementLibraries } from '../../src/library';
-import corpus from '../../spec/data/corpus.toml';
+import { readDisplayText } from '../src/readers';
+import { replacementLibraries } from '../src/library';
+import corpus from '../../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -39,7 +39,7 @@ import {
   nothing,
   type Limits,
   type Value,
-} from '../../src/index';
+} from '../src/index';
 
 type RecordSpec = {
   ids?: string[];

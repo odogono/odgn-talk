@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { DeferredCaseError, replay } from '../tools/core/trace-case';
+import { DeferredCaseError, replay } from '../tools/trace-case';
 import {
   clockCapability,
   timerCapability,

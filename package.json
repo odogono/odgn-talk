@@ -1,35 +1,32 @@
 {
-  "name": "@odgn/northtalk",
+  "name": "odgn-talk-workspace",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts",
-    "./session": "./src/session/index.ts"
-  },
+  "workspaces": [
+    "impl/ts",
+    "tooling/*",
+    "tools"
+  ],
   "scripts": {
-    "spec:gen": "bun tools/spec/generate.ts",
-    "spec:check": "bun tools/spec/generate.ts --check",
-    "grammar:check": "bun tools/grammar/check.ts",
-    "machine:check": "bun tools/machine/check.ts",
-    "corpus:check": "bun tools/corpus/check.ts",
-    "corpus:run": "bun tools/core/corpus.ts",
-    "unicode:generate": "bun tools/unicode/generate.ts",
-    "unicode:check": "bun tools/unicode/generate.ts --check",
-    "typecheck": "tsc",
+    "check": "bun run --cwd tools check",
+    "spec:gen": "bun run --cwd tools spec:gen",
+    "spec:check": "bun run --cwd tools spec:check",
+    "unicode:generate": "bun run --cwd tools unicode:generate",
+    "unicode:check": "bun run --cwd tools unicode:check",
+    "syntax:generate": "bun run --cwd tools syntax:generate",
+    "syntax:check": "bun run --cwd tools syntax:check",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --filter '*' test",
+    "build": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd impl/ts build",
     "lint": "bunx --bun eslint . --max-warnings 0",
     "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
     "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
-    "test": "bun run syntax:check && bun run unicode:check && bun test tests",
-    "build": "bun run syntax:check && bun run unicode:check && bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
-    "test:browser": "bun tools/core/browser-smoke.ts",
-    "syntax:generate": "bun tools/syntax/generate.ts",
-    "syntax:check": "bun tools/syntax/generate.ts --check"
+    "corpus:run": "bun run --cwd impl/ts corpus:run"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",
     "@types/bun": "^1.4.2",
-    "ajv": "^8",
     "eslint": "^9",
     "prettier": "^3.9.9",
     "typescript": "~6.0.0"

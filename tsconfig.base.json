@@ -11,13 +11,5 @@
     "types": [
       "bun"
     ]
-  },
-  "include": [
-    "src",
-    "tests",
-    "tools/unicode",
-    "tools/core",
-    "tools/syntax",
-    "types"
-  ]
+  }
 }

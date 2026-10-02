@@ -6,7 +6,7 @@ A Host embeds a Core through one interface, declared in [`talk.go`](embedding/ta
 
 ## Package names
 
-The Go Core's module path is `github.com/odogono/odgn-talk`, with the public package named `northtalk` at the repository root. The TS Core's package is `@odgn/northtalk` ([ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md)).
+The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the public package named `northtalk` at the module root ([ADR 0046](../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). The TS Core's package is `@odgn/northtalk` ([ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md)).
 
 ## The shape
 
@@ -305,7 +305,7 @@ Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tag
 
 - **Idiom:** how each Core expresses the interface: errors or exceptions, `Start`/`Answer` or a Promise, and the builders for maps.
 - **Wording:** a `HostError`'s detail, and a diagnostic's message. Their codes are normative.
-- **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/driver` in Go, with a worker pool, a run queue and a timer per Group, and `autoDrive(group)` from `@odgn/northtalk/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
+- **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/impl/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `autoDrive(group)` from `@odgn/northtalk/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
 - **The TS Core's debug-pause hook** ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [Appendix C](appendix-c-handed-off-open.md)).
 - **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative.
 - **The Host Manifest** is for tooling, and the Core never reads it.

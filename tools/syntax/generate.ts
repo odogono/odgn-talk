@@ -11,7 +11,7 @@ import errors from '../../spec/data/errors.toml';
 import limits from '../../spec/data/limits.toml';
 import version from '../../spec/data/version.toml';
 import { resolve } from 'node:path';
-import { parseSource } from '../../src/parser';
+import { parseSource } from '../../impl/ts/src/parser';
 
 // Parse the catalogue's call notation with the Core grammar, including defaults
 // containing nested expressions or commas in text. Constants have no contract.
@@ -233,9 +233,15 @@ const stdlibContent =
     2,
   )};\n`;
 const outputs = [
-  [resolve(import.meta.dir, '../../src/generated/syntax.ts'), content],
-  [resolve(import.meta.dir, '../../src/generated/machine.ts'), machineContent],
-  [resolve(import.meta.dir, '../../src/generated/stdlib.ts'), stdlibContent],
+  [resolve(import.meta.dir, '../../impl/ts/src/generated/syntax.ts'), content],
+  [
+    resolve(import.meta.dir, '../../impl/ts/src/generated/machine.ts'),
+    machineContent,
+  ],
+  [
+    resolve(import.meta.dir, '../../impl/ts/src/generated/stdlib.ts'),
+    stdlibContent,
+  ],
 ] as const;
 for (const [path, text] of outputs) {
   if (process.argv.includes('--check')) {

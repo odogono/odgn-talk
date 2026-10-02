@@ -12,11 +12,11 @@ import {
   readDisplay,
   type CodeUnit,
   type LibraryExport,
-} from '../../src/index';
+} from '../src/index';
 import { DeferredCaseError, runTraceCase, unblessed } from './trace-case';
 import { runTranscriptCase } from './transcript-case';
 
-const root = resolve(import.meta.dir, '../..');
+const root = resolve(import.meta.dir, '../../..');
 const corpusRoot = resolve(root, 'corpus');
 /** The case kinds this Core executes; every other kind is deferred. */
 const supported = new Set(['encoding', 'disassembly', 'trace', 'transcript']);

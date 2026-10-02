@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import catalogue from '../spec/data/diagnostics.toml';
+import catalogue from '../../../spec/data/diagnostics.toml';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -347,7 +347,7 @@ describe('Core name resolution', () => {
   });
 
   test('all Standard Library sources pass the implemented name checks', () => {
-    const directory = resolve(import.meta.dir, '../spec/stdlib');
+    const directory = resolve(import.meta.dir, '../../../spec/stdlib');
     for (const path of new Bun.Glob('*.talk').scanSync({ cwd: directory })) {
       const result = checkSource(
         readFileSync(resolve(directory, path), 'utf8'),
@@ -870,7 +870,7 @@ describe('Core construct and Guard checks', () => {
 
   test('chapter 3 kind tables match the checker', () => {
     const chapter = readFileSync(
-      resolve(import.meta.dir, '../spec/03-values.md'),
+      resolve(import.meta.dir, '../../../spec/03-values.md'),
       'utf8',
     );
     const kinds = chapter

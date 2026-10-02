@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { verifyFile } from '../tools/unicode/generate';
-import unicode from '../spec/data/unicode.toml';
+import { verifyFile } from '../../../tools/unicode/generate';
+import unicode from '../../../spec/data/unicode.toml';
 import {
   assertScalarText,
   normalizeNFC,
@@ -14,7 +14,7 @@ import {
   isWhiteSpace,
 } from '../src/unicode';
 
-const dataRoot = resolve(import.meta.dir, '../.cache/unicode/18.0.0');
+const dataRoot = resolve(import.meta.dir, '../../../.cache/unicode/18.0.0');
 const rows = (name: string) =>
   readFileSync(resolve(dataRoot, name), 'utf8').split(/\r?\n/);
 const hexText = (s: string) =>
