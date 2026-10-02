@@ -1,0 +1,16 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "console"
+costs = { write = { fuel = 7, alloc = 2 }, read = { fuel = 11, alloc = 3 } }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { console = { ops = "all" } }

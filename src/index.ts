@@ -148,7 +148,9 @@ export {
 export type { GrantDecls } from './effects';
 export {
   clockCapability,
+  consoleCapability,
   timerCapability,
   type Costs,
+  type ConsoleImpl,
   type TimerImpl,
 } from './standard-capabilities';

@@ -7,6 +7,8 @@ export const shapeData = (shape: Shape): unknown => {
   switch (shape.k) {
     case 'any':
       return 'any';
+    case 'value':
+      return 'value';
     case 'kind':
       return shape.kind;
     case 'quantity':

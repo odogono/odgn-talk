@@ -1,5 +1,5 @@
 // Chapter 7's fixed Standard Capability declarations. The Host supplies
-// costs and durable timer storage; clock.now reads only the Pump's Clock.
+// costs and I/O; clock.now reads only the Pump's Clock.
 import {
   defineCapability,
   type Call,
@@ -11,6 +11,10 @@ import { HostError } from './errors';
 import { instant, type Value } from './values';
 
 export type Costs = Readonly<Record<string, Cost>>;
+export type ConsoleImpl = {
+  read(call: Call<unknown>): void;
+  write(call: Call<unknown>, value: Value): void;
+};
 export type TimerImpl = {
   cancel(call: Call<unknown>, name: string): void;
   schedule(
@@ -49,6 +53,7 @@ const fixed = <B>(capability: CapabilityDef<B>): CapabilityDef<B> => {
 };
 const instantShape: Shape = Object.freeze({ k: 'kind', kind: 'instant' });
 const textShape: Shape = Object.freeze({ k: 'kind', kind: 'text' });
+const valueShape: Shape = Object.freeze({ k: 'value' });
 const dataListShape: Shape = Object.freeze({
   k: 'list',
   of: Object.freeze({ k: 'any' }),
@@ -97,6 +102,40 @@ export const timerCapability = (
         errors: [],
         cost: costOf(costs, 'cancel'),
         fire: (call, name) => impl.cancel(call, name!.asText()!),
+      },
+    }),
+  );
+};
+
+/** The Host shows Values in text form and answers read with a line of text. */
+export const consoleCapability = (
+  impl: ConsoleImpl,
+  costs: Costs,
+): CapabilityDef<unknown> => {
+  if (
+    !impl ||
+    typeof impl.write !== 'function' ||
+    typeof impl.read !== 'function'
+  ) {
+    throw new HostError('invalid value', 'Console needs Write and Read');
+  }
+  return fixed(
+    defineCapability<unknown>('console', {
+      write: {
+        mode: 'fire-and-forget',
+        args: [valueShape],
+        errors: [],
+        cost: costOf(costs, 'write'),
+        fire: (call, value) => impl.write(call, value!),
+      },
+      read: {
+        mode: 'suspending',
+        args: [],
+        result: textShape,
+        errors: [],
+        maxPendingMs: 2_147_483_647,
+        cost: costOf(costs, 'read'),
+        start: call => impl.read(call),
       },
     }),
   );

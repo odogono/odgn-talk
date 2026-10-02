@@ -1,0 +1,12 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "console"
+costs = { write = { fuel = 0 }, read = { fuel = 0 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { maxWaitMs = 1 }
+grants = { console = { ops = "all" } }

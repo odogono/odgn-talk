@@ -1,0 +1,5 @@
+script variable seen = "unchanged"
+on go
+  ask console to read and wait
+  put it into seen
+end
