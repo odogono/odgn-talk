@@ -35,12 +35,19 @@ import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
 import { viewSource } from '../view';
 import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
+import type { TranscriptItem } from './transcript';
 
 export type SessionEnvironment = {
   /** A real Clock reading, in epoch nanoseconds. */
   now(): bigint;
   /** A user Library's source, for `:library` given a path. */
   readFile?(path: string): string;
+  /**
+   * Receives the session as its Session Transcript records it, item by item:
+   * each Entry and Session Command in its recorded form, each real Clock
+   * reading before its Pump, each line typed for `read`, and each line printed.
+   */
+  record?(item: TranscriptItem): void;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
   /** Writes a file of `:export`, given a directory. */
@@ -183,6 +190,11 @@ export class SessionHost {
     return this.sessionSource(this.declarations);
   }
 
+  /** Whether the Clock is virtual, so only `:clock` commands move it. */
+  get virtualClock(): boolean {
+    return this.virtual !== null;
+  }
+
   /** The next deadline a background Pump is due at, if any. */
   get nextDeadline(): bigint | undefined {
     return this.deadline;
@@ -195,6 +207,29 @@ export class SessionHost {
 
   /** An Entry or a Session Command. Returns the lines it printed. */
   input(source: string): string[] {
+    this.recording = source.replace(/\n+$/, '');
+    const out = this.entry(source);
+    this.recorded();
+    return this.printed(out);
+  }
+
+  // The Entry or Session Command, as its Transcript records it, until the
+  // Pump it causes or the lines it prints.
+  private recording: string | null = null;
+  private recorded() {
+    if (this.recording !== null) {
+      this.env.record?.({ k: 'input', source: this.recording });
+      this.recording = null;
+    }
+  }
+  private printed(out: string[]): string[] {
+    for (const text of out) {
+      this.env.record?.({ k: 'output', text });
+    }
+    return out;
+  }
+
+  private entry(source: string): string[] {
     if (source.startsWith(':')) {
       try {
         return this.command(source);
@@ -230,8 +265,9 @@ export class SessionHost {
       return [];
     }
     this.reads.delete(pending[0]);
+    this.env.record?.({ k: 'read', line });
     pending[1].call.answer(text(line));
-    return this.pump();
+    return this.printed(this.pump());
   }
 
   /** `Inspect()`, which is the Host Input `vars`; null before the session starts. */
@@ -241,7 +277,7 @@ export class SessionHost {
 
   /** Pumps at a deadline, under a real Clock. */
   tick(): string[] {
-    return this.group ? this.pump() : [];
+    return this.group ? this.printed(this.pump()) : [];
   }
 
   // ------------------------------------------------------------- starting
@@ -610,6 +646,8 @@ export class SessionHost {
       let at: bigint;
       try {
         at = arg ? parseInstant(arg) : (this.lastClock ?? this.env.now());
+        // A Transcript always records the instant.
+        this.recording = `:clock virtual ${formatInstant(at)}`;
       } catch {
         return refuse('bad arguments');
       }
@@ -787,6 +825,8 @@ export class SessionHost {
       } catch {
         return refuse('bad arguments');
       }
+      // A Transcript records the Library's source in place of its path.
+      this.recording = `:library ${how} ${name}\n${source.slice(0, -1)}`;
     }
     // Known here, so neither reaches the Core.
     const held = this.libraries.get(name!);
@@ -1024,7 +1064,11 @@ export class SessionHost {
   // ------------------------------------------------------------- pumping
 
   private pump(): string[] {
+    this.recorded();
     const reading = this.virtual ?? this.env.now();
+    if (this.virtual === null) {
+      this.env.record?.({ k: 'clock', at: reading });
+    }
     const now =
       this.lastClock !== null && reading < this.lastClock
         ? this.lastClock

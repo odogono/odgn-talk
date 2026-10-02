@@ -17,7 +17,8 @@ Commands in this guide run from `impl/ts/`. The spec-level generators and checks
 - **The Clock, limits and Runs:** `:clock` shows the Clock, switches it between real and virtual, and advances a virtual one and pumps; a virtual Clock is read by every Pump, and a foreground deadline wait returns the prompt at once. `:limits` tightens the override later Entries are requested with. `:cancel` cancels the latest Entry's Run or a named one and pumps. `:runs`, `:mailbox` and `:vars` render `inspect()`, so each is a `vars` Host Input.
 - **Saves, Libraries and export:** `:save` keeps the Group's save with the Session Host's own state in memory, and `:restore` restores it with RejectMismatch and adopts every pending call. `:library` compiles a user Library from a file (the environment's `readFile`) or from the source lines a Transcript records, at version `1`. `:export` prints the session source, or writes it and each user Library through the environment's `writeFile`. A Transcript's Trace Case setup adds each user Library as it was added.
 - **Built-in Capabilities:** `:grant <name> clock` grants the Standard `clock`, which reads the Pump's Clock and costs nothing, so it needs no `~` answers.
-- **Still to come:** `calendar` and `locale` as built-in Capabilities, with their `~` answers, and the `northtalk` REPL.
+- **Recording:** the environment's `record` receives the session as its Transcript records it: each Entry and Session Command in its recorded form (`:clock virtual` with its instant, `:library` with its source lines in place of its path), each real Clock reading before its Pump, each line typed for `read`, and each line printed. `replayTranscript` compares what the replaying Session Host records, so the corpus checks the recorder too. The [`northtalk` REPL](../../tooling/cli/) writes it with `--transcript`.
+- **Still to come:** `calendar` and `locale` as built-in Capabilities, with their `~` answers.
 
 ## Process-wide Core and Host Manifests
 

@@ -41,5 +41,7 @@ jobs:
         working-directory: impl/ts
       - run: bun run corpus:run
         working-directory: impl/ts
+      - run: bun test tests
+        working-directory: tooling/cli
       - run: bun run build
         working-directory: impl/ts
