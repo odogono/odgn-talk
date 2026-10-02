@@ -96,7 +96,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 
 | Command | Written | Does | Notes |
 | --- | --- | --- | --- |
-| `:grant` | `:grant <name> <capability>` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>` | before the session starts |
+| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone or a `locale` Grant's default tag as `<binding>` | before the session starts |
 | `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
 | `:stub` | `:stub <capability>.<operation> <value> \| :stub <capability>.<operation> fail <error>` | Queues the result of the next call of a mock immediate Operation, or an error map to fail it with |  |
 | `:answer` | `:answer <call> <value>` | Answers a pending call of a mock suspending Operation |  |
@@ -120,6 +120,8 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Mocks:** `:mock` defines an Operation whose result has the `any` Shape, and which declares eight arguments, each an Optional `any`, so a call may give from none to eight. It declares no error codes. A call to one prints a `call` line, which names it by its Capability, whichever Grant the call goes through, and lists the arguments the call gave. An immediate one takes the next `:stub` queued for it, as a Trace Case's runner does ([chapter 11](11-the-trace-and-conformance.md#stubs)), and with none fails as `host error`. A suspending one waits for `:answer` or `:fail`, and a fire-and-forget one just succeeds.
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
+  - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, and a default BCP 47 tag for `locale`. With none, they bind `UTC` and `und`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
+  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar` or `locale`.
 - **`:clock`:**
   - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
   - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
@@ -162,7 +164,7 @@ OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
 - **`| `** starts each further line of an Entry, or a line of the source that `:library` records. A `|` alone is an empty one.
 - **`< `** starts a line the user typed for `console`'s `read`, and a `<` alone is an empty one.
 - **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
-- **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
+- **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map: its `code`, its `message` and its other fields, or `{}` for a failure that isn't a Script error, which the Script sees as `host error`. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
 - **`#`** starts a comment, which a REPL never writes.
 - **Every other line** is output. An output line that is empty, or that starts with `>`, `|`, `<`, `@`, `~`, `#` or `'`, is written after a `'`.
 

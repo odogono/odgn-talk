@@ -12,6 +12,6 @@ northtalk replay <transcript> [--trace <file>]
 - **Ctrl-C** is `:cancel` of the Run the prompt waits for, and a Transcript records it as `:cancel`. At the prompt it drops an unfinished Entry.
 - **`--transcript <file>`** records the session as it goes: each Entry and recorded Session Command, each real Clock reading, each line typed for `read`, and each line printed.
 - **`replay`** replays a Transcript through a fresh Session Host, and exits with 1, naming the first differing line, when it doesn't print the same. `--trace` writes the Trace the replay took, ending with `> vars`, as a corpus case's `case.trace` does.
-- **Built-in Capabilities** for `:grant`: `clock`. `calendar` and `locale` come later.
+- **Built-in Capabilities** for `:grant`: `clock`, and `calendar` and `locale` answered from the runtime's Intl data ([`src/builtins.ts`](src/builtins.ts)), as in `:grant cal calendar Europe/London` or `:grant loc locale de-CH`. Without a binding they default to `UTC` and `und`. Their answers are this Host's own, and a Transcript records each one as a `~` line, so a replay never consults Intl.
 
 From the repository root, `bun run repl` and `bun run northtalk …` run it without installing.

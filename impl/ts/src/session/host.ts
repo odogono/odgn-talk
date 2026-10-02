@@ -11,7 +11,12 @@ import {
 } from '../capabilities';
 import { checkSource } from '../checker';
 import { formatInstant, parseInstant } from '../dates';
-import { HostError, LoadError, type LoadDiagnostic } from '../errors';
+import {
+  HostError,
+  LoadError,
+  ScriptError,
+  type LoadDiagnostic,
+} from '../errors';
 import {
   newGroup,
   observeRuns,
@@ -29,7 +34,13 @@ import { compileLibrary, type Library } from '../library';
 import { textForm, waitNs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
 import type { SemanticElement } from '../semantic';
-import { clockCapability, consoleCapability } from '../standard-capabilities';
+import { localeCapability, type LocaleImpl } from '../locale-capability';
+import {
+  calendarCapability,
+  clockCapability,
+  consoleCapability,
+  type CalendarImpl,
+} from '../standard-capabilities';
 import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
@@ -38,6 +49,11 @@ import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
 import type { TranscriptItem } from './transcript';
 
 export type SessionEnvironment = {
+  /**
+   * The Host functions of the Standard Capabilities this Host has built in
+   * for `:grant`, besides `clock`; each answer is recorded as a `~` line.
+   */
+  builtIns?: { calendar?: CalendarImpl; locale?: LocaleImpl };
   /** A real Clock reading, in epoch nanoseconds. */
   now(): bigint;
   /** A user Library's source, for `:library` given a path. */
@@ -73,8 +89,29 @@ export type Mock = {
   operation: string;
 };
 const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
-// The Capabilities this Session Host has built in, for `:grant`.
-const BUILT_IN = new Set(['clock']);
+// The Standard Capabilities a Session Host may build in, for `:grant`, and
+// the binding each takes when `:grant` gives none.
+const BUILT_IN = new Set(['clock', 'calendar', 'locale']);
+const DEFAULT_BINDING: Record<string, string> = {
+  calendar: 'UTC',
+  locale: 'und',
+};
+// The Operations of each Standard Capability the Host answers.
+const OPERATIONS: Record<string, readonly string[]> = {
+  calendar: ['today', 'now', 'toCivil', 'toInstant', 'offset', 'zone'],
+  locale: [
+    'compare',
+    'rank',
+    'upper',
+    'lower',
+    'numberSymbols',
+    'monthNames',
+    'dayNames',
+    'tag',
+  ],
+};
+const free = (operations: readonly string[]) =>
+  Object.fromEntries(operations.map(op => [op, { fuel: 0 }]));
 // A user Library's version; replacing one keeps it.
 const LIBRARY_VERSION = '1';
 // The limits a Delivery may override, by their `ts` names (chapter 12, `:limits`).
@@ -157,6 +194,8 @@ export class SessionHost {
   private readonly mocks: Mock[] = [];
   // Each Grant `:grant` and `:mock` made, by name, and the Capability it grants.
   private readonly granted = new Map<string, string>();
+  // The binding of each Grant `:grant` gave one, by name.
+  private readonly bindings = new Map<string, string>();
   private stubs = new Stubs();
   // Mock calls, whose `call` lines print at their `call` records.
   private mockCalls = new Map<string, { args: Value[]; operation: string }>();
@@ -304,19 +343,82 @@ export class SessionHost {
     );
     const capabilities = this.mockCapabilities();
     capabilities.set('console', console);
-    if ([...this.granted.values()].includes('clock')) {
+    const granted = new Set(this.granted.values());
+    if (granted.has('clock')) {
       capabilities.set('clock', clockCapability({ now: { fuel: 0 } }));
+    }
+    const { calendar, locale } = this.env.builtIns ?? {};
+    if (granted.has('calendar') && calendar) {
+      capabilities.set(
+        'calendar',
+        calendarCapability(
+          this.answered(calendar, OPERATIONS.calendar!),
+          free(OPERATIONS.calendar!),
+        ) as CapabilityDef<unknown>,
+      );
+    }
+    if (granted.has('locale') && locale) {
+      capabilities.set(
+        'locale',
+        localeCapability(
+          this.answered(locale, OPERATIONS.locale!),
+          free(OPERATIONS.locale!),
+        ) as CapabilityDef<unknown>,
+      );
     }
     const grants: Record<string, Grant<unknown>> = {
       console: console.grant('all', undefined),
     };
     for (const [name, capability] of this.granted) {
-      grants[name] = capabilities.get(capability)!.grant('all', undefined);
+      grants[name] = capabilities
+        .get(capability)!
+        .grant('all', this.bindings.get(name) ?? DEFAULT_BINDING[capability]);
     }
     this.grantsByName = grants;
     this.declarations0 = Object.fromEntries(capabilities);
     this.group = group;
     this.script = group.load({ name: NAME, source: '', grants });
+  }
+
+  // A built-in Capability's Host functions, each answer recorded as the `~`
+  // line of its call: its value, or `fail` and its error map, with `{}` for
+  // a failure that isn't a Script error.
+  private answered<T extends object>(
+    impl: T,
+    operations: readonly string[],
+  ): T {
+    const wrapped: Record<string, unknown> = {};
+    for (const op of operations) {
+      const host = (impl as Record<string, (...a: unknown[]) => Value>)[op]!;
+      wrapped[op] = (call: { id: string }, ...args: unknown[]) => {
+        let value: Value;
+        try {
+          value = host.call(impl, call, ...args);
+        } catch (error) {
+          this.env.record?.({
+            k: 'answer',
+            call: call.id,
+            answer: `fail ${
+              error instanceof ScriptError
+                ? map([
+                    ['code', text(error.code)],
+                    ['message', text(error.message)],
+                    ...(error.data.kind === 'map' ? error.data.entries() : []),
+                  ]).toString()
+                : '{}'
+            }`,
+          });
+          throw error;
+        }
+        this.env.record?.({
+          k: 'answer',
+          call: call.id,
+          answer: value.toString(),
+        });
+        return value;
+      };
+    }
+    return wrapped as T;
   }
 
   // What the Library compiler checks a Library's Capability calls against.
@@ -392,8 +494,10 @@ export class SessionHost {
   private command(source: string): string[] {
     const [, name = '', rest = ''] = /^:(\S*)\s*(.*)$/su.exec(source) ?? [];
     switch (name) {
-      case 'grant':
-        return this.grant(words(rest, 2));
+      case 'grant': {
+        const w = rest.trim().split(/\s+/u).filter(Boolean);
+        return this.grant(w.length === 3 ? w : words(rest, 2));
+      }
       case 'mock':
         return this.mock(words(rest, 2));
       case 'stub':
@@ -443,20 +547,36 @@ export class SessionHost {
     }
   }
 
-  private grant([name, capability]: string[]): string[] {
+  private grant([name, capability, binding]: string[]): string[] {
     this.beforeStart();
     if (
       !NAME_TEXT.test(name!) ||
       name === 'console' ||
       !(
-        BUILT_IN.has(capability!) ||
+        this.builtIn(capability!) ||
         this.mocks.some(m => m.capability === capability)
-      )
+      ) ||
+      (binding !== undefined && !(capability! in DEFAULT_BINDING))
     ) {
       refuse('bad arguments');
     }
     this.granted.set(name!, capability!);
+    if (binding === undefined) {
+      this.bindings.delete(name!);
+    } else {
+      this.bindings.set(name!, binding);
+    }
     return [];
+  }
+
+  // `clock` is always built in, and `calendar` and `locale` when the
+  // environment supplies their Host functions.
+  private builtIn(capability: string): boolean {
+    return (
+      capability === 'clock' ||
+      (capability === 'calendar' && Boolean(this.env.builtIns?.calendar)) ||
+      (capability === 'locale' && Boolean(this.env.builtIns?.locale))
+    );
   }
 
   private mock([target, mode]: string[]): string[] {

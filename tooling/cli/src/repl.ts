@@ -13,6 +13,7 @@ import { createInterface } from 'node:readline';
 import { parseEntry } from '@odgn/northtalk';
 import { SessionHost, writeTranscript } from '@odgn/northtalk/session';
 import session from '../../../spec/data/session.toml';
+import { calendar, locale } from './builtins';
 
 type Command = {
   does: string;
@@ -52,6 +53,7 @@ export const repl = ({
   }
   const host = new SessionHost({
     now,
+    builtIns: { calendar, locale },
     readFile: path => readFileSync(path, 'utf8'),
     writeFile: (directory, file, text) => {
       mkdirSync(directory, { recursive: true });

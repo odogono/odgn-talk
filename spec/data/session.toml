@@ -15,8 +15,8 @@
 
 [[command]]
 name = ":grant"
-usage = ":grant <name> <capability>"
-does = "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`"
+usage = ":grant <name> <capability> [<binding>]"
+does = "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone or a `locale` Grant's default tag as `<binding>`"
 before = true
 
 [[command]]
