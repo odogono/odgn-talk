@@ -14,11 +14,12 @@ import {
   type LibraryExport,
 } from '../../src/index';
 import { DeferredCaseError, runTraceCase, unblessed } from './trace-case';
+import { runTranscriptCase } from './transcript-case';
 
 const root = resolve(import.meta.dir, '../..');
 const corpusRoot = resolve(root, 'corpus');
 /** The case kinds this Core executes; every other kind is deferred. */
-const supported = new Set(['encoding', 'disassembly', 'trace']);
+const supported = new Set(['encoding', 'disassembly', 'trace', 'transcript']);
 type Setup = {
   disassembly?: { expected: string; unit: string }[];
   kind: string;
@@ -266,7 +267,10 @@ export const runCorpus = (args: string[]): number => {
     : // A Trace Case runs by default once blessed; until then, only when named.
       casesUnder(corpusRoot).filter(dir => {
         const { kind } = readSetup(dir);
-        return supported.has(kind) && !(kind === 'trace' && unblessed(dir));
+        return (
+          supported.has(kind) &&
+          !((kind === 'trace' || kind === 'transcript') && unblessed(dir))
+        );
       });
   if (!selected.length) {
     throw new Error('Selection contains no cases');
@@ -277,9 +281,7 @@ export const runCorpus = (args: string[]): number => {
     try {
       const { kind } = readSetup(dir);
       if (!supported.has(kind)) {
-        throw new Error(
-          `Deferred case kind: ${kind}; this Core executes Value Encoding and Disassembly Cases`,
-        );
+        throw new Error(`Deferred case kind: ${kind}`);
       }
       if (kind === 'disassembly') {
         const result = runDisassemblyCase(dir, { bless });
@@ -319,9 +321,31 @@ export const runCorpus = (args: string[]): number => {
         }
         continue;
       }
+      if (kind === 'transcript') {
+        checkVersions(readSetup(dir));
+        const result = runTranscriptCase(dir, { bless });
+        if (result.divergence) {
+          const d = result.divergence;
+          console.error(
+            [
+              `FAIL ${name} (TS Session Host 1.0-rc / Cost Model 0)`,
+              `  ${d.file}:${d.line}`,
+              ...d.context.map(line => `    ${line}`),
+              `  expected: ${d.expected}`,
+              `  actual:   ${d.actual}`,
+            ].join('\n'),
+          );
+          failures++;
+        } else {
+          console.log(
+            `${bless ? 'BLESSED' : 'PASS'} ${name} (${result.lines} lines)`,
+          );
+        }
+        continue;
+      }
       if (bless) {
         throw new Error(
-          `--bless writes Disassembly and Trace Cases only, not ${kind}`,
+          `--bless writes Disassembly, Trace and Transcript Cases only, not ${kind}`,
         );
       }
       const result = runEncodingCase(dir);

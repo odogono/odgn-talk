@@ -287,7 +287,7 @@ test('blessing refuses case kinds this Core does not bless', () => {
   ]);
   expect(result.exitCode).toBe(1);
   expect(new TextDecoder().decode(result.stderr)).toContain(
-    '--bless writes Disassembly and Trace Cases only',
+    '--bless writes Disassembly, Trace and Transcript Cases only',
   );
 });
 

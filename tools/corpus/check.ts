@@ -595,7 +595,10 @@ const checkCase = (dir: string) => {
   if (!setup.versions?.language || !setup.versions?.costModel) {
     problems.push(`${where}: [versions] needs language and costModel`);
   }
-  const scripts = new Set<string>();
+  // A Session Transcript's Group holds the one Session Script (chapter 12).
+  const scripts = new Set<string>(
+    setup.kind === 'transcript' ? ['session'] : [],
+  );
   const libraries = new Set<string>();
   for (const s of setup.scripts ?? []) {
     scripts.add(s.name);

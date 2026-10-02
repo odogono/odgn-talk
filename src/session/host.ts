@@ -8,6 +8,7 @@ import {
   newGroup,
   observeRuns,
   type Group,
+  type Inspection,
   type Location,
   type Report,
   type RunEvent,
@@ -127,6 +128,11 @@ export class SessionHost {
     this.reads.delete(pending[0]);
     pending[1].call.answer(text(line));
     return this.pump();
+  }
+
+  /** `Inspect()`, which is the Host Input `vars`; null before the session starts. */
+  inspect(): Inspection | null {
+    return this.group?.inspect() ?? null;
   }
 
   /** Pumps at a deadline, under a real Clock. */

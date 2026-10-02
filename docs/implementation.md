@@ -10,7 +10,8 @@ This guide covers the TS Core built under [#126](https://github.com/odogono/odgn
 - **Implicit Script Variables** are the Container roots an Entry puts into, and the names its binding Captures bind. A pattern's names stay the Run's locals, since a pattern may not bind a Script Variable.
 - **Following Runs:** the Session Host follows its Runs through a TS-internal hook that gives the Trace's `seg`, `call`, `run` and `unhandled` records as typed values ([ADR 0045](adr/0045-the-session-host-follows-its-runs-through-the-trace.md)). It never calls `inspect()` to decide what to print.
 - **The foreground:** `waiting` says whether the Foreground Run waits on `read`, which `read()` answers, or only for a deadline, at which the caller `tick()`s; otherwise the Run goes on in the background, and its lines are printed after `[<run>] `.
-- **Still to come:** Session Commands (each is refused as `unknown command`), Session Transcripts and their corpus runner, mocks, the virtual Clock and the `northtalk` REPL.
+- **Session Transcripts:** `parseTranscript`, `writeTranscript` and `replayTranscript` read, write and replay chapter 12's lines. Replaying gives each `@` reading to the Pump the line before it causes, and makes a Pump at each other `@`. `bun run corpus:run` runs each `kind = "transcript"` case through a fresh Session Host, matching its output lines and its Trace, and then replays its `case.trace` as a Trace Case, in both replays, with the Session Script and a free `console` as its setup. `--bless` fills in the output lines and writes `case.trace`.
+- **Still to come:** Session Commands (each is refused as `unknown command`), mocks and `~` answers, the virtual Clock and the `northtalk` REPL.
 
 ## Process-wide Core and Host Manifests
 
@@ -274,7 +275,7 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining Core work
 
-All 146 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed. The corpus is not a complete conformance test.
+All 148 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed except the two Session Transcripts'. The corpus is not a complete conformance test.
 
 [#126](https://github.com/odogono/odgn-talk/issues/126)'s acceptance is met: the corpus runs through the public embedding interface and reproduces each complete Trace, the pinned Unicode data passes, diagnostics, canonical disassembly and the display and Value Encoding round trips are checked, and Fuel and allocation follow Cost Model 0. Later Appendix B steps continue under [#127](https://github.com/odogono/odgn-talk/issues/127) to [#131](https://github.com/odogono/odgn-talk/issues/131).
 

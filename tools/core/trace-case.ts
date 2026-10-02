@@ -97,7 +97,7 @@ export const parseRecord = (line: string): Parsed => {
  * Whether the Core's line matches the case's. A Host Input line may leave out
  * its `filled` keys and the ids the Core assigns.
  */
-const same = (expected: string, actual: string): boolean => {
+export const same = (expected: string, actual: string): boolean => {
   if (expected === actual) {
     return true;
   }
@@ -152,7 +152,7 @@ type OperationSpec = {
   result?: ShapeSpec;
 };
 type ObjectRefSpec = { id: string; kind: string };
-type Setup = {
+export type Setup = {
   libraries?: { name: string; source: string; version: string }[];
   objectKinds?: {
     name: string;
@@ -177,7 +177,9 @@ type Setup = {
     name: string;
     objects?: Record<string, ObjectRefSpec>;
     owner?: ObjectRefSpec;
+    /** Its source file, or with `text`, the source itself. */
     source: string;
+    text?: string;
   }[];
   standard?: {
     capability: string;
@@ -824,7 +826,8 @@ export const replay = (
             grants,
             grantsAsUsed: script.grantsAsUsed,
             name: script.name,
-            source: readFileSync(resolve(dir, script.source), 'utf8'),
+            source:
+              script.text ?? readFileSync(resolve(dir, script.source), 'utf8'),
             limits: script.limits,
             objects: Object.fromEntries(
               Object.entries(script.objects ?? {}).map(([name, o]) => [
@@ -1251,7 +1254,7 @@ export const runTraceCase = (
 
 // The Core's Trace, with each comment and blank line of the case kept before
 // the Host Input line it preceded, and the case's trailing ones kept last.
-const blessed = (
+export const blessed = (
   file: readonly string[],
   actual: readonly string[],
 ): string => {
