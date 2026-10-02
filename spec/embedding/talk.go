@@ -352,7 +352,9 @@ type CallID string
 // ---------------------------------------------------------------------------
 
 // The spec fixes these Operation Declarations. The Host supplies the answers
-// and the per-call costs, keyed by Operation name. A missing cost is refused.
+// and the per-call costs, keyed by Operation name and copied by the factory.
+// Missing or invalid costs are refused with HostError `invalid value` (ch 9).
+// Extra names are ignored; absent allocation is zero.
 type Costs map[string]Cost
 
 // clock: `now`, answered from Call.Now(). There is nothing to implement.

@@ -229,8 +229,12 @@ export interface Call<B> {
 // Standard Capabilities (ADRs 0023, 0024; #71)
 // ---------------------------------------------------------------------------
 
-/** Per-call costs, keyed by Operation name. A missing one throws. */
-export type Costs = Record<string, Cost>;
+/**
+ * Per-call costs, keyed by Operation name and copied by the factory.
+ * Missing or invalid costs throw HostError `invalid value` (chapter 9).
+ * Extra names are ignored; an absent alloc is zero.
+ */
+export type Costs = Readonly<Record<string, Cost>>;
 
 /**
  * Throw ScriptError `unknown zone` {zone} for an unknown zone, and

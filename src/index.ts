@@ -146,3 +146,9 @@ export {
 } from './syntax';
 
 export type { GrantDecls } from './effects';
+export {
+  clockCapability,
+  timerCapability,
+  type Costs,
+  type TimerImpl,
+} from './standard-capabilities';

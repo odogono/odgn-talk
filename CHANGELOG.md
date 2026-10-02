@@ -9,6 +9,8 @@ tracked separately in the Spec's Data Files.
 
 ### Added
 
+- TS Core Clock and Timer Standard Capability factories, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Nine regression tests and three Trace Cases cover exact Pump readings, fixed declarations, Host timer calls, costs, Library needs and save/restore replay. The corpus runner supports `[[standard]]` for both.
+
 - TS Core `GrantsAsUsed`, kept-Grant inspection and queued revocation, continuing [#126](https://github.com/odogono/odgn-talk/issues/126). Fourteen regression tests and three Capability Trace Cases cover caller aliases, Library needs, pending calls, code changes and save/restore replay.
 
 - Library `needs` in the TS Core: explicit compilation declarations, direct and transitive Operation discovery, `missing grant` and imported-call mode/count/Shape checks, with caller bindings and suspension. Replacement retains dependent compilation declarations. Twelve regression tests and two Library Trace Cases continue [#126](https://github.com/odogono/odgn-talk/issues/126).
@@ -75,6 +77,8 @@ tracked separately in the Spec's Data Files.
 - Apply the shared lint rules and formatting to TypeScript implementation and Spec tooling.
 
 ### Fixed
+
+- Spec rules for Standard Capability factory costs: required per-Operation entries, bounded whole numbers, copied costs and ignored extra names; explicit Clock and Timer arities and error declarations; and Trace setup conflicts, Clock Stubs and Host-owned timer Deliveries. No syntax or Cost Model rate changes.
 
 - Restoring retains each Grant's saved Operation set even when the Host rebinds a wider template, and preserves aliases such as `__proto__`. Existing extension calls reconstruct before revocation state applies. Reissue keeps revoked pending calls under Host control when their Grants rebind. Rejected Reloads and Library replacements keep old code, Grants and revocation state. The Spec fixes one-time Grant trimming, inspection, revocation no-ops and code-change boundaries; Cost Model rates are unchanged.
 

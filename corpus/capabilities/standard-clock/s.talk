@@ -1,0 +1,5 @@
+use stamp from helper
+script variable seen = []
+on go
+  put stamp() after seen
+end go

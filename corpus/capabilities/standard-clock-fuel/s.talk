@@ -1,0 +1,5 @@
+script variable touched = 0
+on go
+  add 1 to touched
+  ask clock to now
+end go
