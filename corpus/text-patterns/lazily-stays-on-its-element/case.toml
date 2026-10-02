@@ -1,6 +1,4 @@
-# lazily-stays-on-its-element: a Text Pattern case (spec chapters 4 and 8). It isn't
-# blessed, and its figures are estimates unless case.trace pins one.
-# says it pins one.
+# lazily-stays-on-its-element: a Text Pattern case (spec chapters 4 and 8), blessed by the TS Core.
 
 kind = "trace"
 

@@ -1,6 +1,7 @@
 # value-encoding: each value is read in the display form, built through the
 # Host's constructors, and encoded.
-# Unblessed: the bytes are written by hand, not by bless.
+# The bytes were written by hand from chapter 9, and the TS Core reproduces
+# them exactly.
 #
 # Empty Bytes, and each amount of padding.
 <<>> => {"$bytes":""}

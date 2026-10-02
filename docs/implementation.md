@@ -1,6 +1,6 @@
 # TS Core foundations
 
-These are the first focused slices of [#126](https://github.com/odogono/odgn-talk/issues/126), as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. It does not yet perform every load check or provide the rest of the embedding interface, so it is not a conforming Core.
+This guide covers the TS Core built under [#126](https://github.com/odogono/odgn-talk/issues/126), Appendix B's step 1, and the step 3 to 5 work that landed with it, as ordered by [Appendix B](../spec/appendix-b-implementation-order.md). The Spec and Data Files remain the authority. The Core constructs and encodes values, parses source losslessly, checks names and bindings, lowers checked source to chapter 8's code units with their canonical disassembly, runs those code units on the Abstract Machine with Cost Model 0, and drives them through a Group that writes chapter 11's Trace. Step 1 is complete. It is not yet a conforming Core: the embedding interface has the gaps below, and the Session Host and REPL of step 6 are still to come.
 
 ## Public values
 
@@ -256,7 +256,9 @@ The execution runner is separate from `corpus:check`, the existing format checke
 
 ## Remaining Core work
 
-All existing corpus cases now execute, but the corpus is not a complete conformance test.
+All 146 corpus cases execute and are blessed by the TS Core, with every first blessing reviewed. The corpus is not a complete conformance test.
+
+[#126](https://github.com/odogono/odgn-talk/issues/126)'s acceptance is met: the corpus runs through the public embedding interface and reproduces each complete Trace, the pinned Unicode data passes, diagnostics, canonical disassembly and the display and Value Encoding round trips are checked, and Fuel and allocation follow Cost Model 0. Later Appendix B steps continue under [#127](https://github.com/odogono/odgn-talk/issues/127) to [#131](https://github.com/odogono/odgn-talk/issues/131).
 
 An audit of the public package against [`talk.ts`](../spec/embedding/talk.ts), chapter 9 and [`diagnostics.toml`](../spec/data/diagnostics.toml) found the load-time diagnostics and the Host error catalogue complete: every code is raised and has a regression test. The embedding interface still has these gaps, tracked under [#128](https://github.com/odogono/odgn-talk/issues/128):
 
