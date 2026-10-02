@@ -1,0 +1,9 @@
+script variable outcome = "pending"
+on go
+  try
+    ask console to read and wait
+    put "read" into outcome
+  catch {code: code}
+    put code into outcome
+  end
+end

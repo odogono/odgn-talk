@@ -602,8 +602,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer` and `console` ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
 
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
-- **The Host** implements each Operation, with any library it likes, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
-- **Parity:** the answers are Host Inputs, so the Trace records each one, and a Trace Case supplies them as Stubs ([chapter 11](11-the-trace-and-conformance.md)).
+- **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
+- **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
 - **Modes:** every `clock`, `calendar` and `locale` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
 - **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. Chapter 6 says how both are checked.
@@ -619,6 +619,8 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 <!-- end -->
 
 `clock` has no zone. A Script that only timestamps events needs no zone, and reading the time is a Grant of its own. Its answer is the Pump's Clock reading, so the Host implements nothing.
+
+`now` takes no arguments and returns an Instant. It declares no Script error codes.
 
 ### `calendar`
 
@@ -705,6 +707,8 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 - **`cancel name`** removes the timer, and cancelling an unknown name does nothing.
 - **Delivery:** the Host stores timers durably. When one is due, the Host delivers `message` with `args` to the Script as an ordinary Delivery, at its next opportunity if `at` has already passed. The Core takes no part in it.
 
+`schedule` takes exactly four arguments, with Shapes text, Instant, text and a list of `any`; `cancel` takes exactly one text. As with every Host boundary, the list cannot contain Function Values, even nested in Containers. Neither Operation declares Script error codes, so a Host failure becomes `host error`.
+
 ### `console`
 
 <!-- generated: stdlib.capability.console -->
@@ -720,6 +724,8 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 - **`write value`** takes any value, and the Host shows its [text form](03-values.md#the-text-form). `say x` is short for `tell console to write x`.
 - **`read`** answers with the next line the user types, as text, without its line break. Its `maxPending` is 2,147,483,647 ms, the largest `MaxWait` every Core honours, so a user can take their time ([chapter 6](06-errors-and-limits.md#limits)).
+
+`write` takes exactly one argument, with the `value` Shape: every value, including Function Values nested in lists or maps. `read` takes no arguments and returns text, including empty text for an empty line. Both declare no Script error codes; a Host failure becomes `host error`. The Console factory forwards `write`'s Value to the Host, which shows its text form, and starts `read` with a `Call` that the Host answers with text. Both calls retain the Grant's binding and the Script's name.
 
 ## Outside parity
 

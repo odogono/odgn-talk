@@ -1,0 +1,3 @@
+on arm due
+  tell timer to schedule "wake", due, "tick", [9]
+end arm

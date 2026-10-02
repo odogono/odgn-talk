@@ -478,6 +478,7 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
 
 - **The runner's, not the Core's:** the Core never sees a `stub` line. The runner writes it into the Trace itself, where the case has it, and queues it for its Operation, named by Capability, whichever Grant the call goes through.
 - **Immediate calls** take the next Stub for their Operation, and return its `value`, or fail with its `error`. One that finds none fails, and the Script sees `host error`, with a `call-failed` record.
+- **Standard `clock.now`** reads the Pump's Clock, so the runner refuses a Stub for it as an invalid case. Standard `timer` calls use fire-and-forget Stubs; the runner stores no durable timers, and the case writes each timer Delivery as an ordinary Host Input.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
 - **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` only.
 - **Suspending calls** are answered by later `answer` and `fail` lines. The runner's Host functions do nothing else.
@@ -511,6 +512,8 @@ A Trace Case is a directory under [`corpus/`](../corpus/) holding `case.toml`, t
 ### `case.toml`
 
 `case.toml` holds a case's setup, in TOML. Its keys are camelCase, since its Operation Declarations and Shapes are the Host Manifest's data model, which the manifest writes as JSON ([chapter 9](09-embedding.md#the-host-manifest-format)).
+
+A Standard Capability supplies its fixed declarations, including when compiling a Library's calls. In a Trace Case, its `costs` must name every Operation, with each cost component zero if absent. Declaring the same Capability more than once through `standard`, or through both `standard` and `operations`, is refused with Host Error `invalid value`.
 
 <!-- generated: corpus.setup -->
 
@@ -556,7 +559,7 @@ A Trace Case is a directory under [`corpus/`](../corpus/) holding `case.toml`, t
 
 A Shape is written as one of these:
 
-- **A kind name,** as text: `"text"`, `"number"`, `"boolean"`, `"nothing"`, `"bytes"`, `"instant"`, `"civil date"`, `"range"`, `"pattern"` or `"function"`, or `"any"`.
+- **A kind name,** as text: `"text"`, `"number"`, `"boolean"`, `"nothing"`, `"bytes"`, `"instant"`, `"civil date"`, `"range"`, `"pattern"` or `"function"`, or `"any"` or `"value"` ([chapter 9](09-embedding.md#shapes)).
 - **`{quantity = "kg"}`** for a Quantity in exactly that Unit, and **`{unitKind = "mass"}`** for any Unit of that Unit Kind.
 - **`{list = <shape>}`**, **`{object = "<kind>"}`**, **`{oneOf = [<shape>, …]}`** and **`{optional = <shape>}`**.
 - **`{map = [<field>, …]}`**, a closed map, or with `open = true` an open one. A field is `{key, shape}`, with `optional = true` for a key that may be missing.

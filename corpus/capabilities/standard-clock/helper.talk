@@ -1,0 +1,4 @@
+function stamp
+  ask clock to now
+  return it
+end stamp

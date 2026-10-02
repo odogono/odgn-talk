@@ -1,0 +1,19 @@
+# Standard clock.now reads the Pump Clock, with no Stub or Host clock.
+# Library needs keep its Grant under GrantsAsUsed. A hidden save/restore
+# between Pumps must preserve the next nanosecond-accurate reading.
+> add-library helper identity=dc6b8cdb6a267ddbb6291fecf6977ab6aa8043e08d24d262bcfc82483d82407c
+> load s identity=c621a4d3174a8708121ed0dc4a07d500a5b7b2eaa7fc0487daaf435386c2ad8d
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T10:00:00.123456789Z
+call s/r1.c1 op=clock.now args=[] result=2026-10-02T10:00:00.123456789Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=45 alloc=42 state=40 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=45 alloc=42
+pumped state=idle fuel=45
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T10:00:00.12345679Z
+call s/r2.c1 op=clock.now args=[] result=2026-10-02T10:00:00.12345679Z
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=45 alloc=42 state=64 end=return
+run s/r2 outcome=completed delivery=d2 handler=go fuel=45 alloc=42
+pumped state=idle fuel=45
+> vars
+vars s seen=[2026-10-02T10:00:00.123456789Z, 2026-10-02T10:00:00.12345679Z]

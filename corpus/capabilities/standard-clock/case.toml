@@ -1,0 +1,16 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[standard]]
+capability = "clock"
+costs = { now = { fuel = 7, alloc = 2 } }
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { clock = { ops = "all" } }

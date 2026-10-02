@@ -235,6 +235,7 @@ type Shape struct { /* opaque */
 
 var (
 	AnyShape       Shape
+	ValueShape     Shape // every value, including nested Function Values; not a storage encoding
 	NothingShape   Shape
 	BoolShape      Shape
 	NumberShape    Shape
@@ -352,7 +353,9 @@ type CallID string
 // ---------------------------------------------------------------------------
 
 // The spec fixes these Operation Declarations. The Host supplies the answers
-// and the per-call costs, keyed by Operation name. A missing cost is refused.
+// and the per-call costs, keyed by Operation name and copied by the factory.
+// Missing or invalid costs are refused with HostError `invalid value` (ch 9).
+// Extra names are ignored; absent allocation is zero.
 type Costs map[string]Cost
 
 // clock: `now`, answered from Call.Now(). There is nothing to implement.
@@ -399,6 +402,15 @@ type TimerImpl interface {
 }
 
 func (c *Core) TimerCapability(impl TimerImpl, costs Costs) (*CapabilityDef, error)
+
+// console: Write shows the Value's text form. Read starts a suspending call
+// and answers with text, without its line break. Read has maxPending 2147483647 ms.
+type ConsoleImpl interface {
+	Write(c *Call, value Value) error
+	Read(c *Call) error
+}
+
+func (c *Core) ConsoleCapability(impl ConsoleImpl, costs Costs) (*CapabilityDef, error)
 
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)

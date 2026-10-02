@@ -11,6 +11,9 @@ import { resolve } from 'node:path';
 import {
   compileLibrary,
   defineCapability,
+  clockCapability,
+  consoleCapability,
+  timerCapability,
   defineObjectKind,
   type HostObject,
   shape,
@@ -19,6 +22,7 @@ import {
   type FieldShape,
   type Grant,
   type GrantDecls,
+  type CapabilityDef,
   type Operation,
   type Shape,
   HostError,
@@ -170,6 +174,10 @@ type Setup = {
     owner?: ObjectRefSpec;
     source: string;
   }[];
+  standard?: {
+    capability: string;
+    costs: Record<string, { alloc?: number; fuel?: number }>;
+  }[];
 };
 
 // A value in the display form, or a deferral for a kind this Core can't read yet.
@@ -187,6 +195,7 @@ const read = (
 };
 const kinds: Record<string, Shape> = {
   any: shape.any,
+  value: shape.value,
   nothing: shape.nothing,
   boolean: shape.bool,
   number: shape.number,
@@ -270,6 +279,34 @@ const takeStub = (
   return stub.value ?? nothing;
 };
 
+const fireStub = (
+  stubs: Map<string, Stub[]>,
+  key: string,
+  call: Call<unknown>,
+  crossing: (id: string) => void,
+) => {
+  try {
+    takeStub(stubs, key, call, false);
+  } finally {
+    crossing(call.id);
+  }
+};
+
+const startStub = (
+  stubs: Map<string, Stub[]>,
+  key: string,
+  call: Call<unknown>,
+  calls: Map<string, Call<unknown>>,
+  crossing: (id: string) => void,
+) => {
+  const stub = stubs.get(key)?.shift();
+  if (stub?.charge) {
+    call.charge(stub.charge);
+  }
+  calls.set(call.id, call);
+  crossing(call.id);
+};
+
 // The runner's Host functions (chapter 11, Stubs): an immediate call takes
 // the next Stub for its Operation, and a fire-and-forget one takes one if
 // there is one.
@@ -320,14 +357,7 @@ const capabilitiesOf = (
                 ? {}
                 : { maxPendingMs: op.maxPending }),
               // Only a Stub's charge; `answer` and `fail` lines settle it.
-              start: call => {
-                const stub = stubs.get(key)?.shift();
-                if (stub?.charge) {
-                  call.charge(stub.charge);
-                }
-                calls.set(call.id, call);
-                crossing(call.id);
-              },
+              start: call => startStub(stubs, key, call, calls, crossing),
             }
           : op.mode === 'immediate'
             ? {
@@ -344,16 +374,74 @@ const capabilitiesOf = (
             : {
                 ...base,
                 mode: 'fire-and-forget',
-                fire: call => {
-                  try {
-                    takeStub(stubs, key, call, false);
-                  } finally {
-                    crossing(call.id);
-                  }
-                },
+                fire: call => fireStub(stubs, key, call, crossing),
               };
     }
     out.set(name, defineCapability(name, operations));
+  }
+  for (const standard of setup.standard ?? []) {
+    const { capability } = standard;
+    if (out.has(capability)) {
+      throw new HostError(
+        'invalid value',
+        `Duplicate Capability ${capability}`,
+      );
+    }
+    const costs = Object.fromEntries(
+      Object.entries(standard.costs ?? {}).map(([name, cost]) => [
+        name,
+        {
+          fuel: cost.fuel ?? 0,
+          ...(cost.alloc === undefined ? {} : { alloc: cost.alloc }),
+        },
+      ]),
+    );
+    if (capability === 'clock') {
+      const clock = clockCapability(costs);
+      const op = clock.operations.get('now')!;
+      if (op.mode === 'immediate') {
+        out.set(
+          capability,
+          defineCapability('clock', {
+            now: {
+              ...op,
+              do: call => {
+                try {
+                  return op.do({ ...call, binding: undefined });
+                } finally {
+                  crossing(call.id);
+                }
+              },
+            },
+          }),
+        );
+      }
+    } else if (capability === 'timer') {
+      out.set(
+        capability,
+        timerCapability(
+          {
+            schedule: call => fireStub(stubs, 'timer.schedule', call, crossing),
+            cancel: call => fireStub(stubs, 'timer.cancel', call, crossing),
+          },
+          costs,
+        ),
+      );
+    } else if (capability === 'console') {
+      out.set(
+        capability,
+        consoleCapability(
+          {
+            write: call => fireStub(stubs, 'console.write', call, crossing),
+            read: call =>
+              startStub(stubs, 'console.read', call, calls, crossing),
+          },
+          costs,
+        ),
+      );
+    } else {
+      throw new DeferredCaseError(`the Standard Capability ${capability}`);
+    }
   }
   return out;
 };
@@ -361,17 +449,20 @@ const capabilitiesOf = (
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
-const operationDeclarations = (setup: Setup): GrantDecls => {
+const operationDeclarations = (
+  capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
+): GrantDecls => {
   const declarations: Record<
     string,
     Record<string, { args: Shape[]; mode: OperationSpec['mode'] }>
   > = Object.create(null);
-  for (const op of setup.operations ?? []) {
-    declarations[op.capability] ??= Object.create(null);
-    declarations[op.capability]![op.name] = {
-      args: (op.args ?? []).map(shapeOf),
-      mode: op.mode,
-    };
+  for (const [name, capability] of capabilities) {
+    declarations[name] = Object.fromEntries(
+      [...capability.operations].map(([operation, op]) => [
+        operation,
+        { args: op.args ?? [], mode: op.mode },
+      ]),
+    );
   }
   return declarations;
 };
@@ -381,6 +472,7 @@ const operationDeclarations = (setup: Setup): GrantDecls => {
 const compileLibraries = (
   dir: string,
   setup: Setup,
+  declarations: GrantDecls,
 ): Map<string, Library | LoadError> => {
   const out = new Map<string, Library | LoadError>();
   let pending = setup.libraries ?? [];
@@ -399,7 +491,7 @@ const compileLibraries = (
               source: readFileSync(resolve(dir, library.source), 'utf8'),
             },
             done,
-            operationDeclarations(setup),
+            declarations,
           ),
         );
       } catch (error) {
@@ -497,7 +589,6 @@ export const replay = (
       }
     }
   };
-  const compiled = compileLibraries(dir, setup);
   // The Host Objects case.toml lists, made before the first Host Input, with
   // their properties' values, which the runner's Get reads and Set writes.
   const made = new Map<string, HostObject>();
@@ -579,6 +670,8 @@ export const replay = (
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
   const capabilities = capabilitiesOf(setup, stubs, calls, crossing);
+  const declarations = operationDeclarations(capabilities);
+  const compiled = compileLibraries(dir, setup, declarations);
   // A mailbox refusal is written before the accepted inputs still waiting
   // for the Pump. Replay those first so the same depth check can refuse it.
   const order: number[] = [];
@@ -686,7 +779,7 @@ export const replay = (
               source: readDisplayText(r.fields.get('source')!),
             },
             [...registered.values()],
-            operationDeclarations(setup),
+            declarations,
           );
           group.replaceLibrary(
             library,
@@ -939,6 +1032,12 @@ export const replay = (
         case 'stub': {
           // The runner's, written where the case has it; the Core never sees it.
           const op = r.ids[0]!;
+          if (
+            op === 'clock.now' &&
+            setup.standard?.some(s => s.capability === 'clock')
+          ) {
+            throw new Error('clock.now uses the Pump Clock, not a Stub');
+          }
           stubs.set(op, [
             ...(stubs.get(op) ?? []),
             {

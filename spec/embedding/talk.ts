@@ -153,6 +153,7 @@ export type FieldShape = Shape | { shape: Shape; optional: true };
 
 export declare const shape: {
   any: Shape; nothing: Shape; bool: Shape; number: Shape; text: Shape;
+  value: Shape; // every value, including nested Function Values; not a storage encoding
   bytes: Shape; instant: Shape; civilDate: Shape; range: Shape; pattern: Shape;
   function: Shape; // a Function Value; any data Shape refuses one with `not encodable`
   quantityOf(unit: string): Shape;
@@ -229,8 +230,12 @@ export interface Call<B> {
 // Standard Capabilities (ADRs 0023, 0024; #71)
 // ---------------------------------------------------------------------------
 
-/** Per-call costs, keyed by Operation name. A missing one throws. */
-export type Costs = Record<string, Cost>;
+/**
+ * Per-call costs, keyed by Operation name and copied by the factory.
+ * Missing or invalid costs throw HostError `invalid value` (chapter 9).
+ * Extra names are ignored; an absent alloc is zero.
+ */
+export type Costs = Readonly<Record<string, Cost>>;
 
 /**
  * Throw ScriptError `unknown zone` {zone} for an unknown zone, and
@@ -258,6 +263,11 @@ export interface LocaleImpl {
 export interface TimerImpl {
   schedule(call: Call<unknown>, name: string, at: Value, message: string, args: Value): void;
   cancel(call: Call<unknown>, name: string): void;
+}
+/** Write shows the Value's text form. Read answers with text, without its line break. */
+export interface ConsoleImpl {
+  write(call: Call<unknown>, value: Value): void;
+  read(call: Call<unknown>): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +364,7 @@ export interface Core {
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone
   localeCapability(impl: LocaleImpl, costs: Costs): CapabilityDef<string>;     // binding: default tag
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
+  consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

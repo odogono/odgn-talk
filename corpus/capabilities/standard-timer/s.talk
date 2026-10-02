@@ -1,0 +1,9 @@
+use arm from helper
+script variable seen = []
+on go due
+  arm due
+  tell timer to cancel "unknown"
+end go
+on tick value
+  put value after seen
+end tick
