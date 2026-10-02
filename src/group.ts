@@ -2266,19 +2266,23 @@ export class Group {
   // Script that it matches, in the order the waits began (chapter 5).
   private observe(s: ScriptState, delivery: Delivery) {
     const from = delivery.from?.split('/')[0] ?? null;
+    let fuel = 0;
     for (const waiter of s.waiters) {
+      const before = waiter.running.run.fuel;
       const fired = waiter.running.run.matchEvent(
         delivery.message,
         delivery.args,
         from,
         (delivery.target ?? s.owner)?.handle.value ?? nothing,
       );
+      fuel += waiter.running.run.fuel - before;
       if (fired) {
         this.endWaiter(s, waiter);
         this.seal(delivery, { verdict: 'allowed' });
         this.ready(s, waiter.running, fired);
       }
     }
+    return fuel;
   }
 
   // A Run that suspended: wait on its timer, its answer or its reply.
@@ -3113,7 +3117,9 @@ export class Group {
         return;
       }
       if (!delivery.fn) {
-        this.observe(s, delivery);
+        // Observation belongs to the waiting Runs, but spends this Script's
+        // slice and the Group cap before the incoming Run's first instruction.
+        charge(this.observe(s, delivery));
       }
       if (delivery.during && !s.loaded.clauses.has('error')) {
         s.queue.shift();

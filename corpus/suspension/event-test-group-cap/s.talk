@@ -1,0 +1,10 @@
+script variable seen = []
+
+on watch id
+  wait for ping n
+  put id after seen
+end watch
+
+on ping n
+  put 0 after seen
+end ping

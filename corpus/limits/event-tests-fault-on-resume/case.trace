@@ -1,0 +1,30 @@
+# The failed Guard takes the waiting Run beyond its Fuel limit without
+# faulting it. A successful test later also runs to completion. cap=1
+# stops the incoming Handler before its first instruction both times;
+# the waiting Run faults only when the final Pump resumes it.
+> load s identity=9e40ebdd805e360c49fe2ffccbdccb051db92c99be4ac16e293eaec241db2ef1
+> deliver d1 to=s message=watch limits={fuelPerRun: 15}
+> pump clock=2026-09-30T10:00:00Z
+seg s/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=224 end=wait-for-any
+pumped state=idle fuel=14
+> deliver d2 to=s message=ping args=[-1]
+> pump clock=2026-09-30T10:00:01Z fuel-cap=1
+preempt s/r2 start delivery=d2 handler=ping clause=1 by=cap fuel=0 alloc=0
+pumped state=sliced fuel=11
+> pump clock=2026-09-30T10:00:02Z
+seg s/r2 continue fuel=7 alloc=0 state=224 end=return
+run s/r2 outcome=completed delivery=d2 handler=ping fuel=7 alloc=0
+pumped state=idle fuel=7
+> deliver d3 to=s message=ping args=[1]
+> pump clock=2026-09-30T10:00:03Z fuel-cap=1
+preempt s/r3 start delivery=d3 handler=ping clause=1 by=cap fuel=0 alloc=0
+pumped state=sliced fuel=16
+> pump clock=2026-09-30T10:00:04Z
+seg s/r3 continue fuel=7 alloc=0 state=372 end=return
+run s/r3 outcome=completed delivery=d3 handler=ping fuel=7 alloc=0
+fault s/r1 limit=fuel at=s:5 pos=4:3
+seg s/r1 resume fuel=0 alloc=0 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=watch limit=fuel fuel=41 alloc=40
+pumped state=idle fuel=7
+> vars
+vars s seen=0

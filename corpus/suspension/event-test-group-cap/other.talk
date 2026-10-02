@@ -1,0 +1,5 @@
+script variable ran = false
+
+on go
+  put true into ran
+end go

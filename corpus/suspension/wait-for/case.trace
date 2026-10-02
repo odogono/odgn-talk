@@ -30,7 +30,7 @@ seg till/r5 start from=bank/r2 handler=paid clause=1 fuel=24 alloc=58 state=1041
 run till/r5 outcome=completed handler=paid fuel=24 alloc=58
 seg till/r1 resume fuel=19 alloc=550 state=849 end=return
 run till/r1 outcome=completed delivery=d1 handler=await fuel=72 alloc=590
-pumped state=idle fuel=166 next=2026-09-30T09:00:05Z
+pumped state=idle fuel=262 next=2026-09-30T09:00:05Z
 > pump clock=2026-09-30T09:00:05Z
 seg till/r2 resume fuel=30 alloc=31 state=640 end=return
 run till/r2 outcome=completed delivery=d2 handler=either fuel=77 alloc=31

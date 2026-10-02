@@ -22,7 +22,7 @@ decided b1 verdict=vetoed vetoes=[{script: "decider", run: "decider/r1", reason:
 run decider/r1 outcome=completed delivery=d4 broadcast=b1 handler=move fuel=13 alloc=69
 seg watcher/r1 resume fuel=14 alloc=16 state=16 end=return
 run watcher/r1 outcome=completed delivery=d1 handler=watch fuel=39 alloc=48
-pumped state=idle fuel=46
+pumped state=idle fuel=57
 > decide-broadcast b2 message=move args=[false] recipients=[broken:d5, decider:d6]
 > pump clock=2026-09-30T10:00:02Z
 raise broken/r2 code="broken" at=broken:3 pos=2:3
