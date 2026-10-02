@@ -113,7 +113,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 ## Suspension Points
 
-- **The Suspension Points** are `wait`, `wait for`, `send … and wait`, a call to a suspending Operation (`ask … and wait`), a Command Call to a Handler that may suspend (`name … and wait`), a Function Value called with `and wait`, and the `end wait` of a Join. Each is written with `wait` in the source, so every possible Suspension Point is known when the Script loads ([ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).
+- **The Suspension Points** are `wait`, `wait for`, `send … and wait`, a call to a suspending Operation (`ask … and wait`), a Command Call to a Handler that may suspend (`name … and wait`), a Function Value called with `and wait`, and the closing `end` of a Join. A Join is marked by its `wait for all` head; its closing `wait` suffix is optional. Every other Suspension Point is written with `wait` at the point itself, so every possible Suspension Point remains known when the Script loads ([ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).
 - **Checked both ways:** `ask … and wait` on an immediate Operation, and `ask` without it on a suspending one, are load errors. So are `name … and wait` for a Handler that can't suspend, and a Command Call without it to one that may. `and wait` on a Function Value that can't suspend is allowed, since the loader can't know which value a variable holds, and then it doesn't suspend.
 - **May suspend:** the loader infers which Handlers may suspend over the call graph, including imported Handlers, and reaches a fixpoint for recursion. A Lambda whose body holds a Suspension Point is may-suspend, and the flag is part of its value.
 - **Never suspend:** functions, Handlers called function-style, Guards, dispatch and Built-ins. A call without `and wait` never suspends.
@@ -135,7 +135,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **`from x`** also requires the message's Target to be `x`, or, for a message sent by a Script, that Script to be `x`. A Name there names a Script as a `send`'s receiver does ([Sending](#sending)).
 - **`it`:** a `wait for` that matches leaves the message in `it`, as the map `{name, args}`: its name as text and its arguments as a list.
 - **A timeout:** `wait for m or d` stops waiting after the exact duration `d`, with the same deadline rule as `wait`, and leaves Nothing in `it`. A `wait for` with no timeout can wait for ever. `MaxWait` doesn't apply to it.
-- **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after `end wait`. A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.
+- **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after the closing `end` (optionally `end wait`). A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.
 - **Guards** on `when` branches follow the rules for Handler Guards. An error in one means the branch doesn't match.
 - **Decisions:** a `wait for` that takes a Decision allows it at once ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **Not in Libraries:** `wait for` is a load error in Library code.
@@ -159,20 +159,20 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 
 ## Joins
 
-A Join, `wait for all … end wait`, starts several calls from one Run and suspends once, at `end wait` ([ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md)).
+A Join, `wait for all … end` (optionally `end wait`), starts several calls from one Run and suspends once, at its closing `end` ([ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md)).
 
 - **Members:** every `ask … and wait` and `send … and wait` that the Join's body reaches is a Join Member, including inside `if`, `repeat` and `match`. A call inside a Lambda in the body belongs to the Lambda. Each member is started where it stands and isn't waited for, and it leaves `it` unchanged. Plain `send`, `tell` and immediate `ask` run where they stand, as anywhere else.
 - **Call ids** are given to members in start order, like any call's.
 - **The result:** when every member has answered, `it` is the list of their answers in start order. Its length is the number of members started, which can vary at run time. Each answer is converted and charged when the Run resumes, in start order. Answers that arrive early count toward Persistent State while the Run waits.
 - **No members:** a Join that starts no member sets `it` to `[]` at once, with no suspension and no Segment boundary.
-- **Failing fast:** the first member failure to arrive resumes the Run and is raised at `end wait` ([chapter 6](06-errors-and-limits.md#errors-across-scripts)). The members still pending are abandoned.
+- **Failing fast:** the first member failure to arrive resumes the Run and is raised at the Join's closing `end` ([chapter 6](06-errors-and-limits.md#errors-across-scripts)). The members still pending are abandoned.
 - **Failing to start:** a failure to start a member (`mailbox full`, `capability revoked`), or a `throw` in the body, raises at that statement, and the members already started are abandoned.
 - **Abandoned members:** an abandoned Capability call gets a cancellation signal on its `Call`, a context in Go and an AbortSignal in TS, which the Host may honour, and an answer that arrives later is ignored. An abandoned send member's receiver keeps running, and its reply is dropped.
 - **Width:** starting a member past `MaxJoin` is a Limit Fault at that statement.
 - **Each member** is charged Fuel as the same call outside a Join would be, pending members count toward Persistent State, and each member's own `maxPending` or `MaxWait` applies.
 - **Also in a Lambda:** a Join may sit in a block Lambda, which is then may-suspend.
 - **Load errors in a Join's body:**
-  - `wait`, `wait for` or a nested Join, since `end wait` is the Join's only Suspension Point.
+  - `wait`, `wait for` or a nested Join, since the Join's closing `end` is its only Suspension Point.
   - A Command Call written `name … and wait`, or `f(x) and wait`, since both may run in this Run. The fix is `send name … to me and wait`.
   - `return`, `veto`, `pass`, or an `exit repeat` or `next repeat` whose loop is outside the Join.
   - A member inside a `try` in the body. A `try` goes around the whole Join.

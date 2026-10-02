@@ -1452,7 +1452,7 @@ pushes = 1
 suspends = true
 cost = "join"
 errors = ["send failed", "timeout"]
-does = "`end wait`: suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend"
+does = "a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend"
 
 [[instruction]]
 name = "veto"

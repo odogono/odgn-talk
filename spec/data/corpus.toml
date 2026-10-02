@@ -1193,7 +1193,7 @@ is = "the Run suspended at a block `wait for`"
 
 [[end]]
 word = "join-end"
-is = "the Run suspended at a Join's `end wait`"
+is = "the Run suspended at a Join's closing `end`"
 
 [[note]]
 word = "late-answer"

@@ -371,6 +371,9 @@ class Parser {
   }
   endName(name: string, at: Token) {
     const t = this.peek(0);
+    if (t.t === 'nl' || t.t === 'eof') {
+      return;
+    }
     if (!this.isWord(t, name)) {
       this.fail(t, `\`end ${name}\` (for line ${at.line})`);
     }
@@ -1291,18 +1294,18 @@ class Parser {
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
-  // statements, then `end given`.
+  // statements, then `end` with an optional `given`.
   *lambda(): ParseTask<Node> {
     const frame = this.enter('Lambda');
     try {
       const at = this.next();
-      return this.at(at, (yield this.lambdaAt(at)) as Node);
+      return this.at(at, (yield this.lambdaAt()) as Node);
     } finally {
       this.leave(frame);
     }
   }
 
-  *lambdaAt(at: Token): ParseTask<Node> {
+  *lambdaAt(): ParseTask<Node> {
     this.nlBase.push(this.brackets.length);
     const params: Node[] = [];
     const t0 = this.peek(0);
@@ -1325,8 +1328,12 @@ class Parser {
     this.endOfStatement();
     const body = (yield this.block(['end'])) as Node[];
     const end = this.expectWord('end');
-    this.endName('given', at);
+    // Restore enclosing bracket continuations before peeking past a bare end.
     this.nlBase.pop();
+    const suffix = this.peek(0, 'operator');
+    if (suffix.line === end.line && this.isWord(suffix, 'given')) {
+      this.next('operator');
+    }
     return {
       k: 'LambdaBlock',
       params,

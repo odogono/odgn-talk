@@ -13,7 +13,10 @@ Script files end in `.talk`.
 -- A Script is a unit of source code, written by an end user, that a Host
 -- (the application embedding the language) loads and runs. It is made of
 -- top-level declarations: Script Variables, Constants, Imports, functions
--- and Handlers (`on … end` blocks that run when a message arrives).
+-- and Handlers (`on name … end name` blocks that run when a message arrives).
+-- Every block also accepts a bare `end`. This tour uses explicit endings;
+-- the beginner lint profile recommends them with a warning, while standard
+-- leaves that advice off. Both forms run in either profile.
 -- Statements live inside Handlers, so every section below wraps its
 -- examples in one.
 

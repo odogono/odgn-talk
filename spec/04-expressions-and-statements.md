@@ -203,7 +203,7 @@ A Lambda makes a Function Value each time it is evaluated ([ADR 0025](../docs/ad
 - **Captures:** a Lambda captures each local of the enclosing body that it names, by value, as it is when the Lambda is evaluated. Inside the Lambda a captured local is read-only, and putting into one is a load error. A Lambda inside a Lambda captures from the one around it.
 - **Script Variables aren't captured.** A Lambda reads and writes its Home Script's Script Variables live, as a Handler does.
 - **Parameters** are Destructuring patterns, one clause only. An argument that doesn't match raises `no match`. The Lambda's own locals are its parameters and the names it binds itself.
-- **Its result:** the expression form `given r: e` gives `e`. The block form gives the value of its `return`, or Nothing at `end given`.
+- **Its result:** the expression form `given r: e` gives `e`. The block form gives the value of its `return`, or Nothing at its closing `end` (optionally `end given`).
 - **Control:** `return` returns from the Lambda, never from the body around it. `pass` and `the target` are load errors inside a Lambda. `it` is the Lambda's own, and `try` works as anywhere.
 - **May suspend:** the loader marks a Lambda as may-suspend when its body holds a Suspension Point, and the mark is part of the value. Only the block form can hold one, since `wait`, `ask … and wait` and `f(x) and wait` are statements.
 

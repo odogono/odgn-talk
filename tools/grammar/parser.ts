@@ -14,7 +14,12 @@
 import grammar from '../../spec/data/grammar.toml';
 import { Lexer, RESERVED, type Mode, type Token } from './lexer';
 
-export type Node = { [key: string]: any; k: string };
+export type Node = {
+  [key: string]: any;
+  col?: number;
+  k: string;
+  line?: number;
+};
 
 export class SyntaxError extends Error {
   constructor(
@@ -346,6 +351,9 @@ export class Parser {
   }
   endName(name: string, at: Token) {
     const t = this.peek(0);
+    if (t.t === 'nl' || t.t === 'eof') {
+      return;
+    }
     if (!this.isWord(t, name)) {
       this.fail(t, `\`end ${name}\` (for line ${at.line})`);
     }
@@ -1090,13 +1098,13 @@ export class Parser {
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
-  // statements, then `end given`.
+  // statements, then `end` with an optional `given`.
   lambda(): Node {
     const at = this.next();
-    return this.at(at, this.lambdaAt(at));
+    return this.at(at, this.lambdaAt());
   }
 
-  lambdaAt(at: Token): Node {
+  lambdaAt(): Node {
     this.nlBase.push(this.brackets.length);
     const params: Node[] = [];
     const t0 = this.peek(0);
@@ -1119,8 +1127,12 @@ export class Parser {
     this.endOfStatement();
     const body = this.block(['end']);
     const end = this.expectWord('end');
-    this.endName('given', at);
+    // Restore enclosing bracket continuations before peeking past a bare end.
     this.nlBase.pop();
+    const suffix = this.peek(0, 'operator');
+    if (suffix.line === end.line && this.isWord(suffix, 'given')) {
+      this.next('operator');
+    }
     return {
       k: 'LambdaBlock',
       params,

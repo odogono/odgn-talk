@@ -207,6 +207,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **The tags:** an Advanced Construct is one [`grammar.toml`](data/grammar.toml) tags `advanced` ([chapter 2](02-grammar.md#advanced-constructs)). A construct is tagged only if a Beginner Surface form does the same ordinary job and a beginner reading it couldn't guess what it means, and its tag names that form. Moving a construct between layers changes only `grammar.toml`.
 - **A Lint** is advice about a Script that loads, and never rejects it. Each has a stable kebab-case id, and a level in each Lint Profile: `off`, `hint` or `warning`. There is no `error` level.
 - **Lint Profiles:** `beginner` and `standard`. The Host sets the default, such as a beginner Playground, and a user may override it.
+- **Explicit endings:** `prefer-explicit-end` flags each bare block-ending `end` at that token, suggesting the matching `end <name>` or `end <keyword>`. Its wording is “Use `end <suffix>` to make this block ending explicit.” It is a warning in `beginner` and off in `standard`, using the existing suppression convention. It never prevents loading or execution. Bare endings are a style choice, not Advanced Constructs; beginner examples and completion suggestions use explicit endings.
 - **Suppressing:** `-- lint: ignore <id>` on the line before suppresses one Lint there. It is a comment, not syntax.
 - **The catalogue** is the tooling's `lints.toml`, with a wording template per Lint. It is published, but adding, removing or re-levelling a Lint is never a language change.
 
@@ -215,6 +216,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 > | Id | Flags | Levels |
 > | --- | --- | --- |
 > | `advanced-construct` | an Advanced Construct | warning / off |
+> | `prefer-explicit-end` | a bare block-ending `end`, suggesting its matching explicit ending | warning / off |
 > | `suggest-ignoring-case` | a text comparison that probably wants `ignoring case` | hint / off |
 > | `unreachable-clause` | a Handler Clause that an earlier clause always wins over | warning / warning |
 > | `pin-trap` | a pattern name that shadows a Script Variable, and so binds rather than compares | warning / hint |
@@ -245,7 +247,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **Completion:** Operations from the Grants, `catch` patterns from declared error codes, names from imports, message names from the Host Manifest, and Units and chunk words where the grammar allows them.
 - **Hover:** a Constant's value in the display form, an Operation's Declaration, and a Function Value's Home Script.
 - **Navigation:** go to definition and find references across imports, and rename.
-- **Suspension marks:** a mark on every Suspension Point and every Handler or Lambda that may suspend. They add to the `wait` the source must already have, and never replace it.
+- **Suspension marks:** a mark on every Suspension Point and every Handler or Lambda that may suspend. They add to the `wait` the source must already have, including a Join's `wait for all` head, and never replace it.
 - **Formatting,** through the formatter.
 - Everything else, such as semantic highlighting and code actions beyond quick fixes for Lints, is the implementation's.
 

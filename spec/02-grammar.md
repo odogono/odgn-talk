@@ -1,6 +1,6 @@
 # 2. Grammar
 
-_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md).
+_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md).
 
 The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), and one set of word lists, in [`grammar.toml`](data/grammar.toml). This chapter shows both and states the rules they can't. What each construct means is in the chapters that follow.
 
@@ -106,8 +106,8 @@ Declaration    ::= 'private'? ( Handler | Function | Constant ) | ScriptVariable
 ScriptVariable ::= 'script' 'variable' Name ( '=' Expression )? NL
 Constant       ::= 'constant' Name '=' Expression NL
 Use            ::= 'use' Name ( ( ',' Name )+ 'from' Name | 'from' Name ( 'as' Name )? ) NL
-Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name NL
-                   /* the Name after `end` is the function's name */
+Function       ::= 'function' Name ( Parameter ( ',' Parameter )* )? NL Block 'end' Name? NL
+                   /* a Name after `end`, if present, is the function's name */
 Parameter      ::= Name ( '=' Expression )?
                    /* a default; only trailing parameters may have one */
 Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
@@ -121,7 +121,7 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 - **`=`** in a Script Variable or Constant means "starts as", and in a function's parameters "defaults to". It is equality everywhere else.
 - **`use … as`** renames a single imported name (`use trim from text as tidy`). After two or more names, `as` is a syntax error.
 - **`private`** goes before a Handler, a function or a Constant. It is a load error in a Script ([chapter 7](07-libraries-and-the-standard-library.md)).
-- **Functions** take a list of names, with no Destructuring. The Name after `end` must be the function's name.
+- **Functions** take a list of names, with no Destructuring. A Name after `end`, if present, must be the function's name.
 - **Defaults:** `name = expression` gives a parameter a default, which a call may leave off ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)). The default runs to the next top-level comma or the end of the line. Only trailing parameters may have one, and what a default may use is a load rule ([chapter 7](07-libraries-and-the-standard-library.md#defaults)).
 
 > **Example.**
@@ -150,8 +150,8 @@ An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-se
 <!-- generated: ebnf.handlers -->
 
 ```ebnf
-Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name NL
-                   /* the Name after `end` is the Handler's name */
+Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
+                   /* a Name after `end`, if present, is the Handler's name */
 HandlerHead    ::= ( Pattern ( ',' Pattern )* )? Guard? ( ',' Suffix )*
 Suffix         ::= 'queued' | 'dropping' | 'replacing' | 'deciding' | 'during' Name
 Guard          ::= 'where' Expression
@@ -163,7 +163,7 @@ MessageName    ::= Name  /* not `all` */
 - **Handler and message names** are one Name each (`beforeClose`). `all` can't name a Handler, a message or an event, since `wait for all` starts a Join.
 - **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern.
 - **Suffixes:** after a comma in a head, `queued`, `dropping`, `replacing` and `deciding` are always suffixes, so none of them can be a parameter name there. `during` followed by a Name is the `during` suffix. Which suffixes may combine is a load rule ([chapter 5](05-handlers-messages-and-scheduling.md)).
-- **The end:** the Name after `end` must be the Handler's name, so a missing `end repeat` is reported at the name after `end`, not at `end`.
+- **The end:** a Name after `end`, if present, must be the Handler's name. If an inner `repeat` is still open, `end handlerName` is a syntax error at `handlerName`; it cannot close through the `repeat`.
 - **`finally`** may end a Handler's body, as sugar for a `try` around it ([chapter 6](06-errors-and-limits.md)).
 
 > **Example.**
@@ -240,22 +240,26 @@ ExpressionList ::= Expression ( ',' Expression )*
 
 ## Blocks
 
+- **Optional endings:** every block closes with `end`, optionally followed by its matching Name (a Handler or function) or keyword (`if`, `repeat`, `match`, `try`, `wait` or `given`). Each ending closes exactly one innermost open block, regardless of indentation. Bare and explicit endings may be mixed, and a supplied suffix must match that block.
+- **Lines:** a closing suffix belongs on the same physical line as `end`; a word on the following line is never consumed as its suffix. A statement block's ending must finish its statement. After a block Lambda's ending, the enclosing expression continues under the usual rules, including commas, closing brackets and separators such as `into`.
+- **Style:** the full endings used in the Spec's examples also introduce the Beginner Surface. Bare endings have the same meaning and are not Advanced Constructs. The `prefer-explicit-end` Lint advises explicit endings in the `beginner` profile ([chapter 12](12-sessions-and-tooling.md#layers-and-lints)).
+
 <!-- generated: ebnf.blocks -->
 
 ```ebnf
 If             ::= 'if' Expression 'then'
                    ( Inline ( 'else' Inline )?
-                   | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if' )
+                   | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if'? )
 Repeat         ::= 'repeat' ( 'for' 'each' Pattern 'in' Expression | 'while' Expression
                             | 'until' Expression | 'forever' | Expression 'times' )
-                   NL Block 'end' 'repeat'
-Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'
+                   NL Block 'end' 'repeat'?
+Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'?
 When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
 Body           ::= Inline NL | NL Block
-Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'
+Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'?
 Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
-Join           ::= 'all' NL Block 'end' 'wait'
-WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'
+Join           ::= 'all' NL Block 'end' 'wait'?
+WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
 Event          ::= MessageName ( Pattern ( ',' Pattern )* )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
@@ -264,7 +268,7 @@ Timeout        ::= 'or' Expression
 <!-- end -->
 
 - **One-line `if`:** `if … then` followed by a statement on the same line is the one-line form, and its `else` must be on that line too. Each branch is one `Inline` statement: not an `if`, `repeat`, `match`, `try`, Join or block `wait for`.
-- **Block `if`:** `if … then` at the end of a line opens a block, closed by `end if`. An `else if … then` or `else` ends its line too.
+- **Block `if`:** `if … then` at the end of a line opens a block, closed by `end` or `end if`. An `else if … then` or `else` ends its line too.
 - **`repeat`:** `forever` straight after `repeat` always means a loop with no end, and never a count. A count is any expression before `times`.
 - **`match`:** each `when` has one pattern, then an optional Guard. `when contains <…>` searches rather than matching the whole value. At most one `else` comes last. A branch body is an `Inline` statement on the same line, or a block.
 - **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). `from` takes a postfix-level operand, so the `or` there is the timeout. At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
@@ -296,7 +300,7 @@ Timeout        ::= 'or' Expression
 
 ```ebnf
 Expression     ::= Lambda | Or
-Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given' )
+Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
 Not            ::= 'not' Not | Comparison
@@ -341,7 +345,7 @@ The operators, lowest precedence first:
 
 <!-- end -->
 
-- **Lambdas** have the lowest precedence of all. The body of `given r: …` runs to the next top-level comma or closing bracket, so `map(xs, given r: r * 2, 2)` passes `2` as a third argument. A block Lambda (`given r` at the end of a line) ends with `end given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
+- **Lambdas** have the lowest precedence of all. The body of `given r: …` runs to the next top-level comma or closing bracket, so `map(xs, given r: r * 2, 2)` passes `2` as a third argument. A block Lambda (`given r` at the end of a line) ends with `end` or `end given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
 - **Comparisons don't chain:** `a = b = c` is a syntax error at the second `=`.
 - **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`.
 - **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. Which names are kinds is a load rule ([chapter 3](03-values.md)).
