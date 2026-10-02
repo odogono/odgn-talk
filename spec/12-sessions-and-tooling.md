@@ -121,15 +121,15 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
 - **`:clock`:**
-  - `:clock` prints `real <instant>` or `virtual <instant>`, the last Pump's reading.
-  - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant.
-  - `:clock advance d` moves a virtual Clock on by the exact duration `d` and pumps. Under a real Clock it is refused with `clock is real`.
+  - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
+  - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
+  - `:clock advance d` moves a virtual Clock on by the exact duration `d`, a Quantity in the display form such as `5 s`, and pumps. Under a real Clock it is refused with `clock is real`, and a negative duration, or anything but an exact duration, with `bad arguments`.
   - `:clock real` goes back to the real Clock. A real reading earlier than the last Pump's is taken as the last Pump's, so the Clock never goes backwards.
 - **`:limits`:**
   - `:limits` prints each limit a Delivery may override, one per line as `<name> <value>`, by its `ts` name: `fuelPerRun`, `allocPerRun`, `maxWaitMs` and `maxJoin`.
   - `:limits <name> <value>` sets that override for every Entry requested afterwards. It can only tighten the default limit profile, and a looser value is refused as `invalid value`. Runs started by a `send` keep the Script's limits.
   - `:limits reset` clears every override.
-- **`:runs`** prints one line per Run that hasn't ended, from `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)): its id, its status (`ready`, `suspended`, `parked` or `preempted`) and its Handler, then, for a suspended one, the end reason it suspended at, `until <instant>` if it has a deadline, and the ids it waits for.
+- **`:runs`** prints one line per Run that hasn't ended, from `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)): its id, its status (`ready`, `suspended`, `parked` or `preempted`) and its Handler, then, for a suspended one, the end reason it suspended at, `until <instant>` if it has a deadline, and the ids it waits for, each separated from the last by a space.
 - **`:mailbox`** prints one line per message waiting: its delivery id, or the call or Run that sent it, then its name and its arguments as a list.
 - **`:vars`** prints one line per Script Variable, in declaration order, as `<name> = <value>`.
 - **`:save` and `:restore`** wrap the same-core save ([chapter 10](10-save-and-restore.md)). A save is kept in the Host's memory with the Session Host's own state: the session source, the next `entry<n>`, the `:limits` override, the Clock and the queued Stubs. `:save` prints `saved <name>`. `:restore` replaces the session's Group with one restored with `RejectMismatch`, adopts every pending call, and prints `restored <name>`.

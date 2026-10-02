@@ -1,0 +1,24 @@
+# `:cancel` of the latest Entry's Run by default, or of a named Run, its
+# `cancelled` line, and Runs that can't be cancelled.
+> :clock virtual 2026-09-30T10:00:00Z
+> on nap
+|   wait 60 s
+|   say "woke"
+| end nap
+> nap and wait
+> :cancel
+[session/r1] ! cancelled
+> :cancel
+! no such run
+> send nap to session
+> send nap to session
+> :cancel session/r5
+[session/r5] ! cancelled
+> :cancel session/r5
+! no such run
+> :cancel session/r99
+! no such run
+> :cancel a b
+! bad arguments
+> :clock advance 60 s
+[session/r3] woke

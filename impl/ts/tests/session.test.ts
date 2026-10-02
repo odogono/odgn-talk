@@ -348,3 +348,75 @@ describe('Mock Operations', () => {
     ]);
   });
 });
+
+describe('The Clock, limits and Runs', () => {
+  test('a virtual Clock moves only at :clock commands', () => {
+    const { host } = session();
+    expect(host.input(':clock')).toEqual(['real']);
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    host.input('on nap\n  wait 2 s\n  say "up"\nend nap');
+    expect(host.input('nap and wait')).toEqual([]);
+    // A deadline wait returns the prompt at once.
+    expect(host.waiting).toEqual({ k: 'prompt' });
+    expect(host.input(':clock advance 1 s')).toEqual([]);
+    expect(host.input(':clock advance 1 s')).toEqual(['[session/r1] up']);
+    expect(host.input(':clock')).toEqual(['virtual 2026-09-30T10:00:02Z']);
+    expect(host.input(':clock virtual 2026-09-30T09:00:00Z')).toEqual([
+      '! clock backwards',
+    ]);
+    expect(host.input(':clock advance -1 s')).toEqual(['! bad arguments']);
+    host.input(':clock real');
+    expect(host.input(':clock advance 1 s')).toEqual(['! clock is real']);
+    // A real reading earlier than the last Pump's is taken as the last Pump's.
+    host.input('1');
+    expect(host.input(':clock')).toEqual(['real 2026-09-30T10:00:02Z']);
+  });
+
+  test(':limits tightens the limits later Entries run with', () => {
+    const { host, trace } = session();
+    expect(host.input(':limits')).toEqual([
+      'fuelPerRun 10000000',
+      'allocPerRun 16777216',
+      'maxWaitMs 30000',
+      'maxJoin 16',
+    ]);
+    expect(host.input(':limits maxJoin 4')).toEqual([]);
+    expect(host.input(':limits maxJoin 17')).toEqual(['! invalid value']);
+    expect(host.input(':limits maxJoin -1')).toEqual(['! bad arguments']);
+    host.input('1');
+    host.input(':limits reset');
+    host.input('2');
+    expect(trace.filter(l => l.startsWith('> request'))).toEqual([
+      '> request d1 to=session message=entry1 limits={maxJoin: 4}',
+      '> request d2 to=session message=entry2',
+    ]);
+  });
+
+  test(':cancel cancels the latest Entry’s Run, or a named one', () => {
+    const { host } = session();
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    host.input('on nap\n  wait 9 s\nend nap');
+    host.input('nap and wait');
+    expect(host.input(':cancel')).toEqual(['[session/r1] ! cancelled']);
+    expect(host.input(':cancel')).toEqual(['! no such run']);
+    host.input('send nap to session');
+    expect(host.input(':cancel session/r3')).toEqual([
+      '[session/r3] ! cancelled',
+    ]);
+  });
+
+  test(':runs, :mailbox and :vars render Inspect()', () => {
+    const { host, trace } = session();
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    host.input('put [1] into xs');
+    host.input('on nap\n  wait 9 s\nend nap');
+    host.input('send nap to session');
+    expect(host.input(':vars')).toEqual(['xs = [1]']);
+    expect(trace.at(-2)).toBe('> vars');
+    expect(host.input(':runs')).toEqual([
+      'session/r3 suspended nap wait until 2026-09-30T10:00:09Z',
+    ]);
+    expect(host.input(':mailbox')).toEqual([]);
+    expect(host.input(':vars now')).toEqual(['! bad arguments']);
+  });
+});

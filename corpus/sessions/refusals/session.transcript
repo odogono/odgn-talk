@@ -1,0 +1,23 @@
+# Refused Session Commands print their reason and change nothing.
+> :nope
+! unknown command
+> :mock db.get sometimes
+! bad arguments
+> :grant
+! bad arguments
+> :clock advance 1 s
+! clock is real
+> :clock virtual yesterday
+! bad arguments
+> :clock sideways
+! bad arguments
+> :limits fuelPerRun many
+! bad arguments
+> :runs now
+! bad arguments
+> :answer c1 1
+! no such call
+> :stub db.get 1
+! bad arguments
+> :mock db.get immediate
+! session started

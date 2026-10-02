@@ -1,0 +1,41 @@
+# A virtual Clock: no `@` lines, a deadline wait returning the prompt at
+# once, background lines at `:clock advance`, a redefinition while a Run is
+# suspended, and a Clock that never goes backwards.
+> :clock virtual 2026-09-30T10:00:00Z
+> :clock
+virtual 2026-09-30T10:00:00Z
+> put 0 into ticks
+> on tick
+|   wait 5 s
+|   add 1 to ticks
+|   say "tick " & ticks
+| end tick
+> tick and wait
+> :clock advance 2 s
+> :clock advance 3 s
+[session/r2] tick 1
+> send tick to session
+> send tick to session
+> :clock advance 5 s
+[session/r4] tick 2
+[session/r6] tick 3
+# Redefining the Handler discards the Run suspended in it, and carries
+# `ticks` over.
+> send tick to session
+> on tick
+|   add 10 to ticks
+| end tick
+! discarded session/r8
+> :clock advance 10 s
+> tick
+> ticks
+13
+> :clock
+virtual 2026-09-30T10:00:20Z
+> :clock virtual 2026-09-30T09:00:00Z
+! clock backwards
+> :clock advance 1 GBP
+! bad arguments
+> :clock real
+> :clock advance 1 s
+! clock is real
