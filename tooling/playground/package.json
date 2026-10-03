@@ -1,0 +1,25 @@
+{
+  "name": "@odgn/northtalk-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests",
+    "build": "bun tools/build.ts",
+    "dev": "bun tools/serve.ts --watch",
+    "start": "bun tools/serve.ts",
+    "test:browser": "bun tools/corpus-serve.ts"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.5",
+    "@odgn/northtalk": "workspace:*",
+    "@odgn/northtalk-tooling": "workspace:*"
+  }
+}

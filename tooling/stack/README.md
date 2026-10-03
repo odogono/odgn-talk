@@ -5,6 +5,10 @@
 belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
+## Built-in Capabilities
+
+`@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line.
+
 ## Formatter
 
 ```ts

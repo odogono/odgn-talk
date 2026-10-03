@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NorthTalk Playground</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>NorthTalk Playground</h1>
+      <div class="toolbar">
+        <button id="apply" title="Enter the Script tab into the session (Ctrl/Cmd-S)">Apply</button>
+        <button id="restart" title="A fresh session from the setup and the tabs">Restart</button>
+        <button id="format" title="Format the current tab">Format</button>
+        <button id="share" title="Make a Shared Link">Share</button>
+        <button id="download" title="Download the Session Transcript">Transcript</button>
+        <label>Lints
+          <select id="profile">
+            <option value="beginner">beginner</option>
+            <option value="standard">standard</option>
+          </select>
+        </label>
+        <label title="Show Clock readings and Capability answers"><input type="checkbox" id="readings" /> @ ~</label>
+      </div>
+    </header>
+    <div id="banner" hidden></div>
+    <main>
+      <section id="editor-pane">
+        <nav id="tabs"></nav>
+        <div id="editor"></div>
+      </section>
+      <section id="side">
+        <div id="console-pane">
+          <div id="console" aria-live="polite"></div>
+          <div id="pending"></div>
+          <form id="prompt-form" autocomplete="off">
+            <span id="prompt-label">&gt;</span>
+            <input id="prompt" spellcheck="false" aria-label="Entry or Session Command" />
+            <button type="button" id="cancel" title="Cancel the Run the prompt waits for (Esc)">Cancel</button>
+          </form>
+        </div>
+        <details id="grants" open>
+          <summary>Grants</summary>
+          <p class="hint">Before the session starts. <code>console</code> is always granted.</p>
+          <ul id="setup"></ul>
+          <form id="grant-form" class="row">
+            <input id="grant-name" placeholder="name" size="8" required />
+            <select id="grant-capability">
+              <option value="clock">clock</option>
+              <option value="calendar">calendar</option>
+              <option value="locale">locale</option>
+            </select>
+            <input id="grant-binding" placeholder="binding (zone or tag)" size="14" />
+            <button>Grant</button>
+          </form>
+          <form id="mock-form" class="row">
+            <input id="mock-target" placeholder="capability.operation" size="18" required />
+            <select id="mock-mode">
+              <option value="immediate">immediate</option>
+              <option value="suspending">suspending</option>
+              <option value="fire-and-forget">fire-and-forget</option>
+            </select>
+            <button>Mock</button>
+          </form>
+        </details>
+        <details id="debugger" open>
+          <summary>Debugger</summary>
+          <p class="hint">Click the gutter to set a breakpoint. A pause holds the whole session.</p>
+          <div class="row">
+            <label><input type="checkbox" id="break-error" /> break on error</label>
+            <label><input type="checkbox" id="break-limit" /> break on Limit Fault</label>
+          </div>
+          <div class="row">
+            <button id="debug-resume" disabled>Continue</button>
+            <button id="debug-step" disabled>Step</button>
+            <button id="debug-over" disabled>Over</button>
+            <button id="debug-out" disabled>Out</button>
+          </div>
+          <pre id="pause-view"></pre>
+        </details>
+        <details id="replay">
+          <summary>Replay debugger</summary>
+          <p class="hint">Replays a Trace on the TS Core. Leave the Trace empty to replay this session; a pasted Trace from another Host needs its Setup as JSON.</p>
+          <textarea id="replay-trace" rows="4" placeholder="Paste a Trace (optional)"></textarea>
+          <textarea id="replay-setup" rows="2" placeholder="Setup as JSON (optional)"></textarea>
+          <div id="replay-need" hidden>
+            <label id="replay-need-label"></label>
+            <textarea id="replay-source" rows="4"></textarea>
+          </div>
+          <div class="row"><button id="replay-load">Load</button></div>
+          <div class="row">
+            <input id="replay-breaks" placeholder="unit:line, …" size="20" />
+            <label><input type="checkbox" id="replay-error" /> errors</label>
+            <label><input type="checkbox" id="replay-limit" /> Limit Faults</label>
+          </div>
+          <div class="row">
+            <button id="replay-resume">Continue</button>
+            <button id="replay-step">Step</button>
+            <button id="replay-over">Over</button>
+            <button id="replay-out">Out</button>
+            <button id="replay-back" title="Reverse one statement">Back</button>
+            <input id="replay-input" type="number" min="0" value="0" size="4" />
+            <button id="replay-go">Run to Host Input</button>
+          </div>
+          <pre id="replay-view"></pre>
+        </details>
+      </section>
+    </main>
+    <dialog id="share-dialog">
+      <form method="dialog">
+        <h2>Share</h2>
+        <label><input type="checkbox" id="share-transcript" checked /> Include the Session Transcript, which replays on opening</label>
+        <input id="share-url" readonly />
+        <p id="share-size" class="hint"></p>
+        <div class="row">
+          <button type="button" id="share-copy">Copy</button>
+          <button>Close</button>
+        </div>
+      </form>
+    </dialog>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

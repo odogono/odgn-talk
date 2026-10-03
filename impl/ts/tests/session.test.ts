@@ -631,3 +631,55 @@ test('fatal cleanup reports keep the Session Source and user Library at their pr
   );
   expect(second.userLibraries).toEqual(libraries);
 });
+
+describe('Debugging a session', () => {
+  const greet = 'on greet name\n  say "hello " & name\n  say "bye"\nend greet';
+
+  test('pauses an Entry and prints the same lines and Trace', () => {
+    const plain = session();
+    plain.host.input(greet);
+    const expected = plain.host.input('greet "Ann"');
+
+    const { host, trace } = session();
+    expect(host.debugController()).toBeNull();
+    host.input(greet);
+    const controller = host.debugController()!;
+    const unit = controller.sources().find(s => s.unit.name === 'session+1')!;
+    controller.breakAt([{ unit: 'session+1', pc: unit.statements[1]! }]);
+    expect(host.input('greet "Ann"')).toEqual([]);
+    expect(host.waiting).toEqual({ k: 'paused' });
+    expect(() => host.input('1')).toThrow('debug-paused');
+    expect(host.tick()).toEqual([]);
+    const out: string[] = [];
+    out.push(...host.continueDebug('step'));
+    while (host.waiting.k === 'paused') {
+      out.push(...host.continueDebug('resume'));
+    }
+    expect(out).toEqual(expected);
+    expect(trace).toEqual(plain.trace);
+    expect(() => host.continueDebug('resume')).toThrow('not debug-paused');
+  });
+
+  test('places each declaration in its loaded code unit', () => {
+    const { host } = session();
+    host.input('on a\n  say 1\nend a');
+    host.input('put 3 into n');
+    expect(host.placementsOfSource).toEqual([
+      { sourceLine: 1, lines: 3, unit: 'session+1', unitLine: 1 },
+      { sourceLine: 4, lines: 1, unit: 'session+2', unitLine: 1 },
+    ]);
+    // A Redefinition reloads every declaration into the base unit.
+    host.input('on a\n  say 2\nend a');
+    expect(host.placementsOfSource).toEqual([
+      { sourceLine: 1, lines: 3, unit: 'session', unitLine: 1 },
+      { sourceLine: 4, lines: 1, unit: 'session', unitLine: 4 },
+    ]);
+  });
+
+  test('exposes its Grants without starting', () => {
+    const { host } = session();
+    host.input(':grant c clock');
+    expect(Object.keys(host.sessionGrants).sort()).toEqual(['c', 'console']);
+    expect(host.inspect()).toBeNull();
+  });
+});
