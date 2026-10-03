@@ -55,6 +55,7 @@ export default [
     files: [
       'tools/**/*.ts',
       'impl/ts/tools/**/*.ts',
+      'impl/ts/examples/**/main.ts',
       'tooling/cli/src/**/*.ts',
       'tooling/fuzz/src/cli.ts',
       'tooling/fuzz/src/worker.ts',

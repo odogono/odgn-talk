@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc",
-    "test": "bun test tests",
+    "test": "bun test tests examples",
     "corpus:run": "bun tools/corpus.ts",
     "build": "bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
     "test:browser": "bun tools/browser-smoke.ts"

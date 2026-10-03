@@ -1,0 +1,5 @@
+on export content
+  ask output to open "report.txt"
+  ask output to write content
+  throw {code: "unfinished export"}
+end export
