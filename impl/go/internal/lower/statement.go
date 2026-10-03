@@ -296,33 +296,38 @@ func (u *Unit) replace(n *syntax.Node) {
 	u.emit(pos, "replace-end")
 }
 func (u *Unit) wait(n *syntax.Node) {
-	ev := event{timeout: len(n.Children) > 0}
+	ev := Event{Timeout: len(n.Children) > 0}
 	pos := n.Pos()
 	for _, branch := range n.Branches {
-		b := eventBranch{message: branch.Text, body: -1}
+		b := EventBranch{Message: branch.Text, Body: -1}
 		if branch.Kind == "after" {
 			u.expression(branch.Children[0])
-			b.after = true
+			b.After = true
 		} else {
 			if len(branch.Children) > 0 {
 				u.expression(branch.Children[0])
-				b.from = true
+				b.From = true
+				if source := branch.Children[0]; source.Kind == "name" {
+					if _, ok := u.checked.Resolve(u.state.body.Checked, source.Text); !ok {
+						b.FromScript = source.Text
+					}
+				}
 			}
 			if len(branch.Params) > 0 || branch.Guard != nil {
 				body := u.extra(branch)
-				b.body = body.Index
-				b.captures = len(body.Checked.Captures)
+				b.Body = body.Index
+				b.Captures = len(body.Checked.Captures)
 				for _, capture := range body.Checked.Captures {
 					u.load(branch.Pos(), capture.Index)
 				}
 				for _, param := range branch.Params {
 					for _, binding := range check.Bindings(param) {
-						b.binds = append(b.binds, u.state.body.Checked.Slot(binding.Text))
+						b.Binds = append(b.Binds, u.state.body.Checked.Slot(binding.Text))
 					}
 				}
 			}
 		}
-		ev.branches = append(ev.branches, b)
+		ev.Branches = append(ev.Branches, b)
 	}
 	if len(n.Children) > 0 {
 		u.expression(n.Children[0])

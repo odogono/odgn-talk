@@ -96,6 +96,9 @@ func (g *Group) fireTimers() {
 		return a.timerOrder < b.timerOrder
 	})
 	for _, t := range due {
+		if t.x.run.EventWait != nil {
+			t.x.run.TimeoutEvent()
+		}
 		t.x.deadline = nil
 		t.x.how = "resume"
 		t.s.queue = append(t.s.queue, workItem{run: t.x})
@@ -189,6 +192,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				result.State = Sliced
 				break
 			}
+			observationSpent := false
 			if s.active == nil {
 				item := s.queue[0]
 				s.queue[0] = workItem{}
@@ -199,11 +203,20 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				} else {
 					d := item.delivery
 					g.release(s)
+					fuel, alloc := g.observe(s, d, func() { seal(d, "", Allowed, Nothing, Completed) })
+					used[s] += fuel
+					result.FuelUsed += fuel
+					s.counters.FuelTotal += fuel
+					s.counters.AllocTotal += alloc
+					observationSpent = o.FuelSlice > 0 && used[s] >= budget[s] || o.FuelCap > 0 && result.FuelUsed >= o.FuelCap
 					if d.during != nil && !s.hasHandler("error") {
 						progress = true
 						continue
 					}
 					s.start(d)
+					if observationSpent && s.active.run.Status == machine.Running {
+						s.active.run.Status = machine.Preempted
+					}
 				}
 			}
 			x := s.active
@@ -224,6 +237,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				by = "cap"
 			}
 			for {
+				if observationSpent {
+					break
+				}
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
 				remaining := slice
@@ -292,10 +308,17 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if r.Status == machine.Suspended {
 				g.nextTimer++
 				x.timerOrder = g.nextTimer
-				x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
+				if r.EventWait != nil {
+					x.deadline = r.EventWait.Deadline
+					common["end"] = r.EventWait.Kind
+				} else {
+					x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
+					common["end"] = "wait"
+				}
 				common["state"] = fmt.Sprint(s.persistent())
-				common["end"] = "wait"
-				common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
+				if x.deadline != nil {
+					common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
+				}
 				g.record("seg", false, []string{string(x.id), x.how}, common)
 				if x.openVerdict() {
 					seal(x.delivery, x.id, Allowed, Nothing, Completed)
@@ -304,7 +327,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				continue
 			}
 			report := g.finish(s, x, common, func() {
-				if r.Status == machine.Completed && x.openVerdict() {
+				if r.Status == machine.Completed && !r.Passed && x.openVerdict() {
 					verdict := Allowed
 					if r.Vetoed {
 						verdict = Vetoed
@@ -316,7 +339,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if report.Outcome == Errored && x.delivery.message.Name != "error" {
 				g.queueError(s, x)
 			}
-			if report.Outcome == UnhandledOutcome && x.delivery.during == nil {
+			if (report.Outcome == UnhandledOutcome || r.Passed) && x.delivery.during == nil {
 				unhandled := &Unhandled{Delivery: x.delivery.id, Message: x.delivery.message}
 				result.Reports = append(result.Reports, unhandled)
 				fields := map[string]string{"message": x.delivery.message.Name}
@@ -325,17 +348,20 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				g.record("unhandled", false, []string{string(x.delivery.id)}, fields)
 			}
-			if report.Outcome == UnhandledOutcome {
+			if report.Outcome == UnhandledOutcome || r.Passed {
 				seal(x.delivery, x.id, Allowed, Nothing, UnhandledOutcome)
 			} else if report.Outcome != Completed {
 				seal(x.delivery, x.id, Undecided, Nothing, report.Outcome)
 			}
 			if p := x.delivery.pending; p != nil {
 				settlements = append(settlements, func() {
-					if report.Outcome == Completed {
+					if report.Outcome == Completed && !r.Passed {
 						p.settle(report.Result, nil)
 					} else {
 						reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped"}[report.Outcome]
+						if r.Passed {
+							reason = "unhandled"
+						}
 						p.settle(Nothing, sendFailure(reason, report.Error))
 					}
 				})
@@ -452,6 +478,9 @@ func scriptError(v corevalue.Value) *ScriptError {
 func (g *Group) finish(s *Script, x *execution, common map[string]string, seal func()) *RunEnd {
 	r := x.run
 	end, outcome := "return", Completed
+	if r.Passed {
+		end = "pass"
+	}
 	if r.Vetoed {
 		end = "veto"
 		if r.VetoReason.Kind != corevalue.Nothing {

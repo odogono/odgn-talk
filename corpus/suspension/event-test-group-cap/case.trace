@@ -13,16 +13,16 @@ pumped state=idle fuel=28
 > deliver d4 to=other message=go
 > pump clock=2026-09-30T10:00:01Z fuel-cap=1
 preempt s/r3 start delivery=d3 handler=ping clause=1 by=cap fuel=0 alloc=0
-pumped state=sliced fuel=22
+pumped state=sliced fuel=14
 > pump clock=2026-09-30T10:00:02Z
 seg s/r3 continue fuel=16 alloc=24 state=800 end=return
 run s/r3 outcome=completed delivery=d3 handler=ping fuel=16 alloc=24
 seg other/r1 start delivery=d4 handler=go clause=1 fuel=10 alloc=0 state=8 end=return
 run other/r1 outcome=completed delivery=d4 handler=go fuel=10 alloc=0
 seg s/r1 resume fuel=13 alloc=24 state=444 end=return
-run s/r1 outcome=completed delivery=d1 handler=watch fuel=38 alloc=64
+run s/r1 outcome=completed delivery=d1 handler=watch fuel=34 alloc=64
 seg s/r2 resume fuel=13 alloc=24 state=88 end=return
-run s/r2 outcome=completed delivery=d2 handler=watch fuel=38 alloc=64
+run s/r2 outcome=completed delivery=d2 handler=watch fuel=34 alloc=64
 pumped state=idle fuel=52
 > vars
 vars s seen=[0, 1, 2]

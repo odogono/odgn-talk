@@ -249,10 +249,8 @@ describe('Script counters', () => {
     s.deliver({ name: 'ping', args: [num(-1)] });
     g.pump(0n);
     const spent = totals(trace);
-    // The failed event test's pattern, guard and return cost 11 Fuel.
-    expect(s.counters().fuelTotal).toBe(
-      before.fuelTotal + spent.fuelTotal + 11,
-    );
+    // The failed event test's loads, Guard and clause-fail cost 7 Fuel.
+    expect(s.counters().fuelTotal).toBe(before.fuelTotal + spent.fuelTotal + 7);
     expect(s.counters().fuelTotal).toBeGreaterThan(
       before.fuelTotal + spent.fuelTotal,
     );

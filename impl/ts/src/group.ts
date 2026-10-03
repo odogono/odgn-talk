@@ -2648,6 +2648,7 @@ export class Group {
     let fuel = 0;
     for (const waiter of s.waiters) {
       const before = waiter.running.run.fuel;
+      const records = waiter.running.run.records.length;
       const fired = waiter.running.run.matchEvent(
         delivery.message,
         delivery.args,
@@ -2655,6 +2656,7 @@ export class Group {
         (delivery.target ?? s.owner)?.handle.value ?? nothing,
       );
       fuel += waiter.running.run.fuel - before;
+      this.writeRecords(waiter.running, records);
       if (fired) {
         this.endWaiter(s, waiter);
         this.seal(delivery, { verdict: 'allowed' });

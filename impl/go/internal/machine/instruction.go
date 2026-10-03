@@ -115,7 +115,13 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		slot := slices.Index(r.State.Unit.Definitions, name(0))
 		effect = func() { r.State.Definitions[slot] = v }
 	case "load-object":
-		push(r.State.Objects[name(0)])
+		if v, ok := r.State.Objects[name(0)]; ok {
+			push(v)
+		} else if slices.Contains(r.State.ScriptNames, name(0)) {
+			push(value.Value{}) // a receiver Name, consumed by the event entry
+		} else {
+			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
+		}
 	case "me":
 		push(r.State.Me)
 	case "target":
@@ -142,6 +148,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		default:
 			push(v)
 		}
+	case "pass":
+		effect = func() { r.Frames = nil; r.Passed = true; r.Status = Completed }
 	case "return", "veto":
 		v := pop()
 		effect = func() {
@@ -266,6 +274,14 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		effect = func() { r.WaitNS = ns; r.Status = Suspended }
+	case "wait-for", "wait-for-any":
+		entry := r.State.Unit.Events[idx(0)]
+		w, err := r.eventWait(i.Name, entry, take(eventValueCount(entry)))
+		if err != nil {
+			bad(*err)
+			break
+		}
+		effect = func() { r.EventWait = w; r.Status = Suspended }
 	case "call-builtin":
 		m.Args = take(idx(1))
 		v, e := builtin(name(0), m.Args, &m)

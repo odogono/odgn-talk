@@ -1,0 +1,37 @@
+> load watcher identity=c6fdb2b39163d42a4061a7638242998b317de0fe7a98da480ed11a807f969967
+> load broken identity=e07b12dd455c3ea05197ba2f27b3da332e3bf28f90825b2134973fbb8ab5da7f
+> load decider identity=fe571133001cde212ad1aaf0ab541cc40cf90cf91be8a24285799bc8372d54a2
+> deliver d1 to=watcher message=watch
+> pump clock=2026-09-30T10:00:00Z
+seg watcher/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=224 end=wait-for
+pumped state=idle fuel=14
+> decide-broadcast b1 message=move args=[true] recipients=[watcher:d2, broken:d3, decider:d4]
+> pump clock=2026-09-30T10:00:01Z
+seg watcher/r2 start delivery=d2 broadcast=b1 fuel=0 alloc=0 state=356 end=unhandled
+run watcher/r2 outcome=unhandled delivery=d2 broadcast=b1 fuel=0 alloc=0
+raise broken/r1 code="broken" at=broken:3 pos=2:3
+seg broken/r1 start delivery=d3 broadcast=b1 handler=move clause=1 fuel=19 alloc=48 state=0 end=error
+run broken/r1 outcome=errored delivery=d3 broadcast=b1 handler=move error={code: "broken", at: {unit: "broken", handler: "move", line: 2, column: 3}} fuel=19 alloc=48
+seg decider/r1 start delivery=d4 broadcast=b1 handler=move clause=1 fuel=13 alloc=69 state=0 end=veto value={reason: "refused"}
+decided b1 verdict=vetoed vetoes=[{script: "decider", run: "decider/r1", reason: {reason: "refused"}}] undecided=[{script: "broken", run: "broken/r1", outcome: "errored"}]
+run decider/r1 outcome=completed delivery=d4 broadcast=b1 handler=move fuel=13 alloc=69
+seg watcher/r1 resume fuel=14 alloc=16 state=16 end=return
+run watcher/r1 outcome=completed delivery=d1 handler=watch fuel=35 alloc=48
+pumped state=idle fuel=53
+> decide-broadcast b2 message=move args=[false] recipients=[broken:d5, decider:d6]
+> pump clock=2026-09-30T10:00:02Z
+raise broken/r2 code="broken" at=broken:3 pos=2:3
+seg broken/r2 start delivery=d5 broadcast=b2 handler=move clause=1 fuel=19 alloc=48 state=0 end=error
+run broken/r2 outcome=errored delivery=d5 broadcast=b2 handler=move error={code: "broken", at: {unit: "broken", handler: "move", line: 2, column: 3}} fuel=19 alloc=48
+seg decider/r2 start delivery=d6 broadcast=b2 handler=move clause=1 fuel=9 alloc=0 state=0 end=return
+decided b2 verdict=undecided undecided=[{script: "broken", run: "broken/r2", outcome: "errored"}]
+run decider/r2 outcome=completed delivery=d6 broadcast=b2 handler=move fuel=9 alloc=0
+pumped state=idle fuel=28
+> decide-broadcast b3 message=absent
+> pump clock=2026-09-30T10:00:03Z
+decided b3 verdict=allowed
+pumped state=idle fuel=0
+> vars
+vars watcher watched=1
+vars broken
+vars decider
