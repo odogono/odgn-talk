@@ -1,0 +1,5 @@
+use answer, twice from maths
+on demo
+put answer into x
+ask http to fetch "url" and wait
+end
