@@ -108,6 +108,24 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	budget := map[*Script]int64{}
 	skipped := map[*Script]bool{}
 	var settlements []func()
+	seal := func(d delivery, run RunID, verdict Verdict, reason Value, outcome Outcome) {
+		if d.decision == nil {
+			return
+		}
+		report := &Decided{Delivery: d.id, Verdict: verdict}
+		if verdict == Vetoed {
+			report.Vetoes = []Veto{{Script: d.script.name, Run: run, Reason: reason}}
+		}
+		if verdict == Undecided {
+			report.Undecided = []UndecidedBy{{Script: d.script.name, Run: run, Outcome: outcome}}
+		}
+		if !d.decision.seal(report) {
+			return
+		}
+		result.Reports = append(result.Reports, report)
+		g.recordDecided(report)
+		settlements = append(settlements, d.decision.finish)
+	}
 	defer func() {
 		for _, settle := range settlements {
 			settle()
@@ -136,7 +154,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				report := &RunEnd{Script: s.name, Delivery: q.id, Outcome: Cancelled}
 				result.Reports = append(result.Reports, report)
 				g.record("run", false, nil, map[string]string{"outcome": "cancelled", "delivery": string(q.id), "fuel": "0", "alloc": "0"})
-				settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })
+				if q.pending != nil {
+					settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })
+				}
+				seal(q, "", Undecided, Nothing, Cancelled)
 				found = true
 				break
 			}
@@ -214,11 +235,16 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 						g.replaceEarlier(s, x)
 						r.PersistentBase = s.retainedOutside(x)
 					}
+					if !x.deciding {
+						seal(x.delivery, x.id, Allowed, Nothing, Completed)
+					}
 				})
 				if r.Status != machine.Dispatching {
 					break
 				}
-				g.selectClause(s, x)
+				g.writeRaises(x, raised)
+				raised = len(r.Raises)
+				g.selectClause(s, x, func() { seal(x.delivery, x.id, Allowed, Nothing, Completed) })
 				if r.Status != machine.Running {
 					break
 				}
@@ -228,19 +254,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			result.FuelUsed += delta
 			s.counters.FuelTotal += delta
 			s.counters.AllocTotal += r.Alloc - alloc
-			for _, raise := range r.Raises[raised:] {
-				fields := map[string]string{"at": fmt.Sprintf("%s:%d", s.name, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
-				name := "raise"
-				if raise.Guard {
-					name = "guard-skip"
-				}
-				if raise.Value != nil {
-					fields["value"] = coretrace.Display(*raise.Value)
-				} else {
-					fields["code"] = corevalue.DisplayText(raise.Code)
-				}
-				g.record(name, false, []string{string(x.id)}, fields)
-			}
+			g.writeRaises(x, raised)
 			common := map[string]string{"fuel": fmt.Sprint(delta), "alloc": fmt.Sprint(r.Alloc - alloc)}
 			if x.how == "start" {
 				if x.delivery.id != "" {
@@ -283,10 +297,21 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				common["end"] = "wait"
 				common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
 				g.record("seg", false, []string{string(x.id), x.how}, common)
+				if x.openVerdict() {
+					seal(x.delivery, x.id, Allowed, Nothing, Completed)
+				}
 				s.active = nil
 				continue
 			}
-			report := g.finish(s, x, common)
+			report := g.finish(s, x, common, func() {
+				if r.Status == machine.Completed && x.openVerdict() {
+					verdict := Allowed
+					if r.Vetoed {
+						verdict = Vetoed
+					}
+					seal(x.delivery, x.id, verdict, Value{r.VetoReason}, Completed)
+				}
+			})
 			result.Reports = append(result.Reports, report)
 			if report.Outcome == Errored && x.delivery.message.Name != "error" {
 				g.queueError(s, x)
@@ -299,6 +324,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					fields["args"] = argsDisplay(x.delivery.message.Args)
 				}
 				g.record("unhandled", false, []string{string(x.delivery.id)}, fields)
+			}
+			if report.Outcome == UnhandledOutcome {
+				seal(x.delivery, x.id, Allowed, Nothing, UnhandledOutcome)
+			} else if report.Outcome != Completed {
+				seal(x.delivery, x.id, Undecided, Nothing, report.Outcome)
 			}
 			if p := x.delivery.pending; p != nil {
 				settlements = append(settlements, func() {
@@ -419,9 +449,18 @@ func scriptError(v corevalue.Value) *ScriptError {
 	data, _ := corevalue.NewMap(fields)
 	return &ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: Value{data}}
 }
-func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEnd {
+func (g *Group) finish(s *Script, x *execution, common map[string]string, seal func()) *RunEnd {
 	r := x.run
 	end, outcome := "return", Completed
+	if r.Vetoed {
+		end = "veto"
+		if r.VetoReason.Kind != corevalue.Nothing {
+			common["value"] = coretrace.Display(r.VetoReason)
+		}
+		if !x.openVerdict() {
+			g.record("note", false, []string{string(x.id)}, map[string]string{"kind": "no-verdict"})
+		}
+	}
 	switch r.Status {
 	case machine.Errored:
 		end, outcome = "error", Errored
@@ -454,6 +493,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 	common["state"] = fmt.Sprint(s.persistentWithoutRun(x))
 	common["end"] = end
 	g.record("seg", false, []string{string(x.id), x.how}, common)
+	seal()
 	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
@@ -546,7 +586,7 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 	}
 }
 
-func (g *Group) selectClause(s *Script, x *execution) {
+func (g *Group) selectClause(s *Script, x *execution, allow func()) {
 	r := x.run
 	body := s.state.Unit.Bodies[r.Frames[0].Body]
 	policy := machine.QueuePolicy(body)
@@ -561,6 +601,7 @@ func (g *Group) selectClause(s *Script, x *execution) {
 		return
 	}
 	x.clause = body.Index
+	x.deciding = machine.DecidingClause(body)
 	switch {
 	case busy && policy == "queued":
 		r.Park()
@@ -569,12 +610,31 @@ func (g *Group) selectClause(s *Script, x *execution) {
 	case policy == "replacing" && !r.Frames[0].Clause:
 		g.replaceEarlier(s, x)
 	}
+	if !x.deciding && (r.Status == machine.Running || r.Status == machine.Parked) && !r.Frames[0].Clause {
+		allow()
+	}
 }
 
 func (g *Group) replaceEarlier(s *Script, x *execution) {
 	for _, other := range s.runs {
-		if other != x && other.clause == x.clause {
+		if other != x && other.clause == x.clause && !other.openVerdict() {
 			g.cancelExecution(s, other)
 		}
+	}
+}
+
+func (g *Group) writeRaises(x *execution, from int) {
+	for _, raise := range x.run.Raises[from:] {
+		fields := map[string]string{"at": fmt.Sprintf("%s:%d", x.delivery.script.name, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
+		name := "raise"
+		if raise.Guard {
+			name = "guard-skip"
+		}
+		if raise.Value != nil {
+			fields["value"] = coretrace.Display(*raise.Value)
+		} else {
+			fields["code"] = corevalue.DisplayText(raise.Code)
+		}
+		g.record(name, false, []string{string(x.id)}, fields)
 	}
 }

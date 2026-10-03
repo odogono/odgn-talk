@@ -47,15 +47,16 @@ type Script struct {
 	debt     int64
 }
 type delivery struct {
-	id      DeliveryID
-	script  *Script
-	message Message
-	pending *Pending
-	cancel  DeliveryID
-	kind    string
-	fields  map[string]string
-	from    RunID
-	during  *corevalue.Value // non-nil only for an internal error message
+	id       DeliveryID
+	script   *Script
+	message  Message
+	pending  *Pending
+	decision *Deciding
+	cancel   DeliveryID
+	kind     string
+	fields   map[string]string
+	from     RunID
+	during   *corevalue.Value // non-nil only for an internal error message
 }
 type execution struct {
 	run        *machine.Run
@@ -67,6 +68,7 @@ type execution struct {
 	deadline   *big.Int
 	timerOrder int64
 	parked     bool
+	deciding   bool
 }
 type workItem struct {
 	delivery delivery
@@ -199,6 +201,9 @@ func (g *Group) receiver(to *Object) *Script {
 	return nil
 }
 func (g *Group) deliver(s *Script, m Message, ctx context.Context, request bool) (DeliveryID, *Pending, error) {
+	return g.enqueue(s, m, ctx, request, nil)
+}
+func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool, decision *Deciding) (DeliveryID, *Pending, error) {
 	fields := map[string]string{"to": "unknown", "message": m.Name}
 	if s != nil {
 		fields["to"] = s.name
@@ -212,6 +217,9 @@ func (g *Group) deliver(s *Script, m Message, ctx context.Context, request bool)
 	name := "deliver"
 	if request {
 		name = "request"
+	}
+	if decision != nil {
+		name = "decide"
 	}
 	refused := func(code HostErrorCode, detail string) (DeliveryID, *Pending, error) {
 		g.recordRefusal(name, nil, fields, code)
@@ -255,10 +263,16 @@ func (g *Group) deliver(s *Script, m Message, ctx context.Context, request bool)
 	}
 	s.reserved++
 
-	d := delivery{id: id, script: s, message: m, pending: p, kind: name, fields: fields}
+	d := delivery{id: id, script: s, message: m, pending: p, decision: decision, kind: name, fields: fields}
 	g.inputs = append(g.inputs, d)
 	if p != nil {
 		p.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
+	}
+	if decision != nil {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		decision.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
 	}
 	ready := g.options.OnReady
 	g.mu.Unlock()
@@ -326,7 +340,12 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.mu.Unlock()
 	defer func() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }()
 
+	accepted := inputs[:0]
 	for _, d := range inputs {
+		if d.cancel != "" && d.decision != nil && d.decision.isSealed() {
+			continue
+		}
+		accepted = append(accepted, d)
 		if d.cancel != "" {
 			g.record("cancel-delivery", true, []string{string(d.cancel)}, nil)
 		} else {
@@ -334,7 +353,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		}
 	}
 	g.record("pump", true, nil, fields)
-	return g.runPump(o, inputs)
+	return g.runPump(o, accepted)
 }
 
 func (r *RunEnd) isReport() {}
@@ -350,14 +369,19 @@ func (g *Group) beginWorker() error {
 func (g *Group) endWorker() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }
 func (g *Group) cancelDelivery(d delivery) {
 	g.mu.Lock()
-	d.pending.mu.Lock()
-	settled := d.pending.settled
-	d.pending.mu.Unlock()
+	settled := false
+	if d.decision != nil {
+		settled = d.decision.isSealed()
+	} else {
+		d.pending.mu.Lock()
+		settled = d.pending.settled
+		d.pending.mu.Unlock()
+	}
 	if settled {
 		g.mu.Unlock()
 		return
 	}
-	g.inputs = append(g.inputs, delivery{cancel: d.id, script: d.script, pending: d.pending})
+	g.inputs = append(g.inputs, delivery{cancel: d.id, script: d.script, pending: d.pending, decision: d.decision})
 	ready := g.options.OnReady
 	g.mu.Unlock()
 	if ready != nil {

@@ -237,8 +237,12 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 					return false
 				}
 				if x.Kind == "command" {
-					if s, ok := u.Symbols[x.Text]; ok && s.Node != nil && u.Bodies[s.Node] != nil && u.Bodies[s.Node].MaySuspend {
-						b.MaySuspend = true
+					if s, ok := u.Resolve(b, x.Text); ok && s.Kind == "handler" {
+						for _, clause := range u.Bodies {
+							if clause.Kind == "handler" && clause.Name == s.Name && clause.MaySuspend {
+								b.MaySuspend = true
+							}
+						}
 					}
 				}
 				return true
@@ -248,6 +252,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			}
 		}
 	}
+	u.checkDecisions()
 	u.orderDiagnostics()
 	return u
 }

@@ -9,6 +9,10 @@ cancellation/queueing-policies
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
+decisions/fault-before-seal
+decisions/script-verdict-boundaries
+decisions/undecided-on-an-error
+decisions/verdict-behind-a-fuel-slice
 disassembly/calls-and-lambdas
 disassembly/containers
 disassembly/destructuring

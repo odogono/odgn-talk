@@ -142,12 +142,17 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		default:
 			push(v)
 		}
-	case "return":
+	case "return", "veto":
 		v := pop()
 		effect = func() {
 			r.Frames = r.Frames[:len(r.Frames)-1]
 			if len(r.Frames) == 0 {
-				r.Result = v
+				if i.Name == "veto" {
+					r.Vetoed, r.VetoReason = true, v
+					r.Result = value.Value{}
+				} else {
+					r.Result = v
+				}
 				r.Status = Completed
 			} else {
 				caller := &r.Frames[len(r.Frames)-1]

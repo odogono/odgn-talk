@@ -78,6 +78,20 @@ describe('loading', () => {
 });
 
 describe('Deliveries and Pumps', () => {
+  test('ordinary Decision dispatch must pay the complete first instruction', () => {
+    for (const budget of [4, 5]) {
+      const { g } = group();
+      const s = g.load({ name: 's', source: 'on go\n return 1 / 0\nend go\n' });
+      s.decide({ name: 'go', limits: { fuelPerRun: budget } });
+      const result = g.pump(clock);
+      expect(result.reports).toMatchObject(
+        budget === 4
+          ? [{ outcome: 'limit fault', fuel: 0 }, { verdict: 'undecided' }]
+          : [{ verdict: 'allowed' }, { outcome: 'limit fault', fuel: 5 }],
+      );
+    }
+  });
+
   test('replacement waits for the combined dispatch charge', () => {
     for (const budget of [4, 5]) {
       const { g, lines } = group();

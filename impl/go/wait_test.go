@@ -195,27 +195,6 @@ end mark
 	}
 }
 
-func TestDeferredDecidingHandlerKeepsRequestPending(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on work, deciding\n return 7\nend work\n"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, p, err := s.Request(nil, Message{Name: "work"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || r.FuelUsed != 0 || len(r.Reports) != 0 {
-		t.Fatal(r, err)
-	}
-	select {
-	case <-p.Done():
-		t.Fatal("unsupported deciding Handler settled Request")
-	default:
-	}
-}
-
 func TestWaitFuelFaultDoesNotChargeOrInstallTimer(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Limits: Limits{FuelPerRun: 14}, Source: "on nap\n wait 1 s\nend nap\n"})
