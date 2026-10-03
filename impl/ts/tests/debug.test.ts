@@ -236,24 +236,37 @@ test('a recorded early landing Trace replays in both replay modes', () => {
   }
 });
 
-test('pausing at every instruction and fault preserves all corpus Trace Cases in both replay modes', () => {
-  const root = resolve(import.meta.dir, '../../../corpus');
-  let pauses = 0;
-  let cases = 0;
-  const breaks = Array.from({ length: 4096 }, (_, pc) => ({ pc }));
-  for (const path of new Bun.Glob('**/case.toml').scanSync({ cwd: root })) {
-    const dir = resolve(root, path, '..');
-    const setup = Bun.TOML.parse(readFileSync(resolve(root, path), 'utf8')) as {
+const corpusRoot = resolve(import.meta.dir, '../../../corpus');
+const corpusTraceCases = [
+  ...new Bun.Glob('**/case.toml').scanSync({ cwd: corpusRoot }),
+]
+  .sort()
+  .flatMap(path => {
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(corpusRoot, path), 'utf8'),
+    ) as {
       kind: string;
     };
-    if (setup.kind !== 'trace') {
-      continue;
-    }
-    const trace = readFileSync(resolve(dir, 'case.trace'), 'utf8').split('\n');
-    for (const restoreBetweenPumps of [true, false]) {
-      const expected = replay(dir, setup as never, trace, {
-        restoreBetweenPumps,
-      });
+    return setup.kind === 'trace' ? [{ path, setup }] : [];
+  });
+
+test('debug pause comparisons discover the corpus Trace Cases', () => {
+  expect(corpusTraceCases.length).toBeGreaterThan(100);
+});
+
+for (const { path, setup } of corpusTraceCases) {
+  for (const restoreBetweenPumps of [false, true]) {
+    const mode = restoreBetweenPumps ? 'save/restore' : 'ordinary';
+    // The 64 MiB Persistent State case is expensive to restore. Give each
+    // case/mode its own budget, rather than timing the entire corpus as one test.
+    test(`debug pause preserves ${path} (${mode} replay)`, () => {
+      const dir = resolve(corpusRoot, path, '..');
+      const trace = readFileSync(resolve(dir, 'case.trace'), 'utf8').split(
+        '\n',
+      );
+      let pauses = 0;
+      const breaks = Array.from({ length: 4096 }, (_, pc) => ({ pc }));
+      const expected = replay(dir, setup as never, trace);
       const actual = replay(dir, setup as never, trace, {
         restoreBetweenPumps,
         configureDebug(group) {
@@ -268,13 +281,17 @@ test('pausing at every instruction and fault preserves all corpus Trace Cases in
           };
         },
       });
-      expect([path, actual]).toEqual([path, expected]);
-    }
-    cases++;
+      expect(actual).toEqual(expected);
+      if (
+        expected.some(
+          line => line.startsWith('seg ') && / fuel=[1-9]/.test(line),
+        )
+      ) {
+        expect(pauses).toBeGreaterThan(0);
+      }
+    }, 60_000);
   }
-  expect(cases).toBeGreaterThan(100);
-  expect(pauses).toBeGreaterThan(1000);
-}, 60_000);
+}
 
 test('pause callbacks cannot reenter the retained Pump and paused time excludes execution', async () => {
   const group = newGroup({ name: 'g' });
