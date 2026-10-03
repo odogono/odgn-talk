@@ -1,0 +1,10 @@
+script variable seen = []
+
+on fail
+  throw "first"
+end fail
+
+on error e, during msg
+  put msg after seen
+  throw "second"
+end error

@@ -99,3 +99,35 @@ func TestTextPatternStepTwoAcceptance(t *testing.T) {
 		})
 	}
 }
+
+// Error delivery replays through the public Group API. Reviewed Core-error
+// cases pin retained maps; new regressions pin dispatch and error backstops.
+func TestErrorDeliveryAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+
+	names := []string{
+		"bytes/build-errors", "dates/instants-and-offsets",
+		"errors/handler-backstop", "errors/handler-delivery",
+		"math/domain-errors", "math/fractional-power-errors", "quantities/incompatible-units",
+	}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("error-delivery case missing from passing gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

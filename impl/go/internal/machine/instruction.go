@@ -23,7 +23,7 @@ func failure(code string, fields ...value.Pair) value.Value {
 		message = entry.Message
 		var replacements []string
 		for _, field := range fields {
-			replacements = append(replacements, "{"+field.Key+"}", textForm(field.Val))
+			replacements = append(replacements, "{"+field.Key+"}", field.Val.Display())
 		}
 		if len(replacements) > 0 {
 			message = strings.NewReplacer(replacements...).Replace(message)

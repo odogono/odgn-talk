@@ -148,12 +148,12 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Suspension, messages, imported calls, Capability effects and Object properties
-stop at a `Blocked` implementation boundary with the instruction and operands
+Suspension and `send` instructions, imported calls, Capability effects and Object
+properties stop at a `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
-and a Request remains unsettled. Full Handler modes, automatic `error` delivery,
-Message Paths and scheduling belong to #134; complete cancellation and Stop
-Script acceptance to [#135](https://github.com/odogono/odgn-talk/issues/135),
+and a Request remains unsettled. Full Handler modes, Message Paths and suspension
+scheduling belong to #134; complete cancellation and Stop Script acceptance to
+[#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
 ## Text Patterns
@@ -199,6 +199,17 @@ visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
 on the next Pump; Fuel Cap limits the Group. Request cancellation joins the same
 queue, and Pending results settle after Pump records. Worker reentry, backwards
 Clock readings, invalid values and foreign Function Values are refused.
+
+An uncaught error queues a separate `error` message behind the existing mailbox
+messages, with the failed Run as its sender. Error Handler Clauses use ordinary
+Destructuring and Guards, including the text-code shorthand. Their `during`
+binding holds the failed message before Guard tests and survives clause skips,
+local calls and preemption. An unmatched internal error never reports `unhandled`,
+and an error Run that errors sends no further message. A full mailbox, including
+reserved Host inputs, drops the error with an `error-dropped` Trace note. Queued
+errors count toward Persistent State; pending `wait for error` observation awaits
+the `wait for` implementation in #134.
+
 Inspection and counters are worker calls; a refused call with no error return
 panics with `HostError`. Trace callbacks run without the input queue lock.
 
@@ -213,14 +224,17 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 76 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 83 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-26 additional standalone math, dates, Quantities, Bytes, limits and Text Pattern
-cases. Trace cases replay through the public embedding interface, with exact
-records, costs and final state. Tests separately enforce the full 50-case step-1
+33 additional math, dates, Quantities, Bytes, limits, Text Pattern and error
+delivery cases. Trace cases replay through the public embedding interface, with
+exact records, costs and final state. Tests separately enforce the full 50-case step-1
 set and eight reviewed step-2 cases, so removing a required case cannot silently
-shrink the gate. Listing a new regression case here protects it while its first
-human blessing review remains pending.
+shrink the gate. Five reviewed Core-error cases also pin retained error-map
+sizes, and two new error-delivery regressions agree on both Cores. Their
+`Unblessed` headers remain until human review of the first blessing. Listing a
+new regression case here protects it while its first human blessing review
+remains pending.
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

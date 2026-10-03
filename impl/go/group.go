@@ -51,6 +51,8 @@ type delivery struct {
 	cancel  DeliveryID
 	kind    string
 	fields  map[string]string
+	from    RunID
+	during  *corevalue.Value // non-nil only for an internal error message
 }
 type execution struct {
 	run      *machine.Run
@@ -400,7 +402,7 @@ func (g *Group) Inspect() Inspection {
 				copy := *m.Limits
 				m.Limits = &copy
 			}
-			view.Mailbox = append(view.Mailbox, MessageView{Delivery: d.id, Message: m})
+			view.Mailbox = append(view.Mailbox, MessageView{Delivery: d.id, From: string(d.from), Message: m})
 		}
 		if g.options.Trace != nil {
 			g.emit(line)

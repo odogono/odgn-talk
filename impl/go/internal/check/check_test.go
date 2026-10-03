@@ -278,3 +278,55 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorDuringBindingAndSuffixDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		source, code string
+		line, col    int
+	}{
+		{"on error e where the name of msg = \"go\", during msg\nreturn given: msg\nend", "", 0, 0},
+		{"on error e, during during, dropping\nreturn during\nend", "", 0, 0},
+		{"on go e, during msg\nend", "bad suffixes", 1, 10},
+		{"on error e, queued, dropping\nend", "bad suffixes", 1, 21},
+		{"on error e, deciding, queued\nend", "bad suffixes", 1, 23},
+		{"on error e, queued, deciding\nend", "bad suffixes", 1, 21},
+		{"on error e, during msg, during other\nend", "bad suffixes", 1, 25},
+		{"constant msg = 1\non error e, during msg\nend", "name clash", 2, 20},
+		{"on error msg, during msg\nend", "duplicate name", 1, 22},
+		{"on error {code: msg}, during msg\nend", "duplicate name", 1, 30},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			tree, err := syntax.Parse(tc.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u := Check(tree, Options{})
+			if tc.code == "" {
+				if len(u.Diagnostics) != 0 {
+					t.Fatal(u.Diagnostics)
+				}
+				b := u.Bodies[tree.Declarations[0]]
+				if b.During == "during" {
+					if b.Slot("during") != 2 {
+						t.Fatal(b.Locals)
+					}
+					return
+				}
+				if b.Slot("msg") != 2 {
+					t.Fatal(b.Locals)
+				}
+				lambda := tree.Declarations[0].Body[0].Children[0]
+				if c := u.Bodies[lambda].Captures; len(c) != 1 || c[0].Name != "msg" {
+					t.Fatal(c)
+				}
+				return
+			}
+			for _, d := range u.Diagnostics {
+				if d.Code == tc.code && d.Pos == (syntax.Position{Line: tc.line, Column: tc.col}) {
+					return
+				}
+			}
+			t.Fatalf("want %s at %d:%d, got %v", tc.code, tc.line, tc.col, u.Diagnostics)
+		})
+	}
+}

@@ -27,7 +27,14 @@ func (s *Script) start(d delivery) {
 		}
 	}
 	r := machine.StartDelivery(s.state, d.message.Name, args, machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize})
-	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: d.message.Name, clause: r.Clause, how: "start"}
+	if d.during != nil {
+		r.SetDuring(*d.during)
+	}
+	handler := ""
+	if s.hasHandler(d.message.Name) {
+		handler = d.message.Name
+	}
+	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: handler, clause: r.Clause, how: "start"}
 }
 func (s *Script) persistentWithoutRun() int64 {
 	var size int64
@@ -114,6 +121,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				d := s.mailbox[0]
 				s.mailbox = s.mailbox[1:]
 				g.release(s)
+				// With no error clauses there is no dispatch code to run. A
+				// future wait-for observer will still see the message here.
+				if d.during != nil && !s.hasHandler("error") {
+					progress = true
+					continue
+				}
 				s.start(d)
 			}
 			x := s.active
@@ -155,8 +168,15 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 			common := map[string]string{"fuel": fmt.Sprint(delta), "alloc": fmt.Sprint(r.Alloc - alloc)}
 			if x.how == "start" {
-				common["delivery"] = string(x.delivery.id)
-				common["handler"] = x.handler
+				if x.delivery.id != "" {
+					common["delivery"] = string(x.delivery.id)
+				}
+				if x.delivery.from != "" {
+					common["from"] = string(x.delivery.from)
+				}
+				if x.handler != "" {
+					common["handler"] = x.handler
+				}
 				if r.Clause > 0 {
 					common["clause"] = fmt.Sprint(r.Clause)
 				}
@@ -175,7 +195,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 			report := g.finish(s, x, common)
 			result.Reports = append(result.Reports, report)
-			if report.Outcome == UnhandledOutcome {
+			if report.Outcome == Errored && x.delivery.message.Name != "error" {
+				g.queueError(s, x)
+			}
+			if report.Outcome == UnhandledOutcome && x.delivery.during == nil {
 				unhandled := &Unhandled{Delivery: x.delivery.id, Message: x.delivery.message}
 				result.Reports = append(result.Reports, unhandled)
 				fields := map[string]string{"message": x.delivery.message.Name}
@@ -214,6 +237,43 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	}
 	g.record("pumped", false, nil, map[string]string{"state": []string{"idle", "sliced", "stopped"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)})
 	return result, nil
+}
+
+func (s *Script) hasHandler(name string) bool {
+	for _, b := range s.state.Unit.Bodies {
+		if b.Checked.Kind == "handler" && b.Checked.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Error delivery is a new mailbox message, after the failed Run's records.
+// Reserve against both waiting messages and Host inputs accepted during Pump.
+// There is no Host Delivery id and no instruction or allocation charge.
+func (g *Group) queueError(s *Script, x *execution) {
+	g.mu.Lock()
+	full := s.reserved >= s.limits.MailboxDepth
+	if !full {
+		s.reserved++
+	}
+	g.mu.Unlock()
+	if full {
+		g.record("note", false, []string{string(x.id)}, map[string]string{"kind": "error-dropped"})
+		return
+	}
+	args := make([]corevalue.Value, len(x.delivery.message.Args))
+	for j, v := range x.delivery.message.Args {
+		args[j] = v.inner
+	}
+	during, _ := corevalue.NewMap([]corevalue.Pair{
+		{Key: "name", Val: mustText(x.delivery.message.Name)},
+		{Key: "args", Val: corevalue.NewList(args)},
+	})
+	s.mailbox = append(s.mailbox, delivery{
+		script: s, message: Message{Name: "error", Args: []Value{{x.run.Error}}},
+		from: x.id, during: &during,
+	})
 }
 func argsDisplay(args []Value) string {
 	vs := make([]corevalue.Value, len(args))
@@ -284,6 +344,12 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
 	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	if x.delivery.id == "" {
+		delete(outputs, "delivery")
+	}
+	if x.handler == "" {
+		delete(outputs, "handler")
+	}
 	if outcome == Completed && r.Result.Kind != corevalue.Nothing {
 		outputs["value"] = coretrace.Display(r.Result)
 	}

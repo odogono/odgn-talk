@@ -58,6 +58,7 @@ type Run struct {
 	PersistentBase int64 // retained Script state outside variables and this Run
 
 	Target        value.Value
+	During        value.Value
 	State         *State
 	Frames        []Frame
 	Base          []value.Value
@@ -152,7 +153,23 @@ func (r *Run) pushFrame(body int, args []value.Value) {
 	b := r.State.Unit.Bodies[body]
 	f := Frame{Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
 	copy(f.Locals[1:], args)
+	if b.Checked.During != "" {
+		f.Locals[b.Checked.Slot(b.Checked.During)] = r.During
+	}
 	r.Frames = append(r.Frames, f)
+}
+
+// SetDuring binds the failed message before dispatch, including Guards. Every
+// later error clause or local call in this Run receives the same binding.
+func (r *Run) SetDuring(v value.Value) {
+	r.During = v
+	for j := range r.Frames {
+		f := &r.Frames[j]
+		b := r.State.Unit.Bodies[f.Body].Checked
+		if b.During != "" {
+			f.Locals[b.Slot(b.During)] = v
+		}
+	}
 }
 func (r *Run) fault(limit string) {
 	if r.Cancelling {

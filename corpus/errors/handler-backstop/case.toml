@@ -1,0 +1,18 @@
+# Internal errors without a match are dropped, and error Runs never chain.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "absent"
+source = "absent.talk"
+
+[[scripts]]
+name = "unmatched"
+source = "unmatched.talk"
+
+[[scripts]]
+name = "recursive"
+source = "recursive.talk"
