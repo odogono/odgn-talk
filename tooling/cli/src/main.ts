@@ -9,6 +9,7 @@ import { lsp } from './lsp';
 import { replay } from './replay';
 
 const usage = `Usage:
+  northtalk debug <script> [--trace <file>] live debugger in a Bun Host
   northtalk lsp                           language server over stdio
   northtalk [repl] [--transcript <file>]   start a REPL session
   northtalk replay <transcript> [--trace <file>]
@@ -36,6 +37,14 @@ const main = async (args: string[]): Promise<number> => {
     rest.splice(i, 2);
     return value;
   };
+  if (command === 'debug') {
+    const trace = option('--trace');
+    if (rest.length !== 1 || rest[0]!.startsWith('-')) {
+      throw new Error(usage);
+    }
+    const { debugScript } = await import('./debug');
+    return debugScript(rest[0]!, trace);
+  }
   if (command === 'lsp') {
     if (rest.length) {
       throw new Error(usage);

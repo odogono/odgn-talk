@@ -53,3 +53,27 @@ test('the browser LSP bundle checks, hovers and navigates without Bun, Node or H
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the browser debug bundle pauses, steps and preserves Trace without Bun or Node globals', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-browser-debug-'));
+  try {
+    const entry = join(dir, 'browser.ts');
+    const fixtures = resolve(import.meta.dir, './verify-debug.ts');
+    writeFileSync(
+      entry,
+      `import { verifyDebugFeatures } from ${JSON.stringify(fixtures)};\nglobalThis.result = verifyDebugFeatures();`,
+    );
+    const build = await Bun.build({ entrypoints: [entry], target: 'browser' });
+    expect(build.success).toBe(true);
+    const context = {
+      TextEncoder,
+      TextDecoder,
+      performance,
+      result: undefined as number | undefined,
+    };
+    runInNewContext(await build.outputs[0]!.text(), context);
+    expect(context.result).toBe(4);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

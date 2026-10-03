@@ -16,7 +16,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`corpus/`](corpus/): the Conformance Corpus, which every Core runs.
 - [`impl/ts/`](impl/ts/): the TS Core, `@odgn/northtalk`, with its Session Host and tests.
 - `impl/go/`: the Go Core, module `github.com/odogono/odgn-talk/impl/go`, once its work begins.
-- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server), and later the debugger and Playground), none of it normative.
+- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server), the [live debugger](tooling/stack/README.md#live-debugger), and later replay debugging and the Playground), none of it normative.
 - [`tools/`](tools/): the Spec checks and the generators that write each Core's tables from the Data Files.
 - [`spikes/`](spikes/): finished experiments the ADRs cite, kept as evidence.
 - [`docs/`](docs/): the tour, the ADRs and research notes.

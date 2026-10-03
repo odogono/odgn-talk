@@ -155,3 +155,74 @@ See the [editor setup](../cli/README.md#language-server) for clean-checkout Bun
 and Node commands and a generic client configuration. Tests include real stdio
 fixture-workspace sessions under both runtimes, browser bundling without Node
 or Bun globals, and the browser smoke page's LSP fixtures.
+
+## Live debugger
+
+`@odgn/northtalk-tooling/debug` exports `LiveDebugger`, source breakpoint and
+result types, and `renderDebugView`. It works in Bun, Node and browser workers;
+the Host supplies the Group, its Grants and lifecycle, and epoch nanoseconds.
+
+```ts
+import { compileSource, newGroup } from '@odgn/northtalk';
+import { LiveDebugger, renderDebugView } from '@odgn/northtalk-tooling/debug';
+
+const source = 'on go\n put 1 into n\n return n\nend';
+const group = newGroup({ name: 'demo', trace: line => console.log(line) });
+const script = group.load({ name: 'main', source });
+const debug = new LiveDebugger(group, {
+  now: () => BigInt(Date.now()) * 1_000_000n,
+});
+debug.registerSource(compileSource(source, { name: 'main' }).unit!, 'main');
+debug.setBreakpoints([{ unit: 'main', script: 'main', line: 2 }]);
+script.deliver({ name: 'go' });
+const result = debug.pump();
+if (result.state === 'paused') {
+  console.log(renderDebugView(debug.snapshot(), 'runs'));
+  debug.stepOver();
+  if (debug.isPaused) debug.resume();
+}
+```
+
+Register each Script and Library's exact compiled `CodeUnit`, using the same
+checker options as the Host (Grants, Libraries and objects). Script registration
+can be scoped to its runtime name; Library registration can omit it. Breakpoints
+use one-based line and column positions from the Core source map. A line-only
+breakpoint selects its first emitted instruction; a column selects the nearest
+mapped column at or after it on that same line. No mapped instruction means
+`verified: false`; it never moves to another line. Optional `script` and `run`
+selectors restrict the pause. `setBreakpoints` replaces the list and returns its
+resolved positions and instructions; `clearBreakpoints` removes it.
+
+`pump`, `resume`, `step`, `stepOver` and `stepOut` return either a completed
+`PumpResult` or `{ state: 'paused', pause }`. A paused result is provisional:
+the retained Pump has not emitted `pumped` or returned its reports. Resume or
+step it until the result is complete. A pause stops every Run in the Group.
+Stepping is by statement; over waits through a suspension while other Runs
+execute, and into/out follows waiting sends and foreign Function Values.
+Breakpoints in every Run remain active during steps. An intervening breakpoint
+replaces the pending step; start a new step from that pause if desired.
+
+`pauseOn({ error: true, limitFault: true })` replaces the fault settings. Errors,
+caught or uncaught, and Limit Faults pause before unwinding or rollback. `current`
+contains the Run, Script, code unit, Handler, instruction, source position and
+fault details. `snapshot()` works only while paused and reads through the Core
+hook, without the `Inspect()` Host Input. Its detached views include Variables,
+mailboxes and Runs with Segment, lifetime Fuel, frames and locals.
+`renderDebugView(snapshot, 'runs' | 'mailbox' | 'vars')` prints Session-style rows
+prefixed with each Script's name, adding Segment and Fuel to Runs.
+
+`clock()` subtracts cumulative paused wall time from the Host's readings and
+clamps rounding regressions. `pump()` uses it by default. An explicit `pump(now,
+options)` uses the supplied reading unchanged, for a virtual Clock or Trace
+comparison. Schedule a returned `nextDeadline` against `debug.clock()`, and
+continue a `sliced` result with another Pump. No Pumps run during a debug pause.
+Pause and inspection add no Trace lines or Fuel charges; corpus Trace Cases are
+compared with and without the debugger in both ordinary and save/restore replay.
+CI exercises the shared live-debugging fixtures in Node and browser bundles.
+
+The debugger has no Script-state setters. Change code with the Host's Reload,
+then register the replacement lowering to rebind the stored breakpoints. Reload
+is refused while a Pump is paused: first resume it to completion. Use one live
+debugger per Group. The [Bun CLI](../cli/README.md#live-debugger) exercises this API.
+Replay debugging and reverse navigation are tracked by [#237](https://github.com/odogono/odgn-talk/issues/237);
+DAP is outside the scope of this transport.
