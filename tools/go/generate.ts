@@ -8,6 +8,8 @@ import diagnostics from '../../spec/data/diagnostics.toml';
 import limits from '../../spec/data/limits.toml';
 import units from '../../spec/data/units.toml';
 import version from '../../spec/data/version.toml';
+import corpus from '../../spec/data/corpus.toml';
+import grammar from '../../spec/data/grammar.toml';
 import { formatGo, writeOutput } from './output';
 
 type Shape =
@@ -110,6 +112,11 @@ export const generateGoCatalogues = async (check: boolean): Promise<void> => {
     limits,
     units,
     version,
+    corpus,
+    grammar: {
+      reserved: grammar.reserved,
+      text_patterns: grammar.text_patterns,
+    },
   })) {
     await writeOutput(
       resolve(import.meta.dir, `../../impl/go/internal/generated/${name}.go`),

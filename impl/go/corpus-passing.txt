@@ -1,0 +1,5 @@
+# Cases the Go Core must continue to pass (issue #132).
+bytes/value-encoding
+dates/value-encoding
+quantities/value-encoding
+text-model/host-text-normalised-to-nfc
