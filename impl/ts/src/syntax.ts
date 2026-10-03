@@ -20,6 +20,7 @@ export type Trivia = {
 export type SyntaxRule =
   | 'Source'
   | 'Entry'
+  | 'Error'
   | 'Declaration'
   | 'Use'
   | 'Handler'

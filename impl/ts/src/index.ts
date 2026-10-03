@@ -95,10 +95,13 @@ export { Lexer, type Mode, type Token, type TokType } from './lexer';
 export {
   parseEntry,
   parseSource,
+  parseSourceRecovering,
   ParseError,
   type EntryKind,
   type EntryResult,
   type ParseResult,
+  type RecoveringParseResult,
+  type RecoveryDiagnostic,
 } from './parser';
 export {
   checkSource,

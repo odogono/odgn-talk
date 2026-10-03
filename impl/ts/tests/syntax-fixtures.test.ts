@@ -1,7 +1,13 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseSource, syntaxText, type SyntaxElement } from '../src';
+import {
+  checkSyntax,
+  parseSource,
+  parseSourceRecovering,
+  syntaxText,
+  type SyntaxElement,
+} from '../src';
 
 const root = resolve(import.meta.dir, '../../..');
 const assertLossless = (source: string, tree: SyntaxElement) => {
@@ -43,6 +49,11 @@ for (const part of broken.split(/^-- case: /m).slice(1)) {
       ? `${result.error.code} at ${result.error.tok.line}:${result.error.tok.col}`
       : 'parses';
     expect(actual).toBe(expected);
+    const recovered = parseSourceRecovering(source);
+    expect(recovered.error).toEqual(result.error);
+    expect(syntaxText(recovered.tree)).toBe(source);
+    assertLossless(source, recovered.tree);
+    checkSyntax(recovered.tree);
     if (result.tree) {
       expect(syntaxText(result.tree)).toBe(source);
       assertLossless(source, result.tree);
@@ -58,6 +69,11 @@ for (const directory of ['corpus', 'spec/stdlib', 'tools/grammar/sketch']) {
       const source = readFileSync(resolve(root, directory, path), 'utf8');
       const result = parseSource(source);
       expect(result.error).toBeNull();
+      expect(parseSourceRecovering(source)).toMatchObject({
+        tree: result.tree,
+        error: null,
+        diagnostics: [],
+      });
       expect(syntaxText(result.tree!)).toBe(source);
       assertLossless(source, result.tree!);
     });

@@ -35,6 +35,9 @@ export class ParseError extends Error {
   }
 }
 
+/** Only the first diagnostic is normative; later ones describe recovery. */
+export type RecoveryDiagnostic = { error: ParseError; recovery: boolean };
+
 const words = (list: string[]) => new Set(list.filter(w => !w.includes(' ')));
 const SINGULAR = words(grammar.chunk.map(c => c.singular));
 const PLURAL = words(grammar.chunk.map(c => c.plural));
@@ -127,6 +130,7 @@ class Parser {
   lx: Lexer;
   tree!: SyntaxNode;
   private frames: ParseFrame[] = [];
+  readonly diagnostics: RecoveryDiagnostic[] = [];
 
   private enter(rule: SyntaxRule, prefix = 0): ParseFrame {
     // Calls and chunks decide their production after consuming its name.
@@ -169,8 +173,117 @@ class Parser {
   nlBase: number[] = [0];
   site = '';
 
-  constructor(src: string) {
+  constructor(
+    src: string,
+    private readonly recovering = false,
+  ) {
     this.lx = new Lexer(src);
+  }
+
+  private record(error: ParseError): void {
+    this.diagnostics.push({ error, recovery: this.diagnostics.length > 0 });
+  }
+
+  // Unwind only the failed production. Its partial children and skipped tokens
+  // remain lossless under Error, while the caller keeps its grammar context.
+  private *recover<T>(
+    task: ParseTask<T>,
+    expression = false,
+  ): ParseTask<T | Node> {
+    if (!this.recovering) {
+      return (yield task) as T;
+    }
+    const frame = this.frames.at(-1)!;
+    const index = frame.children.length;
+    const start = this.offset;
+    // A production owns only brackets and newline bases above its entry depth.
+    // Save depths rather than copying enclosing stacks at every nested operand.
+    const brackets = this.brackets.length;
+    const nlBase = this.nlBase.length;
+    const { build, size } = this;
+    try {
+      return (yield task) as T;
+    } catch (error) {
+      if (!(error instanceof ParseError)) {
+        throw error;
+      }
+      this.record(error);
+      const children = frame.children.splice(index);
+      // After the first error, scan physical tokens so a broken delimiter or
+      // trailing operator cannot swallow the next statement as continuation.
+      this.buf = [];
+      this.prev = null;
+      this.brackets.length = brackets;
+      this.nlBase.length = nlBase;
+      this.build = build;
+      this.size = size;
+      let depth = 0;
+      for (;;) {
+        const token = this.lx.lex(this.offset, 'operand');
+        if (token.t === 'eof' || token.t === 'nl') {
+          break;
+        }
+        if (
+          expression &&
+          depth === 0 &&
+          (this.isOp(token, ',', ')', ']', '}', '>>') ||
+            this.isWord(
+              token,
+              'into',
+              'after',
+              'before',
+              'to',
+              'be',
+              'then',
+              'where',
+              'in',
+              'else',
+              'end',
+            ))
+        ) {
+          break;
+        }
+        children.push(token);
+        this.offset = token.end;
+        if (this.opens(token)) {
+          depth++;
+        } else if (this.isOp(token, ')', ']', '}', '>>')) {
+          depth = Math.max(0, depth - 1);
+        }
+      }
+      frame.children.push({
+        kind: 'node',
+        rule: 'Error',
+        children,
+        start,
+        end: this.offset,
+      });
+      return { k: 'Error' };
+    }
+  }
+
+  private blockBoundary(t: Token): boolean {
+    // Only Reserved Words can stop a statement without changing the first
+    // error. `constant`, `use`, `private` and `script` can be command names.
+    return (
+      t.t === 'eof' ||
+      this.isWord(t, 'on', 'function', 'else', 'catch', 'finally', 'when')
+    );
+  }
+
+  private endBlock(name: string, at: Token, line = false): Token {
+    const t = this.peek(0);
+    // block() already reported the missing ending and left this token to its
+    // enclosing block or the source. No invented token enters the tree.
+    if (this.recovering && this.blockBoundary(t)) {
+      return t;
+    }
+    const end = this.expectWord('end');
+    this.endSuffix(name, at);
+    if (line) {
+      this.endOfStatement();
+    }
+    return end;
   }
 
   // ---------------------------------------------------------------- tokens
@@ -432,7 +545,7 @@ class Parser {
       const out: Node[] = [];
       this.skipNL();
       while (this.peek(0).t !== 'eof') {
-        out.push((yield this.declaration()) as Node);
+        out.push((yield this.recover(this.declaration())) as Node);
         this.skipNL();
       }
       this.next(); // EOF owns any trailing trivia.
@@ -624,9 +737,7 @@ class Parser {
         this.endOfStatement();
         fin = (yield this.block(['end'])) as Node[];
       }
-      const end = this.expectWord('end');
-      this.endSuffix(name, on);
-      this.endOfStatement();
+      const end = this.endBlock(name, on, true);
       return {
         k: 'Handler',
         name,
@@ -679,9 +790,7 @@ class Parser {
       }
       this.endOfStatement();
       const body = (yield this.block(['end'])) as Node[];
-      const end = this.expectWord('end');
-      this.endSuffix(name, fn);
-      this.endOfStatement();
+      const end = this.endBlock(name, fn, true);
       return {
         k: 'Function',
         name,
@@ -705,18 +814,43 @@ class Parser {
       for (;;) {
         this.skipNL();
         const t = this.peek(0);
-        if (t.t === 'eof') {
-          this.fail(t, terms.map(w => `\`${w}\``).join(' or '));
-        }
         if (this.isWord(t) && terms.includes(t.v)) {
           return out;
         }
-        out.push((yield this.statement()) as Node);
-        this.endOfStatement();
+        if (t.t === 'eof' || (this.recovering && this.blockBoundary(t))) {
+          try {
+            this.fail(
+              t,
+              t.t === 'eof'
+                ? terms.map(w => `\`${w}\``).join(' or ')
+                : 'a statement',
+            );
+          } catch (error) {
+            if (!this.recovering || !(error instanceof ParseError)) {
+              throw error;
+            }
+            this.record(error);
+            frame.children.push({
+              kind: 'node',
+              rule: 'Error',
+              children: [],
+              start: this.offset,
+              end: this.offset,
+            });
+            return out;
+          }
+        }
+        out.push((yield this.recover(this.statementLine())) as Node);
       }
     } finally {
       this.leave(frame);
     }
+  }
+
+  private *statementLine(): ParseTask<Node> {
+    const statement = (yield this.statement()) as Node;
+    this.endOfStatement();
+    return statement;
   }
 
   // A branch body: a newline and a block, or one simple statement on the line.
@@ -1033,8 +1167,7 @@ class Parser {
         }
         this.endOfStatement();
         const body = (yield this.block(['end'])) as Node[];
-        this.expectWord('end');
-        this.endSuffix('wait', w);
+        this.endBlock('wait', w);
         return { k: 'Join', body };
       }
       if (this.atEnd('operand')) {
@@ -1169,8 +1302,7 @@ class Parser {
         els = (yield this.block(['end'])) as Node[];
         break;
       }
-      this.expectWord('end');
-      this.endSuffix('if', at);
+      this.endBlock('if', at);
       return { k: 'If', cond, then, elses, else: els, block: true };
     } finally {
       this.leave(frame);
@@ -1202,8 +1334,7 @@ class Parser {
       }
       this.endOfStatement();
       const body = (yield this.block(['end'])) as Node[];
-      this.expectWord('end');
-      this.endSuffix('repeat', at);
+      this.endBlock('repeat', at);
       return { k: 'Repeat', head, body };
     } finally {
       this.leave(frame);
@@ -1302,8 +1433,7 @@ class Parser {
         this.endOfStatement();
         fin = (yield this.block(['end'])) as Node[];
       }
-      this.expectWord('end');
-      this.endSuffix('try', at);
+      this.endBlock('try', at);
       return { k: 'Try', body, catches, finally: fin };
     } finally {
       this.leave(frame);
@@ -1360,13 +1490,17 @@ class Parser {
   *expr(): ParseTask<Node> {
     const frame = this.enter('Expression');
     try {
-      if (this.atWord('given')) {
-        return (yield this.lambda()) as Node;
-      }
-      return (yield this.or()) as Node;
+      return (yield this.recover(this.expressionValue(), true)) as Node;
     } finally {
       this.leave(frame);
     }
+  }
+
+  private *expressionValue(): ParseTask<Node> {
+    if (this.atWord('given')) {
+      return (yield this.lambda()) as Node;
+    }
+    return (yield this.or()) as Node;
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
@@ -2492,6 +2626,26 @@ export const parseSource = (source: string): ParseResult => {
     }
     throw error;
   }
+};
+
+/** A lossless tooling parse, including malformed regions as Error nodes. */
+export type RecoveringParseResult = {
+  diagnostics: readonly RecoveryDiagnostic[];
+  error: ParseError | null;
+  tree: SyntaxNode;
+};
+
+/** Recover past syntax errors. Invalid scalar source still throws HostError. */
+export const parseSourceRecovering = (
+  source: string,
+): RecoveringParseResult => {
+  const parser = new Parser(source, true);
+  runTask(parser.source());
+  return {
+    tree: parser.tree,
+    error: parser.diagnostics[0]?.error ?? null,
+    diagnostics: parser.diagnostics,
+  };
 };
 
 export type EntryResult =

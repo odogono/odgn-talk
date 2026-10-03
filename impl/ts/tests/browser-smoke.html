@@ -39,6 +39,13 @@
     const source = '\ufeff-- 😀 comment\r\non t\r\n put ["e\u0301", -- list\r\n 2] into xs\r\nend t -- eof';
     const parsed = talk.parseSource(source);
     assert(parsed.error === null && talk.syntaxText(parsed.tree) === source, "Lossless Core parser");
+    const editing = 'on t x\n @\n put [1 + , 2] into broken\n put x into kept\n return missing\nend t';
+    const recovered = talk.parseSourceRecovering(editing);
+    const strict = talk.parseSource(editing);
+    assert(recovered.error.code === strict.error.code && recovered.error.tok.pos === strict.error.tok.pos && talk.syntaxText(recovered.tree) === editing, "Lossless parser recovery and normative first error");
+    assert(recovered.diagnostics.length === 2 && recovered.diagnostics[0].recovery === false && recovered.diagnostics[1].recovery === true, "Recovery diagnostic markers");
+    const recoveredCheck = talk.checkSyntax(recovered.tree);
+    assert(recoveredCheck.diagnostics.length === 1 && recoveredCheck.diagnostics[0].code === "unknown name" && recoveredCheck.diagnostics[0].span.line === 5 && recoveredCheck.tree.scopes.some(scope => scope.kind === "handler" && scope.bindings.some(binding => binding.name === "kept")), "Recovered checker diagnostics, scopes and bindings");
     const deepSource = 'constant nested = ' + '['.repeat(3000) + '1' + ']'.repeat(3000);
     const deepParse = talk.parseSource(deepSource);
     assert(deepParse.error === null && talk.syntaxText(deepParse.tree) === deepSource, "Deep lossless parsing");
@@ -91,7 +98,7 @@
     const console = core.consoleCapability({ write() { throw new Error("Manifest called the Host"); }, read() { throw new Error("Manifest called the Host"); } }, { write: { fuel: 1 }, read: { fuel: 1 } });
     const manifest = talk.exportManifest({ kind: "smoke", version: "1", grants: { console: console.grant(["write"], { secret: "host-only" }) }, libraries: [library] });
     assert(!manifest.includes("host-only") && manifest.endsWith("\n") && JSON.parse(manifest).libraries[0].source === library.source, "Host Manifest");
-    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, plain JSON, Core versions, decimal, invalid input, deep values, lossless parsing, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine, the Group, Core restore and Host Manifests in a browser";
+    document.querySelector("#result").textContent = "PASS: NFC, Hangul, ordered values, display, encoding, plain JSON, Core versions, decimal, invalid input, deep values, lossless parsing, parser/checker recovery, name resolution, binding/function contracts, control-flow and construct checks, lowering, disassembly, the Abstract Machine, the Group, Core restore and Host Manifests in a browser";
     globalThis.smokeResult = { passed: true };
   } catch (error) {
     document.querySelector("#result").textContent = `FAIL: ${error.stack}`;
