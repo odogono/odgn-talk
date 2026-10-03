@@ -31,7 +31,9 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 
 ## Seed blessing
 
-All 198 current corpus cases execute, and every Trace Case and Session Transcript is blessed by the TS Core, the only available Core. Every first blessing has had its human review except the Session Transcripts' and scoped-effect cases' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
+The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except the Session Transcripts' and scoped-effect cases' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
+
+The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -68,7 +70,7 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
-Every current Trace Case runs in CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. The Go Core must agree before a case counts as blessed by both.
+Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the three Text Pattern regressions above. Every available Core must agree before a case is blessed.
 
 
 ## The Disassembly Cases

@@ -156,6 +156,35 @@ Message Paths and scheduling belong to #134; complete cancellation and Stop
 Script acceptance to [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
+## Text Patterns
+
+`internal/machine/pattern.go` compiles chapter 8's normative Pike VM programs
+and matches whole Characters using the pinned Unicode tables. Matching keeps
+threads in priority order and charges every visited list's thread count,
+including discarded empty searches. Boolean searches stop at the first
+accepted match; Match Searches retain the preferred match, converted Captures
+and their Character ranges. `lazily` changes only its element's own repetitions.
+
+Composition accepts Text and Text Patterns, preserves spliced Captures and
+rejects duplicate names or Captures inside repetitions. Canonical source
+omits empty nested groups and separates a leading group with `< <`.
+`make-pattern` uses the resulting program size for its Fuel and allocation;
+loading and initializers remain uncharged. Literal size checks count every
+copy of the singular class and emit no code for a zero count.
+
+The step-2 acceptance test runs all eight reviewed `corpus/text-patterns/`
+cases through the public embedding API and protects their passing-list entries.
+Additional tests pin normative programs, composition errors, conversions,
+absent Captures and compilation charges. Three new regression cases for empty
+literals, counted program sizes and wrong-kind splices agree on both Cores;
+their `Unblessed` headers remain until the first human review.
+
+`matching-fuel-exhaustion` and `pattern-size-made-at-run-time` also pass, but
+complete limits acceptance belongs to
+[#135](https://github.com/odogono/odgn-talk/issues/135).
+`pattern-size-literal-limit` requires Reload from
+[#136](https://github.com/odogono/odgn-talk/issues/136) as well.
+
 ## Group embedding
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver` and `Request`, `Pump`, `Inspect`,
@@ -184,12 +213,14 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 73 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 76 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-23 additional standalone math, dates, Quantities, Bytes, limits and Text Pattern
+26 additional standalone math, dates, Quantities, Bytes, limits and Text Pattern
 cases. Trace cases replay through the public embedding interface, with exact
 records, costs and final state. Tests separately enforce the full 50-case step-1
-set, so removing a required case cannot silently shrink the gate.
+set and eight reviewed step-2 cases, so removing a required case cannot silently
+shrink the gate. Listing a new regression case here protects it while its first
+human blessing review remains pending.
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

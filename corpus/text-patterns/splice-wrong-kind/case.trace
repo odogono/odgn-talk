@@ -1,0 +1,14 @@
+# Unblessed: new regression case, awaiting human review of its first blessing.
+# Chapter 4 requires expected="pattern", retaining the offending value.
+# make-pattern has no result, so costs 20 Fuel and allocates nothing.
+# Dispatch, its operand and the matching catch/body add 31 Fuel; no frames
+# are unwound. Retained Text "pattern" and Number 42 total 23 + 16 = 39 bytes.
+> load splice identity=055c37f9c6f525f26b1e1c364129dc597af6904e08166bcdb8faf0fa1e38f079
+> deliver d1 to=splice message=go
+> pump clock=2026-09-30T09:00:00Z
+raise splice/r1 code="wrong kind" at=splice:3 pos=6:9
+seg splice/r1 start delivery=d1 handler=go clause=1 fuel=51 alloc=0 state=39 end=return
+run splice/r1 outcome=completed delivery=d1 handler=go fuel=51 alloc=0
+pumped state=idle fuel=51
+> vars
+vars splice expected="pattern" offending=42

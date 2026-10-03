@@ -10,6 +10,50 @@ import (
 	"testing"
 )
 
+func TestEmptyPatternsUseOperandModeAndPreserveSource(t *testing.T) {
+	for _, statement := range []string{
+		"put <> into result",
+		"return <>",
+		"return [<>, <>]",
+		"return f(<>)",
+		"return <(<>)>",
+		`let <> be ""`,
+		`let [<>, <>] be ["", ""]`,
+		`match ""` + "\r\n when <> then\r\n end match",
+		`return replace <> in "a" with "+"`,
+		`put given <>, <>: true into f`,
+		`f <>`,
+		`return "a" <> "b"`,
+		`return word <> 1`,
+		`return word <= 1`,
+		`return <> is <>`,
+		`return <> is not <>`,
+		`next <>`,
+	} {
+		source := "-- 😀 modal lookahead\r\non go\r\n\t" + statement + " -- tail\r\nend go\r\n"
+		tree, err := Parse(source)
+		if err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+		if got := tree.Source(); got != source {
+			t.Fatalf("source changed: %q, want %q", got, source)
+		}
+	}
+}
+
+func TestEmptyPatternsInHandlerParameters(t *testing.T) {
+	for _, parameters := range []string{"<>", "a, <>", "a, <>, b", "<>, queued"} {
+		source := "on go " + parameters + "\nend go\n"
+		tree, err := Parse(source)
+		if err != nil {
+			t.Fatalf("%s: %v", parameters, err)
+		}
+		if tree.Source() != source {
+			t.Fatalf("source changed: %q", tree.Source())
+		}
+	}
+}
+
 func TestSharedSyntaxExamples(t *testing.T) {
 	root := "../../../.."
 	files, err := filepath.Glob(filepath.Join(root, "tools/grammar/sketch/*.talk"))

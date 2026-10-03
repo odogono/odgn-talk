@@ -1,0 +1,8 @@
+script variable empty = <>
+script variable composed
+script variable found
+
+on go
+  put <(empty), "x"> into composed
+  put "x" matches composed into found
+end go

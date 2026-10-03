@@ -958,6 +958,9 @@ func patternSize(n *syntax.Node) (int64, bool) {
 		if err != nil || count > 1000000000 {
 			return 1000000000, spliced
 		}
+		if count == 0 {
+			return 0, spliced
+		}
 		if len(n.Children) == 1 && n.Children[0].Kind == "pattern-keyword" {
 			switch n.Children[0].Text {
 			case "characters", "digits", "letters", "spaces":
@@ -965,6 +968,9 @@ func patternSize(n *syntax.Node) (int64, bool) {
 			case "words":
 				return 2 + max(count-1, 0)*4, false
 			}
+		}
+		if len(n.Children) == 1 && n.Children[0].Kind == "pattern-class" && strings.HasSuffix(n.Children[0].Text, "letters") {
+			sum = 1
 		}
 		if count != 0 && sum > patternSizeCap/count {
 			return patternSizeCap, spliced

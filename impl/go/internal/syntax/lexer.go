@@ -186,6 +186,9 @@ func (l *Lexer) Next(mode Mode) (Token, error) {
 	default:
 		found := false
 		for _, punct := range []string{"...", "..", "<=", ">=", "<>", "<<", ">>"} {
+			if mode == Operand && (punct == "<>" || punct == "<=") {
+				continue
+			}
 			if mode == Pattern && (punct == "<<" || punct == ">>" || punct == "<=" || punct == "<>" || punct == ">=") {
 				continue
 			}

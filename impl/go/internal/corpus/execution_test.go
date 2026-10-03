@@ -59,3 +59,43 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 		t.Fatalf("required set: %d cases, want 50", count)
 	}
 }
+
+// Step 2 completes against reviewed TS-produced cases, with execution through
+// the public Group API and comparison of every Trace record. The limits cases
+// are tracked by #135; pattern-size-literal-limit also requires #136 Reload.
+func TestTextPatternStepTwoAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{
+		"text-patterns/canonical-source-leading-group",
+		"text-patterns/empty-match-skipped-after-match",
+		"text-patterns/empty-matches-step-one-character",
+		"text-patterns/greedy-by-default",
+		"text-patterns/lazily-prefers-fewer",
+		"text-patterns/lazily-stays-on-its-element",
+		"text-patterns/or-is-leftmost-first",
+		"text-patterns/replace-all-empty-matches",
+	}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, line := range strings.Split(string(b), "\n") {
+		listed[line] = true
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !listed[c.Name] {
+				t.Errorf("required step-2 case not listed: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
