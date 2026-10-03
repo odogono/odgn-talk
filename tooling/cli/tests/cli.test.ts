@@ -89,3 +89,55 @@ test('a bad command line prints the usage', () => {
   expect(code).toBe(2);
   expect(stderr).toContain('Usage:');
 });
+
+test('fmt writes several files in place and check never writes them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-format-'));
+  const first = join(dir, 'first.talk');
+  const second = join(dir, 'second.talk');
+  const source = 'on go\nsay  1+2\nend go\n';
+  writeFileSync(first, source);
+  writeFileSync(second, source);
+  expect(run(['fmt', '--check', first, second]).code).toBe(1);
+  expect(readFileSync(first, 'utf8')).toBe(source);
+  expect(run(['fmt', first, second]).code).toBe(0);
+  expect(readFileSync(first, 'utf8')).toBe('on go\n  say 1 + 2\nend go\n');
+  expect(readFileSync(second, 'utf8')).toBe(readFileSync(first, 'utf8'));
+  expect(run(['fmt', first, second, '--check']).code).toBe(0);
+});
+
+test('fmt reads stdin and check reports differences without printing source', () => {
+  const source = 'on go\nsay 1\nend go';
+  expect(run(['fmt', '-'], source)).toEqual({
+    code: 0,
+    stdout: 'on go\n  say 1\nend go',
+    stderr: '',
+  });
+  const checked = run(['fmt', '--check', '-'], source);
+  expect(checked.code).toBe(1);
+  expect(checked.stdout).toBe('');
+  expect(checked.stderr).toContain('not formatted');
+});
+
+test('fmt preserves syntax errors and processes the other files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-format-'));
+  const broken = join(dir, 'broken.talk');
+  const valid = join(dir, 'valid.talk');
+  const source = '  on go\nsay 1+\nend go';
+  writeFileSync(broken, source);
+  writeFileSync(valid, 'on go\nsay 1\nend go');
+  const result = run(['fmt', broken, valid]);
+  expect(result.code).toBe(1);
+  expect(result.stderr).toContain('unexpected token');
+  expect(readFileSync(broken, 'utf8')).toBe(source);
+  expect(readFileSync(valid, 'utf8')).toBe('on go\n  say 1\nend go');
+  const stdin = run(['fmt', '-'], source);
+  expect(stdin.code).toBe(1);
+  expect(stdin.stdout).toBe(source);
+});
+
+test('fmt validates its command line and reports unreadable files', () => {
+  expect(run(['fmt']).code).toBe(2);
+  expect(run(['fmt', '--width', '4', '-']).code).toBe(2);
+  expect(run(['fmt', '-', '-']).code).toBe(2);
+  expect(run(['fmt', '/nonexistent/northtalk.talk']).code).toBe(1);
+});
