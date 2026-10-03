@@ -107,11 +107,27 @@ func (r Runner) execute(c Case) (int, error) {
 	var expected []string
 	filename := "case.trace"
 	if c.Kind == "disassembly" {
-		setup, ok := c.Setup["disassembly"].(Setup)
+		units, ok := c.Setup["disassembly"].([]any)
 		if !ok {
-			return 0, fmt.Errorf("missing disassembly table")
+			return 0, fmt.Errorf("missing disassembly tables")
 		}
-		filename, _ = setup["expected"].(string)
+		for _, raw := range units {
+			setup := raw.(Setup)
+			filename := setup["expected"].(string)
+			b, e := os.ReadFile(filepath.Join(c.Dir, filename))
+			if e != nil {
+				return 0, e
+			}
+			expected = append(expected, strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")...)
+		}
+		actual, e := r.Backends[c.Kind].Run(c, nil)
+		if e != nil {
+			return 0, e
+		}
+		if e := Compare(c.Name, expected, actual); e != nil {
+			return 0, e
+		}
+		return len(actual), nil
 	} else if c.Kind == "transcript" {
 		filename = "case.transcript"
 	}

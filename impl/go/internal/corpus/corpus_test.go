@@ -40,11 +40,11 @@ func TestAllCaseSetupsAndTracesRead(t *testing.T) {
 }
 func TestEncodingCasesAndPassingList(t *testing.T) {
 	var out bytes.Buffer
-	r := Runner{Root: filepath.Join(root(t), "corpus"), Output: &out}
+	r := Runner{Root: filepath.Join(root(t), "corpus"), Output: &out, Backends: ExecutionBackends()}
 	if e := r.CheckPassing(filepath.Join(root(t), "impl/go/corpus-passing.txt")); e != nil {
 		t.Fatal(e, out.String())
 	}
-	if strings.Count(out.String(), "PASS ") != 4 {
+	if strings.Contains(out.String(), "NEW PASS ") || strings.Count(out.String(), "PASS ") < 50 {
 		t.Fatal(out.String())
 	}
 }

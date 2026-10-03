@@ -2,8 +2,9 @@
 
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
 package `northtalk`. It provides immutable values, decimal arithmetic, pinned
-Unicode text, a front end and standalone Abstract Machine execution. Its internal machine executes checked code; the public Group embedding and
-Trace backends are supplied by the next layer of #251. The Spec, Data Files and Conformance Corpus are
+Unicode text, a front end and standalone Abstract Machine execution. Its Group
+embedding subset loads Scripts, accepts Deliveries and Requests, pumps Runs and
+emits canonical Trace records. The Spec, Data Files and Conformance Corpus are
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
@@ -11,8 +12,8 @@ the authority; the TS Core is not a reference
 
 - The root package implements the available declarations of the
   [embedding interface](../../spec/embedding/talk.go). `value.go`, `encoding.go`
-  and `text.go` own immutable values and codecs. Public Group execution is
-  supplied by the next layer.
+  and `text.go` own immutable values and codecs. `core.go` owns compilation and
+  default limits; `group.go` owns Host inputs, and `group_run.go` pumps Runs.
 - `internal/generated/` holds tables from Spec Data Files and pinned Unicode
   sources, with `UNICODE-LICENSE.txt` beside them.
 - `internal/unicode/` supplies NFC, Character boundaries, simple folding, full
@@ -32,9 +33,11 @@ the authority; the TS Core is not a reference
   Go-private byte encoding round-trips each body's instruction stream.
 - `internal/machine/` executes checked code with heap frames, detached operand
   evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
-- `internal/trace/` reserves the canonical Trace writer boundary.
-- `internal/corpus/` reads setups and runs encoding cases. `cmd/corpus/` provides
-  selection, first-divergence output and the gate.
+- `internal/trace/` orders records and keys by `corpus.toml`. It removes the
+  Core's non-parity error wording from Trace values, including nested errors,
+  while preserving Script and Host data named `message`.
+- `internal/corpus/` reads setups and runs encoding, disassembly and Trace
+  backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -84,9 +87,8 @@ and pin the first errors in `tools/grammar/broken.talk`. The seven units in the
 six Disassembly Cases match byte for byte, including pools, slots, positions,
 Unwind Tables and Event Tables; together they emit every declared opcode.
 Stdlib signatures can be linked for disassembly without executing Libraries.
-Tests pin the 30 load-diagnostic cases. Initializer failure identifies the
-raising instruction's source-map position. Public `Load` and runner backends
-arrive in the next layer.
+All 30 load-diagnostic Trace Cases replay through public `Load`, including
+`initialiser failed` at the raising instruction's source-map position.
 
 Implicit Script Variable initializers allocate Nothing slots without emitting
 stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
@@ -148,15 +150,49 @@ pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
 Suspension, messages, imported calls, Capability effects and Object properties
 stop at a `Blocked` implementation boundary with the instruction and operands
-untouched and no charge for that instruction. The caller retains the pending Run. Full Handler modes, automatic `error` delivery,
+untouched and no charge for that instruction. The pending Run remains visible
+and a Request remains unsettled. Full Handler modes, automatic `error` delivery,
 Message Paths and scheduling belong to #134; complete cancellation and Stop
 Script acceptance to [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
+## Group embedding
+
+`New`, `NewGroup`, `Load`, Script/Group `Deliver` and `Request`, `Pump`, `Inspect`,
+`Counters` and `TraceSink` implement their handoff signatures. Core compilation
+caches are mutex-protected and Groups have separate live state. Load supports
+standalone Scripts; unavailable Grant and Object bindings are refused rather
+than ignored. Other unimplemented public declarations are omitted.
+
+Any-goroutine deliveries reserve mailbox capacity before joining the input
+queue. A Pump takes one Clock reading, drains accepted inputs in order, and
+visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
+on the next Pump; Fuel Cap limits the Group. Request cancellation joins the same
+queue, and Pending results settle after Pump records. Worker reentry, backwards
+Clock readings, invalid values and foreign Function Values are refused.
+Inspection and counters are worker calls; a refused call with no error return
+panics with `HostError`. Trace callbacks run without the input queue lock.
+
 ## Corpus runner
 
-From `impl/go/`, run `go run ./cmd/corpus --check-passing`. The runner gates the
-four Value Encoding cases and has no blessing mode. The internal machine tests
-run the ten text-model Script fixtures through the Go front end, checking final
-variables, Fuel, allocation, state and canonical raise positions. The public
-embedding and Trace replay layer of #251 connects these executions to the runner.
+From `impl/go/`:
+
+```sh
+go run ./cmd/corpus --list
+go run ./cmd/corpus
+go run ./cmd/corpus text-model/chunk-write-padding
+go run ./cmd/corpus --check-passing
+```
+
+The gate contains 73 cases: all 11 text-model cases, all 30 load-diagnostic
+cases, all six Disassembly Cases, the three other Value Encoding cases, and
+23 additional standalone math, dates, Quantities, Bytes, limits and Text Pattern
+cases. Trace cases replay through the public embedding interface, with exact
+records, costs and final state. Tests separately enforce the full 50-case step-1
+set, so removing a required case cannot silently shrink the gate.
+
+A listed regression or missing case fails; an unlisted passing case is reported
+for addition. Other cases retain first-divergence output or `SKIP` with a reason
+for unsupported facilities. Explicitly selecting an unsupported case fails.
+Transcript and save/restore backends belong to the later steps. The Go runner
+has no blessing mode and never changes expected Corpus lines.
