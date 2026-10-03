@@ -1,0 +1,2 @@
+script variable x = 1
+constant y = x

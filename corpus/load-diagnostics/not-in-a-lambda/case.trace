@@ -1,0 +1,4 @@
+# Pins `not in a lambda` and its source position. New case for human review.
+> load bad identity=655061276cd8bc67c99f2604c7722b5a5d475ed5bdbe6e82b1e4b2050ad71e21
+diag bad code="not in a lambda" pos=2:12
+> vars

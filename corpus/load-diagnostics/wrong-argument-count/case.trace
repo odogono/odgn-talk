@@ -1,0 +1,4 @@
+# Pins `wrong argument count` and its source position. New case for human review.
+> load bad identity=330705d1fa495df31b21437735d9c1919865af4773681781ad081621f29b4a1e
+diag bad code="wrong argument count" pos=5:8
+> vars

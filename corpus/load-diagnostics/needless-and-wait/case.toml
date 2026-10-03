@@ -1,0 +1,15 @@
+# Pins the load diagnostic `needless and wait` (chapter 2).
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[standard]]
+capability = "console"
+costs = { write = { fuel = 1, alloc = 0 }, read = { fuel = 1, alloc = 0 } }
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+grants = { console = { ops = "all" } }

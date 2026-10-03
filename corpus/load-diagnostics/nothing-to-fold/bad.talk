@@ -1,0 +1,3 @@
+on t x
+return x is a number ignoring case
+end

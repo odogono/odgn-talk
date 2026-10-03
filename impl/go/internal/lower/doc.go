@@ -1,2 +1,2 @@
-// Package lower is reserved for normative Abstract Machine lowering.
+// Package lower implements normative Abstract Machine lowering and canonical disassembly.
 package lower

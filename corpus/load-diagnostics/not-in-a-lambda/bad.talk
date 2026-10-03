@@ -1,0 +1,3 @@
+on t
+put given: the target into f
+end

@@ -1,0 +1,4 @@
+# Pins `nothing to fold` and its source position. New case for human review.
+> load bad identity=fcb8a067878c28a5abbbba9934e6f95958406b90104ab502b5253947c5402699
+diag bad code="nothing to fold" pos=2:22
+> vars

@@ -1,0 +1,4 @@
+# Pins `bad number` and its source position. New case for human review.
+> load bad identity=794db6234ed7ceb46c1460b1623fdca4a4ab844fd4760efafdc4bda95306028d
+diag bad code="bad number" pos=1:14
+> vars

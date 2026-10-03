@@ -1,2 +1,2 @@
-// Package check is reserved for load-time name and binding checks.
+// Package check resolves names, body slots and captures, and emits load diagnostics.
 package check

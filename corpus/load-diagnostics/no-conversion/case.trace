@@ -1,0 +1,4 @@
+# Pins `no conversion` and its source position. New case for human review.
+> load bad identity=29ba3502731b66eefd88847856766a159ef5acf67f71106846dbb5f5ecdbcfb3
+diag bad code="no conversion" pos=2:10
+> vars

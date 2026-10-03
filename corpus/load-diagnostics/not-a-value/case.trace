@@ -1,0 +1,4 @@
+# Pins `not a value` and its source position. New case for human review.
+> load bad identity=58f6e0b448cab4f95a5bc8c71ab553e4298a104a45ce1d718e1c1dacdd13920f
+diag bad code="not a value" pos=2:8
+> vars
