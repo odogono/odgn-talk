@@ -9,6 +9,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"math/big"
 	"slices"
 	"strconv"
 	"sync"
@@ -28,6 +29,7 @@ type Group struct {
 	scripts      []*Script
 	inputs       []delivery
 	nextDelivery int64
+	nextTimer    int64
 	clock        time.Time
 	pumping      bool
 }
@@ -36,7 +38,8 @@ type Script struct {
 	name     string
 	state    *machine.State
 	limits   Limits
-	mailbox  []delivery
+	queue    []workItem
+	runs     []*execution
 	active   *execution
 	counters Counters
 	owner    *Object
@@ -55,12 +58,18 @@ type delivery struct {
 	during  *corevalue.Value // non-nil only for an internal error message
 }
 type execution struct {
-	run      *machine.Run
+	run        *machine.Run
+	delivery   delivery
+	id         RunID
+	handler    string
+	clause     int
+	how        string
+	deadline   *big.Int
+	timerOrder int64
+}
+type workItem struct {
 	delivery delivery
-	id       RunID
-	handler  string
-	clause   int
-	how      string
+	run      *execution
 }
 type Pending struct {
 	mu      sync.Mutex
@@ -324,11 +333,6 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		}
 	}
 	g.record("pump", true, nil, fields)
-	for _, d := range inputs {
-		if d.cancel == "" {
-			d.script.mailbox = append(d.script.mailbox, d)
-		}
-	}
 	return g.runPump(o, inputs)
 }
 
@@ -388,14 +392,22 @@ func (g *Group) Inspect() Inspection {
 			view.Vars = append(view.Vars, KV(name, v))
 			line += " " + name + "=" + coretrace.Display(v.inner)
 		}
-		if x := s.active; x != nil {
+		for _, x := range s.runs {
 			status := Ready
 			if x.run.Status == machine.Preempted {
 				status = Preempted
 			}
-			view.Runs = append(view.Runs, RunView{ID: x.id, Status: status, Handler: x.handler})
+			run := RunView{ID: x.id, Status: status, Handler: x.handler}
+			if x.deadline != nil {
+				run.Status, run.Wait, run.Until = Suspended, "wait", deadlineTime(x.deadline)
+			}
+			view.Runs = append(view.Runs, run)
 		}
-		for _, d := range s.mailbox {
+		for _, item := range s.queue {
+			if item.run != nil {
+				continue
+			}
+			d := item.delivery
 			m := d.message
 			m.Args = slices.Clone(m.Args)
 			if m.Limits != nil {
@@ -419,7 +431,11 @@ func (s *Script) Counters() Counters {
 	defer s.group.endWorker()
 	c := s.counters
 	c.PersistentState = s.persistent()
-	c.MailboxLen = len(s.mailbox)
+	for _, item := range s.queue {
+		if item.run == nil {
+			c.MailboxLen++
+		}
+	}
 	s.group.record("counters", true, []string{s.name}, nil)
 	s.group.record("counters", false, []string{s.name}, map[string]string{"fuel": fmt.Sprint(c.FuelTotal), "alloc": fmt.Sprint(c.AllocTotal), "runs": fmt.Sprint(c.Runs), "faults": fmt.Sprint(c.Faults), "state": fmt.Sprint(c.PersistentState), "mailbox": fmt.Sprint(c.MailboxLen)})
 	return c

@@ -141,18 +141,21 @@ Value metadata. Object lifecycle Built-ins depend on #134.
 
 Generated Cost Model 0 charges precede committed instruction changes. Fuel,
 allocation, depth and dynamic Pattern Size faults leave the faulting instruction
-uncharged and restore Script Variables to the Run's starting snapshot. Range
+uncharged and restore Script Variables to the Segment's starting snapshot. Range
 materialization and padding have budget preflights before construction.
 Persistent State counts variables, mailboxes and retained Run frames; a final
 return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Suspension and `send` instructions, imported calls, Capability effects and Object
-properties stop at a `Blocked` implementation boundary with the instruction and operands
+Other suspension and `send` instructions, foreign Function Value calls with
+`and wait`, imported calls, Capability effects and Object properties stop at a
+`Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
-and a Request remains unsettled. Full Handler modes, Message Paths and suspension
-scheduling belong to #134; complete cancellation and Stop Script acceptance to
+and a Request remains unsettled. Queueing Policies and deciding Handlers stop
+before dispatch without a charge. Full Handler modes, Message Paths, event waits
+and pending calls belong to #134; complete cancellation and Stop Script
+acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -198,7 +201,24 @@ queue. A Pump takes one Clock reading, drains accepted inputs in order, and
 visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
 on the next Pump; Fuel Cap limits the Group. Request cancellation joins the same
 queue, and Pending results settle after Pump records. Worker reentry, backwards
-Clock readings, invalid values and foreign Function Values are refused.
+Clock readings, invalid values and Function Values from other Groups are refused.
+
+Duration waits retain heap frames and release the Script to run other queued
+work. Their deadlines use the Pump's Clock reading plus an exact duration,
+rounded to whole nanoseconds, half even. Due timers enter the work queue after
+Host inputs, ordered by deadline and then creation. Zero and negative waits
+resume only in a later Pump. `NextDeadline` reports the earliest retained timer.
+Inspection lists suspended and ready Runs in start order; Persistent State
+counts every retained Run.
+
+Local Handler and Function Value calls with `and wait` retain their call frames.
+Resumption starts a new Segment snapshot at its actual turn; Fuel and allocation
+remain cumulative over the Run. A suspension charges the wait before checking
+retained Persistent State. Cancelling a suspended Request removes its timer and
+queues finally cleanup in input order, preserving committed earlier Segments.
+Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
+representable range stop at the untouched wait boundary; durations beyond
+`time.Duration` are supported when their deadline fits `time.Time`.
 
 An uncaught error queues a separate `error` message behind the existing mailbox
 messages, with the failed Run as its sender. Error Handler Clauses use ordinary
@@ -224,15 +244,20 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 83 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 89 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-33 additional math, dates, Quantities, Bytes, limits, Text Pattern and error
-delivery cases. Trace cases replay through the public embedding interface, with
-exact records, costs and final state. Tests separately enforce the full 50-case step-1
+39 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+delivery and suspension cases. Trace cases replay through the public embedding
+interface, with exact records, costs and final state. Tests separately enforce
+the full 50-case step-1
 set and eight reviewed step-2 cases, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
-`Unblessed` headers remain until human review of the first blessing. Listing a
+`Unblessed` headers remain until human review of the first blessing. Four
+reviewed wait cases pin zero waits, deadlines, rollback and nested frames.
+Two new suspension regressions also agree on both Cores before their first
+blessing, covering work ordering, cap-held resumptions, nanosecond rounding and
+long durations. Their `Unblessed` headers remain until human review. Listing a
 new regression case here protects it while its first human blessing review
 remains pending.
 

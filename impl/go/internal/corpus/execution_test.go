@@ -131,3 +131,28 @@ func TestErrorDeliveryAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestDurationWaitAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"limits/wait-zero-next-pump", "limits/wait-deadline", "limits/rollback-after-suspension", "suspension/nested-waits", "suspension/wait-work-order", "suspension/wait-precision"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("wait case missing from passing gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

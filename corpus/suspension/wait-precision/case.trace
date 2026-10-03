@@ -1,0 +1,36 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Exact durations round to nanoseconds, half even. Negative and zero waits
+# still await a later Pump. A 60-billion-second wait exceeds time.Duration.
+> load s identity=b8ae232eafc21a04497643e36dbdebce1e05eb0a8f6c63568cc03d08b1cc6a41
+> request d1 to=s message=nap args=[1, 0.0000000005 s]
+> deliver d2 to=s message=nap args=[2, 0.0000000015 s]
+> deliver d3 to=s message=nap args=[3, 0.0000000025 s]
+> deliver d4 to=s message=nap args=[4, -1 s]
+> deliver d5 to=s message=nap args=[5, 60000000000 s]
+> pump clock=2026-10-03T12:00:00Z
+seg s/r1 start delivery=d1 handler=nap clause=1 fuel=15 alloc=0 state=520 end=wait until=2026-10-03T12:00:00Z
+seg s/r2 start delivery=d2 handler=nap clause=1 fuel=15 alloc=0 state=680 end=wait until=2026-10-03T12:00:00.000000002Z
+seg s/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=840 end=wait until=2026-10-03T12:00:00.000000002Z
+seg s/r4 start delivery=d4 handler=nap clause=1 fuel=15 alloc=0 state=1000 end=wait until=2026-10-03T11:59:59Z
+seg s/r5 start delivery=d5 handler=nap clause=1 fuel=15 alloc=0 state=1160 end=wait until=3928-01-30T22:40:00Z
+pumped state=idle fuel=75 next=2026-10-03T11:59:59Z
+> pump clock=2026-10-03T12:00:00Z
+seg s/r4 resume fuel=3 alloc=0 state=928 end=return
+run s/r4 outcome=completed delivery=d4 handler=nap value=4 fuel=18 alloc=0
+seg s/r1 resume fuel=3 alloc=0 state=696 end=return
+run s/r1 outcome=completed delivery=d1 handler=nap value=1 fuel=18 alloc=0
+pumped state=idle fuel=6 next=2026-10-03T12:00:00.000000002Z
+> pump clock=2026-10-03T12:00:00.000000001Z
+pumped state=idle fuel=0 next=2026-10-03T12:00:00.000000002Z
+> pump clock=2026-10-03T12:00:00.000000002Z
+seg s/r2 resume fuel=3 alloc=0 state=464 end=return
+run s/r2 outcome=completed delivery=d2 handler=nap value=2 fuel=18 alloc=0
+seg s/r3 resume fuel=3 alloc=0 state=232 end=return
+run s/r3 outcome=completed delivery=d3 handler=nap value=3 fuel=18 alloc=0
+pumped state=idle fuel=6 next=3928-01-30T22:40:00Z
+> pump clock=3928-01-30T22:40:00Z
+seg s/r5 resume fuel=3 alloc=0 state=0 end=return
+run s/r5 outcome=completed delivery=d5 handler=nap value=5 fuel=18 alloc=0
+pumped state=idle fuel=3
+> vars
+vars s

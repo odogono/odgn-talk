@@ -1,0 +1,9 @@
+script variable seen = []
+on nap n, d
+ put n after seen
+ wait d
+ put n + 10 after seen
+end nap
+on mark
+ put 99 after seen
+end mark
