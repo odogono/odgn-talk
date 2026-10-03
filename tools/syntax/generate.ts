@@ -12,6 +12,7 @@ import limits from '../../spec/data/limits.toml';
 import version from '../../spec/data/version.toml';
 import { resolve } from 'node:path';
 import { parseSource } from '../../impl/ts/src/parser';
+import { generateGoCatalogues } from '../go/generate';
 
 // Parse the catalogue's call notation with the Core grammar, including defaults
 // containing nested expressions or commas in text. Constants have no contract.
@@ -255,3 +256,4 @@ for (const [path, text] of outputs) {
     await Bun.write(path, text);
   }
 }
+await generateGoCatalogues(process.argv.includes('--check'));

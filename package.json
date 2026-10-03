@@ -15,6 +15,8 @@
     "spec:check": "bun run --cwd tools spec:check",
     "unicode:generate": "bun run --cwd tools unicode:generate",
     "unicode:check": "bun run --cwd tools unicode:check",
+    "go:generate": "bun run --cwd tools go:generate",
+    "go:check": "bun run --cwd tools go:check",
     "syntax:generate": "bun run --cwd tools syntax:generate",
     "syntax:check": "bun run --cwd tools syntax:check",
     "typecheck": "bun run --filter '*' typecheck",
