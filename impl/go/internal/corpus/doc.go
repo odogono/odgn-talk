@@ -1,2 +1,2 @@
-// Package corpus is reserved for Conformance Corpus replay.
+// Package corpus reads Conformance Corpus cases and replays supported backends.
 package corpus
