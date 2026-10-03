@@ -44,6 +44,7 @@ jobs:
         working-directory: impl/ts
       - run: bun run corpus:run
         working-directory: impl/ts
+      # Includes the real stdio LSP fixture workspace under Bun.
       - run: bun test tests
         working-directory: tooling/cli
       - run: bun run lints:check
@@ -53,6 +54,7 @@ jobs:
         working-directory: tooling/stack
       - run: bun run test:node
         working-directory: tooling/stack
+      # Runs the same stdio LSP workspace under Node.
       - run: bun run build && bun run test:node
         working-directory: tooling/cli
       - run: bun run build

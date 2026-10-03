@@ -5,9 +5,11 @@ import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { format } from './format';
 import { lintFiles } from './lint';
+import { lsp } from './lsp';
 import { replay } from './replay';
 
 const usage = `Usage:
+  northtalk lsp                           language server over stdio
   northtalk [repl] [--transcript <file>]   start a REPL session
   northtalk replay <transcript> [--trace <file>]
                                           replay a Session Transcript
@@ -34,6 +36,12 @@ const main = async (args: string[]): Promise<number> => {
     rest.splice(i, 2);
     return value;
   };
+  if (command === 'lsp') {
+    if (rest.length) {
+      throw new Error(usage);
+    }
+    return lsp();
+  }
   if (command === 'repl') {
     const transcript = option('--transcript');
     if (rest.length) {

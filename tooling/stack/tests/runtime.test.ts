@@ -30,3 +30,26 @@ globalThis.result = formatSource('on go\nsay 1+2\nend go\n');`,
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the browser LSP bundle checks, hovers and navigates without Bun, Node or Host I/O', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-browser-lsp-'));
+  try {
+    const entry = join(dir, 'browser.ts');
+    const fixtures = resolve(import.meta.dir, './verify-lsp.ts');
+    writeFileSync(
+      entry,
+      `import { verifyLspFeatures } from ${JSON.stringify(fixtures)};\nglobalThis.result = verifyLspFeatures();`,
+    );
+    const build = await Bun.build({ entrypoints: [entry], target: 'browser' });
+    expect(build.success).toBe(true);
+    const context: {
+      result?: number;
+      TextDecoder: typeof TextDecoder;
+      TextEncoder: typeof TextEncoder;
+    } = { TextEncoder, TextDecoder };
+    runInNewContext(await build.outputs[0]!.text(), context);
+    expect(context.result).toBe(4);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

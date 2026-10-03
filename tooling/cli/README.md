@@ -1,6 +1,6 @@
 # `northtalk`
 
-The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, and Lints ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
+The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, and the language server ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
 northtalk [repl] [--transcript <file>]
@@ -8,6 +8,7 @@ northtalk replay <transcript> [--trace <file>]
 northtalk fmt [--check] <file>…
 northtalk fmt [--check] -
 northtalk lint [--profile beginner|standard] <file>...
+northtalk lsp
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt, and an empty line ends it, so a real syntax error shows.
@@ -38,3 +39,108 @@ node tooling/cli/dist/main.js lint --profile beginner example.talk
 The shared [Lint engine](../stack/) supplies advice in `standard` by default. It prints `file:line:column: level [id] message` on stdout, with the Core's original source positions. Both shipped profiles contain only hints and warnings; Lints never reject a Script or make the command fail. Syntax errors are separate, printed on stderr; recovery lets advice after an error appear too. Exit codes are 0 for advice alone, 1 for syntax errors, and 2 for invalid arguments or file errors. The command checks syntax and the eleven syntax-based Lints; it does not load the Script or check bindings, Grants or a Host Manifest. Seven catalogue entries remain planned; their scope is recorded on [#241](https://github.com/odogono/odgn-talk/issues/241).
 
 A standalone `-- lint: ignore <id>` comment suppresses that id on the next physical line. Blank lines break adjacency. The [catalogue](../stack/lints.toml) records wording, profile levels and the Join threshold. The linter leaves source files unchanged. The REPL remains Bun-only.
+
+## Language server
+
+From a clean checkout, with Bun 1.4.2 and Node 22 or later:
+
+```sh
+bun install
+bun run --cwd tooling/cli build
+node tooling/cli/dist/main.js lsp
+# Or run the source directly under Bun:
+bun tooling/cli/src/main.ts lsp
+```
+
+The command waits for LSP messages on stdin and writes only Content-Length
+framed JSON-RPC messages to stdout. An editor launches this process; ordinary
+terminal input is not the protocol. Set the editor's language ID to `northtalk`
+for `*.talk` files. Use an absolute checkout path so launch does not depend on
+the editor's working directory. For any generic LSP client, use:
+
+```json
+{
+  "languageId": "northtalk",
+  "extensions": [".talk"],
+  "command": "node",
+  "args": ["/absolute/path/odgn-talk/tooling/cli/dist/main.js", "lsp"],
+  "initializationOptions": {
+    "northtalk": {
+      "profile": "beginner",
+      "manifest": "demo.talk-manifest.json"
+    }
+  }
+}
+```
+
+Map these fields to your client's process, file-type and initialization settings.
+For Bun, set `command` to `bun` and the first argument to the absolute
+`tooling/cli/src/main.ts` path. `northtalk.profile` accepts `beginner` or
+`standard`; omit it for `standard`. `northtalk.manifest` is optional: a relative
+path is resolved against the first workspace root, and an absolute path is used
+as supplied. Without this setting the server selects the single
+`*.talk-manifest.json` file in the workspace roots. Several matches produce a
+`host manifest` diagnostic asking for configuration; no match silently gives
+grammar-only features. Invalid or unreadable manifests produce a diagnostic and
+also preserve grammar features.
+
+For [Neovim 0.11's built-in LSP client](https://neovim.io/doc/user/lsp/), after the build:
+
+```lua
+vim.filetype.add({ extension = { talk = 'northtalk' } })
+vim.lsp.config('northtalk', {
+  cmd = { 'node', '/absolute/path/odgn-talk/tooling/cli/dist/main.js', 'lsp' },
+  filetypes = { 'northtalk' },
+  root_markers = { '.git' },
+  init_options = { northtalk = { profile = 'beginner' } },
+})
+vim.lsp.enable('northtalk')
+-- Enable suspension marks in the attached buffer:
+vim.lsp.inlay_hint.enable(true)
+```
+
+For [Helix](https://docs.helix-editor.com/languages.html), add to `languages.toml`:
+
+```toml
+[language-server.northtalk]
+command = "node"
+args = ["/absolute/path/odgn-talk/tooling/cli/dist/main.js", "lsp"]
+config = { profile = "beginner" }
+
+[[language]]
+name = "northtalk"
+scope = "source.northtalk"
+file-types = ["talk"]
+language-servers = ["northtalk"]
+roots = [".git"]
+```
+
+A generic VS Code LSP client can use the same process configuration and
+`northtalk` document selector; the server needs no dedicated NorthTalk extension.
+The editor must recognize the file's language ID. Enable inlay hints to show
+suspension marks. A syntax grammar is not required for these LSP features.
+
+The server indexes workspace `.talk` files, ignoring hidden directories,
+`node_modules`, `dist` and symlinks. Manifest Library source is checked without
+the Host. A workspace file named `<library>.talk` overrides that Library's
+embedded source for editing and navigation; other files are Scripts. Open
+buffer contents override disk text until close. Save and
+`workspace/didChangeWatchedFiles` reload workspace files and manifests. Clients
+that support dynamic watched-file registration receive watchers for `.talk` and
+`.talk-manifest.json`. Configuration is read from initialization options,
+`workspace/configuration` when supported, and
+`workspace/didChangeConfiguration` notifications. Each successful update
+refreshes diagnostics for open documents.
+
+The [server API guide](../stack/README.md#language-server) describes virtual
+Library URIs, rename semantics and the shipped Lints. For generic editors the stdio adapter materializes manifest and Standard
+Library sources into temporary files, removed when the server exits. Definition
+locations use those file URIs. Renaming a manifest Library export returns edits
+for its temporary file, importing Scripts and the manifest's embedded source
+(only the affected JSON source string changes). Apply and save all returned edits. Save any direct edits to the manifest source before renaming its Library exports. Ordinary
+workspace Library files are edited directly; changes there do not rewrite the
+manifest. Standard Library exports cannot be renamed. The REPL remains Bun-only.
+
+CI's `bun test tests` includes the Bun stdio integration session;
+`bun run --cwd tooling/cli build` followed by
+`bun run --cwd tooling/cli test:node` runs the same fixture workspace under Node.

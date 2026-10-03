@@ -104,3 +104,54 @@ bun run --cwd tooling/stack test:browser  # open the printed local URL
 ```
 
 The same positive/negative fixtures run under Bun, Node and the browser smoke page. Lint fixtures are tooling tests, separate from the Conformance Corpus.
+
+## Language server
+
+`@odgn/northtalk-tooling/lsp` exports `createLanguageServer(send)`. Supply a
+callback that receives JSON-RPC messages, then pass incoming messages to
+`server.handle(message)`. `server.configure({ manifest, sources, profile })`
+accepts the Host Manifest as JSON text or decoded data, and workspace sources
+as `{ uri, text, library? }`. No file, process or transport API is used; a
+browser worker can post the messages directly. `server.exitCode` becomes 0 on
+`shutdown` followed by `exit`, or 1 on `exit` without shutdown.
+
+The server supports LSP 3.17 initialization, incremental document changes,
+versioned push diagnostics, completion, hover, definition, references, rename,
+inlay hints, formatting and Lint quick fixes. Positions are UTF-16, including
+CRLF and supplementary Unicode characters; the Core's scalar columns stay
+internal. Suspension marks use `textDocument/inlayHint` with a `⏸` label on
+Suspension Points and on Handlers or Lambdas that may suspend, including Join
+heads. Enable inlay hints in the editor to show them.
+
+Diagnostics combine the first Core syntax error, recovering checker/load
+errors and the shipped Lints in `northtalk.profile` (`standard` by default).
+Manifest Library source supplies export contracts, suspension information and
+bindings; imported Library diagnostics and transitive Grant requirements are
+reported at the importing `use` line. Constants are evaluated by the Core's
+initializer and shown in the display form. Operations show their manifest
+Declaration; Function Values show their Home Script. Formatting delegates to
+the formatter, and `prefer-explicit-end` has an insertion quick fix.
+
+Rename follows resolved bindings, retains explicit ending suffixes, and keeps
+local aliases separate: renaming an alias changes that alias and its uses;
+renaming the exported name changes definitions and import names while retaining
+aliases. It rejects reserved words and conflicting bindings. Clients apply the
+returned WorkspaceEdit. Library definitions embedded in a manifest and Standard
+Library definitions use `northtalk-library:///<name>.talk` URIs. Clients that
+open these URIs can fetch their text with the `northtalk/librarySource` request
+(`{ uri }`, returning source text or null). A workspace source marked with the
+same Library name supplies an ordinary editable file URI instead.
+
+Without a manifest, diagnostics degrade to syntax and syntax Lints, with no
+missing-manifest error; grammar completion, formatting and suspension marks
+remain available. Seven binding/manifest Lints remain tracked in [#241](https://github.com/odogono/odgn-talk/issues/241).
+The server does not infer Host Object property values or run Handlers to obtain
+hover values. A browser client needs virtual document support for embedded Library URIs.
+The stdio adapter supplies temporary file URIs for generic editors and includes
+manifest source updates in rename edits; Standard Library export names are
+read-only. Ordinary workspace Library files remain directly editable.
+
+See the [editor setup](../cli/README.md#language-server) for clean-checkout Bun
+and Node commands and a generic client configuration. Tests include real stdio
+fixture-workspace sessions under both runtimes, browser bundling without Node
+or Bun globals, and the browser smoke page's LSP fixtures.

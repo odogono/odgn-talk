@@ -4,6 +4,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  verifyLspStdio,
+  verifyLspInvalidConfiguration,
+} from './lsp-integration';
 
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-node-'));
 const main = fileURLToPath(new URL('./main.js', import.meta.url));
@@ -39,3 +43,12 @@ try {
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
+
+await verifyLspStdio(
+  process.execPath,
+  main,
+  fileURLToPath(new URL('../tests/fixtures/lsp', import.meta.url)),
+);
+process.stdout.write('Node CLI LSP: fixture workspace passed\n');
+
+await verifyLspInvalidConfiguration(process.execPath, main);
