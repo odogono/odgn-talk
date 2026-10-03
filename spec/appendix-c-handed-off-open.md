@@ -16,7 +16,6 @@ These need a working Core, so they are written during [Appendix B](appendix-b-im
 ## Tooling
 
 - **A tree-sitter grammar:** optional, for editors that want one. Like all tooling, it is not normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
-- **The Lint catalogue's wording,** in the tooling's `lints.toml`, and the `long-join-body` threshold ([ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [chapter 12](12-sessions-and-tooling.md#layers-and-lints)).
 
 ## Language questions
 

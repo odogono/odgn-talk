@@ -46,11 +46,14 @@ jobs:
         working-directory: impl/ts
       - run: bun test tests
         working-directory: tooling/cli
+      - run: bun run lints:check
       - run: bun test tests
         working-directory: tooling/stack
       - run: bun run build
         working-directory: tooling/stack
-      - run: bun run build
+      - run: bun run test:node
+        working-directory: tooling/stack
+      - run: bun run build && bun run test:node
         working-directory: tooling/cli
       - run: bun run build
         working-directory: impl/ts

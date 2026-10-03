@@ -6,9 +6,10 @@
     "northtalk": "./src/main.ts"
   },
   "scripts": {
-    "build": "bun build src/main.ts --target node --outfile dist/main.js",
     "typecheck": "tsc",
-    "test": "bun test tests"
+    "test": "bun test tests",
+    "build": "bun build src/main.ts --target node --outfile dist/main.js && cp ../../impl/ts/src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
+    "test:node": "bun build tests/node-runtime.ts --target node --outfile dist/node-runtime.mjs && node dist/node-runtime.mjs"
   },
   "dependencies": {
     "@odgn/northtalk": "workspace:*",
