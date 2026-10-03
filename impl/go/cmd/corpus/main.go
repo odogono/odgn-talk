@@ -19,7 +19,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	runner := corpus.Runner{Root: filepath.Join(root, "corpus"), Output: os.Stdout}
+	runner := corpus.Runner{Root: filepath.Join(root, "corpus"), Output: os.Stdout, Backends: corpus.ExecutionBackends()}
 	if *check {
 		if *list || flag.NArg() != 0 {
 			fmt.Fprintln(os.Stderr, "--check-passing cannot be combined with other selections")
