@@ -1,5 +1,5 @@
 import { compileSource, newGroup, num } from '@odgn/northtalk';
-import { LiveDebugger, renderDebugView } from '../src/debug';
+import { LiveDebugger, ReplayDebugger, renderDebugView } from '../src/debug';
 
 /** The same live-debugging checks run in Bun, Node and browser environments. */
 export const verifyDebugFeatures = (): number => {
@@ -40,5 +40,39 @@ export const verifyDebugFeatures = (): number => {
   if (JSON.stringify(run(false)) !== JSON.stringify(run(true))) {
     throw new Error('Live debugging changed the Trace');
   }
-  return 4;
+  const recorded = run(false);
+  const replay = new ReplayDebugger(
+    { scripts: [{ name: 's', source: '', text: source }] },
+    recorded,
+  );
+  replay.setBreakpoints([{ unit: 's', line: 3 }]);
+  if (
+    replay.resume().state !== 'paused' ||
+    Number(replay.current?.line) !== 3
+  ) {
+    throw new Error('Replay breakpoint failed');
+  }
+  replay.clearBreakpoints();
+  if (
+    replay.stepOver().state !== 'paused' ||
+    Number(replay.current?.line) !== 4
+  ) {
+    throw new Error('Replay step failed');
+  }
+  if (
+    replay.reverseStep().state !== 'paused' ||
+    Number(replay.current?.line) !== 3
+  ) {
+    throw new Error('Reverse step failed');
+  }
+  if (
+    replay.resume().state !== 'ended' ||
+    JSON.stringify(replay.trace) !== JSON.stringify(recorded)
+  ) {
+    throw new Error('Replay Trace parity failed');
+  }
+  if (replay.runToHostInput(0).state !== 'input' || replay.trace.length) {
+    throw new Error('Host Input seek failed');
+  }
+  return 9;
 };

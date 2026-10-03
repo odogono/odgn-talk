@@ -224,5 +224,61 @@ The debugger has no Script-state setters. Change code with the Host's Reload,
 then register the replacement lowering to rebind the stored breakpoints. Reload
 is refused while a Pump is paused: first resume it to completion. Use one live
 debugger per Group. The [Bun CLI](../cli/README.md#live-debugger) exercises this API.
-Replay debugging and reverse navigation are tracked by [#237](https://github.com/odogono/odgn-talk/issues/237);
 DAP is outside the scope of this transport.
+
+## Replay debugger
+
+`ReplayDebugger` uses the Core's browser-safe Trace replay driver, shared with the
+Trace Case runner and its `Stubs`. Supply a Trace and its chapter 11 setup, with
+each Script and Library's source in `text`, or provide a source reader:
+
+```ts
+import { ReplayDebugger } from '@odgn/northtalk-tooling/debug';
+
+const debug = new ReplayDebugger({
+  scripts: [{ name: 's', source: 's.talk', text: source }],
+}, trace);
+debug.setBreakpoints([{ unit: 's', line: 2 }]);
+debug.resume();
+if (debug.isPaused) {
+  debug.stepOver();
+  debug.reverseStep();
+  console.log(debug.snapshot());
+}
+debug.runToHostInput(0);
+```
+
+The `ReplaySetup` type describes Scripts, Libraries, Grant declarations, Limits,
+Standard Capabilities and Host Objects as a Trace Case does. The source reader
+runs only during construction; reverse navigation reuses those captured sources.
+No live Host is called: recorded results, errors, charges, property answers and
+lifecycle outcomes answer crossings, and every Pump reads its recorded Clock.
+Explicit Stub inputs use the same queues as the Session Host and corpus runner.
+
+Breakpoints, `pauseOn`, `current`, `snapshot`, `step`, `stepOver` and `stepOut`
+work as in live mode. Breakpoints set before Load are initially unverified and
+bind when their code is loaded; Reload, extensions and restores rebind them.
+`resume()` runs across Pumps until a pause or `{ state: 'ended' }`. Each recorded
+early Stop or CancelRun pauses with reason `replay` and its `hostInputIndex` at
+the recorded `pc`, before applying that input on resume. Inspection adds no
+Host Input. `trace` is a detached copy of the Trace produced so far; `reports`
+contains completed Pump reports. End-of-Trace validates the replay and reports
+the first divergent record.
+
+`runToHostInput(n)` uses zero-based indices, counting every `> ` line, including
+Stubs and inputs inside Pumps. It reconstructs execution from the start and
+stops before the input, returning `{ state: 'input', hostInputIndex: n }`, or an
+early landing pause. A Stop or CancelRun made synchronously by a Host callback
+has no instruction boundary inside that callback; its seek result has
+`applied: true` and shows the safe boundary after that Pump. `hostInputCount`
+and `hostInputIndex` expose the range and current position. Seeking ignores
+intervening user breakpoints and fault breaks, which remain set for resuming.
+
+`reverseStep()` reconstructs statement boundaries from the start, then replays
+to the previous one in execution order across Runs and Pumps. It works at a
+pause or after the Trace ends. Before the first statement it returns to Host
+Input 0. No instruction recording or extra Trace lines are needed; long Traces
+cost proportionally more to rewind. The debugger never sets Script state or
+edits the recorded sources. Bun, Node and browser fixtures exercise replay and
+reverse navigation; corpus tests compare every Trace Case and Session
+Transcript's `case.trace` with replay-debugging output.

@@ -35,7 +35,7 @@ const server = Bun.serve({
 import { verifyLintFixtures } from '/verify.js';
 import { verifyLspFeatures } from '/verify-lsp.js';
 import { verifyDebugFeatures } from '/verify-debug.js';
-try { document.querySelector('#result').textContent = 'PASS: ' + verifyLintFixtures() + ' Lint fixtures and ' + verifyLspFeatures() + ' LSP checks and ' + verifyDebugFeatures() + ' live debugger checks in a browser'; }
+try { document.querySelector('#result').textContent = 'PASS: ' + verifyLintFixtures() + ' Lint fixtures and ' + verifyLspFeatures() + ' LSP checks and ' + verifyDebugFeatures() + ' live/replay debugger checks in a browser'; }
 catch (error) { document.querySelector('#result').textContent = 'FAIL: ' + error.message; throw error; }
 </script></body></html>`,
       { headers: { 'content-type': 'text/html' } },

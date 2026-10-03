@@ -4,68 +4,17 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  MOCK_ARGUMENTS,
   parseTranscript,
   replayTranscript,
   writeTranscript,
-  type SessionHost,
 } from '../src/session';
 import {
   blessed,
   runTraceCase,
   same,
-  type Setup,
   type TraceDivergence,
 } from './trace-case';
-
-// The Session Host's Group, as a Trace Case sets it up: the Session Script
-// loaded from empty source, granted `console`, whose Operations cost nothing,
-// each mock Operation and built-in Capability, under every name it was
-// granted, and each user Library as it was added.
-const sessionSetup = (host: SessionHost): Setup => {
-  const { granted, mocks } = host.grants;
-  return {
-    libraries: host.userLibraries.map(l => ({
-      name: l.name,
-      version: l.version,
-      source: '(inline)',
-      text: l.source,
-    })),
-    operations: mocks.map(m => ({
-      capability: m.capability,
-      name: m.operation,
-      mode: m.mode,
-      args: Array.from({ length: MOCK_ARGUMENTS }, () => ({ optional: 'any' })),
-      ...(m.mode === 'fire-and-forget' ? {} : { result: 'any' }),
-      cost: { fuel: 0 },
-    })),
-    scripts: [
-      {
-        name: 'session',
-        source: '(empty)',
-        text: '',
-        grants: {
-          console: { ops: 'all' },
-          ...Object.fromEntries(
-            Object.entries(granted).map(([name, capability]) => [
-              name,
-              { capability, ops: 'all' as const },
-            ]),
-          ),
-        },
-      },
-    ],
-    standard: [
-      {
-        capability: 'console',
-        costs: { write: { fuel: 0 }, read: { fuel: 0 } },
-      },
-      ...(Object.values(granted).includes('clock')
-        ? [{ capability: 'clock', costs: { now: { fuel: 0 } } }]
-        : []),
-    ],
-  };
-};
+import { sessionSetup } from '../src/replay';
 
 export type TranscriptDivergence = TraceDivergence & {
   file: 'session.transcript' | 'case.trace';

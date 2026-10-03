@@ -1,5 +1,5 @@
 // TS tooling state lives outside machine state and never enters a save.
-import type { Instruction } from './code-unit';
+import type { CodeUnit, Instruction } from './code-unit';
 import type { Inspection, Location, PumpResult } from './group';
 import type { LimitName, Run } from './machine';
 import type { Value } from './values';
@@ -27,6 +27,11 @@ export type DebugSnapshot = Omit<Inspection, 'scripts'> & {
       segment: number;
     })[];
   })[];
+};
+export type DebugSource = {
+  script?: string;
+  statements: number[];
+  unit: CodeUnit;
 };
 type Fault = {
   error?: Value;
@@ -74,7 +79,12 @@ export class DebugController {
   constructor(
     private readonly read: () => DebugSnapshot,
     private readonly advance: () => PumpResult,
+    private readonly readSources: () => DebugSource[],
   ) {}
+  /** Detached lowerings of the code actually loaded, including extensions. */
+  sources(): DebugSource[] {
+    return this.readSources();
+  }
   get isPaused(): boolean {
     return this.pause !== null;
   }

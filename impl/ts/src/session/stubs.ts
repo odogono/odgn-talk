@@ -98,10 +98,21 @@ export class Stubs {
   }
 
   /** A suspending call takes a Stub for its charge only. */
-  start(operation: string, call: { charge(fuel: number): void }): void {
-    const stub = this.queues.get(operation)?.shift();
+  start(
+    operation: string,
+    call: { charge(fuel: number): void },
+    recorded?: Stub,
+  ): void {
+    const queued = this.queues.get(operation)?.shift();
+    const stub = queued ?? recorded;
     if (stub?.charge) {
       call.charge(stub.charge);
+    }
+    if (!queued && recorded?.error) {
+      if (!recorded.error.entries().length) {
+        throw new Error(`The recorded call of ${operation} fails`);
+      }
+      throw hostFailure(recorded.error);
     }
   }
 }
