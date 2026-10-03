@@ -1,0 +1,39 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapter 6 queues error as a separate message after the failed Run's records.
+# Chapter 5 keeps FIFO order and suppresses Guard errors. During is bound before
+# testing each clause. Chapter 8 charges dispatch, even for skipped clauses.
+# The first Pump ends just after throw: clause 4 + const 1 + throw 10 + unwind 4.
+# The retained error message is 32 + size(error); during is metadata, not an arg.
+
+> load s identity=18dfc18d880fc3afce3336dc119c994124c2594b5874cb28485f16806486675d
+> request d1 to=s message=fail args=[7]
+> deliver d2 to=s message=next
+> pump clock=2026-09-30T10:00:00Z fuel-cap=19
+raise s/r1 code="mine" at=s:5 pos=4:3
+seg s/r1 start delivery=d1 handler=fail clause=1 fuel=19 alloc=48 state=48 end=error
+run s/r1 outcome=errored delivery=d1 handler=fail error={code: "mine", at: {unit: "s", handler: "fail", line: 4, column: 3}} fuel=19 alloc=48
+pumped state=sliced fuel=19
+> vars
+vars s seen=[]
+> counters s
+counters s fuel=19 alloc=48 runs=1 faults=0 state=372 mailbox=2
+> pump clock=2026-09-30T10:00:00Z fuel-slice=1
+preempt s/r2 start delivery=d2 handler=next clause=1 by=slice fuel=5 alloc=0
+pumped state=sliced fuel=5
+> vars
+vars s seen=[]
+> pump clock=2026-09-30T10:00:00Z fuel-slice=1
+pumped state=sliced fuel=0
+> pump clock=2026-09-30T10:00:00Z
+seg s/r2 continue fuel=11 alloc=28 state=368 end=return
+run s/r2 outcome=completed delivery=d2 handler=next fuel=16 alloc=28
+guard-skip s/r3 at=s:27 pos=11:25 code="division by zero"
+guard-skip s/r3 at=s:41 pos=15:18 value=7
+seg s/r3 start from=s/r1 handler=error clause=4 fuel=79 alloc=920 state=508 end=return
+run s/r3 outcome=completed handler=error fuel=79 alloc=920
+pumped state=idle fuel=90
+> counters s
+counters s fuel=114 alloc=996 runs=3 faults=0 state=508 mailbox=0
+
+> vars
+vars s seen=["next", [{name: "fail", args: [7]}, {code: "mine", at: {unit: "s", handler: "fail", line: 4, column: 3}}]]

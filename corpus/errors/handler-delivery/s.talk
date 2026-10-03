@@ -1,0 +1,25 @@
+script variable seen = []
+
+on fail x
+  throw "mine"
+end fail
+
+on next
+  put "next" after seen
+end next
+
+on error "mine" where 1 / 0 > 0, during msg
+  put "wrong" after seen
+end error
+
+on error e where 7, during msg
+  put "wrong" after seen
+end error
+
+on error "mine" where the name of msg = "other", during msg
+  put "wrong" after seen
+end error
+
+on error e where the name of msg = "fail", during msg
+  put [msg, e] after seen
+end error

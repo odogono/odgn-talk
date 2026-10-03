@@ -41,6 +41,7 @@ type Body struct {
 	Captures   []Symbol
 	Parent     *Body
 	MaySuspend bool
+	During     string // the failed-message binding on an error Handler
 }
 
 func (b *Body) Slot(name string) int { return slices.Index(b.Locals, name) }
@@ -414,6 +415,15 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 	parameterEnd := len(b.Locals)
 	// Gather whole-body locals, ordering binding tokens rather than parent nodes.
 	var sites []*syntax.Node
+	for j := 0; j < len(n.Flags); j++ {
+		flag := n.Flags[j]
+		if flag.Raw == "during" && j+1 < len(n.Flags) {
+			binding := n.Flags[j+1]
+			b.During = binding.Raw
+			sites = append(sites, &syntax.Node{Kind: "binding", Text: binding.Raw, Token: binding})
+			j++
+		}
+	}
 	for _, child := range syntax.SourceChildren(analysis) {
 		bindingSites(child, func(site *syntax.Node) {
 			if site != nil {
@@ -501,6 +511,9 @@ type context struct {
 
 func (u *Unit) validateBody(b *Body, ctx context) {
 	ctx.body = b
+	if b.Kind == "handler" {
+		u.handlerSuffixes(b.Node)
+	}
 	if b.Kind == "lambda" {
 		ctx.lambda++
 		ctx.loop = 0
@@ -537,6 +550,37 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 	}
 	for _, n := range b.Node.Branches {
 		u.validate(n, b, ctx)
+	}
+}
+
+func (u *Unit) handlerSuffixes(n *syntax.Node) {
+	seen := map[string]bool{}
+	for j := 0; j < len(n.Flags); j++ {
+		flag := n.Flags[j]
+		policy := flag.Raw == "queued" || flag.Raw == "dropping" || flag.Raw == "replacing"
+		if seen[flag.Raw] || policy && (seen["queued"] || seen["dropping"] || seen["replacing"]) ||
+			flag.Raw == "queued" && seen["deciding"] || flag.Raw == "deciding" && seen["queued"] ||
+			flag.Raw == "during" && n.Text != "error" {
+			u.add("bad suffixes", flag.Pos)
+			return
+		}
+		seen[flag.Raw] = true
+		if flag.Raw != "during" {
+			continue
+		}
+		j++
+		binding := n.Flags[j]
+		name := &syntax.Node{Kind: "binding", Text: binding.Raw, Token: binding}
+		if _, ok := u.Symbols[binding.Raw]; ok {
+			u.clash(name)
+		}
+		for _, param := range n.Params {
+			for _, p := range Bindings(param) {
+				if p.Text == binding.Raw {
+					u.add("duplicate name", binding.Pos)
+				}
+			}
+		}
 	}
 }
 func validNumber(raw string) bool {

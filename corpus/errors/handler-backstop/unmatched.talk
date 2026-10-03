@@ -1,0 +1,7 @@
+on fail
+  throw "first"
+end fail
+
+on error "other"
+  return
+end error

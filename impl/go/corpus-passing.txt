@@ -1,8 +1,10 @@
-# Cases the Go Core must continue to pass (issues #132 and #133).
-# The three new step-2 regression cases retain Unblessed headers until review.
+# Cases the Go Core must continue to pass (issues #132, #133 and #134).
+# New regression cases retain Unblessed headers until their first human review.
 bytes/build-and-match
+bytes/build-errors
 bytes/value-encoding
 dates/civil-arithmetic
+dates/instants-and-offsets
 dates/value-encoding
 disassembly/calls-and-lambdas
 disassembly/containers
@@ -10,6 +12,8 @@ disassembly/destructuring
 disassembly/errors-and-loops
 disassembly/expressions
 disassembly/messages-and-waiting
+errors/handler-backstop
+errors/handler-delivery
 limits/alloc-exhaustion-point
 limits/call-depth-minimum
 limits/fault-at-dispatch
@@ -47,10 +51,13 @@ load-diagnostics/unknown-import
 load-diagnostics/unknown-kind
 load-diagnostics/unknown-name
 load-diagnostics/wrong-argument-count
+math/domain-errors
 math/floats
 math/fractional-power
+math/fractional-power-errors
 math/number-functions
 quantities/arithmetic-through-base-units
+quantities/incompatible-units
 quantities/value-encoding
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters

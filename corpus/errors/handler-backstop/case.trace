@@ -1,0 +1,65 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapter 6: no matching internal error clause means no unhandled report;
+# an error Run that errors again ends errored but sends no further message.
+# Without any error clauses, dispatch spends no Fuel and starts no Run.
+# A Host-delivered error is an ordinary Delivery: during is Nothing, no match
+# reports unhandled, and an uncaught error still does not chain.
+# A limit fault and an unhandled ordinary message also send no error message.
+
+> load absent identity=ec05fdbbd231c4b18ddd09d7af4ab342bf23394793d0a61c22f44447b6c04a12
+> load unmatched identity=b3e700f4bd1cf5d89b0314efb99ad5cf879d232b5ba0ee702ed64f31b55ee0ce
+> load recursive identity=78a55633ddfcf517118f2b1e513739497bfce05a02455d2400e45825e80d435d
+> deliver d1 to=absent message=fail
+> deliver d2 to=unmatched message=fail
+> deliver d3 to=recursive message=fail
+> pump clock=2026-09-30T10:00:00Z
+raise absent/r1 code="first" at=absent:3 pos=2:3
+seg absent/r1 start delivery=d1 handler=fail clause=1 fuel=19 alloc=48 state=0 end=error
+run absent/r1 outcome=errored delivery=d1 handler=fail error={code: "first", at: {unit: "absent", handler: "fail", line: 2, column: 3}} fuel=19 alloc=48
+raise unmatched/r1 code="first" at=unmatched:3 pos=2:3
+seg unmatched/r1 start delivery=d2 handler=fail clause=1 fuel=19 alloc=48 state=0 end=error
+run unmatched/r1 outcome=errored delivery=d2 handler=fail error={code: "first", at: {unit: "unmatched", handler: "fail", line: 2, column: 3}} fuel=19 alloc=48
+raise recursive/r1 code="first" at=recursive:5 pos=4:3
+seg recursive/r1 start delivery=d3 handler=fail clause=1 fuel=19 alloc=48 state=16 end=error
+run recursive/r1 outcome=errored delivery=d3 handler=fail error={code: "first", at: {unit: "recursive", handler: "fail", line: 4, column: 3}} fuel=19 alloc=48
+seg unmatched/r2 start from=unmatched/r1 handler=error fuel=13 alloc=0 state=0 end=unhandled
+run unmatched/r2 outcome=unhandled handler=error fuel=13 alloc=0
+raise recursive/r2 code="second" at=recursive:16 pos=9:3
+seg recursive/r2 start from=recursive/r1 handler=error clause=1 fuel=28 alloc=164 state=132 end=error
+run recursive/r2 outcome=errored handler=error error={code: "second", at: {unit: "recursive", handler: "error", line: 9, column: 3}} fuel=28 alloc=164
+pumped state=idle fuel=98
+> vars
+vars absent
+vars unmatched
+vars recursive seen=[{name: "fail", args: []}]
+> counters absent
+counters absent fuel=19 alloc=48 runs=1 faults=0 state=0 mailbox=0
+> counters unmatched
+counters unmatched fuel=32 alloc=48 runs=2 faults=0 state=0 mailbox=0
+> counters recursive
+counters recursive fuel=47 alloc=212 runs=2 faults=0 state=132 mailbox=0
+> request d4 to=unmatched message=error args=[{code: "host"}]
+> request d5 to=recursive message=error args=[{code: "host"}]
+> deliver d6 to=recursive message=fail limits={fuelPerRun: 1}
+> deliver d7 to=recursive message=unknown
+> pump clock=2026-09-30T10:00:00Z
+seg unmatched/r3 start delivery=d4 handler=error fuel=13 alloc=0 state=0 end=unhandled
+run unmatched/r3 outcome=unhandled delivery=d4 handler=error fuel=13 alloc=0
+unhandled d4 message=error args=[{code: "host"}]
+raise recursive/r3 code="second" at=recursive:16 pos=9:3
+seg recursive/r3 start delivery=d5 handler=error clause=1 fuel=28 alloc=64 state=212 end=error
+run recursive/r3 outcome=errored delivery=d5 handler=error error={code: "second", at: {unit: "recursive", handler: "error", line: 9, column: 3}} fuel=28 alloc=64
+fault recursive/r4 limit=fuel at=recursive:4 pos=4:9
+seg recursive/r4 start delivery=d6 handler=fail clause=1 fuel=0 alloc=0 state=180 end=fault
+run recursive/r4 outcome=limit-fault delivery=d6 handler=fail limit=fuel fuel=0 alloc=0
+seg recursive/r5 start delivery=d7 fuel=0 alloc=0 state=148 end=unhandled
+run recursive/r5 outcome=unhandled delivery=d7 fuel=0 alloc=0
+unhandled d7 message=unknown
+pumped state=idle fuel=41
+> counters recursive
+counters recursive fuel=75 alloc=276 runs=5 faults=1 state=148 mailbox=0
+
+> vars
+vars absent
+vars unmatched
+vars recursive seen=[{name: "fail", args: []}, nothing]

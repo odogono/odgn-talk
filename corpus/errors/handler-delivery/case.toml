@@ -1,0 +1,10 @@
+# Uncaught errors queue behind existing messages and dispatch through Guards.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
