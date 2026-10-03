@@ -10,6 +10,7 @@ export default [
       '**/dist/**',
       '**/node_modules/**',
       'impl/ts/src/generated/**',
+      'tooling/stack/src/generated/**',
       'spec/**',
     ],
   },
@@ -42,6 +43,7 @@ export default [
             './impl/ts/tsconfig.json',
             './tools/tsconfig.json',
             './tooling/cli/tsconfig.json',
+            './tooling/stack/tsconfig.json',
           ],
         },
       },
@@ -52,6 +54,7 @@ export default [
       'tools/**/*.ts',
       'impl/ts/tools/**/*.ts',
       'tooling/cli/src/**/*.ts',
+      'tooling/stack/tools/**/*.ts',
     ],
     rules: {
       // These command-line Hosts print their reports and diagnostics.

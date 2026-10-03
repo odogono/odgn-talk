@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check",
+    "check": "bun run test && bun run spec:check && bun run grammar:check && bun run machine:check && bun run corpus:check && bun run syntax:check && bun run unicode:check && bun run lints:check",
     "spec:gen": "bun spec/generate.ts",
     "spec:check": "bun spec/generate.ts --check",
     "grammar:check": "bun grammar/check.ts",
@@ -16,7 +16,9 @@
     "typecheck": "tsc",
     "test": "bun test spec/commands.test.ts commits/",
     "commits:check": "bun commits/check.ts",
-    "changelog": "bun commits/changelog.ts"
+    "changelog": "bun commits/changelog.ts",
+    "lints:generate": "bun lints/generate.ts",
+    "lints:check": "bun lints/generate.ts --check"
   },
   "devDependencies": {
     "ajv": "^8"

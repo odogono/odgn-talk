@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -140,4 +140,57 @@ test('fmt validates its command line and reports unreadable files', () => {
   expect(run(['fmt', '--width', '4', '-']).code).toBe(2);
   expect(run(['fmt', '-', '-']).code).toBe(2);
   expect(run(['fmt', '/nonexistent/northtalk.talk']).code).toBe(1);
+});
+
+test('lint prints advice without rejecting a valid Script, and selects either profile', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const file = join(dir, 'demo.talk');
+  writeFileSync(file, 'on demo\nput {length: 1} into x\nend');
+  const standard = run(['lint', file]);
+  expect(standard.code).toBe(0);
+  expect(standard.stdout).toContain(
+    `${file}:2:6: warning [key-shadows-property]`,
+  );
+  expect(standard.stdout).not.toContain('prefer-explicit-end');
+  const beginner = run(['lint', '--profile', 'beginner', file]);
+  expect(beginner.code).toBe(0);
+  expect(beginner.stdout).toContain(
+    `${file}:3:1: warning [prefer-explicit-end]`,
+  );
+});
+
+test('lint recovers after syntax errors and returns a syntax failure separately from advice', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const file = join(dir, 'demo.talk');
+  writeFileSync(
+    file,
+    'on demo\nput + into x\nput {length: 1} into x\nend demo',
+  );
+  const result = run(['lint', file]);
+  expect(result.code).toBe(1);
+  expect(result.stderr).toContain(`${file}:2:5: unexpected token`);
+  expect(result.stdout).toContain('[key-shadows-property]');
+});
+
+test('lint accepts multiple files and rejects invalid profile names and missing files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const file = join(dir, 'demo.talk');
+  writeFileSync(file, 'on demo\nend demo');
+  expect(run(['lint', file, file]).code).toBe(0);
+  const invalid = run(['lint', '--profile', 'expert', file]);
+  expect(invalid.code).toBe(2);
+  expect(invalid.stderr).toContain('beginner or standard');
+  expect(run(['lint']).code).toBe(2);
+  expect(run(['lint', join(dir, 'missing.talk')]).code).toBe(2);
+});
+
+test('the Bun command runs through a bin symlink', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const bin = join(dir, 'northtalk');
+  symlinkSync(main, bin);
+  const file = join(dir, 'demo.talk');
+  writeFileSync(file, 'on demo\nput {length: 1} into x\nend demo');
+  const result = Bun.spawnSync([process.execPath, bin, 'lint', file]);
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain('[key-shadows-property]');
 });

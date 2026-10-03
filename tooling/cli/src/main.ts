@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 // The `northtalk` command (chapter 12, Tooling). The REPL's interface and
-// formatting are outside parity; Session output and recording aren't.
+// formatting and Lints are outside parity; Session output and recording aren't.
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { format } from './format';
+import { lintFiles } from './lint';
 import { replay } from './replay';
 
 const usage = `Usage:
@@ -11,7 +12,9 @@ const usage = `Usage:
   northtalk replay <transcript> [--trace <file>]
                                           replay a Session Transcript
   northtalk fmt [--check] <file>…          format in place, or check layout
-  northtalk fmt [--check] -                read source from stdin`;
+  northtalk fmt [--check] -                read source from stdin
+  northtalk lint [--profile beginner|standard] <file>...
+                                          print Lints (default: standard)`;
 
 const main = async (args: string[]): Promise<number> => {
   const [command = 'repl', ...rest] = args[0]?.startsWith('--')
@@ -24,7 +27,9 @@ const main = async (args: string[]): Promise<number> => {
     }
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) {
-      throw new Error(`${name} needs a file`);
+      throw new Error(
+        `${name} needs ${name === '--profile' ? 'a profile' : 'a file'}`,
+      );
     }
     rest.splice(i, 2);
     return value;
@@ -48,6 +53,16 @@ const main = async (args: string[]): Promise<number> => {
       throw new Error(usage);
     }
     return format(files, check);
+  }
+  if (command === 'lint') {
+    const profile = option('--profile') ?? 'standard';
+    if (profile !== 'beginner' && profile !== 'standard') {
+      throw new Error('--profile must be beginner or standard');
+    }
+    if (!rest.length || rest.some(arg => arg.startsWith('--'))) {
+      throw new Error(usage);
+    }
+    return lintFiles(rest, profile);
   }
   if (command === 'replay') {
     const trace = option('--trace');

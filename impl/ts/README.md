@@ -14,6 +14,7 @@ Run commands in this guide from the repository root. Workspace-only scripts sele
 | Save and restore | [snapshot](src/snapshot.ts), [Group](src/group.ts) | [save and restore](../../spec/10-save-and-restore.md) | [save/restore tests](tests/save-restore.test.ts) |
 | Sessions, Transcripts and CLI | [Session Host](src/session/host.ts), [Transcript codec/replay](src/session/transcript.ts), [CLI](../../tooling/cli/) | [sessions and tooling](../../spec/12-sessions-and-tooling.md) | [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session corpus](../../corpus/sessions/) |
 | Formatting source | [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts) | [formatter](../../spec/12-sessions-and-tooling.md#the-formatter) | [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/) |
+| Lints and CLI advice | [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/) | [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints) | [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts) |
 | Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Unicode tests](tests/unicode.test.ts) |
 
 The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
@@ -315,7 +316,7 @@ bun run corpus:run text-model/host-text-normalised-to-nfc
 bun run build
 ```
 
-`bun run lint:fix` applies ESLint fixes using `@nkzw/eslint-config`; `bun run format` formats the TypeScript sources and ESLint configuration with Prettier. CI requires both lint and formatting checks to pass. Generated Unicode tables and normative files under `spec/` are excluded: their existing regeneration and Spec checks verify them instead.
+`bun run lint:fix` applies ESLint fixes using `@nkzw/eslint-config`; `bun run format` formats the TypeScript sources and ESLint configuration with Prettier. CI requires both lint and formatting checks to pass. Generated Core/tooling tables and normative files under `spec/` are excluded: their regeneration and Spec checks verify them instead. `bun run lints:check` verifies the tooling catalogue and its copies of the grammar tags and Built-in properties.
 
 Record notable implementation changes under the appropriate Added, Changed, Deprecated, Removed, Fixed or Security heading in [CHANGELOG.md](CHANGELOG.md)'s Unreleased section. At release, move those entries into a dated version section and add its comparison link. Implementation releases are separate from Language and Cost Model versions.
 
@@ -323,7 +324,7 @@ Tests cover every row and all five NFC columns of the pinned NormalizationTest, 
 
 The execution runner is separate from `corpus:check`, the format checker. Its default selection includes Value Encoding and Disassembly Cases, plus Trace Cases and Session Transcripts that already have expected Traces. Paths are relative to `corpus/`, or absolute; naming a case selects it even before its first blessing. `--list` marks each case supported or deferred. Explicitly selecting a deferred case kind fails. A mismatch identifies the case and the differing output. `--bless` requires named cases and writes their expected disassembly, Trace or Transcript output for human review; it refuses encoding cases. See the [corpus guide](../../corpus/README.md) for blessing rules.
 
-`bun run build` verifies the pins and builds `impl/ts/dist/index.js`, an ES module usable in a browser without Bun or Node dependencies. To check it in a real browser, run `bun run --cwd impl/ts test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing, syntax and load diagnostics, and lowering and disassembly. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
+`bun run build` verifies the pins and builds `impl/ts/dist/index.js`, the browser-safe Lint bundle `tooling/stack/dist/lint.js`, and the Node CLI bundle `tooling/cli/dist/main.js`. To check it in a real browser, run `bun run --cwd impl/ts test:browser` and visit `http://127.0.0.1:3926/`. The smoke test disables platform Unicode functions and checks values, encodings, display forms, deeply nested values, lossless parsing, syntax and load diagnostics, and lowering and disassembly. Stop the server when finished. CI checks lint, formatting, regeneration, types, tests, the implemented corpus selection, the browser build and all existing spec/grammar/lowering/corpus-format checks.
 
 ## Outstanding work
 
