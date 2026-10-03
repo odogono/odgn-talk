@@ -4,21 +4,17 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 )
 
-// Deciding dispatch awaits its own step-3 slice.
 // During's following binding token is a name, not a policy flag.
-func SupportedDispatch(b *lower.Body) bool {
-	if b.Checked.Kind != "handler" {
-		return true
-	}
+func DecidingClause(b *lower.Body) bool {
 	for j := 0; j < len(b.Checked.Node.Flags); j++ {
 		switch b.Checked.Node.Flags[j].Raw {
 		case "during":
 			j++
 		case "deciding":
-			return false
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func QueuePolicy(b *lower.Body) string {
@@ -41,7 +37,7 @@ func Supported(i lower.Instruction) bool {
 	switch i.Name {
 	case "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
 		return true
-	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait":
+	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "veto", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait":
 		return true
 	case "add", "subtract", "multiply", "divide", "div", "mod", "power", "negate", "concat", "range":
 		return true

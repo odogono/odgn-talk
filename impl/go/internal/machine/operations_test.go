@@ -133,6 +133,10 @@ func TestDeliveryTriesClausesAndSkipsGuardErrors(t *testing.T) {
 	}
 	r := StartDelivery(s, "pick", []value.Value{integer(3)}, Limits{Fuel: 1000, Alloc: 1000})
 	r.Execute(0)
+	if r.Status != Dispatching || r.Clause != 3 || !r.AcceptClause(false) {
+		t.Fatalf("dispatch did not reach the selected body: %+v", r)
+	}
+	r.Execute(0)
 	if r.Status != Completed || r.Result.Display() != "4" || r.Clause != 3 || len(r.Raises) != 1 || !r.Raises[0].Guard {
 		t.Fatalf("%+v", r)
 	}

@@ -152,9 +152,9 @@ Other suspension and `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
-and a Request remains unsettled. Deciding Handlers stop before dispatch without
-a charge. Decisions, Message Paths, event waits and pending calls belong to
-#134; complete cancellation and Stop Script acceptance to
+and a Request remains unsettled. A Decision remains open if it has not sealed
+before that boundary. Message Paths, Broadcast Decisions, event waits and
+pending calls belong to #134; complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -189,7 +189,7 @@ complete limits acceptance belongs to
 
 ## Group embedding
 
-`New`, `NewGroup`, `Load`, Script/Group `Deliver` and `Request`, `Pump`, `Inspect`,
+`New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`, `Inspect`,
 `Counters` and `TraceSink` implement their handoff signatures. Core compilation
 caches are mutex-protected and Groups have separate live state. Load supports
 standalone Scripts; unavailable Grant and Object bindings are refused rather
@@ -219,10 +219,23 @@ Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.
 
+Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
+ordinary Handler allows after its successful dispatch charge; an unmatched
+message also allows. A deciding Handler keeps its Verdict open through
+preemption until its first Segment ends or suspends, sealing `Allowed`, or
+until `veto` completes its finally cleanup, sealing `Vetoed` with its reason.
+The vetoed Run completes with Nothing. Errors, faults, drops and cancellation
+before sealing report `Undecided` with the Run's outcome. Reports appear at
+the seal, and futures settle after the Pump's records. Context cancellation
+after sealing leaves the continuing Run alone. Load checks reject vetoes
+outside deciding entry Handlers, in locally called Handlers, or reachable
+after suspension, and reject passes reachable after suspension. Message Paths
+and Broadcast Decisions remain deferred, as does routing through Object handles.
+
 Queueing Policies apply to the selected entry clause after Destructuring and
 Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
 `dropping` ends a new overlapping Run with outcome `dropped`; `replacing`
-cancels earlier Runs and queues their finally cleanup in their existing work
+cancels earlier Runs whose Verdicts are no longer open and queues their finally cleanup in their existing work
 order. Failed Guards never affect a clause's queue. Policy dispatch survives
 preemption, and parked and dropped Runs pay dispatch once without entering the
 body. A replacement with unpaid dispatch cancels earlier Runs only after
@@ -256,10 +269,10 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 92 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 96 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-42 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
-delivery, suspension and Queueing Policy cases. Trace cases replay through the
+46 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+delivery, suspension, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 50-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
@@ -273,8 +286,11 @@ long durations. The reviewed Queueing Policy case also passes; two new
 policy regressions agree on both Cores before blessing, covering selected
 clauses, Guard skips, preemption, and dispatch and Persistent State limits.
 Their `Unblessed` headers remain until human review. Listing a new regression
-case here protects it while its first human blessing review
-remains pending.
+case here protects it while its first human blessing review remains pending.
+Three reviewed Decision cases pin errors, faults and preemption before sealing.
+A new Decision regression agrees on both Cores and retains its `Unblessed`
+header for first human review; it covers dispatch charges, dropping, veto
+cleanup, unmatched messages and a Run that resumes after its Verdict seals.
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

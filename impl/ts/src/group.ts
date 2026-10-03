@@ -3572,6 +3572,15 @@ export class Group {
         }
       }
     };
+    const dispatchPaid = () => {
+      const clause = run.selectedClause;
+      if (clause?.policy === 'replacing') {
+        replaceEarlier();
+      }
+      if (clause && !clause.deciding && !run.done) {
+        this.seal(running.delivery, { verdict: 'allowed' });
+      }
+    };
     const selected = () => {
       const clause = run.selectedClause;
       if (!running.selected && clause) {
@@ -3595,7 +3604,7 @@ export class Group {
         if (clause.policy === 'replacing' && !run.clauseChargePending) {
           replaceEarlier();
         }
-        if (!clause.deciding && !run.done) {
+        if (!clause.deciding && !run.done && !run.clauseChargePending) {
           this.seal(running.delivery, { verdict: 'allowed' });
         }
         run.openVerdict =
@@ -3638,10 +3647,8 @@ export class Group {
         pending();
       } else {
         run.step(
-          running.selected &&
-            run.clauseChargePending &&
-            run.selectedClause?.policy === 'replacing'
-            ? replaceEarlier
+          running.selected && run.clauseChargePending
+            ? dispatchPaid
             : undefined,
         );
       }

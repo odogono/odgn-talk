@@ -41,7 +41,7 @@ func (executionBackend) Support(c Case) string {
 		return e.Error()
 	}
 	for _, r := range records {
-		if r.Input && !strings.Contains("|load|deliver|request|pump|vars|counters|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|load|deliver|request|decide|pump|vars|counters|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -69,9 +69,6 @@ func (executionBackend) Support(c Case) string {
 				return e.Error()
 			}
 			for _, body := range unit.Bodies {
-				if !machine.SupportedDispatch(body) {
-					return "deciding dispatch belongs to step3"
-				}
 				for _, i := range body.Code {
 					if !machine.Supported(i) {
 						return i.Name + " execution belongs to step3"
@@ -113,7 +110,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 					return nil, e
 				}
 			}
-		case "deliver", "request":
+		case "deliver", "request", "decide":
 			s := g.Script(fields["to"].Raw)
 			if s == nil {
 				return nil, fmt.Errorf("unknown Script %s", fields["to"].Raw)
@@ -133,6 +130,8 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			var e error
 			if r.Name == "request" {
 				_, _, e = s.Request(context.Background(), m)
+			} else if r.Name == "decide" {
+				_, _, e = s.Decide(context.Background(), m)
 			} else {
 				_, e = s.Deliver(m)
 			}

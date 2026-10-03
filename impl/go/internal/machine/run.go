@@ -57,6 +57,8 @@ type Run struct {
 	WaitNS         *big.Int
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
+	Vetoed         bool
+	VetoReason     value.Value
 
 	Cancelling                 bool
 	CleanupBudget, CleanupFuel int64
@@ -241,11 +243,11 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !SupportedDispatch(b) || !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) {
 			r.Status = Blocked
 			break
 		}
-		if r.PolicyDispatch && len(r.Frames) == 1 && !r.Cancelling && !f.Accepted && f.PC == b.DispatchEnd && QueuePolicy(b) != "" {
+		if r.PolicyDispatch && len(r.Frames) == 1 && !r.Cancelling && !f.Accepted && f.PC == b.DispatchEnd {
 			r.Status = Dispatching
 			break
 		}
@@ -253,7 +255,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 			break
 		}
 
-		if i.Name == "return" && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+		if (i.Name == "return" || i.Name == "veto") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
 			r.fault("persistent")
 			break
 		}

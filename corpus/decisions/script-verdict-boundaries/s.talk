@@ -1,0 +1,19 @@
+script variable seen = []
+
+on ordinary
+  return 1 / 0
+end ordinary
+
+on hold, deciding, dropping
+  put "started" after seen
+  wait 1 s
+  put "resumed" after seen
+end hold
+
+on deny, deciding
+  try
+    veto {why: "blocked"}
+  finally
+    put "finally" after seen
+  end try
+end deny

@@ -1,0 +1,47 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapters 5/8/9: ordinary dispatch requires the combined first charge;
+# clause 4 + const 1 cannot be paid with 4 Fuel, so it stays undecided.
+# Five Fuel pays dispatch and allows before a later fault. Preemption keeps
+# a deciding Verdict open; a wait seals it before follow-up work. Dropping
+# leaves the new Decision undecided. Finally runs before veto sealing, and
+# reaching the end of the path allows an unmatched message.
+> load s identity=a795296a754e0709e1a850b75f0994642e30c2cb9802a02d1919447cb620e7e3
+> decide d1 to=s message=ordinary limits={fuelPerRun: 4}
+> decide d2 to=s message=ordinary limits={fuelPerRun: 5}
+> pump clock=2026-10-03T12:00:00Z
+fault s/r1 limit=fuel at=s:4 pos=4:10
+seg s/r1 start delivery=d1 handler=ordinary clause=1 fuel=0 alloc=0 state=48 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=ordinary limit=fuel fuel=0 alloc=0
+decided d1 verdict=undecided undecided=[{script: "s", run: "s/r1", outcome: "limit fault"}]
+decided d2 verdict=allowed
+fault s/r2 limit=fuel at=s:5 pos=4:14
+seg s/r2 start delivery=d2 handler=ordinary clause=1 fuel=5 alloc=0 state=16 end=fault
+run s/r2 outcome=limit-fault delivery=d2 handler=ordinary limit=fuel fuel=5 alloc=0
+pumped state=idle fuel=5
+> decide d3 to=s message=hold
+> decide d4 to=s message=hold
+> decide d5 to=s message=deny
+> decide d6 to=s message=absent
+> pump clock=2026-10-03T12:00:00Z fuel-slice=5
+preempt s/r3 start delivery=d3 handler=hold clause=1 by=slice fuel=5 alloc=0
+pumped state=sliced fuel=5
+> pump clock=2026-10-03T12:00:00Z
+seg s/r3 continue fuel=19 alloc=31 state=350 end=wait until=2026-10-03T12:00:01Z
+decided d3 verdict=allowed
+seg s/r4 start delivery=d4 handler=hold clause=1 fuel=4 alloc=0 state=318 end=dropped
+run s/r4 outcome=dropped delivery=d4 handler=hold fuel=4 alloc=0
+decided d4 verdict=undecided undecided=[{script: "s", run: "s/r4", outcome: "dropped"}]
+seg s/r5 start delivery=d5 handler=deny clause=1 fuel=22 alloc=97 state=317 end=veto value={why: "blocked"}
+decided d5 verdict=vetoed vetoes=[{script: "s", run: "s/r5", reason: {why: "blocked"}}]
+run s/r5 outcome=completed delivery=d5 handler=deny fuel=22 alloc=97
+seg s/r6 start delivery=d6 fuel=0 alloc=0 state=285 end=unhandled
+run s/r6 outcome=unhandled delivery=d6 fuel=0 alloc=0
+unhandled d6 message=absent
+decided d6 verdict=allowed
+pumped state=idle fuel=45 next=2026-10-03T12:00:01Z
+> pump clock=2026-10-03T12:00:01Z
+seg s/r3 resume fuel=12 alloc=31 state=109 end=return
+run s/r3 outcome=completed delivery=d3 handler=hold fuel=36 alloc=62
+pumped state=idle fuel=12
+> vars
+vars s seen=["started", "finally", "resumed"]
