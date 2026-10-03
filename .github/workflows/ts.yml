@@ -48,6 +48,16 @@ jobs:
         working-directory: impl/ts
       - run: bun run corpus:run
         working-directory: impl/ts
+      - run: bun test tests
+        working-directory: tooling/fuzz
+      # A fixed seed keeps this a deterministic gate; the nightly job explores new seeds.
+      - run: bun run fuzz smoke --seed 1 --output fuzz-findings
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-smoke-findings
+          path: fuzz-findings
+          if-no-files-found: ignore
       # Includes the real stdio LSP fixture workspace under Bun.
       - run: bun test tests
         working-directory: tooling/cli
