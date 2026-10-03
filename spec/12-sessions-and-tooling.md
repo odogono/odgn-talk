@@ -260,7 +260,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 ### The debugger
 
 - **Two modes:** live, against the TS Core in the Playground or a Bun Host, and replay, from any Trace, including one taken on a Go Host.
-- **Breakpoints** map through the source map to an instruction, and pause the whole Group at that instruction's boundary, through a tooling-only hook in the TS Core ([Appendix C](appendix-c-handed-off-open.md)).
+- **Breakpoints** map through the source map to an instruction, and pause the whole Group at that instruction's boundary, through the [TS Core's tooling-only hook](../impl/ts/README.md#tooling-debug-hooks).
 - **A pause isn't a Host Input:** it costs no Fuel and leaves the Trace unchanged, and Fuel Slices count Fuel, not time. While paused, the Group is shown in the same form as `:runs`, `:mailbox` and `:vars`, read through the tooling hook rather than `Inspect()`, which is a Host Input. Resuming continues the same Run.
 - **Stepping** in, over and out works by statement. Stepping over a Suspension Point goes on until this Run resumes past it, while other Runs execute, and a breakpoint in any of them pauses the Group. Stepping into a `send … and wait`, or a call to a Function Value in another Script, follows the message into the receiving Run. Each Run's view shows its Segment number and the Fuel it has used.
 - **The Clock:** live, the debugger's Host supplies Clock readings and subtracts paused time, so deadlines don't all fire on resume. In replay, the readings come from the Trace.
@@ -285,4 +285,4 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 - **The tooling:** the formatter's output, the LSP's features, the debugger, the Lint catalogue and its wording, and the Advanced tags ([ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 - **The REPL's own interface:** its prompt, line editing, colours, `:help` and `:quit`, and how it is told where to write a Transcript.
 - **Built-in Capabilities:** which ones a REPL or Playground offers to `:grant`, and their answers, which a Transcript records.
-- **The TS Core's tooling hooks,** for pausing and for landing an early `Stop` or `CancelRun` in replay ([Appendix C](appendix-c-handed-off-open.md)).
+- **The TS Core's tooling hooks,** for pausing and for landing an early `Stop` or `CancelRun` in replay ([TS implementation guide](../impl/ts/README.md#tooling-debug-hooks)).

@@ -1,3 +1,9 @@
+import {
+  DebugController,
+  machineDebug,
+  type DebugPause,
+  type DebugSnapshot,
+} from './debug';
 // The embedding interface's Group (chapter 9) for the Core's implemented
 // subset: Load, Deliver and Request to a Script, Pump with Fuel Slices and a
 // Fuel cap, and Inspect, writing chapter 11's Trace as it goes. Turns follow
@@ -596,6 +602,41 @@ export class Group {
     null;
   private activeStop: (() => void) | null = null;
   private drainingTrace: string[] | null = null;
+  private debugController: DebugController | null = null;
+  private debugPump: Generator<DebugPause, PumpResult> | null = null;
+
+  /** TS tooling only, outside the embedding interface and Trace parity. */
+  debug(): DebugController {
+    return (this.debugController ??= new DebugController(
+      () => this.debugSnapshot(),
+      () => this.advanceDebugPump(),
+    ));
+  }
+
+  private advanceDebugPump(): PumpResult {
+    const pump = this.debugPump!;
+    let next: IteratorResult<DebugPause, PumpResult>;
+    try {
+      next = pump.next();
+    } catch (error) {
+      this.debugPump = null;
+      this.active = null;
+      this.activeStop = null;
+      this.pumping = false;
+      throw error;
+    }
+    if (next.done) {
+      this.debugPump = null;
+      this.active = null;
+      this.activeStop = null;
+      this.pumping = false;
+      return next.value;
+    }
+    this.debugController!.enter(next.value);
+    // A provisional result only. The retained Pump has not written `pumped`.
+    return { state: 'sliced', fuelUsed: 0, reports: [] };
+  }
+
   private observer: ((r: RunEvent) => void) | null = null;
 
   /** TS-internal: receives the records a Session Host follows (ADR 0045). */
@@ -1689,6 +1730,14 @@ export class Group {
 
   // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
   private queueInput(input: QueuedInput): void {
+    const landing = this.debugController?.current;
+    if (
+      landing?.reason === 'replay' &&
+      (input.action.k === 'stop' || input.action.k === 'cancel-run') &&
+      typeof input.line === 'string'
+    ) {
+      input.line += ` pc=${landing.pc}`;
+    }
     this.inputs.push(input);
     if (this.onReady) {
       if (this.pumping || this.cleaning) {
@@ -3208,16 +3257,14 @@ export class Group {
       throw new HostError('clock backwards');
     }
     this.pumping = true;
-    try {
-      return this.pumpAtClock(now, o);
-    } finally {
-      this.active = null;
-      this.activeStop = null;
-      this.pumping = false;
-    }
+    this.debugPump = this.pumpAtClock(now, o);
+    return this.advanceDebugPump();
   }
 
-  private pumpAtClock(now: bigint, o: PumpOptions): PumpResult {
+  private *pumpAtClock(
+    now: bigint,
+    o: PumpOptions,
+  ): Generator<DebugPause, PumpResult> {
     this.lastClock = now;
     this.drainCharges.clear();
     const firstRestorePump = this.restored;
@@ -3324,7 +3371,7 @@ export class Group {
           continue;
         }
         progress = true;
-        this.turn(
+        yield* this.turn(
           s,
           reports,
           () => preempt(s),
@@ -3402,12 +3449,12 @@ export class Group {
   }
 
   // A Script's turn: its queue's head runs until it ends or is preempted.
-  private turn(
+  private *turn(
     s: ScriptState,
     reports: Report[],
     preempt: () => 'slice' | 'cap' | null,
     charge: (fuel: number) => void,
-  ) {
+  ): Generator<DebugPause, void> {
     if (s.stopped) {
       this.dropStoppedMailbox(s);
       return;
@@ -3467,6 +3514,7 @@ export class Group {
       how = 'resume';
     }
     const { run } = running;
+    this.debugController?.attach(run, running.delivery.reply);
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
 
@@ -3524,11 +3572,45 @@ export class Group {
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
     while (!run.done && !run.suspended && !running.parked && !s.stopped) {
-      by = preempt();
+      // Selection/parking can fault without stepping an instruction. Finish
+      // that deferred fault before a cap or slice may end this stretch.
+      by = machineDebug.get(run)?.pending ? null : preempt();
       if (by) {
         break;
       }
-      run.step();
+      const pause = this.debugController?.boundary(run, s.name);
+      if (pause) {
+        yield pause;
+        this.landUrgentInputs();
+        if (run.done || run.suspended || s.stopped) {
+          break;
+        }
+      }
+      const debug = machineDebug.get(run);
+      if (debug?.pending) {
+        const pending = debug.pending;
+        debug.pending = null;
+        debug.fault = null;
+        pending();
+      } else {
+        run.step();
+      }
+      while (debug?.pending) {
+        const faultPause = this.debugController!.boundary(run, s.name)!;
+        const cancelling = run.cancelling;
+        yield faultPause;
+        this.landUrgentInputs();
+        if (s.stopped || run.done || run.cancelling !== cancelling) {
+          debug.pending = null;
+          debug.fault = null;
+          break;
+        }
+        const pending = debug.pending;
+        debug.pending = null;
+        debug.fault = null;
+        pending();
+      }
+      run.finishInstruction();
       this.writeRecords(running, this.active.records);
       this.active.records = run.records.length;
       if (run.effectStateUnknown) {
@@ -3543,6 +3625,7 @@ export class Group {
       this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
     }
     if (outcome) {
+      this.debugController?.ended(run);
       s.suspended.delete(running);
     }
     if (outcome?.kind === 'limit fault') {
@@ -4213,19 +4296,59 @@ export class Group {
     };
   }
 
+  private debugSnapshot(): DebugSnapshot {
+    const view = this.inspection();
+    return {
+      scripts: view.scripts.map((s, i) => ({
+        ...s,
+        runs: s.runs.map(view => {
+          const run = this.runsOf(this.scripts[i]!).find(
+            r => r.id === view.id,
+          )!.run;
+          return {
+            ...view,
+            fuel: run.fuel,
+            segment: Number(run.segmentId.split('.s')[1]),
+            frames: run.frames.map(frame => {
+              const ins = frame.code.unit.code[frame.pc]!;
+              return {
+                unit: frame.code.name,
+                handler: frame.handler,
+                pc: frame.pc,
+                line: ins.line,
+                col: ins.col,
+                locals: frame.body.locals.map(
+                  (name, j) =>
+                    [name, frame.locals[j] ?? nothing] as [string, Value],
+                ),
+              };
+            }),
+          };
+        }),
+      })),
+    };
+  }
+
   inspect(): Inspection {
     this.worker();
     this.trace(recordLine('vars', [], [], true));
-    const scripts = this.scripts.map(s => {
-      const vars = s.loaded.variableNames.map(
-        (n, i) => [n, s.loaded.variables[i] ?? nothing] as [string, Value],
-      );
+    const view = this.inspection();
+    for (const s of view.scripts) {
       this.trace(
         recordLine(
           'vars',
           [s.name],
-          vars.map(([n, v]) => [n, traceValue(v)]),
+          s.vars.map(([n, v]) => [n, traceValue(v)]),
         ),
+      );
+    }
+    return view;
+  }
+
+  private inspection(): Inspection {
+    const scripts = this.scripts.map(s => {
+      const vars = s.loaded.variableNames.map(
+        (n, i) => [n, s.loaded.variables[i] ?? nothing] as [string, Value],
       );
       return {
         name: s.name,

@@ -22,6 +22,7 @@ import type {
   UnwindEntry,
 } from './code-unit';
 import { instructionSpec } from './code-unit';
+import { statementStarts } from './debug';
 import type { ParseError } from './parser';
 import type {
   Binding,
@@ -72,6 +73,7 @@ const errorPattern = (p: Pattern): Pattern =>
     : p;
 
 type Label = { pc: number | null };
+const pendingStatements = new WeakSet<Pending>();
 type Pending = {
   col: number;
   line: number;
@@ -319,6 +321,9 @@ class UnitLowering {
             return body.start + operand.pc;
           }),
         });
+        if (pendingStatements.has(ins)) {
+          statementStarts.add(code.at(-1)!);
+        }
         if (instructionSpec.get(ins.op)!.suspends) {
           body.maySuspend = true;
         }
@@ -370,6 +375,7 @@ class BodyLowering {
   }[] = [];
   join = 0;
   iterators = 0;
+  private starts = new Set<number>();
 
   constructor(
     readonly u: UnitLowering,
@@ -380,7 +386,11 @@ class BodyLowering {
   // ------------------------------------------------------------- emission
 
   emit(at: Pos, op: string, ...operands: (Operand | Label)[]): number {
-    this.code.push({ op, operands, line: at.line, col: at.col });
+    const ins = { op, operands, line: at.line, col: at.col };
+    if (this.starts.delete(this.code.length)) {
+      pendingStatements.add(ins);
+    }
+    this.code.push(ins);
     return this.code.length - 1;
   }
 
@@ -691,6 +701,7 @@ class BodyLowering {
   }
 
   *statement(s: Stmt): Task {
+    this.starts.add(this.code.length);
     const at = s.pos;
     switch (s.k) {
       case 'put':
@@ -873,6 +884,7 @@ class BodyLowering {
       this.emit(at, head.k === 'each' ? 'iterate' : 'iterate-times');
       this.iterators++;
       this.place(loop.top);
+      this.starts.add(this.code.length);
       this.emit(at, 'next', loop.exit);
       if (head.k === 'times') {
         this.emit(at, 'pop');
