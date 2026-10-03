@@ -1,0 +1,8 @@
+script variable count = 0
+on go
+try
+ask r to write
+catch e
+put 2 into count
+end try
+end go

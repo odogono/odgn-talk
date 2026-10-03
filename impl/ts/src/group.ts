@@ -2262,7 +2262,11 @@ export class Group {
       for (const { s } of replacements) {
         this.stopState(s, 'reload');
       }
-      this.requireKnownEffects();
+      // Cleanup has already happened. Return its reports even if it stopped
+      // the Group; publishing replacement code would hide the failed effects.
+      if (this.effectStateUnknown) {
+        return reports;
+      }
       for (const { s, loaded, units, identity, grants } of replacements) {
         s.loaded = loaded;
         s.identity = identity;
@@ -2369,6 +2373,9 @@ export class Group {
         ),
       }));
     const reports = this.replaceScripts(replacements);
+    if (this.effectStateUnknown) {
+      return reports;
+    }
     this.libraries.clear();
     for (const [name, library] of libraries) {
       this.libraries.set(name, library);

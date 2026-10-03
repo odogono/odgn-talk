@@ -511,3 +511,123 @@ describe('Saves, Libraries and export', () => {
     expect(host.input('now()')).toEqual(['2026-09-30T10:00:00Z']);
   });
 });
+
+test('lifecycle failures render without success values or a crash', () => {
+  const { host } = session();
+  // Session mocks have no lifecycle declarations. Exercise the consumer with
+  // the typed notifications/reports an embedding Host receives from the Core.
+  const consumer = host as unknown as {
+    events: import('../src/group').RunEvent[];
+    print(reports: import('../src/group').Report[]): string[];
+  };
+  consumer.events = [{ k: 'run', run: 'session/r1', outcome: 'effect-failed' }];
+  const failure = {
+    script: 'session',
+    run: 'session/r1',
+    grant: 'db',
+    segment: 'session/r1.s1',
+    phase: 'commit' as const,
+    status: 'failed' as const,
+  };
+  expect(
+    consumer.print([
+      { kind: 'effect failure', ...failure },
+      {
+        kind: 'run end',
+        script: 'session',
+        run: 'session/r1',
+        outcome: 'effect failed',
+        fuel: 0,
+        alloc: 0,
+        effect: failure,
+      },
+    ]),
+  ).toEqual([
+    '[session/r1] ! effect failure grant=db segment=session/r1.s1 phase=commit status=failed',
+    '[session/r1] ! effect failed',
+  ]);
+});
+
+test('outside-Pump lifecycle reports render fatal cleanup instead of silent replacement success', () => {
+  const { host } = session();
+  const consumer = host as unknown as {
+    discarded(reports: import('../src/group').Report[]): string[];
+  };
+  expect(
+    consumer.discarded([
+      {
+        kind: 'effect failure',
+        script: 'session',
+        run: 'session/r1',
+        grant: 'db',
+        segment: 'session/r1.s1',
+        phase: 'rollback',
+        status: 'failed',
+      },
+      {
+        kind: 'stop',
+        script: 'session',
+        reason: 'effect state unknown',
+        discardedRuns: ['session/r1'],
+        droppedMessages: [],
+        pendingCalls: [],
+      },
+    ]),
+  ).toEqual([
+    '[session/r1] ! effect failure grant=db segment=session/r1.s1 phase=rollback status=failed',
+    '! effect state unknown',
+    '! discarded session/r1',
+  ]);
+});
+
+test('fatal cleanup reports keep the Session Source and user Library at their previous definitions', () => {
+  const reports: import('../src/group').Report[] = [
+    {
+      kind: 'effect failure',
+      script: 'session',
+      run: 'session/r1',
+      grant: 'db',
+      segment: 'session/r1.s1',
+      phase: 'rollback',
+      status: 'failed',
+    },
+    {
+      kind: 'stop',
+      script: 'session',
+      reason: 'effect state unknown',
+      discardedRuns: [],
+      droppedMessages: [],
+      pendingCalls: [],
+    },
+  ];
+  const first = new SessionHost({ now: () => start });
+  first.input('function one\nreturn 1\nend one');
+  const previous = first.source;
+  // Session Commands don't offer lifecycle metadata. Supply the native API's
+  // terminal reports at its boundary to verify the consumer's publication.
+  const script = (first as unknown as { script: { reload(): typeof reports } })
+    .script;
+  script.reload = () => reports;
+  expect(first.input('function one\nreturn 2\nend one')).toContain(
+    '! effect state unknown',
+  );
+  expect(first.source).toBe(previous);
+
+  const second = new SessionHost({
+    now: () => start,
+    readFile: path =>
+      path === 'old.talk'
+        ? 'function one\nreturn 1\nend one'
+        : 'function one\nreturn 2\nend one',
+  });
+  expect(second.input(':library add user old.talk')).toEqual([]);
+  const libraries = second.userLibraries;
+  const group = (
+    second as unknown as { group: { replaceLibrary(): typeof reports } }
+  ).group;
+  group.replaceLibrary = () => reports;
+  expect(second.input(':library replace user next.talk')).toContain(
+    '! effect state unknown',
+  );
+  expect(second.userLibraries).toEqual(libraries);
+});

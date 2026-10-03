@@ -1,0 +1,9 @@
+script variable count = 0
+on go
+ask r to open
+ask r to write
+ask r to close
+put 2 into count
+repeat forever
+end repeat
+end go

@@ -1,0 +1,6 @@
+script variable count = 0
+on go, deciding
+ask r to write
+put 2 into count
+veto "blocked"
+end go

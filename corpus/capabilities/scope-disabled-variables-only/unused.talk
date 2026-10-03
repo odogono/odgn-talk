@@ -1,0 +1,3 @@
+function spare
+return 1
+end spare

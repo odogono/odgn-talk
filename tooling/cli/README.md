@@ -1,12 +1,13 @@
 # `northtalk`
 
-The `northtalk` command: the TS REPL, replaying Session Transcripts, and formatting source ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
+The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, and Lints ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
 northtalk [repl] [--transcript <file>]
 northtalk replay <transcript> [--trace <file>]
 northtalk fmt [--check] <file>…
 northtalk fmt [--check] -
+northtalk lint [--profile beginner|standard] <file>...
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt, and an empty line ends it, so a real syntax error shows.
@@ -22,3 +23,18 @@ From the repository root, `bun run repl` and `bun run northtalk …` run it with
 From a clean checkout, run `bun install`, then `bun run northtalk fmt script.talk`.
 For Node 22 or later, run `bun run --cwd tooling/cli build`, then
 `node tooling/cli/dist/main.js fmt script.talk`. The REPL remains Bun-only.
+
+## Lints
+
+From a clean checkout, run `bun install`, then:
+
+```sh
+bun run northtalk lint example.talk
+bun run northtalk lint --profile beginner example.talk another.talk
+bun run --cwd tooling/cli build
+node tooling/cli/dist/main.js lint --profile beginner example.talk
+```
+
+The shared [Lint engine](../stack/) supplies advice in `standard` by default. It prints `file:line:column: level [id] message` on stdout, with the Core's original source positions. Both shipped profiles contain only hints and warnings; Lints never reject a Script or make the command fail. Syntax errors are separate, printed on stderr; recovery lets advice after an error appear too. Exit codes are 0 for advice alone, 1 for syntax errors, and 2 for invalid arguments or file errors. The command checks syntax and the eleven syntax-based Lints; it does not load the Script or check bindings, Grants or a Host Manifest. Seven catalogue entries remain planned; their scope is recorded on [#241](https://github.com/odogono/odgn-talk/issues/241).
+
+A standalone `-- lint: ignore <id>` comment suppresses that id on the next physical line. Blank lines break adjacency. The [catalogue](../stack/lints.toml) records wording, profile levels and the Join threshold. The linter leaves source files unchanged. The REPL remains Bun-only.

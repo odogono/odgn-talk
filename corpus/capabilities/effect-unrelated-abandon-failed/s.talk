@@ -1,0 +1,6 @@
+script variable count = 0
+on go
+ask alias to openlock
+ask r to write
+put 2 into count
+end go

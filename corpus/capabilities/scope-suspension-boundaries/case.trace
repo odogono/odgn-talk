@@ -1,0 +1,107 @@
+# scope-suspension-boundaries: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=93cd80dfea9e98ace51b402672640e59394c8f6b41fafad6ebf760a5dc3da1c1
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=b0
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+raise s/r1 code="scope open" at=s:21 pos=12:1
+call s/r1.c2 op=r.close args=[] result=nothing
+scope s/r1.c2 grant=r name=file action=closed
+seg s/r1 start delivery=d1 handler=b0 clause=1 fuel=64 alloc=98 state=32 end=return
+run s/r1 outcome=completed delivery=d1 handler=b0 fuel=64 alloc=98
+pumped state=idle fuel=64
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d2 to=s message=b1
+> pump clock=2026-10-02T00:00:00Z
+call s/r2.c1 op=r.open args=[] result=nothing
+scope s/r2.c1 grant=r name=file action=opened
+raise s/r2 code="scope open" at=s:43 pos=21:1
+call s/r2.c2 op=r.close args=[] result=nothing
+scope s/r2.c2 grant=r name=file action=closed
+seg s/r2 start delivery=d2 handler=b1 clause=1 fuel=64 alloc=112 state=46 end=return
+run s/r2 outcome=completed delivery=d2 handler=b1 fuel=64 alloc=112
+pumped state=idle fuel=64
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d3 to=s message=b2
+> pump clock=2026-10-02T00:00:00Z
+call s/r3.c1 op=r.open args=[] result=nothing
+scope s/r3.c1 grant=r name=file action=opened
+raise s/r3 code="scope open" at=s:66 pos=30:1
+call s/r3.c2 op=r.close args=[] result=nothing
+scope s/r3.c2 grant=r name=file action=closed
+seg s/r3 start delivery=d3 handler=b2 clause=1 fuel=65 alloc=126 state=60 end=return
+run s/r3 outcome=completed delivery=d3 handler=b2 fuel=65 alloc=126
+pumped state=idle fuel=65
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d4 to=s message=b3
+> pump clock=2026-10-02T00:00:00Z
+call s/r4.c1 op=r.open args=[] result=nothing
+scope s/r4.c1 grant=r name=file action=opened
+raise s/r4 code="scope open" at=s:90 pos=39:1
+call s/r4.c2 op=r.close args=[] result=nothing
+scope s/r4.c2 grant=r name=file action=closed
+seg s/r4 start delivery=d4 handler=b3 clause=1 fuel=78 alloc=172 state=74 end=return
+run s/r4 outcome=completed delivery=d4 handler=b3 fuel=78 alloc=172
+pumped state=idle fuel=78
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d5 to=s message=b4
+> pump clock=2026-10-02T00:00:00Z
+call s/r5.c1 op=r.open args=[] result=nothing
+scope s/r5.c1 grant=r name=file action=opened
+raise s/r5 code="scope open" at=s:113 pos=48:1
+call s/r5.c2 op=r.close args=[] result=nothing
+scope s/r5.c2 grant=r name=file action=closed
+seg s/r5 start delivery=d5 handler=b4 clause=1 fuel=67 alloc=154 state=88 end=return
+run s/r5 outcome=completed delivery=d5 handler=b4 fuel=67 alloc=154
+pumped state=idle fuel=67
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d6 to=s message=b5
+> pump clock=2026-10-02T00:00:00Z
+call s/r6.c1 op=r.open args=[] result=nothing
+scope s/r6.c1 grant=r name=file action=opened
+raise s/r6 code="scope open" at=s:140 pos=59:1
+call s/r6.c2 op=r.close args=[] result=nothing
+scope s/r6.c2 grant=r name=file action=closed
+seg s/r6 start delivery=d6 handler=b5 clause=1 fuel=68 alloc=168 state=102 end=return
+run s/r6 outcome=completed delivery=d6 handler=b5 fuel=68 alloc=168
+pumped state=idle fuel=68
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d7 to=s message=b6
+> pump clock=2026-10-02T00:00:00Z
+call s/r7.c1 op=r.open args=[] result=nothing
+scope s/r7.c1 grant=r name=file action=opened
+raise s/r7 code="scope open" at=s:5 pos=3:1
+call s/r7.c2 op=r.close args=[] result=nothing
+scope s/r7.c2 grant=r name=file action=closed
+seg s/r7 start delivery=d7 handler=b6 clause=1 fuel=86 alloc=182 state=116 end=return
+run s/r7 outcome=completed delivery=d7 handler=b6 fuel=86 alloc=182
+pumped state=idle fuel=86
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d8 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r8.c1 op=r.open args=[] result=nothing
+scope s/r8.c1 grant=r name=file action=opened
+call s/r8.c2 op=r.close args=[] result=nothing
+scope s/r8.c2 grant=r name=file action=closed
+seg s/r8 start delivery=d8 handler=go clause=1 fuel=52 alloc=16 state=116 end=return
+run s/r8 outcome=completed delivery=d8 handler=go fuel=52 alloc=16
+pumped state=idle fuel=52
+> deliver d9 to=s message=joined
+> pump clock=2026-10-02T00:00:00Z
+raise s/r9 code="scope in join" at=s:205 pos=88:1
+seg s/r9 start delivery=d9 handler=joined clause=1 fuel=44 alloc=0 state=116 end=error
+run s/r9 outcome=errored delivery=d9 handler=joined error={code: "scope in join", capability: "r", operation: "open", scope: "file", at: {unit: "s", handler: "acquire", line: 88, column: 1}} fuel=44 alloc=0
+pumped state=idle fuel=44
+> vars
+vars s count="[][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "][" & quote & "scope open" & quote & "]"

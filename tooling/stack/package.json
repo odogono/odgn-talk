@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./format": "./src/format.ts"
+    "./format": "./src/format.ts",
+    "./lint": "./src/lint.ts"
   },
   "scripts": {
     "typecheck": "tsc",
     "test": "bun test tests",
-    "build": "bun build src/format.ts --target browser --outdir dist"
+    "build": "bun build src/format.ts src/lint.ts --target browser --outdir dist && cp ../../impl/ts/src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
+    "test:node": "bun build tests/runtime.ts --target node --outfile dist/runtime.mjs && node dist/runtime.mjs",
+    "test:browser": "bun tools/browser-smoke.ts"
   },
   "dependencies": {
     "@odgn/northtalk": "workspace:*"

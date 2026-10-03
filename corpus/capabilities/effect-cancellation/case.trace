@@ -1,0 +1,31 @@
+# effect-cancellation: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=94742ae7183b69146e0cdd581e4a7c2a035491737e3eedc5f39adecdba827c44
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=rollback status=ok
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z fuel-slice=40
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
+pumped state=sliced fuel=40
+> cancel-run s/r1
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+effect s/r1.s1 grant=r phase=rollback status=ok
+effect s/r1.s2 grant=r phase=begin status=ok
+call s/r1.c3 op=r.write args=[] result=nothing
+effect s/r1.s2 grant=r phase=commit status=ok
+seg s/r1 continue fuel=18 alloc=8 state=16 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=58 alloc=16
+pumped state=idle fuel=18
+> vars
+vars s count=3

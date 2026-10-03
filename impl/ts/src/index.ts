@@ -136,7 +136,7 @@ export {
   type Outcome,
   type RunRecord,
 } from './machine';
-export { NotImplementedError } from './operations';
+export { canConvert, NotImplementedError } from './operations';
 export {
   disassemble,
   type Body,

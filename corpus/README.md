@@ -30,7 +30,7 @@ The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-co
 
 ## Seed blessing
 
-All 155 current corpus cases execute, and every Trace Case and Session Transcript is blessed by the TS Core, the only available Core. Every first blessing has had its human review except the Session Transcripts' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
+All 198 current corpus cases execute, and every Trace Case and Session Transcript is blessed by the TS Core, the only available Core. Every first blessing has had its human review except the Session Transcripts' and scoped-effect cases' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them.
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -75,6 +75,8 @@ Every current Trace Case runs in CI, including the limits at their conformance m
 The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case, in both replays. Each awaits its first human review in the [#131](https://github.com/odogono/odgn-talk/issues/131) PR that adds it.
 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
+
+The 43 `scope-*` and `effect-*` cases under `capabilities/` cover scope slots, automatic cleanup, participant outcomes, cancellation cleanup, disablement, code changes and Save refusal. They pass TS normal and save/restore replay, plus replay using recorded Host results with Stub inputs removed. Their first human review is pending in #222. The [matrix reconciliation](capabilities/scoped-effects.md) identifies executable native Host tests and the unimplemented Message Layer transport coverage. Go parity remains unverified.
 
 ## Checking
 

@@ -18,8 +18,8 @@
     "syntax:generate": "bun run --cwd tools syntax:generate",
     "syntax:check": "bun run --cwd tools syntax:check",
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --filter '*' test",
-    "build": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd impl/ts build",
+    "test": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd tools lints:check && bun run --filter '*' test",
+    "build": "bun run --cwd tools syntax:check && bun run --cwd tools unicode:check && bun run --cwd tools lints:check && bun run --cwd impl/ts build && bun run --cwd tooling/stack build && bun run --cwd tooling/cli build",
     "lint": "bunx --bun eslint . --max-warnings 0",
     "lint:fix": "bunx --bun eslint . --fix --max-warnings 0",
     "format": "bunx --bun prettier --write '**/*.{ts,tsx}' eslint.config.js",
@@ -29,7 +29,9 @@
     "northtalk": "bun tooling/cli/src/main.ts",
     "grammar:check": "bun run --cwd tools grammar:check",
     "machine:check": "bun run --cwd tools machine:check",
-    "corpus:check": "bun run --cwd tools corpus:check"
+    "corpus:check": "bun run --cwd tools corpus:check",
+    "lints:generate": "bun run --cwd tools lints:generate",
+    "lints:check": "bun run --cwd tools lints:check"
   },
   "devDependencies": {
     "@nkzw/eslint-config": "^3.3.0",

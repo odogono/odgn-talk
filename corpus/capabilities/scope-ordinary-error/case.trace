@@ -1,0 +1,18 @@
+# scope-ordinary-error: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=6ce3c7a351cc5a6b04d48838c681ec9f34e6f380c1df970749a9f38e87142f43
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+raise s/r1 code="test" at=s:10 pos=5:1
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=39 alloc=120 state=16 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "test", at: {unit: "s", handler: "go", line: 5, column: 1}} fuel=39 alloc=120
+pumped state=idle fuel=39
+> vars
+vars s count=2
