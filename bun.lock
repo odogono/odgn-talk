@@ -22,6 +22,13 @@
       },
       "dependencies": {
         "@odgn/northtalk": "workspace:*",
+        "@odgn/northtalk-tooling": "workspace:*",
+      },
+    },
+    "tooling/stack": {
+      "name": "@odgn/northtalk-tooling",
+      "dependencies": {
+        "@odgn/northtalk": "workspace:*",
       },
     },
     "tools": {
@@ -119,6 +126,8 @@
     "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
 
     "@odgn/northtalk-spec-tools": ["@odgn/northtalk-spec-tools@workspace:tools"],
+
+    "@odgn/northtalk-tooling": ["@odgn/northtalk-tooling@workspace:tooling/stack"],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 

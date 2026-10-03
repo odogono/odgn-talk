@@ -1,0 +1,16 @@
+{
+  "name": "@odgn/northtalk-tooling",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./format": "./src/format.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests",
+    "build": "bun build src/format.ts --target browser --outdir dist"
+  },
+  "dependencies": {
+    "@odgn/northtalk": "workspace:*"
+  }
+}

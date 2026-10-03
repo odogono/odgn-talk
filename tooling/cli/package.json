@@ -6,10 +6,12 @@
     "northtalk": "./src/main.ts"
   },
   "scripts": {
+    "build": "bun build src/main.ts --target node --outfile dist/main.js",
     "typecheck": "tsc",
     "test": "bun test tests"
   },
   "dependencies": {
-    "@odgn/northtalk": "workspace:*"
+    "@odgn/northtalk": "workspace:*",
+    "@odgn/northtalk-tooling": "workspace:*"
   }
 }

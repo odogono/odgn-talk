@@ -1,14 +1,17 @@
 #!/usr/bin/env bun
-// The `northtalk` command (chapter 12, Tooling): the TS REPL, and replaying a
-// Session Transcript. Its interface is outside parity; what the Session Host
-// prints and records isn't.
-import { repl } from './repl';
+// The `northtalk` command (chapter 12, Tooling). The REPL's interface and
+// formatting are outside parity; Session output and recording aren't.
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { format } from './format';
 import { replay } from './replay';
 
 const usage = `Usage:
   northtalk [repl] [--transcript <file>]   start a REPL session
   northtalk replay <transcript> [--trace <file>]
-                                          replay a Session Transcript`;
+                                          replay a Session Transcript
+  northtalk fmt [--check] <file>…          format in place, or check layout
+  northtalk fmt [--check] -                read source from stdin`;
 
 const main = async (args: string[]): Promise<number> => {
   const [command = 'repl', ...rest] = args[0]?.startsWith('--')
@@ -31,7 +34,20 @@ const main = async (args: string[]): Promise<number> => {
     if (rest.length) {
       throw new Error(usage);
     }
+    const { repl } = await import('./repl');
     return repl({ transcript });
+  }
+  if (command === 'fmt') {
+    const check = rest.includes('--check');
+    const files = rest.filter(arg => arg !== '--check');
+    if (
+      !files.length ||
+      files.some(arg => arg.startsWith('-') && arg !== '-') ||
+      files.filter(file => file === '-').length > 1
+    ) {
+      throw new Error(usage);
+    }
+    return format(files, check);
   }
   if (command === 'replay') {
     const trace = option('--trace');
@@ -47,9 +63,12 @@ const main = async (args: string[]): Promise<number> => {
   throw new Error(usage);
 };
 
-if (import.meta.main) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+) {
   try {
-    process.exitCode = await main(Bun.argv.slice(2));
+    process.exitCode = await main(process.argv.slice(2));
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 2;
