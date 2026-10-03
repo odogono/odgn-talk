@@ -51,3 +51,6 @@ jobs:
       # Verbose output reports API names not implemented yet, as #132 requires.
       - run: go test -race -v ./...
         working-directory: impl/go
+      - name: Enforce the Go corpus passing list
+        run: go run ./cmd/corpus --check-passing
+        working-directory: impl/go

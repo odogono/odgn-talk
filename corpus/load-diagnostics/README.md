@@ -12,7 +12,7 @@ review surface; blessing alone does not establish conformance.
 Go's static checker compares its complete diagnostic list with these records.
 The `initialiser failed` boundary test obtains its position from executing the
 fixture's actual lowered division instruction. The full Abstract Machine and
-worker replay arrive in #251 and #249 respectively. Handler, Library and
+worker Trace replay arrive in #251; #249's runner already reads these records. Handler, Library and
 Capability diagnostics deferred to step 3 are listed beside the checker in
 [the Go guide](../../impl/go/README.md#front-end-and-lowering-checks).
 

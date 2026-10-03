@@ -8,6 +8,7 @@ import diagnostics from '../../spec/data/diagnostics.toml';
 import limits from '../../spec/data/limits.toml';
 import units from '../../spec/data/units.toml';
 import version from '../../spec/data/version.toml';
+import corpus from '../../spec/data/corpus.toml';
 import grammar from '../../spec/data/grammar.toml';
 import stdlib from '../../spec/data/stdlib.toml';
 import { formatGo, writeOutput } from './output';
@@ -116,6 +117,7 @@ export const generateGoCatalogues = async (check: boolean): Promise<void> => {
     limits,
     units,
     version,
+    corpus,
     grammar,
     builtins: { builtin: stdlib.builtin },
   })) {
