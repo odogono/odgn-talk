@@ -10,6 +10,7 @@ import {
   type Operation,
 } from '../capabilities';
 import { checkSource } from '../checker';
+import type { DebugController } from '../debug';
 import { formatInstant, parseInstant } from '../dates';
 import {
   HostError,
@@ -25,6 +26,7 @@ import {
   type Inspection,
   type LimitOverride,
   type Location,
+  type PumpResult,
   type Report,
   type RunEvent,
   type Script,
@@ -76,7 +78,26 @@ export type Waiting =
   /** The Foreground Run waits on `console`'s `read`. */
   | { k: 'read' }
   /** The Foreground Run waits only for a deadline, so the Host sleeps. */
-  | { at: bigint; k: 'deadline' };
+  | { at: bigint; k: 'deadline' }
+  /**
+   * A debugger paused the Group mid-Pump. Tooling only: the pause is not a
+   * Host Input, and the Pump's lines print when it completes.
+   */
+  | { k: 'paused' };
+
+/** How a debugger continues a paused Pump. */
+export type DebugAction = 'resume' | 'step' | 'stepOver' | 'stepOut';
+
+/** Where one declaration of the session source sits in the loaded code. */
+export type SourcePlacement = {
+  /** How many lines it has. */
+  lines: number;
+  /** The declaration's first line in the session source, from 1. */
+  sourceLine: number;
+  /** The code unit it was loaded in, and its first line there. */
+  unit: string;
+  unitLine: number;
+};
 
 const NAME = 'session';
 /** How many arguments a mock Operation takes, each an Optional `any`. */
@@ -163,6 +184,9 @@ type Declaration = {
   library?: string;
   names: string[];
   source: string;
+  /** The code unit it was loaded in, and its first line there. */
+  unit?: string;
+  unitLine?: number;
   uses?: { local: string; name: string }[];
 };
 
@@ -233,6 +257,11 @@ export class SessionHost {
     return this.sessionSource(this.declarations);
   }
 
+  /** Whether the session has started, so its Grants are fixed. */
+  get started(): boolean {
+    return this.group !== null;
+  }
+
   /** Whether the Clock is virtual, so only `:clock` commands move it. */
   get virtualClock(): boolean {
     return this.virtual !== null;
@@ -248,8 +277,72 @@ export class SessionHost {
     return { granted: Object.fromEntries(this.granted), mocks: this.mocks };
   }
 
+  /**
+   * Each user-visible Grant by name, as the session starts or started with
+   * them, for building the Host Manifest. Starting nothing.
+   */
+  get sessionGrants(): Record<string, Grant<unknown>> {
+    return this.group ? { ...this.grantsByName } : this.capabilities().grants;
+  }
+
+  /** Where each declaration of the session source is in the loaded code. */
+  get placementsOfSource(): SourcePlacement[] {
+    const out: SourcePlacement[] = [];
+    let line = 1;
+    for (const d of this.declarations) {
+      const lines = lineCount(d.source);
+      if (d.unit !== undefined) {
+        out.push({
+          sourceLine: line,
+          lines,
+          unit: d.unit,
+          unitLine: d.unitLine!,
+        });
+      }
+      line += lines;
+    }
+    return out;
+  }
+
+  /**
+   * TS tooling only: the debug controller of the session's Group, once the
+   * session has started. A Pump it pauses waits as `paused` until
+   * `continueDebug`; `:restore` replaces the Group and its controller.
+   */
+  debugController(): DebugController | null {
+    if (!this.group) {
+      return null;
+    }
+    return (this.controller ??= this.group.debug());
+  }
+
+  /**
+   * Continues a debug-paused Pump. Returns the lines the Pump printed once it
+   * completes, as it would have printed them without the pause.
+   */
+  continueDebug(action: DebugAction): string[] {
+    const controller = this.controller;
+    if (this.state.k !== 'paused' || !controller?.isPaused) {
+      throw new Error('The session is not debug-paused');
+    }
+    const result = controller[action]();
+    if (controller.isPaused) {
+      return [];
+    }
+    return this.printed(this.pumped(result));
+  }
+
+  // The debug controller tooling asked for, on the current Group.
+  private controller: DebugController | null = null;
+  private paused() {
+    if (this.state.k === 'paused') {
+      throw new Error('The session is debug-paused');
+    }
+  }
+
   /** An Entry or a Session Command. Returns the lines it printed. */
   input(source: string): string[] {
+    this.paused();
     this.recording = source.replace(/\n+$/, '');
     const out = this.entry(source);
     this.recorded();
@@ -301,6 +394,7 @@ export class SessionHost {
 
   /** Answers the Foreground Run's `read` with a line the user typed. */
   read(line: string): string[] {
+    this.paused();
     const pending = [...this.reads].find(
       ([, r]) => r.run !== undefined && r.run === this.foreground?.run,
     );
@@ -320,7 +414,9 @@ export class SessionHost {
 
   /** Pumps at a deadline, under a real Clock. */
   tick(): string[] {
-    return this.group ? this.printed(this.pump()) : [];
+    return this.group && this.state.k !== 'paused'
+      ? this.printed(this.pump())
+      : [];
   }
 
   // ------------------------------------------------------------- starting
@@ -334,6 +430,18 @@ export class SessionHost {
       trace: line => this.env.trace?.(line),
     });
     group[observeRuns](e => this.events.push(e));
+    const { capabilities, grants } = this.capabilities();
+    this.grantsByName = grants;
+    this.declarations0 = Object.fromEntries(capabilities);
+    this.group = group;
+    this.script = group.load({ name: NAME, source: '', grants });
+  }
+
+  // The Capabilities the session grants, and its Grants by name.
+  private capabilities(): {
+    capabilities: Map<string, CapabilityDef<unknown>>;
+    grants: Record<string, Grant<unknown>>;
+  } {
     const console = consoleCapability(
       {
         write: (call, value) => {
@@ -378,10 +486,7 @@ export class SessionHost {
         .get(capability)!
         .grant('all', this.bindings.get(name) ?? DEFAULT_BINDING[capability]);
     }
-    this.grantsByName = grants;
-    this.declarations0 = Object.fromEntries(capabilities);
-    this.group = group;
-    this.script = group.load({ name: NAME, source: '', grants });
+    return { capabilities, grants };
   }
 
   // A built-in Capability's Host functions, each answer recorded as the `~`
@@ -674,8 +779,11 @@ export class SessionHost {
       } catch (error) {
         return this.refused(error, { line: 0, col: 0 });
       }
-      this.units++;
-      this.declarations.push(decl);
+      this.declarations.push({
+        ...decl,
+        unit: `${NAME}+${this.units++}`,
+        unitLine: 1,
+      });
       return [];
     }
     if (
@@ -703,7 +811,9 @@ export class SessionHost {
       d => d.kind === 'variable' && d.names[0] === name,
     );
     const before = this.declarations;
-    this.declarations = before.map((d, i) => (i === index ? decl : d));
+    this.declarations = before.map((d, i) =>
+      i === index ? { ...decl, unit: d.unit, unitLine: d.unitLine } : d,
+    );
     const { loaded, out } = this.run(statement, false);
     if (!loaded) {
       this.declarations = before;
@@ -748,7 +858,12 @@ export class SessionHost {
       this.deadline = undefined;
       return this.discarded(reports);
     }
-    this.declarations = next;
+    let at = 1;
+    this.declarations = next.map(d => {
+      const placed = { ...d, unit: NAME, unitLine: at };
+      at += lineCount(d.source);
+      return placed;
+    });
     this.implicit.clear();
     this.placements.clear();
     this.units = 1;
@@ -890,6 +1005,7 @@ export class SessionHost {
     const { group, result } = restored;
     group[observeRuns](e => this.events.push(e));
     this.group = group;
+    this.controller = null;
     this.script = group.script(NAME)!;
     this.declarations = [...saved.declarations];
     this.implicit = new Set(saved.implicit);
@@ -1134,12 +1250,15 @@ export class SessionHost {
     }
     this.lastEntry = n;
     this.implicit.add(handler);
-    this.placements.set(`${NAME}+${this.units++}`, placement);
-    for (const v of bound) {
+    const extension = `${NAME}+${this.units++}`;
+    this.placements.set(extension, placement);
+    for (const [i, v] of bound.entries()) {
       this.declarations.push({
         kind: 'variable',
         names: [v],
         source: `script variable ${v}`,
+        unit: extension,
+        unitLine: i + 1,
       });
     }
     const { id } = this.script!.request({
@@ -1214,6 +1333,15 @@ export class SessionHost {
     this.lastClock = now;
     this.events = [];
     const result = this.group!.pump(now);
+    if (this.controller?.isPaused) {
+      this.state = { k: 'paused' };
+      return [];
+    }
+    return this.pumped(result);
+  }
+
+  // A completed Pump's lines.
+  private pumped(result: PumpResult): string[] {
     this.deadline = result.nextDeadline;
     const out = this.print(result.reports);
     this.settleForeground();

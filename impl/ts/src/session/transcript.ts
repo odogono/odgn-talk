@@ -5,7 +5,7 @@ import type { LocaleImpl } from '../locale-capability';
 import { readDisplay } from '../readers';
 import type { CalendarImpl } from '../standard-capabilities';
 import type { Value } from '../values';
-import { SessionHost } from './host';
+import { SessionHost, type SessionEnvironment } from './host';
 import { hostFailure } from './stubs';
 
 /** One line of a Transcript, with an Entry's further lines folded in. */
@@ -116,6 +116,12 @@ export const writeTranscript = (items: readonly TranscriptItem[]): string =>
     .join('');
 
 export type ReplayOptions = {
+  /**
+   * Where the Session Host turns once the Transcript runs out, so a
+   * Playground can go on live from a replayed session: its Clock, its
+   * built-in Capabilities, and where later items are recorded.
+   */
+  live?: Pick<SessionEnvironment, 'builtIns' | 'now' | 'record'>;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
 };
@@ -160,12 +166,33 @@ export const replayTranscript = (
     }
     throw hostFailure(error);
   };
-  const builtIn = (operations: readonly string[]) =>
-    Object.fromEntries(operations.map(op => [op, answer]));
+  // Once the Transcript runs out, the live environment takes over.
+  let live = false;
+  const builtIn = (operations: readonly string[], impl: object | undefined) =>
+    Object.fromEntries(
+      operations.map(op => [
+        op,
+        (call: { id: string }, ...args: unknown[]): Value => {
+          if (!live) {
+            return answer(call);
+          }
+          const host = (impl as Record<string, (...a: unknown[]) => Value>)?.[
+            op
+          ];
+          if (!host) {
+            throw new Error(`No live built-in answers ${op}`);
+          }
+          return host.call(impl, call, ...args);
+        },
+      ]),
+    );
   // The reading the next Pump takes, if a recorded `@` line gave one.
   let offered: bigint | null = null;
   const host = new SessionHost({
     now: () => {
+      if (live) {
+        return options.live!.now();
+      }
       if (offered === null) {
         throw new Error('The Transcript has no `@` reading for a Pump');
       }
@@ -173,26 +200,30 @@ export const replayTranscript = (
       offered = null;
       return at;
     },
-    record: item => items.push(item),
+    record: item => {
+      items.push(item);
+      if (live) {
+        options.live!.record?.(item);
+      }
+    },
     builtIns: {
-      calendar: builtIn([
-        'today',
-        'now',
-        'toCivil',
-        'toInstant',
-        'offset',
-        'zone',
-      ]) as unknown as CalendarImpl,
-      locale: builtIn([
-        'compare',
-        'rank',
-        'upper',
-        'lower',
-        'numberSymbols',
-        'monthNames',
-        'dayNames',
-        'tag',
-      ]) as unknown as LocaleImpl,
+      calendar: builtIn(
+        ['today', 'now', 'toCivil', 'toInstant', 'offset', 'zone'],
+        options.live?.builtIns?.calendar,
+      ) as unknown as CalendarImpl,
+      locale: builtIn(
+        [
+          'compare',
+          'rank',
+          'upper',
+          'lower',
+          'numberSymbols',
+          'monthNames',
+          'dayNames',
+          'tag',
+        ],
+        options.live?.builtIns?.locale,
+      ) as unknown as LocaleImpl,
     },
     ...(options.trace ? { trace: options.trace } : {}),
     // Replaying never writes a file: `:export` writes to a scratch directory.
@@ -238,5 +269,6 @@ export const replayTranscript = (
         break;
     }
   }
+  live = options.live !== undefined;
   return { host, items };
 };

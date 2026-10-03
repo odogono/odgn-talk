@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline';
 import { parseEntry } from '@odgn/northtalk';
 import { SessionHost, writeTranscript } from '@odgn/northtalk/session';
 import session from '../../../spec/data/session.toml';
-import { calendar, locale } from './builtins';
+import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
 
 type Command = {
   does: string;

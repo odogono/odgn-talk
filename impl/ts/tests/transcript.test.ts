@@ -244,3 +244,22 @@ describe('Built-in Capabilities', () => {
     ]);
   });
 });
+
+describe('Going on live after a replay', () => {
+  test('takes the live Clock and records later items', () => {
+    const recorded = parseTranscript(
+      ['> 1 + 1', '@ 2026-09-30T10:00:00Z', '2', ''].join('\n'),
+    );
+    const later: TranscriptItem[] = [];
+    const { host, items } = replayTranscript(recorded, {
+      live: { now: () => at('05'), record: item => later.push(item) },
+    });
+    expect(writeTranscript(items)).toBe(writeTranscript(recorded));
+    expect(host.input('2 + 2')).toEqual(['4']);
+    expect(later).toEqual([
+      { k: 'input', source: '2 + 2' },
+      { k: 'clock', at: at('05') },
+      { k: 'output', text: '4' },
+    ]);
+  });
+});

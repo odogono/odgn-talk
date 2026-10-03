@@ -168,6 +168,14 @@ _Avoid_: console, shell, interpreter
 The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
 _Avoid_: sandbox (that word means the security boundary), editor, IDE
 
+**Restart**:
+In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
+_Avoid_: reset, reload, refresh
+
+**Shared Link**:
+A Playground URL carrying the Session Script's and user Libraries' sources and, optionally, a Session Transcript, which replays when the link opens.
+_Avoid_: permalink, snapshot, save link
+
 **Session Script**:
 The one ordinary Script a REPL or Playground session builds up, to which every definition the user enters is added.
 _Avoid_: session (as a language concept), workspace, scratch script

@@ -1,6 +1,8 @@
 // The Session Host of chapter 12, for a REPL or Playground.
 export {
   MOCK_ARGUMENTS,
+  type DebugAction,
+  type SourcePlacement,
   SessionHost,
   type Mock,
   type SessionEnvironment,

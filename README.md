@@ -16,7 +16,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`corpus/`](corpus/): the Conformance Corpus, which every Core runs.
 - [`impl/ts/`](impl/ts/): the TS Core, `@odgn/northtalk`, with its Session Host and tests.
 - [`impl/go/`](impl/go/): the Go Core foundations, module `github.com/odogono/odgn-talk/impl/go`, with immutable values, decimal arithmetic, Value Encoding, Unicode text primitives and a corpus runner.
-- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), and later the Playground), none of it normative.
+- [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), and the [Playground](tooling/playground/)), none of it normative.
 - [`tools/`](tools/): the Spec checks and the generators that write each Core's tables from the Data Files.
 - [`spikes/`](spikes/): finished experiments the ADRs cite, kept as evidence.
 - [`docs/`](docs/): the tour, the ADRs and research notes.
@@ -37,3 +37,14 @@ bun run corpus:run sessions                   # the corpus's Session Transcripts
 ```
 
 Enter a declaration, a statement or an expression at the `>` prompt. An unfinished one goes on at a `|` prompt, and an empty line ends it. `:help` lists the Session Commands. Ctrl-C cancels the Run the prompt is waiting for, and Ctrl-D or `:quit` ends the session. `replay` exits with 1 and names the first line that differs when a Transcript doesn't replay the same. See [chapter 12](spec/12-sessions-and-tooling.md) for what a session does, and [`tooling/cli/`](tooling/cli/) for the command.
+
+## The Playground
+
+The NorthTalk Playground is the REPL's browser counterpart, on the TS Core:
+
+```sh
+bun run playground          # build and serve it at http://127.0.0.1:3927/, rebuilding on change
+bun run --cwd tooling/playground build   # a static dist/ any web server can host
+```
+
+See [`tooling/playground/`](tooling/playground/) for what it does and how to run the corpus in a browser.

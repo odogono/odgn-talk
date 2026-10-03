@@ -36,7 +36,7 @@ export type {
   TextEdit,
   LspDiagnostic,
 } from './lsp/protocol';
-export type { WorkspaceSource } from './lsp/workspace';
+export { libraryUri, type WorkspaceSource } from './lsp/workspace';
 export type WorkspaceConfiguration = {
   manifest?: unknown;
   manifestError?: string | null;

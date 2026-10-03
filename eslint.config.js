@@ -44,6 +44,7 @@ export default [
             './tools/tsconfig.json',
             './tooling/cli/tsconfig.json',
             './tooling/stack/tsconfig.json',
+            './tooling/playground/tsconfig.json',
           ],
         },
       },
@@ -55,6 +56,7 @@ export default [
       'impl/ts/tools/**/*.ts',
       'tooling/cli/src/**/*.ts',
       'tooling/stack/tools/**/*.ts',
+      'tooling/playground/tools/**/*.ts',
     ],
     rules: {
       // These command-line Hosts print their reports and diagnostics.
