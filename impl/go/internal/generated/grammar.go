@@ -2,8 +2,30 @@
 package generated
 
 type GrammarTable struct {
-	Reserved     []string
-	TextPatterns GrammarTableTextPatterns
+	Reserved       []string
+	Follow         []string
+	Ordinals       []string
+	Properties     []string
+	Contextual     []GrammarTableContextualEntry
+	Chunk          []GrammarTableChunkEntry
+	TextPatterns   GrammarTableTextPatterns
+	BinaryPatterns GrammarTableBinaryPatterns
+	Operator       []GrammarTableOperatorEntry
+	Modifier       []GrammarTableModifierEntry
+	Decision       []GrammarTableDecisionEntry
+	Advanced       []GrammarTableAdvancedEntry
+	SyntaxError    []GrammarTableSyntaxErrorEntry
+	Units          GrammarTableUnits
+}
+
+type GrammarTableContextualEntry struct {
+	Word      string
+	Positions []string
+}
+
+type GrammarTableChunkEntry struct {
+	Singular string
+	Plural   string
 }
 
 type GrammarTableTextPatterns struct {
@@ -11,6 +33,43 @@ type GrammarTableTextPatterns struct {
 	Classes  []string
 	Anchors  []string
 	Phrases  []string
+}
+
+type GrammarTableBinaryPatterns struct {
+	IntegerTypes []string
+	SizeUnits    []string
+	ByteOrders   []string
+}
+
+type GrammarTableOperatorEntry struct {
+	Level int64
+	Assoc string
+	Ops   []string
+}
+
+type GrammarTableModifierEntry struct {
+	Name     string
+	Attaches string
+}
+
+type GrammarTableDecisionEntry struct {
+	Name string
+	Rule string
+}
+
+type GrammarTableAdvancedEntry struct {
+	Construct string
+	Written   string
+	Beginner  string
+}
+
+type GrammarTableSyntaxErrorEntry struct {
+	Code       string
+	RaisedWhen string
+}
+
+type GrammarTableUnits struct {
+	Catalogue string
 }
 
 var Grammar = GrammarTable{
@@ -67,6 +126,315 @@ var Grammar = GrammarTable{
 		"nothing",
 		"true",
 	},
+	Follow: []string{
+		"as",
+		"before",
+		"begins",
+		"by",
+		"can",
+		"contains",
+		"delimited",
+		"div",
+		"ends",
+		"from",
+		"ignoring",
+		"matches",
+		"mod",
+		"times",
+		"with",
+	},
+	Ordinals: []string{
+		"first",
+		"second",
+		"third",
+		"fourth",
+		"fifth",
+		"sixth",
+		"seventh",
+		"eighth",
+		"ninth",
+		"tenth",
+		"last",
+	},
+	Properties: []string{
+		"length",
+		"keys",
+		"values",
+		"items",
+		"lines",
+		"words",
+		"characters",
+		"bytes",
+		"code points",
+	},
+	Contextual: []GrammarTableContextualEntry{
+		GrammarTableContextualEntry{
+			Word: "a",
+			Positions: []string{
+				"after `is` or `is not`, before a kind",
+				"after `can be`",
+				"before a kind in a Text Pattern (a Typed Element)",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "an",
+			Positions: []string{
+				"as `a`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "all",
+			Positions: []string{
+				"straight after `wait for` (a Join)",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "as",
+			Positions: []string{
+				"after an operand (a conversion)",
+				"after a pattern (binding the whole value)",
+				"after the Library name in `use`, before the new name",
+				"after a Text Pattern element",
+				"after the value of a Binary Pattern build field",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "before",
+			Positions: []string{
+				"after the value in `put`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "begins",
+			Positions: []string{
+				"operator position, before `with`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "by",
+			Positions: []string{
+				"after the Container in `multiply` and `divide`",
+				"after `delimited`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "can",
+			Positions: []string{
+				"operator position, before `be`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "case",
+			Positions: []string{
+				"after `ignoring`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "civil",
+			Positions: []string{
+				"before `date` in a kind",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "constant",
+			Positions: []string{
+				"at the start of a top-level declaration",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "contains",
+			Positions: []string{
+				"operator position",
+				"after `when`, before `<`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "date",
+			Positions: []string{
+				"after `civil`, in a kind",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "deciding",
+			Positions: []string{
+				"after a comma in a Handler head",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "delimited",
+			Positions: []string{
+				"after a Chunk Expression, before `by`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "div",
+			Positions: []string{
+				"operator position",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "dropping",
+			Positions: []string{
+				"after a comma in a Handler head",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "during",
+			Positions: []string{
+				"after a comma in a Handler head, before a name",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "each",
+			Positions: []string{
+				"after `repeat for`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "empty",
+			Positions: []string{
+				"after `is` or `is not`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "ends",
+			Positions: []string{
+				"operator position, before `with`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "every",
+			Positions: []string{
+				"operand position, before `match` (the Match Search)",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "forever",
+			Positions: []string{
+				"straight after `repeat`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "from",
+			Positions: []string{
+				"after the value in `subtract`",
+				"after the event in `wait for`",
+				"after the imported names in `use`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "ignoring",
+			Positions: []string{
+				"after a comparison, a `match` subject or a Text Pattern element, before `case`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "lazily",
+			Positions: []string{
+				"after a Text Pattern element",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "matches",
+			Positions: []string{
+				"operator position",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "mod",
+			Positions: []string{
+				"operator position",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "next",
+			Positions: []string{
+				"at the start of a statement, before `repeat`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "private",
+			Positions: []string{
+				"at the start of a top-level declaration, before `on`, `function` or `constant`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "queued",
+			Positions: []string{
+				"after a comma in a Handler head",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "replacing",
+			Positions: []string{
+				"after a comma in a Handler head",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "script",
+			Positions: []string{
+				"at the start of a top-level declaration, before `variable`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "target",
+			Positions: []string{
+				"after `the`, when `of` doesn't follow",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "times",
+			Positions: []string{
+				"after the count in `repeat`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "use",
+			Positions: []string{
+				"at the start of a top-level declaration",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "variable",
+			Positions: []string{
+				"after `script` at the start of a top-level declaration",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "with",
+			Positions: []string{
+				"after the message name in `send`",
+				"after the Container in `replace`",
+				"after `begins` or `ends`",
+			},
+		},
+	},
+	Chunk: []GrammarTableChunkEntry{
+		GrammarTableChunkEntry{
+			Singular: "character",
+			Plural:   "characters",
+		},
+		GrammarTableChunkEntry{
+			Singular: "word",
+			Plural:   "words",
+		},
+		GrammarTableChunkEntry{
+			Singular: "line",
+			Plural:   "lines",
+		},
+		GrammarTableChunkEntry{
+			Singular: "item",
+			Plural:   "items",
+		},
+		GrammarTableChunkEntry{
+			Singular: "byte",
+			Plural:   "bytes",
+		},
+		GrammarTableChunkEntry{
+			Singular: "code point",
+			Plural:   "code points",
+		},
+	},
 	TextPatterns: GrammarTableTextPatterns{
 		Keywords: []string{
 			"character",
@@ -101,5 +469,309 @@ var Grammar = GrammarTable{
 			"optional",
 			"zero or more of",
 		},
+	},
+	BinaryPatterns: GrammarTableBinaryPatterns{
+		IntegerTypes: []string{
+			"int8",
+			"int16",
+			"int32",
+			"int64",
+			"uint8",
+			"uint16",
+			"uint32",
+			"uint64",
+		},
+		SizeUnits: []string{
+			"bit",
+			"bits",
+			"byte",
+			"bytes",
+		},
+		ByteOrders: []string{
+			"big",
+			"little",
+		},
+	},
+	Operator: []GrammarTableOperatorEntry{
+		GrammarTableOperatorEntry{
+			Level: 1,
+			Assoc: "left",
+			Ops: []string{
+				"or",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 2,
+			Assoc: "left",
+			Ops: []string{
+				"and",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 3,
+			Assoc: "prefix",
+			Ops: []string{
+				"not",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 4,
+			Assoc: "none",
+			Ops: []string{
+				"=",
+				"<>",
+				"<",
+				">",
+				"<=",
+				">=",
+				"is",
+				"is not",
+				"is in",
+				"is not in",
+				"is a",
+				"is not a",
+				"is empty",
+				"is not empty",
+				"can be",
+				"contains",
+				"begins with",
+				"ends with",
+				"matches",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 5,
+			Assoc: "left",
+			Ops: []string{
+				"&",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 6,
+			Assoc: "none",
+			Ops: []string{
+				"..",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 7,
+			Assoc: "left",
+			Ops: []string{
+				"+",
+				"-",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 8,
+			Assoc: "left",
+			Ops: []string{
+				"*",
+				"/",
+				"mod",
+				"div",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 9,
+			Assoc: "right",
+			Ops: []string{
+				"^",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 10,
+			Assoc: "prefix",
+			Ops: []string{
+				"-",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 11,
+			Assoc: "postfix",
+			Ops: []string{
+				"as",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 12,
+			Assoc: "postfix",
+			Ops: []string{
+				"of",
+				"'s",
+				"f(…)",
+			},
+		},
+	},
+	Modifier: []GrammarTableModifierEntry{
+		GrammarTableModifierEntry{
+			Name:     "as",
+			Attaches: "the operand before it, as a postfix operator above every binary operator and below chunk `of`, `'s` and calls",
+		},
+		GrammarTableModifierEntry{
+			Name:     "ignoring case",
+			Attaches: "the nearest comparison before it, a `match` subject, or a Text Pattern element",
+		},
+		GrammarTableModifierEntry{
+			Name:     "delimited by",
+			Attaches: "the outermost Chunk Expression of an `of` chain",
+		},
+		GrammarTableModifierEntry{
+			Name:     "lazily",
+			Attaches: "a Text Pattern element",
+		},
+		GrammarTableModifierEntry{
+			Name:     "and wait",
+			Attaches: "a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement",
+		},
+		GrammarTableModifierEntry{
+			Name:     "little, big",
+			Attaches: "an integer field of a Binary Pattern or build",
+		},
+	},
+	Decision: []GrammarTableDecisionEntry{
+		GrammarTableDecisionEntry{
+			Name: "and-wait",
+			Rule: "`and` followed by `wait` ends the expression before it, and is never a boolean `and`",
+		},
+		GrammarTableDecisionEntry{
+			Name: "as-in-build",
+			Rule: "inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type",
+		},
+		GrammarTableDecisionEntry{
+			Name: "begins-with",
+			Rule: "`begins` or `ends` followed by `with` is the operator; otherwise the word ends the expression",
+		},
+		GrammarTableDecisionEntry{
+			Name: "binary-field",
+			Rule: "in a Binary Pattern, a word followed by `:` names a field",
+		},
+		GrammarTableDecisionEntry{
+			Name: "can-be",
+			Rule: "`can` followed by `be` is the kind test; otherwise the word ends the expression",
+		},
+		GrammarTableDecisionEntry{
+			Name: "capture",
+			Rule: "in a Text Pattern, a word followed by `:` is a Capture",
+		},
+		GrammarTableDecisionEntry{
+			Name: "chunk-word",
+			Rule: "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name",
+		},
+		GrammarTableDecisionEntry{
+			Name: "code-point",
+			Rule: "`code` followed by `point` or `points` is the chunk kind",
+		},
+		GrammarTableDecisionEntry{
+			Name: "delimited-by",
+			Rule: "`delimited` followed by `by` is the modifier",
+		},
+		GrammarTableDecisionEntry{
+			Name: "during",
+			Rule: "after a comma in a Handler head, `during` followed by a word is the modifier",
+		},
+		GrammarTableDecisionEntry{
+			Name: "every-match",
+			Rule: "`every` followed by `match` starts a Match Search; otherwise `every` is a name",
+		},
+		GrammarTableDecisionEntry{
+			Name: "ignoring-case",
+			Rule: "`ignoring` followed by `case` is the modifier",
+		},
+		GrammarTableDecisionEntry{
+			Name: "is-a",
+			Rule: "after `is` or `is not`, `a` or `an` followed by a word that isn't reserved, or by `function`, starts a kind test; otherwise it is a name",
+		},
+		GrammarTableDecisionEntry{
+			Name: "kind",
+			Rule: "`civil` followed by `date` is the kind `civil date`",
+		},
+		GrammarTableDecisionEntry{
+			Name: "map-key",
+			Rule: "in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}`",
+		},
+		GrammarTableDecisionEntry{
+			Name: "next-repeat",
+			Rule: "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call",
+		},
+		GrammarTableDecisionEntry{
+			Name: "ordinal",
+			Rule: "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
+		},
+		GrammarTableDecisionEntry{
+			Name: "pattern-anchor",
+			Rule: "in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor",
+		},
+		GrammarTableDecisionEntry{
+			Name: "replace-first",
+			Rule: "after `replace`, `first` followed by anything but `in` means only the first match",
+		},
+		GrammarTableDecisionEntry{
+			Name: "script-variable",
+			Rule: "at top level, `script` followed by `variable` starts a Script Variable",
+		},
+		GrammarTableDecisionEntry{
+			Name: "target",
+			Rule: "after `the`, `target` not followed by `of` is `the target`",
+		},
+		GrammarTableDecisionEntry{
+			Name: "wait-from",
+			Rule: "in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns",
+		},
+		GrammarTableDecisionEntry{
+			Name: "when-contains",
+			Rule: "after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name",
+		},
+	},
+	Advanced: []GrammarTableAdvancedEntry{
+		GrammarTableAdvancedEntry{
+			Construct: "The pin",
+			Written:   "`^name` in a pattern, e.g. `{order: ^orderId}`",
+			Beginner:  "`{order: o} where o = orderId`",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "A pinned Binary Pattern size",
+			Written:   "`^n bytes`, or `^` inside a parenthesised size",
+			Beginner:  "a Guard on the length the pattern read, or `...rest` and then `bytes 1..n of rest`",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "The `code point` chunk",
+			Written:   "`code point 1 of s`, `code points 2..3 of s`",
+			Beginner:  "Characters",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "The `code points` property",
+			Written:   "`the code points of s`",
+			Beginner:  "Characters",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "`lazily`",
+			Written:   "after a Text Pattern element, e.g. `text lazily`",
+			Beginner:  "a narrower element",
+		},
+	},
+	SyntaxError: []GrammarTableSyntaxErrorEntry{
+		GrammarTableSyntaxErrorEntry{
+			Code:       "bad character",
+			RaisedWhen: "A character outside a text literal or comment starts no token",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "unterminated text",
+			RaisedWhen: "A text literal has no closing quote before the end of its line; reported at the opening quote",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "bad unit",
+			RaisedWhen: "A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "unexpected token",
+			RaisedWhen: "A token can't continue the parse, including the end of a line or of the source",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "not a container",
+			RaisedWhen: "A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token",
+		},
+	},
+	Units: GrammarTableUnits{
+		Catalogue: "units.toml",
 	},
 }

@@ -1,0 +1,3 @@
+function f
+wait 1 s
+end

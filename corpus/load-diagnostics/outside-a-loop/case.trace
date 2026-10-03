@@ -1,0 +1,4 @@
+# Pins `outside a loop` and its source position. New case for human review.
+> load bad identity=d05e4c9a37dfdd93a5ce7f36964a1024923a86b1616e0691232a4128ac7e1d8a
+diag bad code="outside a loop" pos=2:1
+> vars

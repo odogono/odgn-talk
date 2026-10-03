@@ -6,13 +6,15 @@
 //
 // It lowers the stdlib Libraries in spec/stdlib/, strictly, and the syntax
 // sketch, the corpus and every `talk` block in docs/ and spec/, leniently: a
-// name those don't declare is taken as a well-known object. Then it verifies
+// name those don't declare is taken as a well-known object. Sources whose
+// blessed load emits diagnostics have no instruction stream. Then it verifies
 // every body against spec/data/machine.toml: each instruction exists, with
 // the right operands, and every path through a body reaches every
 // instruction with one stack depth, never underflows and ends in an
 // instruction that leaves the body. Not normative (ADR 0028).
 
 import machine from '../../spec/data/machine.toml';
+import { isRejectedSource } from './rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { parse, type Node } from '../grammar/parser';
@@ -389,6 +391,9 @@ lower(
   true,
 );
 for (const f of files(join(ROOT, 'corpus'), '.talk')) {
+  if (isRejectedSource(f)) {
+    continue;
+  }
   lower(
     readFileSync(f, 'utf8'),
     basename(f, '.talk'),

@@ -1,0 +1,4 @@
+# Pins `duplicate name` and its source position. New case for human review.
+> load bad identity=0b6b2ea76046c3966956f1dbf65a08bde48eec1f984a5abe1b749b9173f4f5e7
+diag bad code="duplicate name" pos=2:9
+> vars

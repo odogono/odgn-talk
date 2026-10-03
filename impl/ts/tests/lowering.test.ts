@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import {
@@ -224,7 +225,7 @@ const compileFile = (path: string): CodeUnit => {
 describe('the lowering of every source', () => {
   const sources = [
     ...files(join(root, 'spec/stdlib')),
-    ...files(join(root, 'corpus')),
+    ...files(join(root, 'corpus')).filter(path => !isRejectedSource(path)),
     join(root, 'tools/machine/lowering.talk'),
   ];
   test.each(sources.map(path => [path.slice(root.length + 1), path]))(

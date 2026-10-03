@@ -1,0 +1,4 @@
+# Pins `bits not whole bytes` and its source position. New case for human review.
+> load bad identity=248499d6d1404e99a0ff02659d9b8186488d1f57a7801fe1aabc203bac3e4ce6
+diag bad code="bits not whole bytes" pos=2:10
+> vars

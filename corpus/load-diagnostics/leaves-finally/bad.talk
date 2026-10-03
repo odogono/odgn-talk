@@ -1,0 +1,6 @@
+on t
+try
+finally
+return 1
+end
+end

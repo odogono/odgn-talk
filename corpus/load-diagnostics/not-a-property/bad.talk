@@ -1,0 +1,3 @@
+on t x
+set x to 1
+end

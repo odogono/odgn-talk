@@ -1,0 +1,4 @@
+# Pins `can't suspend here` and its source position. New case for human review.
+> load bad identity=66166e3f8834ae520ac64364f81077e19c1f583d691644d46a0acf749c0782c1
+diag bad code="can't suspend here" pos=2:1
+> vars

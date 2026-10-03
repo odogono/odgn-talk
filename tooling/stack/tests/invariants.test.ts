@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
@@ -147,7 +148,11 @@ for (const directory of ['corpus', 'spec']) {
     path.endsWith('.talk'),
   )) {
     test(`formatter invariants: ${path.slice(root.length + 1)}`, () => {
-      invariant(readFileSync(path, 'utf8'), optionsFor(path), true);
+      invariant(
+        readFileSync(path, 'utf8'),
+        optionsFor(path),
+        !isRejectedSource(path),
+      );
     });
   }
 }

@@ -1,2 +1,2 @@
-// Package syntax is reserved for the lexer and lossless parser.
+// Package syntax implements modal UTF-8 lexing and a lossless predictive parser.
 package syntax

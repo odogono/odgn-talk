@@ -1,0 +1,4 @@
+constant x = 1
+on t
+put 2 into x
+end

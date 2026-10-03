@@ -1,0 +1,4 @@
+# Pins `unknown name` and its source position. New case for human review.
+> load bad identity=314f8db7542134dbd59053af58579bea3f6f69b7ec0293fb702062872a7729c5
+diag bad code="unknown name" pos=2:8
+> vars

@@ -1,0 +1,4 @@
+# Pins `default order` and its source position. New case for human review.
+> load bad identity=e125b8ce170ccba10efa052c0dc21a1abb5b98cad637ccd0ae221eb3ee2ae5b7
+diag bad code="default order" pos=1:19
+> vars

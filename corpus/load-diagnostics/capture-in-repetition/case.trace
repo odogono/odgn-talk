@@ -1,0 +1,4 @@
+# Pins `capture in repetition` and its source position. New case for human review.
+> load bad identity=f31ecd97220f817b3ff7c8188c0dcebb4cced2e5d9dc8493a1af8d25eba1a2a3
+diag bad code="capture in repetition" pos=2:18
+> vars

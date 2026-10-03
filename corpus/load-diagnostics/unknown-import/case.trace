@@ -1,0 +1,4 @@
+# Pins `unknown import` and its source position. New case for human review.
+> load bad identity=e905299d08c51e3f15590c6c1b8a9213b59ed45ef295a437877419be4f5fd5f5
+diag bad code="unknown import" pos=1:12
+> vars

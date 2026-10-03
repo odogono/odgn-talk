@@ -1,0 +1,3 @@
+on t
+say 1 and wait
+end

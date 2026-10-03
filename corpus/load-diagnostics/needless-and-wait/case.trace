@@ -1,0 +1,4 @@
+# Pins `needless and wait` and its source position. New case for human review.
+> load bad identity=e236dd2872c12ea8944c2d57c34b3ba319304c9f3a2347365994a4737b3383ea
+diag bad code="needless and wait" pos=2:1
+> vars

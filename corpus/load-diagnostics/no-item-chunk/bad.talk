@@ -1,0 +1,3 @@
+on t x
+return word 1 of x delimited by ","
+end
