@@ -198,6 +198,9 @@ func Compile(checked *check.Unit, name string) (*Unit, error) {
 	for _, n := range checked.Tree.Declarations {
 		switch n.Kind {
 		case "variable", "constant":
+			if n.Kind == "variable" && len(n.Children) == 0 {
+				continue
+			}
 			if len(n.Children) > 0 {
 				u.expression(n.Children[0])
 			} else {
