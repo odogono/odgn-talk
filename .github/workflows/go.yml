@@ -1,0 +1,53 @@
+name: Go Core
+
+on:
+  pull_request:
+    paths:
+      - 'impl/go/**'
+      - 'tools/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/go.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'impl/go/**'
+      - 'tools/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/go.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # Downloads and verifies the pinned UCD used by the conformance tests,
+      # and holds both Cores' generated output to the Data Files.
+      - run: bun run check
+      - name: Check Go formatting
+        working-directory: impl/go
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+        working-directory: impl/go
+      # Includes the talk.go API check and the Unicode import-policy check.
+      # Verbose output reports API names not implemented yet, as #132 requires.
+      - run: go test -race -v ./...
+        working-directory: impl/go
