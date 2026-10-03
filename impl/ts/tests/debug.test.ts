@@ -9,6 +9,36 @@ const instruction = (line: number) => {
   return { unit: 's', pc: unit.code.findIndex(i => i.line === line) };
 };
 
+test('a replacement paused before payment cancels its owner only after paying', () => {
+  for (const cancelIncoming of [false, true]) {
+    const source =
+      'script variable n = 0\non go, replacing\n try\n  wait 1 s\n finally\n  add 1 to n\n end try\nend go';
+    const unit = compileSource(source, { name: 's' }).unit!;
+    const trace: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => trace.push(line) });
+    const s = group.load({ name: 's', source });
+    s.deliver({ name: 'go' });
+    group.pump(0n);
+    const debug = group.debug();
+    debug.breakAt([{ unit: 's', pc: unit.code.findIndex(i => i.line === 4) }]);
+    s.deliver({ name: 'go', limits: { fuelPerRun: 5 } });
+    group.pump(0n);
+    expect(debug.isPaused).toBe(true);
+    expect(trace.some(line => line.startsWith('run s/r1 '))).toBe(false);
+    if (cancelIncoming) {
+      s.cancelRun('s/r2');
+    }
+    debug.clearBreaks();
+    debug.resume();
+    group.pump(1_000_000_000n);
+    const owner = trace.filter(line => line.startsWith('run s/r1 '));
+    expect(owner).toHaveLength(1);
+    expect(owner[0]).toContain(
+      `outcome=${cancelIncoming ? 'completed' : 'cancelled'}`,
+    );
+  }
+});
+
 test('a durable whole-Group pause resumes the same Pump and preserves Trace and slices', () => {
   const run = (debugging: boolean) => {
     const trace: string[] = [];

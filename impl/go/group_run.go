@@ -39,7 +39,7 @@ func (s *Script) start(d delivery) {
 	if s.hasHandler(d.message.Name) {
 		handler = d.message.Name
 	}
-	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: handler, clause: r.Clause, how: "start"}
+	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: handler, clause: -1, how: "start"}
 	s.runs = append(s.runs, s.active)
 }
 func (s *Script) persistentWithoutRun(exclude *execution) int64 {
@@ -47,13 +47,7 @@ func (s *Script) persistentWithoutRun(exclude *execution) int64 {
 	for _, v := range s.state.Variables {
 		size += machine.Size(v)
 	}
-	size += s.mailboxSize()
-	for _, x := range s.runs {
-		if x != exclude {
-			size += x.run.RetainedSize()
-		}
-	}
-	return size
+	return size + s.retainedOutside(exclude)
 }
 func (s *Script) mailboxSize() int64 {
 	var size int64
@@ -150,13 +144,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		if !found {
 			for _, x := range s.runs {
 				if x.delivery.id == d.cancel {
-					waiting := x.deadline != nil
-					x.deadline = nil
-					x.run.Cancel(s.limits.CleanupBudget)
-					if waiting {
-						x.how = "resume"
-						s.queue = append(s.queue, workItem{run: x})
-					}
+					g.cancelExecution(s, x)
 					break
 				}
 			}
@@ -214,14 +202,27 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				slice = o.FuelCap - result.FuelUsed
 				by = "cap"
 			}
-			r.PersistentBase = s.mailboxSize()
-			for _, other := range s.runs {
-				if other != x {
-					r.PersistentBase += other.run.RetainedSize()
+			for {
+				r.PersistentBase = s.retainedOutside(x)
+				r.ClockNS = clockNanos(g.clock)
+				remaining := slice
+				if slice > 0 {
+					remaining -= r.Fuel - fuel
+				}
+				r.ExecuteSelected(remaining, func() {
+					if machine.QueuePolicy(s.state.Unit.Bodies[x.clause]) == "replacing" {
+						g.replaceEarlier(s, x)
+						r.PersistentBase = s.retainedOutside(x)
+					}
+				})
+				if r.Status != machine.Dispatching {
+					break
+				}
+				g.selectClause(s, x)
+				if r.Status != machine.Running {
+					break
 				}
 			}
-			r.ClockNS = clockNanos(g.clock)
-			r.Execute(slice)
 			delta := r.Fuel - fuel
 			used[s] += delta
 			result.FuelUsed += delta
@@ -267,6 +268,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				skipped[s] = true
 				continue
 			}
+			if r.Status == machine.Parked {
+				x.parked = true
+				common["state"], common["end"] = fmt.Sprint(s.persistent()), "park"
+				g.record("seg", false, []string{string(x.id), x.how}, common)
+				s.active = nil
+				continue
+			}
 			if r.Status == machine.Suspended {
 				g.nextTimer++
 				x.timerOrder = g.nextTimer
@@ -297,7 +305,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					if report.Outcome == Completed {
 						p.settle(report.Result, nil)
 					} else {
-						reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled"}[report.Outcome]
+						reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped"}[report.Outcome]
 						p.settle(Nothing, sendFailure(reason, report.Error))
 					}
 				})
@@ -306,6 +314,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			for j, live := range s.runs {
 				if live == x {
 					s.runs = slices.Delete(s.runs, j, j+1)
+					s.releaseParked(x.clause)
 					break
 				}
 			}
@@ -428,6 +437,8 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 		end, outcome = "unhandled", UnhandledOutcome
 	case machine.Cancelled:
 		end, outcome = "cancel", Cancelled
+	case machine.Dropped:
+		end, outcome = "dropped", Dropped
 	}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 
@@ -447,7 +458,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
-	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
 	if x.delivery.id == "" {
 		delete(outputs, "delivery")
 	}
@@ -483,4 +494,87 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 
 	g.record("run", false, []string{string(x.id)}, outputs)
 	return report
+}
+
+// A clause is busy until all of its selected, unparked Runs have ended.
+func (s *Script) releaseParked(clause int) {
+	if clause < 0 {
+		return
+	}
+	for _, x := range s.runs {
+		if x.clause == clause && !x.parked {
+			return
+		}
+	}
+	for _, x := range s.runs {
+		if x.clause == clause && x.parked {
+			x.parked = false
+			x.how = "resume"
+			s.queue = append(s.queue, workItem{run: x})
+			return
+		}
+	}
+}
+
+func (s *Script) retainedOutside(exclude *execution) int64 {
+	size := s.mailboxSize()
+	for _, x := range s.runs {
+		if x != exclude {
+			size += x.run.RetainedSize()
+		}
+	}
+	return size
+}
+
+func (g *Group) cancelExecution(s *Script, x *execution) {
+	if x.run.Cancelling {
+		return
+	}
+	queued := x == s.active
+	for _, item := range s.queue {
+		if item.run == x {
+			queued = true
+			break
+		}
+	}
+	x.deadline = nil
+	x.parked = false
+	x.run.Cancel(s.limits.CleanupBudget)
+	if !queued {
+		x.how = "resume"
+		s.queue = append(s.queue, workItem{run: x})
+	}
+}
+
+func (g *Group) selectClause(s *Script, x *execution) {
+	r := x.run
+	body := s.state.Unit.Bodies[r.Frames[0].Body]
+	policy := machine.QueuePolicy(body)
+	busy := false
+	for _, other := range s.runs {
+		if other != x && other.clause == body.Index {
+			busy = true
+			break
+		}
+	}
+	if !r.AcceptClause(busy && (policy == "queued" || policy == "dropping")) {
+		return
+	}
+	x.clause = body.Index
+	switch {
+	case busy && policy == "queued":
+		r.Park()
+	case busy && policy == "dropping":
+		r.Drop()
+	case policy == "replacing" && !r.Frames[0].Clause:
+		g.replaceEarlier(s, x)
+	}
+}
+
+func (g *Group) replaceEarlier(s *Script, x *execution) {
+	for _, other := range s.runs {
+		if other != x && other.clause == x.clause {
+			g.cancelExecution(s, other)
+		}
+	}
 }

@@ -3,6 +3,9 @@
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
+cancellation/policy-clause-selection
+cancellation/policy-dispatch-limits
+cancellation/queueing-policies
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding

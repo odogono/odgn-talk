@@ -36,12 +36,13 @@ type unwind struct {
 	depth       int
 }
 type Body struct {
-	Checked *check.Body
-	Code    []Instruction
-	Unwind  []unwind
-	First   int
-	Clause  int
-	Index   int
+	Checked     *check.Body
+	Code        []Instruction
+	Unwind      []unwind
+	First       int
+	Clause      int
+	Index       int
+	DispatchEnd int // first instruction after parameter tests and the Guard
 }
 type eventBranch struct {
 	message  string
@@ -282,6 +283,7 @@ func (u *Unit) compileBody(body *Body) {
 	if end := u.pc(); end > start && (body.Checked.Kind == "handler" || body.Checked.Kind == "event") {
 		body.Unwind = append(body.Unwind, unwind{start, end - 1, "guard", fail, 0})
 	}
+	body.DispatchEnd = u.pc()
 	if body.Checked.Kind == "event" {
 		bindings := []*syntax.Node{}
 		for _, p := range n.Params {

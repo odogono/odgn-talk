@@ -4,19 +4,33 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 )
 
-// Queueing Policies and deciding dispatch await their own step-3 slice.
+// Deciding dispatch awaits its own step-3 slice.
 // During's following binding token is a name, not a policy flag.
 func SupportedDispatch(b *lower.Body) bool {
 	if b.Checked.Kind != "handler" {
 		return true
 	}
 	for j := 0; j < len(b.Checked.Node.Flags); j++ {
-		if b.Checked.Node.Flags[j].Raw != "during" {
+		switch b.Checked.Node.Flags[j].Raw {
+		case "during":
+			j++
+		case "deciding":
 			return false
 		}
-		j++
 	}
 	return true
+}
+
+func QueuePolicy(b *lower.Body) string {
+	for j := 0; j < len(b.Checked.Node.Flags); j++ {
+		switch flag := b.Checked.Node.Flags[j].Raw; flag {
+		case "during":
+			j++
+		case "queued", "dropping", "replacing":
+			return flag
+		}
+	}
+	return ""
 }
 
 // Deferred execution keeps the untouched instruction and operands in plain

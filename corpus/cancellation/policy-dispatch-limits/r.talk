@@ -1,0 +1,4 @@
+on work, replacing
+ wait 1 s
+ return 8
+end work
