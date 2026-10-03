@@ -28,6 +28,7 @@
     "format:check": "bunx --bun prettier --check '**/*.{ts,tsx}' eslint.config.js",
     "corpus:run": "bun run --cwd impl/ts corpus:run",
     "repl": "bun tooling/cli/src/main.ts",
+    "fuzz": "bun tooling/fuzz/src/cli.ts",
     "northtalk": "bun tooling/cli/src/main.ts",
     "playground": "bun run --cwd tooling/playground dev",
     "grammar:check": "bun run --cwd tools grammar:check",

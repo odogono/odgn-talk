@@ -25,6 +25,12 @@
         "@odgn/northtalk-tooling": "workspace:*",
       },
     },
+    "tooling/fuzz": {
+      "name": "@odgn/northtalk-fuzz",
+      "dependencies": {
+        "@odgn/northtalk": "workspace:*",
+      },
+    },
     "tooling/playground": {
       "name": "@odgn/northtalk-playground",
       "dependencies": {
@@ -161,6 +167,8 @@
     "@odgn/northtalk": ["@odgn/northtalk@workspace:impl/ts"],
 
     "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
+
+    "@odgn/northtalk-fuzz": ["@odgn/northtalk-fuzz@workspace:tooling/fuzz"],
 
     "@odgn/northtalk-playground": ["@odgn/northtalk-playground@workspace:tooling/playground"],
 

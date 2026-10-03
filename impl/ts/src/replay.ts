@@ -669,7 +669,7 @@ const compileLibraries = (
 const isCrossing = (line: string) => /^(call|prop|effect) /.test(line);
 
 /** Replay a case's Host Inputs, giving the Trace the Core wrote. */
-export const replayTrace = function* (
+const driveReplay = function* (
   readSource: (file: string) => string,
   setup: Setup,
   lines: readonly string[],
@@ -677,12 +677,18 @@ export const replayTrace = function* (
     restoreBetweenPumps = false,
     configureDebug,
     trace = [],
+    incremental = false,
   }: {
     configureDebug?: (group: Group) => void;
+    incremental?: boolean;
     restoreBetweenPumps?: boolean;
     trace?: string[];
   } = {},
-): Generator<ReplayEvent, string[], ReplayAction | undefined> {
+): Generator<
+  ReplayEvent | ReplayReady,
+  string[],
+  ReplayAction | string | undefined
+> {
   let hidden = false;
   const hiddenTrace: string[] = [];
   const adopted = new Set<string>();
@@ -990,7 +996,27 @@ export const replayTrace = function* (
   let registered = new Map<string, Library>();
   const saved = new Map<string, Uint8Array>();
   const bound = new Map<string, Record<string, Grant<unknown>>>();
-  for (const index of order) {
+  for (let cursor = 0; ; cursor++) {
+    if (cursor === order.length) {
+      if (!incremental) {
+        break;
+      }
+      const input = yield {
+        state: 'ready',
+        group,
+        callIds: [...calls.keys()],
+        saveIds: [...saved.keys()],
+      };
+      if (input === undefined) {
+        break;
+      }
+      if (!input.startsWith('> ')) {
+        throw new Error('Expected a concrete Host Input');
+      }
+      order.push(lines.length);
+      lines = [...lines, input];
+    }
+    const index = order[cursor]!;
     const line = lines[index]!;
     if (crossingLines.has(index) || landedLines.has(index)) {
       continue;
@@ -1318,7 +1344,13 @@ export const replayTrace = function* (
               landedLines.add(landing.line);
               armLanding();
             }
-            pumped = group.debug()[action ?? 'resume']()!;
+            if (
+              action !== undefined &&
+              !['resume', 'step', 'stepOver', 'stepOut'].includes(action)
+            ) {
+              throw new Error('Expected a replay debugger action');
+            }
+            pumped = group.debug()[(action ?? 'resume') as ReplayAction]()!;
           }
           if (landings.length) {
             throw new Error(
@@ -1550,6 +1582,78 @@ export const replayTrace = function* (
     }
   }
   return trace;
+};
+
+type ReplayReady = {
+  callIds: string[];
+  group: Group;
+  saveIds: string[];
+  state: 'ready';
+};
+
+/** Replay a fixed Trace, including recorded Host crossings and debugger landings. */
+export const replayTrace = function* (
+  readSource: (file: string) => string,
+  setup: Setup,
+  lines: readonly string[],
+  options: {
+    configureDebug?: (group: Group) => void;
+    restoreBetweenPumps?: boolean;
+    trace?: string[];
+  } = {},
+): Generator<ReplayEvent, string[], ReplayAction | undefined> {
+  const driver = driveReplay(readSource, setup, lines, options);
+  let next = driver.next();
+  while (!next.done) {
+    if (next.value.state === 'ready') {
+      throw new Error('Unexpected incremental replay boundary');
+    }
+    next = driver.next(yield next.value);
+  }
+  return next.value;
+};
+
+/** Non-normative incremental Host for generated cases. No hidden Inspect calls. */
+export const createReplayHost = (
+  readSource: (file: string) => string,
+  setup: Setup,
+) => {
+  const trace: string[] = [];
+  const driver = driveReplay(readSource, setup, [], {
+    incremental: true,
+    trace,
+  });
+  let ready = driver.next().value as ReplayReady;
+  return {
+    trace,
+    get group() {
+      return ready.group;
+    },
+    get callIds(): readonly string[] {
+      return ready.callIds;
+    },
+    get saveIds(): readonly string[] {
+      return ready.saveIds;
+    },
+    apply(input: string): PumpResult | undefined {
+      let pumped: PumpResult | undefined;
+      let next = driver.next(input);
+      while (!next.done && next.value.state !== 'ready') {
+        if (next.value.state === 'pumped') {
+          pumped = next.value.result;
+        }
+        if (next.value.state === 'paused') {
+          throw new Error('Incremental Host cannot pause for debugging');
+        }
+        next = driver.next();
+      }
+      if (next.done) {
+        throw new Error('Incremental replay Host has ended');
+      }
+      ready = next.value as ReplayReady;
+      return pumped;
+    },
+  };
 };
 
 export type ReplayAction = 'resume' | 'step' | 'stepOver' | 'stepOut';

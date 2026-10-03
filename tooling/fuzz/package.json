@@ -1,0 +1,15 @@
+{
+  "name": "@odgn/northtalk-fuzz",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "northtalk-fuzz": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@odgn/northtalk": "workspace:*"
+  }
+}
