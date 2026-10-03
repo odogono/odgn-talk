@@ -5,6 +5,7 @@ const build = await Bun.build({
   entrypoints: [
     resolve(root, 'tests/verify.ts'),
     resolve(root, 'tests/verify-lsp.ts'),
+    resolve(root, 'tests/verify-debug.ts'),
   ],
   target: 'browser',
 });
@@ -16,7 +17,9 @@ const server = Bun.serve({
   port: 3927,
   fetch(request) {
     if (
-      ['/verify.js', '/verify-lsp.js'].includes(new URL(request.url).pathname)
+      ['/verify.js', '/verify-lsp.js', '/verify-debug.js'].includes(
+        new URL(request.url).pathname,
+      )
     ) {
       return new Response(
         build.outputs.find(output =>
@@ -31,7 +34,8 @@ const server = Bun.serve({
       `<!doctype html><html><title>NorthTalk Lint browser smoke</title><body><pre id="result">Running…</pre><script type="module">
 import { verifyLintFixtures } from '/verify.js';
 import { verifyLspFeatures } from '/verify-lsp.js';
-try { document.querySelector('#result').textContent = 'PASS: ' + verifyLintFixtures() + ' Lint fixtures and ' + verifyLspFeatures() + ' LSP checks in a browser'; }
+import { verifyDebugFeatures } from '/verify-debug.js';
+try { document.querySelector('#result').textContent = 'PASS: ' + verifyLintFixtures() + ' Lint fixtures and ' + verifyLspFeatures() + ' LSP checks and ' + verifyDebugFeatures() + ' live debugger checks in a browser'; }
 catch (error) { document.querySelector('#result').textContent = 'FAIL: ' + error.message; throw error; }
 </script></body></html>`,
       { headers: { 'content-type': 'text/html' } },

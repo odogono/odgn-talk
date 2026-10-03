@@ -16,6 +16,7 @@ Run commands in this guide from the repository root. Workspace-only scripts sele
 | Formatting source | [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts) | [formatter](../../spec/12-sessions-and-tooling.md#the-formatter) | [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/) |
 | Lints and CLI advice | [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/) | [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints) | [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts) |
 | Editor language server | [Browser-safe LSP core](../../tooling/stack/src/lsp.ts), [stdio CLI](../../tooling/cli/src/lsp.ts) | [LSP](../../spec/12-sessions-and-tooling.md#the-lsp), [Host Manifest](../../spec/09-embedding.md#the-host-manifest-format) | [Language-feature tests](../../tooling/stack/tests/lsp.test.ts), [stdio fixture workspace](../../tooling/cli/tests/lsp-runtime.test.ts) |
+| Live debugging | [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Core hooks](#tooling-debug-hooks) | [Live debugger tests](../../tooling/stack/tests/debug.test.ts), [Trace parity](../../tooling/stack/tests/debug-corpus.test.ts), [CLI tests](../../tooling/cli/tests/debug.test.ts) |
 | Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Unicode tests](tests/unicode.test.ts) |
 
 The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
@@ -38,6 +39,8 @@ The parsers and compiler under root `tools/` check the Spec; the Core implementa
 - **Built-in `calendar` and `locale`:** offered to `:grant` when the environment's `builtIns` supplies their Host functions, bound to the zone or tag `:grant` gives, or `UTC` and `und`. Each answer, or failure with its code, message and fields, is recorded as the call's `~` line, and `replayTranscript` answers each call from those lines in place of a Host.
 
 ## Tooling debug hooks
+
+The [live debugger](../../tooling/stack/README.md#live-debugger) maps source breakpoints and supplies the adjusted Clock over these hooks; its [Bun CLI](../../tooling/cli/README.md#live-debugger) runs a Script from a clean checkout.
 
 `group.debug()` returns the Group's TS-only controller; its types are available from `@odgn/northtalk/debug`. This is outside chapter 9's embedding interface and Trace parity, like the Session Host's internal observation hook ([ADR 0045](../../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md)). It adds no Host Input, Trace line or Fuel charge. Its state and the lowering's statement-start metadata are absent from saves and Group Fingerprints; a restored Group starts with a fresh controller.
 

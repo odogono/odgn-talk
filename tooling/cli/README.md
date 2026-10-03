@@ -1,6 +1,6 @@
 # `northtalk`
 
-The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, and the language server ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
+The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
 northtalk [repl] [--transcript <file>]
@@ -9,6 +9,7 @@ northtalk fmt [--check] <file>…
 northtalk fmt [--check] -
 northtalk lint [--profile beginner|standard] <file>...
 northtalk lsp
+northtalk debug <script> [--trace <file>]
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt, and an empty line ends it, so a real syntax error shows.
@@ -144,3 +145,58 @@ manifest. Standard Library exports cannot be renamed. The REPL remains Bun-only.
 CI's `bun test tests` includes the Bun stdio integration session;
 `bun run --cwd tooling/cli build` followed by
 `bun run --cwd tooling/cli test:node` runs the same fixture workspace under Node.
+
+## Live debugger
+
+From a clean checkout, with Bun 1.4.2:
+
+```sh
+bun install
+bun run northtalk debug demo.talk --trace demo.trace
+```
+
+The file is loaded as one Script, named from its filename without `.talk`. Add
+breakpoints before delivering a message; nothing runs until `:run`. For example,
+with `on go` starting at line 1:
+
+```text
+:break 2
+:errors on
+:limits on
+:run go
+:runs
+:mailbox
+:vars
+:step
+:over
+:out
+:continue
+:quit
+```
+
+`:break <line>[:<column>]` adds a breakpoint, reporting its mapped position or
+that it is unverified. `:clear` removes every breakpoint. `:run [message]`
+delivers a zero-argument message, defaulting to `go`. `:step`, `:over` and `:out`
+step by statement; `:continue` resumes. Inspection commands require a pause.
+`:errors on|off` and `:limits on|off` toggle fault breaks. `:help` lists commands;
+`:quit` or EOF ends the debugger, including an unfinished paused Run.
+
+The Host pumps automatically through Fuel caps and deadline waits, using the
+live debugger's adjusted Clock so time at a breakpoint does not expire waits.
+A pause retains the Pump and shows its source position, Run and any fault.
+`:runs` includes Segment and lifetime Fuel. Inspection and control add no Host
+Inputs or Trace lines. `--trace` writes the Core's Trace through the point of
+exit. The Trace path must refer to a different file from the Script, including
+through symlinks or hard links. Runtime Errors, Limit Faults and effect failures
+give exit code 1; file,
+load or argument failures give 2. Invalid interactive commands print an error
+and keep the prompt available.
+
+`:reload` reads the file again and uses Reload with `carry variables`, then
+rebinds breakpoints. First resume any paused Pump to completion. The CLI never
+writes the source or sets Variables. This minimal Bun Host loads one Script,
+without Grants, Host Objects or user Libraries, and delivers messages without
+arguments. For richer Hosts and worker integration, use the
+[browser-safe programmatic API](../stack/README.md#live-debugger). This command
+provides live mode; Trace replay and reverse navigation are tracked by
+[#237](https://github.com/odogono/odgn-talk/issues/237).
