@@ -89,11 +89,62 @@ const isName = (token: Token) =>
   token.t === 'word' && token.v !== '_' && !RESERVED.has(token.v);
 const bodyRules = new Set(['Handler', 'Function', 'Lambda']);
 
-/** Resolve bindings and check writes, named calls, constant references and control flow without evaluation. */
+// Error regions are opaque to semantic passes. A malformed operand makes its
+// enclosing construct unusable, but a block retains its other statements.
+const parsedSyntax = (root: SyntaxNode): SyntaxNode => {
+  const ordered: SyntaxNode[] = [];
+  const work = [root];
+  let recovered = false;
+  while (work.length) {
+    const node = work.pop()!;
+    ordered.push(node);
+    if (node.rule !== 'Error') {
+      for (const child of nodes(node)) {
+        work.push(child);
+      }
+    } else {
+      recovered = true;
+    }
+  }
+  if (!recovered) {
+    return root;
+  }
+  const parsed = new Map<SyntaxNode, SyntaxNode | null>();
+  for (const node of ordered.reverse()) {
+    if (node.rule === 'Error') {
+      parsed.set(node, null);
+      continue;
+    }
+    const children: SyntaxElement[] = [];
+    let malformed = false;
+    let changed = false;
+    for (const child of node.children) {
+      const result = child.kind === 'node' ? parsed.get(child)! : child;
+      changed ||= result !== child;
+      if (result) {
+        children.push(result);
+      } else {
+        malformed = true;
+      }
+    }
+    const container = ['Source', 'Block', 'Body'].includes(node.rule);
+    parsed.set(
+      node,
+      malformed && !container ? null : changed ? { ...node, children } : node,
+    );
+  }
+  return parsed.get(root) ?? { ...root, children: [] };
+};
+
+/**
+ * Resolve bindings and check writes, named calls, constants and control flow.
+ * On recovered syntax, omit malformed constructs and check retained code.
+ */
 export const checkSyntax = (
   syntax: SyntaxNode,
   options: CheckOptions = {},
 ): SemanticResult => {
+  syntax = parsedSyntax(syntax);
   const scopes: Scope[] = [];
   const newScope = (kind: Scope['kind'], parent: Scope | null): Scope => {
     const scope: Scope = {

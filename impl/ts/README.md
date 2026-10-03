@@ -91,9 +91,22 @@ if (result.error) {
 
 `parseSource` accepts a complete Script or Library and returns either a typed concrete syntax tree or its first `ParseError`. Invalid scalar source throws `HostError("invalid value")` before parsing. The syntax tree is a Core front-end API; it is not an addition to the normative embedding declarations. Syntax checking here implements chapters 1 and 2; name and binding checks are described below.
 
+For a file being edited, `parseSourceRecovering(source)` always returns a lossless `tree` for scalar source, together with `error` (the same first `ParseError` as `parseSource`, or null) and `diagnostics`. Each diagnostic holds `{ error, recovery }`: the first has `recovery: false`, and every later syntax error has `recovery: true`. Only the first error is normative. Invalid scalar source still throws `HostError("invalid value")`.
+
+Recovery uses the same productions as the strict parser. Failed regions become `Error` nodes owning their partial productions and skipped tokens. Expression recovery resumes at a comma, closing delimiter, separator or physical newline; statement and declaration recovery resume at a physical newline. Incomplete blocks retain their parsed bodies at EOF or an enclosing branch or reserved declaration boundary. A missing ending can have a zero-width `Error` node; no token or source character is invented. `syntaxText` reconstructs the complete original input, including malformed regions. Recovery is best effort: malformed heads or delimiters can hide otherwise valid code, and later errors may follow from earlier ones. It does not make malformed source compilable or change `parseSource`, `checkSource`, `parseEntry` or compilation.
+
+```ts
+import { parseSourceRecovering, checkSyntax } from "@odgn/northtalk";
+
+const parsed = parseSourceRecovering('on greet name\n  @\n  return name\nend greet');
+const checked = checkSyntax(parsed.tree); // Handler and parameter bindings remain available
+// Show parsed.diagnostics before checked.diagnostics; all output after the
+// first syntax error is tooling recovery, outside parity.
+```
+
 Each `SyntaxNode` identifies a recognition production with `rule`, ordered `children`, and half-open `start`/`end` spans. Its children are further nodes or `Token`s. A token retains its exact `raw` spelling, `pos`/`end`, initial lexical `mode`, and `leadingTrivia`. Trivia records preserve the initial BOM, spaces/tabs, comments and continued physical line breaks; statement-ending line breaks and EOF are tokens. Spans include leading trivia, and every source character belongs to exactly one token or trivia record. `syntaxText` reconstructs source by walking the tree, without requiring a separate source string. Offsets index the original TS string in UTF-16 code units; diagnostic `line` and `col` are 1-based Unicode scalar positions, with tabs counting as one column. Text literal content remains as written; the existing text value constructor performs pinned NFC when a literal becomes a value.
 
-The low-level `Lexer` is also exported. Call `lex(offset, mode)` at a token boundary; it returns the next physical token without applying statement continuation. `where(offset)` provides scalar positions. Modes are `operand`, `operator`, `pattern`, `unit` (after a number), and `type` (after `as`). The parser fixes each token's interpretation on its first scan, buffers at most two tokens and never backtracks or relexes. Productions run through an explicit work stack, so deeply nested source does not depend on the JavaScript call stack. Scalar column lookup uses indexes rather than rescanning long lines. It handles the full grammar, including contextual keywords, compound units, Text/Binary Patterns and block Lambdas inside brackets. No platform Unicode normalization or Host imports are used by the front end.
+The low-level `Lexer` is also exported. Call `lex(offset, mode)` at a token boundary; it returns the next physical token without applying statement continuation. `where(offset)` provides scalar positions. Modes are `operand`, `operator`, `pattern`, `unit` (after a number), and `type` (after `as`). The strict parser fixes each token's interpretation on its first scan, buffers at most two tokens and never backtracks or relexes. After an error, recovery discards unconsumed lookahead and resets delimiter and continuation state before scanning physical tokens to a boundary. Productions run through an explicit work stack, so deeply nested source does not depend on the JavaScript call stack. Scalar column lookup uses indexes rather than rescanning long lines. It handles the full grammar, including contextual keywords, compound units, Text/Binary Patterns and block Lambdas inside brackets. No platform Unicode normalization or Host imports are used by the front end.
 
 ```sh
 bun run syntax:generate
@@ -120,6 +133,8 @@ if (!parsed.error) checkSyntax(parsed.tree); // check an existing lossless tree
 ```
 
 `checkSource` parses once and returns either the first syntax error, with no semantic tree or load diagnostics, or the semantic tree and ordered diagnostics. `checkSyntax` accepts an existing `SyntaxNode` without reconstructing or reparsing source. Both are front-end APIs, not additions to the embedding interface. `ok` means the implemented semantic checks succeeded; later load checks and compilation are still required.
+
+On a recovered tree, `checkSyntax` treats `Error` regions as opaque and omits constructs with malformed operands or heads. Blocks keep their other statements, so parsed declarations, scopes, bindings and load diagnostics remain available to tooling. The lossless syntax tree is unchanged. These diagnostics are recovery output; `ok` only describes the retained semantic checks and does not mean the original source is valid. Consult the recovering parser's `error` as well.
 
 The typed semantic tree retains grammar productions and operator/literal tokens for later lowering, omits trivia and empty productions, and replaces declaration, binding and reference tokens with `SemanticName` nodes. Every node has a half-open UTF-16 source span and a 1-based scalar start position. Name nodes identify their role and resolved `Binding`; body nodes identify their scope. Scopes expose parameters, locals (including `it`), and Lambda captures in first-use order. Local bindings record their Nothing initialization. The input lossless tree remains unchanged. Conversion and traversal use explicit work stacks, including for deeply nested expressions.
 
