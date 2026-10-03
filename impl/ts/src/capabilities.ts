@@ -259,6 +259,26 @@ const deepFunction = (v: Value, path: (string | number)[]): Mismatch | null => {
 
 export type ScopeDecl = { abandon: string; opens: string } | { closes: string };
 
+/** Synchronous, unmetered participant lifecycle work. */
+export type SegmentContext<B> = {
+  readonly binding: B;
+  readonly grantName: string;
+  readonly group: Group;
+  readonly now: bigint;
+  readonly runId: string;
+  readonly scriptName: string;
+  readonly segmentId: string;
+};
+export type EffectResult = {
+  detail?: string;
+  status: 'ok' | 'failed' | 'unknown';
+};
+export type SegmentLifecycle<B> = {
+  begin(context: SegmentContext<B>): EffectResult;
+  commit(context: SegmentContext<B>): EffectResult;
+  rollback(context: SegmentContext<B>): EffectResult;
+};
+
 export type Cost = { alloc?: number; fuel: number };
 export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
 type OpBase = {
@@ -312,6 +332,7 @@ export class LimitReached extends Error {
 export type CapabilityDef<B> = {
   /** A reusable template. Each load binds it to one Script. */
   grant(ops: readonly string[] | 'all', binding: B): Grant<B>;
+  readonly lifecycle?: SegmentLifecycle<B>;
   readonly name: string;
   /** Its Operations, ordered by name. */
   readonly operations: ReadonlyMap<string, Operation<B>>;
@@ -330,13 +351,27 @@ const scopeWord = (value: unknown): value is string =>
 export const defineCapability = <B = void>(
   name: string,
   ops: Record<string, Operation<B>>,
+  lifecycle?: SegmentLifecycle<B>,
 ): CapabilityDef<B> => {
   for (const op of Object.keys(ops)) {
     if (refusedNames.has(op)) {
       throw new HostError('invalid value', `${op} can't name an Operation`);
     }
   }
+  if (
+    lifecycle !== undefined &&
+    (!lifecycle ||
+      !['begin', 'commit', 'rollback'].every(
+        phase =>
+          typeof lifecycle[phase as keyof SegmentLifecycle<B>] === 'function',
+      ))
+  ) {
+    invalidValue(
+      'A participant requires synchronous begin, commit and rollback hooks',
+    );
+  }
   const scopes = new Map<string, string>();
+  const scopeEffects = new Map<string, boolean>();
   for (const [opName, op] of Object.entries(ops)) {
     const metadata = op as Operation<B> & {
       scope?: ScopeDecl;
@@ -348,8 +383,10 @@ export const defineCapability = <B = void>(
     ) {
       invalidValue('segmentBound must be Boolean');
     }
-    if (metadata.segmentBound) {
-      invalidValue('Segment-bound Operations are not yet supported');
+    if (metadata.segmentBound && (op.mode !== 'immediate' || !lifecycle)) {
+      invalidValue(
+        'Segment-bound Operations require immediate mode and lifecycle hooks',
+      );
     }
     const scope = metadata.scope;
     if (scope === undefined) {
@@ -358,6 +395,14 @@ export const defineCapability = <B = void>(
     if (op.mode !== 'immediate' || !scope || typeof scope !== 'object') {
       invalidValue('Scopes require immediate Operations');
     }
+    const scopeName = 'opens' in scope ? scope.opens : scope.closes;
+    const bound = metadata.segmentBound === true;
+    if (scopeEffects.has(scopeName) && scopeEffects.get(scopeName) !== bound) {
+      invalidValue(
+        'All lifecycle Operations of a scope must agree on segmentBound',
+      );
+    }
+    scopeEffects.set(scopeName, bound);
     const keys = Object.keys(scope).sort().join(',');
     if (keys === 'abandon,opens' && 'opens' in scope) {
       if (!scopeWord(scope.opens) || !scopeWord(scope.abandon)) {
@@ -410,8 +455,14 @@ export const defineCapability = <B = void>(
         const declaration = ops[op]!;
         return [
           op,
-          declaration.mode === 'immediate' && declaration.scope
-            ? { ...declaration, scope: Object.freeze({ ...declaration.scope }) }
+          declaration.mode === 'immediate' &&
+          (declaration.scope || declaration.segmentBound !== undefined)
+            ? {
+                ...declaration,
+                ...(declaration.scope
+                  ? { scope: Object.freeze({ ...declaration.scope }) }
+                  : {}),
+              }
             : declaration,
         ] as const;
       }),
@@ -419,6 +470,15 @@ export const defineCapability = <B = void>(
   const def: CapabilityDef<B> = {
     name,
     operations,
+    ...(lifecycle
+      ? {
+          lifecycle: Object.freeze({
+            begin: lifecycle.begin,
+            commit: lifecycle.commit,
+            rollback: lifecycle.rollback,
+          }),
+        }
+      : {}),
     grant: (granted, binding) => {
       const names = granted === 'all' ? [...operations.keys()] : granted;
       for (const op of names) {

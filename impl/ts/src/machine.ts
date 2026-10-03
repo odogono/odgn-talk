@@ -65,8 +65,11 @@ import {
   type Grant,
   type Operation,
   type ImmediateOp,
+  type EffectResult,
+  type SegmentContext,
   type Shape,
 } from './capabilities';
+import type { EffectFailure } from './group';
 import { HostError, ScriptError as HostScriptError } from './errors';
 import {
   bool,
@@ -503,9 +506,17 @@ export type RunRecord =
       detail: string;
       grant: string;
       kind: 'effect-failure';
-      scope: string;
+      phase: EffectFailure['phase'];
+      scope?: string;
       segment: string;
       status: 'failed' | 'unknown';
+    }
+  | {
+      grant: string;
+      kind: 'effect';
+      phase: 'begin' | 'commit' | 'rollback';
+      segment: string;
+      status: EffectResult['status'];
     }
   | { detail: string; id: string; kind: 'call-failed'; op: string }
   | { id: string; kind: 'abandon' }
@@ -730,6 +741,7 @@ export type Outcome =
       /** The code unit the faulting instruction is in. */
       unit: string;
     }
+  | { effect: EffectFailure; kind: 'effect failed' }
   | { kind: 'unhandled' | 'dropped' }
   | {
       cleanupFailed?: { code: string } | { limit: LimitName };
@@ -788,6 +800,124 @@ export class Run {
     op: ImmediateOp<unknown>;
   }[] = [];
 
+  private participant: { grant: Grant<unknown>; grantName: string } | null =
+    null;
+  private participantAbandonment: EffectFailure | null = null;
+  effectStateUnknown = false;
+
+  get hasParticipant(): boolean {
+    return this.participant !== null;
+  }
+
+  private lifecycle(phase: 'begin' | 'commit' | 'rollback'): EffectResult {
+    const participant = this.participant!;
+    const context: SegmentContext<unknown> = {
+      group: this.host!.group,
+      binding: participant.grant.binding,
+      scriptName: this.script.name,
+      runId: this.id,
+      grantName: participant.grantName,
+      segmentId: this.segmentId,
+      now: this.host!.now,
+    };
+    let result: EffectResult;
+    try {
+      const returned = participant.grant.capability.lifecycle![phase](context);
+      const status = returned?.status;
+      const detail = returned?.detail;
+      if (
+        !['ok', 'failed', 'unknown'].includes(status) ||
+        (detail !== undefined && typeof detail !== 'string')
+      ) {
+        throw new Error('Malformed lifecycle result');
+      }
+      result = { status, ...(detail === undefined ? {} : { detail }) };
+    } catch (error) {
+      result = { status: 'unknown', detail: hostDetail(error) };
+    }
+    this.records.push({
+      kind: 'effect',
+      grant: participant.grantName,
+      segment: this.segmentId,
+      phase,
+      status: result.status,
+    });
+    if (result.status !== 'ok') {
+      this.records.push({
+        kind: 'effect-failure',
+        grant: participant.grantName,
+        segment: this.segmentId,
+        phase,
+        status: result.status,
+        detail: result.detail ?? '',
+      });
+    }
+    return result;
+  }
+
+  private effectFailure(
+    phase: EffectFailure['phase'],
+    result: EffectResult,
+  ): EffectFailure {
+    return {
+      script: this.script.name,
+      run: this.id,
+      grant: this.participant!.grantName,
+      segment: this.segmentId,
+      phase,
+      status: result.status as 'failed' | 'unknown',
+      ...(result.detail === undefined ? {} : { detail: result.detail }),
+    };
+  }
+
+  private rollbackParticipant() {
+    if (!this.participant) {
+      return;
+    }
+    if (this.lifecycle('rollback').status !== 'ok') {
+      this.effectStateUnknown = true;
+    }
+    this.participant = null;
+    this.participantAbandonment = null;
+    this.script.variables = [...this.segmentBase];
+  }
+
+  /** After charges/state checks, before any Segment outcome becomes visible. */
+  finalizeEffects(rollback = false) {
+    if (rollback || this.done) {
+      this.abandonScopes();
+    }
+    if (!this.participant) {
+      return;
+    }
+    if (
+      rollback ||
+      this.outcome?.kind === 'limit fault' ||
+      (this.outcome?.kind === 'cancelled' &&
+        this.outcome.cleanupFailed &&
+        'limit' in this.outcome.cleanupFailed)
+    ) {
+      this.rollbackParticipant();
+      return;
+    }
+    const abandonment = this.participantAbandonment;
+    const result = abandonment ? null : this.lifecycle('commit');
+    if (result?.status === 'ok') {
+      this.participant = null;
+      this.participantAbandonment = null;
+      return;
+    }
+    const failure = abandonment ?? this.effectFailure('commit', result!);
+    if (result?.status === 'unknown') {
+      this.effectStateUnknown = true;
+    }
+    this.rollbackParticipant();
+    const pending = this.discard();
+    this.records.push(...pending.map(id => ({ kind: 'abandon' as const, id })));
+    this.script.variables = [...this.segmentBase];
+    this.outcome = { kind: 'effect failed', effect: failure };
+  }
+
   get hasOpenScopes(): boolean {
     return this.scopes.length !== 0;
   }
@@ -806,11 +936,15 @@ export class Run {
   }
 
   /** Reserved Host cleanup, called by the Group before publishing termination. */
-  abandonScopes() {
-    while (this.scopes.length) {
-      const scope = this.scopes.pop()!;
+  abandonScopes(grantName?: string) {
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (grantName !== undefined && this.scopes[i]!.grantName !== grantName) {
+        continue;
+      }
+      const scope = this.scopes.splice(i, 1)[0]!;
       const id = `${this.id}.c${++this.calls}`;
       let contractFailure = false;
+      // eslint-disable-next-line unicorn/consistent-function-scoping -- Each attempt tracks forbidden calls even if the Host catches their error.
       const forbidden = (): never => {
         contractFailure = true;
         throw new HostError(
@@ -907,6 +1041,7 @@ export class Run {
           },
           {
             kind: 'effect-failure',
+            phase: 'abandon',
             grant: scope.grantName,
             segment: this.segmentId,
             scope: scope.name,
@@ -914,6 +1049,18 @@ export class Run {
             detail: hostDetail(error),
           },
         );
+        if (this.participant?.grantName === scope.grantName) {
+          this.participantAbandonment ??= {
+            script: this.script.name,
+            run: this.id,
+            grant: scope.grantName,
+            segment: this.segmentId,
+            phase: 'abandon',
+            scope: scope.name,
+            status,
+            detail: hostDetail(error),
+          };
+        }
       }
     }
   }
@@ -1179,6 +1326,10 @@ export class Run {
           )
           .map(entry => ({ frame, entry })),
       );
+    if (this.participant) {
+      this.abandonScopes(this.participant.grantName);
+      this.rollbackParticipant();
+    }
     this.cancellationAbandons = this.discard(betweenSegments);
     this.segment++;
     this.cancellation = blocks;
@@ -2071,6 +2222,14 @@ export class Run {
   private unwind(error: Value, ins: Instruction) {
     if (this.cancelling) {
       this.record(error, ins, false);
+      try {
+        this.checkState();
+      } catch (error_) {
+        if (error_ instanceof LimitFaultError) {
+          return this.fault(error_.limit, ins);
+        }
+        throw error_;
+      }
       this.frames = [];
       this.outcome = {
         kind: 'cancelled',
@@ -2323,9 +2482,34 @@ export class Run {
         throw new ScriptError('scope not open', fields);
       }
     }
+    if (
+      op.mode === 'immediate' &&
+      op.segmentBound &&
+      this.participant &&
+      this.participant.grantName !== grantName
+    ) {
+      throw new ScriptError('segment participant conflict', [
+        ...named,
+        ['participant', text(this.participant.grantName)],
+      ]);
+    }
     const declared = op.cost.fuel;
     this.pay(key, { declared });
     this.payAmount(0, op.cost.alloc ?? 0);
+    if (op.mode === 'immediate' && op.segmentBound && !this.participant) {
+      this.participant = { grantName, grant };
+      const result = this.lifecycle('begin');
+      if (result.status === 'failed') {
+        this.participant = null;
+        throw new ScriptError('host error', named, true);
+      }
+      if (result.status === 'unknown') {
+        // Keep the possibly acquired participant for terminal cleanup, which
+        // abandons existing scopes before attempting rollback exactly once.
+        this.effectStateUnknown = true;
+        throw new CrossingInterruptedError();
+      }
+    }
     const id = `${this.id}.c${++this.calls}`;
     const ctx: CallContext = {
       id,

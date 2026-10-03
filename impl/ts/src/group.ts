@@ -185,7 +185,8 @@ export type RunOutcome =
   | 'limit fault'
   | 'cancelled'
   | 'unhandled'
-  | 'dropped';
+  | 'dropped'
+  | 'effect failed';
 /** The Trace's name for a limit a Limit Fault or failed cleanup passed. */
 export type LimitWord =
   'fuel' | 'alloc' | 'persistent' | 'depth' | 'pattern' | 'join' | 'cleanup';
@@ -200,9 +201,9 @@ export type Location = {
 export type EffectFailure = {
   detail?: string;
   grant: string;
-  phase: 'abandon';
+  phase: 'abandon' | 'begin' | 'commit' | 'rollback';
   run: string;
-  scope: string;
+  scope?: string;
   script: string;
   segment: string;
   status: 'failed' | 'unknown';
@@ -216,6 +217,7 @@ export type Report =
       broadcast?: string;
       cleanupFailed?: { code: string } | { limit: Exclude<LimitWord, 'fuel'> };
       delivery?: string;
+      effect?: EffectFailure;
       error?: ScriptError;
       fn?: Value;
       fuel: number;
@@ -588,6 +590,8 @@ export class Group {
   private lastClock: bigint | null = null;
   private pumping = false;
   private cleaning = false;
+  private effectStateUnknown = false;
+  private terminalReports: (() => void)[] | null = null;
   private active: { records: number; running: Running; s: ScriptState } | null =
     null;
   private activeStop: (() => void) | null = null;
@@ -672,7 +676,12 @@ export class Group {
   save(): Uint8Array {
     this.worker();
     const id = `s${++this.saves}`;
-    if (this.scripts.some(s => this.runsOf(s).some(r => r.run.hasOpenScopes))) {
+    if (
+      this.effectStateUnknown ||
+      this.scripts.some(s =>
+        this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
+      )
+    ) {
       this.trace(recordLine('save', [id], [], true));
       this.trace(
         recordLine(
@@ -1482,7 +1491,21 @@ export class Group {
     if (running.run.cancelling || running.run.done) {
       return;
     }
-    running.run.cancel(running.parked || running.resuming);
+    const records = running.run.records.length;
+    this.cleaning = true;
+    try {
+      running.run.cancel(running.parked || running.resuming);
+    } finally {
+      this.cleaning = false;
+    }
+    this.writeRecords(running, records);
+    if (this.active?.running === running) {
+      this.active.records = running.run.records.length;
+    }
+    if (running.run.effectStateUnknown) {
+      this.stopUnknownEffects();
+      return;
+    }
     this.forgetWait(s, running);
     running.parked = false;
     running.cleanupReady = this.active?.running !== running;
@@ -1520,16 +1543,70 @@ export class Group {
       pendingCalls.push(
         ...r.run.discard(r.parked || r.resuming || r.cleanupReady),
       );
-      this.abandonScopes(r);
+      this.finalizeEffects(r, true);
       this.forgetWait(s, r);
     }
     s.queue = [];
+    if (!this.effectStateUnknown && runs.some(r => r.run.effectStateUnknown)) {
+      s.stopReason = 'effect state unknown';
+      this.stopUnknownEffects(s, () =>
+        this.reportStop(
+          s,
+          'effect state unknown',
+          runs,
+          messages,
+          pendingCalls,
+        ),
+      );
+      return;
+    }
     const report = () =>
       this.reportStop(s, reason, runs, messages, pendingCalls);
-    if (this.active?.s === s) {
+    if (this.terminalReports) {
+      this.terminalReports.push(report);
+    } else if (this.active?.s === s) {
       this.activeStop = report;
     } else {
       report();
+    }
+  }
+
+  private stopUnknownEffects(
+    failedScript?: ScriptState,
+    failedReport?: () => void,
+  ) {
+    if (this.effectStateUnknown) {
+      return;
+    }
+    this.effectStateUnknown = true;
+    const reports: (() => void)[] = [];
+    this.terminalReports = reports;
+    try {
+      for (const s of this.scripts) {
+        if (s === failedScript) {
+          reports.push(failedReport!);
+        } else {
+          this.stopState(s, 'effect state unknown');
+        }
+      }
+    } finally {
+      this.terminalReports = null;
+    }
+    const publish = () => {
+      for (const report of reports) {
+        report();
+      }
+    };
+    if (this.active) {
+      this.activeStop = publish;
+    } else {
+      publish();
+    }
+  }
+
+  private requireKnownEffects() {
+    if (this.effectStateUnknown) {
+      throw new HostError('effect state unknown');
     }
   }
 
@@ -1630,20 +1707,21 @@ export class Group {
     }
   }
 
-  private abandonScopes(running: Running) {
-    if (!running.run.hasOpenScopes) {
+  private finalizeEffects(running: Running, rollback = false) {
+    const run = running.run;
+    if (!run.hasOpenScopes && !run.hasParticipant) {
       return;
     }
-    const records = running.run.records.length;
+    const records = run.records.length;
     this.cleaning = true;
     try {
-      running.run.abandonScopes();
+      run.finalizeEffects(rollback);
     } finally {
       this.cleaning = false;
     }
     this.writeRecords(running, records);
     if (this.active?.running === running) {
-      this.active.records = running.run.records.length;
+      this.active.records = run.records.length;
     }
   }
 
@@ -1697,6 +1775,7 @@ export class Group {
   /** Worker. Compiles, checks and loads a Script, or throws LoadError. */
   load(o: LoadOptions): Script {
     this.worker();
+    this.requireKnownEffects();
     const objects = Object.keys(o.objects ?? {});
     const owner = o.owner ? this.held(o.owner) : null;
     if (owner?.owner) {
@@ -1919,6 +1998,7 @@ export class Group {
   /** Worker. Check and initialise before discarding any old work. */
   reload(name: string, source: string, carry: CarryOver): Report[] {
     this.worker();
+    this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
     const p = prepare('script', name, source, this.libraries);
     this.trace(
@@ -2100,6 +2180,7 @@ export class Group {
   /** Worker. Existing code units and Runs remain untouched. */
   extend(name: string, source: string): void {
     this.worker();
+    this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
     const p = this.extension(s, source);
     this.trace(
@@ -2132,6 +2213,7 @@ export class Group {
       for (const { s } of replacements) {
         this.stopState(s, 'reload');
       }
+      this.requireKnownEffects();
       for (const { s, loaded, units, identity, grants } of replacements) {
         s.loaded = loaded;
         s.identity = identity;
@@ -2183,6 +2265,7 @@ export class Group {
   /** Worker. Prepare every dependent before changing the Group. */
   replaceLibrary(l: Library, carry: CarryOver): Report[] {
     this.worker();
+    this.requireKnownEffects();
     this.trace(
       recordLine(
         'replace-library',
@@ -3448,12 +3531,14 @@ export class Group {
       run.step();
       this.writeRecords(running, this.active.records);
       this.active.records = run.records.length;
+      if (run.effectStateUnknown) {
+        this.stopUnknownEffects();
+      }
       selected();
       charge(run.fuel - last);
       last = run.fuel;
     }
-    this.active = null;
-    const outcome = run.ended;
+    let outcome = run.ended;
     if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
       this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
     }
@@ -3495,9 +3580,14 @@ export class Group {
         ),
       );
     }
-    if (outcome && !s.stopped) {
-      this.abandonScopes(running);
+    if ((run.done || run.suspended) && !s.stopped) {
+      this.finalizeEffects(running);
     }
+    if (run.effectStateUnknown) {
+      this.stopUnknownEffects();
+    }
+    outcome = run.ended;
+    this.active = null;
     const handler =
       !running.delivery.fn && s.loaded.clauses.has(running.delivery.message)
         ? running.delivery.message
@@ -3700,6 +3790,20 @@ export class Group {
         );
         continue;
       }
+      if (rec.kind === 'effect') {
+        this.trace(
+          recordLine(
+            'effect',
+            [rec.segment],
+            [
+              ['grant', rec.grant],
+              ['phase', rec.phase],
+              ['status', rec.status],
+            ],
+          ),
+        );
+        continue;
+      }
       if (rec.kind === 'effect-failure') {
         this.trace(
           recordLine(
@@ -3708,9 +3812,9 @@ export class Group {
             [
               ['grant', rec.grant],
               ['segment', rec.segment],
-              ['phase', 'abandon'],
+              ['phase', rec.phase],
               ['status', rec.status],
-              ['scope', rec.scope],
+              ['scope', rec.scope ?? null],
             ],
           ),
         );
@@ -3720,9 +3824,9 @@ export class Group {
           run: running.id,
           grant: rec.grant,
           segment: rec.segment,
-          phase: 'abandon',
+          phase: rec.phase,
           status: rec.status,
-          scope: rec.scope,
+          ...(rec.scope ? { scope: rec.scope } : {}),
           detail: rec.detail,
         });
         continue;
@@ -3855,7 +3959,12 @@ export class Group {
     if (outcome.kind === 'limit fault') {
       s.faults++;
     }
-    const word = outcome.kind === 'limit fault' ? 'limit-fault' : outcome.kind;
+    const word =
+      outcome.kind === 'limit fault'
+        ? 'limit-fault'
+        : outcome.kind === 'effect failed'
+          ? 'effect-failed'
+          : outcome.kind;
     const result = outcome.kind === 'completed' ? outcome.result : null;
     const error = outcome.kind === 'errored' ? outcome.error : null;
     const limit =
@@ -3876,6 +3985,27 @@ export class Group {
           ],
           ['error', error ? traceValue(error) : null],
           ['limit', limit],
+          [
+            'effect',
+            outcome.kind === 'effect failed'
+              ? traceValue(
+                  map([
+                    ['grant', text(outcome.effect.grant)],
+                    ['segment', text(outcome.effect.segment)],
+                    ['phase', text(outcome.effect.phase)],
+                    ['status', text(outcome.effect.status)],
+                    ...(outcome.effect.scope
+                      ? [
+                          ['scope', text(outcome.effect.scope)] as [
+                            string,
+                            Value,
+                          ],
+                        ]
+                      : []),
+                  ]),
+                )
+              : null,
+          ],
           ['fuel', String(run.fuel)],
           ['alloc', String(run.alloc)],
         ],
@@ -3910,6 +4040,7 @@ export class Group {
           }
         : {}),
       outcome: outcome.kind,
+      ...(outcome.kind === 'effect failed' ? { effect: outcome.effect } : {}),
       ...(result ? { result } : {}),
       ...(error ? { error: hostError(error) } : {}),
       ...(limit ? { limit } : {}),
@@ -3926,7 +4057,8 @@ export class Group {
       outcome.kind === 'errored' ||
       outcome.kind === 'limit fault' ||
       outcome.kind === 'cancelled' ||
-      outcome.kind === 'dropped'
+      outcome.kind === 'dropped' ||
+      outcome.kind === 'effect failed'
     ) {
       this.seal(delivery, {
         verdict: 'undecided',
@@ -4192,6 +4324,8 @@ const endReason = (outcome: Outcome): string => {
       return 'dropped';
     case 'cancelled':
       return 'cancel';
+    case 'effect failed':
+      return 'effect-failed';
   }
 };
 
