@@ -1,0 +1,21 @@
+# Chapter 8: zero copies emit nothing; counted plural classes use the singular.
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "zero"
+source = "zero.talk"
+limits = { patternSize = 1 }
+
+[[scripts]]
+name = "upper"
+source = "upper.talk"
+limits = { patternSize = 4 }
+
+[[scripts]]
+name = "lower"
+source = "lower.talk"
+limits = { patternSize = 4 }

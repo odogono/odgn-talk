@@ -1,0 +1,11 @@
+script variable expected
+script variable offending
+
+on go
+  try
+    put <(42)> into unused
+  catch {code: "wrong kind", expected: wanted, value: bad}
+    put wanted into expected
+    put bad into offending
+  end try
+end go

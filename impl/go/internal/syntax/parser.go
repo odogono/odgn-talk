@@ -78,8 +78,19 @@ func spelling(t Token) string {
 	}
 	return t.Raw
 }
-func (p *parser) at(s string) bool      { return spelling(p.peek(Operator)) == s }
-func (p *parser) pair(a, b string) bool { return p.at(a) && spelling(p.second(Operator)) == b }
+func (p *parser) at(s string) bool { return spelling(p.peek(Operator)) == s }
+
+// atOperand checks an optional production where an expression or binding may
+// follow. Chapter 1 fixes the mode before lexing, including for lookahead.
+func (p *parser) atOperand(s string) bool { return spelling(p.peek(Operand)) == s }
+func (p *parser) pair(a, b string) bool   { return p.at(a) && spelling(p.second(Operator)) == b }
+func (p *parser) acceptOperand(s string) bool {
+	if p.atOperand(s) {
+		p.take(Operand)
+		return true
+	}
+	return false
+}
 func (p *parser) take(mode Mode) Token {
 	token := p.peek(mode)
 	p.pending = p.pending[1:]
@@ -195,7 +206,7 @@ func (p *parser) declaration() *Node {
 		}
 		n.Text = name.Raw
 		n.NameToken = name
-		for !p.at("\n") && !p.at("where") && !p.at(",") && (n.Kind != "handler" || !p.suffixStart()) {
+		for !p.atOperand("\n") && !p.at("where") && !p.at(",") && (n.Kind != "handler" || !p.suffixStart()) {
 			if n.Kind == "function" {
 				param := node("name", p.name())
 				if p.accept("=") {
@@ -242,7 +253,7 @@ func (p *parser) declaration() *Node {
 	return n
 }
 func (p *parser) suffixStart() bool {
-	return p.at(",") && slices.Contains([]string{"queued", "dropping", "replacing", "deciding", "during"}, p.second(Operator).Raw)
+	return p.at(",") && slices.Contains([]string{"queued", "dropping", "replacing", "deciding", "during"}, p.second(Operand).Raw)
 }
 func (p *parser) block(ends ...string) []*Node {
 	var body []*Node
@@ -295,7 +306,8 @@ func (p *parser) statement(inline bool) *Node {
 	n := node(t.Raw, p.take(Operand))
 	switch t.Raw {
 	case "put":
-		if p.accept("...") {
+		if p.atOperand("...") {
+			p.take(Operand)
 			n.Flags = append(n.Flags, Token{Raw: "..."})
 		}
 		n.Children = append(n.Children, p.expression())
@@ -328,8 +340,8 @@ func (p *parser) statement(inline bool) *Node {
 	case "delete":
 		n.Children = append(n.Children, p.container())
 	case "replace":
-		if p.pair("first", "in") { /* first is a name here */
-		} else if p.accept("first") {
+		if p.atOperand("first") && p.second(Operand).Raw != "in" {
+			p.take(Operand)
 			n.Flags = append(n.Flags, Token{Raw: "first"})
 		}
 		n.Children = append(n.Children, p.chunkLevel())
@@ -354,14 +366,14 @@ func (p *parser) statement(inline bool) *Node {
 		n.Params = []*Node{p.expression()}
 		p.expect("to")
 		n.Text = p.word().Raw
-		if !p.at("\n") && !p.at("else") && !p.pair("and", "wait") {
+		if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
 			n.Children = p.expressionList()
 		}
 		if t.Raw == "ask" {
 			p.andWait(n)
 		}
 	case "return", "veto":
-		if !p.at("\n") && !p.at("else") {
+		if !p.atOperand("\n") && !p.at("else") {
 			n.Children = []*Node{p.expression()}
 		}
 	case "throw":
@@ -371,19 +383,19 @@ func (p *parser) statement(inline bool) *Node {
 	case "exit":
 		p.expect("repeat")
 	default:
-		if t.Raw == "next" && p.accept("repeat") {
+		if t.Raw == "next" && p.acceptOperand("repeat") {
 			n.Kind = "next"
 			break
 		}
 		if !isName(t) {
 			p.fail(t)
 		}
-		if p.at("(") && p.peek(Operator).Start == t.End {
+		if p.atOperand("(") && p.peek(Operator).Start == t.End {
 			n.Kind = "call-statement"
 			n.Children = []*Node{p.call(t)}
 		} else {
 			n.Kind = "command"
-			if !p.at("\n") && !p.at("else") && !p.pair("and", "wait") {
+			if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
 				n.Children = p.expressionList()
 			}
 		}
@@ -493,7 +505,7 @@ func (p *parser) matchStatement() *Node {
 			continue
 		}
 		b := node("when", p.expect("when"))
-		if p.pair("contains", "<") {
+		if p.atOperand("contains") && p.second(Operand).Raw == "<" {
 			b.Flags = append(b.Flags, p.take(Operand))
 		}
 		b.Params = []*Node{p.bindingPattern()}
@@ -542,7 +554,7 @@ func (p *parser) event(t Token) *Node {
 		p.fail(name)
 	}
 	e.Text = name.Raw
-	for !p.at("\n") && !p.at("where") && !p.at("then") && !p.at("or") && !(p.at("from") && startsOperand(p.second(Operand))) {
+	for !p.atOperand("\n") && !p.at("where") && !p.at("then") && !p.at("or") && !(p.at("from") && startsOperand(p.second(Operand))) {
 		e.Params = append(e.Params, p.bindingPattern())
 		if !p.accept(",") {
 			break
@@ -559,10 +571,11 @@ func (p *parser) event(t Token) *Node {
 }
 func (p *parser) waitStatement(inline bool) *Node {
 	n := node("wait", p.take(Operand))
-	if !p.accept("for") {
+	if !p.atOperand("for") {
 		n.Children = []*Node{p.expression()}
 		return n
 	}
+	p.take(Operand)
 	if p.at("all") {
 		if inline {
 			p.fail(p.peek(Operand))
@@ -617,7 +630,7 @@ func startsOperand(t Token) bool {
 	return slices.Contains([]string{"(", "[", "{", "<", "<<", "-", "not", "given", "the", "every", "replace", "true", "false", "nothing", "it", "me"}, t.Raw)
 }
 func (p *parser) expression() *Node {
-	if p.at("given") {
+	if p.atOperand("given") {
 		return p.lambda()
 	}
 	return p.binary(1)
@@ -625,7 +638,7 @@ func (p *parser) expression() *Node {
 func (p *parser) lambda() *Node {
 	n := node("lambda", p.take(Operand))
 	p.base = append(p.base, p.depth)
-	for !p.at(":") && !p.at("\n") {
+	for !p.atOperand(":") && !p.at("\n") {
 		n.Params = append(n.Params, p.bindingPattern())
 		if !p.accept(",") {
 			break
@@ -643,14 +656,14 @@ func (p *parser) lambda() *Node {
 }
 func (p *parser) binary(level int) *Node {
 	if level == 3 {
-		if p.at("not") {
+		if p.atOperand("not") {
 			t := p.take(Operand)
 			return node("unary", t, p.binary(3))
 		}
 		return p.binary(4)
 	}
 	if level == 10 {
-		if p.at("-") {
+		if p.atOperand("-") {
 			t := p.take(Operand)
 			return node("unary", t, p.binary(10))
 		}
@@ -722,12 +735,12 @@ func (p *parser) comparison() *Node {
 		left.Text = op + " with"
 	} else if op == "is" {
 		p.take(Operator)
-		neg := p.accept("not")
+		neg := p.acceptOperand("not")
 		op = "is"
 		if neg {
 			op = "is not"
 		}
-		if p.accept("in") {
+		if p.acceptOperand("in") {
 			left = node("binary", t, left, p.binary(5))
 			left.Text = op + " in"
 		} else if (p.at("a") || p.at("an")) && (isName(p.second(Operand)) || p.second(Operand).Raw == "function") {
@@ -852,7 +865,8 @@ func (p *parser) primary() *Node {
 	case t.Raw == "replace":
 		p.take(Operand)
 		n := node("replace-expression", t)
-		if !p.pair("first", "in") && p.accept("first") {
+		if p.atOperand("first") && p.second(Operand).Raw != "in" {
+			p.take(Operand)
 			n.Flags = append(n.Flags, Token{Raw: "first"})
 		}
 		n.Children = append(n.Children, p.chunkLevel())
@@ -898,7 +912,7 @@ func (p *parser) call(t Token) *Node {
 	defer func() { p.buildDepth = build }()
 	p.expect("(")
 	n := node("call", t)
-	if !p.at(")") {
+	if !p.atOperand(")") {
 		n.Children = p.expressionList()
 	}
 	n.End = p.expect(")")
@@ -973,7 +987,7 @@ func (p *parser) collection(mapping bool) *Node {
 		kind = "map"
 	}
 	n := node(kind, t)
-	if !p.at(close) {
+	if !p.atOperand(close) {
 		for {
 			if mapping {
 				k := p.peek(Operand)
@@ -988,7 +1002,10 @@ func (p *parser) collection(mapping bool) *Node {
 				}
 				n.Children = append(n.Children, entry)
 			} else {
-				spread := p.accept("...")
+				spread := p.atOperand("...")
+				if spread {
+					p.take(Operand)
+				}
 				item := p.expression()
 				if spread {
 					item = node("spread", item.Token, item)
@@ -1015,7 +1032,7 @@ func (p *parser) bindingPattern() *Node {
 			kind, close = "pattern-map", "}"
 		}
 		n = node(kind, t)
-		if !p.at(close) {
+		if !p.atOperand(close) {
 			for {
 				var item *Node
 				if mapping {
@@ -1034,7 +1051,7 @@ func (p *parser) bindingPattern() *Node {
 						name := p.name()
 						item = node("entry", name, node("binding", name))
 					}
-				} else if p.at("...") {
+				} else if p.atOperand("...") {
 					item = node("rest", p.take(Operand))
 					item.Text = ""
 					if isName(p.peek(Operand)) && !p.at("as") {
@@ -1255,7 +1272,7 @@ func (p *parser) binaryPattern(pattern bool) *Node {
 	}
 	n := node(kind, t)
 	p.buildDepth++
-	if !p.at(">>") {
+	if !p.atOperand(">>") {
 		for {
 			token := p.peek(Operand)
 			var field *Node

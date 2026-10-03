@@ -74,6 +74,8 @@ func TestModalPunctuators(t *testing.T) {
 	}{
 		{"<=>><<...", Operator, []string{"<=", ">>", "<<", "..."}},
 		{"<>>", Pattern, []string{"<", ">", ">"}},
+		{"<>", Operand, []string{"<", ">"}},
+		{"<>", Operator, []string{"<>"}},
 		{"0x1F 007.50 1..2", Operand, []string{"0x1F", "007.50", "1", "..", "2"}},
 		{"x's size", Operator, []string{"x", "'s", "size"}},
 	} {

@@ -1,0 +1,10 @@
+# Empty Pattern literals and empty spliced groups (chapters 4, 8 and 11).
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "empty"
+source = "empty.talk"

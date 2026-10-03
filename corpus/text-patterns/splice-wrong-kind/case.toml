@@ -1,0 +1,10 @@
+# The make-pattern wrong-kind diagnostic fields (chapter 4, Making a pattern).
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[scripts]]
+name = "splice"
+source = "splice.talk"

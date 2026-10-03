@@ -1,4 +1,5 @@
-# Cases the Go Core must continue to pass (issue #132).
+# Cases the Go Core must continue to pass (issues #132 and #133).
+# The three new step-2 regression cases retain Unblessed headers until review.
 bytes/build-and-match
 bytes/value-encoding
 dates/civil-arithmetic
@@ -63,6 +64,8 @@ text-model/word-break-anchor
 text-model/word-chunks-keep-punctuation
 text-model/zwj-sequence-search
 text-patterns/canonical-source-leading-group
+text-patterns/counted-program-sizes
+text-patterns/empty-literal-composition
 text-patterns/empty-match-skipped-after-match
 text-patterns/empty-matches-step-one-character
 text-patterns/greedy-by-default
@@ -72,3 +75,4 @@ text-patterns/matching-fuel-exhaustion
 text-patterns/or-is-leftmost-first
 text-patterns/pattern-size-made-at-run-time
 text-patterns/replace-all-empty-matches
+text-patterns/splice-wrong-kind

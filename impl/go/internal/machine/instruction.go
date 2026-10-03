@@ -477,7 +477,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		source := r.State.Constants[idx(0)].Text
 		for _, v := range vs {
 			if v.Kind != value.Text && v.Kind != value.Pattern {
-				bad(wrong("text or pattern", v))
+				bad(wrong("pattern", v))
 				break
 			}
 		}
