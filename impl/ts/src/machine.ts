@@ -1,3 +1,4 @@
+import { deferFault, machineDebug } from './debug';
 /* eslint require-yield: "off" */
 // Chapter 8's Abstract Machine over the code units the lowering produces. A
 // Run's frames, slots and operand stacks follow chapter 8's state; each
@@ -1268,6 +1269,11 @@ export class Run {
 
   /** Roll back the active Segment and abandon every pending call without unwinding. */
   discard(betweenSegments = false): string[] {
+    const debug = machineDebug.get(this);
+    if (debug) {
+      debug.pending = null;
+      debug.fault = null;
+    }
     if (!betweenSegments && !this.suspended && !this.resumption && !this.done) {
       this.script.variables = [...this.segmentBase];
     }
@@ -1621,26 +1627,31 @@ export class Run {
         // The function was never entered: its catch/finally regions cannot
         // see an invalid Host argument count, and no instruction is charged.
         const error = this.errorMap(code, [], ins);
-        this.records.push({
-          kind: 'raise',
-          code,
-          unit: frame.code.name,
-          pc: frame.pc,
-          line: ins.line,
-          col: ins.col,
-        });
-        this.frames = [];
-        this.outcome = {
-          kind: 'errored',
-          error,
-          at: {
+        const finish = () => {
+          this.records.push({
+            kind: 'raise',
+            code,
             unit: frame.code.name,
-            handler: frame.handler,
             pc: frame.pc,
             line: ins.line,
             col: ins.col,
-          },
+          });
+          this.frames = [];
+          this.outcome = {
+            kind: 'errored',
+            error,
+            at: {
+              unit: frame.code.name,
+              handler: frame.handler,
+              pc: frame.pc,
+              line: ins.line,
+              col: ins.col,
+            },
+          };
         };
+        if (!deferFault(this, { reason: 'error', error }, finish)) {
+          finish();
+        }
         return;
       }
       if (resumption) {
@@ -1661,11 +1672,24 @@ export class Run {
         throw error;
       }
     }
+    this.finishInstruction();
+  }
+
+  /** Internal: also called after a debug-deferred unwind. */
+  finishInstruction() {
+    if (machineDebug.get(this)?.pending) {
+      return;
+    }
     // An abandoned call is written after the raise that reports it.
     for (const id of this.abandoning) {
       this.records.push({ kind: 'abandon', id });
     }
     this.abandoning = [];
+  }
+
+  /** TS tooling: a resumption consumes the suspension instruction, not a new statement. */
+  get resumingInstruction(): boolean {
+    return this.resumption !== null;
   }
 
   /** Make a suspended Run ready: its next step resumes it with `r`. */
@@ -2108,6 +2132,17 @@ export class Run {
   }
 
   private fault(limit: LimitName, ins: Instruction) {
+    if (
+      deferFault(this, { reason: 'limitFault', limit }, () =>
+        this.faultNow(limit, ins),
+      )
+    ) {
+      return;
+    }
+    this.faultNow(limit, ins);
+  }
+
+  private faultNow(limit: LimitName, ins: Instruction) {
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
     this.faultAbandons = this.abandonJoin();
     const code = this.frame.code;
@@ -2220,6 +2255,17 @@ export class Run {
    * for the frames popped, then continue there.
    */
   private unwind(error: Value, ins: Instruction) {
+    if (
+      deferFault(this, { reason: 'error', error }, () =>
+        this.unwindNow(error, ins),
+      )
+    ) {
+      return;
+    }
+    this.unwindNow(error, ins);
+  }
+
+  private unwindNow(error: Value, ins: Instruction) {
     if (this.cancelling) {
       this.record(error, ins, false);
       try {

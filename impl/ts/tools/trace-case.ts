@@ -42,6 +42,7 @@ import {
   map,
   nothing,
   type Limits,
+  type Group,
   type Value,
 } from '../src/index';
 
@@ -606,7 +607,13 @@ export const replay = (
   dir: string,
   setup: Setup,
   lines: readonly string[],
-  { restoreBetweenPumps = false } = {},
+  {
+    restoreBetweenPumps = false,
+    configureDebug,
+  }: {
+    configureDebug?: (group: Group) => void;
+    restoreBetweenPumps?: boolean;
+  } = {},
 ): string[] => {
   const trace: string[] = [];
   let hidden = false;
@@ -642,6 +649,8 @@ export const replay = (
   const functions = new Map<string, Value>();
   const receive = (value: Value) => rememberFunctions(value, functions);
   let group = newGroup({ name: 'case', trace: writeTrace });
+  configureDebug?.(group);
+  const landedLines = new Set<number>();
   // A Stop or CancelRun after a crossing is made from that Host function,
   // rather than a second time by the outer replay loop (chapter 11).
   const atCrossings = new Map<string, Parsed[][]>();
@@ -675,6 +684,9 @@ export const replay = (
         continue;
       }
       if (!line.startsWith('> stop ') && !line.startsWith('> cancel-run ')) {
+        break;
+      }
+      if (parseRecord(line).fields.has('pc')) {
         break;
       }
       inputs.push(parseRecord(line));
@@ -871,7 +883,7 @@ export const replay = (
   const bound = new Map<string, Record<string, Grant<unknown>>>();
   for (const index of order) {
     const line = lines[index]!;
-    if (crossingLines.has(index)) {
+    if (crossingLines.has(index) || landedLines.has(index)) {
       continue;
     }
     if (!line.startsWith('> ')) {
@@ -1074,6 +1086,7 @@ export const replay = (
             visibleSaves = Number(from.slice(1));
           }
           group = restored.group;
+          configureDebug?.(group);
           registered = new Map(
             [...registered].filter(([name]) => !withheld.has(name)),
           );
@@ -1115,7 +1128,55 @@ export const replay = (
           break;
         }
         case 'pump': {
-          const pumped = group.pump(parseInstant(r.fields.get('clock')!), {
+          const landings: {
+            input: Parsed;
+            inputIndex: number;
+            line: number;
+            run: string;
+          }[] = [];
+          let inputIndex = lines
+            .slice(0, index + 1)
+            .filter(l => l.startsWith('> ')).length;
+          for (
+            let j = index + 1;
+            j < lines.length && !lines[j]!.startsWith('pumped ');
+            j++
+          ) {
+            const line = lines[j]!;
+            if (!line.startsWith('> ')) {
+              continue;
+            }
+            const input = parseRecord(line);
+            if (
+              (input.name === 'stop' || input.name === 'cancel-run') &&
+              input.fields.has('pc')
+            ) {
+              const segment = lines
+                .slice(j + 1)
+                .find(l => l.startsWith('seg '));
+              if (!segment) {
+                throw new Error('Early Host Input has no executing Segment');
+              }
+              landings.push({
+                line: j,
+                input,
+                inputIndex,
+                run: parseRecord(segment).ids[0]!,
+              });
+            }
+            inputIndex++;
+          }
+          const armLanding = () => {
+            const next = landings[0];
+            if (next) {
+              group.debug().landAt(next.inputIndex, {
+                pc: Number(next.input.fields.get('pc')),
+                run: next.run,
+              });
+            }
+          };
+          armLanding();
+          let pumped = group.pump(parseInstant(r.fields.get('clock')!), {
             fuelSlice: r.fields.has('fuel-slice')
               ? Number(r.fields.get('fuel-slice'))
               : 0,
@@ -1123,6 +1184,29 @@ export const replay = (
               ? Number(r.fields.get('fuel-cap'))
               : 0,
           });
+          while (group.debug().isPaused) {
+            if (group.debug().current?.reason === 'replay') {
+              const landing = landings.shift()!;
+              const input = landing.input;
+              if (input.name === 'stop') {
+                group
+                  .script(input.ids[0]!)!
+                  .stop(value(input.fields.get('reason')!).asText()!);
+              } else {
+                group
+                  .script(input.ids[0]!.split('/r')[0]!)!
+                  .cancelRun(input.ids[0]!);
+              }
+              landedLines.add(landing.line);
+              armLanding();
+            }
+            pumped = group.debug().resume()!;
+          }
+          if (landings.length) {
+            throw new Error(
+              'Early Host Input did not reach its replay instruction',
+            );
+          }
           if (malformed) {
             throw malformed;
           }
@@ -1218,6 +1302,7 @@ export const replay = (
               )
             ) {
               group = restored.group;
+              configureDebug?.(group);
               for (const [key, handle] of made) {
                 made.set(key, group.objectById(handle.kind.name, handle.id)!);
               }
