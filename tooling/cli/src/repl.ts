@@ -1,3 +1,4 @@
+import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
 // The TS REPL: a line-at-a-time interface over the Session Host. Its prompt,
 // line editing, `:help`, `:quit` and how it is told where to write a
 // Transcript are outside parity (chapter 12); everything it prints and
@@ -53,6 +54,7 @@ export const repl = ({
   }
   const host = new SessionHost({
     now,
+    capabilities: canvasCapabilities,
     builtIns: { calendar, locale },
     readFile: path => readFileSync(path, 'utf8'),
     writeFile: (directory, file, text) => {

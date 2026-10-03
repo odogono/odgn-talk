@@ -56,6 +56,9 @@ export type SessionEnvironment = {
    * for `:grant`, besides `clock`; each answer is recorded as a `~` line.
    */
   builtIns?: { calendar?: CalendarImpl; locale?: LocaleImpl };
+  /** Fresh, deterministic immediate Host capabilities, also supplied during replay.
+   * They must not perform external I/O; their state belongs to this session. */
+  capabilities?(): readonly CapabilityDef<unknown>[];
   /** A real Clock reading, in epoch nanoseconds. */
   now(): bigint;
   /** A user Library's source, for `:library` given a path. */
@@ -245,11 +248,35 @@ export class SessionHost {
   >();
   private readonly saves = new Map<string, Saved>();
 
-  constructor(private readonly env: SessionEnvironment) {}
+  private readonly extensions: ReadonlyMap<string, CapabilityDef<unknown>>;
+  constructor(private readonly env: SessionEnvironment) {
+    const definitions = env.capabilities?.() ?? [];
+    this.extensions = new Map(definitions.map(def => [def.name, def]));
+    if (
+      this.extensions.size !== definitions.length ||
+      definitions.some(
+        def =>
+          def.name === 'console' ||
+          BUILT_IN.has(def.name) ||
+          def.lifecycle ||
+          [...def.operations.values()].some(
+            op => op.mode !== 'immediate' || op.scope || op.segmentBound,
+          ),
+      )
+    ) {
+      throw new Error(
+        'Session extensions must be distinct deterministic immediate capabilities',
+      );
+    }
+  }
 
   /** What the Host waits for before returning the prompt. */
   get waiting(): Waiting {
     return this.state;
+  }
+
+  get extensionCapabilities(): readonly CapabilityDef<unknown>[] {
+    return [...this.extensions.values()];
   }
 
   /** The session source: its declarations, in the order entered. */
@@ -478,6 +505,12 @@ export class SessionHost {
         ) as CapabilityDef<unknown>,
       );
     }
+    for (const name of granted) {
+      const extension = this.extensions.get(name);
+      if (extension) {
+        capabilities.set(name, extension);
+      }
+    }
     const grants: Record<string, Grant<unknown>> = {
       console: console.grant('all', undefined),
     };
@@ -682,6 +715,7 @@ export class SessionHost {
   // environment supplies their Host functions.
   private builtIn(capability: string): boolean {
     return (
+      this.extensions.has(capability) ||
       capability === 'clock' ||
       (capability === 'calendar' && Boolean(this.env.builtIns?.calendar)) ||
       (capability === 'locale' && Boolean(this.env.builtIns?.locale))
@@ -697,6 +731,7 @@ export class SessionHost {
       !NAME_TEXT.test(operation ?? '') ||
       capability === 'console' ||
       BUILT_IN.has(capability!) ||
+      this.extensions.has(capability!) ||
       !MODES.has(mode!)
     ) {
       refuse('bad arguments');

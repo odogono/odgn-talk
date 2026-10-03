@@ -3,7 +3,11 @@
 // written in base64url. The fragment never reaches a server.
 import type { Tabs } from './session';
 
-export type Shared = Tabs & { transcript?: string };
+export type Shared = Tabs & {
+  launch?: string;
+  setup?: string[];
+  transcript?: string;
+};
 
 const VERSION = 1;
 const PREFIX = `v${VERSION}.`;
@@ -38,6 +42,8 @@ const unbase64url = (text: string): Uint8Array => {
 export const encodeLink = async (shared: Shared): Promise<string> => {
   const json = JSON.stringify({
     v: VERSION,
+    ...(shared.launch === undefined ? {} : { launch: shared.launch }),
+    ...(shared.setup === undefined ? {} : { setup: shared.setup }),
     script: shared.script,
     libraries: shared.libraries.map(l => [l.name, l.source]),
     ...(shared.transcript === undefined
@@ -80,6 +86,10 @@ export const decodeLink = async (fragment: string): Promise<Shared> => {
   }
   return {
     script: text(data.script, 'Script'),
+    ...(data.launch === undefined
+      ? {}
+      : { launch: text(data.launch, 'launch expression') }),
+    ...(data.setup === undefined ? {} : { setup: readSetup(data.setup) }),
     libraries: data.libraries.map((l: unknown) => {
       if (!Array.isArray(l)) {
         throw new Error('The link is malformed');
@@ -93,4 +103,16 @@ export const decodeLink = async (fragment: string): Promise<Shared> => {
       ? {}
       : { transcript: text(data.transcript, 'Transcript') }),
   };
+};
+
+const readSetup = (value: unknown): string[] => {
+  if (
+    !Array.isArray(value) ||
+    !value.every(
+      v => typeof v === 'string' && /^:(grant|mock) [^\r\n]+$/u.test(v),
+    )
+  ) {
+    throw new Error("The link's setup is malformed");
+  }
+  return value;
 };

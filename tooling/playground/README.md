@@ -14,9 +14,14 @@ bun run --cwd tooling/playground start    # build once and serve dist/
 bun run --cwd tooling/playground test     # the session, Apply and link tests
 ```
 
-`dist/` is static: `index.html`, `style.css`, `main.js` and the two workers, `session.worker.js` and `lsp.worker.js`. Any web server can host it, with no server-side code. Set `PORT` to serve on another port.
+`dist/` is static: `index.html`, `style.css`, `main.js` and the workers, `session.worker.js`, `lsp.worker.js` and `syntax.worker.js`. Any web server can host it, with no server-side code. Set `PORT` to serve on another port.
 
 ## What it does
+
+- **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Canvas, Debug, Replay and Setup. Preferences persist locally; narrow screens stack the panes.
+- **Run fresh** loads current tabs into a replacement session, then evaluates the visible Launch Entry. Invalid source or Libraries leave the old session intact. After loading succeeds, execution errors belong to the new session. An empty Launch Entry only loads.
+- **Evaluate** runs the Launch Entry against the currently loaded session, without applying pending edits. **Apply** retains the live workflow below.
+- **Syntax** follows the current editor text, not loaded code. Select a node to highlight source; selecting source reveals its node. Incomplete source remains inspectable.
 
 - **The Script tab is the session source** ([ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)):
   - **Apply** (Ctrl/Cmd-S in the tab) enters each new or changed top-level declaration as an Entry. A redefinition causes the Spec's Reload, which prints `! discarded` for each Run it discards.
@@ -44,11 +49,11 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - A pasted Trace from another Host needs its Setup as JSON (a `case.toml` converted to JSON). The Setup's source files come from tabs of the same name, and the panel asks for any it can't find.
   - Breakpoints are `unit:line`. **Back** steps backwards, and **Run to Host Input** seeks to a Host Input.
 - **Sharing:** **Share** makes a Shared Link.
-  - The link's fragment carries the tabs and, optionally, the Session Transcript, deflated and base64url-encoded, so it never reaches a server.
+  - The link's fragment carries the tabs, launch Entry, setup commands and, optionally, the Session Transcript, deflated and base64url-encoded, so it never reaches a server.
   - Opening a link replays its Transcript, then goes on live. If the replay prints differently, the page shows the first differing line, never goes live, and leaves the replay debugger to step through what did replay.
   - **Transcript** downloads `session.transcript`, which `bun run northtalk replay` replays.
-- **Autosave:** the tabs, the Lint Profile and the **@ ~** choice are kept in `localStorage`.
-  - On load they open as unapplied edits in an empty session, and nothing runs until you Apply. The session itself is never saved.
+- **Autosave:** the tabs, launch Entry, setup, the Lint Profile and the **@ ~** choice are kept in `localStorage`.
+  - On load they open as unapplied edits in an empty session, and nothing executes until you explicitly use Run fresh, Apply or the prompt. The session itself is never saved.
 
 ## Layout
 
@@ -57,6 +62,7 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
 - [`src/session.worker.ts`](src/session.worker.ts): the Playground Host. It holds the session, its deadline timers and the replay debugger.
 - [`src/lsp.worker.ts`](src/lsp.worker.ts): the tooling stack's language server over `postMessage`.
 - [`src/main.ts`](src/main.ts), [`src/editor.ts`](src/editor.ts), [`src/lsp-client.ts`](src/lsp-client.ts): the page, the CodeMirror 6 editor, and its LSP client.
+- [`src/workbench.ts`](src/workbench.ts): pane controls, themes and syntax navigation. [`src/syntax.worker.ts`](src/syntax.worker.ts) projects the recovering tree; [`src/canvas.ts`](src/canvas.ts) renders validated drawing commands.
 - [`src/link.ts`](src/link.ts): the Shared Link codec. [`src/protocol.ts`](src/protocol.ts): the worker messages.
 
 ## The corpus in a browser
@@ -70,3 +76,40 @@ This serves a page at http://127.0.0.1:3928/. Open it in a browser and it runs e
 - **The same checks:** it uses [`case-checks.ts`](../../impl/ts/tools/case-checks.ts), which the Bun runner uses too. For a Trace Case it replays twice, the second time restoring between Pumps. For a Transcript it compares the replayed lines, then replays the Trace as a Trace Case.
 - **Results:** the page reports each case and a summary. `document.body.dataset.done` is `pass` or `fail` once it finishes.
 - **What it leaves out:** Value Encoding and Disassembly Cases run only under Bun, and CI doesn't open the page.
+
+## Static canvas
+
+Use **Load drawing example** in the Canvas inspector, then **Run fresh**. Alternatively grant `canvas` in Setup before the session starts, or enter `:grant canvas canvas` at the prompt. Canvas is a Host capability, not language syntax or a Standard Capability. The same capability is available in the TypeScript CLI, including `northtalk replay`.
+
+```northtalk
+on draw
+  ask canvas to background "#f5f0e8"
+  ask canvas to noStroke
+  ask canvas to fill "#235f75"
+  ask canvas to rectangle 70, 70, 180, 180
+  ask canvas to fill "#e0a458"
+  ask canvas to ellipse 250, 250, 160, 160
+end draw
+```
+
+Set Launch to `draw`. Operations are immediate and return Nothing, so use `ask`, not `tell` or `and wait`.
+
+| Operation | Arguments and behavior |
+| --- | --- |
+| `size` | Integer width, height, each 1–4096; clears pixels and resets styles |
+| `clear` | No arguments; clears pixels, preserving styles |
+| `background` | Color; replaces all pixels, preserving styles |
+| `fill`, `stroke` | Color; enables and sets that style |
+| `noFill`, `noStroke` | No arguments; disables that style |
+| `strokeWidth` | Nonnegative number; zero suppresses strokes |
+| `line` | x1, y1, x2, y2; uses stroke |
+| `rectangle` | x, y, positive width, positive height; top-left origin |
+| `ellipse` | x, y, positive width, positive height; center origin |
+| `text` | Text, x, y; left-aligned alphabetic baseline; uses fill/stroke |
+| `textSize` | Positive size in logical pixels; sans-serif |
+
+Colors are `#RRGGBB` or `#RRGGBBAA`, case-insensitive. Coordinates and numeric arguments are bounded to ±1,000,000. Text is limited to 4096 UTF-16 code units. A session accepts at most 10,000 operations (including style changes); Run fresh resets this budget. Each call costs one Fuel. Invalid values raise `invalid canvas argument`; exhaustion raises `canvas limit`. Core Shape checks reject wrong types and argument counts.
+
+The initial canvas is transparent, 400×400, with black fill, black one-pixel stroke and 12-pixel sans-serif text. Live evaluation keeps pixels and styles. Run fresh resets them after loading succeeds. Display scales to fit the pane without changing coordinates. Accepted drawing operations are not rolled back if later script work fails. Core `:save`/`:restore` does not rewind canvas pixels, styles or its session-wide operation budget; use Run fresh for that.
+
+Shared transcripts reconstruct the drawing from successful typed Trace calls. Replay seeks rebuild the relevant prefix. The CLI validates/replays headlessly; pixel equality across browsers is not promised. Go replay requires the future Go Session Host to supply compatible declarations and validation (#137). Animation, input events, transforms, images and arbitrary browser access are not provided.

@@ -121,7 +121,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
   - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, and a default BCP 47 tag for `locale`. With none, they bind `UTC` and `und`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
-  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar` or `locale`.
+  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar` or `locale`, or the name of a registered Host capability.
 - **`:clock`:**
   - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
   - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
@@ -190,6 +190,7 @@ OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
 
 - **Replaying** gives each Entry and recorded Session Command, in order, to a fresh Session Host, with each `@` reading as that Pump's Clock reading, each `<` line as the answer to `read`, and each `~` line as the answer of its call, in place of the built-in Capability. It never writes a file: `:export` with a directory writes to a scratch one.
 - **Both must match:** the printed lines must equal the Transcript's output lines, and the Group's Trace must equal `case.trace` ([chapter 11](11-the-trace-and-conformance.md#running-a-case)).
+- **Deterministic Host extensions:** a Host may register additional immediate Capabilities whose implementation uses only arguments and session-owned state. A Transcript replays these through the same implementation and declarations; they do not read external I/O and need no `~` answers. Each fresh session receives fresh extension state. Trace replay carries their Operation Declarations and uses the recorded call outcomes. This does not make them Standard Capabilities.
 - **In the Corpus,** a Transcript grants only `console` and mock Capabilities, since which Capabilities a REPL has built in, and what they cost, is each Host's own.
 - **Bless** writes `case.trace` and fills in the output lines, only when every available REPL agrees, as for a Trace Case.
 
@@ -276,9 +277,14 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 ### The Playground
 
 - **Public name:** NorthTalk Playground.
+- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Canvas, live Debug, Replay and Setup.
+- **Syntax** is a readable projection of the recovering parser tree of the current editor text, including errors. Source selection and tree selection are linked; it does not describe the last loaded session.
+- **Run fresh** prepares a replacement from the setup, current Library tabs and Script tab. Failed loading preserves the live session. Successful loading replaces it, starts a fresh Transcript, then evaluates the launch Entry if nonempty; an execution fault belongs to that new session.
+- **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.
 - **It ships** the LSP in a worker, the formatter, live debugging, and replay debugging of a pasted Trace.
 - **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`.
-- **Sharing** is source only: a link carries the Session Script's source and, optionally, a Session Transcript, which replays on opening. So a bug report can arrive as a link and be debugged in replay mode.
+- **Sharing** carries Script and Library sources, the launch Entry, setup commands and optionally a Session Transcript, which replays on opening. Older links default to an empty launch Entry. Locally restored sources and setup do not execute automatically.
+- **Static graphics:** the TS CLI and Playground supply a typed `canvas` Host capability, granted explicitly with `:grant canvas canvas`. Its operations, state and bounds are documented in the [Playground guide](../tooling/playground/README.md#static-canvas). Live evaluation preserves drawing state; fresh execution resets it. Browser display projects successful calls from the Trace; the CLI replays the same operations headlessly. Graphics are Host behavior, outside language parity. Go REPL support is a separate compatibility requirement.
 
 ## Outside parity
 

@@ -116,12 +116,16 @@ export const writeTranscript = (items: readonly TranscriptItem[]): string =>
     .join('');
 
 export type ReplayOptions = {
+  capabilities?: SessionEnvironment['capabilities'];
   /**
    * Where the Session Host turns once the Transcript runs out, so a
    * Playground can go on live from a replayed session: its Clock, its
    * built-in Capabilities, and where later items are recorded.
    */
-  live?: Pick<SessionEnvironment, 'builtIns' | 'now' | 'record'>;
+  live?: Pick<
+    SessionEnvironment,
+    'builtIns' | 'capabilities' | 'now' | 'record'
+  >;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
 };
@@ -189,6 +193,9 @@ export const replayTranscript = (
   // The reading the next Pump takes, if a recorded `@` line gave one.
   let offered: bigint | null = null;
   const host = new SessionHost({
+    ...((options.capabilities ?? options.live?.capabilities)
+      ? { capabilities: options.capabilities ?? options.live?.capabilities }
+      : {}),
     now: () => {
       if (live) {
         return options.live!.now();

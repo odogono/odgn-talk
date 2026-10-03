@@ -1571,14 +1571,19 @@ export const sessionSetup = (host: SessionHost): Setup => {
       source: '(inline)',
       text: l.source,
     })),
-    operations: mocks.map(m => ({
-      capability: m.capability,
-      name: m.operation,
-      mode: m.mode,
-      args: Array.from({ length: MOCK_ARGUMENTS }, () => ({ optional: 'any' })),
-      ...(m.mode === 'fire-and-forget' ? {} : { result: 'any' }),
-      cost: { fuel: 0 },
-    })),
+    operations: [
+      ...extensionOperations(host),
+      ...mocks.map(m => ({
+        capability: m.capability,
+        name: m.operation,
+        mode: m.mode,
+        args: Array.from({ length: MOCK_ARGUMENTS }, () => ({
+          optional: 'any',
+        })),
+        ...(m.mode === 'fire-and-forget' ? {} : { result: 'any' }),
+        cost: { fuel: 0 },
+      })),
+    ],
     scripts: [
       {
         name: 'session',
@@ -1605,4 +1610,64 @@ export const sessionSetup = (host: SessionHost): Setup => {
         : []),
     ],
   };
+};
+
+// Carry custom declarations into Trace replay; replay supplies recorded outcomes.
+const shapeSpec = (s: Shape): ShapeSpec => {
+  switch (s.k) {
+    case 'kind':
+      return s.kind;
+    case 'any':
+    case 'value':
+      return s.k;
+    case 'quantity':
+      return { quantity: s.unit };
+    case 'unitKind':
+      return { unitKind: s.kind };
+    case 'object':
+      return { object: s.kind };
+    case 'list':
+      return { list: shapeSpec(s.of) };
+    case 'oneOf':
+      return { oneOf: s.of.map(shapeSpec) };
+    case 'optional':
+      return { optional: shapeSpec(s.of) };
+    case 'map':
+      return {
+        map: s.fields.map(f => ({
+          key: f.key,
+          optional: f.optional,
+          shape: shapeSpec(f.shape),
+        })),
+        open: s.open,
+      };
+  }
+};
+const extensionOperations = (host: SessionHost): OperationSpec[] => {
+  const granted = new Set(Object.values(host.grants.granted));
+  return host.extensionCapabilities
+    .filter(c => granted.has(c.name))
+    .flatMap(c =>
+      [...c.operations].map(([name, op]) => ({
+        capability: c.name,
+        name,
+        mode: op.mode,
+        args: (op.args ?? []).map(shapeSpec),
+        cost: op.cost,
+        ...(op.result ? { result: shapeSpec(op.result) } : {}),
+        ...(op.errors
+          ? {
+              errors: op.errors.map(e => ({
+                code: e.code,
+                fields: Object.entries(e.fields ?? {}).map(([key, field]) => ({
+                  key,
+                  ...('shape' in field
+                    ? { optional: true, shape: shapeSpec(field.shape) }
+                    : { shape: shapeSpec(field) }),
+                })),
+              })),
+            }
+          : {}),
+      })),
+    );
 };

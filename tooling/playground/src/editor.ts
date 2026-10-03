@@ -279,6 +279,7 @@ export type EditorHooks = {
   goTo(uri: string, line: number, character: number): void;
   references(lines: string[]): void;
   save(): void;
+  selected?(): void;
 };
 
 export const createEditorState = (
@@ -447,6 +448,9 @@ export const createEditorState = (
     hover,
     keymap.of([...bindings, indentWithTab, ...defaultKeymap, ...historyKeymap]),
     EditorView.updateListener.of(update => {
+      if (update.selectionSet) {
+        hooks.selected?.();
+      }
       if (update.docChanged) {
         hooks.changed(update.state.doc.toString());
       }

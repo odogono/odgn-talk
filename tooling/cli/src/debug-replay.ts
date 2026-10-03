@@ -1,3 +1,4 @@
+import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
 // File and stdio concerns for the browser-safe replay debugger.
 import { readFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
@@ -39,6 +40,7 @@ export const debugTrace = async (
             parseTranscript(
               readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
             ),
+            { capabilities: canvasCapabilities },
           ).host,
         )
       : parsed;

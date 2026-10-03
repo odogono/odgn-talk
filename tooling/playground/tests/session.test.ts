@@ -156,3 +156,51 @@ describe('A shared Transcript', () => {
     });
   });
 });
+
+describe('Fresh execution', () => {
+  test('preserves the old session and transcript when source or libraries fail', () => {
+    const s = new PlaygroundSession(environment().env);
+    s.apply('constant n = 7');
+    const before = s.transcriptText;
+    expect(
+      s.prepareFresh({ script: 'on broken', libraries: [] }).session,
+    ).toBeNull();
+    expect(
+      s.prepareFresh({
+        script: '',
+        libraries: [{ name: 'bad', source: 'function' }],
+      }).session,
+    ).toBeNull();
+    expect(s.transcriptText).toBe(before);
+    expect(s.input('n')).toEqual(['7']);
+  });
+  test('replaces declarations in a new transcript and evaluates only when asked', () => {
+    const s = new PlaygroundSession(environment().env);
+    s.apply('constant old = 7');
+    const prepared = s.prepareFresh({ script: greet, libraries: [] });
+    expect(prepared.session).not.toBeNull();
+    expect(prepared.session!.transcriptText).not.toContain('constant old');
+    expect(prepared.session!.input('greet "Ann"')).toEqual([
+      'hello Ann',
+      'bye',
+    ]);
+  });
+});
+
+test('Apply keeps live variables while fresh execution starts from initializers', () => {
+  const session = new PlaygroundSession(environment().env);
+  const source =
+    'script variable count = 0\non bump\n add 1 to count\nend bump';
+  session.apply(source);
+  session.input('bump');
+  session.apply(source.replace('add 1', 'add 2'));
+  session.input('bump');
+  expect(session.input('count')).toEqual(['3']);
+  const fresh = session.prepareFresh({
+    script: source,
+    libraries: [],
+  }).session!;
+  expect(fresh.input('count')).toEqual(['0']);
+  fresh.input('bump');
+  expect(fresh.input('count')).toEqual(['1']);
+});

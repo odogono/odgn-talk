@@ -168,6 +168,14 @@ _Avoid_: console, shell, interpreter
 The browser-page counterpart of the REPL, running the TS Core, where a user writes, runs and shares Scripts.
 _Avoid_: sandbox (that word means the security boundary), editor, IDE
 
+**Launch Entry**:
+The Entry a Playground author chooses to evaluate after loading a fresh session, or explicitly against the already loaded session.
+_Avoid_: main function, startup script
+
+**Syntax View**:
+The Playground's navigable view of how the current source is structured, including incomplete or invalid regions.
+_Avoid_: execution tree, runtime state
+
 **Restart**:
 In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
 _Avoid_: reset, reload, refresh

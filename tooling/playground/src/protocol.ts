@@ -1,4 +1,4 @@
-// Messages between the page and its two workers. The session worker runs the
+// Messages between the page and its workers. The session worker runs the
 // Core, the Session Host and the debuggers; the LSP worker runs the language
 // server, the formatter and the Lints.
 import type { DebugAction, TranscriptItem } from '@odgn/northtalk/session';
@@ -34,18 +34,23 @@ export type ConsoleLine =
   | { k: 'note'; level: 'info' | 'warning' | 'error'; text: string };
 
 export type ReplayView = {
+  canvas: import('@odgn/northtalk-tooling/canvas').CanvasCommand[];
   hostInputCount: number;
   hostInputIndex: number;
   pause: Omit<PauseView, 'tab'> | null;
+  revision: number;
   state: 'paused' | 'input' | 'ended';
 };
 
 export type SessionState = {
   breakpoints: { line: number; tab: string; verified: boolean }[];
+  canvas: import('@odgn/northtalk-tooling/canvas').CanvasCommand[];
+  generation: number;
   lines: ConsoleLine[];
   manifest: unknown;
   pause: PauseView | null;
   prompt: Prompt;
+  revision: number;
   savedLibraries: Library[];
   setup: string[];
   /** The session source, for keeping the Script tab in sync. */
@@ -57,6 +62,9 @@ export type SessionRequest =
   | { shared?: Shared; t: 'open' }
   | { t: 'line'; text: string }
   | { t: 'cancel' }
+  | { t: 'canvasExample' }
+  | { launch: string; t: 'fresh'; tabs: Tabs }
+  | { launch: string; t: 'evaluate' }
   | { script: string; t: 'apply' }
   | { library: Library; t: 'saveLibrary' }
   | { t: 'restart'; tabs: Tabs }
@@ -105,3 +113,8 @@ export type ToLsp =
   | { message: RpcMessage; t: 'rpc' }
   | { configuration: WorkspaceConfiguration; t: 'configure' };
 export type FromLsp = { message: RpcMessage };
+
+export type SyntaxRequest = { revision: number; source: string };
+export type SyntaxResponse = { revision: number } & (
+  { tree: import('./syntax').SyntaxView } | { error: string }
+);
