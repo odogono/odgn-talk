@@ -868,7 +868,7 @@ const (
 	Errored
 	LimitFault
 	Cancelled
-	Unhandled
+	UnhandledOutcome // named separately from the *Unhandled report
 	Dropped
 	EffectFailureOutcome // "effect failed"
 )
