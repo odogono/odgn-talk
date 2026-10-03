@@ -16,7 +16,8 @@ export type HostErrorCode =
   | 'save mismatch'
   | 'unknown call'
   | 'state too large'
-  | 'effects pending';
+  | 'effects pending'
+  | 'effect state unknown';
 
 export class HostError extends Error {
   constructor(
