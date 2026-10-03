@@ -1,0 +1,12 @@
+script variable seen = []
+on work [n] where n < 0, queued
+ put n after seen
+ wait 1 s
+end work
+on work [n] where 1 / 0 = 0, replacing
+ put "wrong" after seen
+end work
+on work [n], dropping
+ put n after seen
+ wait 1 s
+end work

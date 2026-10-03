@@ -772,6 +772,9 @@ const iteratorItem = (source: Value | null, at: number): Value => {
 
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
 
+// Scheduler callbacks last only for one step and are never saved with a Run.
+const clauseChargeCallbacks = new WeakMap<Run, () => void>();
+
 export class Run {
   /** Its id in the Trace, such as `orders/r2`, which its call ids extend. */
   id = '';
@@ -1442,6 +1445,11 @@ export class Run {
     return f && f.pc === f.body.acceptedAt ? f.body : null;
   }
 
+  /** Whether entry dispatch still shares its charge with a body instruction. */
+  get clauseChargePending(): boolean {
+    return this.frames[0]?.clauseCharge === true;
+  }
+
   /** Empty parameter/Guard regions still pay the clause's dispatch rate. */
   acceptClause(dispatchOnly: boolean): boolean {
     if (this.frame.clauseCharge) {
@@ -1570,12 +1578,18 @@ export class Run {
     if (this.alloc + alloc > this.limits.allocPerRun) {
       throw new LimitFaultError('allocPerRun', frame.pc);
     }
+    const entryCharge = frame.clauseCharge && frame === this.frames[0];
     frame.clauseCharge = false;
     this.fuel += fuel;
     if (this.cancelling) {
       this.cleanupFuel += fuel;
     }
     this.alloc += alloc;
+    if (entryCharge) {
+      const paid = clauseChargeCallbacks.get(this);
+      clauseChargeCallbacks.delete(this);
+      paid?.();
+    }
   }
 
   // ------------------------------------------------------------- stepping
@@ -1609,7 +1623,10 @@ export class Run {
     return item;
   }
 
-  step() {
+  step(clausePaid?: () => void) {
+    if (clausePaid) {
+      clauseChargeCallbacks.set(this, clausePaid);
+    }
     const frame = this.frame;
     const ins = frame.code.unit.code[frame.pc]!;
     // A Built-in call is charged by that Built-in's rate, when it raises too.
@@ -1671,6 +1688,8 @@ export class Run {
       } else {
         throw error;
       }
+    } finally {
+      clauseChargeCallbacks.delete(this);
     }
     this.finishInstruction();
   }

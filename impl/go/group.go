@@ -62,10 +62,11 @@ type execution struct {
 	delivery   delivery
 	id         RunID
 	handler    string
-	clause     int
+	clause     int // selected body index; -1 until accepted
 	how        string
 	deadline   *big.Int
 	timerOrder int64
+	parked     bool
 }
 type workItem struct {
 	delivery delivery
@@ -396,6 +397,9 @@ func (g *Group) Inspect() Inspection {
 			status := Ready
 			if x.run.Status == machine.Preempted {
 				status = Preempted
+			}
+			if x.parked {
+				status = Parked
 			}
 			run := RunView{ID: x.id, Status: status, Handler: x.handler}
 			if x.deadline != nil {

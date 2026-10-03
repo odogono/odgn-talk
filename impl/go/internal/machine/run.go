@@ -23,6 +23,9 @@ const (
 	Unhandled
 	Cancelled
 	Suspended
+	Dispatching
+	Parked
+	Dropped
 )
 
 type Limits struct {
@@ -47,11 +50,13 @@ type Frame struct {
 	Locals, Stack []value.Value
 	Clause        bool
 	Waiting       bool
+	Accepted      bool
 }
 type Run struct {
-	Rollback []string
-	WaitNS   *big.Int
-	ClockNS  *big.Int // Group Clock; nil for standalone execution
+	Rollback       []string
+	WaitNS         *big.Int
+	ClockNS        *big.Int // Group Clock; nil for standalone execution
+	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 
 	Cancelling                 bool
 	CleanupBudget, CleanupFuel int64
@@ -132,7 +137,7 @@ func Start(s *State, body int, args []value.Value, limits Limits) *Run {
 
 // StartDelivery retains dispatch state across preemption and clause failure.
 func StartDelivery(s *State, name string, args []value.Value, limits Limits) *Run {
-	r := &Run{State: s, Limits: limits, Base: slices.Clone(s.Variables), Arguments: slices.Clone(args)}
+	r := &Run{State: s, Limits: limits, Base: slices.Clone(s.Variables), Arguments: slices.Clone(args), PolicyDispatch: true}
 	for _, b := range s.Unit.Bodies {
 		if b.Checked.Kind == "handler" && b.Checked.Name == name && len(b.Checked.Node.Params) == len(args) {
 			r.Clauses = append(r.Clauses, b.Index)
@@ -218,6 +223,13 @@ func (r *Run) pay(fuel, alloc int64) bool {
 	return true
 }
 func (r *Run) Execute(slice int64) {
+	r.ExecuteSelected(slice, nil)
+}
+
+// ExecuteSelected notifies the scheduler when an entry clause's combined
+// charge succeeds, before the instruction commits any effects. The callback
+// belongs to this turn, so faults, preemption and cleanup cannot retain it.
+func (r *Run) ExecuteSelected(slice int64, paid func()) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
@@ -233,19 +245,17 @@ func (r *Run) Execute(slice int64) {
 			r.Status = Blocked
 			break
 		}
+		if r.PolicyDispatch && len(r.Frames) == 1 && !r.Cancelling && !f.Accepted && f.PC == b.DispatchEnd && QueuePolicy(b) != "" {
+			r.Status = Dispatching
+			break
+		}
 		if !r.preflight(f, i) {
 			break
 		}
 
-		if i.Name == "return" && len(r.Frames) == 1 && r.Limits.Persistent > 0 {
-			size := r.PersistentBase
-			for _, v := range r.State.Variables {
-				size += Size(v)
-			}
-			if size > r.Limits.Persistent {
-				r.fault("persistent")
-				break
-			}
+		if i.Name == "return" && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+			r.fault("persistent")
+			break
 		}
 		// Evaluate against a detached operand stack. State changes commit only
 		// after the complete instruction charge has been accepted.
@@ -278,6 +288,11 @@ func (r *Run) Execute(slice int64) {
 		if !r.pay(fuel, alloc) {
 			break
 		}
+		if f.Clause && f.Accepted && len(r.Frames) == 1 && paid != nil {
+			notify := paid
+			paid = nil
+			notify()
+		}
 		f.Clause = false
 		trial.Clause = false
 		if err != nil {
@@ -294,14 +309,8 @@ func (r *Run) Execute(slice int64) {
 		}
 		// A wait commits its instruction charge, but retaining its frames can
 		// still fault the Segment before the scheduler installs a timer.
-		if r.Status == Suspended && r.Limits.Persistent > 0 {
-			size := saturatingAdd(r.PersistentBase, r.RetainedSize())
-			for _, v := range r.State.Variables {
-				size = saturatingAdd(size, Size(v))
-			}
-			if size > r.Limits.Persistent {
-				r.fault("persistent")
-			}
+		if r.Status == Suspended {
+			r.checkRetainedState()
 		}
 		if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
 			r.Status = Preempted
@@ -323,13 +332,61 @@ func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
 // Resume begins a new Segment at the Script state present when its turn starts.
 // Run budgets and frames survive, while rollback starts from this new snapshot.
 func (r *Run) Resume() {
-	if r.Status != Suspended && !(r.Cancelling && r.Status == Running) {
+	if r.Status != Suspended && r.Status != Parked && !(r.Cancelling && r.Status == Running) {
 		return
 	}
 	r.Base = slices.Clone(r.State.Variables)
 	r.WaitNS = nil
 	r.Status = Running
 }
+
+// AcceptClause checks the unpaid dispatch rate before applying a policy.
+// Parking and dropping pay it alone; otherwise the first body instruction
+// pays it together with its own charge. Guards may already have paid it.
+func (r *Run) AcceptClause(dispatchOnly bool) bool {
+	f := &r.Frames[0]
+	if f.Clause {
+		if r.Limits.Fuel > 0 && 4 > r.Limits.Fuel-r.Fuel {
+			r.fault("fuel")
+			return false
+		}
+		if dispatchOnly {
+			if !r.pay(4, 0) {
+				return false
+			}
+			f.Clause = false
+		}
+	}
+	f.Accepted = true
+	r.Status = Running
+	return true
+}
+
+func (r *Run) persistentSize() int64 {
+	size := r.PersistentBase
+	for _, v := range r.State.Variables {
+		size = saturatingAdd(size, Size(v))
+	}
+	return size
+}
+func (r *Run) checkRetainedState() {
+	if r.Limits.Persistent > 0 && saturatingAdd(r.persistentSize(), r.RetainedSize()) > r.Limits.Persistent {
+		r.fault("persistent")
+	}
+}
+func (r *Run) Park() {
+	r.Status = Parked
+	r.checkRetainedState()
+}
+func (r *Run) Drop() {
+	if r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+		r.fault("persistent")
+		return
+	}
+	r.Frames = nil
+	r.Status = Dropped
+}
+
 func (r *Run) raise(err value.Value) {
 	code := err.Get("code").Text
 	raised := Raised{Handler: r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name, Code: code, PC: r.PC, Instruction: r.At}
@@ -438,14 +495,16 @@ func hasKey(v value.Value, key string) bool {
 // Cancel rolls back the interrupted Segment, then enters the nearest finally
 // without an error or unwind charge. Cleanup has its own Fuel budget.
 func (r *Run) Cancel(budget int64) {
-	if r.Status == Completed || r.Status == Errored || r.Status == Faulted || r.Status == Cancelled || r.Status == Unhandled {
+	if r.Cancelling || r.Status == Completed || r.Status == Errored || r.Status == Faulted || r.Status == Cancelled || r.Status == Unhandled || r.Status == Dropped {
 		return
 	}
-	if r.Status == Suspended {
+	if r.Status == Suspended || r.Status == Parked {
 		// Between Segments, earlier writes are committed. The unwind table
-		// applies at the wait, whose PC has already advanced.
+		// applies at the next parked instruction, or the wait that advanced PC.
 		r.Base = slices.Clone(r.State.Variables)
-		r.Frames[len(r.Frames)-1].PC--
+		if r.Status == Suspended {
+			r.Frames[len(r.Frames)-1].PC--
+		}
 		r.WaitNS = nil
 	}
 	r.State.Variables = slices.Clone(r.Base)

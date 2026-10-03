@@ -70,7 +70,7 @@ func (executionBackend) Support(c Case) string {
 			}
 			for _, body := range unit.Bodies {
 				if !machine.SupportedDispatch(body) {
-					return "Handler policies and deciding dispatch belong to step3"
+					return "deciding dispatch belongs to step3"
 				}
 				for _, i := range body.Code {
 					if !machine.Supported(i) {

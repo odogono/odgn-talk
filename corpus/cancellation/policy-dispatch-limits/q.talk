@@ -1,0 +1,5 @@
+script variable a = 0
+on work n, queued
+ wait 1 s
+ put n into a
+end work

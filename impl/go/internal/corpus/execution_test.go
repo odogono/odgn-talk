@@ -156,3 +156,27 @@ func TestDurationWaitAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestQueueingPolicyAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"cancellation/queueing-policies", "cancellation/policy-clause-selection", "cancellation/policy-dispatch-limits"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("policy case missing from passing gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

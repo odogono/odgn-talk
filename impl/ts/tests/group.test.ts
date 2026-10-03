@@ -78,6 +78,30 @@ describe('loading', () => {
 });
 
 describe('Deliveries and Pumps', () => {
+  test('replacement waits for the combined dispatch charge', () => {
+    for (const budget of [4, 5]) {
+      const { g, lines } = group();
+      const s = g.load({
+        name: 's',
+        source: 'on work, replacing\n wait 1 s\nend work\n',
+      });
+      s.deliver({ name: 'work' });
+      g.pump(clock);
+      s.deliver({ name: 'work', limits: { fuelPerRun: budget } });
+      const result = g.pump(clock);
+      expect(result.reports).toMatchObject([
+        { run: 's/r2', outcome: 'limit fault', fuel: budget === 4 ? 0 : 5 },
+        ...(budget === 5 ? [{ run: 's/r1', outcome: 'cancelled' }] : []),
+      ]);
+      g.pump(later(1));
+      expect(lines).toContain(
+        budget === 4
+          ? 'run s/r1 outcome=completed delivery=d1 handler=work fuel=18 alloc=0'
+          : 'run s/r1 outcome=cancelled delivery=d1 handler=work fuel=15 alloc=0',
+      );
+    }
+  });
+
   test("a Delivery runs in the Pump that drains it, written as chapter 11's records", () => {
     const { g, lines } = group();
     const a = g.load({

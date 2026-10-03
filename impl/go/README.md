@@ -152,10 +152,9 @@ Other suspension and `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
-and a Request remains unsettled. Queueing Policies and deciding Handlers stop
-before dispatch without a charge. Full Handler modes, Message Paths, event waits
-and pending calls belong to #134; complete cancellation and Stop Script
-acceptance to
+and a Request remains unsettled. Deciding Handlers stop before dispatch without
+a charge. Decisions, Message Paths, event waits and pending calls belong to
+#134; complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -220,6 +219,19 @@ Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.
 
+Queueing Policies apply to the selected entry clause after Destructuring and
+Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
+`dropping` ends a new overlapping Run with outcome `dropped`; `replacing`
+cancels earlier Runs and queues their finally cleanup in their existing work
+order. Failed Guards never affect a clause's queue. Policy dispatch survives
+preemption, and parked and dropped Runs pay dispatch once without entering the
+body. A replacement with unpaid dispatch cancels earlier Runs only after
+paying the first instruction's combined charge. Parked Runs appear as
+`Parked`, count toward Persistent State, and do not
+consume mailbox slots. A clause releases its first parked Run when its last
+unparked Run ends, including errors, faults and completed cancellation cleanup.
+A resumed parked Run starts a new Segment snapshot and keeps its Run budgets.
+
 An uncaught error queues a separate `error` message behind the existing mailbox
 messages, with the failed Run as its sender. Error Handler Clauses use ordinary
 Destructuring and Guards, including the text-code shorthand. Their `during`
@@ -244,21 +256,24 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 89 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 92 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-39 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
-delivery and suspension cases. Trace cases replay through the public embedding
-interface, with exact records, costs and final state. Tests separately enforce
-the full 50-case step-1
-set and eight reviewed step-2 cases, so removing a required case cannot silently
+42 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+delivery, suspension and Queueing Policy cases. Trace cases replay through the
+public embedding interface, with exact records, costs and final state. Tests
+separately enforce the full 50-case step-1 set and eight reviewed step-2 cases,
+so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
 `Unblessed` headers remain until human review of the first blessing. Four
 reviewed wait cases pin zero waits, deadlines, rollback and nested frames.
 Two new suspension regressions also agree on both Cores before their first
 blessing, covering work ordering, cap-held resumptions, nanosecond rounding and
-long durations. Their `Unblessed` headers remain until human review. Listing a
-new regression case here protects it while its first human blessing review
+long durations. The reviewed Queueing Policy case also passes; two new
+policy regressions agree on both Cores before blessing, covering selected
+clauses, Guard skips, preemption, and dispatch and Persistent State limits.
+Their `Unblessed` headers remain until human review. Listing a new regression
+case here protects it while its first human blessing review
 remains pending.
 
 A listed regression or missing case fails; an unlisted passing case is reported

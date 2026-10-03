@@ -1,0 +1,43 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapter 5: policies belong to the selected clause, after Destructuring and
+# Guards. A Guard error skips its replacing clause without cancelling Runs.
+# Chapter 8: dispatch survives preemption and charges each tried clause once.
+> load s identity=f68ea131446e4bbcc2d2524c8605cfcc22768a877562e2b458f6335e26e57b92
+> deliver d1 to=s message=work args=[[-1]]
+> deliver d2 to=s message=work args=[[1]]
+> request d3 to=s message=work args=[[2]]
+> deliver d4 to=s message=work args=[[-2]]
+> deliver d5 to=s message=work args=["no"]
+> pump clock=2026-10-03T12:00:00Z fuel-cap=1
+preempt s/r1 start delivery=d1 handler=work clause=1 by=cap fuel=5 alloc=0
+pumped state=sliced fuel=5
+> pump clock=2026-10-03T12:00:00Z fuel-cap=8
+preempt s/r1 continue by=cap fuel=8 alloc=0
+pumped state=sliced fuel=8
+> pump clock=2026-10-03T12:00:00Z
+seg s/r1 continue fuel=21 alloc=24 state=578 end=wait until=2026-10-03T12:00:01Z
+guard-skip s/r2 at=s:31 pos=6:21 code="division by zero"
+seg s/r2 start delivery=d2 handler=work clause=3 fuel=61 alloc=24 state=802 end=wait until=2026-10-03T12:00:01Z
+guard-skip s/r3 at=s:31 pos=6:21 code="division by zero"
+seg s/r3 start delivery=d3 handler=work clause=3 fuel=41 alloc=0 state=730 end=dropped
+run s/r3 outcome=dropped delivery=d3 handler=work fuel=41 alloc=0
+seg s/r4 start delivery=d4 handler=work clause=1 fuel=14 alloc=0 state=922 end=park
+seg s/r5 start delivery=d5 handler=work fuel=24 alloc=0 state=872 end=unhandled
+run s/r5 outcome=unhandled delivery=d5 handler=work fuel=24 alloc=0
+unhandled d5 message=work args=["no"]
+pumped state=idle fuel=161 next=2026-10-03T12:00:01Z
+> counters s
+counters s fuel=174 alloc=48 runs=5 faults=0 state=872 mailbox=0
+> pump clock=2026-10-03T12:00:01Z
+seg s/r1 resume fuel=3 alloc=0 state=600 end=return
+run s/r1 outcome=completed delivery=d1 handler=work fuel=37 alloc=24
+seg s/r2 resume fuel=3 alloc=0 state=328 end=return
+run s/r2 outcome=completed delivery=d2 handler=work fuel=64 alloc=24
+seg s/r4 resume fuel=20 alloc=24 state=360 end=wait until=2026-10-03T12:00:02Z
+pumped state=idle fuel=26 next=2026-10-03T12:00:02Z
+> pump clock=2026-10-03T12:00:02Z
+seg s/r4 resume fuel=3 alloc=0 state=88 end=return
+run s/r4 outcome=completed delivery=d4 handler=work fuel=37 alloc=24
+pumped state=idle fuel=3
+> vars
+vars s seen=[-1, 1, -2]

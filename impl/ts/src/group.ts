@@ -3557,16 +3557,25 @@ export class Group {
     const fuel0 = run.fuel;
     const alloc0 = run.alloc;
 
+    const earlierRuns = () =>
+      this.runsOf(s).filter(
+        r =>
+          r !== running &&
+          r.selected &&
+          r.delivery.message === running.delivery.message &&
+          r.run.clauseNumber === run.clauseNumber,
+      );
+    const replaceEarlier = () => {
+      for (const r of earlierRuns()) {
+        if (!r.run.openVerdict) {
+          this.cancelRunning(s, r);
+        }
+      }
+    };
     const selected = () => {
       const clause = run.selectedClause;
       if (!running.selected && clause) {
-        const earlier = this.runsOf(s).filter(
-          r =>
-            r !== running &&
-            r.selected &&
-            r.delivery.message === running.delivery.message &&
-            r.run.clauseNumber === run.clauseNumber,
-        );
+        const earlier = earlierRuns();
         if (
           !run.acceptClause(
             earlier.length > 0 &&
@@ -3583,12 +3592,8 @@ export class Group {
         if (clause.policy === 'queued' && earlier.length) {
           running.parked = run.park();
         }
-        if (clause.policy === 'replacing') {
-          for (const r of earlier) {
-            if (!r.run.openVerdict) {
-              this.cancelRunning(s, r);
-            }
-          }
+        if (clause.policy === 'replacing' && !run.clauseChargePending) {
+          replaceEarlier();
         }
         if (!clause.deciding && !run.done) {
           this.seal(running.delivery, { verdict: 'allowed' });
@@ -3632,7 +3637,13 @@ export class Group {
         debug.fault = null;
         pending();
       } else {
-        run.step();
+        run.step(
+          running.selected &&
+            run.clauseChargePending &&
+            run.selectedClause?.policy === 'replacing'
+            ? replaceEarlier
+            : undefined,
+        );
       }
       while (debug?.pending) {
         const faultPause = this.debugController!.boundary(run, s.name)!;
