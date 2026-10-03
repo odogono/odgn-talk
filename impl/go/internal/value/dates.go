@@ -13,8 +13,17 @@ import (
 var civilSyntax = regexp.MustCompile(`^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?)?$`)
 var instantSyntax = regexp.MustCompile(`^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?)(Z|[+-][0-9]{2}:[0-9]{2})$`)
 
+// DateRangeError separates a syntactically valid unsupported year from a
+// malformed date, for the Script conversion error catalogue.
+type DateRangeError struct{ Year int }
+
+func (e *DateRangeError) Error() string { return fmt.Sprintf("year %d outside date range", e.Year) }
+
 func NewCivil(f DateFields) (Value, error) {
-	if f.Year < 1 || f.Year > 9999 || f.Month < 1 || f.Month > 12 || f.Day < 1 || f.Day > 31 || f.Hour < 0 || f.Hour > 23 || f.Minute < 0 || f.Minute > 59 || f.Second < 0 || f.Second > 59 || f.Nanosecond < 0 || f.Nanosecond >= 1e9 {
+	if f.Year < 1 || f.Year > 9999 {
+		return Value{}, &DateRangeError{f.Year}
+	}
+	if f.Month < 1 || f.Month > 12 || f.Day < 1 || f.Day > 31 || f.Hour < 0 || f.Hour > 23 || f.Minute < 0 || f.Minute > 59 || f.Second < 0 || f.Second > 59 || f.Nanosecond < 0 || f.Nanosecond >= 1e9 {
 		return Value{}, fmt.Errorf("invalid Civil Date fields")
 	}
 	if !f.HasTime && (f.Hour != 0 || f.Minute != 0 || f.Second != 0 || f.Nanosecond != 0) {
@@ -39,7 +48,10 @@ func ParseCivil(s string) (Value, error) {
 	return NewCivil(f)
 }
 func NewInstant(seconds int64, nanos int32) (Value, error) {
-	if seconds < -62135596800 || seconds > 253402300799 || nanos < 0 || nanos >= 1e9 {
+	if seconds < -62135596800 || seconds > 253402300799 {
+		return Value{}, &DateRangeError{time.Unix(seconds, 0).UTC().Year()}
+	}
+	if nanos < 0 || nanos >= 1e9 {
 		return Value{}, fmt.Errorf("invalid Instant")
 	}
 	return Value{Kind: Instant, Seconds: seconds, Nanos: nanos}, nil

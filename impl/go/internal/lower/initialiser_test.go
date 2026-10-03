@@ -66,3 +66,11 @@ func TestInitialiserFailureCorpus(t *testing.T) {
 		t.Fatalf("unexpected load error %s", record)
 	}
 }
+
+func TestOnlyExplicitVariableInitializersEmitStores(t *testing.T) {
+	u := compileSource(t, "script variable implicit\nscript variable explicit = nothing\non go\n return implicit\nend go\n")
+	code := u.Bodies[0].Code
+	if len(code) != 4 || code[0].Name != "const" || code[1].Name != "store-var" || code[1].Operands()[0].Index != 1 || u.Bodies[1].First != 4 {
+		t.Fatalf("%s", u.Disassemble())
+	}
+}

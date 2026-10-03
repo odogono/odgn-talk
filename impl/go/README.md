@@ -1,65 +1,48 @@
 # Go Core
 
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
-package `northtalk`. It supplies immutable values and their Host constructors
-and accessors, decimal arithmetic, the display form and its reader, plain JSON
-and the Value Encoding. Its internal front end lexes UTF-8 source, parses a
-lossless tree, resolves names and bindings, and lowers checked units into the
-Abstract Machine's instructions, source maps, Unwind Tables and Event Tables.
-It also supplies pinned Unicode text primitives: NFC, extended grapheme cluster
-(Character) boundaries, simple case folding, and White_Space-based words and
-word breaks. Public loading and execution arrive in the later steps; no
-unimplemented public declaration is stubbed. The Spec and Data Files are the
-authority; the TS Core is not a
-reference ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
+package `northtalk`. It provides immutable values, decimal arithmetic, pinned
+Unicode text, a front end and standalone Abstract Machine execution. Its internal machine executes checked code; the public Group embedding and
+Trace backends are supplied by the next layer of #251. The Spec, Data Files and Conformance Corpus are
+the authority; the TS Core is not a reference
+([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
 ## Layout
 
-- The root package owns the [embedding interface](../../spec/embedding/talk.go).
-  `value.go` and `encoding.go` implement the value and codec declarations.
-  `text.go` holds `Text`'s uncharged, UTF-8-validating NFC seam.
-  No unimplemented public declaration is stubbed.
-- `internal/unicode/` holds the text primitives. Its spans and boundaries use
-  zero-based UTF-8 byte offsets; Script positions count Unicode scalars, starting
-  at line and column 1. It segments text as given, without normalizing the
-  entire source.
-- `internal/generated/` holds checked-in tables written from the Spec Data
-  Files and pinned Unicode sources, with `UNICODE-LICENSE.txt` beside them.
-- `internal/apicheck/` checks root exports and their declarations against
-  `talk.go`, allowing private named fields for opaque types. Anonymous
-  embeddings are compared even when private, because they can promote public
-  members. Unimplemented
-  Spec names are reported without failing until #141.
-- `internal/syntax/` owns modal lexing and the predictive parser. Tokens retain
-  every source byte, including trivia and the initial BOM; `Tree.Source()`
-  reconstructs it. Identifiers follow chapter 1's ASCII rules, source is not
-  normalized, and only Text literal values are NFC.
-- `internal/check/` resolves declarations, body slots, lexical captures and
-  initializer dependencies. `Check` returns diagnostics in source order,
-  breaking ties by catalogue order. Its options supply well-known object names,
-  import signatures and `PatternSize`.
-- `internal/lower/` accepts a diagnostic-free checked unit. `Compile` returns
-  canonical disassembly and a Go-private varint byte encoding of each body's
-  instruction stream. Labels and source maps use instruction indices, never
-  byte offsets. Compiling again preserves the checked unit's slots.
-- `internal/decimal/` implements exact-input decimals, half-even arithmetic,
-  integer and fractional powers, and exact Host conversions. Large powers use
-  outward-rounded intervals and increase precision until both bounds select
-  the same decimal; exact rational roots handle halfway results.
-- `internal/value/` holds the value model, catalogue-based Units, comparison,
-  display reader/writer and strict JSON codecs. Containers copy input slices;
-  the public accessors return copies. Quantity comparison keeps Base Unit
-  magnitudes beyond the number limit internally, so comparison stays total.
-- `internal/corpus/` reads case setups and Trace records from generated
-  `corpus.toml` tables, runs encoding cases and checks the passing list.
-  Its `Backend` interface accepts future Trace production without depending
-  on the machine or a particular Trace writer.
-- `internal/machine/` and `trace/` reserve the remaining implementation
-  boundaries agreed on [#132](https://github.com/odogono/odgn-talk/issues/132).
+- The root package implements the available declarations of the
+  [embedding interface](../../spec/embedding/talk.go). `value.go`, `encoding.go`
+  and `text.go` own immutable values and codecs. Public Group execution is
+  supplied by the next layer.
+- `internal/generated/` holds tables from Spec Data Files and pinned Unicode
+  sources, with `UNICODE-LICENSE.txt` beside them.
+- `internal/unicode/` supplies NFC, Character boundaries, simple folding, full
+  default case mappings and White_Space-based words. Spans use zero-based UTF-8
+  byte offsets; Script source positions count scalars from line and column 1.
+- `internal/decimal/` supplies exact-input decimals, arithmetic, integral
+  rounding and elementary functions. Outward-rounded intervals increase
+  precision until both bounds select the same 34-digit half-even result.
+- `internal/value/` owns values, Units, comparison, display and strict JSON.
+  Containers copy input slices; public accessors return copies.
+- `internal/syntax/` owns lossless UTF-8 lexing and parsing. `Tree.Source()`
+  reconstructs every source byte; only Text literal values are NFC.
+- `internal/check/` resolves declarations, body slots, captures and initializer
+  dependencies. Diagnostics sort by source position, then catalogue order.
+- `internal/lower/` produces canonical instructions, source maps, Unwind Tables
+  and Event Tables. Labels use instruction indices, never byte offsets. Its
+  Go-private byte encoding round-trips each body's instruction stream.
+- `internal/machine/` executes checked code with heap frames, detached operand
+  evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
+- `internal/trace/` reserves the canonical Trace writer boundary.
+- `internal/corpus/` reads setups and runs encoding cases. `cmd/corpus/` provides
+  selection, first-divergence output and the gate.
+- `internal/apicheck/` compares root exports and signatures with `talk.go`,
+  including promoted members. Missing declarations are reported without failing
+  until [#141](https://github.com/odogono/odgn-talk/issues/141).
 
-The module has no third-party requirements and no `go.work`. The REPL, Session
-Host and Message Layer driver belong to later work under `cmd/northtalk/`,
-`session/` and `driver/` ([ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)).
+The module has no third-party requirements and no `go.work`. Session tooling
+belongs to [#137](https://github.com/odogono/odgn-talk/issues/137); the planned
+`session/`, `driver/` and `cmd/northtalk/` boundaries follow
+[ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md).
 
 ## Build and test
 
@@ -67,132 +50,113 @@ Use Go 1.27 and Bun 1.4.2. From the repository root:
 
 ```sh
 bun install --frozen-lockfile
-bun run unicode:check     # verifies/downloads the pinned test sources
+bun run unicode:check
 cd impl/go
 go build ./...
 go vet ./...
 go test -race -v ./...
+go run ./cmd/corpus --check-passing
 gofmt -l .               # must print no paths
 ```
 
-The Unicode tests read `.cache/unicode/18.0.0/` at the repository root and verify
-each source's SHA-256. A missing or corrupt file fails the tests. They cover all
-five columns of `NormalizationTest.txt`, scalars absent from its first column,
-every `GraphemeBreakTest.txt` row, and simple C/S folding against
-`CaseFolding.txt`. The import-policy test refuses platform Unicode tables,
-`strings` case functions (including aliases) and `golang.org/x/text`.
+Unicode tests verify source hashes in `.cache/unicode/18.0.0/`, all five columns
+of `NormalizationTest.txt`, scalars absent from its first column, every
+`GraphemeBreakTest.txt` row and C/S folding against `CaseFolding.txt`. Missing or
+corrupt sources fail. The import-policy test refuses platform Unicode tables,
+`strings` case functions and `golang.org/x/text`.
 
-## Regeneration
-
-Run from the repository root:
+Regenerate from the repository root:
 
 ```sh
-bun run go:generate       # Core catalogues, corpus formats, grammar and Built-in metadata
-bun run unicode:generate # both Cores' Unicode tables and licenses
-bun run syntax:generate  # TS syntax tables and the Go Data File tables
-bun run check            # checks every generated output against its sources
+bun run go:generate
+bun run unicode:generate
+bun run syntax:generate
+bun run check
 ```
 
-The Go emitter in `tools/go/` reads only `spec/data/`; it imports no TS Core
-code. The Unicode generator parses the pinned UCD once for both output formats.
-The emitters use `gofmt`, so Go must also be installed for generator commands.
-Each generator's `--check` refuses missing or stale Go output without rewriting
-it. `bun run go:check` checks the non-Unicode Go tables independently.
+Emitters read Spec Data Files and pinned UCD sources, import no TS Core code and
+use `gofmt`. Their `--check` modes refuse missing or stale output without writing.
 
 ## Front-end and lowering checks
 
-Go tests reconstruct every grammar sketch, Corpus source and stdlib Library,
-and pin all first errors in `tools/grammar/broken.talk`. The seven units in the six
-Disassembly Cases match byte for byte: pools, slots, instruction order and
-positions, Unwind Tables and Event Tables. Together they emit every opcode in
-`machine.toml`. All seven stdlib Libraries also check, lower and round-trip the
-Go encoding. Other tests cover lexical scalar positions, NFC text, nested
-captures, binding order, binary-size pins, pattern limits, canonical value
-printing and nested cleanup paths.
+Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
+and pin the first errors in `tools/grammar/broken.talk`. The seven units in the
+six Disassembly Cases match byte for byte, including pools, slots, positions,
+Unwind Tables and Event Tables; together they emit every declared opcode.
+Stdlib signatures can be linked for disassembly without executing Libraries.
+Tests pin the 30 load-diagnostic cases. Initializer failure identifies the
+raising instruction's source-map position. Public `Load` and runner backends
+arrive in the next layer.
 
-The 30 new [load-diagnostic Trace Cases](../../corpus/load-diagnostics/)
-were blessed by the TS Core. Each still needs the human review required by
-[#132](https://github.com/odogono/odgn-talk/issues/132). The Go tests compare
-all static diagnostic records with those cases. `initialiser failed` enters
-through `Unit.InitialiserFailed`: the loader reports the raising instruction's
-source-map position. Its boundary test executes the fixture's lowered numeric
-instructions and checks that record; general initialization execution belongs
-to the Abstract Machine in [#251](https://github.com/odogono/odgn-talk/issues/251).
-The runner from [#249](https://github.com/odogono/odgn-talk/issues/249) now
-reads their setups and records. The front-end cases continue to run through Go
-tests until disassembly and load-diagnostic backends are connected to its
-`Backend` interface; then register them on its passing list.
+Implicit Script Variable initializers allocate Nothing slots without emitting
+stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
+This keeps canonical code positions aligned with the existing Corpus.
 
-The checker supports the step 1 diagnostic families represented in that
-directory. Within families spanning later facilities, `wrong argument count`
-checks local/imported function signatures and `say`; `needless and wait` checks
-`say`; `can't suspend here` checks direct suspension; `unknown import` checks
-supplied import signatures; and `can't write` checks Constants and captured
-locals. Handler call graphs, Library linking and Host Object property Shapes
-are completed with the corresponding facilities in step 3. Capability
-Operations are lowered, while validating their Grants, modes and argument
-Shapes belongs to that step.
-
-As #250 permits, the following complete diagnostic families are deferred to
-step 3: `wrong argument`, `unknown operation`, `wrong mode`, `missing and wait`,
+Handler call-graph analysis, Library linking, Grants, Capability modes and Host
+Object property Shapes belong to
+[#134](https://github.com/odogono/odgn-talk/issues/134). The diagnostic families
+`wrong argument`, `unknown operation`, `wrong mode`, `missing and wait`,
 `import cycle`, `missing grant`, `not in a library`, `veto outside a decision`,
-`after a suspension`, `wrong message`, and `bad suffixes`. These dependencies
-are tracked by [#134](https://github.com/odogono/odgn-talk/issues/134), rather
-than implemented as public stubs here. The Built-in catalogue contains only
-name/call metadata needed for resolution and lowering; its implementations and
-the rest of the stdlib catalogue belong to the later runtime work.
+`after a suspension`, `wrong message` and `bad suffixes` depend on those facilities.
 
 ## Values and codecs
 
-`Dec` reads the Spec's number syntax without rounding. `FromFloat` uses Go's
-shortest round-trip digits. `Decimal.String` keeps trailing zeros; integer
-accessors refuse fractions and overflow, and `Float64Lossy` rounds to nearest,
-ties to even. Constructors reject invalid input as `HostError{Code: InvalidValue}`.
-`InstantFromTime` drops the zone and monotonic reading; because its declared
-signature has no error result, a time outside years 0001–9999 panics with that
-HostError. Use `Instant` when input needs a returned refusal.
+`Dec` reads number syntax without rounding. `FromFloat` uses shortest round-trip
+digits. Decimal printing retains trailing zeros; integer accessors refuse
+fractions and overflow, and `Float64Lossy` rounds nearest, ties to even.
+Constructors reject invalid input with `HostError{Code: InvalidValue}`.
+`InstantFromTime` drops zone and monotonic readings and panics with that Host
+error outside years 0001–9999; `Instant` returns the refusal instead.
 
-`Value.String` is chapter 11's display form, including text joins for hidden
-code points and insertion-order maps. `EncodeValue` preserves every supported
-kind and numeric exponent. `DecodeValue` rejects malformed UTF-8, lone
-surrogates, duplicate NFC keys and noncanonical Base64, re-parses pattern
-sources, and resolves object tags through the supplied resolver. Plain JSON
-uses chapter 7's mapping and refuses non-JSON kinds with `ScriptError` code
-`not encodable`, carrying `kind` and the first depth-first `path`.
+`Value.String` uses chapter 11's display form. `EncodeValue` preserves supported
+kinds and numeric exponents. `DecodeValue` rejects malformed UTF-8, lone
+surrogates, duplicate NFC keys and noncanonical Base64, re-parses Text Patterns
+and resolves Object tags through its resolver. Plain JSON refuses non-JSON
+kinds with `not encodable`, including `kind` and the first depth-first `path`.
+Function Values have Home identity, capture equality and accessors, and are
+refused by storage encoding. Object registration belongs to #134.
 
-Text Pattern metadata is available for display/encoding; matching arrives with
-execution. Function Values and Host Objects have display/equality metadata and
-accessors, but there are no Host constructors for them here. Function Values
-are refused by storage encoding. Object registration and Group ownership arrive
-with the embedding interface.
+Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
+the number limit. Some huge Unit exponents remain impractical when interval
+bounds and stable-coefficient shortcuts cannot decide the comparison.
 
-Quantity comparison preserves sequential rounding during Base Unit conversion.
-Large powers use logarithmic bounds, stable coefficient jumps and early merging
-of equal rounded states. When those shortcuts cannot decide a comparison, work
-is proportional to the Unit exponent. Thus some enormous powers, such as
-comparing `1 min^10000000000000000000000000000000000000000` with `2` in the same
-Unit, remain impractical to compare.
+## Machine execution
 
-## The Go corpus runner
+`machine.Initialize` evaluates initializers without Run charges.
+`InitializeBound` supplies Home identity before creating Function Values.
+`StartDelivery` tries arity-compatible Handler Clauses in source order; local
+Handler calls use the same clause-failure rules. `Run.Execute` returns between
+instructions on preemption, keeping frames, locals, stacks and unwind state as
+plain data. It uses no saved Go callback or goroutine continuation.
 
-From `impl/go/`:
+Standalone execution covers chapter 3/4 arithmetic, Quantities and dates,
+conversions, folded structural comparison, containers and writes, snapshot
+iteration, branches, loops, catch/finally, binary construction/destructuring,
+Text Patterns and replacement, and non-suspending local Function Values with
+captures and named defaults. The Built-ins include number functions, IEEE float
+codecs, pinned case mapping, date fields and fixed-offset conversion, and Function
+Value metadata. Object lifecycle Built-ins depend on #134.
 
-```sh
-go run ./cmd/corpus --list
-go run ./cmd/corpus
-go run ./cmd/corpus quantities/value-encoding
-go run ./cmd/corpus --check-passing
-```
+Generated Cost Model 0 charges precede committed instruction changes. Fuel,
+allocation, depth and dynamic Pattern Size faults leave the faulting instruction
+uncharged and restore Script Variables to the Run's starting snapshot. Range
+materialization and padding have budget preflights before construction.
+Persistent State counts variables, mailboxes and retained Run frames; a final
+return checks the state that will remain. Cancellation runs finally cleanup
+under its separate Cleanup Budget. Execution tests cover each chapter area and
+pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-The runner passes the four Value Encoding cases, including Host NFC conversion.
-It reports `SKIP` and a reason for unsupported kinds/features; explicitly
-selecting an unsupported case fails. It has no blessing mode. Trace, disassembly
-and transcript execution arrive with their backends; their setup files already
-read, and tests parse every existing Trace, including filled keys. The front
-end and lowering are checked independently as described above.
+Suspension, messages, imported calls, Capability effects and Object properties
+stop at a `Blocked` implementation boundary with the instruction and operands
+untouched and no charge for that instruction. The caller retains the pending Run. Full Handler modes, automatic `error` delivery,
+Message Paths and scheduling belong to #134; complete cancellation and Stop
+Script acceptance to [#135](https://github.com/odogono/odgn-talk/issues/135),
+and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
-`corpus-passing.txt` is the CI gate: a listed regression or missing case fails;
-an unlisted case that now passes is reported for addition. `go test` runs the
-same gate. Setups accept the Corpus's TOML types (tables and arrays of tables,
-inline tables, arrays, single-line strings, integers and booleans); other TOML
-types are outside `case.toml`'s schema.
+## Corpus runner
+
+From `impl/go/`, run `go run ./cmd/corpus --check-passing`. The runner gates the
+four Value Encoding cases and has no blessing mode. The internal machine tests
+run the ten text-model Script fixtures through the Go front end, checking final
+variables, Fuel, allocation, state and canonical raise positions. The public
+embedding and Trace replay layer of #251 connects these executions to the runner.

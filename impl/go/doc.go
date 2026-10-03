@@ -1,6 +1,5 @@
-// Package northtalk implements the NorthTalk Go Core. Its public embedding
-// interface follows spec/embedding/talk.go; the Spec and Conformance Corpus
-// define its behavior. The Core provides immutable values, Decimal arithmetic,
-// display and JSON codecs, and Unicode text primitives. Source parsing and the
-// execution interface are not yet implemented.
+// Package northtalk implements the NorthTalk Go Core's immutable values,
+// codecs and pinned Unicode seams. Internal packages parse, check and lower
+// source and execute standalone machine instructions. The public Group
+// embedding interface is supplied by the next implementation layer.
 package northtalk

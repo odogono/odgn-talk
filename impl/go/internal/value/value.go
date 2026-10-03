@@ -1,5 +1,5 @@
 // Package value holds the shared value model, used by the Go embedding seam
-// and, later, the Abstract Machine. Constructors own and normalize inputs.
+// and the internal Abstract Machine. Constructors own and normalize inputs.
 package value
 
 import (
@@ -29,9 +29,12 @@ const (
 	Pattern
 	Function
 	Object
+	Iterator
+	BinaryReader
+	Replacement
 )
 
-var KindNames = []string{"nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object"}
+var KindNames = []string{"nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object", "iterator", "reader", "replacement"}
 
 type DateFields struct {
 	Year, Month, Day                 int
@@ -47,26 +50,59 @@ type ObjectData struct {
 	Handle   any
 }
 type FunctionData struct {
+	Body       int
+	Owner      any
+	Group      any
+	Name       string
 	Home, Code string
 	Captures   []Pair
 }
 
+// IteratorData is private machine state retained by an internal value.
+// Advancement copies it before rebinding the iterator.
+type IteratorData struct {
+	Snapshot  Value
+	Position  int
+	Remaining decimal.Number
+	Current   decimal.Number
+	Done      bool
+}
+
 // Fields are internal to the Core. Consumers must rebind values rather than
 // mutate their container slices or metadata; constructors copy all slices.
+type ReaderData struct {
+	Snapshot Value
+	Position int
+}
+
+type ReplacementData struct {
+	Subject      Value
+	Matches      []Value
+	Position, At int
+	Parts        []string
+}
+
 type Value struct {
-	Kind     Kind
-	Bool     bool
-	Number   decimal.Number
-	Text     string
-	Bytes    []byte
-	Items    []Value
-	Entries  []Pair
-	Unit     Unit
-	Date     DateFields
-	Seconds  int64
-	Nanos    int32
-	Object   *ObjectData
-	Function *FunctionData
+	// CoreMessage marks only a Core-generated error message. It is visible to
+	// Scripts but omitted from parity Trace values (chapter 11).
+	CoreMessage bool
+
+	Reader      *ReaderData
+	Replacement *ReplacementData
+	Iterator    *IteratorData
+	Kind        Kind
+	Bool        bool
+	Number      decimal.Number
+	Text        string
+	Bytes       []byte
+	Items       []Value
+	Entries     []Pair
+	Unit        Unit
+	Date        DateFields
+	Seconds     int64
+	Nanos       int32
+	Object      *ObjectData
+	Function    *FunctionData
 }
 
 func NewText(s string) (Value, error) {
@@ -176,7 +212,7 @@ func (v Value) Equal(w Value) bool {
 	case Object:
 		return v.Object != nil && w.Object != nil && v.Object.Handle == w.Object.Handle
 	case Function:
-		if v.Function == nil || w.Function == nil || v.Function.Home != w.Function.Home || v.Function.Code != w.Function.Code {
+		if v.Function == nil || w.Function == nil || v.Function.Home != w.Function.Home || v.Function.Code != w.Function.Code || v.Function.Group != w.Function.Group {
 			return false
 		}
 		return (Value{Kind: Map, Entries: v.Function.Captures}).Equal(Value{Kind: Map, Entries: w.Function.Captures})
