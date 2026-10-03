@@ -1,0 +1,8 @@
+script variable count = 0
+on go
+ask r to open
+repeat 10 times
+put 2 into count
+end repeat
+ask r to close
+end go

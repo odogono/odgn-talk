@@ -114,6 +114,10 @@ const free = (operations: readonly string[]) =>
   Object.fromEntries(operations.map(op => [op, { fuel: 0 }]));
 // A user Library's version; replacing one keeps it.
 const LIBRARY_VERSION = '1';
+const terminalEffects = (reports: readonly Report[]) =>
+  reports.some(r => r.kind === 'stop' && r.reason === 'effect state unknown');
+const effectFailureText = (r: Extract<Report, { kind: 'effect failure' }>) =>
+  `! effect failure grant=${r.grant} segment=${r.segment} phase=${r.phase} status=${r.status}${r.scope ? ` scope=${r.scope}` : ''}`;
 // The limits a Delivery may override, by their `ts` names (chapter 12, `:limits`).
 const OVERRIDABLE = [
   'fuelPerRun',
@@ -740,6 +744,10 @@ export class SessionHost {
     } catch (error) {
       return this.refused(error, { line, col: 0 }, lineCount(decl.source));
     }
+    if (terminalEffects(reports)) {
+      this.deadline = undefined;
+      return this.discarded(reports);
+    }
     this.declarations = next;
     this.implicit.clear();
     this.placements.clear();
@@ -983,6 +991,10 @@ export class SessionHost {
     } catch (error) {
       return this.refused(error, { line: 0, col: 0 });
     }
+    if (terminalEffects(reports)) {
+      this.deadline = undefined;
+      return this.discarded(reports);
+    }
     this.libraries.set(name!, { added: held?.added ?? source, library });
     return this.discarded(reports);
   }
@@ -1050,7 +1062,13 @@ export class SessionHost {
   private discarded(reports: readonly Report[]): string[] {
     const out: string[] = [];
     for (const r of reports) {
+      if (r.kind === 'effect failure') {
+        out.push(this.prefix(r.run) + effectFailureText(r));
+      }
       if (r.kind === 'stop') {
+        if (r.reason === 'effect state unknown') {
+          out.push('! effect state unknown');
+        }
         for (const run of r.discardedRuns) {
           out.push(`! discarded ${run}`);
           this.lastSeg.delete(run);
@@ -1221,6 +1239,16 @@ export class SessionHost {
       }
     }
     const out: string[] = [];
+    for (const report of reports) {
+      if (report.kind === 'effect failure') {
+        out.push(this.prefix(report.run) + effectFailureText(report));
+      } else if (
+        report.kind === 'stop' &&
+        report.reason === 'effect state unknown'
+      ) {
+        out.push('! effect state unknown');
+      }
+    }
     for (const e of this.events) {
       if (e.k === 'seg') {
         this.lastSeg.set(e.run, e);
@@ -1280,6 +1308,8 @@ export class SessionHost {
         return `! limit fault ${report?.limit} at ${this.where(report?.at)}`;
       case 'cancelled':
         return '! cancelled';
+      case 'effect-failed':
+        return '! effect failed';
       default:
         return null;
     }

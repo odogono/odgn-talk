@@ -1,0 +1,4 @@
+script variable count = 0
+on go
+ask r to write
+end go

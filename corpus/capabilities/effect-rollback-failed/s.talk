@@ -1,0 +1,7 @@
+script variable count = 0
+on go
+ask r to write
+repeat forever
+put 2 into count
+end repeat
+end go

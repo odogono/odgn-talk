@@ -613,6 +613,14 @@ test('fatal rollback during Reload prevents replacement and stops the Group', ()
   );
   group.load({ name: 'other', source: '' });
   group.pump(now, { fuelSlice: 40 });
+  const reports = script.reload('script variable count = 9', 'carry variables');
+  expect(reports).toContainEqual(
+    expect.objectContaining({
+      kind: 'effect failure',
+      phase: 'rollback',
+      status: 'failed',
+    }),
+  );
   expect(() =>
     script.reload('script variable count = 9', 'carry variables'),
   ).toThrow('effect state unknown');
@@ -1121,4 +1129,85 @@ test('unknown begin abandons existing scopes before rolling back the possibly ac
   script.deliver({ name: 'go' });
   expect(group.pump(now).state).toBe('stopped');
   expect(events).toEqual(['open', 'begin', 'abandon', 'rollback']);
+});
+
+test('cancellation queued by the first Operation rolls back before a fresh cleanup Segment without preemption', () => {
+  let cancelled = false;
+  const host = transactionalHost(
+    { status: 'ok' },
+    {
+      change: call => {
+        if (!cancelled) {
+          cancelled = true;
+          call.group.script(call.scriptName)!.cancelRun(call.runId);
+        }
+        return nothing;
+      },
+    },
+  );
+  const { group } = start(
+    'try\nask db to change\nput 2 into count\nfinally\nask db to change\nput 3 into count\nend try',
+    host,
+  );
+  expect(runEnd(group)).toMatchObject({ outcome: 'cancelled' });
+  expect(count(group)).toBe('3');
+  expect(host.events).toEqual([
+    'begin:s/r1.s1',
+    'change:s/r1.s1',
+    'rollback:s/r1.s1',
+    'begin:s/r1.s2',
+    'change:s/r1.s2',
+    'commit:s/r1.s2',
+  ]);
+  expect(host.state().committed).toBe(1);
+});
+
+test('fatal rollback during Library replacement reports failure and prevents new code publication', () => {
+  const host = transactionalHost(
+    { status: 'ok' },
+    { rollback: () => ({ status: 'failed', detail: 'Host repair required' }) },
+  );
+  const group = newGroup({ name: 'g' });
+  group.addLibrary(
+    compileLibrary({
+      name: 'user',
+      version: '1',
+      source: 'function one\nreturn 1\nend one',
+    }),
+  );
+  const script = group.load({
+    name: 's',
+    grants: { db: host.cap.grant('all', undefined) },
+    source:
+      'use one from user\non go\nask db to change\nrepeat forever\nend repeat\nend go',
+  });
+  script.deliver({ name: 'go' });
+  group.pump(now, { fuelSlice: 40 });
+  const before = group.fingerprint();
+  const replacement = compileLibrary({
+    name: 'user',
+    version: '2',
+    source: 'function one\nreturn 2\nend one',
+  });
+  const reports = group.replaceLibrary(replacement, 'carry variables');
+  expect(group.fingerprint()).toEqual(before);
+  expect(() => group.replaceLibrary(replacement, 'carry variables')).toThrow(
+    'effect state unknown',
+  );
+  expect(reports).toContainEqual(
+    expect.objectContaining({
+      kind: 'effect failure',
+      script: 's',
+      run: 's/r1',
+      grant: 'db',
+      segment: 's/r1.s1',
+      phase: 'rollback',
+      status: 'failed',
+      detail: 'Host repair required',
+    }),
+  );
+  expect(
+    host.events.filter(event => event.startsWith('rollback:')),
+  ).toHaveLength(1);
+  expect(() => group.save()).toThrow('effects pending');
 });

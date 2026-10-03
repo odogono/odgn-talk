@@ -1,0 +1,27 @@
+# scope-preemption-save: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=229bbe888f0fd1c70cbd0c15ca9de343eabb61494cd3270d9100208ea0bef4d2
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z fuel-cap=15
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=16 alloc=8
+pumped state=sliced fuel=16
+> save s1
+refused code="effects pending"
+> pump clock=2026-10-02T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=24
+pumped state=sliced fuel=20
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c2 op=r.close args=[] result=nothing
+scope s/r1.c2 grant=r name=file action=closed
+seg s/r1 continue fuel=73 alloc=8 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=40
+pumped state=idle fuel=73
+> save s2
+> restore from=s2 fingerprint=e30ca8b3437bb59e5edd9dd6656d91a4969580f9867fe70c6c18923b4c3934cd mode=full
+> vars
+vars s count=2

@@ -1,0 +1,89 @@
+script variable count = []
+on helper
+wait 0 ms
+end helper
+on local flag
+if flag then wait 0 ms
+return 1
+end local
+on b0
+ask r to open
+try
+wait 0 ms
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b0
+on b1
+ask r to open
+try
+wait for ping
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b1
+on b2
+ask r to open
+try
+ask r to later and wait
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b2
+on b3
+ask r to open
+try
+send ping to me and wait
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b3
+on b4
+ask r to open
+try
+wait for all
+if false then ask r to later and wait
+end wait
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b4
+on b5
+ask r to open
+try
+wait for all
+ask r to later and wait
+end wait
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b5
+on b6
+ask r to open
+try
+helper and wait
+catch e
+put count & [the code of e] into count
+end try
+ask r to close
+end b6
+on go
+ask r to open
+local false and wait
+ask r to close
+end go
+on joined
+wait for all
+acquire
+ask r to later and wait
+end wait
+end joined
+on acquire
+ask r to open
+end acquire

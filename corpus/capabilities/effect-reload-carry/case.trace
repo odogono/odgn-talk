@@ -1,0 +1,29 @@
+# effect-reload-carry: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=c0b0bc23c362336f891b1e77170f93ad0459a69f819fe89535fda92a26690c4b
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=rollback status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z fuel-slice=40
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
+pumped state=sliced fuel=40
+> reload s carry=yes source="on" identity=2c985e5707012ea6e4c8e49dfe8713c769c68648d1fa757c2e74e99c7d5ffebb
+diag s code="unexpected token" pos=1:3
+> reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=fe48545740fdadf8b983b1e62c7d058da259291dd9dd697da47c6b7ec3de3108
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+effect s/r1.s1 grant=r phase=rollback status=ok
+stopped s reason="reload" discarded=[s/r1]
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=7 alloc=0 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=go value=0 fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars s count=0

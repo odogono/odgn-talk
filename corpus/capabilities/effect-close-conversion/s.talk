@@ -1,0 +1,5 @@
+script variable count = 0
+on go
+ask r to open
+ask r to finish
+end go

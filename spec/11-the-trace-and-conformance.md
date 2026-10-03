@@ -684,7 +684,7 @@ A Session Transcript is a case directory holding `case.toml` with `kind = "trans
 
 ## Scope and Segment-effect conformance scenarios
 
-The following scenarios are required by [the lifecycle contract](embedding/scoped-effects.md). They specify the future executable corpus coverage; this design change does not claim that either Core implements them. Implement Trace Cases under `corpus/capabilities/`, using Operation and lifecycle Stubs, plus embedding tests for Host callbacks and Message Layer exchanges. Keep real filesystem/database integration tests in the relevant Example Host.
+The following scenarios are required by [the lifecycle contract](embedding/scoped-effects.md). Implement Trace Cases under `corpus/capabilities/`, using Operation and lifecycle Stubs, plus embedding tests for Host callbacks and Message Layer exchanges. The [coverage reconciliation](../corpus/capabilities/scoped-effects.md) identifies executable TS coverage, pending expectation review and transport gaps; it does not establish Go or Message Layer conformance. Keep real filesystem/database integration tests in the relevant Example Host.
 
 | Scenario | Required observation |
 | --- | --- |

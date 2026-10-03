@@ -1,0 +1,9 @@
+script variable count = 0
+on go
+ask r to open
+try
+ask r to close
+catch e
+put the code of e into count
+end try
+end go

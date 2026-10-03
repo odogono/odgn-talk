@@ -1,0 +1,18 @@
+# effect-participant-conflict: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=3994ab9d16265a747cb7fe6879dd446bfbb8a8aca9ffeefe6c1c7e32313ab706
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+raise s/r1 code="segment participant conflict" at=s:6 pos=4:1
+effect s/r1.s1 grant=r phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=31 alloc=8 state=16 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "alias", operation: "write", participant: "r", at: {unit: "s", handler: "go", line: 4, column: 1}} fuel=31 alloc=8
+pumped state=idle fuel=31
+> vars
+vars s count=0

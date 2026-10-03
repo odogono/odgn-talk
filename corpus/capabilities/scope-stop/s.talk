@@ -1,0 +1,11 @@
+script variable count = 0
+on go
+try
+ask r to open
+repeat forever
+put 2 into count
+end repeat
+finally
+put 9 into count
+end try
+end go

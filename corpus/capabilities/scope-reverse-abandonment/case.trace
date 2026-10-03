@@ -1,0 +1,36 @@
+# scope-reverse-abandonment: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=6b9022546bee7d37bf4f2f1fc122c2690f05eefb69e0c663d33240ecc2594da1
+> stub resource.open value=nothing
+> stub resource.open value=nothing
+> stub resource.openlock value=nothing
+> stub resource.unlock value=nothing
+> stub resource.close error={}
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+call s/r1.c2 op=alias.open args=[] result=nothing
+scope s/r1.c2 grant=alias name=file action=opened
+call s/r1.c3 op=r.openlock args=[] result=nothing
+scope s/r1.c3 grant=r name=lock action=opened
+call s/r1.c4 op=r.unlock args=[] result=nothing automatic=yes
+scope s/r1.c4 grant=r name=lock action=abandoned
+call s/r1.c5 op=alias.close args=[] error={} automatic=yes
+scope s/r1.c5 grant=alias name=file action=failed
+effect-failure s/r1 grant=alias segment=s/r1.s1 phase=abandon status=unknown scope=file
+call s/r1.c6 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c6 grant=r name=file action=abandoned
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=46 alloc=24 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=46 alloc=24
+pumped state=idle fuel=46
+> deliver d2 to=s message=later
+> pump clock=2026-10-02T00:00:00Z
+raise s/r2 code="capability disabled" at=s:13 pos=9:1
+seg s/r2 start delivery=d2 handler=later clause=1 fuel=8 alloc=0 state=16 end=error
+run s/r2 outcome=errored delivery=d2 handler=later error={code: "capability disabled", capability: "alias", operation: "open", at: {unit: "s", handler: "later", line: 9, column: 1}} fuel=8 alloc=0
+pumped state=idle fuel=8
+> vars
+vars s count=0
