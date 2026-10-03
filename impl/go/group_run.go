@@ -2,10 +2,15 @@ package northtalk
 
 import (
 	"fmt"
+	"math/big"
+	"slices"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"strings"
 )
 
 func (r *Unhandled) isReport() {}
@@ -35,17 +40,28 @@ func (s *Script) start(d delivery) {
 		handler = d.message.Name
 	}
 	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: handler, clause: r.Clause, how: "start"}
+	s.runs = append(s.runs, s.active)
 }
-func (s *Script) persistentWithoutRun() int64 {
+func (s *Script) persistentWithoutRun(exclude *execution) int64 {
 	var size int64
 	for _, v := range s.state.Variables {
 		size += machine.Size(v)
 	}
-	return size + s.mailboxSize()
+	size += s.mailboxSize()
+	for _, x := range s.runs {
+		if x != exclude {
+			size += x.run.RetainedSize()
+		}
+	}
+	return size
 }
 func (s *Script) mailboxSize() int64 {
 	var size int64
-	for _, d := range s.mailbox {
+	for _, item := range s.queue {
+		if item.run != nil {
+			continue
+		}
+		d := item.delivery
 		size += 32
 		for _, v := range d.message.Args {
 			size += machine.Size(v.inner)
@@ -53,12 +69,43 @@ func (s *Script) mailboxSize() int64 {
 	}
 	return size
 }
-func (s *Script) persistent() int64 {
-	size := s.persistentWithoutRun()
-	if s.active != nil {
-		size += s.active.run.RetainedSize()
+func (s *Script) persistent() int64 { return s.persistentWithoutRun(nil) }
+
+func clockNanos(t time.Time) *big.Int {
+	ns := new(big.Int).Mul(big.NewInt(t.Unix()), big.NewInt(1e9))
+	return ns.Add(ns, big.NewInt(int64(t.Nanosecond())))
+}
+func deadlineTime(ns *big.Int) time.Time {
+	sec, nano := new(big.Int), new(big.Int)
+	sec.DivMod(ns, big.NewInt(1e9), nano)
+	return time.Unix(sec.Int64(), nano.Int64()).UTC()
+}
+func (g *Group) fireTimers() {
+	type timer struct {
+		s *Script
+		x *execution
 	}
-	return size
+	var due []timer
+	now := clockNanos(g.clock)
+	for _, s := range g.scripts {
+		for _, x := range s.runs {
+			if x.deadline != nil && x.deadline.Cmp(now) <= 0 {
+				due = append(due, timer{s, x})
+			}
+		}
+	}
+	sort.Slice(due, func(i, j int) bool {
+		a, b := due[i].x, due[j].x
+		if cmp := a.deadline.Cmp(b.deadline); cmp != 0 {
+			return cmp < 0
+		}
+		return a.timerOrder < b.timerOrder
+	})
+	for _, t := range due {
+		t.x.deadline = nil
+		t.x.how = "resume"
+		t.s.queue = append(t.s.queue, workItem{run: t.x})
+	}
 }
 
 func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
@@ -78,17 +125,19 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			s.debt = max(0, s.debt-o.FuelSlice)
 		}
 	}
-	// All inputs are drained before the first turn. Cancellation acts on the
-	// resulting mailbox, or marks a retained Run for cleanup in its own turn.
+	// Drain inputs in order before timers and turns. Cancellation either
+	// removes a message or queues a suspended Run's cleanup at this position.
 	for _, d := range inputs {
 		if d.cancel == "" {
+			d.script.queue = append(d.script.queue, workItem{delivery: d})
 			continue
 		}
 		s := d.script
 		found := false
-		for j, q := range s.mailbox {
-			if q.id == d.cancel {
-				s.mailbox = append(s.mailbox[:j], s.mailbox[j+1:]...)
+		for j, item := range s.queue {
+			q := item.delivery
+			if item.run == nil && q.id == d.cancel {
+				s.queue = slices.Delete(s.queue, j, j+1)
 				g.release(s)
 				report := &RunEnd{Script: s.name, Delivery: q.id, Outcome: Cancelled}
 				result.Reports = append(result.Reports, report)
@@ -98,14 +147,28 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				break
 			}
 		}
-		if !found && s.active != nil && s.active.delivery.id == d.cancel {
-			s.active.run.Cancel(s.limits.CleanupBudget)
+		if !found {
+			for _, x := range s.runs {
+				if x.delivery.id == d.cancel {
+					waiting := x.deadline != nil
+					x.deadline = nil
+					x.run.Cancel(s.limits.CleanupBudget)
+					if waiting {
+						x.how = "resume"
+						s.queue = append(s.queue, workItem{run: x})
+					}
+					break
+				}
+			}
 		}
 	}
+	// Only timers retained from an earlier Pump fire, after Host inputs.
+	g.fireTimers()
+
 	for {
 		progress := false
 		for _, s := range g.scripts {
-			if skipped[s] || s.active == nil && len(s.mailbox) == 0 {
+			if skipped[s] || s.active == nil && len(s.queue) == 0 {
 				continue
 			}
 			if o.FuelSlice > 0 && used[s] >= budget[s] {
@@ -118,16 +181,21 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				break
 			}
 			if s.active == nil {
-				d := s.mailbox[0]
-				s.mailbox = s.mailbox[1:]
-				g.release(s)
-				// With no error clauses there is no dispatch code to run. A
-				// future wait-for observer will still see the message here.
-				if d.during != nil && !s.hasHandler("error") {
-					progress = true
-					continue
+				item := s.queue[0]
+				s.queue[0] = workItem{}
+				s.queue = s.queue[1:]
+				if item.run != nil {
+					s.active = item.run
+					s.active.run.Resume()
+				} else {
+					d := item.delivery
+					g.release(s)
+					if d.during != nil && !s.hasHandler("error") {
+						progress = true
+						continue
+					}
+					s.start(d)
 				}
-				s.start(d)
 			}
 			x := s.active
 			r := x.run
@@ -147,6 +215,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				by = "cap"
 			}
 			r.PersistentBase = s.mailboxSize()
+			for _, other := range s.runs {
+				if other != x {
+					r.PersistentBase += other.run.RetainedSize()
+				}
+			}
+			r.ClockNS = clockNanos(g.clock)
 			r.Execute(slice)
 			delta := r.Fuel - fuel
 			used[s] += delta
@@ -193,6 +267,17 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				skipped[s] = true
 				continue
 			}
+			if r.Status == machine.Suspended {
+				g.nextTimer++
+				x.timerOrder = g.nextTimer
+				x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
+				common["state"] = fmt.Sprint(s.persistent())
+				common["end"] = "wait"
+				common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
+				g.record("seg", false, []string{string(x.id), x.how}, common)
+				s.active = nil
+				continue
+			}
 			report := g.finish(s, x, common)
 			result.Reports = append(result.Reports, report)
 			if report.Outcome == Errored && x.delivery.message.Name != "error" {
@@ -218,6 +303,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				})
 			}
 			s.active = nil
+			for j, live := range s.runs {
+				if live == x {
+					s.runs = slices.Delete(s.runs, j, j+1)
+					break
+				}
+			}
 		}
 		if !progress || o.FuelCap > 0 && result.FuelUsed >= o.FuelCap {
 			break
@@ -231,11 +322,24 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	// Exhausting a budget matters only when some runnable work remains.
 	result.State = Idle
 	for _, s := range g.scripts {
-		if s.active != nil && s.active.run.Status != machine.Blocked || len(s.mailbox) > 0 && s.active == nil {
+		if s.active != nil && s.active.run.Status != machine.Blocked || len(s.queue) > 0 && s.active == nil {
 			result.State = Sliced
 		}
 	}
-	g.record("pumped", false, nil, map[string]string{"state": []string{"idle", "sliced", "stopped"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)})
+	fields := map[string]string{"state": []string{"idle", "sliced", "stopped"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)}
+	var next *big.Int
+	for _, s := range g.scripts {
+		for _, x := range s.runs {
+			if x.deadline != nil && (next == nil || x.deadline.Cmp(next) < 0) {
+				next = x.deadline
+			}
+		}
+	}
+	if next != nil {
+		result.NextDeadline = deadlineTime(next)
+		fields["next"] = result.NextDeadline.Format(time.RFC3339Nano)
+	}
+	g.record("pumped", false, nil, fields)
 	return result, nil
 }
 
@@ -270,10 +374,10 @@ func (g *Group) queueError(s *Script, x *execution) {
 		{Key: "name", Val: mustText(x.delivery.message.Name)},
 		{Key: "args", Val: corevalue.NewList(args)},
 	})
-	s.mailbox = append(s.mailbox, delivery{
+	s.queue = append(s.queue, workItem{delivery: delivery{
 		script: s, message: Message{Name: "error", Args: []Value{{x.run.Error}}},
 		from: x.id, during: &during,
-	})
+	}})
 }
 func argsDisplay(args []Value) string {
 	vs := make([]corevalue.Value, len(args))
@@ -336,7 +440,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string) *RunEn
 		}
 		g.record("cleanup-failed", false, []string{string(x.id)}, fields)
 	}
-	common["state"] = fmt.Sprint(s.persistentWithoutRun())
+	common["state"] = fmt.Sprint(s.persistentWithoutRun(x))
 	common["end"] = end
 	g.record("seg", false, []string{string(x.id), x.how}, common)
 	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}

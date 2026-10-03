@@ -1,0 +1,4 @@
+on nap n, d
+ wait d
+ return n
+end nap

@@ -1,0 +1,32 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapter 5: inputs precede timers; due timers order by deadline, then creation.
+# A cap leaves preempted and timer-ready Runs in FIFO order for the next Pump.
+> load s identity=2509d082d982c680f1cf0cabf9dbb6498df40724b6dccb68d3f1bdd78a1cf2fc
+> deliver d1 to=s message=nap args=[1, 3 s]
+> deliver d2 to=s message=nap args=[2, 1 s]
+> deliver d3 to=s message=nap args=[3, 1 s]
+> pump clock=2026-10-03T12:00:00Z
+seg s/r1 start delivery=d1 handler=nap clause=1 fuel=24 alloc=24 state=440 end=wait until=2026-10-03T12:00:03Z
+seg s/r2 start delivery=d2 handler=nap clause=1 fuel=24 alloc=24 state=648 end=wait until=2026-10-03T12:00:01Z
+seg s/r3 start delivery=d3 handler=nap clause=1 fuel=24 alloc=24 state=856 end=wait until=2026-10-03T12:00:01Z
+pumped state=idle fuel=72 next=2026-10-03T12:00:01Z
+> counters s
+counters s fuel=72 alloc=72 runs=3 faults=0 state=856 mailbox=0
+> deliver d4 to=s message=mark
+> pump clock=2026-10-03T12:00:03Z fuel-cap=1
+preempt s/r4 start delivery=d4 handler=mark clause=1 by=cap fuel=5 alloc=0
+pumped state=sliced fuel=5
+> counters s
+counters s fuel=77 alloc=72 runs=4 faults=0 state=1064 mailbox=0
+> pump clock=2026-10-03T12:00:03Z
+seg s/r4 continue fuel=11 alloc=24 state=880 end=return
+run s/r4 outcome=completed delivery=d4 handler=mark fuel=16 alloc=24
+seg s/r2 resume fuel=17 alloc=40 state=648 end=return
+run s/r2 outcome=completed delivery=d2 handler=nap fuel=41 alloc=64
+seg s/r3 resume fuel=17 alloc=40 state=416 end=return
+run s/r3 outcome=completed delivery=d3 handler=nap fuel=41 alloc=64
+seg s/r1 resume fuel=17 alloc=40 state=184 end=return
+run s/r1 outcome=completed delivery=d1 handler=nap fuel=41 alloc=64
+pumped state=idle fuel=62
+> vars
+vars s seen=[1, 2, 3, 99, 12, 13, 11]

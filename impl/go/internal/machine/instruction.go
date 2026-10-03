@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"math/big"
 	"slices"
 	"strings"
 
@@ -166,7 +167,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			vs = append(vs, r.State.Definitions[slot])
 		}
 		effect = func() { r.pushFrame(body, vs) }
-	case "call-handler":
+	case "call-handler", "call-handler-wait":
 		n := idx(1)
 		vs := take(n)
 		m.Count = int64(n)
@@ -200,7 +201,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			functionName = body.Checked.Name
 		}
 		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: body.Checked.Name, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName}})
-	case "call-value":
+	case "call-value", "call-value-wait":
 		n := idx(0)
 		vs := take(n)
 		fn := pop()
@@ -227,7 +228,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				}
 			}
 		}
-		if maySuspend {
+		if maySuspend && i.Name == "call-value" {
 			bad(failure("would suspend"))
 			break
 		}
@@ -253,6 +254,13 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				callee.Locals[body.Checked.Slot(capture.Key)] = capture.Val
 			}
 		}
+	case "wait":
+		ns, err := waitNanos(pop())
+		if err != nil {
+			bad(*err)
+			break
+		}
+		effect = func() { r.WaitNS = ns; r.Status = Suspended }
 	case "call-builtin":
 		m.Args = take(idx(1))
 		v, e := builtin(name(0), m.Args, &m)
@@ -813,4 +821,21 @@ func compared(a, b value.Value, folded bool) int64 {
 		return scanned
 	}
 	return 0
+}
+
+// waitNanos accepts exact durations and rounds to whole nanoseconds, half even.
+func waitNanos(v value.Value) (*big.Int, *value.Value) {
+	fail := func(e value.Value) (*big.Int, *value.Value) { return nil, &e }
+	if v.Kind != value.Quantity {
+		return fail(wrong("quantity", v))
+	}
+	seconds, _ := value.ParseUnit("s")
+	if !v.Unit.Compatible(seconds) {
+		return fail(failure("wrong kind", value.Pair{Key: "expected", Val: text("s")}, value.Pair{Key: "got", Val: text(v.Unit.String())}, value.Pair{Key: "value", Val: v}))
+	}
+	n, err := v.Unit.Convert(v.Number, true)
+	if err != nil {
+		return fail(failure(err.(*decimal.Error).Code))
+	}
+	return roundInteger(new(big.Rat).Mul(n.Rat(), big.NewRat(1e9, 1))), nil
 }

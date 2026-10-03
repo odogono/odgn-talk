@@ -69,6 +69,9 @@ func (executionBackend) Support(c Case) string {
 				return e.Error()
 			}
 			for _, body := range unit.Bodies {
+				if !machine.SupportedDispatch(body) {
+					return "Handler policies and deciding dispatch belong to step3"
+				}
 				for _, i := range body.Code {
 					if !machine.Supported(i) {
 						return i.Name + " execution belongs to step3"

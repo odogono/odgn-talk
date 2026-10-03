@@ -4,6 +4,21 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 )
 
+// Queueing Policies and deciding dispatch await their own step-3 slice.
+// During's following binding token is a name, not a policy flag.
+func SupportedDispatch(b *lower.Body) bool {
+	if b.Checked.Kind != "handler" {
+		return true
+	}
+	for j := 0; j < len(b.Checked.Node.Flags); j++ {
+		if b.Checked.Node.Flags[j].Raw != "during" {
+			return false
+		}
+		j++
+	}
+	return true
+}
+
 // Deferred execution keeps the untouched instruction and operands in plain
 // Run state. It is not a Script error, and consumes no instruction charge.
 // Supported identifies the standalone execution instructions implemented here.
@@ -12,7 +27,7 @@ func Supported(i lower.Instruction) bool {
 	switch i.Name {
 	case "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
 		return true
-	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "call", "call-handler":
+	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait":
 		return true
 	case "add", "subtract", "multiply", "divide", "div", "mod", "power", "negate", "concat", "range":
 		return true

@@ -2,6 +2,8 @@ package machine
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 	"slices"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
@@ -20,6 +22,7 @@ const (
 	Blocked
 	Unhandled
 	Cancelled
+	Suspended
 )
 
 type Limits struct {
@@ -47,6 +50,8 @@ type Frame struct {
 }
 type Run struct {
 	Rollback []string
+	WaitNS   *big.Int
+	ClockNS  *big.Int // Group Clock; nil for standalone execution
 
 	Cancelling                 bool
 	CleanupBudget, CleanupFuel int64
@@ -224,7 +229,7 @@ func (r *Run) Execute(slice int64) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) {
+		if !SupportedDispatch(b) || !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) {
 			r.Status = Blocked
 			break
 		}
@@ -248,7 +253,7 @@ func (r *Run) Execute(slice int64) {
 		trial.Stack = slices.Clone(f.Stack)
 		trial.Locals = slices.Clone(f.Locals)
 		m, effect, err := r.evaluate(&trial, i)
-		if (i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
+		if (i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
 			r.fault("depth")
 			break
 		}
@@ -287,10 +292,43 @@ func (r *Run) Execute(slice int64) {
 		if effect != nil {
 			effect()
 		}
+		// A wait commits its instruction charge, but retaining its frames can
+		// still fault the Segment before the scheduler installs a timer.
+		if r.Status == Suspended && r.Limits.Persistent > 0 {
+			size := saturatingAdd(r.PersistentBase, r.RetainedSize())
+			for _, v := range r.State.Variables {
+				size = saturatingAdd(size, Size(v))
+			}
+			if size > r.Limits.Persistent {
+				r.fault("persistent")
+			}
+		}
 		if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
 			r.Status = Preempted
 		}
 	}
+}
+
+// Foreign Function Value calls await the cross-Script reply implementation.
+// Keep their operands and charge untouched at that boundary.
+func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
+	if i.Name != "call-value-wait" {
+		return false
+	}
+	n := i.Operands()[0].Index
+	fn := f.Stack[len(f.Stack)-n-1]
+	return fn.Kind == value.Function && fn.Function.Owner != nil && fn.Function.Body >= 0 && fn.Function.Owner != r.State
+}
+
+// Resume begins a new Segment at the Script state present when its turn starts.
+// Run budgets and frames survive, while rollback starts from this new snapshot.
+func (r *Run) Resume() {
+	if r.Status != Suspended && !(r.Cancelling && r.Status == Running) {
+		return
+	}
+	r.Base = slices.Clone(r.State.Variables)
+	r.WaitNS = nil
+	r.Status = Running
 }
 func (r *Run) raise(err value.Value) {
 	code := err.Get("code").Text
@@ -403,6 +441,13 @@ func (r *Run) Cancel(budget int64) {
 	if r.Status == Completed || r.Status == Errored || r.Status == Faulted || r.Status == Cancelled || r.Status == Unhandled {
 		return
 	}
+	if r.Status == Suspended {
+		// Between Segments, earlier writes are committed. The unwind table
+		// applies at the wait, whose PC has already advanced.
+		r.Base = slices.Clone(r.State.Variables)
+		r.Frames[len(r.Frames)-1].PC--
+		r.WaitNS = nil
+	}
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
 	r.Cancelling = true
@@ -445,4 +490,20 @@ func (r *Run) failClause() {
 	r.At = b.Code[caller.PC-1]
 	r.PC = b.First + caller.PC - 1
 	r.raise(failure("no match"))
+}
+
+// The embedding API uses time.Time for deadlines. Defer waits beyond its
+// representable range, without wrapping the timer or charging the instruction.
+func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
+	if i.Name != "wait" || r.ClockNS == nil {
+		return false
+	}
+	ns, err := waitNanos(f.Stack[len(f.Stack)-1])
+	if err != nil {
+		return false
+	}
+	seconds := new(big.Int).Div(new(big.Int).Add(r.ClockNS, ns), big.NewInt(1e9))
+	// Go's signed seconds count starts at year 0001, 62135596800 seconds
+	// before the Unix epoch. Its upper bound must leave room for that offset.
+	return !seconds.IsInt64() || seconds.Cmp(big.NewInt(math.MaxInt64-62135596800)) > 0
 }

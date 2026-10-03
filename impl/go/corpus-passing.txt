@@ -21,6 +21,9 @@ limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
 limits/pattern-size-minimum
 limits/persistent-state-minimum
+limits/rollback-after-suspension
+limits/wait-deadline
+limits/wait-zero-next-pump
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here
@@ -59,6 +62,9 @@ math/number-functions
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+suspension/nested-waits
+suspension/wait-precision
+suspension/wait-work-order
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters
 text-model/chunk-write-out-of-range
