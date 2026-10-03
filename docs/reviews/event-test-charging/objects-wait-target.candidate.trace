@@ -1,0 +1,23 @@
+> load old identity=1fed0c7b053c6b0236301950b41089d99f9657b14a7f69e6161ae122fc224af4
+> load next identity=79ebc91ba72d8cdbb412a01e7944f8f00006c277d73183bdb787b822daa5d9da
+> set-parent object=<object room "leaf"> parent=<object room "old">
+> deliver d1 to=next message=watch
+> pump clock=2026-09-30T09:00:00Z
+seg next/r1 start delivery=d1 handler=watch clause=1 fuel=17 alloc=0 state=288 end=wait-for-any until=2026-09-30T09:00:01Z
+pumped state=idle fuel=17 next=2026-09-30T09:00:01Z
+> deliver d2 to=next message=ping args=[9]
+> pump clock=2026-09-30T09:00:00Z
+seg next/r2 start delivery=d2 handler=ping clause=1 fuel=16 alloc=24 state=312 end=return
+run next/r2 outcome=completed delivery=d2 handler=ping fuel=16 alloc=24
+pumped state=idle fuel=16 next=2026-09-30T09:00:01Z
+> deliver d3 to=<object room "leaf"> message=ping args=[4]
+> set-parent object=<object room "leaf"> parent=<object room "new">
+> pump clock=2026-09-30T09:00:00Z
+seg next/r3 start delivery=d3 handler=ping clause=1 fuel=16 alloc=24 state=452 end=return
+run next/r3 outcome=completed delivery=d3 handler=ping fuel=16 alloc=24
+seg next/r1 resume fuel=25 alloc=24 state=104 end=return
+run next/r1 outcome=completed delivery=d1 handler=watch fuel=54 alloc=64
+pumped state=idle fuel=53
+> vars
+vars old handled=[]
+vars next handled=[9, 4] observed=[4]

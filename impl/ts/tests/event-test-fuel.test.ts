@@ -5,7 +5,7 @@ const watcher =
   'on watch\n  wait for\n    when ping n where n > 0 then\n      return n\n  end wait\nend watch\non ping n\nend ping';
 
 describe('wait-for event-test Fuel', () => {
-  test('a failed test contributes its 11 Fuel to the receiving Pump', () => {
+  test('a failed test contributes its 7 Fuel to the receiving Pump', () => {
     const group = newGroup({ name: 'g' });
     const script = group.load({ name: 's', source: watcher });
     script.deliver({ name: 'watch' });
@@ -16,8 +16,8 @@ describe('wait-for event-test Fuel', () => {
     const result = group.pump(0n);
     const handlerFuel = result.reports.find(r => r.kind === 'run end')!.fuel;
 
-    expect(script.counters().fuelTotal - before).toBe(handlerFuel + 11);
-    expect(result.fuelUsed).toBe(handlerFuel + 11);
+    expect(script.counters().fuelTotal - before).toBe(handlerFuel + 7);
+    expect(result.fuelUsed).toBe(handlerFuel + 7);
   });
 
   test('a waiting Run spends its receiving Script slice and carries observation debt', () => {
@@ -34,21 +34,21 @@ describe('wait-for event-test Fuel', () => {
     script.deliver({ name: 'ping', args: [num(-1)] });
     other.deliver({ name: 'go' });
     const observed = group.pump(0n, { fuelSlice: 4 });
-    expect(script.counters().fuelTotal - before).toBe(11);
+    expect(script.counters().fuelTotal - before).toBe(7);
     expect(other.counters().fuelTotal).toBeGreaterThan(0);
-    expect(observed.fuelUsed).toBe(11 + other.counters().fuelTotal);
+    expect(observed.fuelUsed).toBe(7 + other.counters().fuelTotal);
     expect(observed.state).toBe('sliced');
 
-    // Observation overran this Script's slice by 7. Each following Pump pays
+    // Observation overran this Script's slice by 3. Each following Pump pays
     // its debt before permitting either dispatch or another Run to proceed.
-    group.pump(0n, { fuelSlice: 4 });
-    expect(script.counters().fuelTotal - before).toBe(11);
-    expect(group.pump(0n, { fuelSlice: 3 })).toMatchObject({
+    group.pump(0n, { fuelSlice: 1 });
+    expect(script.counters().fuelTotal - before).toBe(7);
+    expect(group.pump(0n, { fuelSlice: 2 })).toMatchObject({
       state: 'sliced',
-      fuelUsed: 0,
+      fuelUsed: 2, // the other Script finishes; this Script still pays debt
     });
     expect(group.pump(0n)).toMatchObject({ state: 'idle', fuelUsed: 7 });
-    expect(script.counters().fuelTotal - before).toBe(18);
+    expect(script.counters().fuelTotal - before).toBe(14);
   });
 
   test('observation spends the Group cap before dispatch or another Script turn', () => {
@@ -67,7 +67,7 @@ describe('wait-for event-test Fuel', () => {
     other.deliver({ name: 'go' });
     expect(group.pump(0n, { fuelCap: 1 })).toMatchObject({
       state: 'sliced',
-      fuelUsed: 11,
+      fuelUsed: 7,
       reports: [],
     });
     expect(trace).toContain(
@@ -96,10 +96,10 @@ describe('wait-for event-test Fuel', () => {
     script.deliver({ name: 'ping', args: [num(1)] });
     expect(group.pump(0n, { fuelCap: 1 })).toMatchObject({
       state: 'sliced',
-      fuelUsed: 32,
+      fuelUsed: 24,
       reports: [],
     });
-    expect(script.counters().fuelTotal - before).toBe(32);
+    expect(script.counters().fuelTotal - before).toBe(24);
     expect(group.inspect().scripts[0]!.runs).toEqual([
       { id: 's/r1', status: 'ready', handler: 'watch' },
       { id: 's/r2', status: 'ready', handler: 'watch' },
@@ -125,7 +125,7 @@ describe('wait-for event-test Fuel', () => {
     group.pump(0n);
 
     script.deliver({ name: 'ping', args: [num(1)] });
-    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(11 + 16);
+    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(7 + 12);
     const finished = group
       .pump(0n)
       .reports.find(r => r.kind === 'run end' && r.run === 's/r1');
@@ -183,7 +183,7 @@ describe('wait-for event-test Fuel', () => {
 
     const delivery = script.deliver({ name: 'ping', args: [num(1)] });
     const result = group.pump(0n, { fuelCap: 1 });
-    expect(result).toMatchObject({ state: 'sliced', fuelUsed: 16 });
+    expect(result).toMatchObject({ state: 'sliced', fuelUsed: 12 });
     expect(result.reports).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
@@ -233,12 +233,12 @@ describe('wait-for event-test Fuel', () => {
     const result = group.pump(0n, { fuelCap: 1 });
     expect(result).toMatchObject({
       state: 'sliced',
-      fuelUsed: 13,
+      fuelUsed: 9,
       reports: [],
     });
     expect(script.counters()).toMatchObject({
       runs: before.runs,
-      fuelTotal: before.fuelTotal + 13,
+      fuelTotal: before.fuelTotal + 9,
       mailboxLen: 0,
     });
     expect(group.inspect().scripts[0]!.runs).toEqual([
@@ -254,13 +254,13 @@ describe('wait-for event-test Fuel', () => {
     group.pump(0n);
 
     script.deliver({ name: 'ping', args: [num(-1)] });
-    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(11);
+    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(7);
     expect(script.counters().faults).toBe(0);
     group.pump(0n);
     expect(script.counters().faults).toBe(0);
 
     script.deliver({ name: 'ping', args: [num(1)] });
-    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(16);
+    expect(group.pump(0n, { fuelCap: 1 }).fuelUsed).toBe(12);
     expect(script.counters().faults).toBe(0);
     const resumed = group.pump(0n);
     expect(resumed.reports).toContainEqual(
@@ -269,7 +269,7 @@ describe('wait-for event-test Fuel', () => {
         run: 's/r1',
         outcome: 'limit fault',
         limit: 'fuel',
-        fuel: 14 + 11 + 16,
+        fuel: 14 + 7 + 12,
       }),
     );
     expect(trace.find(line => line.startsWith('fault s/r1 '))).toContain(
@@ -288,7 +288,7 @@ describe('wait-for event-test Fuel', () => {
     script.deliver({ name: 'watch' });
     group.pump(0n);
     script.deliver({ name: 'ping', args: [num(1)] });
-    expect(group.pump(0n, { fuelSlice: 4 }).fuelUsed).toBe(16);
+    expect(group.pump(0n, { fuelSlice: 4 }).fuelUsed).toBe(12);
     const restoredTrace: string[] = [];
     const { group: copy } = restore(group.save(), {
       name: 'copy',
@@ -301,7 +301,7 @@ describe('wait-for event-test Fuel', () => {
 
     originalTrace.length = 0;
     restoredTrace.length = 0;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const result = group.pump(0n, { fuelSlice: 4 });
       expect(result).toMatchObject({ state: 'sliced', fuelUsed: 0 });
       expect(copy.pump(0n, { fuelSlice: 4 })).toEqual(result);

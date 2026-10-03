@@ -77,6 +77,8 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
+The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. Go and TS agree byte for byte, including TS save/restore replay; its first blessing awaits human review. Four existing event-test Traces were corrected after paired execution, while four proposed corrections retain their authoritative expectations pending the Go facilities in [#277](https://github.com/odogono/odgn-talk/issues/277). See the [charging reconciliation](../docs/reviews/event-test-charging/README.md) for the remaining TS corpus divergences.
+
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
 

@@ -9,6 +9,7 @@ cancellation/queueing-policies
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
+decisions/dispatch-and-waits
 decisions/fault-before-seal
 decisions/script-verdict-boundaries
 decisions/undecided-on-an-error
@@ -23,6 +24,7 @@ errors/handler-backstop
 errors/handler-delivery
 limits/alloc-exhaustion-point
 limits/call-depth-minimum
+limits/event-tests-fault-on-resume
 limits/fault-at-dispatch
 limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
@@ -69,7 +71,10 @@ math/number-functions
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+suspension/event-test-group-cap
+suspension/event-test-slice-debt
 suspension/nested-waits
+suspension/wait-observation
 suspension/wait-precision
 suspension/wait-work-order
 text-model/chunk-read-out-of-range

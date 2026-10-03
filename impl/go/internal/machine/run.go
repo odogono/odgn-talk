@@ -38,6 +38,7 @@ type State struct {
 	Unit                              *lower.Unit
 	Constants, Variables, Definitions []value.Value
 	Objects                           map[string]value.Value
+	ScriptNames                       []string // receiver Names are not Values
 }
 type handlerDispatch struct {
 	Bodies []int
@@ -55,9 +56,12 @@ type Frame struct {
 type Run struct {
 	Rollback       []string
 	WaitNS         *big.Int
+	EventWait      *EventWait
+	EventResume    *EventResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 	Vetoed         bool
+	Passed         bool
 	VetoReason     value.Value
 
 	Cancelling                 bool
@@ -255,7 +259,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 			break
 		}
 
-		if (i.Name == "return" || i.Name == "veto") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+		if (i.Name == "return" || i.Name == "veto" || i.Name == "pass") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
 			r.fault("persistent")
 			break
 		}
@@ -339,6 +343,9 @@ func (r *Run) Resume() {
 	}
 	r.Base = slices.Clone(r.State.Variables)
 	r.WaitNS = nil
+	if r.EventResume != nil {
+		r.resumeEvent()
+	}
 	r.Status = Running
 }
 
@@ -508,6 +515,8 @@ func (r *Run) Cancel(budget int64) {
 			r.Frames[len(r.Frames)-1].PC--
 		}
 		r.WaitNS = nil
+		r.EventWait = nil
+		r.EventResume = nil
 	}
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
@@ -518,6 +527,17 @@ func (r *Run) Cancel(budget int64) {
 }
 func (r *Run) RetainedSize() int64 {
 	size := int64(96)
+	if r.EventWait != nil {
+		for _, v := range r.EventWait.Values {
+			size = saturatingAdd(size, Size(v))
+		}
+	}
+	if p := r.EventResume; p != nil && !p.Timeout {
+		size = saturatingAdd(size, Size(p.Message))
+		for _, v := range p.Bindings {
+			size = saturatingAdd(size, Size(v))
+		}
+	}
 	for _, f := range r.Frames {
 		n := int64(64 + 8*len(f.Locals))
 		for _, v := range f.Locals {
@@ -556,14 +576,28 @@ func (r *Run) failClause() {
 // The embedding API uses time.Time for deadlines. Defer waits beyond its
 // representable range, without wrapping the timer or charging the instruction.
 func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
-	if i.Name != "wait" || r.ClockNS == nil {
+	if r.ClockNS == nil {
 		return false
 	}
-	ns, err := waitNanos(f.Stack[len(f.Stack)-1])
-	if err != nil {
+	var deadline *big.Int
+	switch i.Name {
+	case "wait":
+		ns, err := waitNanos(f.Stack[len(f.Stack)-1])
+		if err != nil {
+			return false
+		}
+		deadline = new(big.Int).Add(r.ClockNS, ns)
+	case "wait-for", "wait-for-any":
+		entry := r.State.Unit.Events[i.Operands()[0].Index]
+		w, err := r.eventWait(i.Name, entry, f.Stack[len(f.Stack)-eventValueCount(entry):])
+		if err != nil || w.Deadline == nil {
+			return false
+		}
+		deadline = w.Deadline
+	default:
 		return false
 	}
-	seconds := new(big.Int).Div(new(big.Int).Add(r.ClockNS, ns), big.NewInt(1e9))
+	seconds := new(big.Int).Div(deadline, big.NewInt(1e9))
 	// Go's signed seconds count starts at year 0001, 62135596800 seconds
 	// before the Unix epoch. Its upper bound must leave room for that offset.
 	return !seconds.IsInt64() || seconds.Cmp(big.NewInt(math.MaxInt64-62135596800)) > 0

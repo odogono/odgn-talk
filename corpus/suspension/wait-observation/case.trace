@@ -1,0 +1,65 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapters 5/8: pending waits observe without consuming the message. Captured
+# locals are pinned at registration; Script Variables are read at observation.
+# Guard errors skip a branch, source order breaks matches and timer ties, and
+# internal errors are observed even without an error Handler.
+> load s identity=8ad001c3676d88ef7881da97221ae260fa162fbe3d34d8a5d7357966fc7b58ef
+> deliver d1 to=s message=ping args=[0]
+> deliver d2 to=s message=watch args=[7]
+> deliver d3 to=s message=choose
+> pump clock=2026-10-03T12:00:00Z
+seg s/r1 start delivery=d1 handler=ping clause=1 fuel=16 alloc=31 state=143 end=return
+run s/r1 outcome=completed delivery=d1 handler=ping fuel=16 alloc=31
+seg s/r2 start delivery=d2 handler=watch clause=1 fuel=15 alloc=0 state=343 end=wait-for
+seg s/r3 start delivery=d3 handler=choose clause=1 fuel=17 alloc=0 state=551 end=wait-for-any until=2026-10-03T12:00:01Z
+pumped state=idle fuel=48 next=2026-10-03T12:00:01Z
+> deliver d4 to=s message=setLimit args=[3]
+> deliver d5 to=s message=ping args=[{id: 8, n: 1}]
+> deliver d6 to=s message=ping args=[{id: 7, n: 2}]
+> pump clock=2026-10-03T12:00:00Z
+seg s/r4 start delivery=d4 handler=setLimit clause=1 fuel=10 alloc=0 state=813 end=return
+run s/r4 outcome=completed delivery=d4 handler=setLimit fuel=10 alloc=0
+guard-skip s/r3 at=s:167 pos=11:38 code="division by zero"
+seg s/r5 start delivery=d5 handler=ping clause=1 fuel=16 alloc=31 state=960 end=return
+run s/r5 outcome=completed delivery=d5 handler=ping fuel=16 alloc=31
+seg s/r6 start delivery=d6 handler=ping clause=1 fuel=16 alloc=31 state=1075 end=return
+run s/r6 outcome=completed delivery=d6 handler=ping fuel=16 alloc=31
+seg s/r3 resume fuel=30 alloc=32 state=620 end=return
+run s/r3 outcome=completed delivery=d3 handler=choose fuel=94 alloc=96
+seg s/r2 resume fuel=21 alloc=592 state=457 end=return
+run s/r2 outcome=completed delivery=d2 handler=watch fuel=64 alloc=632
+pumped state=idle fuel=168
+> deliver d7 to=s message=choose
+> deliver d8 to=s message=filtered
+> deliver d9 to=s message=ping args=[{id: 9, n: 5}]
+> pump clock=2026-10-03T12:00:00Z
+seg s/r7 start delivery=d7 handler=choose clause=1 fuel=17 alloc=0 state=860 end=wait-for-any until=2026-10-03T12:00:01Z
+seg s/r8 start delivery=d8 handler=filtered clause=1 fuel=16 alloc=0 state=1036 end=wait-for until=2026-10-03T12:00:00Z
+guard-skip s/r7 at=s:167 pos=11:38 code="division by zero"
+seg s/r9 start delivery=d9 handler=ping clause=1 fuel=16 alloc=31 state=1183 end=return
+run s/r9 outcome=completed delivery=d9 handler=ping fuel=16 alloc=31
+seg s/r7 resume fuel=25 alloc=32 state=728 end=return
+run s/r7 outcome=completed delivery=d7 handler=choose fuel=79 alloc=96
+pumped state=idle fuel=111 next=2026-10-03T12:00:00Z
+> pump clock=2026-10-03T12:00:00Z
+seg s/r8 resume fuel=13 alloc=16 state=536 end=return
+run s/r8 outcome=completed delivery=d8 handler=filtered fuel=29 alloc=16
+pumped state=idle fuel=13
+> deliver d10 to=s message=choose
+> deliver d11 to=s message=watchError
+> deliver d12 to=s message=fail
+> pump clock=2026-10-03T12:00:00Z
+seg s/r10 start delivery=d10 handler=choose clause=1 fuel=17 alloc=0 state=840 end=wait-for-any until=2026-10-03T12:00:01Z
+seg s/r11 start delivery=d11 handler=watchError clause=1 fuel=15 alloc=0 state=1016 end=wait-for
+raise s/r12 code="division by zero" at=s:137 pos=45:12
+seg s/r12 start delivery=d12 handler=fail clause=1 fuel=13 alloc=0 state=984 end=error
+run s/r12 outcome=errored delivery=d12 handler=fail error={code: "division by zero", at: {unit: "s", handler: "fail", line: 45, column: 12}} fuel=13 alloc=0
+seg s/r11 resume fuel=13 alloc=40 state=816 end=return
+run s/r11 outcome=completed delivery=d11 handler=watchError fuel=40 alloc=96
+pumped state=idle fuel=70 next=2026-10-03T12:00:01Z
+> pump clock=2026-10-03T12:00:02Z
+seg s/r10 resume fuel=40 alloc=16 state=592 end=return
+run s/r10 outcome=completed delivery=d10 handler=choose fuel=57 alloc=16
+pumped state=idle fuel=40
+> vars
+vars s seen=["handled", "handled", "handled", "fallback", ["match", 2, {name: "ping", args: [{id: 7, n: 2}]}], "handled", "positive", nothing, "division by zero", nothing] threshold=3
