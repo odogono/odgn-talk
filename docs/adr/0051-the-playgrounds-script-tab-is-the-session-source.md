@@ -15,3 +15,7 @@ A Playground session still takes only Entries and Session Commands, like a REPL'
 - **Library tabs:** the first save is `:library add` and later ones `:library replace`, each with the Library's source inline. Renaming or closing a Library tab needs a Restart to take it out of the session.
 - **A Restart is not recorded:** it starts a new Session Transcript, and a Shared Link carries only the current session's.
 - **Debugging:** breakpoints in the Script tab map through each declaration to the code unit it was loaded in, and a pause holds the Session Host mid-Pump, through the TS Core's tooling hook. The pause isn't a Host Input, so the Transcript and the Trace are as they would be without it.
+
+## Fresh execution alongside live Apply
+
+The workbench also offers **Run fresh** with a visible launch Entry. It prepares and validates the current tabs in a new session before replacing the old one, then enters the launch Entry. A failed load leaves the old session available; a fault in the launch Entry belongs to the successfully loaded new session. **Evaluate** enters that same Entry against the live session without applying edits. This revisits the rejected restart-on-every-run interface by offering fresh execution explicitly alongside Apply, rather than removing state-preserving experimentation. Neither action adds a Session Command or changes the Transcript format.

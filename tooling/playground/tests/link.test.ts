@@ -17,3 +17,13 @@ test('a Shared Link round-trips its tabs and Transcript', async () => {
 test('refuses an unknown version', async () => {
   expect(decodeLink('#v2.abc')).rejects.toThrow('unknown Playground');
 });
+
+test('shares the launch expression and setup without requiring a transcript', async () => {
+  const shared = {
+    script: '',
+    libraries: [],
+    launch: 'draw',
+    setup: [':grant canvas canvas'],
+  };
+  expect(await decodeLink(await encodeLink(shared))).toEqual(shared);
+});

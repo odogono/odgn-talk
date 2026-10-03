@@ -1,7 +1,9 @@
+import { createCanvasView } from './canvas';
 // The NorthTalk Playground page: tabs and an editor over the LSP worker, and
 // a console, Grants, and debuggers over the session worker. Its layout and
 // controls are tooling freedom (chapter 12); everything a session prints and
 // records comes from the Session Host in the session worker.
+import { createWorkbench } from './workbench';
 import { writeTranscript } from '@odgn/northtalk/session';
 import { libraryUri, type Position } from '@odgn/northtalk-tooling/lsp';
 import type { EditorState } from '@codemirror/state';
@@ -34,9 +36,8 @@ import { loadSaved, save, type Saved } from './storage';
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 
-const WELCOME = `-- Welcome to the NorthTalk Playground. This tab is the session's source:
--- Apply (Ctrl/Cmd-S) enters it into the session, then try
--- greet "Ann" at the prompt.
+const WELCOME = `-- A small greeting. Run fresh starts from this source.
+-- Apply keeps your live variables; Evaluate uses the loaded code.
 on greet name
   say "hello " & name
 end greet
@@ -81,6 +82,13 @@ let savedLibraries: Library[] = [];
 let profile: Saved['profile'] = 'beginner';
 
 const view = new EditorView({ parent: $('editor') });
+const workbench = createWorkbench(view);
+const launch = $('launch') as HTMLInputElement;
+let sessionSetup: string[] = [];
+const renderCanvas = createCanvasView(
+  $('drawing') as HTMLCanvasElement,
+  $('canvas-size'),
+);
 const tabText = (tab: Tab) =>
   (tab === tabs[active] ? view.state : tab.state).doc.toString();
 const scriptTab = () => tabs[0]!;
@@ -91,7 +99,9 @@ const currentTabs = () => ({
 });
 
 const hooksFor = (uri: () => string) => ({
+  selected: () => workbench.selected(),
   changed: (text: string) => {
+    workbench.changed();
     lsp.change(uri(), text);
     if (tabs.find(t => t.uri === uri())?.kind === 'library') {
       configureSources();
@@ -133,6 +143,7 @@ const switchTo = (index: number) => {
     view.setState(tabs[index]!.state);
   }
   renderTabs();
+  workbench.changed();
   scheduleHints();
 };
 
@@ -168,6 +179,16 @@ const renderTabs = () => {
       button.ondblclick = () => renameLibrary(tab);
       const close = document.createElement('span');
       close.className = 'close';
+      close.tabIndex = 0;
+      close.setAttribute('role', 'button');
+      close.setAttribute('aria-label', `Close ${tab.name} Library`);
+      close.onkeydown = event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          closeLibrary(tab);
+        }
+      };
       close.textContent = '×';
       close.title = 'Close this Library tab';
       close.onclick = event => {
@@ -182,6 +203,9 @@ const renderTabs = () => {
   add.textContent = '+ Library';
   add.onclick = newLibrary;
   nav.append(add);
+  $('source-status').textContent = isClean(tabText(scriptTab()), sessionSource)
+    ? 'Source applied'
+    : 'Unapplied edits';
 };
 
 const askLibraryName = (initial = ''): string | null => {
@@ -326,6 +350,8 @@ const scheduleAutosave = debounce(400, () => {
   save({
     script,
     libraries,
+    launch: launch.value,
+    setup: sessionSetup,
     profile,
     showReadings: document.body.classList.contains('readings'),
   });
@@ -383,6 +409,7 @@ const renderLine = (line: ConsoleLine) => {
 // ------------------------------------------------------------- session state
 
 let manifest = '';
+let generation = -1;
 let lastPause: PauseView | null = null;
 
 const receive = (response: SessionResponse) => {
@@ -401,6 +428,18 @@ const receive = (response: SessionResponse) => {
 };
 
 const render = (state: SessionState) => {
+  if (generation !== state.generation) {
+    generation = state.generation;
+    consoleEl.replaceChildren();
+  }
+  if (JSON.stringify(sessionSetup) !== JSON.stringify(state.setup)) {
+    sessionSetup = state.setup;
+    scheduleAutosave();
+  }
+  renderCanvas(state.canvas, state.revision);
+  for (const id of ['fresh', 'apply', 'evaluate']) {
+    ($(id) as HTMLButtonElement).disabled = state.prompt === 'paused';
+  }
   for (const line of state.lines) {
     renderLine(line);
   }
@@ -553,6 +592,7 @@ const renderPause = (pause: PauseView | null) => {
     }
   }
   if (pause) {
+    workbench.selectInspector('debugger');
     ($('debugger') as HTMLDetailsElement).open = true;
   }
 };
@@ -626,6 +666,48 @@ const saveActive = async () => {
   }
 };
 
+launch.oninput = scheduleAutosave;
+$('fresh').onclick = async () =>
+  applied(
+    await call({ t: 'fresh', tabs: currentTabs(), launch: launch.value }),
+  );
+$('canvas-example').onclick = async () => {
+  if (
+    !confirm(
+      'Replace the Script tab with a drawing example? Your current source will be replaced.',
+    )
+  ) {
+    return;
+  }
+  switchTo(0);
+  view.dispatch({
+    changes: {
+      from: 0,
+      to: view.state.doc.length,
+      insert: `on draw
+  ask canvas to background "#f5f0e8"
+  ask canvas to noStroke
+  ask canvas to fill "#235f75"
+  ask canvas to rectangle 70, 70, 180, 180
+  ask canvas to fill "#e0a458"
+  ask canvas to ellipse 250, 250, 160, 160
+  ask canvas to fill "#23313b"
+  ask canvas to textSize 20
+  ask canvas to text "Hello, NorthTalk", 70, 350
+end draw
+`,
+    },
+  });
+  launch.value = 'draw';
+  // Setup is immutable once execution starts; use the existing setup on fresh.
+  const response = await call({ t: 'canvasExample' });
+  if (response.t !== 'error') {
+    workbench.selectInspector('canvas');
+  }
+  scheduleAutosave();
+};
+$('evaluate').onclick = () =>
+  void call({ t: 'evaluate', launch: launch.value });
 $('apply').onclick = () => void apply();
 $('restart').onclick = () => {
   if (
@@ -672,7 +754,11 @@ $('download').onclick = async () => {
 
 // Share
 const shareUrl = async () => {
-  const shared: Shared = currentTabs();
+  const shared: Shared = {
+    ...currentTabs(),
+    launch: launch.value,
+    setup: sessionSetup,
+  };
   if (($('share-transcript') as HTMLInputElement).checked) {
     const response = await call({ t: 'transcript' });
     if (response.t === 'transcript' && response.text) {
@@ -788,6 +874,7 @@ const showReplay = (response: SessionResponse) => {
   }
   $('replay-need').hidden = true;
   const r: ReplayView = response.replay;
+  renderCanvas(r.canvas, r.revision);
   $('replay-view').textContent = [
     `Host Input ${r.hostInputIndex} of ${r.hostInputCount} (${r.state})`,
     ...(r.pause ? ['', pauseText(r.pause)] : []),
@@ -874,6 +961,11 @@ const start = async () => {
     settings: { northtalk: { profile } },
   });
   const source = shared ?? saved ?? { script: WELCOME, libraries: [] };
+  launch.value = shared
+    ? (shared.launch ?? '')
+    : saved
+      ? (saved.launch ?? '')
+      : 'greet "Ann"';
   addTab('script', SESSION_TAB, source.script);
   for (const library of source.libraries) {
     addTab('library', library.name, library.source);
@@ -881,13 +973,18 @@ const start = async () => {
   configureSources();
   view.setState(tabs[0]!.state);
   renderTabs();
-  const response = await call({ t: 'open', ...(shared ? { shared } : {}) });
+  const response = await call({
+    t: 'open',
+    ...((shared ?? saved) ? { shared: shared ?? saved! } : {}),
+  });
+  workbench.changed();
   if (response.t === 'mismatch') {
     const d = response.difference;
     note(
       `The shared Transcript replays differently at line ${d.line}: expected ${d.expected}, got ${d.actual}. The session did not go live; the Replay debugger can step through what did replay.`,
       'error',
     );
+    workbench.selectInspector('replay');
     ($('replay') as HTMLDetailsElement).open = true;
   } else if (shared) {
     note(

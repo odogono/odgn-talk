@@ -1,3 +1,4 @@
+import { canvasCommands } from '@odgn/northtalk-tooling/canvas';
 // The session worker: the Playground Host. It owns the Session Host, its
 // timers and the replay debugger, and answers the page with the session's
 // state after every request and every Pump it makes at a deadline.
@@ -42,6 +43,13 @@ let entry: string[] = [];
 let sleeping: ReturnType<typeof setTimeout> | null = null;
 let background: ReturnType<typeof setTimeout> | null = null;
 let replay: ReplayDebugger | null = null;
+let revision = 0;
+let generation = 0;
+let replayCanvasNames: string[] = [];
+const canvasNames = () =>
+  Object.entries(session.host.grants.granted)
+    .filter(([, c]) => c === 'canvas')
+    .map(([name]) => name);
 
 const note = (text: string, level: 'info' | 'warning' | 'error' = 'info') =>
   notes.push({ k: 'note', level, text });
@@ -90,6 +98,9 @@ const state = (): SessionState => {
   notes = [];
   return {
     lines,
+    generation,
+    revision: ++revision,
+    canvas: canvasCommands(session.trace, canvasNames()),
     prompt: prompt(),
     started: session.started,
     source: session.host.source,
@@ -154,6 +165,7 @@ const settle = () => {
 };
 
 const replace = (next: PlaygroundSession) => {
+  generation++;
   session = next;
   sent = 0;
   entry = [];
@@ -242,6 +254,8 @@ const replayView = (result: ReplayResult | null): ReplayView => {
     };
   }
   return {
+    revision: ++revision,
+    canvas: canvasCommands(debug.trace, replayCanvasNames),
     state: result?.state ?? (pause ? 'paused' : 'input'),
     hostInputIndex: debug.hostInputIndex,
     hostInputCount: debug.hostInputCount,
@@ -303,11 +317,45 @@ const handle = (request: SessionRequest): SessionResponse => {
       } else {
         replace(new PlaygroundSession(env));
         lastReplayed = null;
+        for (const command of request.shared?.setup ?? []) {
+          session.input(command);
+        }
       }
       return { t: 'state', state: state() };
     }
     case 'line':
       line(request.text);
+      break;
+    case 'canvasExample': {
+      if (!session.setup.includes(':grant canvas canvas')) {
+        session.setup.push(':grant canvas canvas');
+      }
+      note(
+        'Drawing example ready. Run fresh to load its canvas grant and source.',
+      );
+      break;
+    }
+    case 'fresh': {
+      const prepared = session.prepareFresh(request.tabs);
+      if (prepared.session) {
+        replace(prepared.session);
+        note('Fresh session loaded.');
+        if (request.launch.trim()) {
+          session.input(request.launch);
+        }
+        settle();
+      }
+      return { t: 'applied', result: prepared.result, state: state() };
+    }
+    case 'evaluate':
+      if (session.host.waiting.k !== 'prompt' || entry.length) {
+        note(
+          'Finish or cancel the current Entry before evaluating.',
+          'warning',
+        );
+      } else if (request.launch.trim()) {
+        session.input(request.launch);
+      }
       break;
     case 'cancel':
       if (session.paused) {
@@ -371,6 +419,17 @@ const handle = (request: SessionRequest): SessionResponse => {
           : lastReplayed
             ? [lastReplayed.setup, lastReplayed.trace.join('\n')]
             : [sessionSetup(session.host), session.trace.join('\n')];
+      replayCanvasNames = [
+        ...new Set(
+          (setup.scripts ?? []).flatMap(s =>
+            Object.entries(s.grants ?? {})
+              .filter(
+                ([name, grant]) => (grant.capability ?? name) === 'canvas',
+              )
+              .map(([name]) => name),
+          ),
+        ),
+      ];
       try {
         replay = new ReplayDebugger(
           setup,

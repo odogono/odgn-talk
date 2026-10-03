@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Build the Playground into a static `dist/`: the page script, its two
+// Build the Playground into a static `dist/`: the page script, its
 // workers, the page and its styles. Any static host can serve the result.
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -11,9 +11,12 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
   rmSync(dist, { recursive: true, force: true });
   mkdirSync(dist, { recursive: true });
   const result = await Bun.build({
-    entrypoints: ['main.ts', 'session.worker.ts', 'lsp.worker.ts'].map(f =>
-      resolve(root, 'src', f),
-    ),
+    entrypoints: [
+      'main.ts',
+      'session.worker.ts',
+      'lsp.worker.ts',
+      'syntax.worker.ts',
+    ].map(f => resolve(root, 'src', f)),
     outdir: dist,
     target: 'browser',
     format: 'esm',

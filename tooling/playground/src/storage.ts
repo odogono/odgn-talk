@@ -2,9 +2,11 @@
 import type { Library } from './session';
 
 export type Saved = {
+  launch?: string;
   libraries: Library[];
   profile: 'beginner' | 'standard';
   script: string;
+  setup?: string[];
   showReadings: boolean;
 };
 
@@ -18,6 +20,13 @@ export const loadSaved = (): Saved | null => {
     }
     const data = JSON.parse(text) as Partial<Saved>;
     return {
+      launch: typeof data.launch === 'string' ? data.launch : '',
+      setup: Array.isArray(data.setup)
+        ? data.setup.filter(
+            (v): v is string =>
+              typeof v === 'string' && /^:(grant|mock) [^\r\n]+$/u.test(v),
+          )
+        : [],
       script: typeof data.script === 'string' ? data.script : '',
       libraries: Array.isArray(data.libraries)
         ? data.libraries.filter(

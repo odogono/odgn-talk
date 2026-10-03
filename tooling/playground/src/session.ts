@@ -2,6 +2,7 @@
 // session prints and records comes from the Session Host (chapter 12); this
 // module only decides which Entries and Session Commands to give it, and maps
 // debugger positions between tabs and loaded code units. It does no I/O.
+import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
 import { parseEntry, type Value } from '@odgn/northtalk';
 import type {
   DebugController,
@@ -99,6 +100,7 @@ export class PlaygroundSession {
       host ??
       new SessionHost({
         now: () => this.now(),
+        capabilities: canvasCapabilities,
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => this.transcript.push(item),
         trace: line => this.trace.push(line),
@@ -125,6 +127,7 @@ export class PlaygroundSession {
     const trace: string[] = [];
     let session: PlaygroundSession | null = null;
     const { host, items } = replayTranscript(recorded, {
+      capabilities: canvasCapabilities,
       trace: line => (session ? session.trace : trace).push(line),
       live: {
         now: () => session!.now(),
@@ -327,9 +330,33 @@ export class PlaygroundSession {
     return { session: next, lines, result };
   }
 
+  /** Stage a fresh session; a failed load never replaces the live session. */
+  prepareFresh(tabs: Tabs): {
+    result: ApplyResult;
+    session: PlaygroundSession | null;
+  } {
+    const next = this.restart(tabs);
+    if (refusedOrDiagnostic(next.lines)) {
+      return {
+        session: null,
+        result: { kind: 'syntax', error: next.lines.join('; ') },
+      };
+    }
+    const ok =
+      next.result.kind === 'applied' &&
+      !next.result.failed.length &&
+      !next.result.pending;
+    return { session: ok ? next.session : null, result: next.result };
+  }
+
   // Asks the old session for its state; what it prints is dropped with it.
   private peek(command: string): string[] {
-    return this.host.input(command);
+    const length = this.transcript.length;
+    try {
+      return this.host.input(command);
+    } finally {
+      this.transcript.length = length;
+    }
   }
 
   // ------------------------------------------------------------- debugging

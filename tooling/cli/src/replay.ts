@@ -1,3 +1,4 @@
+import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
 // `northtalk replay`: replay a Session Transcript through a fresh Session
 // Host, and report the first line it printed differently (chapter 12).
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ export const replay = (
   const recorded = readFileSync(file, 'utf8');
   const trace: string[] = [];
   const { host, items } = replayTranscript(parseTranscript(recorded), {
+    capabilities: canvasCapabilities,
     trace: line => trace.push(line),
   });
   // Every Trace ends with `> vars` (chapter 11, Running a case).
