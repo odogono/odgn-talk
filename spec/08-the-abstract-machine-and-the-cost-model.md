@@ -49,7 +49,7 @@ An extension keeps the older code units unchanged. Its variables table starts wi
 
 The body table lists every body of the code unit, in this order:
 
-1. **The initialiser**, body 0, named `initialiser`. It evaluates each Script Variable's initial value, each Constant and each parameter default, in source order, stores them with `store-var` or `store-definition`, and ends with `const nothing` and `return`. It runs once, when the unit loads.
+1. **The initialiser**, body 0, named `initialiser`. Every newly allocated Script Variable slot starts as Nothing. A declaration without `=` emits no initialiser instructions. The initialiser evaluates each explicitly written Script Variable initial value, each Constant and each parameter default, in source order, stores them with `store-var` or `store-definition`, and ends with `const nothing` and `return`. It runs once, when the unit loads. An explicit `= nothing` still emits `const nothing` and `store-var`.
 2. **Each function, and each Handler Clause,** in source order. A Handler's clauses are numbered from 1, in source order.
 3. **Each Lambda and each event test,** in the order the lowering reaches it: in the initialiser first, then in each declaration in source order.
 
