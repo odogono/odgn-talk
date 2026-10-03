@@ -2,10 +2,16 @@
 // of an Operation, queued in advance. The Trace Case runner and the Session
 // Host's mocks share them, so both answer calls the same way.
 import { ScriptError } from '../errors';
+import type { EffectResult } from '../capabilities';
 import { recordLine, traceValue } from '../trace';
 import { map, nothing, type Value } from '../values';
 
-export type Stub = { charge: number; error?: Value; value?: Value };
+export type Stub = {
+  charge: number;
+  error?: Value;
+  malformed?: boolean;
+  value?: Value;
+};
 
 /** An error map as a Host function fails with it, its code and message apart. */
 export const hostFailure = (error: Value): ScriptError =>
@@ -31,17 +37,30 @@ export const stubLine = (operation: string, stub: Stub): string =>
 /** The Stubs queued for each Operation, named `<capability>.<operation>`. */
 export class Stubs {
   private readonly queues = new Map<string, Stub[]>();
+  private readonly effects = new Map<string, EffectResult[]>();
 
   clone(): Stubs {
     const copy = new Stubs();
     for (const [operation, queue] of this.queues) {
       copy.queues.set(operation, [...queue]);
     }
+    for (const [key, queue] of this.effects) {
+      copy.effects.set(key, [...queue]);
+    }
     return copy;
   }
 
   add(operation: string, stub: Stub): void {
     this.queues.set(operation, [...(this.queues.get(operation) ?? []), stub]);
+  }
+
+  addEffect(grant: string, phase: string, result: EffectResult): void {
+    const key = `${grant}.${phase}`;
+    this.effects.set(key, [...(this.effects.get(key) ?? []), result]);
+  }
+
+  takeEffect(grant: string, phase: string): EffectResult | undefined {
+    return this.effects.get(`${grant}.${phase}`)?.shift();
   }
 
   /**
@@ -53,8 +72,9 @@ export class Stubs {
     operation: string,
     call: { charge(fuel: number): void },
     needed: boolean,
+    recorded?: Stub,
   ): Value {
-    const stub = this.queues.get(operation)?.shift();
+    const stub = this.queues.get(operation)?.shift() ?? recorded;
     if (!stub) {
       if (needed) {
         throw new Error(`No Stub for ${operation}`);
@@ -63,6 +83,10 @@ export class Stubs {
     }
     if (stub.charge) {
       call.charge(stub.charge);
+    }
+    if (stub.malformed) {
+      // A normal Host return acknowledges a scope before result validation.
+      return null as unknown as Value;
     }
     if (stub.error) {
       if (!stub.error.entries().length) {

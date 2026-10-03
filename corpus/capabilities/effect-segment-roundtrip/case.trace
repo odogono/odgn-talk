@@ -1,0 +1,26 @@
+# effect-segment-roundtrip: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=db5b264b318d689039999aa7438fef1f815728d2d739f34a10c92eb15940dcb2
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+effect s/r1.s1 grant=r phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=28 alloc=8 state=192 end=wait until=2026-10-02T00:00:00Z
+pumped state=idle fuel=28 next=2026-10-02T00:00:00Z
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s2 grant=r phase=begin status=ok
+call s/r1.c2 op=r.write args=[] result=nothing
+effect s/r1.s2 grant=r phase=commit status=ok
+seg s/r1 resume fuel=16 alloc=8 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=44 alloc=16
+pumped state=idle fuel=16
+> vars
+vars s count=0

@@ -1,0 +1,18 @@
+# scope-limit-fault: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=67d5341d393e527d22e3b926082185279a720226af1b8b488ba47d1c29e91aa3
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+fault s/r1 limit=fuel at=s:8 pos=5:1 rollback=[count]
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=80 alloc=8 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=80 alloc=8
+pumped state=idle fuel=80
+> vars
+vars s count=0

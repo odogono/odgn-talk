@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -305,10 +306,18 @@ test("every record the Core writes has corpus.toml's ids and keys, in its order"
   };
   const specs = new Map(corpus.record.map(r => [r.name, r]));
   const lines: string[] = [];
-  for (const area of ['text-model', 'limits', 'text-patterns']) {
+  for (const area of [
+    'text-model',
+    'limits',
+    'text-patterns',
+    'capabilities',
+  ]) {
     const root = resolve(import.meta.dir, '../../../corpus', area);
     for (const name of readdirSync(root)) {
       const dir = resolve(root, name);
+      if (!statSync(dir).isDirectory()) {
+        continue;
+      }
       const setup = Bun.TOML.parse(
         readFileSync(resolve(dir, 'case.toml'), 'utf8'),
       ) as {

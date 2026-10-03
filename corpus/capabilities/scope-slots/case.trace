@@ -1,0 +1,31 @@
+# scope-slots: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=0fd23efed1d3f5fecefa41b1efa5cea1f93d23726e27cb9d33e853bc0b94f7fc
+> stub resource.open value=nothing
+> stub resource.openlock value=nothing
+> stub resource.close value=nothing
+> stub resource.open value=nothing
+> stub resource.unlock value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+call s/r1.c2 op=r.openlock args=[] result=nothing
+scope s/r1.c2 grant=r name=lock action=opened
+call s/r1.c3 op=r.close args=[] result=nothing
+scope s/r1.c3 grant=r name=file action=closed
+call s/r1.c4 op=r.open args=[] result=nothing
+scope s/r1.c4 grant=r name=file action=opened
+raise s/r1 code="scope already open" at=s:12 pos=8:1
+call s/r1.c5 op=r.unlock args=[] result=nothing
+scope s/r1.c5 grant=r name=lock action=closed
+call s/r1.c6 op=r.close args=[] result=nothing
+scope s/r1.c6 grant=r name=file action=closed
+raise s/r1 code="scope not open" at=s:29 pos=15:1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=127 alloc=48 state=30 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=127 alloc=48
+pumped state=idle fuel=127
+> vars
+vars s count="scope not open"

@@ -4,7 +4,7 @@
 // Trace back, keeping each comment and blank line before the Host Input line
 // it preceded.
 import { readDisplayText } from '../src/readers';
-import { Stubs } from '../src/session/stubs';
+import { Stubs, type Stub } from '../src/session/stubs';
 import { replacementLibraries } from '../src/library';
 import corpus from '../../../spec/data/corpus.toml';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -29,6 +29,8 @@ import {
   type Operation,
   type Shape,
   type ScopeDecl,
+  type SegmentContext,
+  type EffectResult,
   HostError,
   LoadError,
   type Library,
@@ -322,6 +324,11 @@ const capabilitiesOf = (
   calls: Map<string, Call<unknown>>,
   crossing: (id: string) => void,
   receive: (value: Value) => void,
+  recordedCall: (call: Call<unknown>) => Stub | undefined,
+  lifecycle: (
+    context: SegmentContext<unknown>,
+    phase: 'begin' | 'commit' | 'rollback',
+  ) => EffectResult,
 ): Map<string, ReturnType<typeof defineCapability>> => {
   const byCapability = new Map<string, OperationSpec[]>();
   for (const op of setup.operations ?? []) {
@@ -380,7 +387,7 @@ const capabilitiesOf = (
                 do: (call, ...args) => {
                   args.forEach(receive);
                   try {
-                    return stubs.take(key, call, true);
+                    return stubs.take(key, call, true, recordedCall(call));
                   } finally {
                     crossing(call.id);
                   }
@@ -395,7 +402,20 @@ const capabilitiesOf = (
                 },
               };
     }
-    out.set(name, defineCapability(name, operations));
+    out.set(
+      name,
+      defineCapability(
+        name,
+        operations,
+        ops.some(op => op.segmentBound)
+          ? {
+              begin: context => lifecycle(context, 'begin'),
+              commit: context => lifecycle(context, 'commit'),
+              rollback: context => lifecycle(context, 'rollback'),
+            }
+          : undefined,
+      ),
+    );
   }
   for (const standard of setup.standard ?? []) {
     const { capability } = standard;
@@ -579,6 +599,8 @@ const compileLibraries = (
   return out;
 };
 
+const isCrossing = (line: string) => /^(call|prop|effect) /.test(line);
+
 /** Replay a case's Host Inputs, giving the Trace the Core wrote. */
 export const replay = (
   dir: string,
@@ -588,11 +610,13 @@ export const replay = (
 ): string[] => {
   const trace: string[] = [];
   let hidden = false;
+  const hiddenTrace: string[] = [];
   const adopted = new Set<string>();
   const saveNames = new Map<string, string>();
   let visibleSaves = 0;
   const writeTrace = (line: string) => {
     if (hidden) {
+      hiddenTrace.push(line);
       return;
     }
     if (restoreBetweenPumps && line.startsWith('> settle ')) {
@@ -623,19 +647,30 @@ export const replay = (
   const atCrossings = new Map<string, Parsed[][]>();
   const crossingLines = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i]!.startsWith('call ') && !lines[i]!.startsWith('prop ')) {
+    if (!isCrossing(lines[i]!)) {
       continue;
     }
     const record = parseRecord(lines[i]!);
     const key =
       record.name === 'call'
         ? record.ids[0]!
-        : `${record.fields.get('object')}:${record.fields.get('name')}:${record.fields.get('op')}`;
+        : record.name === 'effect'
+          ? `${record.ids[0]}.${record.fields.get('grant')}.${record.fields.get('phase')}`
+          : `${record.fields.get('object')}:${record.fields.get('name')}:${record.fields.get('op')}`;
     const inputs: Parsed[] = [];
     let j = i + 1;
     while (j < lines.length) {
       const line = lines[j]!;
       if (!line || line.startsWith('#')) {
+        j++;
+        continue;
+      }
+      // Finalization publishes scope/Segment/Run records before landing inputs
+      // queued by its Host callback. Keep those inputs at the last crossing.
+      if (!line.startsWith('> ')) {
+        if (isCrossing(line) || line.startsWith('pumped ')) {
+          break;
+        }
         j++;
         continue;
       }
@@ -739,9 +774,72 @@ export const replay = (
       : undefined,
   });
   const stubs = new Stubs();
+  const recordedCalls = new Map<string, Parsed>();
+  const acknowledged = new Set<string>();
+  const recordedEffects = new Map<string, EffectResult>();
+  for (const line of lines) {
+    if (line.startsWith('call ')) {
+      const r = parseRecord(line);
+      recordedCalls.set(r.ids[0]!, r);
+    } else if (line.startsWith('scope ')) {
+      const r = parseRecord(line);
+      if (['opened', 'closed'].includes(r.fields.get('action')!)) {
+        acknowledged.add(r.ids[0]!);
+      }
+    } else if (line.startsWith('effect ')) {
+      const r = parseRecord(line);
+      recordedEffects.set(
+        `${r.ids[0]}.${r.fields.get('grant')}.${r.fields.get('phase')}`,
+        {
+          status: r.fields.get('status') as EffectResult['status'],
+        },
+      );
+    }
+  }
+  let malformed: Error | undefined;
+  const lifecycle = (
+    context: SegmentContext<unknown>,
+    phase: 'begin' | 'commit' | 'rollback',
+  ): EffectResult => {
+    const grant = `${context.scriptName}.${context.grantName}`;
+    const result =
+      stubs.takeEffect(grant, phase) ??
+      recordedEffects.get(`${context.segmentId}.${context.grantName}.${phase}`);
+    if (!result) {
+      malformed = new Error(`No lifecycle Stub for ${grant} phase=${phase}`);
+      throw malformed;
+    }
+    crossing(`${context.segmentId}.${context.grantName}.${phase}`);
+    return result;
+  };
+  const recordedCall = (call: Call<unknown>): Stub | undefined => {
+    const r = recordedCalls.get(call.id);
+    if (!r) {
+      return undefined;
+    }
+    return {
+      charge: Number(r.fields.get('charged') ?? 0),
+      ...(r.fields.has('result')
+        ? { value: value(r.fields.get('result')!) }
+        : {}),
+      ...(r.fields.has('error')
+        ? acknowledged.has(call.id)
+          ? { malformed: true }
+          : { error: value(r.fields.get('error')!) }
+        : {}),
+    };
+  };
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
-  const capabilities = capabilitiesOf(setup, stubs, calls, crossing, receive);
+  const capabilities = capabilitiesOf(
+    setup,
+    stubs,
+    calls,
+    crossing,
+    receive,
+    recordedCall,
+    lifecycle,
+  );
   const declarations = operationDeclarations(capabilities);
   const compiled = compileLibraries(dir, setup, declarations);
   // A mailbox refusal is written before the accepted inputs still waiting
@@ -970,6 +1068,11 @@ export const replay = (
                 ? 'variables only'
                 : 'reject',
           });
+          if (restoreBetweenPumps) {
+            // A restore rewinds the visible Save counter as well as the Core's
+            // counter, which may include hidden successful or refused attempts.
+            visibleSaves = Number(from.slice(1));
+          }
           group = restored.group;
           registered = new Map(
             [...registered].filter(([name]) => !withheld.has(name)),
@@ -1020,6 +1123,9 @@ export const replay = (
               ? Number(r.fields.get('fuel-cap'))
               : 0,
           });
+          if (malformed) {
+            throw malformed;
+          }
           for (const report of pumped.reports) {
             if (report.kind === 'run end') {
               if (report.result) {
@@ -1060,7 +1166,36 @@ export const replay = (
                   (line.startsWith('> ') && line.includes('<function ')),
               );
             hidden = true;
-            const bytes = group.save();
+            hiddenTrace.length = 0;
+            let bytes: Uint8Array;
+            const inspection = () =>
+              JSON.stringify(group.inspect(), (_key, value) =>
+                typeof value === 'bigint' ? String(value) : value,
+              );
+            const before = inspection();
+            hiddenTrace.length = 0;
+            try {
+              bytes = group.save();
+            } catch (error) {
+              if (
+                !(error instanceof HostError) ||
+                error.code !== 'effects pending'
+              ) {
+                throw error;
+              }
+              if (
+                hiddenTrace.length !== 2 ||
+                !hiddenTrace[0]!.startsWith('> save ') ||
+                hiddenTrace[1] !== 'refused code="effects pending"'
+              ) {
+                throw new Error('Refused Save changed execution');
+              }
+              if (inspection() !== before) {
+                throw new Error('Refused Save changed Group state');
+              }
+              hidden = false;
+              break;
+            }
             const restored = restore(bytes, {
               name: 'case',
               trace: writeTrace,
@@ -1154,6 +1289,21 @@ export const replay = (
           trace.push(line);
           break;
         }
+        case 'stub-effect': {
+          const phase = r.fields.get('phase')!;
+          const status = r.fields.get('status')!;
+          if (
+            !['begin', 'commit', 'rollback'].includes(phase) ||
+            !['ok', 'failed', 'unknown'].includes(status)
+          ) {
+            throw new Error('Invalid lifecycle Stub');
+          }
+          stubs.addEffect(r.ids[0]!, phase, {
+            status: status as EffectResult['status'],
+          });
+          trace.push(line);
+          break;
+        }
         default:
           throw new DeferredCaseError(`the Host Input ${r.name}`);
       }
@@ -1172,6 +1322,9 @@ export const replay = (
         throw new DeferredCaseError(error.message);
       }
       throw error;
+    }
+    if (malformed) {
+      throw malformed;
     }
   }
   return trace;

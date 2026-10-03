@@ -1,0 +1,64 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc"
+costModel = "0"
+
+[[operations]]
+capability = "resource"
+name = "open"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { opens = "file", abandon = "close" }
+
+[[operations]]
+capability = "resource"
+name = "close"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { closes = "file" }
+
+[[operations]]
+capability = "resource"
+name = "openlock"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { opens = "lock", abandon = "unlock" }
+
+[[operations]]
+capability = "resource"
+name = "unlock"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { closes = "lock" }
+
+[[operations]]
+capability = "resource"
+name = "write"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+
+
+[[operations]]
+capability = "resource"
+name = "later"
+mode = "suspending"
+args = []
+result = "nothing"
+cost = { fuel = 0 }
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { r = { capability = "resource", ops = "all", binding = "shared" }, alias = { capability = "resource", ops = "all", binding = "shared" } }
+

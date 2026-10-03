@@ -1,0 +1,20 @@
+# scope-dispose: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=67d5341d393e527d22e3b926082185279a720226af1b8b488ba47d1c29e91aa3
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z fuel-slice=40
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
+pumped state=sliced fuel=40
+> dispose object=<object door "owner">
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+stopped s reason="owner disposed" discarded=[s/r1]
+pumped state=stopped fuel=0
+> vars
+vars s count=0

@@ -1,0 +1,10 @@
+script variable count = 0
+on go
+ask r to open
+ask alias to open
+ask r to openlock
+end go
+
+on later
+ask alias to open
+end later

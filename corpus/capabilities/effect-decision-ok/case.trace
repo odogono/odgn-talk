@@ -1,0 +1,18 @@
+# effect-decision-ok: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=c30d0925c1defefff8f422f44158ec3e352e168b45cae2c976dceda2bae276e9
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> decide d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+effect s/r1.s1 grant=r phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=23 alloc=8 state=16 end=veto value="blocked"
+decided d1 verdict=vetoed vetoes=[{script: "s", run: "s/r1", reason: "blocked"}]
+run s/r1 outcome=completed delivery=d1 handler=go fuel=23 alloc=8
+pumped state=idle fuel=23
+> vars
+vars s count=2

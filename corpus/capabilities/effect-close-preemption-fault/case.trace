@@ -1,0 +1,29 @@
+# effect-close-preemption-fault: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=a5f325ddb7a12c542e6d653c6d0ce5f883bcb141162f13506f5e436da95ff267
+> stub resource.open value=nothing
+> stub resource.write value=nothing
+> stub resource.close value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=rollback status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z fuel-slice=45
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+call s/r1.c2 op=r.write args=[] result=nothing
+call s/r1.c3 op=r.close args=[] result=nothing
+scope s/r1.c3 grant=r name=file action=closed
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=46 alloc=24
+pumped state=sliced fuel=46
+> save s1
+refused code="effects pending"
+> pump clock=2026-10-02T00:00:00Z
+fault s/r1 limit=fuel at=s:12 pos=7:1 rollback=[count]
+effect s/r1.s1 grant=r phase=rollback status=ok
+seg s/r1 continue fuel=54 alloc=0 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=100 alloc=24
+pumped state=idle fuel=54
+> vars
+vars s count=0

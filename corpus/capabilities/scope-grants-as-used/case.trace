@@ -1,0 +1,30 @@
+# scope-grants-as-used: lifecycle ordering and results specified by chapter 11.
+# TS expectations; first human review pending in #222. Go parity is unverified.
+
+> load s identity=006453c7afa2ccf44546a1450727f19bea3ed474a654cf56bd44ba7432110452
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r1.c1 op=r.open args=[] result=nothing
+scope s/r1.c1 grant=r name=file action=opened
+call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r1.c2 grant=r name=file action=abandoned
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=20 alloc=8 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=20 alloc=8
+pumped state=idle fuel=20
+> save s1
+> restore from=s1 fingerprint=4ea0b92d08c17812a3344c0f5b86d60ce241e4fb95b06483e1a5f75048ffea40 mode=full
+> stub resource.open value=nothing
+> stub resource.close value=nothing
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+call s/r2.c1 op=r.open args=[] result=nothing
+scope s/r2.c1 grant=r name=file action=opened
+call s/r2.c2 op=r.close args=[] result=nothing automatic=yes
+scope s/r2.c2 grant=r name=file action=abandoned
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=20 alloc=8 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=go fuel=20 alloc=8
+pumped state=idle fuel=20
+> vars
+vars s count=0

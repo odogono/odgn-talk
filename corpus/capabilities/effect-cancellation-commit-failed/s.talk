@@ -1,0 +1,12 @@
+script variable count = 0
+on go
+try
+ask r to open
+put 2 into count
+repeat forever
+end repeat
+finally
+ask r to write
+put 3 into count
+end try
+end go
