@@ -10,5 +10,5 @@ process.stdout.write(
 
 import { verifyDebugFeatures } from './verify-debug';
 process.stdout.write(
-  `Live debugger: ${verifyDebugFeatures()} passed under Node\n`,
+  `Live/replay debugger: ${verifyDebugFeatures()} passed under Node\n`,
 );

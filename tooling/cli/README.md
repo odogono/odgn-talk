@@ -198,5 +198,48 @@ writes the source or sets Variables. This minimal Bun Host loads one Script,
 without Grants, Host Objects or user Libraries, and delivers messages without
 arguments. For richer Hosts and worker integration, use the
 [browser-safe programmatic API](../stack/README.md#live-debugger). This command
-provides live mode; Trace replay and reverse navigation are tracked by
-[#237](https://github.com/odogono/odgn-talk/issues/237).
+provides live mode; the same command also offers Trace replay.
+
+## Replay debugger
+
+From a clean checkout:
+
+```sh
+bun install
+bun run northtalk debug --trace corpus/counters/lifetime/case.trace
+```
+
+With no Script argument, `--trace` reads an existing Trace. Its adjacent
+`case.toml` supplies Script, Library and Grant declarations, as for a Trace
+Case; sources are relative to that setup file. `--setup <file>` chooses another
+TOML or JSON setup, including inline `text` sources. A Session Transcript case
+uses its adjacent `session.transcript` to reconstruct its initial Session
+Script, mock Grants and user Libraries.
+
+```text
+:break s:3
+:continue
+:vars
+:back
+:step
+:input 0
+:clear
+:continue
+:quit
+```
+
+`:break <unit>:<line>[:<column>]` chooses a Script, extension or Library; omit
+the unit when the setup has one Script. Breakpoints bind as their code loads.
+Forward stepping, fault breaks and paused inspection use the live commands.
+`:back` reverses one statement in execution order, including after the Trace
+ends. `:input <n>` seeks to a zero-based Host Input index, counting every `> `
+line. It replays from the start, ignoring intervening user breaks. Early Stop
+and CancelRun inputs pause at their recorded instruction; callback inputs have
+an applied checkpoint after their Pump. See the
+[API](../stack/README.md#replay-debugger) for boundary details.
+
+There are no timer-driven Pumps or live Host calls in replay. The Trace file
+and sources are read without modification. `:continue` prints completed Run
+reports and `end of Trace` after verifying the recorded outputs. Runtime
+faults give exit code 1; setup, argument, interactive-command or Trace
+divergence failures give 2. Replay has no `:run` or `:reload` commands.

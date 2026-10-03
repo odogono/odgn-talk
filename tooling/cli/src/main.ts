@@ -10,6 +10,8 @@ import { replay } from './replay';
 
 const usage = `Usage:
   northtalk debug <script> [--trace <file>] live debugger in a Bun Host
+  northtalk debug --trace <file> [--setup <file>]
+                                          replay debugger (case.toml by default)
   northtalk lsp                           language server over stdio
   northtalk [repl] [--transcript <file>]   start a REPL session
   northtalk replay <transcript> [--trace <file>]
@@ -39,6 +41,14 @@ const main = async (args: string[]): Promise<number> => {
   };
   if (command === 'debug') {
     const trace = option('--trace');
+    const setup = option('--setup');
+    if (trace && rest.length === 0) {
+      const { debugTrace } = await import('./debug-replay');
+      return debugTrace(trace, setup);
+    }
+    if (setup) {
+      throw new Error('--setup is for Trace replay');
+    }
     if (rest.length !== 1 || rest[0]!.startsWith('-')) {
       throw new Error(usage);
     }

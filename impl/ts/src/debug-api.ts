@@ -4,4 +4,5 @@ export type {
   DebugInstruction,
   DebugPause,
   DebugSnapshot,
+  DebugSource,
 } from './debug';

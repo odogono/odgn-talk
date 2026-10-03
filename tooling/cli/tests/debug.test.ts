@@ -11,6 +11,26 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const main = resolve(import.meta.dir, '../src/main.ts');
+test('debug --trace replays a Trace Case with reverse steps and Host Input seeking', () => {
+  const trace = resolve(
+    import.meta.dir,
+    '../../../corpus/counters/lifetime/case.trace',
+  );
+  const result = Bun.spawnSync(
+    [process.execPath, main, 'debug', '--trace', trace],
+    {
+      stdin: new TextEncoder().encode(
+        ':break s:3\n:continue\n:vars\n:step\n:back\n:input 0\n:clear\n:continue\n:quit\n',
+      ),
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain('NorthTalk replay debugger');
+  expect(result.stdout.toString()).toContain('paused breakpoint s:3:');
+  expect(result.stdout.toString()).toContain('Host Input 0');
+  expect(result.stdout.toString()).toContain('end of Trace');
+  expect(result.stderr.toString()).toBe('');
+});
 test('debug CLI runs a Script, steps, inspects and resumes through piped commands', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));
   try {

@@ -1,8 +1,10 @@
 import {
   DebugController,
   machineDebug,
+  statementStarts,
   type DebugPause,
   type DebugSnapshot,
+  type DebugSource,
 } from './debug';
 // The embedding interface's Group (chapter 9) for the Core's implemented
 // subset: Load, Deliver and Request to a Script, Pump with Fuel Slices and a
@@ -65,6 +67,7 @@ import { sha256 } from './sha256';
 import { checkDecisionCalls } from './decisions';
 import {
   codeIdentity,
+  codeOf,
   replacementLibraries,
   identityOf,
   linksOf,
@@ -610,6 +613,35 @@ export class Group {
     return (this.debugController ??= new DebugController(
       () => this.debugSnapshot(),
       () => this.advanceDebugPump(),
+      () => {
+        const sources: DebugSource[] = [];
+        const seen = new Set<Code>();
+        const visit = (code: Code, script?: string) => {
+          if (seen.has(code)) {
+            return;
+          }
+          seen.add(code);
+          sources.push({
+            unit: structuredClone(code.unit),
+            ...(script ? { script } : {}),
+            statements: code.unit.code.flatMap((instruction, pc) =>
+              statementStarts.has(instruction) ? [pc] : [],
+            ),
+          });
+          for (const library of code.libraries.values()) {
+            visit(library);
+          }
+        };
+        for (const s of this.scripts) {
+          for (const code of s.loaded.units) {
+            visit(code, s.name);
+          }
+        }
+        for (const library of this.libraries.values()) {
+          visit(codeOf(library));
+        }
+        return sources;
+      },
     ));
   }
 

@@ -54,7 +54,7 @@ test('the browser LSP bundle checks, hovers and navigates without Bun, Node or H
   }
 });
 
-test('the browser debug bundle pauses, steps and preserves Trace without Bun or Node globals', async () => {
+test('the browser debug bundle replays, reverses and preserves Trace without Bun or Node globals', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-browser-debug-'));
   try {
     const entry = join(dir, 'browser.ts');
@@ -69,10 +69,11 @@ test('the browser debug bundle pauses, steps and preserves Trace without Bun or 
       TextEncoder,
       TextDecoder,
       performance,
+      structuredClone,
       result: undefined as number | undefined,
     };
     runInNewContext(await build.outputs[0]!.text(), context);
-    expect(context.result).toBe(4);
+    expect(context.result).toBe(9);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
