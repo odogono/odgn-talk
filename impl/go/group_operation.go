@@ -24,11 +24,6 @@ type CallFailed struct {
 
 func (*CallFailed) isReport() {}
 func (g *Group) operation(s *Script, x *execution, grantName, opName string, args []corevalue.Value, pay func(int64, int64) bool, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
-	// Library Capability calls wait for import-time needs validation and trimming.
-	// Preserve the unpaid instruction and its operands at this boundary.
-	if x.run.CurrentCode().Unit.Kind == "library" {
-		return corevalue.Value{}, nil, true
-	}
 	grant := s.grants[grantName]
 	op := grant.definition.ops[opName]
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}

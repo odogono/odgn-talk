@@ -1,0 +1,19 @@
+private function unused
+  tell io to note "unused"
+end unused
+
+function fetch x
+  ask io to read x
+  return it
+end fetch
+
+on hold
+  try
+    ask io to pause 1 and wait
+    put it into first
+    ask io to pause 2 and wait
+    return [first, it]
+  finally
+    tell io to note "cleanup"
+  end try
+end hold

@@ -124,7 +124,7 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	if len(checked.Diagnostics) > 0 {
 		ds := make([]Diagnostic, len(checked.Diagnostics))
 		for j, d := range checked.Diagnostics {
-			ds[j] = Diagnostic{Code: d.Code, Unit: name, Line: d.Pos.Line, Col: d.Pos.Column}
+			ds[j] = Diagnostic{Code: d.Code, Message: d.Message, Unit: name, Line: d.Pos.Line, Col: d.Pos.Column}
 		}
 		return nil, &LoadError{ds}
 	}

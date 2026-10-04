@@ -14,8 +14,9 @@ import (
 )
 
 type Diagnostic struct {
-	Code string
-	Pos  syntax.Position
+	Message string
+	Code    string
+	Pos     syntax.Position
 }
 
 func (d Diagnostic) String() string {
@@ -32,6 +33,7 @@ type Symbol struct {
 type Options struct {
 	Library     bool
 	Objects     []string
+	ImportCalls map[string][]OperationUse
 	Imports     map[string]map[string]Symbol
 	PatternSize int
 	Grants      map[string]map[string]OperationCheck
@@ -89,7 +91,7 @@ func (u *Unit) add(code string, pos syntax.Position) {
 			return
 		}
 	}
-	u.Diagnostics = append(u.Diagnostics, Diagnostic{code, pos})
+	u.Diagnostics = append(u.Diagnostics, Diagnostic{Code: code, Pos: pos})
 }
 
 // A clash belongs to the later name, even when globals were collected first.
@@ -694,7 +696,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
 		u.add("not in a join", n.Pos())
 	}
-	if u.Options.Library && (slices.Contains([]string{"wait-for", "wait-any", "send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
+	if u.Options.Library && (slices.Contains([]string{"wait-for", "wait-any", "join", "send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
 		u.add("not in a library", n.Pos())
 	}
 	switch n.Kind {

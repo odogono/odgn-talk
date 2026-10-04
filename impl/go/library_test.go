@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 )
 
 func TestLibraryCallsUseCallerRunAndDefaults(t *testing.T) {
@@ -281,7 +279,7 @@ func TestLibraryPrivateAndImportedNamesAreNotReexported(t *testing.T) {
 	}
 }
 
-func TestLibraryNeedsAreImmutableAndHostExecutionRemainsDeferred(t *testing.T) {
+func TestLibraryNeedsAreImmutableAndImportsRequireGrants(t *testing.T) {
 	c := New()
 	source := LibrarySource{Name: "helper", Source: "private function unused\n ask db to write\n return it\nend unused\nfunction read\n ask db to read\n return it\nend read\n"}
 	decls := GrantDecls{"db": {"read": {Mode: Immediate}, "write": {Mode: Immediate}}}
@@ -311,27 +309,8 @@ func TestLibraryNeedsAreImmutableAndHostExecutionRemainsDeferred(t *testing.T) {
 	if err := g.AddLibrary(l); err != nil {
 		t.Fatal(err)
 	}
-	s, err := g.Load(LoadOptions{Name: "s", Source: "use read from helper\non go\n return read()\nend go\n"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, p, err := s.Request(context.Background(), Message{Name: "go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-p.Done():
-		t.Fatal("deferred Library Capability call settled")
-	default:
-	}
-	if s.active.run.Status != machine.Blocked {
-		t.Fatal("Library Capability boundary did not block")
-	}
-	frame := s.active.run.Frames[len(s.active.run.Frames)-1]
-	if frame.Code.Unit.Bodies[frame.Body].Code[frame.PC].Name != "ask" {
-		t.Fatal("boundary consumed unpaid instruction")
+	_, err = g.Load(LoadOptions{Name: "s", Source: "use read from helper\non go\n return read()\nend go\n"})
+	if err == nil {
+		t.Fatal("import without Library Grants loaded")
 	}
 }

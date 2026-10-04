@@ -15,6 +15,7 @@ capabilities/charge-faults
 capabilities/declared-allocation
 capabilities/host-failures
 capabilities/load-checks
+capabilities/optional-args
 capabilities/optional-args-fuel
 capabilities/optional-args-join
 capabilities/ordinary-grants
@@ -41,8 +42,11 @@ errors/handler-backstop
 errors/handler-delivery
 errors/lambda-capture-parity
 examples/orders-pricing
+libraries/caller-capabilities
 libraries/calls
 libraries/errors
+libraries/needs-suspending
+libraries/needs-transitive
 libraries/registration
 limits/alloc-exhaustion-point
 limits/call-depth-minimum

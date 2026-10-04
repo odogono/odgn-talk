@@ -9,7 +9,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 )
 
-func setupLibraries(core *talk.Core, c Case) (map[string]*talk.Library, error) {
+func setupLibraries(core *talk.Core, c Case, declarations talk.GrantDecls) (map[string]*talk.Library, error) {
 	setups := map[string]Setup{}
 	rows, _ := c.Setup["libraries"].([]any)
 	for _, raw := range rows {
@@ -47,7 +47,7 @@ func setupLibraries(core *talk.Core, c Case) (map[string]*talk.Library, error) {
 			}
 		}
 		version, _ := row["version"].(string)
-		l, err := core.CompileLibrary(talk.LibrarySource{Name: name, Version: version, Source: string(source)}, imports, nil)
+		l, err := core.CompileLibrary(talk.LibrarySource{Name: name, Version: version, Source: string(source)}, imports, declarations)
 		if err != nil {
 			return nil, err
 		}
