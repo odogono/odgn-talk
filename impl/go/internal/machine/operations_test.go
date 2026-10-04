@@ -228,6 +228,25 @@ func TestDelimitedRangeBoundsAndOperandErrors(t *testing.T) {
 	}
 }
 
+func TestBytesPropertyRejectsUnaffordableConstructionBeforeEvaluation(t *testing.T) {
+	s, err := Initialize(compile(t, "on go b\n return the bytes of b\nend go\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, limit := range []Limits{{Fuel: 100, Alloc: 1000000}, {Fuel: 1000000, Alloc: 100}} {
+		r := Start(s, 1, []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}, limit)
+		f := &r.Frames[0]
+		f.Stack = []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}
+		for _, i := range s.Unit.Bodies[1].Code {
+			if i.Name == "property" && i.Operands()[0].Text == "bytes" {
+				if r.preflight(f, i) || r.Status != Faulted || r.Fuel != 0 || r.Alloc != 0 {
+					t.Fatalf("unpaid bound: %v fuel=%d alloc=%d", r.Status, r.Fuel, r.Alloc)
+				}
+			}
+		}
+	}
+}
+
 func TestFoldedMapComparisonChargesAllMatchedEntries(t *testing.T) {
 	var left, right []value.Pair
 	for n := 1; n <= 17; n++ {

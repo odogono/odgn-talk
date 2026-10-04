@@ -95,6 +95,9 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		if !ok {
 			return domain(v)
 		}
+		if code, ok := v.Function.CodeState.(*State); ok {
+			state = code
+		}
 		body := state.Unit.Bodies[v.Function.Body]
 		required := 0
 		for _, p := range body.Checked.Node.Params {

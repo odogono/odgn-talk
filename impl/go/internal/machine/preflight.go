@@ -33,7 +33,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		return true
 	}
 	if i.Name == "bytes-bits" {
-		widths := r.State.Constants[i.Operands()[0].Index].Items
+		widths := f.Code.Constants[i.Operands()[0].Index].Items
 		count := i.Operands()[1].Index
 		values := f.Stack[len(f.Stack)-count:]
 		total := new(big.Int)
@@ -55,6 +55,10 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		return bounded(3, alloc)
 	}
 	n := len(f.Stack)
+	if i.Name == "property" && i.Operands()[0].Text == "bytes" && f.Stack[n-1].Kind == value.Bytes {
+		count := int64(len(f.Stack[n-1].Bytes))
+		return bounded(saturatingAdd(3, count), saturatingAdd(16, saturatingMultiply(24, count)))
+	}
 	if (i.Name == "property" || i.Name == "property-delimited") && i.Operands()[0].Text == "items" {
 		if i.Name == "property-delimited" {
 			d := f.Stack[n-1]

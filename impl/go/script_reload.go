@@ -32,7 +32,8 @@ func (*Stop) isReport() {}
 // Scoped lifecycle and Library replacement are not supported by this Core yet.
 func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	g := s.group
-	fields := map[string]string{"source": corevalue.DisplayText(source), "carry": "no", "identity": fmt.Sprintf("%x", identity(s.name, source))}
+	exports, importIDs, states := libraryOptions(g.libraries)
+	fields := map[string]string{"source": corevalue.DisplayText(source), "carry": "no", "identity": fmt.Sprintf("%x", codeIdentity("script", s.name, source, importIDs))}
 	if carry == CarryVariables {
 		fields["carry"] = "yes"
 	}
@@ -63,12 +64,12 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 			declarations[name][opName] = check.OperationCheck{Mode: modeName(op.Mode), Args: args}
 		}
 	}
-	unit, loadError := g.core.compile(s.name, source, check.Options{PatternSize: s.limits.PatternSize, Grants: declarations})
+	unit, loadError := g.core.compile(s.name, source, check.Options{Imports: exports, PatternSize: s.limits.PatternSize, Grants: declarations}, importIDs)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	state, e := machine.InitializeBound(unit, g, corevalue.Value{}, nil)
+	state, e := machine.InitializeLinked(unit, g, states)
 	if e != nil {
 		pos := e.(*machine.InitError).Instruction.Pos
 		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: s.name, Line: pos.Line, Col: pos.Column}}}

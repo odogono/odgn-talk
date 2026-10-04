@@ -618,7 +618,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 	case machine.Faulted:
 		end, outcome = "fault", LimitFault
 		s.counters.Faults++
-		fields := map[string]string{"limit": r.Limit, "at": fmt.Sprintf("%s:%d", s.name, r.PC), "pos": fmt.Sprintf("%d:%d", r.At.Pos.Line, r.At.Pos.Column)}
+		fields := map[string]string{"limit": r.Limit, "at": fmt.Sprintf("%s:%d", r.CurrentCode().Unit.Name, r.PC), "pos": fmt.Sprintf("%d:%d", r.At.Pos.Line, r.At.Pos.Column)}
 		if len(r.Rollback) > 0 {
 			fields["rollback"] = "[" + strings.Join(r.Rollback, ", ") + "]"
 		}
@@ -676,15 +676,15 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 		report.Limit = r.Limit
 	}
 	if outcome == Errored || outcome == LimitFault {
-		report.At = Location{Unit: s.name, Handler: x.handler, Line: r.At.Pos.Line, Col: r.At.Pos.Column, PC: r.PC}
+		report.At = Location{Unit: r.CurrentCode().Unit.Name, Handler: x.handler, Line: r.At.Pos.Line, Col: r.At.Pos.Column, PC: r.PC}
 		if outcome == LimitFault && len(r.Frames) > 0 {
-			report.At.Handler = r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name
+			report.At.Handler = r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name
 		}
 		if outcome == Errored {
 			for j := len(r.Raises) - 1; j >= 0; j-- {
 				a := r.Raises[j]
 				if !a.Guard {
-					report.At = Location{Unit: s.name, Handler: a.Handler, Line: a.Instruction.Pos.Line, Col: a.Instruction.Pos.Column, PC: a.PC}
+					report.At = Location{Unit: a.Unit, Handler: a.Handler, Line: a.Instruction.Pos.Line, Col: a.Instruction.Pos.Column, PC: a.PC}
 					break
 				}
 			}
@@ -788,7 +788,7 @@ func (g *Group) replaceEarlier(s *Script, x *execution) {
 
 func (g *Group) writeRaises(x *execution, from int) {
 	for _, raise := range x.run.Raises[max(from, x.raisesWritten):] {
-		fields := map[string]string{"at": fmt.Sprintf("%s:%d", x.delivery.script.name, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
+		fields := map[string]string{"at": fmt.Sprintf("%s:%d", raise.Unit, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
 		name := "raise"
 		if raise.Guard {
 			name = "guard-skip"

@@ -76,14 +76,37 @@ func effectiveLimits(l Limits) (Limits, error) {
 	return l, nil
 }
 func identity(name, source string) [32]byte {
-	return sha256.Sum256([]byte("odgn-talk code identity 1\n" + generated.Version.Language + "\n" + fmt.Sprint(generated.Costs.Version) + "\nscript\n" + name + "\nsource\n" + source))
+	return codeIdentity("script", name, source, nil)
+}
+func codeIdentity(kind, name, source string, imports map[string][32]byte) [32]byte {
+	text := "odgn-talk code identity 1\n" + generated.Version.Language + "\n" + fmt.Sprint(generated.Costs.Version) + "\n" + kind + "\n" + name + "\n"
+	seen := map[string]bool{}
+	if tree, err := syntax.Parse(source); err == nil {
+		for _, n := range tree.Declarations {
+			if n.Kind == "use" && !seen[n.Text] {
+				seen[n.Text] = true
+				if id, ok := imports[n.Text]; ok {
+					text += fmt.Sprintf("%x\n", id)
+				}
+			}
+		}
+	}
+	return sha256.Sum256([]byte(text + "source\n" + source))
 }
 func (e *LoadError) Error() string { return fmt.Sprintf("source rejected: %v", e.Diagnostics) }
-func (c *Core) compile(name, source string, options check.Options) (*lower.Unit, *LoadError) {
+func (c *Core) compile(name, source string, options check.Options, imports ...map[string][32]byte) (*lower.Unit, *LoadError) {
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)
 	declarations, _ := json.Marshal(options.Grants)
-	key := compileKey{identity(name, source), strings.Join(objects, "\x00"), options.PatternSize, string(declarations)}
+	kind := "script"
+	if options.Library {
+		kind = "library"
+	}
+	var ids map[string][32]byte
+	if len(imports) > 0 {
+		ids = imports[0]
+	}
+	key := compileKey{codeIdentity(kind, name, source, ids), strings.Join(objects, "\x00"), options.PatternSize, string(declarations)}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.units == nil {

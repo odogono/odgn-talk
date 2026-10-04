@@ -154,7 +154,7 @@ func (r *Run) leaveJoin(frame, target int) {
 		return
 	}
 	if frame == j.Frame && target > j.Start {
-		code := r.State.Unit.Bodies[r.Frames[frame].Body].Code
+		code := r.Frames[frame].Code.Unit.Bodies[r.Frames[frame].Body].Code
 		end := j.Start
 		for end < len(code) && code[end].Name != "join-end" {
 			end++

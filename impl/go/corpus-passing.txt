@@ -1,5 +1,6 @@
 # Cases the Go Core must continue to pass (issues #132, #133 and #134).
 # New regression cases retain Unblessed headers until their first human review.
+builtins/function-values
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
@@ -40,6 +41,9 @@ errors/handler-backstop
 errors/handler-delivery
 errors/lambda-capture-parity
 examples/orders-pricing
+libraries/calls
+libraries/errors
+libraries/registration
 limits/alloc-exhaustion-point
 limits/call-depth-minimum
 limits/cleanup-budget-minimum
@@ -107,6 +111,8 @@ quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
 reload/reload-carry-and-discard
+stdlib/calls
+stdlib/errors-name-the-call
 suspension/answers
 suspension/capability-resumption
 suspension/event-test-group-cap

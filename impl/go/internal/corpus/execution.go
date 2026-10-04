@@ -27,7 +27,12 @@ func ExecutionBackends() map[string]Backend {
 	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
 }
 func (executionBackend) Support(c Case) string {
-	for _, feature := range []string{"libraries", "factories", "objects"} {
+	if libraries, ok := c.Setup["libraries"].([]any); ok && len(libraries) > 0 {
+		if operations, ok := c.Setup["operations"].([]any); ok && len(operations) > 0 {
+			return "Library Capability needs validation remains deferred"
+		}
+	}
+	for _, feature := range []string{"factories", "objects"} {
 		if xs, ok := c.Setup[feature].([]any); ok && len(xs) > 0 {
 			return feature + " execution belongs to later Go steps"
 		}
@@ -53,7 +58,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" && len(standards) > 0 {
 			return "Standard Capability factories remain deferred"
 		}
-		if r.Input && !strings.Contains("|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -96,6 +101,10 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
+	libraries, e := setupLibraries(core, c)
+	if e != nil {
+		return nil, e
+	}
 	g := core.NewGroup(talk.GroupOptions{Trace: &lines})
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
@@ -111,6 +120,12 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "add-library":
+			if e := g.AddLibrary(libraries[r.IDs[0]]); e != nil {
+				if _, ok := e.(*talk.HostError); !ok {
+					return nil, e
+				}
+			}
 		case "answer", "fail":
 			call := operations.calls[talk.CallID(r.IDs[0])]
 			if call == nil {

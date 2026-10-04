@@ -11,6 +11,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"maps"
 	"math/big"
 	"slices"
 	"strconv"
@@ -28,6 +29,7 @@ type Group struct {
 	mu               sync.Mutex
 	core             *Core
 	options          GroupOptions
+	libraries        map[string]*Library
 	scripts          []*Script
 	inputs           []delivery
 	cancelRunsQueued bool
@@ -116,9 +118,11 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	p.err = e
 	close(p.done)
 }
-func (c *Core) NewGroup(o GroupOptions) *Group { return &Group{core: c, options: o} }
-func (g *Group) Name() string                  { return g.options.Name }
-func (g *Group) Script(name string) *Script    { g.mu.Lock(); defer g.mu.Unlock(); return g.script(name) }
+func (c *Core) NewGroup(o GroupOptions) *Group {
+	return &Group{core: c, options: o, libraries: maps.Clone(standardLibraries())}
+}
+func (g *Group) Name() string               { return g.options.Name }
+func (g *Group) Script(name string) *Script { g.mu.Lock(); defer g.mu.Unlock(); return g.script(name) }
 func (g *Group) script(name string) *Script {
 	for _, s := range g.scripts {
 		if s.name == name {
@@ -138,7 +142,8 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 	return &HostError{code, detail}
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
-	id := identity(o.Name, o.Source)
+	exports, ids, states := libraryOptions(g.libraries)
+	id := codeIdentity("script", o.Name, o.Source, ids)
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("load", []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)}, ReentrantCall)
 		return nil, e
@@ -179,12 +184,12 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	for name := range o.Objects {
 		objects = append(objects, name)
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Objects: objects, PatternSize: limits.PatternSize, Grants: declarations})
+	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, Objects: objects, PatternSize: limits.PatternSize, Grants: declarations}, ids)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	state, e := machine.InitializeBound(unit, g, corevalue.Value{}, nil)
+	state, e := machine.InitializeLinked(unit, g, states)
 	if e != nil {
 		pos := e.(*machine.InitError).Instruction.Pos
 		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: o.Name, Line: pos.Line, Col: pos.Column}}}
