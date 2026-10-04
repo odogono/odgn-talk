@@ -98,12 +98,21 @@ use `gofmt`. Their `--check` modes refuse missing or stale output without writin
 ## Front-end and lowering checks
 
 Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
-and pin the first errors in `tools/grammar/broken.talk`. The seven units in the
-six Disassembly Cases match byte for byte, including pools, slots, positions,
+and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
+match byte for byte, including pools, slots, positions,
 Unwind Tables and Event Tables; together they emit every declared opcode.
 Stdlib signatures can be linked for disassembly without executing Libraries.
-All 30 load-diagnostic Trace Cases replay through public `Load`, including
+All load-diagnostic Trace Cases replay through public `Load`, including
 `initialiser failed` at the raising instruction's source-map position.
+
+Raw Text Literals preserve backslashes and placeholders. Backticks decode
+escapes and accept nested multiline Interpolation Holes. Both forms support
+exact closing margins and physical newline normalization; hole-free forms also
+work in literal-only Text positions. Holes retain Constant and Guard
+restrictions and lower to ordinary concatenation instructions, with generated
+joins mapped to `${`. Invalid closing margins identify the first non-whitespace
+source scalar; paired Corpus cases also pin interpolation Fuel and allocation
+faults and Segment rollback.
 
 Implicit Script Variable initializers allocate Nothing slots without emitting
 stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
@@ -353,12 +362,12 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 116 cases: all 12 text-model cases, all 35 load-diagnostic
+The gate contains 119 cases: all 12 text-model cases, all 37 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-59 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+60 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 57-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 59-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their

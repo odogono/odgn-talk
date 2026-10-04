@@ -187,6 +187,17 @@ test('the blessed text-model Trace Cases reproduce exactly', () => {
   }
 });
 
+test.each([
+  'load-diagnostics/invalid-raw-text-closing-margin',
+  'load-diagnostics/invalid-text-closing-margin',
+  'limits/fenced-text-concat',
+])('the fenced-text regression %s reproduces on both replay paths', name => {
+  const dir = resolve(import.meta.dir, '../../../corpus', name);
+  const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
+  const result = runTraceCase(dir, setup as never);
+  expect(result.divergence).toBeUndefined();
+});
+
 test('blessing a Trace Case keeps its comments before the inputs they preceded', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-trace-'));
   try {

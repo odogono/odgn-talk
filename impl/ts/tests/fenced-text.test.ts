@@ -218,6 +218,19 @@ describe('fenced text diagnostics', () => {
     expect(result.error && result.incomplete).toBe(false);
   });
 
+  test.each(['`', '"""'])(
+    'a non-whitespace closing margin identifies its first offending character for %s',
+    fence => {
+      const result = parseEntry(
+        `${fence}\n  first\n \tbad${fence}`,
+        () => false,
+      );
+      expect(result.error?.code).toBe('invalid text indentation');
+      expect(result.error?.tok).toMatchObject({ line: 3, col: 3 });
+      expect(result.error && result.incomplete).toBe(false);
+    },
+  );
+
   test('EOF inside nested text points to the innermost opener', () => {
     const result = parseEntry('`outer ${`inner', () => false);
     expect(result.error?.tok).toMatchObject({ line: 1, col: 10 });
