@@ -299,9 +299,9 @@ func TestSentRunUsesReceiverLimits(t *testing.T) {
 	}
 }
 
-func TestSendAndWaitRemainsAtUntouchedBoundary(t *testing.T) {
+func TestJoinSendRemainsAtUntouchedBoundary(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
-	a, err := g.Load(LoadOptions{Name: "a", Source: "on go\n send ping with 7 to b and wait\nend go"})
+	a, err := g.Load(LoadOptions{Name: "a", Source: "on go\n wait for all\n send ping with 7 to b and wait\n end wait\nend go"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestSendAndWaitRemainsAtUntouchedBoundary(t *testing.T) {
 	}
 	a.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 0 || result.FuelUsed != 6 {
+	if err != nil || len(result.Reports) != 0 || result.FuelUsed != 0 {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if b.Counters().Runs != 0 || a.Counters().AllocTotal != 0 {

@@ -335,6 +335,14 @@ The event-test charging correction agrees with Go for four revised cases and the
 
 ## Verification and corpus selection
 
+At a waiting Script send's suspension boundary, Persistent State includes its
+new 48-byte pending reply. If retaining it faults, the accepted receiver message
+still runs and its reply is abandoned. The paired
+[`send-wait-retention`](../../corpus/limits/send-wait-retention/) regression
+pins this boundary alongside ordinary Go and TS save/restore execution.
+The corresponding retention boundaries for other suspension forms are under
+audit in [#281](https://github.com/odogono/odgn-talk/issues/281).
+
 ```sh
 bun run lint
 bun run format:check

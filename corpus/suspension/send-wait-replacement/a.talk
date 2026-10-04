@@ -1,0 +1,9 @@
+script variable seen = []
+on go n, replacing
+ try
+  send ping with n to b and wait
+  put it after seen
+ finally
+  put "clean" after seen
+ end try
+end go

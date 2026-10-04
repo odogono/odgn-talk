@@ -1,0 +1,4 @@
+on ping n
+ wait 2 s
+ return n
+end ping

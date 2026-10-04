@@ -1,0 +1,10 @@
+on go
+ try
+  query and wait
+ catch {code: "send failed", reason: why}
+  return why
+ end try
+end go
+on query
+ send ping to b and wait
+end query

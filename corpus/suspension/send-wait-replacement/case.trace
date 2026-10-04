@@ -1,0 +1,37 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Replacing a sender abandons its reply and runs cleanup; the receiver keeps
+# running. Only the second sender receives its answer when both receivers end.
+> load a identity=52b1f9e5034f4f8d8edc5ae220acff2629b011da21398ef2d7be848ef6cc591f
+> load b identity=e6811a89c68b6f688bde252d732bd5e04113eb59ecf41244bfecfb9d959fb921
+> deliver d1 to=a message=go args=[1]
+> deliver d2 to=a message=go args=[2]
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping args=[1] wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=28 alloc=48 state=328 end=send-wait
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=15 alloc=0 state=200 end=wait until=2026-10-04T12:00:02Z
+send a/r2.c1 to=b message=ping args=[2] wait=yes
+seg a/r2 start delivery=d2 handler=go clause=1 fuel=28 alloc=48 state=496 end=send-wait
+seg b/r2 start from=a/r2.c1 handler=ping clause=1 fuel=15 alloc=0 state=400 end=wait until=2026-10-04T12:00:02Z
+seg a/r1 resume fuel=11 alloc=29 state=309 end=cancel
+abandon a/r1.c1
+run a/r1 outcome=cancelled delivery=d1 handler=go fuel=39 alloc=77
+pumped state=idle fuel=97 next=2026-10-04T12:00:02Z
+> counters a
+counters a fuel=67 alloc=125 runs=2 faults=0 state=309 mailbox=0
+> counters b
+counters b fuel=30 alloc=0 runs=2 faults=0 state=400 mailbox=0
+> pump clock=2026-10-04T12:00:02Z
+seg b/r1 resume fuel=3 alloc=0 state=200 end=return
+run b/r1 outcome=completed handler=ping value=1 fuel=18 alloc=0
+seg b/r2 resume fuel=3 alloc=0 state=0 end=return
+run b/r2 outcome=completed handler=ping value=2 fuel=18 alloc=0
+seg a/r2 resume fuel=23 alloc=53 state=98 end=return
+run a/r2 outcome=completed delivery=d2 handler=go fuel=51 alloc=101
+pumped state=idle fuel=29
+> counters a
+counters a fuel=90 alloc=178 runs=2 faults=0 state=98 mailbox=0
+> counters b
+counters b fuel=36 alloc=0 runs=2 faults=0 state=0 mailbox=0
+> vars
+vars a seen=["clean", 2, "clean"]
+vars b

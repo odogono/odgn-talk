@@ -140,12 +140,13 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
 		}
 	case "me":
-		if r.State.Me.Kind == value.Nothing && r.State.Unit.Bodies[f.Body].Code[f.PC+1].Name == "send" {
+		next := r.State.Unit.Bodies[f.Body].Code[f.PC+1].Name
+		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait") {
 			receiver(r.State.Unit.Name)
 		} else {
 			push(r.State.Me)
 		}
-	case "send":
+	case "send", "send-wait":
 		if f.ReceiverNames[len(f.Stack)-1] == "" {
 			bad(wrong("object", pop()))
 			break
@@ -155,6 +156,9 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		m.InputSize = 32
 		for _, v := range m.Args {
 			m.InputSize = saturatingAdd(m.InputSize, Size(v))
+		}
+		if i.Name == "send-wait" {
+			effect = func() { r.SendWait = true; r.Status = Suspended }
 		}
 	case "target":
 		push(r.Target)

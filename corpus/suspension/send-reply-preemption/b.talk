@@ -1,0 +1,4 @@
+on ping
+ wait 0 s
+ throw "bad"
+end ping

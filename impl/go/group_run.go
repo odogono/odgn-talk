@@ -99,6 +99,10 @@ func (g *Group) fireTimers() {
 		if t.x.run.EventWait != nil {
 			t.x.run.TimeoutEvent()
 		}
+		if t.x.run.SendWait {
+			g.abandonSend(t.x)
+			t.x.run.SettleSend(machine.SendResume{Timeout: true, AfterMS: int64(t.x.maxWait() / time.Millisecond)})
+		}
 		t.x.deadline = nil
 		t.x.how = "resume"
 		t.s.queue = append(t.s.queue, workItem{run: t.x})
@@ -242,9 +246,18 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
+				if r.SendResume != nil {
+					r.ResumeSend()
+					g.writeRaises(x, raised)
+					raised = len(r.Raises)
+				}
 				remaining := slice
 				if slice > 0 {
 					remaining -= r.Fuel - fuel
+					if remaining <= 0 && r.Status == machine.Running {
+						r.Status = machine.Preempted
+						break
+					}
 				}
 				r.ExecuteSelected(remaining, func() {
 					if machine.QueuePolicy(s.state.Unit.Bodies[x.clause]) == "replacing" {
@@ -254,8 +267,8 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					if !x.deciding {
 						seal(x.delivery, x.id, Allowed, Nothing, Completed)
 					}
-				}, func(to, message string, args []corevalue.Value) bool {
-					ok := g.send(x, to, message, args)
+				}, func(to, message string, args []corevalue.Value, wait bool) bool {
+					ok := g.send(x, to, message, args, wait)
 					if ok {
 						r.PersistentBase = s.retainedOutside(x)
 					}
@@ -295,6 +308,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if r.Status == machine.Preempted {
 				common["by"] = by
 				g.record("preempt", false, []string{string(x.id), x.how}, common)
+				g.writeAbandon(x)
 				x.how = "continue"
 				skipped[s] = true
 				result.State = Sliced
@@ -317,12 +331,15 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				if r.EventWait != nil {
 					x.deadline = r.EventWait.Deadline
 					common["end"] = r.EventWait.Kind
+				} else if r.SendWait {
+					x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
+					common["end"] = "send-wait"
 				} else {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
 					common["end"] = "wait"
 				}
 				common["state"] = fmt.Sprint(s.persistent())
-				if x.deadline != nil {
+				if x.deadline != nil && !r.SendWait {
 					common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
 				}
 				g.record("seg", false, []string{string(x.id), x.how}, common)
@@ -342,6 +359,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 			})
 			result.Reports = append(result.Reports, report)
+			reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped"}[report.Outcome]
+			if r.Passed {
+				reason = "unhandled"
+			}
+			g.reply(x.delivery.reply, report.Result.inner, reason, r.Error)
 			if report.Outcome == Errored && x.delivery.message.Name != "error" {
 				g.queueError(s, x)
 			}
@@ -352,7 +374,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				if len(x.delivery.message.Args) > 0 {
 					fields["args"] = argsDisplay(x.delivery.message.Args)
 				}
-				g.record("unhandled", false, []string{string(x.delivery.id)}, fields)
+				var ids []string
+				if x.delivery.id != "" {
+					ids = []string{string(x.delivery.id)}
+				}
+				g.record("unhandled", false, ids, fields)
 			}
 			if report.Outcome == UnhandledOutcome || r.Passed {
 				seal(x.delivery, x.id, Allowed, Nothing, UnhandledOutcome)
@@ -525,9 +551,12 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 		}
 		g.record("cleanup-failed", false, []string{string(x.id)}, fields)
 	}
+	g.abandonSend(x)
+	g.writeRaises(x, len(r.Raises))
 	common["state"] = fmt.Sprint(s.persistentWithoutRun(x))
 	common["end"] = end
 	g.record("seg", false, []string{string(x.id), x.how}, common)
+	g.writeAbandon(x)
 	seal()
 	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
@@ -614,6 +643,7 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 	}
 	x.deadline = nil
 	x.parked = false
+	g.abandonSend(x)
 	x.run.Cancel(s.limits.CleanupBudget)
 	if !queued {
 		x.how = "resume"
@@ -673,4 +703,14 @@ func (g *Group) writeRaises(x *execution, from int) {
 		g.record(name, false, []string{string(x.id)}, fields)
 	}
 	x.raisesWritten = len(x.run.Raises)
+	if !x.run.Cancelling {
+		g.writeAbandon(x)
+	}
+}
+
+func (g *Group) writeAbandon(x *execution) {
+	if x.abandonCall != "" {
+		g.record("abandon", false, []string{string(x.abandonCall)}, nil)
+		x.abandonCall = ""
+	}
 }
