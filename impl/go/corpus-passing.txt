@@ -20,6 +20,9 @@ capabilities/optional-args-fuel
 capabilities/optional-args-join
 capabilities/ordinary-grants
 capabilities/revoke-in-flight
+capabilities/standard-clock
+capabilities/standard-clock-fuel
+capabilities/standard-timer
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding

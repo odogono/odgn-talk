@@ -63,44 +63,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		}
 		key := name + "." + op.Name
 		invoke := func(c *talk.Call, args []talk.Value) (talk.Value, error) {
-			queue := out.stubs[key]
-			if len(queue) == 0 {
-				if op.Mode == talk.FireAndForget {
-					return talk.Nothing, nil
-				}
-				return talk.Nothing, fmt.Errorf("missing Stub for %s", key)
-			}
-			stub := queue[0]
-			out.stubs[key] = queue[1:]
-			if charge, ok := stub["charge"]; ok {
-				n, _ := strconv.ParseInt(charge.Raw, 10, 64)
-				if e := c.Charge(n); e != nil {
-					return talk.Nothing, e
-				}
-			}
-			if failed, ok := stub["error"]; ok {
-				v := failed.Value
-				code := v.Get("code")
-				if code.Text == "" {
-					return talk.Nothing, fmt.Errorf("Stub is not a ScriptError")
-				}
-				var entries []talk.Pair
-				for _, p := range v.Entries {
-					if p.Key != "code" && p.Key != "message" {
-						x, e := construct(p.Val)
-						if e != nil {
-							return talk.Nothing, e
-						}
-						entries = append(entries, talk.KV(p.Key, x))
-					}
-				}
-				data, _ := talk.Map(entries...)
-				return talk.Nothing, &talk.ScriptError{Code: code.Text, Message: v.Get("message").Text, Data: data}
-			}
-			if value, ok := stub["value"]; ok {
-				return construct(value.Value)
-			}
-			return talk.Nothing, nil
+			return out.invoke(key, op.Mode, c)
 		}
 		switch op.Mode {
 		case talk.Immediate:
@@ -119,16 +82,52 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		}
 		byName[name] = append(byName[name], op)
 	}
-	// The console load-diagnostic fixture needs its fixed declarations. Runtime
-	// Standard Capability factories remain outside this ordinary-Operation slice.
+	// Console is available only for load diagnostics until its factory is implemented.
 	standards, _ := setup["standard"].([]any)
+	seen := map[string]bool{}
 	for _, raw := range standards {
 		row := raw.(Setup)
-		if row["capability"] == "console" {
-			byName["console"] = []talk.Operation{
+		name := row["capability"].(string)
+		if seen[name] || len(byName[name]) > 0 {
+			return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "duplicate Standard Capability"}
+		}
+		seen[name] = true
+		var names []string
+		switch name {
+		case "clock":
+			names = []string{"now"}
+		case "timer":
+			names = []string{"schedule", "cancel"}
+		}
+		costs, costErr := setupStandardCosts(row, names)
+		if costErr != nil {
+			return nil, costErr
+		}
+		var def *talk.CapabilityDef
+		var err error
+		switch name {
+		case "clock":
+			def, err = core.ClockCapability(costs)
+			out.declarations[name] = map[string]talk.OperationCheck{"now": {Mode: talk.Immediate}}
+		case "timer":
+			def, err = core.TimerCapability(replayTimer{out}, costs)
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"schedule": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape, talk.InstantShape, talk.TextShape, talk.ListOf(talk.AnyShape)}},
+				"cancel":   {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape}},
+			}
+		case "console":
+			byName[name] = []talk.Operation{
 				{Name: "write", Mode: talk.FireAndForget, Args: []talk.Shape{talk.ValueShape}, Fire: func(*talk.Call, []talk.Value) error { return nil }},
 				{Name: "read", Mode: talk.Suspending, Result: talk.TextShape, Start: func(*talk.Call, []talk.Value) error { return nil }},
 			}
+		default:
+			return nil, fmt.Errorf("unsupported Standard Capability %s", name)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if def != nil {
+			out.defs[name] = def
 		}
 	}
 	for name, ops := range byName {
@@ -230,4 +229,84 @@ func setupShape(raw any) (talk.Shape, error) {
 		}
 	}
 	return talk.Shape{}, fmt.Errorf("unsupported Shape %v", raw)
+}
+
+// Standard Timer replay consumes ordinary fire-and-forget Stubs. Cases supply
+// due Deliveries explicitly; the runner stores no durable timers.
+type replayTimer struct{ replay *operationReplay }
+
+func (t replayTimer) Schedule(c *talk.Call, name string, at talk.Value, message string, args talk.Value) error {
+	_, err := t.replay.invoke("timer.schedule", talk.FireAndForget, c)
+	return err
+}
+func (t replayTimer) Cancel(c *talk.Call, name string) error {
+	_, err := t.replay.invoke("timer.cancel", talk.FireAndForget, c)
+	return err
+}
+func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk.Value, error) {
+	queue := o.stubs[key]
+	if len(queue) == 0 {
+		if mode == talk.FireAndForget {
+			return talk.Nothing, nil
+		}
+		return talk.Nothing, fmt.Errorf("missing Stub for %s", key)
+	}
+	stub := queue[0]
+	o.stubs[key] = queue[1:]
+	if charge, ok := stub["charge"]; ok {
+		n, _ := strconv.ParseInt(charge.Raw, 10, 64)
+		if e := c.Charge(n); e != nil {
+			return talk.Nothing, e
+		}
+	}
+	if failed, ok := stub["error"]; ok {
+		v := failed.Value
+		code := v.Get("code")
+		if code.Text == "" {
+			return talk.Nothing, fmt.Errorf("Stub is not a ScriptError")
+		}
+		var entries []talk.Pair
+		for _, p := range v.Entries {
+			if p.Key != "code" && p.Key != "message" {
+				x, e := construct(p.Val)
+				if e != nil {
+					return talk.Nothing, e
+				}
+				entries = append(entries, talk.KV(p.Key, x))
+			}
+		}
+		data, _ := talk.Map(entries...)
+		return talk.Nothing, &talk.ScriptError{Code: code.Text, Message: v.Get("message").Text, Data: data}
+	}
+	if value, ok := stub["value"]; ok {
+		return construct(value.Value)
+	}
+	return talk.Nothing, nil
+}
+
+func setupStandardCosts(row Setup, names []string) (talk.Costs, error) {
+	costs := talk.Costs{}
+	rows, _ := row["costs"].(Setup)
+	for _, name := range names {
+		raw, present := rows[name]
+		if !present {
+			continue
+		} // The public factory refuses missing Operation entries.
+		cost, ok := raw.(Setup)
+		if !ok {
+			return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "invalid Standard Capability cost"}
+		}
+		var components [2]int64
+		for i, key := range []string{"fuel", "alloc"} {
+			if raw, present := cost[key]; present {
+				component, ok := raw.(int64)
+				if !ok {
+					return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "invalid Standard Capability cost component"}
+				}
+				components[i] = component
+			}
+		}
+		costs[name] = talk.Cost{Fuel: components[0], Alloc: components[1]}
+	}
+	return costs, nil
 }

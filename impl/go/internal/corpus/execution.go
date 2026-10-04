@@ -50,8 +50,20 @@ func (executionBackend) Support(c Case) string {
 	}
 	standards, _ := c.Setup["standard"].([]any)
 	for _, r := range records {
-		if r.Input && r.Name == "pump" && len(standards) > 0 {
-			return "Standard Capability factories remain deferred"
+		if r.Input && r.Name == "pump" {
+			for _, raw := range standards {
+				name := raw.(Setup)["capability"].(string)
+				if name != "clock" && name != "timer" {
+					return name + " Standard Capability factory remains deferred"
+				}
+			}
+		}
+		if r.Input && r.Name == "stub" && len(r.IDs) > 0 && r.IDs[0] == "clock.now" {
+			for _, raw := range standards {
+				if raw.(Setup)["capability"] == "clock" {
+					return "Standard clock.now cannot use a Stub"
+				}
+			}
 		}
 		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
