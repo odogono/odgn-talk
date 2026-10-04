@@ -345,8 +345,11 @@ pins this boundary alongside ordinary Go and TS save/restore execution.
 Script-only Joins also count their pending members at the closing suspension
 boundary and retain replies arriving while an open body is preempted. Buffered
 replies are applied in arrival order at `join-end`; their answers and receiver
-error maps count toward Persistent State. The remaining suspension forms are
-under audit in [#281](https://github.com/odogono/odgn-talk/issues/281).
+error maps count toward Persistent State. Ordinary Capability calls and mixed Joins now agree with Go on the reviewed answer
+and Join cases and the new `suspension/capability-resumption` regression. The new
+case also agrees on TS save/restore, retaining its `Unblessed` header for first
+human review. Other suspension forms remain under audit in
+[#281](https://github.com/odogono/odgn-talk/issues/281).
 Join failures, timeouts and faults at `join-end` use the closing `end` token's
 source position, for bare `end` and `end wait`, including Joins in local Handlers
 and block Lambdas. Member indices remain 1-based, and failed replies retain the

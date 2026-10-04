@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
@@ -25,9 +26,6 @@ func (*CallFailed) isReport() {}
 func (g *Group) operation(s *Script, x *execution, grantName, opName string, args []corevalue.Value, pay func(int64, int64) bool, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
 	grant := s.grants[grantName]
 	op := grant.definition.ops[opName]
-	if op.Mode == Suspending {
-		return corevalue.Value{}, nil, true
-	}
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
 	fail := func(code string, fields ...corevalue.Pair) (corevalue.Value, *corevalue.Value, bool) {
 		err := operationError(code, fields)
@@ -57,7 +55,8 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	}
 	g.writeRaises(x, x.raisesWritten)
 	x.calls++
-	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: context.Background(), starting: true, charge: x.run.ChargeHost}
+	ctx, cancel := operationContext(op.Mode)
+	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost}
 	vs := make([]Value, len(args))
 	for i, v := range args {
 		vs[i] = Value{v}
@@ -69,25 +68,59 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		fields["charged"] = fmt.Sprint(call.charged)
 	}
 	record := func() { g.record("call", false, []string{string(call.id)}, fields) }
+	if call.reached || errors.Is(err, ErrLimit) {
+		record()
+		cancel()
+		x.run.FaultHostFuel()
+		return corevalue.Value{}, nil, false
+	}
+	if op.Mode == Suspending && err == nil {
+		record()
+		if g.calls == nil {
+			g.calls = map[CallID]*operationCall{}
+		}
+		g.calls[call.id] = &operationCall{call: call, cancel: cancel, s: s, x: x, op: op, name: opName, pending: true}
+		if x.run.Join != nil {
+			x.run.AddJoinMember(string(call.id))
+			x.run.Join.Members[len(x.run.Join.Members)-1].WaitMS = int64(operationWait(op, x) / time.Millisecond)
+		} else {
+			x.waitCall = call.id
+			x.run.SendWait = true
+			x.run.OperationWait = true
+		}
+		return corevalue.Value{}, nil, false
+	}
+	if op.Mode == Suspending {
+		cancel()
+	}
+	return g.completeOperation(s, x, grantName, opName, op, call, result, err, fields, record, 0, reports)
+}
+
+// completeOperation runs on the Run's turn, so validation and conversion belong
+// to the resuming Segment, including a failure's Data.
+func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
+	grant := s.grants[grantName]
+	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
+	fail := func(code string, fields ...corevalue.Pair) (corevalue.Value, *corevalue.Value, bool) {
+		e := operationError(code, fields)
+		return corevalue.Value{}, &e, false
+	}
 	hostError := func(detail string) (corevalue.Value, *corevalue.Value, bool) {
 		g.record("call-failed", false, []string{string(call.id)}, map[string]string{"op": grantName + "." + opName})
 		*reports = append(*reports, &CallFailed{Script: s.name, Call: call.id, Operation: OperationRef{Capability: grant.definition.name, Operation: opName}, Detail: detail})
 		return fail("host error", named...)
 	}
-	if call.reached || errors.Is(err, ErrLimit) {
-		record()
-		x.run.FaultHostFuel()
-		return corevalue.Value{}, nil, false
-	}
-	conversion := func(v corevalue.Value) bool {
+	conversion := func(v corevalue.Value, late int64) bool {
 		after, alloc := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel, Result: v, ResultPresent: true})
-		return x.run.PayHost(after-fuel, alloc)
+		return x.run.PayHost(after-10-op.Cost.Fuel+late, alloc)
 	}
 	if err != nil {
 		e, ok := err.(*ScriptError)
 		if !ok || e == nil {
 			fields["error"] = "{}"
-			record()
+			if record != nil {
+				record()
+			}
 			return hostError(fmt.Sprint(err))
 		}
 		data := e.Data.inner
@@ -109,7 +142,9 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			v, _ := corevalue.NewMap(failed)
 			fields["error"] = coretrace.Display(v)
 		}
-		record()
+		if record != nil {
+			record()
+		}
 		for _, d := range generated.Errors.Error {
 			if d.Code == e.Code {
 				bad = "failure uses a catalogue code"
@@ -134,7 +169,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		if bad != "" {
 			return hostError(bad)
 		}
-		if !conversion(data) {
+		if !conversion(data, 0) {
 			return corevalue.Value{}, nil, false
 		}
 		failed = append(failed, named...)
@@ -142,17 +177,23 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		return corevalue.Value{}, &v, false
 	}
 	if op.Mode == FireAndForget {
-		record()
+		if record != nil {
+			record()
+		}
 		return corevalue.Value{}, nil, false
 	}
 	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil {
 		fields["error"] = "{}"
-		record()
+		if record != nil {
+			record()
+		}
 		return hostError("result violates its Shape or Group ownership")
 	}
 	fields["result"] = coretrace.Display(result.inner)
-	record()
-	if !conversion(result.inner) {
+	if record != nil {
+		record()
+	}
+	if !conversion(result.inner, lateFuel) {
 		return corevalue.Value{}, nil, false
 	}
 	return result.inner, nil, false
@@ -166,8 +207,18 @@ func invokeOperation(op Operation, c *Call, args []Value) (v Value, err error) {
 	if op.Mode == Immediate {
 		return op.Do(c, args)
 	}
+	if op.Mode == Suspending {
+		return Nothing, op.Start(c, args)
+	}
 	return Nothing, op.Fire(c, args)
 }
 func operationError(code string, fields []corevalue.Pair) corevalue.Value {
 	return machine.ErrorValue(code, fields...)
+}
+
+func operationContext(mode Mode) (context.Context, context.CancelFunc) {
+	if mode == Suspending {
+		return context.WithCancel(context.Background())
+	}
+	return context.Background(), func() {}
 }

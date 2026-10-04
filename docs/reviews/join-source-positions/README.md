@@ -68,3 +68,8 @@ remaining Capability execution belongs to #134.
 - Independent review found no blocking implementation findings.
 - After the maintainer's approval, all 237 default TS corpus cases pass,
   including the new regression and corrected mixed-Capability Join case.
+
+The subsequent Go ordinary suspending Capability slice (#134) now reproduces
+the reviewed mixed `suspension/joins` Trace unchanged, including its approved
+closing positions. The exception above records the evidence available at #286;
+Go ordinary execution now establishes parity for this case.

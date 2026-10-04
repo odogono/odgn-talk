@@ -53,7 +53,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" && len(standards) > 0 {
 			return "Standard Capability factories remain deferred"
 		}
-		if r.Input && !strings.Contains("|load|deliver|request|decide|pump|vars|counters|stub|revoke|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -111,15 +111,70 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "answer", "fail":
+			call := operations.calls[talk.CallID(r.IDs[0])]
+			if call == nil {
+				return nil, fmt.Errorf("unknown call %s", r.IDs[0])
+			}
+			if r.Name == "answer" {
+				v, e := construct(fields["value"].Value)
+				if e != nil {
+					return nil, e
+				}
+				fuel, _ := strconv.ParseInt(fields["fuel"].Raw, 10, 64)
+				call.AnswerWithCost(v, fuel)
+			} else {
+				v := fields["error"].Value
+				if v.Get("code").Text == "" {
+					call.Fail(nil)
+				} else {
+					var data []talk.Pair
+					for _, p := range v.Entries {
+						if p.Key != "code" && p.Key != "message" {
+							value, e := construct(p.Val)
+							if e != nil {
+								return nil, e
+							}
+							data = append(data, talk.KV(p.Key, value))
+						}
+					}
+					m, _ := talk.Map(data...)
+					call.Fail(&talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m})
+				}
+			}
 		case "stub":
 			lines = append(lines, r.Raw)
 			operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
+		case "cancel-run":
+			name, _, _ := strings.Cut(r.IDs[0], "/r")
+			s := g.Script(name)
+			if s == nil {
+				return nil, fmt.Errorf("unknown Script %s", name)
+			}
+			s.CancelRun(talk.RunID(r.IDs[0]))
 		case "revoke":
 			s := g.Script(r.IDs[0])
 			if s == nil {
 				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
 			}
 			s.Revoke(fields["grant"].Raw)
+		case "reload":
+			s := g.Script(r.IDs[0])
+			if s == nil {
+				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
+			}
+			carry := talk.ResetVariables
+			if fields["carry"].Raw == "yes" {
+				carry = talk.CarryVariables
+			}
+			_, e := s.Reload(fields["source"].Value.Text, carry)
+			if e != nil {
+				if _, ok := e.(*talk.LoadError); !ok {
+					if _, ok := e.(*talk.HostError); !ok {
+						return nil, e
+					}
+				}
+			}
 		case "load":
 			name := r.IDs[0]
 			setup := setups[name]

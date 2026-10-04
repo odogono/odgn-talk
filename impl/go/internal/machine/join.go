@@ -13,8 +13,9 @@ type Join struct {
 	early          []joinReply
 }
 type JoinMember struct {
-	ID    string
-	Reply *SendResume
+	WaitMS int64
+	ID     string
+	Reply  *SendResume
 }
 type joinReply struct {
 	id    string
@@ -40,7 +41,7 @@ func (r *Run) SettleJoin(id string, p SendResume) bool {
 			j.early = append(j.early, joinReply{id, p})
 			return false
 		}
-		if p.Reason != "" || p.Timeout {
+		if p.Reason != "" || p.Timeout || p.Failed {
 			j.Failure, j.Index, j.Ready = &p, n+1, true
 			if p.Timeout {
 				r.Abandons = append(r.Abandons, id)
@@ -79,7 +80,7 @@ func (r *Run) BeginJoinWait() bool {
 	return j.Ready
 }
 
-func (r *Run) ResumeJoin() {
+func (r *Run) ResumeJoinOperation(resume ResumeOperationFunc) {
 	j := r.Join
 	if j == nil || !j.Ready {
 		return
@@ -88,7 +89,15 @@ func (r *Run) ResumeJoin() {
 	f := &r.Frames[len(r.Frames)-1]
 	if j.Failure != nil {
 		f.PC--
-		err := r.positionedError(sendResumeError(*j.Failure))
+		err := sendResumeError(*j.Failure)
+		if j.Failure.Capability {
+			_, failure := resume(*j.Failure)
+			if r.Status != Running {
+				return
+			}
+			err = *failure
+		}
+		err = r.positionedError(err)
 		if !hasKey(err, "index") {
 			err.Entries = append(err.Entries, value.Pair{Key: "index", Val: integer(int64(j.Index))})
 		}
@@ -97,7 +106,23 @@ func (r *Run) ResumeJoin() {
 	}
 	answers := make([]value.Value, len(j.Members))
 	for n, m := range j.Members {
-		answers[n] = m.Reply.Answer
+		if m.Reply.Capability {
+			f.PC--
+			answer, err := resume(*m.Reply)
+			if r.Status != Running {
+				return
+			}
+			if err != nil {
+				e := r.positionedError(*err)
+				e.Entries = append(e.Entries, value.Pair{Key: "index", Val: integer(int64(n + 1))})
+				r.raise(e)
+				return
+			}
+			f.PC++
+			answers[n] = answer
+		} else {
+			answers[n] = m.Reply.Answer
+		}
 	}
 	result := value.NewList(answers)
 	// The Join's base rate was paid at its closing end. Script replies have
@@ -142,6 +167,12 @@ func (r *Run) leaveJoin(frame, target int) {
 }
 
 func sendResumeSize(p SendResume) int64 {
+	if p.Capability && p.Failed {
+		if p.FailureData.Kind == value.Nothing {
+			return 0
+		}
+		return Size(p.FailureData)
+	}
 	if p.Reason == "" && !p.Timeout {
 		return Size(p.Answer)
 	}
@@ -150,3 +181,5 @@ func sendResumeSize(p SendResume) int64 {
 	}
 	return 0
 }
+
+func (r *Run) ResumeJoin() { r.ResumeJoinOperation(nil) }

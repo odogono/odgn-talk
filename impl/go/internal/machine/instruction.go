@@ -270,7 +270,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		data := fn.Function
-		if data.Owner == nil || data.Body < 0 {
+		home, _ := data.Owner.(*State)
+		if data.Owner == nil || data.Body < 0 || home != nil && home.Gone {
 			bad(failure("function gone"))
 			break
 		}
