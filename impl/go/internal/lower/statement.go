@@ -167,7 +167,7 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.state.join++
 		u.statements(n.Body)
 		u.state.join--
-		u.emit(pos, "join-end")
+		u.emit(n.End.Pos, "join-end")
 		u.store(pos, 0)
 	case "wait-for", "wait-any":
 		u.wait(n)

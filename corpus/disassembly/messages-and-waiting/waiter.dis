@@ -130,7 +130,7 @@ code
   0101 44:5 pop
   0102 48:5 ask clock now 0
   0103 48:5 store 0 ; it
-  0104 43:3 join-end
+  0104 49:3 join-end
   0105 43:3 store 0 ; it
   0106 50:10 load 0 ; it
   0107 50:3 return

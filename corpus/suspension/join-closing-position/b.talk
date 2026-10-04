@@ -1,0 +1,5 @@
+on ping n
+ if n = 2 then throw "bad"
+ if n = 3 then wait 2 s
+ return n
+end ping

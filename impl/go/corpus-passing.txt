@@ -39,6 +39,7 @@ limits/fenced-text-concat
 limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
 limits/join-retention
+limits/mailbox-depth
 limits/pattern-size-minimum
 limits/persistent-state-minimum
 limits/rollback-after-suspension
@@ -95,6 +96,7 @@ quantities/incompatible-units
 quantities/value-encoding
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
+suspension/join-closing-position
 suspension/join-preemption
 suspension/nested-waits
 suspension/script-joins

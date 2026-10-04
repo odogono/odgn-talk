@@ -1,0 +1,69 @@
+# First blessing reviewed by the maintainer in #286. Go and TS agree.
+# Both ending spellings, local Handler frames, failed replies and timeouts.
+> load a identity=c8078a986915217e991fcea04d4d72324eda2e8b0c2b910cc452f5dc75b8b006
+> load b identity=efa18b70402516ac02b4809e541aec9c3ae5e38d9fa5262af74dba3ff3db44d0
+> deliver d1 to=a message=direct args=[2]
+> deliver d2 to=a message=local args=[2]
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping args=[1] wait=join
+send a/r1.c2 to=b message=ping args=[2] wait=join
+seg a/r1 start delivery=d1 handler=direct clause=1 fuel=72 alloc=96 state=408 end=join-end
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=17 alloc=0 state=48 end=return
+run b/r1 outcome=completed handler=ping value=1 fuel=17 alloc=0
+send a/r2.c1 to=b message=ping args=[1] wait=join
+send a/r2.c2 to=b message=ping args=[2] wait=join
+seg a/r2 start delivery=d2 handler=local clause=1 fuel=85 alloc=96 state=776 end=join-end
+raise b/r2 code="bad" at=b:7 pos=2:16
+seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=24 alloc=48 state=96 end=error
+run b/r2 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
+raise a/r1 code="send failed" at=a:11 pos=7:3
+seg a/r1 resume fuel=17 alloc=824 state=1288 end=return
+run a/r1 outcome=completed delivery=d1 handler=direct fuel=89 alloc=920
+seg b/r3 start from=a/r2.c1 handler=ping clause=1 fuel=17 alloc=0 state=371 end=return
+run b/r3 outcome=completed handler=ping value=1 fuel=17 alloc=0
+raise b/r4 code="bad" at=b:7 pos=2:16
+seg b/r4 start from=a/r2.c2 handler=ping clause=1 fuel=24 alloc=48 state=323 end=error
+run b/r4 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
+raise a/r2 code="send failed" at=a:57 pos=23:2
+seg a/r2 resume fuel=21 alloc=823 state=1663 end=return
+run a/r2 outcome=completed delivery=d2 handler=local fuel=106 alloc=919
+pumped state=idle fuel=277
+> deliver d3 to=a message=direct args=[3]
+> deliver d4 to=a message=local args=[3]
+> pump clock=2026-10-04T12:00:00Z
+send a/r3.c1 to=b message=ping args=[1] wait=join
+send a/r3.c2 to=b message=ping args=[3] wait=join
+seg a/r3 start delivery=d3 handler=direct clause=1 fuel=72 alloc=96 state=2055 end=join-end
+seg b/r5 start from=a/r3.c1 handler=ping clause=1 fuel=17 alloc=0 state=48 end=return
+run b/r5 outcome=completed handler=ping value=1 fuel=17 alloc=0
+send a/r4.c1 to=b message=ping args=[1] wait=join
+send a/r4.c2 to=b message=ping args=[3] wait=join
+seg a/r4 start delivery=d4 handler=local clause=1 fuel=85 alloc=96 state=2423 end=join-end
+seg b/r6 start from=a/r3.c2 handler=ping clause=1 fuel=25 alloc=0 state=296 end=wait until=2026-10-04T12:00:02Z
+seg b/r7 start from=a/r4.c1 handler=ping clause=1 fuel=17 alloc=0 state=248 end=return
+run b/r7 outcome=completed handler=ping value=1 fuel=17 alloc=0
+seg b/r8 start from=a/r4.c2 handler=ping clause=1 fuel=25 alloc=0 state=400 end=wait until=2026-10-04T12:00:02Z
+pumped state=idle fuel=241 next=2026-10-04T12:00:01Z
+> pump clock=2026-10-04T12:00:01Z
+raise a/r3 code="timeout" at=a:11 pos=7:3
+abandon a/r3.c2
+seg a/r3 resume fuel=17 alloc=479 state=2494 end=return
+run a/r3 outcome=completed delivery=d3 handler=direct fuel=89 alloc=575
+raise a/r4 code="timeout" at=a:57 pos=23:2
+abandon a/r4.c2
+seg a/r4 resume fuel=21 alloc=478 state=2620 end=return
+run a/r4 outcome=completed delivery=d4 handler=local fuel=106 alloc=574
+pumped state=idle fuel=38 next=2026-10-04T12:00:02Z
+> pump clock=2026-10-04T12:00:02Z
+seg b/r6 resume fuel=3 alloc=0 state=200 end=return
+run b/r6 outcome=completed handler=ping value=3 fuel=28 alloc=0
+seg b/r8 resume fuel=3 alloc=0 state=0 end=return
+run b/r8 outcome=completed handler=ping value=3 fuel=28 alloc=0
+pumped state=idle fuel=6
+> counters a
+counters a fuel=390 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
+> counters b
+counters b fuel=172 alloc=96 runs=8 faults=0 state=0 mailbox=0
+> vars
+vars a errors=[{code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}}, at: {unit: "a", handler: "direct", line: 7, column: 3}, index: 2}, {code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}}, at: {unit: "a", handler: "query", line: 23, column: 2}, index: 2}, {code: "timeout", after: 1000 ms, at: {unit: "a", handler: "direct", line: 7, column: 3}, index: 2}, {code: "timeout", after: 1000 ms, at: {unit: "a", handler: "query", line: 23, column: 2}, index: 2}]
+vars b
