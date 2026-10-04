@@ -1,0 +1,8 @@
+on ping n
+  throw "bad"
+end ping
+
+on slow n
+  wait 1 s
+  return n
+end slow

@@ -40,6 +40,12 @@ this source-map fix and are tracked in
 expectation was blessed on disagreement, and this change does not alter their
 charges.
 
+The subsequent #289 reconciliation fixes these Lambda differences without
+changing body identities or PCs. `errors/lambda-capture-parity` reproduces
+captured Join failures/timeouts and nested-Lambda errors exactly on Go, TS
+ordinary execution and TS save/restore. Its new Trace retains `Unblessed`
+pending first human review.
+
 ## Approved mixed-Capability expectation correction
 
 Go refuses `suspension/joins` because Capability Operations are outside its

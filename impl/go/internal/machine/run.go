@@ -496,7 +496,7 @@ func (r *Run) Drop() {
 
 func (r *Run) raise(err value.Value) {
 	code := err.Get("code").Text
-	raised := Raised{Handler: r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name, Code: code, PC: r.PC, Instruction: r.At}
+	raised := Raised{Handler: enclosingHandler(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: code, PC: r.PC, Instruction: r.At}
 	// The first applicable unwind entry decides whether this is a Guard skip.
 search:
 	for frame := len(r.Frames) - 1; frame >= 0; frame-- {
@@ -531,7 +531,7 @@ func (r *Run) positionedError(err value.Value) value.Value {
 	// Errors add their instruction position only when absent; map keys follow
 	// the error catalogue's order.
 	if !hasKey(err, "at") {
-		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(r.State.Unit.Name)}, {Key: "handler", Val: text(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name)}, {Key: "line", Val: integer(int64(r.At.Pos.Line))}, {Key: "column", Val: integer(int64(r.At.Pos.Column))}})
+		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(r.State.Unit.Name)}, {Key: "handler", Val: text(enclosingHandler(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked))}, {Key: "line", Val: integer(int64(r.At.Pos.Line))}, {Key: "column", Val: integer(int64(r.At.Pos.Column))}})
 		err.Entries = append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at})
 	}
 	return err

@@ -38,6 +38,7 @@ disassembly/messages-and-waiting
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
+errors/lambda-capture-parity
 examples/orders-pricing
 limits/alloc-exhaustion-point
 limits/call-depth-minimum

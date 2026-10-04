@@ -158,7 +158,11 @@ the maintainer reviewed its first blessing in #286. The corrected `suspension/sc
 agree on both Cores, with only source positions changed. See the
 [Join source-position reconciliation](../docs/reviews/join-source-positions/README.md)
 for the maintainer-approved mixed-Capability `suspension/joins` correction
-and the separate Lambda full-Trace parity limitation.
+and its historical Lambda parity findings. `errors/lambda-capture-parity` now
+agrees on Go, TS ordinary execution and TS save/restore: nested Lambda errors
+name the enclosing Handler, Join failures/timeouts retain the closing token,
+and captured Values have the specified allocation and retained sizes. Its
+`Unblessed` marker remains for first human review.
 
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
