@@ -1,0 +1,6 @@
+# Unblessed: new regression; first blessing awaits human review.
+# A plain local Handler call cannot conceal a nested Join Suspension Point.
+> load bad identity=dbba6d6bf4b97d73d5cf933c195125516be35cab2d6c09d8a51554cd5eb45a6d
+diag bad code="missing and wait" pos=4:3
+diag bad code="can't suspend here" pos=5:7
+> vars

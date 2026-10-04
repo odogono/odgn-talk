@@ -24,8 +24,8 @@ func TestExecutionBackends(t *testing.T) {
 			})
 		}
 	}
-	if count != 48 {
-		t.Fatalf("expected 48 Trace cases, got %d", count)
+	if count != 49 {
+		t.Fatalf("expected 49 Trace cases, got %d", count)
 	}
 }
 
@@ -55,8 +55,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 59 {
-		t.Fatalf("required set: %d cases, want 59", count)
+	if count != 60 {
+		t.Fatalf("required set: %d cases, want 60", count)
 	}
 }
 
@@ -272,6 +272,32 @@ func TestScriptReplyAcceptance(t *testing.T) {
 			}
 			if !strings.Contains("\n"+string(passing), "\n"+c.Name+"\n") {
 				t.Fatal("missing reply acceptance case from passing gate")
+			}
+		})
+	}
+}
+
+// Script-only Joins agree with TS ordinary and save/restore execution. Mixed
+// Capability members remain deferred, so these cases pin their own acceptance.
+func TestScriptJoinAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"suspension/script-joins", "suspension/join-preemption", "limits/join-retention", "limits/script-join-width"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Errorf("required Script Join case not listed: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

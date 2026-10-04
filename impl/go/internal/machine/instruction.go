@@ -141,12 +141,22 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 	case "me":
 		next := r.State.Unit.Bodies[f.Body].Code[f.PC+1].Name
-		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait") {
+		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send") {
 			receiver(r.State.Unit.Name)
 		} else {
 			push(r.State.Me)
 		}
-	case "send", "send-wait":
+	case "join-start":
+		effect = func() { r.Join = &Join{Frame: len(r.Frames) - 1, Start: r.Frames[len(r.Frames)-1].PC - 1} }
+	case "join-end":
+		if len(r.Join.Members) == 0 {
+			m.Result = value.NewList(nil)
+			push(m.Result)
+			effect = func() { r.Join = nil }
+		} else {
+			effect = func() { r.Status = Suspended }
+		}
+	case "send", "send-wait", "join-send":
 		if f.ReceiverNames[len(f.Stack)-1] == "" {
 			bad(wrong("object", pop()))
 			break

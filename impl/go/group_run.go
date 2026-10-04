@@ -22,8 +22,11 @@ func (s *Script) start(d delivery) {
 	for j, v := range d.message.Args {
 		args[j] = v.inner
 	}
-	fuel, alloc := s.limits.FuelPerRun, s.limits.AllocPerRun
+	fuel, alloc, width := s.limits.FuelPerRun, s.limits.AllocPerRun, s.limits.MaxJoin
 	if o := d.message.Limits; o != nil {
+		if o.MaxJoin > 0 {
+			width = o.MaxJoin
+		}
 		if o.FuelPerRun > 0 {
 			fuel = o.FuelPerRun
 		}
@@ -31,7 +34,7 @@ func (s *Script) start(d delivery) {
 			alloc = o.AllocPerRun
 		}
 	}
-	r := machine.StartDelivery(s.state, d.message.Name, args, machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize})
+	r := machine.StartDelivery(s.state, d.message.Name, args, machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width})
 	if d.during != nil {
 		r.SetDuring(*d.during)
 	}
@@ -98,6 +101,14 @@ func (g *Group) fireTimers() {
 	for _, t := range due {
 		if t.x.run.EventWait != nil {
 			t.x.run.TimeoutEvent()
+		}
+		if j := t.x.run.Join; j != nil && j.Waiting && !j.Ready {
+			for _, m := range j.Members {
+				if m.Reply == nil {
+					t.x.run.SettleJoin(m.ID, machine.SendResume{Timeout: true, AfterMS: int64(t.x.maxWait() / time.Millisecond)})
+					break
+				}
+			}
 		}
 		if t.x.run.SendWait {
 			g.abandonSend(t.x)
@@ -246,8 +257,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
-				if r.SendResume != nil {
+				if r.SendResume != nil || r.Join != nil && r.Join.Ready {
 					r.ResumeSend()
+					r.ResumeJoin()
 					g.writeRaises(x, raised)
 					raised = len(r.Raises)
 				}
@@ -331,6 +343,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				if r.EventWait != nil {
 					x.deadline = r.EventWait.Deadline
 					common["end"] = r.EventWait.Kind
+				} else if r.Join != nil {
+					common["end"] = "join-end"
+					if r.BeginJoinWait() {
+						s.queue = append(s.queue, workItem{run: x})
+					} else {
+						x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
+					}
 				} else if r.SendWait {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
 					common["end"] = "send-wait"
@@ -339,10 +358,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					common["end"] = "wait"
 				}
 				common["state"] = fmt.Sprint(s.persistent())
-				if x.deadline != nil && !r.SendWait {
+				if x.deadline != nil && !r.SendWait && r.Join == nil {
 					common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
 				}
 				g.record("seg", false, []string{string(x.id), x.how}, common)
+				if r.Join != nil && r.Join.Ready {
+					x.how = "resume"
+				}
 				if x.openVerdict() {
 					seal(x.delivery, x.id, Allowed, Nothing, Completed)
 				}
@@ -533,6 +555,10 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 			fields["rollback"] = "[" + strings.Join(r.Rollback, ", ") + "]"
 		}
 		g.record("fault", false, []string{string(x.id)}, fields)
+		for _, id := range r.FaultAbandons {
+			g.record("abandon", false, []string{id}, nil)
+		}
+		r.FaultAbandons = nil
 	case machine.Unhandled:
 		end, outcome = "unhandled", UnhandledOutcome
 	case machine.Cancelled:
@@ -709,6 +735,10 @@ func (g *Group) writeRaises(x *execution, from int) {
 }
 
 func (g *Group) writeAbandon(x *execution) {
+	for _, id := range x.run.Abandons {
+		g.record("abandon", false, []string{id}, nil)
+	}
+	x.run.Abandons = nil
 	if x.abandonCall != "" {
 		g.record("abandon", false, []string{string(x.abandonCall)}, nil)
 		x.abandonCall = ""

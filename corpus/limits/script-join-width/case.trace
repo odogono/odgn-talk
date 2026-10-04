@@ -1,0 +1,37 @@
+# Unblessed: new regression; first blessing awaits human review.
+# A tightened MaxJoin faults before the second send charge, rolls back variables and preserves the first receiver.
+> load a identity=36a5db7b4bff225074c5c7401d25bb39a8d8b56a0e134932f2034ef0910b126b
+> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
+> deliver d1 to=a message=go limits={fuelPerRun: 44, maxJoin: 1}
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping args=[7] wait=join
+fault a/r1 limit=join at=a:12 pos=6:3 rollback=[saved]
+abandon a/r1.c1
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=43 alloc=48 state=16 end=fault
+run a/r1 outcome=limit-fault delivery=d1 handler=go limit=join fuel=43 alloc=48
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r1 outcome=completed handler=ping value=7 fuel=7 alloc=0
+pumped state=idle fuel=50
+> vars
+vars a saved=0
+vars b
+> counters a
+counters a fuel=43 alloc=48 runs=1 faults=1 state=16 mailbox=0
+> counters b
+counters b fuel=7 alloc=0 runs=1 faults=0 state=0 mailbox=0
+
+> deliver d2 to=a message=abort limits={fuelPerRun: 49}
+> pump clock=2026-10-04T12:00:00Z
+send a/r2.c1 to=b message=ping args=[11] wait=join
+raise a/r2 code="bad" at=a:23 pos=12:3
+abandon a/r2.c1
+fault a/r2 limit=fuel at=a:23 pos=12:3
+seg a/r2 start delivery=d2 handler=abort clause=1 fuel=49 alloc=96 state=16 end=fault
+run a/r2 outcome=limit-fault delivery=d2 handler=abort limit=fuel fuel=49 alloc=96
+seg b/r2 start from=a/r2.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r2 outcome=completed handler=ping value=11 fuel=7 alloc=0
+pumped state=idle fuel=56
+
+> vars
+vars a saved=0
+vars b

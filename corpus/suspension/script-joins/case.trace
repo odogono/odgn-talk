@@ -1,0 +1,76 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Ordered answers, no dynamic members, fail-fast with surviving receivers, and queued self-sends.
+> load a identity=56c122b2cb943c0a630f68327e7a337f5b77f1c33119003521115dad40718c12
+> load b identity=374e1e6dd5a9c40ebfd24684a7b9eed40fddb8ae0951c1a85633b02badbdbdb6
+> deliver d1 to=a message=gather args=[[1, 3]]
+> deliver d2 to=a message=gather args=[[]]
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping args=[1] wait=join
+send a/r1.c2 to=b message=ping args=[3] wait=join
+seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=488 end=join-end
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=20 alloc=0 state=280 end=wait until=2026-10-04T12:00:01Z
+seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=464 end=return
+run a/r2 outcome=completed delivery=d2 handler=gather fuel=60 alloc=64
+seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=20 alloc=0 state=448 end=wait until=2026-10-04T12:00:01Z
+pumped state=idle fuel=202 next=2026-10-04T12:00:01Z
+> pump clock=2026-10-04T12:00:01Z
+seg b/r1 resume fuel=12 alloc=24 state=256 end=return
+run b/r1 outcome=completed handler=ping value=1 fuel=32 alloc=24
+seg b/r2 resume fuel=12 alloc=24 state=64 end=return
+run b/r2 outcome=completed handler=ping value=3 fuel=32 alloc=24
+seg a/r1 resume fuel=14 alloc=136 state=112 end=return
+run a/r1 outcome=completed delivery=d1 handler=gather fuel=116 alloc=256
+pumped state=idle fuel=38
+> deliver d3 to=a message=gather args=[[1, 2, 3]]
+> pump clock=2026-10-04T12:00:01Z
+send a/r3.c1 to=b message=ping args=[1] wait=join
+send a/r3.c2 to=b message=ping args=[2] wait=join
+send a/r3.c3 to=b message=ping args=[3] wait=join
+seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=608 end=join-end
+seg b/r3 start from=a/r3.c1 handler=ping clause=1 fuel=20 alloc=0 state=376 end=wait until=2026-10-04T12:00:02Z
+raise b/r4 code="bad" at=b:10 pos=4:3
+seg b/r4 start from=a/r3.c2 handler=ping clause=1 fuel=28 alloc=111 state=328 end=error
+run b/r4 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 4, column: 3}} fuel=28 alloc=111
+raise a/r3 code="send failed" at=a:16 pos=5:3
+abandon a/r3.c1
+abandon a/r3.c3
+seg a/r3 resume fuel=17 alloc=824 state=936 end=return
+run a/r3 outcome=completed delivery=d3 handler=gather fuel=147 alloc=992
+seg b/r5 start from=a/r3.c3 handler=ping clause=1 fuel=20 alloc=0 state=819 end=wait until=2026-10-04T12:00:02Z
+pumped state=idle fuel=215 next=2026-10-04T12:00:02Z
+> pump clock=2026-10-04T12:00:02Z
+seg b/r3 resume fuel=12 alloc=24 state=304 end=return
+run b/r3 outcome=completed handler=ping value=1 fuel=32 alloc=24
+seg b/r5 resume fuel=12 alloc=24 state=112 end=return
+run b/r5 outcome=completed handler=ping value=3 fuel=32 alloc=24
+pumped state=idle fuel=24
+> deliver d4 to=a message=self
+> pump clock=2026-10-04T12:00:02Z
+send a/r4.c1 to=a message=echo args=[7] wait=join
+send a/r4.c2 to=a message=echo args=[9] wait=join
+seg a/r4 start delivery=d4 handler=self clause=1 fuel=72 alloc=96 state=1320 end=join-end
+seg a/r5 start from=a/r4.c1 handler=echo clause=1 fuel=15 alloc=0 state=1472 end=wait until=2026-10-04T12:00:02Z
+seg a/r6 start from=a/r4.c2 handler=echo clause=1 fuel=4 alloc=0 state=1624 end=park
+pumped state=idle fuel=91 next=2026-10-04T12:00:02Z
+> pump clock=2026-10-04T12:00:02Z
+seg a/r5 resume fuel=3 alloc=0 state=1424 end=return
+run a/r5 outcome=completed handler=echo value=7 fuel=18 alloc=0
+seg a/r6 resume fuel=11 alloc=0 state=1392 end=wait until=2026-10-04T12:00:02Z
+pumped state=idle fuel=14 next=2026-10-04T12:00:02Z
+> pump clock=2026-10-04T12:00:02Z
+seg a/r6 resume fuel=3 alloc=0 state=1192 end=return
+run a/r6 outcome=completed handler=echo value=9 fuel=18 alloc=0
+seg a/r4 resume fuel=13 alloc=136 state=1008 end=return
+run a/r4 outcome=completed delivery=d4 handler=self fuel=85 alloc=232
+pumped state=idle fuel=16
+> vars
+vars a results=[[], [1, 3], {code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 4, column: 3}}, at: {unit: "a", handler: "gather", line: 5, column: 3}, index: 2}, [7, 9]]
+vars b done=[1, 3, 1, 3]
+> counters a
+counters a fuel=444 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
+> counters b
+counters b fuel=156 alloc=207 runs=5 faults=0 state=112 mailbox=0
+
+> vars
+vars a results=[[], [1, 3], {code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 4, column: 3}}, at: {unit: "a", handler: "gather", line: 5, column: 3}, index: 2}, [7, 9]]
+vars b done=[1, 3, 1, 3]

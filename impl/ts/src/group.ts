@@ -2594,6 +2594,13 @@ export class Group {
   private settleReply(id: string, r: Resumption) {
     const p = this.pending.get(id);
     if (!p) {
+      for (const s of this.scripts) {
+        for (const running of this.runsOf(s)) {
+          if (running.run.replyToOpenJoin(id, r)) {
+            return;
+          }
+        }
+      }
       if (r.k === 'answer' || r.k === 'fail') {
         this.trace(recordLine('note', [id], [['kind', 'late-answer']]));
       }
@@ -2711,6 +2718,9 @@ export class Group {
           running,
         );
         this.pending.set(m.id, { s, running, timer, join });
+      }
+      for (const { id, reply } of running.run.takeJoinReplies()) {
+        this.settleReply(id, reply);
       }
       return null;
     }
@@ -3807,8 +3817,9 @@ export class Group {
       return;
     }
     if (!outcome && run.suspended) {
+      const suspension = run.suspended;
       s.queue.shift();
-      const deadline = this.suspended(s, running, run.suspended);
+      const deadline = this.suspended(s, running, suspension);
       this.trace(
         recordLine(
           'seg',
@@ -3819,18 +3830,18 @@ export class Group {
             ['state', String(this.persistentState(s))],
             [
               'end',
-              run.suspended.k === 'wait-for' && run.suspended.any
+              suspension.k === 'wait-for' && suspension.any
                 ? 'wait-for-any'
-                : suspendReasons[run.suspended.k],
+                : suspendReasons[suspension.k],
             ],
             ['until', deadline === null ? null : formatInstant(deadline)],
           ],
         ),
       );
       observe(
-        run.suspended.k === 'wait-for' && run.suspended.any
+        suspension.k === 'wait-for' && suspension.any
           ? 'wait-for-any'
-          : suspendReasons[run.suspended.k],
+          : suspendReasons[suspension.k],
         deadline ?? undefined,
       );
       this.seal(running.delivery, { verdict: 'allowed' });

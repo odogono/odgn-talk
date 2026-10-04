@@ -173,7 +173,7 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Joins and Message Path `send` instructions, foreign Function Value calls with
+Capability Join Members and Object Message Path `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
@@ -305,8 +305,36 @@ or the receiver's error map for a failure, in place of that call. Resumption
 charges, including unwinding through local Handler frames, spend the Pump's
 Fuel cap and the Script's slice before following instructions run. Inspection
 reports `send-wait` and the pending call id, with no `until` for `MaxWait`.
-Joins, Object Message Paths and foreign Function Value calls remain at their
+Object Message Paths and foreign Function Value calls remain at their
 untouched implementation boundaries.
+
+`wait for all … end` supports waiting sends to named Scripts and ownerless
+`me`. Each member starts where reached, leaves `it` unchanged, and receives a
+call id in start order. The closing `end` suspends once; its ready resumption
+assembles replies in start order and allocates their result List. A Join that
+starts no dynamic members returns `[]` immediately without a Segment boundary.
+The first receiver failure raises `send failed` with its 1-based `index` at the
+closing `join-end` instruction. Other pending replies are abandoned in start
+order while their receivers continue. Body errors, limit faults and sender
+cancellation also abandon pending members; cancellation runs normal cleanup.
+
+Each pending member counts 48 bytes toward Persistent State, including across
+preemption in an open Join. Early replies replace their pending-call size with
+the retained answer; a ready failure retains only its receiver error map. Replies
+arriving before a preempted Join closes are kept in arrival order. A Run's
+`MaxJoin`, including a tightened Delivery override, faults before charging the
+member that would exceed it. `MaxWait` begins when the Join closes and is not
+reset when another member replies. Script-only members share that deadline;
+Pump Fuel Caps, Script Fuel Slices and unwind charges still apply when the caller resumes. Inspection reports
+`join-end`, pending member ids in start order, and no `until` for call timeouts.
+
+A plain local Handler call to a may-suspend Handler is rejected with
+`missing and wait`; function-style calls to a may-suspend Handler are rejected
+with `can't suspend here`. A call cannot hide a nested Join. Capability members
+(`join-ask`) and Object Message Paths remain at their untouched boundaries.
+Both lowerers currently report the Join head's source position for its closing
+instruction; correcting source attribution is tracked in
+[#286](https://github.com/odogono/odgn-talk/issues/286).
 
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
@@ -362,12 +390,12 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 119 cases: all 12 text-model cases, all 37 load-diagnostic
+The gate contains 124 cases: all 12 text-model cases, all 38 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-60 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+64 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 59-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their

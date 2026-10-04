@@ -299,26 +299,6 @@ func TestSentRunUsesReceiverLimits(t *testing.T) {
 	}
 }
 
-func TestJoinSendRemainsAtUntouchedBoundary(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
-	a, err := g.Load(LoadOptions{Name: "a", Source: "on go\n wait for all\n send ping with 7 to b and wait\n end wait\nend go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := g.Load(LoadOptions{Name: "b", Source: "on ping n\n return n\nend ping"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a.Deliver(Message{Name: "go"})
-	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 0 || result.FuelUsed != 0 {
-		t.Fatalf("%+v %v", result, err)
-	}
-	if b.Counters().Runs != 0 || a.Counters().AllocTotal != 0 {
-		t.Fatal("deferred send delivered or charged")
-	}
-}
-
 func TestCancellingSenderPreservesSentRunAndCanSendFromCleanup(t *testing.T) {
 	ready := make(chan struct{}, 2)
 	g := New().NewGroup(GroupOptions{OnReady: func() { ready <- struct{}{} }})

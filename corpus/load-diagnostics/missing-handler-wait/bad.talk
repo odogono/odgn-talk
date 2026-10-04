@@ -1,0 +1,12 @@
+on go
+ wait for all
+  send ping to b and wait
+  helper
+  put helper() into result
+ end wait
+end go
+on helper
+ wait for all
+  send ping to b and wait
+ end wait
+end helper

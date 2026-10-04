@@ -31,7 +31,7 @@ const (
 
 type Limits struct {
 	Fuel, Alloc, Persistent int64
-	Depth, Pattern          int
+	Depth, Pattern, Join    int
 }
 type State struct {
 	Group                             any
@@ -60,6 +60,9 @@ type Run struct {
 	WaitNS         *big.Int
 	EventWait      *EventWait
 	EventResume    *EventResume
+	Join           *Join
+	Abandons       []string
+	FaultAbandons  []string
 	SendWait       bool
 	SendResume     *SendResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
@@ -192,6 +195,10 @@ func (r *Run) SetDuring(v value.Value) {
 	}
 }
 func (r *Run) fault(limit string) {
+	before := len(r.Abandons)
+	r.AbandonJoin()
+	r.FaultAbandons = append(r.FaultAbandons, r.Abandons[before:]...)
+	r.Abandons = r.Abandons[:before]
 	if r.Cancelling {
 		r.Status = Cancelled
 		r.CancelLimit = limit
@@ -255,12 +262,16 @@ func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}
 		if r.PolicyDispatch && len(r.Frames) == 1 && !r.Cancelling && !f.Accepted && f.PC == b.DispatchEnd {
 			r.Status = Dispatching
+			break
+		}
+		if i.Name == "join-send" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
+			r.fault("join")
 			break
 		}
 		if !r.preflight(f, i) {
@@ -310,7 +321,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 		}
 		f.Clause = false
 		trial.Clause = false
-		if err == nil && (i.Name == "send" || i.Name == "send-wait") && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args, i.Name == "send-wait") {
+		if err == nil && (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args, i.Name != "send") {
 			v := failure("mailbox full", value.Pair{Key: "to", Val: text(f.ReceiverNames[len(f.Stack)-1])})
 			err = &v
 		}
@@ -439,13 +450,17 @@ search:
 		r.Status = Cancelled
 		return
 	}
+	r.unwind(r.positionedError(err))
+}
+
+func (r *Run) positionedError(err value.Value) value.Value {
 	// Errors add their instruction position only when absent; map keys follow
 	// the error catalogue's order.
 	if !hasKey(err, "at") {
 		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(r.State.Unit.Name)}, {Key: "handler", Val: text(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name)}, {Key: "line", Val: integer(int64(r.At.Pos.Line))}, {Key: "column", Val: integer(int64(r.At.Pos.Column))}})
 		err.Entries = append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at})
 	}
-	r.unwind(err)
+	return err
 }
 func (r *Run) unwind(err value.Value) {
 	for frame := len(r.Frames) - 1; frame >= 0; frame-- {
@@ -458,6 +473,7 @@ func (r *Run) unwind(err value.Value) {
 			if place < u.First || place > u.Last || r.Cancelling && u.Kind != "finally" {
 				continue
 			}
+			r.leaveJoin(frame, u.Target)
 			err = r.replaceCleanupError(err, frame, u.First)
 			if !r.Cancelling && !r.pay(int64(4*(len(r.Frames)-1-frame)), 0) {
 				return
@@ -487,6 +503,7 @@ func (r *Run) unwind(err value.Value) {
 		r.Status = Cancelled
 		return
 	}
+	r.AbandonJoin()
 	err = r.replaceCleanupError(err, 0, -1)
 	if !r.pay(int64(4*len(r.Frames)), 0) {
 		return
@@ -538,6 +555,7 @@ func (r *Run) Cancel(budget int64) {
 		r.SendWait = false
 		r.SendResume = nil
 	}
+	r.AbandonJoin()
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
 	r.Cancelling = true
@@ -551,10 +569,19 @@ func (r *Run) RetainedSize() int64 {
 		size = saturatingAdd(size, 48)
 	}
 	if p := r.SendResume; p != nil {
-		if p.Reason == "" && !p.Timeout {
-			size = saturatingAdd(size, Size(p.Answer))
-		} else if p.Error.Kind != value.Nothing {
-			size = saturatingAdd(size, Size(p.Error))
+		size = saturatingAdd(size, sendResumeSize(*p))
+	}
+	if j := r.Join; j != nil {
+		if j.Ready && j.Failure != nil {
+			size = saturatingAdd(size, sendResumeSize(*j.Failure))
+		} else {
+			for _, m := range j.Members {
+				if m.Reply == nil {
+					size = saturatingAdd(size, 48)
+				} else {
+					size = saturatingAdd(size, sendResumeSize(*m.Reply))
+				}
+			}
 		}
 	}
 	if r.EventWait != nil {

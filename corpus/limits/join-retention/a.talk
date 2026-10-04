@@ -1,0 +1,5 @@
+on go
+ wait for all
+  send ping with 7 to b and wait
+ end wait
+end go

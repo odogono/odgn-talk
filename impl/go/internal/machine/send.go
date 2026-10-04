@@ -35,14 +35,17 @@ func (r *Run) ResumeSend() {
 		return
 	}
 	f.PC--
+	r.raise(sendResumeError(*p))
+}
+
+func sendResumeError(p SendResume) value.Value {
 	if p.Timeout {
 		after, _ := value.NewQuantity(decimal.FromInt(p.AfterMS), "ms")
-		r.raise(failure("timeout", value.Pair{Key: "after", Val: after}))
-		return
+		return failure("timeout", value.Pair{Key: "after", Val: after})
 	}
 	fields := []value.Pair{{Key: "reason", Val: text(p.Reason)}}
 	if p.Error.Kind != value.Nothing {
 		fields = append(fields, value.Pair{Key: "error", Val: p.Error})
 	}
-	r.raise(failure("send failed", fields...))
+	return failure("send failed", fields...)
 }

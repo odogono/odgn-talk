@@ -1,0 +1,9 @@
+script variable done = []
+on ping n
+ if n = 2 then
+  throw {code: "bad"}
+ end if
+ wait 1 s
+ put n after done
+ return n
+end ping

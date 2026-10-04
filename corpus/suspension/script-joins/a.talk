@@ -1,0 +1,28 @@
+script variable results = []
+on gather keys
+ try
+  seed
+  wait for all
+   repeat for each k in keys
+    send ping with k to b and wait
+   end repeat
+  end wait
+  put it after results
+ catch e
+  put e after results
+ end try
+end gather
+on self
+ wait for all
+  send echo with 7 to me and wait
+  send echo with 9 to me and wait
+ end wait
+ put it after results
+end self
+on echo n, queued
+ wait 0 s
+ return n
+end echo
+on seed
+ return 91
+end seed

@@ -27,7 +27,11 @@ func (g *Group) send(x *execution, to, message string, args []corevalue.Value, w
 	if wait {
 		x.calls++
 		reply = CallID(fmt.Sprintf("%s.c%d", x.id, x.calls))
-		x.waitCall = reply
+		if x.run.Join != nil {
+			x.run.AddJoinMember(string(reply))
+		} else {
+			x.waitCall = reply
+		}
 		from = RunID(reply)
 	}
 	s.queue = append(s.queue, workItem{delivery: delivery{script: s, message: Message{Name: message, Args: vs}, from: from, reply: reply}})
@@ -38,6 +42,9 @@ func (g *Group) send(x *execution, to, message string, args []corevalue.Value, w
 	}
 	if wait {
 		fields["wait"] = "yes"
+		if x.run.Join != nil {
+			fields["wait"] = "join"
+		}
 	}
 	g.record("send", false, []string{string(from)}, fields)
 	return true
@@ -49,6 +56,14 @@ func (g *Group) reply(call CallID, answer corevalue.Value, reason string, failur
 	}
 	for _, s := range g.scripts {
 		for _, x := range s.runs {
+			if x.run.Join != nil {
+				if x.run.SettleJoin(string(call), machine.SendResume{Answer: answer, Reason: reason, Error: failure}) {
+					x.deadline = nil
+					x.how = "resume"
+					s.queue = append(s.queue, workItem{run: x})
+				}
+				continue
+			}
 			if x.waitCall != call || !x.run.SendWait {
 				continue
 			}
