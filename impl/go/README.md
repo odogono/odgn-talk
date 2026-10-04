@@ -8,6 +8,21 @@ emits canonical Trace records. The Spec, Data Files and Conformance Corpus are
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
+## Task navigation
+
+| Task | Implementation | Rules | Tests and cases |
+| --- | --- | --- | --- |
+| Lexing and parsing | [syntax](internal/syntax/) | [lexical structure](../../spec/01-lexical-structure.md), [grammar](../../spec/02-grammar.md) | [lexer tests](internal/syntax/lexer_test.go), [parser tests](internal/syntax/parser_test.go) |
+| Name and binding checks | [checker](internal/check/check.go) | [load diagnostics](../../spec/02-grammar.md#load-time-diagnostics) | [checker tests](internal/check/check_test.go), [load diagnostics](../../corpus/load-diagnostics/) |
+| Lowering and source maps | [lowering](internal/lower/) | [Abstract Machine](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](internal/lower/lower_test.go), [disassembly cases](../../corpus/disassembly/) |
+| Execution and resource costs | [machine](internal/machine/) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md), [limits](../../spec/06-errors-and-limits.md) | [machine tests](internal/machine/machine_test.go), [execution tests](execution_test.go), [limit cases](../../corpus/limits/) |
+| Dispatch, scheduling and waits | [Host inputs](group.go), [Run scheduling](group_run.go), [message observation](group_observe.go), [sends](group_send.go) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go) |
+| Text Patterns | [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go) | [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs) | [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/) |
+| Generated tables | [Go generator](../../tools/go/generate.ts), [Unicode generator](../../tools/unicode/generate.ts), [syntax generator](../../tools/syntax/generate.ts) → [tables](internal/generated/) | [Data Files](../../spec/README.md#data-files) | [generator tests](../../tools/go/generate.test.ts), [Unicode tests](internal/unicode/unicode_test.go) |
+| Corpus selection and parity | [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt) | [corpus commands and blessing](../../corpus/README.md#checking), [conformance](../../spec/11-the-trace-and-conformance.md) | [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go) |
+
+The feature sections below describe the supported subset and its limits. Follow Spec links for rules and the [ADR index](../../docs/adr/README.md) for rationale. The TS Core is a parity peer; root `tools/grammar/` and `tools/machine/` are Spec-checking prototypes. Update generated files through their generators.
+
 ## Layout
 
 - The root package implements the available declarations of the
@@ -83,12 +98,21 @@ use `gofmt`. Their `--check` modes refuse missing or stale output without writin
 ## Front-end and lowering checks
 
 Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
-and pin the first errors in `tools/grammar/broken.talk`. The seven units in the
-six Disassembly Cases match byte for byte, including pools, slots, positions,
+and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
+match byte for byte, including pools, slots, positions,
 Unwind Tables and Event Tables; together they emit every declared opcode.
 Stdlib signatures can be linked for disassembly without executing Libraries.
-All 30 load-diagnostic Trace Cases replay through public `Load`, including
+All load-diagnostic Trace Cases replay through public `Load`, including
 `initialiser failed` at the raising instruction's source-map position.
+
+Raw Text Literals preserve backslashes and placeholders. Backticks decode
+escapes and accept nested multiline Interpolation Holes. Both forms support
+exact closing margins and physical newline normalization; hole-free forms also
+work in literal-only Text positions. Holes retain Constant and Guard
+restrictions and lower to ordinary concatenation instructions, with generated
+joins mapped to `${`. Invalid closing margins identify the first non-whitespace
+source scalar; paired Corpus cases also pin interpolation Fuel and allocation
+faults and Segment rollback.
 
 Implicit Script Variable initializers allocate Nothing slots without emitting
 stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
@@ -366,12 +390,12 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 121 cases: all 12 text-model cases, all 36 load-diagnostic
+The gate contains 124 cases: all 12 text-model cases, all 38 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-63 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+64 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 58-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their

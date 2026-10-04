@@ -1,6 +1,6 @@
 # Differential fuzzer
 
-Generates Scripts and Host Input sequences, runs them on the Core, and checks the Traces against conformance oracles. [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md) makes fuzzing required practice, outside the normative Spec. [The research](../../docs/research/differential-fuzzing.md) gives the design; this harness is the TS-only first step of it ([#138](https://github.com/odogono/odgn-talk/issues/138)).
+Generates Scripts and Host Input sequences, runs them on the Core, and checks the Traces against conformance oracles. [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md) makes fuzzing required practice, outside the normative Spec. [The historical research](../../docs/research/differential-fuzzing.md#historical-proposal) records the original proposal and its superseded assumptions. The [oracle contract](#oracle-contract) below describes this harness ([#138](https://github.com/odogono/odgn-talk/issues/138)).
 
 ```sh
 bun run fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>]
@@ -47,3 +47,11 @@ A fixed divergence becomes a corpus case under [`corpus/`](../../corpus/), bless
 - **Minimization** ([`minimize.ts`](src/minimize.ts)) first deletes and shrinks choices, then reduces concrete Host Inputs and Script syntax.
 
 The dual-Core mode compares complete Traces from a second runner, passed in with `--go-runner <path>`. It speaks the [worker](src/worker.ts) protocol of one JSON request and response per line, and stays unused until the Go Core has a fuzz runner.
+
+## Oracle contract
+
+[Chapter 10](../../spec/10-save-and-restore.md#saving) and [chapter 11](../../spec/11-the-trace-and-conformance.md#save-and-restore-replays) define Save eligibility and replay parity. The shared replay driver attempts Save at eligible boundaries, checks `effects pending` where required, and preserves the original Group on refusal. Successful round trips use the Spec's Trace projection and Host-handle restrictions.
+
+A finite case may end with suspended Runs or open Decisions. The [Trace invariant checker](src/oracles.ts) rejects duplicate Run and Decision terminal outcomes, resetting that accounting at explicit restores; it does not require all work to terminate within the generated input sequence.
+
+Same-input dual-Core comparison uses complete Traces. Metamorphic comparisons have relation-specific projections: local renaming excludes the `identity`, `source`, `pos` and `fingerprint` fields, while save/restore replay excludes its injected records and normalizes save-attempt ids as chapter 11 specifies. Consult [the oracle implementation](src/oracles.ts) before adding a relation; raw Trace equality is not valid for every source or scheduling transformation.

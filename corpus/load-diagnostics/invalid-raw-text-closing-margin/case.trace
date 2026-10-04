@@ -1,0 +1,4 @@
+# Unblessed: both Cores must report the first non-whitespace source scalar.
+> load bad identity=4571ca73f41cdbccf06af589448e31958e9265af1102d79939155aaf0f23a883
+diag bad code="invalid text indentation" pos=3:3
+> vars

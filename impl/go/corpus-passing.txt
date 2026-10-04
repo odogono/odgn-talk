@@ -27,6 +27,7 @@ limits/alloc-exhaustion-point
 limits/call-depth-minimum
 limits/event-tests-fault-on-resume
 limits/fault-at-dispatch
+limits/fenced-text-concat
 limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
 limits/join-retention
@@ -49,6 +50,8 @@ load-diagnostics/duplicate-name
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/initialiser-failed
+load-diagnostics/invalid-raw-text-closing-margin
+load-diagnostics/invalid-text-closing-margin
 load-diagnostics/invalid-text-delimiter
 load-diagnostics/invalid-text-escape
 load-diagnostics/invalid-text-indentation

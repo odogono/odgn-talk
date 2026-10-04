@@ -108,6 +108,8 @@ func TestFencedTextDiagnosticPositions(t *testing.T) {
 		{"legacy octal", "`a\\01`", Position{2, 11}},
 		{"legacy decimal escape", "`a\\8`", Position{2, 11}},
 		{"margin mismatch", "`\n \ttext\n  `", Position{3, 2}},
+		{"non-whitespace backtick closing margin", "`\n  first\n \tbad`", Position{4, 3}},
+		{"non-whitespace raw closing margin", "\"\"\"\n  first\n \tbad\"\"\"", Position{4, 3}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse("on go\n return " + tc.expression)
