@@ -118,7 +118,14 @@ The `grants-as-used`, `revoke-in-flight` and `revoke-reissue` cases in `capabili
 
 The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover nanosecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
 
-The `standard-console`, `standard-console-cancel` and `standard-console-timeout` cases cover Console calls through fixed declarations: a Library's `say` of nested Function Values, an empty input line, extra Fuel, cancellation and late answers, and the human-input deadline overriding a shorter Script `MaxWait`.
+The `standard-console`, `standard-console-cancel` and `standard-console-timeout`
+cases cover Console calls through fixed declarations: a Library's `say` of
+nested Function Values, an empty input line, extra starting and late Fuel,
+cancellation and late answers, and the human-input deadline overriding a shorter
+Script `MaxWait`. Go and TS reproduce all three reviewed traces unchanged.
+Go also reproduces `reload/function-staleness` with Function Values displayed by
+source position. All four cases are protected in Go's required-case acceptance
+test and gate.
 
 The `standard-locale`, `standard-locale-ranks` and `standard-locale-validation` cases cover all eight Locale Operations, Host data and fallback, stable sorting through dense ranks, malformed answers, option and tag checks, and save/restore replay.
 

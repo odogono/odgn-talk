@@ -22,6 +22,9 @@ capabilities/ordinary-grants
 capabilities/revoke-in-flight
 capabilities/standard-clock
 capabilities/standard-clock-fuel
+capabilities/standard-console
+capabilities/standard-console-cancel
+capabilities/standard-console-timeout
 capabilities/standard-timer
 dates/civil-arithmetic
 dates/instants-and-offsets
@@ -117,6 +120,7 @@ math/number-functions
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+reload/function-staleness
 reload/reload-carry-and-discard
 stdlib/calls
 stdlib/errors-name-the-call

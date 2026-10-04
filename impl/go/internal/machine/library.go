@@ -8,11 +8,13 @@ import (
 )
 
 func functionCode(code *State, name string) string {
-	if code.Unit.Kind != "library" {
-		return name
-	}
+	// Lambda body names include the enclosing Handler/function for internal
+	// identity. Display uses only the given token's line and column.
 	if parts := strings.Split(name, ":"); len(parts) > 1 {
 		name = strings.Join(parts[len(parts)-2:], ":")
+	}
+	if code.Unit.Kind != "library" {
+		return name
 	}
 	return code.Unit.Name + ":" + name
 }

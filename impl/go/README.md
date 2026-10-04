@@ -332,7 +332,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Console, Calendar and Locale factories, Object execution, Capability Scopes and
+Calendar and Locale factories, Object execution, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
@@ -357,6 +357,25 @@ are ignored and costs are copied, so later map changes cannot affect calls.
 Timer requires a non-nil implementation; an interface holding a nil pointer is
 refused too.
 Both factories use ordinary Grant trimming, Library needs and atomic charging.
+
+### Console Standard Capability
+
+`Core.ConsoleCapability(ConsoleImpl, Costs)` supplies fixed fire-and-forget
+`write` and suspending `read` Operations. `write` forwards its Value to the Host,
+including Function Values nested in Containers, and leaves `it` unchanged.
+`say` calls `console.write` through the caller's Grant, including in Libraries.
+Function Value display names the Home Script, source unit where needed, and
+Lambda line/column; internal enclosing Handler names are not displayed.
+
+The Host starts `read` with a Call and answers it with text without the line
+break, including an empty line. Its fixed 2,147,483,647 ms timeout overrides
+Script MaxWait. Answers queued during Read resume only in a later Pump;
+timeout and cancellation abandon the Call and cancel its Context. Late answers
+are traced and ignored. Both Operations retain the Script name and Grant
+binding, require copied valid costs and a non-nil implementation, and declare
+no Script error codes. Invalid read results and Host failures become `host error`.
+
+### Scheduling and suspension
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
@@ -529,7 +548,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 165 cases, including all text-model, load-diagnostic,
+The gate contains 169 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -605,3 +624,9 @@ Three reviewed Standard Capability cases pass unchanged: `standard-clock`,
 `standard-clock-fuel` and `standard-timer` under `capabilities/`. A separate
 acceptance test requires them in the gate, pinning nanosecond readings through
 Library calls, declared cost rollback, Timer Host charges and ordinary Deliveries.
+
+The reviewed `standard-console`, `standard-console-timeout` and
+`standard-console-cancel` traces also pass unchanged, including nested Function
+Values, Library Grants, starting/late costs, the fixed timeout and abandonment.
+The reviewed `reload/function-staleness` trace passes with corrected Function
+Value display. A separate acceptance test requires all four cases in the gate.
