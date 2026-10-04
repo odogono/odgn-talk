@@ -125,6 +125,7 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+objects/properties
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding

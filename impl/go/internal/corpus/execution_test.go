@@ -548,3 +548,24 @@ func TestObjectIdentityAcceptance(t *testing.T) {
 		}
 	}
 }
+
+func TestObjectPropertyAcceptance(t *testing.T) {
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains("\n"+string(listed), "\nobjects/properties\n") {
+		t.Fatal("Object property acceptance case missing from gate")
+	}
+	cases, err := Discover("../../../../corpus", []string{"objects/properties"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: "../../../../corpus", Output: io.Discard, Backends: ExecutionBackends()}
+	if reason := runner.support(cases[0]); reason != "" {
+		t.Fatal(reason)
+	}
+	if _, err := runner.execute(cases[0]); err != nil {
+		t.Fatal(err)
+	}
+}

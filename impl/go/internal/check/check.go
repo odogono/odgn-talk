@@ -687,6 +687,20 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			u.add("not in a guard", n.Pos())
 		}
 	}
+	if ctx.guard && (n.Kind == "key" || n.Kind == "key-computed") {
+		base := n.Children[len(n.Children)-1]
+		s, _ := u.Resolve(b, base.Text)
+		if base.Kind == "name" && s.Kind == "object" || base.Kind == "literal" && base.Text == "me" {
+			id := n.Kind == "key" && n.Text == "id"
+			if n.Kind == "key-computed" {
+				k := n.Children[0]
+				id = k.Kind == "literal" && k.Token.Kind == syntax.Text && k.Text == "id"
+			}
+			if !id && (n.Kind == "key-computed" || !slices.Contains(generated.Grammar.Properties, n.Text)) {
+				u.add("not in a guard", n.Pos())
+			}
+		}
+	}
 	if ctx.lambda > 0 && (n.Kind == "pass" || n.Kind == "target") {
 		u.add("not in a lambda", n.Pos())
 	}

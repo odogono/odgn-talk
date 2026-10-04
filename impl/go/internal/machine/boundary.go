@@ -2,24 +2,7 @@ package machine
 
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
-
-func deferredObjectProperty(f *Frame, i lower.Instruction) bool {
-	if i.Name != "get-key" && i.Name != "get-key-computed" {
-		return false
-	}
-	if len(f.Stack) == 0 || f.Stack[len(f.Stack)-1].Kind != value.Object {
-		return false
-	}
-	if i.Name == "get-key" {
-		return i.Operands()[0].Text != `"id"`
-	}
-	if len(f.Stack) < 2 || f.Stack[len(f.Stack)-2].Kind != value.Text {
-		return false // let the normal key-kind check raise its error
-	}
-	return f.Stack[len(f.Stack)-2].Text != "id"
-}
 
 // During's following binding token is a name, not a policy flag.
 func DecidingClause(b *lower.Body) bool {
@@ -60,7 +43,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case "equal", "not-equal", "less", "greater", "less-or-equal", "greater-or-equal":
 		return true
-	case "list", "list-append", "list-extend", "map", "get-key", "get-key-computed", "property", "property-delimited":
+	case "list", "list-append", "list-extend", "map", "get-key", "get-key-computed", "set-property", "set-property-computed", "property", "property-delimited":
 		return true
 	case "chunk-get", "chunk-get-delimited", "chunk-set", "chunk-set-delimited", "chunk-delete", "chunk-delete-delimited", "test-chunk", "test-chunk-delimited":
 		return true

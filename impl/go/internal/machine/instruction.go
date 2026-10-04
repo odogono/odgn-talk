@@ -536,6 +536,17 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		} else {
 			push(v.Get(k))
 		}
+	case "set-property", "set-property-computed":
+		pop() // input
+		v := pop()
+		if i.Name == "set-property-computed" {
+			x := pop()
+			if x.Kind != value.Text {
+				bad(wrong("text", x))
+				break
+			}
+		}
+		bad(wrong("object", v)) // Object writes take the Host crossing path.
 	case "property", "property-delimited":
 		d := text(",")
 		if i.Name == "property-delimited" {
