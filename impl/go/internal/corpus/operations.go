@@ -82,7 +82,6 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		}
 		byName[name] = append(byName[name], op)
 	}
-	// Console is available only for load diagnostics until its factory is implemented.
 	standards, _ := setup["standard"].([]any)
 	seen := map[string]bool{}
 	for _, raw := range standards {
@@ -98,6 +97,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"now"}
 		case "timer":
 			names = []string{"schedule", "cancel"}
+		case "console":
+			names = []string{"write", "read"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -116,9 +117,10 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"cancel":   {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape}},
 			}
 		case "console":
-			byName[name] = []talk.Operation{
-				{Name: "write", Mode: talk.FireAndForget, Args: []talk.Shape{talk.ValueShape}, Fire: func(*talk.Call, []talk.Value) error { return nil }},
-				{Name: "read", Mode: talk.Suspending, Result: talk.TextShape, Start: func(*talk.Call, []talk.Value) error { return nil }},
+			def, err = core.ConsoleCapability(replayConsole{out}, costs)
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"write": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.ValueShape}},
+				"read":  {Mode: talk.Suspending},
 			}
 		default:
 			return nil, fmt.Errorf("unsupported Standard Capability %s", name)
@@ -309,4 +311,19 @@ func setupStandardCosts(row Setup, names []string) (talk.Costs, error) {
 		costs[name] = talk.Cost{Fuel: components[0], Alloc: components[1]}
 	}
 	return costs, nil
+}
+
+type replayConsole struct{ replay *operationReplay }
+
+func (h replayConsole) Write(c *talk.Call, value talk.Value) error {
+	_, err := h.replay.invoke("console.write", talk.FireAndForget, c)
+	return err
+}
+func (h replayConsole) Read(c *talk.Call) error {
+	h.replay.calls[c.ID()] = c
+	if len(h.replay.stubs["console.read"]) == 0 {
+		return nil
+	}
+	_, err := h.replay.invoke("console.read", talk.Suspending, c)
+	return err
 }
