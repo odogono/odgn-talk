@@ -332,7 +332,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-The Locale factory, Object execution, Capability Scopes and
+Object execution, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
@@ -398,6 +398,33 @@ are accepted only with valid fields and no reserved Data keys. Other Host
 failures become `host error`. The factory requires all six copied costs and a
 non-nil implementation. Factory checks are private to the definition; ordinary
 Capabilities cannot opt into Calendar errors by name or declaration.
+
+### Locale Standard Capability
+
+`Core.LocaleCapability(LocaleImpl, Costs)` supplies eight fixed immediate
+Operations: `compare`, `rank`, `upper`, `lower`, `numberSymbols`, `monthNames`,
+`dayNames` and `tag`. The Host supplies Collation, case mappings, Locale data and
+supported-tag lookup/fallback. The Grant binding supplies a default tag string;
+calls retain the caller's binding and Pump Clock through Library frames.
+
+Optional options and tag arguments are distinguished by kind. Omitted or Nothing
+options receive a complete map in documented key order: `sensitivity: "variant"`
+and `numeric: false`, or `width: "long"` and `form: "format"`. An omitted or
+Nothing tag reaches the Host as `""`. The Trace retains supplied arguments.
+Shape checks precede option-domain checks in supplied map order, then effective
+tag validation, all before charges and Host execution. An explicit tag overrides
+a malformed default. The Core checks case-insensitive ASCII RFC 5646 syntax,
+including private-use and grandfathered tags, without registry checks, trimming
+or canonicalisation. Malformed tags raise `bad locale`; invalid option words or
+text in both optional positions raise `out of domain`.
+
+Result checks require `compare` to be exactly -1, 0 or 1, `rank` to contain exactly
+the distinct supplied texts with dense positive integer ranks, name lists to
+contain 12 or 7 texts, and `numberSymbols` to be a closed map with nonempty
+separators/signs, ten nonempty digit texts and positive integer grouping fields.
+`tag` must return well-formed tag text; case results are text with Core-owned NFC.
+Invalid results and every Host failure become `host error`. All eight costs are
+required and copied; the implementation must be non-nil.
 
 ### Scheduling and suspension
 
@@ -572,7 +599,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 172 cases, including all text-model, load-diagnostic,
+The gate contains 175 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -660,3 +687,8 @@ Three reviewed Calendar cases pass unchanged: `standard-calendar`,
 `capabilities/`. A required-case acceptance test protects all three, including
 optional arguments, declared failure fields, uncharged domain errors, malformed
 results and exact costs.
+
+Three reviewed Locale cases pass unchanged: `standard-locale`,
+`standard-locale-ranks` and `standard-locale-validation` under `capabilities/`.
+A required-case acceptance test protects all eight Operations, dense-rank
+sorting, option/tag validation, malformed answers and exact charges.

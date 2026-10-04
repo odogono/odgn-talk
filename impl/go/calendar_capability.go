@@ -68,9 +68,9 @@ func (c *Core) CalendarCapability(impl CalendarImpl, costs Costs) (*CapabilityDe
 		}}
 		switch name {
 		case "today":
-			checks.result = func(v corevalue.Value) bool { return !v.Date.HasTime }
+			checks.result = func(v corevalue.Value, _ []corevalue.Value) bool { return !v.Date.HasTime }
 		case "now", "toCivil":
-			checks.result = func(v corevalue.Value) bool { return v.Date.HasTime }
+			checks.result = func(v corevalue.Value, _ []corevalue.Value) bool { return v.Date.HasTime }
 		case "toInstant":
 			checks.arguments = calendarInstantDomain
 		}
@@ -100,7 +100,7 @@ func calendarInstantOptions(args []Value) (word, zone string) {
 	}
 	return word, calendarText(args, 2)
 }
-func calendarInstantDomain(args []corevalue.Value) *corevalue.Value {
+func calendarInstantDomain(args []corevalue.Value, _ any) *corevalue.Value {
 	var bad corevalue.Value
 	if !args[0].Date.HasTime {
 		bad = args[0]
