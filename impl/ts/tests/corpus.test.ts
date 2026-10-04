@@ -300,11 +300,12 @@ test("every record the Core writes has corpus.toml's ids and keys, in its order"
   const corpus = (await import('../../../spec/data/corpus.toml')).default as {
     record: {
       ids?: string[];
+      input: boolean;
       key?: { key: string; optional?: boolean }[];
       name: string;
     }[];
   };
-  const specs = new Map(corpus.record.map(r => [r.name, r]));
+  const specs = new Map(corpus.record.map(r => [`${r.input}:${r.name}`, r]));
   const lines: string[] = [];
   for (const area of [
     'text-model',
@@ -344,7 +345,7 @@ test("every record the Core writes has corpus.toml's ids and keys, in its order"
   expect(lines.length).toBeGreaterThan(100);
   for (const line of lines) {
     const record = parseRecord(line);
-    const spec = specs.get(record.name)!;
+    const spec = specs.get(`${record.input}:${record.name}`)!;
     expect(spec).toBeDefined();
     const keys = (spec.key ?? []).map(k => k.key);
     const written = [...record.fields.keys()];

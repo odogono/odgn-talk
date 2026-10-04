@@ -1,0 +1,37 @@
+script variable seen = []
+on fire n
+ repeat for each i in n..(n + 2)
+  try
+   send note with i to b
+  catch {code: "mailbox full", to: t}
+   put t after seen
+  end try
+ end repeat
+ send self to me
+end fire
+on self
+ put "self" after seen
+end self
+on missing
+ try
+  send lost to absent
+ catch {code: "object gone", object: o}
+  put o after seen
+ end try
+ send note with 7 to b
+end missing
+on wrong target
+ try
+  send note to target
+ catch {code: "wrong kind", expected: k, value: v}
+  put [k, v] after seen
+ end try
+ send note with 8 to b
+end wrong
+on cut
+ send note with 9 to b
+ throw "sender failed"
+end cut
+on error "sender failed"
+ send note with 0 to b
+end error

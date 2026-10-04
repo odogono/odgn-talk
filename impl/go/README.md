@@ -149,7 +149,7 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Joins and `send` instructions, foreign Function Value calls with
+Joins and waiting or Message Path `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
@@ -239,7 +239,27 @@ instruction, ahead of newly ready waiters, and slice overrun becomes debt.
 Internal `error` messages are observed even without an error Handler. Named
 Script filters resolve when waiting begins; missing names raise `object gone`,
 and other non-Object filters raise `wrong kind`. Object filters remain dependent
-on Object registration, and ordinary Script sends remain deferred.
+on Object registration, while Object-addressed sends remain deferred.
+
+Non-waiting `send` to a named Script or an ownerless Script's `me` joins the
+receiver's work queue immediately during a Pump. Receivers never run inside the
+sender; FIFO order and sender Run identity are preserved. Named receivers can
+load after their senders, and their existence is checked when the receiver is
+loaded onto the operand stack. Missing names raise `object gone`; ordinary
+non-Object Values raise `wrong kind`. Mailbox capacity includes Host inputs
+accepted during the Pump. A full mailbox raises `mailbox full`, with the Script
+name as `to`, at the paid send; no message is delivered.
+
+The sender pays Cost Model 0's message charge: 20 Fuel plus the rounded-up
+message size divided by 32, allocating the message size. The message counts
+against the receiving Script's mailbox and its Run uses that Script's own
+limits. A self-send updates the sender's retained-state base immediately, so
+the queued message counts at its next Persistent State check. Budget faults
+prevent delivery; later sender faults, errors or
+cancellation preserve already sent messages. Plain `send` leaves `it` unchanged.
+Receiver Names remain plain frame data across preemption and contribute no
+Value size to Persistent State. `send … and wait`, Joins and Object Message
+Paths remain at their untouched implementation boundaries.
 
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
@@ -295,9 +315,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 101 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 105 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-51 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+55 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 50-case step-1 set and eight reviewed step-2 cases,
@@ -322,9 +342,14 @@ including atomic cap/slice overruns, debt, late Run faults and Decision sealing.
 A new observation regression also agrees on both Cores, retaining its `Unblessed`
 header for first human review; it covers pinned locals, live Script Variables,
 branch priority, Guard errors, non-consuming matches, sender filters, timeouts
-and internal error observation. Four other corrected TS traces
-need Go facilities outside this slice. Their maintainer-approved TS-only
-corrections do not establish Go parity, which remains tracked in
+and internal error observation. The reviewed `suspension/wait-for` case now
+agrees on Go, including Script sends and sender filters. Three new send regressions
+agree on both Cores and retain their `Unblessed` headers for first human review;
+they pin FIFO and self sends, full/missing/invalid receiver errors, record order,
+immediate delivery surviving a sender error, and preempted receiver identity
+without Value size, and same-Segment Persistent State checks after self-send.
+Three other corrected TS traces need Go facilities outside
+this slice; their remaining Go parity is tracked in
 [#277](https://github.com/odogono/odgn-talk/issues/277).
 
 A listed regression or missing case fails; an unlisted passing case is reported

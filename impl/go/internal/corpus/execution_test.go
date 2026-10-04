@@ -228,3 +228,27 @@ func TestEventObservationAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestScriptSendAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"suspension/wait-for", "suspension/script-sends", "suspension/send-preemption", "limits/self-send-persistent"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passing, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains("\n"+string(passing), "\n"+c.Name+"\n") {
+				t.Fatal("missing send acceptance case from passing gate")
+			}
+		})
+	}
+}

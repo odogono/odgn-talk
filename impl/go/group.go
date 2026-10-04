@@ -59,16 +59,17 @@ type delivery struct {
 	during   *corevalue.Value // non-nil only for an internal error message
 }
 type execution struct {
-	run        *machine.Run
-	delivery   delivery
-	id         RunID
-	handler    string
-	clause     int // selected body index; -1 until accepted
-	how        string
-	deadline   *big.Int
-	timerOrder int64
-	parked     bool
-	deciding   bool
+	raisesWritten int
+	run           *machine.Run
+	delivery      delivery
+	id            RunID
+	handler       string
+	clause        int // selected body index; -1 until accepted
+	how           string
+	deadline      *big.Int
+	timerOrder    int64
+	parked        bool
+	deciding      bool
 }
 type workItem struct {
 	delivery delivery

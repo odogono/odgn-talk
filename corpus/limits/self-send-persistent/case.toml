@@ -1,0 +1,12 @@
+kind = "trace"
+[versions]
+language = "1.0-rc"
+costModel = "0"
+[[scripts]]
+name = "returner"
+source = "returner.talk"
+limits = { persistentState = 100 }
+[[scripts]]
+name = "waiter"
+source = "waiter.talk"
+limits = { persistentState = 400 }
