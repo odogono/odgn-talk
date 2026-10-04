@@ -132,6 +132,15 @@ that could conceal an indirect nested Join. All five retain their `Unblessed`
 headers for first human review. The mixed-Capability `suspension/joins` case remains
 outside the Go subset.
 
+Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
+`argument-shapes`, `load-checks`, `host-failures`, `charge-faults` and
+`optional-args-fuel`. The new `declared-allocation` and `ordinary-grants` cases
+agree on Go, TS ordinary execution and TS save/restore before blessing. They pin
+atomic declared costs, Optional arguments, alias Grants, revocation, trimming and
+caught raises before later Host calls. Their `Unblessed` headers await first human
+review. Suspending Capability calls, Capability Join members, Library needs and
+Standard factories remain outside this Go slice.
+
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
 ## The Disassembly Cases

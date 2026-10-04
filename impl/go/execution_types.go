@@ -208,8 +208,6 @@ const (
 	EffectUnknown EffectStatus = "unknown"
 )
 
-type Grant struct{}
-
 type Unhandled struct {
 	Delivery DeliveryID
 	Message  Message

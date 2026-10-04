@@ -17,6 +17,7 @@ the authority; the TS Core is not a reference
 | Lowering and source maps | [lowering](internal/lower/) | [Abstract Machine](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](internal/lower/lower_test.go), [disassembly cases](../../corpus/disassembly/) |
 | Execution and resource costs | [machine](internal/machine/) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md), [limits](../../spec/06-errors-and-limits.md) | [machine tests](internal/machine/machine_test.go), [execution tests](execution_test.go), [limit cases](../../corpus/limits/) |
 | Dispatch, scheduling and waits | [Host inputs](group.go), [Run scheduling](group_run.go), [message observation](group_observe.go), [sends](group_send.go) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go) |
+| Capability Operations | [definitions and Grants](capability.go), [Shapes](shape.go), [load checks](internal/check/operations.go), [Host crossings](group_operation.go) | [Capabilities and Shapes](../../spec/09-embedding.md#capabilities), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [embedding tests](capability_test.go), [Capability cases](../../corpus/capabilities/) |
 | Text Patterns | [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go) | [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs) | [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/) |
 | Generated tables | [Go generator](../../tools/go/generate.ts), [Unicode generator](../../tools/unicode/generate.ts), [syntax generator](../../tools/syntax/generate.ts) → [tables](internal/generated/) | [Data Files](../../spec/README.md#data-files) | [generator tests](../../tools/go/generate.test.ts), [Unicode tests](internal/unicode/unicode_test.go) |
 | Corpus selection and parity | [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt) | [corpus commands and blessing](../../corpus/README.md#checking), [conformance](../../spec/11-the-trace-and-conformance.md) | [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go) |
@@ -118,13 +119,14 @@ Implicit Script Variable initializers allocate Nothing slots without emitting
 stores. Explicit `= nothing` emits its constant and store, as chapter 8 requires.
 This keeps canonical code positions aligned with the existing Corpus.
 
-Handler call-graph analysis, Library linking, Grants, Capability modes and Host
-Object property Shapes belong to
-[#134](https://github.com/odogono/odgn-talk/issues/134). The diagnostic families
-`wrong argument`, `unknown operation`, `wrong mode`, `missing and wait`,
-`import cycle`, `missing grant`, `not in a library`, `veto outside a decision`,
-`after a suspension`, `wrong message` and `bad suffixes` depend on those facilities.
-The current subset already rejects `wait for` in a Library, as `not in a library`.
+Handler call-graph analysis rejects plain calls to may-suspend Handlers and
+function-style calls that could suspend. Grant-aware loading checks Operation
+names, modes, argument counts and literal Shapes, including `say`. Decisions
+also check `veto` and `pass` reachability before suspension. Library linking,
+Library needs and Host Object property Shapes remain part of
+[#134](https://github.com/odogono/odgn-talk/issues/134). The subset rejects
+`wait for` in a Library as `not in a library`; imports and Library execution
+remain unavailable.
 
 ## Values and codecs
 
@@ -174,12 +176,12 @@ under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
 Capability Join Members and Object Message Path `send` instructions, foreign Function Value calls with
-`and wait`, imported calls, Capability effects and Object properties stop at a
+`and wait`, imported calls, suspending Capability Operations and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
 before that boundary. Message Paths, Broadcast Decisions and
-pending calls belong to #134; complete cancellation and Stop Script acceptance to
+pending Capability calls belong to #134; complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -217,8 +219,7 @@ complete limits acceptance belongs to
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`, `Inspect`,
 `Counters` and `TraceSink` implement their handoff signatures. Core compilation
 caches are mutex-protected and Groups have separate live state. Load supports
-standalone Scripts; unavailable Grant and Object bindings are refused rather
-than ignored. Other unimplemented public declarations are omitted.
+standalone Scripts with named Capability Grants; Object bindings are refused. Other unimplemented public declarations are omitted.
 
 Any-goroutine deliveries reserve mailbox capacity before joining the input
 queue. A Pump takes one Clock reading, drains accepted inputs in order, and
@@ -229,6 +230,45 @@ Clock readings, invalid values and Function Values from other Groups are refused
 Clock readings outside the language's year 1–9999 range currently panic during
 conversion; returning `invalid value` for them is tracked in
 [#282](https://github.com/odogono/odgn-talk/issues/282).
+
+### Ordinary Capability Operations
+
+`Core.DefineCapability` copies Operation declarations and validates their modes,
+Shapes, costs and Host functions. `Grant` selects Operations, and `GrantAll`
+selects the whole definition with an opaque Host binding. Load copies each named
+Grant, so aliases and Scripts have independent revocation state. Shapes include
+scalar kinds, exact Units and Unit kinds, Lists, Maps, unions and Optional values.
+`AnyShape` accepts data and refuses nested Function Values; `ValueShape` accepts
+all Values. A trailing suffix of Optional arguments may be omitted, and the Host
+receives only supplied arguments, preserving explicit Nothing.
+
+Immediate `ask` and fire-and-forget `tell`/`say` execute inside the pumping Run.
+Argument checks and revoked Grants fail before charging or calling the Host.
+The base 10 Fuel, declared Fuel and allocation, and pending dispatch charge are
+paid atomically before the Host crossing. `Call.Charge` draws additional Fuel
+while the Host function runs; a refused charge faults the Run even if the Host
+swallows `ErrLimit`. Immediate results are checked and their conversion charged
+before being stored in `it`; fire-and-forget calls leave `it` unchanged. An
+accepted Host effect remains committed when later conversion or Script code faults.
+
+A valid custom `ScriptError` raises its code, message and Data with Operation
+identity. Catalogue codes, reserved Data keys, undeclared codes, invalid results,
+plain errors and panics become `host error`, with Host-only detail in `CallFailed`.
+Calls carry the named Grant, binding, Pump Clock, Run and Segment identity.
+Caught raises precede subsequent Host call records. Host inputs accepted during
+a call join the next Pump; worker reentry is refused.
+
+`Script.Grants` returns fresh, sorted Operation lists. `GrantsAsUsed` trims direct
+uses across the whole Script, including unused function bodies. `Script.Revoke`
+queues revocation in Host-input order; retained aliases remain independent.
+Library needs and imported uses are deferred with Library linking.
+
+Suspending declarations participate in load checks, but `ask … and wait` and
+Capability Join members still stop at their untouched implementation boundaries.
+Standard Capability factories, Object execution, Capability Scopes and
+Segment-bound effects remain part of #134. Definitions that request Scopes or
+Segment-bound behavior are refused. Ordinary calls have no scope, are not
+automatic, and carry a background Context because they finish synchronously.
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
@@ -390,10 +430,10 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 124 cases: all 12 text-model cases, all 38 load-diagnostic
+The gate contains 132 cases: all 12 text-model cases, all 38 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-64 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
-delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
+72 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+delivery, suspension, observation, Queueing Policy, Decision and ordinary Capability cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
@@ -432,6 +472,13 @@ receiver errors, unmatched messages and timeout. Three new paired reply cases
 pin resumption unwinding under a Pump cap, pending-call retention faults, and
 replacement cancellation with cleanup and ignored late replies. They keep
 their `Unblessed` headers for first human review.
+
+Six reviewed ordinary Capability cases pass unchanged: calls, argument Shapes,
+load checks, Host failures, charge faults and omitted optional arguments.
+Two new cases agree on Go, TS and TS save/restore before blessing:
+`capabilities/declared-allocation` pins atomic pre-Host charging in both modes;
+`capabilities/ordinary-grants` pins alias bindings, revocation, trimming and caught
+raises before later Host calls. Their `Unblessed` headers await first human review.
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

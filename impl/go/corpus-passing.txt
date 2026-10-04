@@ -6,6 +6,14 @@ bytes/value-encoding
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
+capabilities/argument-shapes
+capabilities/calls
+capabilities/charge-faults
+capabilities/declared-allocation
+capabilities/host-failures
+capabilities/load-checks
+capabilities/optional-args-fuel
+capabilities/ordinary-grants
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding

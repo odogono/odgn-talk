@@ -302,3 +302,32 @@ func TestScriptJoinAcceptance(t *testing.T) {
 		})
 	}
 }
+
+// Ordinary Operations execute through the public embedding API. These
+// existing reviewed cases and new paired regressions protect this slice.
+func TestOrdinaryOperationAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"capabilities/calls", "capabilities/charge-faults", "capabilities/load-checks", "capabilities/argument-shapes", "capabilities/host-failures", "capabilities/optional-args-fuel", "capabilities/declared-allocation", "capabilities/ordinary-grants"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(b), "\n"+c.Name+"\n") {
+				t.Errorf("required ordinary Operation case not listed: %s", c.Name)
+			}
+			if reason := r.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

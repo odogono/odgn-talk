@@ -1,0 +1,28 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "read"
+mode = "immediate"
+args = [{ optional = "text" }]
+result = "number"
+cost = { fuel = 7, alloc = 2 }
+[[operations]]
+capability = "api"
+name = "note"
+mode = "fire-and-forget"
+args = [{ optional = "text" }]
+cost = { fuel = 2, alloc = 3 }
+[[operations]]
+capability = "console"
+name = "write"
+mode = "fire-and-forget"
+args = ["value"]
+cost = { fuel = 1 }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { a = { capability = "api", ops = "all" }, b = { capability = "api", ops = "all" }, console = { ops = "all" } }

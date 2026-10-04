@@ -33,6 +33,7 @@ type Options struct {
 	Objects     []string
 	Imports     map[string]map[string]Symbol
 	PatternSize int
+	Grants      map[string]map[string]OperationCheck
 }
 type Body struct {
 	Node       *syntax.Node
@@ -252,6 +253,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			}
 		}
 	}
+	u.checkOperations()
 	u.checkHandlerWaits()
 	u.checkDecisions()
 	u.orderDiagnostics()

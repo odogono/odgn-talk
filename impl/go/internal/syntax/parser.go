@@ -379,7 +379,8 @@ func (p *parser) statement(inline bool) *Node {
 	case "ask", "tell":
 		n.Params = []*Node{p.expression()}
 		p.expect("to")
-		n.Text = p.word().Raw
+		n.NameToken = p.word()
+		n.Text = n.NameToken.Raw
 		if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
 			n.Children = p.expressionList()
 		}

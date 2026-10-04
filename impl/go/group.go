@@ -7,6 +7,8 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
+	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
@@ -42,6 +44,7 @@ type Script struct {
 	runs     []*execution
 	active   *execution
 	counters Counters
+	grants   map[string]*Grant
 	owner    *Object
 	reserved int
 	debt     int64
@@ -71,6 +74,7 @@ type execution struct {
 	timerOrder    int64
 	parked        bool
 	deciding      bool
+	segment       int
 	calls         int64
 	waitCall      CallID
 	abandonCall   CallID
@@ -145,10 +149,24 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		g.record("refused", false, nil, map[string]string{"code": corevalue.DisplayText(string(InvalidValue))})
 		return nil, e
 	}
-	// Grants and Object registration are the next implementation stage. No
-	// valid handle can be constructed here yet; refuse supplied placeholders.
-	if len(o.Grants) > 0 {
-		return nil, g.refuse(InvalidValue, "Capability Grants are not available")
+	grants := map[string]*Grant{}
+	declarations := map[string]map[string]check.OperationCheck{}
+	for name, template := range o.Grants {
+		if template == nil || template.definition == nil {
+			return nil, g.refuse(InvalidValue, "invalid Grant")
+		}
+		bound := &Grant{definition: template.definition, operations: map[string]bool{}, binding: template.binding}
+		declarations[name] = map[string]check.OperationCheck{}
+		for op := range template.operations {
+			bound.operations[op] = true
+			d := template.definition.ops[op]
+			args := make([]shape.Shape, len(d.Args))
+			for i, s := range d.Args {
+				args[i] = s.inner
+			}
+			declarations[name][op] = check.OperationCheck{Mode: modeName(d.Mode), Args: args}
+		}
+		grants[name] = bound
 	}
 	if o.Owner != nil || len(o.Objects) > 0 {
 		return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
@@ -157,7 +175,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	for name := range o.Objects {
 		objects = append(objects, name)
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Objects: objects, PatternSize: limits.PatternSize})
+	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Objects: objects, PatternSize: limits.PatternSize, Grants: declarations})
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
@@ -169,7 +187,39 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	s := &Script{group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
+	if o.GrantsAsUsed {
+		used := map[string]map[string]bool{}
+		tree, _ := syntax.Parse(o.Source)
+		for _, decl := range tree.Declarations {
+			syntax.Walk(decl, func(n *syntax.Node) bool {
+				name, op := "", ""
+				if n.Kind == "ask" || n.Kind == "tell" {
+					name, op = n.Params[0].Text, n.Text
+				}
+				if n.Kind == "command" && n.Text == "say" {
+					name, op = "console", "write"
+				}
+				if name != "" {
+					if used[name] == nil {
+						used[name] = map[string]bool{}
+					}
+					used[name][op] = true
+				}
+				return true
+			})
+		}
+		for name, grant := range grants {
+			for op := range grant.operations {
+				if !used[name][op] {
+					delete(grant.operations, op)
+				}
+			}
+			if len(grant.operations) == 0 {
+				delete(grants, name)
+			}
+		}
+	}
+	s := &Script{grants: grants, group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
 	g.mu.Lock()
 	g.scripts = append(g.scripts, s)
 	for _, loaded := range g.scripts {
@@ -360,7 +410,11 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		if d.cancel != "" {
 			g.record("cancel-delivery", true, []string{string(d.cancel)}, nil)
 		} else {
-			g.record(d.kind, true, []string{string(d.id)}, d.fields)
+			if d.kind == "revoke" {
+				g.record(d.kind, true, []string{d.script.name}, d.fields)
+			} else {
+				g.record(d.kind, true, []string{string(d.id)}, d.fields)
+			}
 		}
 	}
 	g.record("pump", true, nil, fields)

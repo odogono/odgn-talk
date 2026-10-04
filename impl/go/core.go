@@ -2,6 +2,7 @@ package northtalk
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
@@ -30,6 +31,7 @@ type compileKey struct {
 	Identity    [32]byte
 	Objects     string
 	PatternSize int
+	Grants      string
 }
 
 func New() *Core { return &Core{units: map[compileKey]*lower.Unit{}} }
@@ -80,7 +82,8 @@ func (e *LoadError) Error() string { return fmt.Sprintf("source rejected: %v", e
 func (c *Core) compile(name, source string, options check.Options) (*lower.Unit, *LoadError) {
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)
-	key := compileKey{identity(name, source), strings.Join(objects, "\x00"), options.PatternSize}
+	declarations, _ := json.Marshal(options.Grants)
+	key := compileKey{identity(name, source), strings.Join(objects, "\x00"), options.PatternSize, string(declarations)}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.units == nil {

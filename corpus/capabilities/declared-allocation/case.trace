@@ -1,0 +1,14 @@
+# Unblessed: paired Go/TS regression; first blessing awaits human review.
+> load s identity=3177659b9ff35df3ff3d0a5e600d0ef68a7f51ae2b5c0f657376734873c8f6c3
+> deliver d1 to=s message=inspect
+> deliver d2 to=s message=write
+> pump clock=2026-10-04T12:00:00Z
+fault s/r1 limit=alloc at=s:2 pos=2:2
+seg s/r1 start delivery=d1 handler=inspect clause=1 fuel=0 alloc=0 state=32 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=inspect limit=alloc fuel=0 alloc=0
+fault s/r2 limit=alloc at=s:7 pos=5:2
+seg s/r2 start delivery=d2 handler=write clause=1 fuel=0 alloc=0 state=0 end=fault
+run s/r2 outcome=limit-fault delivery=d2 handler=write limit=alloc fuel=0 alloc=0
+pumped state=idle fuel=0
+> vars
+vars s

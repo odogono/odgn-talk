@@ -42,7 +42,7 @@ func (s *Script) start(d delivery) {
 	if s.hasHandler(d.message.Name) {
 		handler = d.message.Name
 	}
-	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), handler: handler, clause: -1, how: "start"}
+	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), segment: 1, handler: handler, clause: -1, how: "start"}
 	s.runs = append(s.runs, s.active)
 }
 func (s *Script) persistentWithoutRun(exclude *execution) int64 {
@@ -158,6 +158,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	// Drain inputs in order before timers and turns. Cancellation either
 	// removes a message or queues a suspended Run's cleanup at this position.
 	for _, d := range inputs {
+		if d.kind == "revoke" {
+			if grant := d.script.grants[d.fields["grant"]]; grant != nil {
+				grant.revoked = true
+			}
+			continue
+		}
 		if d.cancel == "" {
 			d.script.queue = append(d.script.queue, workItem{delivery: d})
 			continue
@@ -214,6 +220,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				s.queue = s.queue[1:]
 				if item.run != nil {
 					s.active = item.run
+					if s.active.run.Status == machine.Suspended || s.active.run.Status == machine.Parked {
+						s.active.segment++
+					}
 					s.active.run.Resume()
 				} else {
 					d := item.delivery
@@ -271,7 +280,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 						break
 					}
 				}
-				r.ExecuteSelected(remaining, func() {
+				r.ExecuteHosted(remaining, func() {
 					if machine.QueuePolicy(s.state.Unit.Bodies[x.clause]) == "replacing" {
 						g.replaceEarlier(s, x)
 						r.PersistentBase = s.retainedOutside(x)
@@ -285,6 +294,8 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 						r.PersistentBase = s.retainedOutside(x)
 					}
 					return ok
+				}, func(grant, op string, args []corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value, bool) {
+					return g.operation(s, x, grant, op, args, pay, &result.Reports)
 				})
 				if r.Status != machine.Dispatching {
 					break
@@ -667,6 +678,7 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 			break
 		}
 	}
+	x.segment++
 	x.deadline = nil
 	x.parked = false
 	g.abandonSend(x)

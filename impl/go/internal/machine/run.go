@@ -251,6 +251,9 @@ type SendFunc func(to, message string, args []value.Value, wait bool) bool
 // charge succeeds, before effects commit. Both callbacks belong to this turn;
 // faults, preemption and cleanup cannot retain them in Run state.
 func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
+	r.ExecuteHosted(slice, paid, send, nil)
+}
+func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation OperationFunc) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
@@ -269,6 +272,49 @@ func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 		if r.PolicyDispatch && len(r.Frames) == 1 && !r.Cancelling && !f.Accepted && f.PC == b.DispatchEnd {
 			r.Status = Dispatching
 			break
+		}
+		if i.Name == "ask" || i.Name == "tell" {
+			if operation == nil {
+				r.Status = Blocked
+				break
+			}
+			n := i.Operands()[2].Index
+			args := slices.Clone(f.Stack[len(f.Stack)-n:])
+			result, err, blocked := operation(i.Operands()[0].Text, i.Operands()[1].Text, args, func(fuel, alloc int64) bool {
+				if f.Clause {
+					fuel += 4
+				}
+				if !r.pay(fuel, alloc) {
+					return false
+				}
+				f.Clause = false
+				if f.Accepted && len(r.Frames) == 1 && paid != nil {
+					notify := paid
+					paid = nil
+					notify()
+				}
+				return true
+			})
+			if blocked {
+				r.Status = Blocked
+				break
+			}
+			if r.Status == Faulted || r.Status == Cancelled {
+				break
+			}
+			if err != nil {
+				r.raise(*err)
+			} else {
+				f.Stack = f.Stack[:len(f.Stack)-n]
+				if i.Name == "ask" {
+					f.Stack = append(f.Stack, result)
+				}
+				f.PC++
+			}
+			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
+				r.Status = Preempted
+			}
+			continue
 		}
 		if i.Name == "join-send" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
 			r.fault("join")

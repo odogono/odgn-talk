@@ -1,0 +1,30 @@
+script variable replies = []
+script variable errors = []
+on optional
+ ask a to read
+ put it after replies
+ ask b to read nothing
+ put it after replies
+ tell a to note
+ say replies
+ return it
+end optional
+on read value
+ try
+  ask a to read value
+  put it after replies
+ catch e
+  put e after errors
+ end try
+end read
+function unused
+ tell b to note "retained"
+end unused
+on caught
+ try
+  throw "caught"
+ catch e
+ end try
+ ask b to read
+ tell b to note
+end caught
