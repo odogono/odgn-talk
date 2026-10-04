@@ -53,7 +53,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" {
 			for _, raw := range standards {
 				name := raw.(Setup)["capability"].(string)
-				if name != "clock" && name != "timer" && name != "console" && name != "calendar" {
+				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" {
 					return name + " Standard Capability factory remains deferred"
 				}
 			}

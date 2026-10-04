@@ -28,6 +28,9 @@ capabilities/standard-clock-fuel
 capabilities/standard-console
 capabilities/standard-console-cancel
 capabilities/standard-console-timeout
+capabilities/standard-locale
+capabilities/standard-locale-ranks
+capabilities/standard-locale-validation
 capabilities/standard-timer
 dates/civil-arithmetic
 dates/instants-and-offsets

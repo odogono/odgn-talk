@@ -45,8 +45,8 @@ type Operation struct {
 // operationChecks are private refinements installed only by Standard factories.
 // Ordinary Host declarations cannot opt into catalogue failures or Core checks.
 type operationChecks struct {
-	arguments func([]corevalue.Value) *corevalue.Value
-	result    func(corevalue.Value) bool
+	arguments func([]corevalue.Value, any) *corevalue.Value
+	result    func(corevalue.Value, []corevalue.Value) bool
 	failure   func(string, corevalue.Value) bool
 }
 type CapabilityDef struct {

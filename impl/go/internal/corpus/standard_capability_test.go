@@ -12,6 +12,8 @@ import (
 func TestStandardReplayRefusesMalformedCostsAndDuplicates(t *testing.T) {
 	clock := Setup{"capability": "clock", "costs": Setup{"now": Setup{}}}
 	for _, setup := range []Setup{
+		{"standard": []any{Setup{"capability": "locale", "costs": Setup{"tag": Setup{}}}}},
+		{"standard": []any{Setup{"capability": "locale", "costs": Setup{"compare": Setup{"fuel": true}}}}},
 		{"standard": []any{Setup{"capability": "calendar", "costs": Setup{"today": Setup{}}}}},
 		{"standard": []any{Setup{"capability": "calendar", "costs": Setup{"now": Setup{"alloc": true}}}}},
 		{"standard": []any{Setup{"capability": "console", "costs": Setup{"write": Setup{}}}}},

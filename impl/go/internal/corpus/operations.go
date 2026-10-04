@@ -101,6 +101,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"write", "read"}
 		case "calendar":
 			names = []string{"today", "now", "toCivil", "toInstant", "offset", "zone"}
+		case "locale":
+			names = []string{"compare", "rank", "upper", "lower", "numberSymbols", "monthNames", "dayNames", "tag"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -134,6 +136,21 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"toInstant": {Mode: talk.Immediate, Args: []talk.Shape{talk.CivilDateShape, optionalText, optionalText}},
 				"offset":    {Mode: talk.Immediate, Args: []talk.Shape{talk.InstantShape, optionalText}},
 				"zone":      {Mode: talk.Immediate, Args: []talk.Shape{optionalText}},
+			}
+		case "locale":
+			def, err = core.LocaleCapability(replayLocale{out}, costs)
+			collation := talk.Optional(talk.OneOf(talk.MapShape(talk.Field{Key: "sensitivity", Shape: talk.TextShape, Optional: true}, talk.Field{Key: "numeric", Shape: talk.BoolShape, Optional: true}), talk.TextShape))
+			names := talk.Optional(talk.OneOf(talk.MapShape(talk.Field{Key: "width", Shape: talk.TextShape, Optional: true}, talk.Field{Key: "form", Shape: talk.TextShape, Optional: true}), talk.TextShape))
+			tag := talk.Optional(talk.TextShape)
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"compare":       {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.TextShape, collation, tag}},
+				"rank":          {Mode: talk.Immediate, Args: []talk.Shape{talk.ListOf(talk.TextShape), collation, tag}},
+				"upper":         {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, tag}},
+				"lower":         {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, tag}},
+				"numberSymbols": {Mode: talk.Immediate, Args: []talk.Shape{tag}},
+				"monthNames":    {Mode: talk.Immediate, Args: []talk.Shape{names, tag}},
+				"dayNames":      {Mode: talk.Immediate, Args: []talk.Shape{names, tag}},
+				"tag":           {Mode: talk.Immediate, Args: []talk.Shape{tag}},
 			}
 		default:
 			return nil, fmt.Errorf("unsupported Standard Capability %s", name)
@@ -360,4 +377,31 @@ func (h replayCalendar) Offset(c *talk.Call, instant talk.Value, zone string) (t
 }
 func (h replayCalendar) Zone(c *talk.Call, zone string) (talk.Value, error) {
 	return h.replay.invoke("calendar.zone", talk.Immediate, c)
+}
+
+type replayLocale struct{ replay *operationReplay }
+
+func (h replayLocale) Compare(c *talk.Call, a, b, opts talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.compare", talk.Immediate, c)
+}
+func (h replayLocale) Rank(c *talk.Call, texts, opts talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.rank", talk.Immediate, c)
+}
+func (h replayLocale) Upper(c *talk.Call, s talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.upper", talk.Immediate, c)
+}
+func (h replayLocale) Lower(c *talk.Call, s talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.lower", talk.Immediate, c)
+}
+func (h replayLocale) NumberSymbols(c *talk.Call, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.numberSymbols", talk.Immediate, c)
+}
+func (h replayLocale) MonthNames(c *talk.Call, opts talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.monthNames", talk.Immediate, c)
+}
+func (h replayLocale) DayNames(c *talk.Call, opts talk.Value, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.dayNames", talk.Immediate, c)
+}
+func (h replayLocale) Tag(c *talk.Call, tag string) (talk.Value, error) {
+	return h.replay.invoke("locale.tag", talk.Immediate, c)
 }

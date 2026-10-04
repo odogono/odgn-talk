@@ -50,7 +50,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		}
 	}
 	if check := grant.definition.checks[opName].arguments; check != nil {
-		if err := check(args); err != nil {
+		if err := check(args, grant.binding); err != nil {
 			return corevalue.Value{}, err, false
 		}
 	}
@@ -98,12 +98,12 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	if op.Mode == Suspending {
 		cancel()
 	}
-	return g.completeOperation(s, x, grantName, opName, op, call, result, err, fields, record, 0, reports)
+	return g.completeOperation(s, x, grantName, opName, op, call, args, result, err, fields, record, 0, reports)
 }
 
 // completeOperation runs on the Run's turn, so validation and conversion belong
 // to the resuming Segment, including a failure's Data.
-func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
+func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, args []corevalue.Value, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
 	grant := s.grants[grantName]
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
 	fail := func(code string, fields ...corevalue.Pair) (corevalue.Value, *corevalue.Value, bool) {
@@ -191,7 +191,7 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		return corevalue.Value{}, nil, false
 	}
 	checkResult := grant.definition.checks[opName].result
-	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil || checkResult != nil && !checkResult(result.inner) {
+	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil || checkResult != nil && !checkResult(result.inner, args) {
 		fields["error"] = "{}"
 		if record != nil {
 			record()
