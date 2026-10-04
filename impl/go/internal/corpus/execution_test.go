@@ -361,7 +361,7 @@ func TestSuspendingOperationAcceptance(t *testing.T) {
 // Library and normative Standard Library calls protect the shared code context.
 func TestLibraryExecutionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	names := []string{"builtins/function-values", "libraries/calls", "libraries/errors", "libraries/registration", "stdlib/calls", "stdlib/errors-name-the-call"}
+	names := []string{"builtins/function-values", "libraries/calls", "libraries/errors", "libraries/registration", "stdlib/calls", "stdlib/errors-name-the-call", "stdlib/template-migration"}
 	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,44 @@
+use format from text
+use makeDate, makeDateTime, formatDate, parseDate from date
+
+constant dateTemplate = """$${year} {old} $ ${year}-${month:2}-${day:2}"""
+constant timeTemplate = """${year}-${month:2}-${day:2} ${hour:2}:${minute:2}:${second:2}.${fraction:3}"""
+script variable texts
+script variable dates
+script variable caught
+
+on go
+  put [format("""${full name} owes ${amount}; $${literal} {old} $""", {"full name": "Ann", amount: 2.50 GBP}), format("""${a.b!?}/${again}""", {"a.b!?": 7, again: "${missing} $$"}), format("""$$${name}""", {name: "Ann"}), format("{name}", {}), format("""e${mark}""", {mark: "́"})] into texts
+  put makeDate(2026, 9, 27) into d
+  put makeDateTime(2026, 9, 27, 14, 5, 9, 123000000) into dt
+  put [formatDate(d, dateTemplate), parseDate("${year} {old} $ 2026-09-27", dateTemplate), formatDate(dt, timeTemplate), parseDate("2026-09-27 14:05:09.123", timeTemplate)] into dates
+end go
+
+on invalid
+  put [] into caught
+  try
+    get format("${name", {})
+  catch e
+    put e after caught
+  end try
+  try
+    get format("${missing}", {})
+  catch e
+    put e after caught
+  end try
+  try
+    get formatDate(makeDate(2026, 9, 27), "{year}-{month}-{day}")
+  catch e
+    put e after caught
+  end try
+  try
+    get formatDate(makeDate(2026, 9, 27), "${year}-${month:0}-${day}")
+  catch e
+    put e after caught
+  end try
+  try
+    get parseDate("2026/09/27", "${year}-${month}-${day}")
+  catch e
+    put e after caught
+  end try
+end invalid

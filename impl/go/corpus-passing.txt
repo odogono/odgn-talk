@@ -113,6 +113,7 @@ quantities/value-encoding
 reload/reload-carry-and-discard
 stdlib/calls
 stdlib/errors-name-the-call
+stdlib/template-migration
 suspension/answers
 suspension/capability-resumption
 suspension/event-test-group-cap

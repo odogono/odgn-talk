@@ -1,24 +1,30 @@
+# Unblessed: corrected multiline output awaiting first human review.
 > load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on entry1" & newline & "let message be `" & newline & "  first" & newline & newline & "  value ${1 +" & newline & "2}" & newline & "  `" & newline & "end entry1" & newline identity=2ed66834998ccb6aeced1489825fb1d6a2406563e62c893747747a06db85c360
+> extend session source="script variable message" & newline & "on entry1" & newline & "put `" & newline & "  first" & newline & newline & "  value ${1 +" & newline & "2}" & newline & "  ` into message" & newline & "end entry1" & newline identity=7e98f705ed0703e5cc488555dbfa4c7bb236e49981c7fc6a10b627512d4c7984
 > request d1 to=session message=entry1
 > pump clock=2026-10-04T09:00:00Z
-seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=23 alloc=46 state=0 end=return
-run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=23 alloc=46
-pumped state=idle fuel=23
-> extend session source="on entry2" & newline & "say message" & newline & "end entry2" & newline identity=ebdd2e06592e2206cf320e4cfa6768f669a4a0cc3cc115bfedefa02a76a1f14e
-diag session+2 code="unknown name" pos=2:5
-> extend session source="on entry2" & newline & "return `hello ${2 + 3}`" & newline & "end entry2" & newline identity=0ae8bb60165eedcc781e1b586d75326e5101f759af10ded0624361c632122951
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=20 alloc=46 state=30 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=20 alloc=46
+pumped state=idle fuel=20
+> extend session source="on entry2" & newline & "say message" & newline & "end entry2" & newline identity=72c6aca5f4726e93f0425c2754d338b951f2812643df77a464f74a181426e11c
 > request d2 to=session message=entry2
 > pump clock=2026-10-04T09:00:00Z
-seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=17 alloc=39 state=0 end=return
-run session/r2 outcome=completed delivery=d2 handler=entry2 value="hello 5" fuel=17 alloc=39
-pumped state=idle fuel=17
-> extend session source="use format from text" identity=622f4e9b8a14e9bdf0a3f6b023cabb7d53ed987a2ad15f842318f72e0583e5ba
-> extend session source="on entry3" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry3" & newline identity=7d116c63855ebb5d5cb0bbe915d0950b28f8f460594c5119a4ecabc250c21663
+call session/r2.c1 op=console.write args=["first" & newline & newline & "value 3"]
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=18 alloc=0 state=30 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=18 alloc=0
+pumped state=idle fuel=18
+> extend session source="on entry3" & newline & "return `hello ${2 + 3}`" & newline & "end entry3" & newline identity=f91d805c2db4bdf02ed0484946b0aaff8b742cae167e6dac6518328463893cd6
 > request d3 to=session message=entry3
 > pump clock=2026-10-04T09:00:00Z
-seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=1975 alloc=5417 state=0 end=return
-run session/r3 outcome=completed delivery=d3 handler=entry3 value="Ann ${literal}" fuel=1975 alloc=5417
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=17 alloc=39 state=30 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value="hello 5" fuel=17 alloc=39
+pumped state=idle fuel=17
+> extend session source="use format from text" identity=cfd86053da2dae1da7e0faa92a6522915fdd9859d3dc6cefb9f45fa216698faa
+> extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=2229917e5797133e66dcc4370e655ef5c852fb6792347eaaf2bece8c4bf9df99
+> request d4 to=session message=entry4
+> pump clock=2026-10-04T09:00:00Z
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=1975 alloc=5417 state=30 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 value="Ann ${literal}" fuel=1975 alloc=5417
 pumped state=idle fuel=1975
 > vars
-vars session
+vars session message="first" & newline & newline & "value 3"

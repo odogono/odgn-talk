@@ -22,6 +22,8 @@ import {
   replay,
   runTraceCase,
 } from '../tools/trace-case';
+import { runTranscriptCase } from '../tools/transcript-case';
+import { parseTranscript } from '../src/session';
 
 test('the NFC encoding seed case executes every line through the public values', () => {
   const dir = resolve(
@@ -191,11 +193,23 @@ test.each([
   'load-diagnostics/invalid-raw-text-closing-margin',
   'load-diagnostics/invalid-text-closing-margin',
   'limits/fenced-text-concat',
+  'stdlib/template-migration',
 ])('the fenced-text regression %s reproduces on both replay paths', name => {
   const dir = resolve(import.meta.dir, '../../../corpus', name);
   const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
   const result = runTraceCase(dir, setup as never);
   expect(result.divergence).toBeUndefined();
+});
+
+test('the fenced-text Transcript prints its multiline value and replays exactly', () => {
+  const dir = resolve(import.meta.dir, '../../../corpus/sessions/fenced-text');
+  const items = parseTranscript(
+    readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
+  );
+  expect(
+    items.filter(item => item.k === 'output').map(item => item.text),
+  ).toEqual(['first', '', 'value 3', '"hello 5"', '"Ann ${literal}"']);
+  expect(runTranscriptCase(dir).divergence).toBeUndefined();
 });
 
 test('blessing a Trace Case keeps its comments before the inputs they preceded', () => {

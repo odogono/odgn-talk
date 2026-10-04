@@ -1,0 +1,11 @@
+# Dollar-brace placeholders and dollar doubling in the normative text/date
+# Libraries, executed and charged through the public Group API in both Cores.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "templates"
+source = "templates.talk"
