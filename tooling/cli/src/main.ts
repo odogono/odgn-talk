@@ -18,7 +18,7 @@ const usage = `Usage:
                                           replay a Session Transcript
   northtalk fmt [--check] <file>…          format in place, or check layout
   northtalk fmt [--check] -                read source from stdin
-  northtalk lint [--profile beginner|standard] <file>...
+  northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
                                           print Lints (default: standard)`;
 
 const main = async (args: string[]): Promise<number> => {
@@ -82,6 +82,7 @@ const main = async (args: string[]): Promise<number> => {
     return format(files, check);
   }
   if (command === 'lint') {
+    const manifest = option('--manifest');
     const profile = option('--profile') ?? 'standard';
     if (profile !== 'beginner' && profile !== 'standard') {
       throw new Error('--profile must be beginner or standard');
@@ -89,7 +90,7 @@ const main = async (args: string[]): Promise<number> => {
     if (!rest.length || rest.some(arg => arg.startsWith('--'))) {
       throw new Error(usage);
     }
-    return lintFiles(rest, profile);
+    return lintFiles(rest, profile, manifest);
   }
   if (command === 'replay') {
     const trace = option('--trace');

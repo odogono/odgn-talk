@@ -8,6 +8,7 @@ import {
   verifyLspStdio,
   verifyLspInvalidConfiguration,
 } from './lsp-integration';
+import { coreVersions } from '@odgn/northtalk';
 
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-node-'));
 const main = fileURLToPath(new URL('./main.js', import.meta.url));
@@ -27,6 +28,28 @@ try {
   );
   assert.equal(beginner.status, 0, beginner.stderr);
   assert.match(beginner.stdout, /warning \[prefer-explicit-end]/);
+  const manifest = join(directory, 'host.talk-manifest.json');
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      kind: 'demo',
+      version: '1',
+      language: coreVersions.language,
+      grants: [],
+      libraries: [],
+      messages: [],
+      objects: [],
+      objectKinds: [],
+    }),
+  );
+  const withManifest = spawnSync(
+    process.execPath,
+    [main, 'lint', '--manifest', manifest, file],
+    { encoding: 'utf8' },
+  );
+  assert.equal(withManifest.status, 0, withManifest.stderr);
+  assert.match(withManifest.stdout, /hint \[unknown-message]/);
+  assert.doesNotMatch(standard.stdout, /unknown-message/);
   writeFileSync(
     file,
     'on demo\nput + into x\nput {length: 1} into x\nend demo',

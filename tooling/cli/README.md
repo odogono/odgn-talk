@@ -7,7 +7,7 @@ northtalk [repl] [--transcript <file>]
 northtalk replay <transcript> [--trace <file>]
 northtalk fmt [--check] <file>…
 northtalk fmt [--check] -
-northtalk lint [--profile beginner|standard] <file>...
+northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
 northtalk lsp
 northtalk debug <script> [--trace <file>]
 ```
@@ -37,7 +37,7 @@ bun run --cwd tooling/cli build
 node tooling/cli/dist/main.js lint --profile beginner example.talk
 ```
 
-The shared [Lint engine](../stack/) supplies advice in `standard` by default. It prints `file:line:column: level [id] message` on stdout, with the Core's original source positions. Both shipped profiles contain only hints and warnings; Lints never reject a Script or make the command fail. Syntax errors are separate, printed on stderr; recovery lets advice after an error appear too. Exit codes are 0 for advice alone, 1 for syntax errors, and 2 for invalid arguments or file errors. The command checks syntax and the eleven syntax-based Lints; it does not load the Script or check bindings, Grants or a Host Manifest. Seven catalogue entries remain planned; their scope is recorded on [#241](https://github.com/odogono/odgn-talk/issues/241).
+The shared [Lint engine](../stack/) supplies advice in `standard` by default. It prints `file:line:column: level [id] message` on stdout, with the Core's original source positions. Both shipped profiles contain only hints and warnings; Lints never reject a Script or make the command fail. Syntax errors are separate, printed on stderr; recovery lets advice after an error appear too. Exit codes are 0 for advice alone, 1 for syntax errors, and 2 for invalid arguments or file errors. The command implements all eighteen catalogue entries using the Core parser and checker without loading or executing the Script. Add `--manifest host.talk-manifest.json` to supply chapter 9's Host Manifest, including Library and well-known Object bindings. `unknown-message` is silent without a manifest. Checker load diagnostics do not become Lints or change the lint command's exit status; an invalid or unreadable manifest is a file/argument error (exit 2).
 
 A standalone `-- lint: ignore <id>` comment suppresses that id on the next physical line. Blank lines break adjacency. The [catalogue](../stack/lints.toml) records wording, profile levels and the Join threshold. The linter leaves source files unchanged. The REPL remains Bun-only.
 

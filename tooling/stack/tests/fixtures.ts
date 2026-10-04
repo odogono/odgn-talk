@@ -1,8 +1,67 @@
 // Tooling fixtures, outside the Conformance Corpus (ADR 0028).
+import type { LintId, LintOptions } from '../src/lint';
+export const fixtureManifest = {
+  grants: new Map(),
+  libraries: [],
+  messages: ['demo'],
+  objects: [],
+};
 const script = (body: string) => `on demo\n${body}\nend demo`;
 const join = (lines: number) =>
   script(`wait for all\n${'say 1\n'.repeat(lines)}end wait`);
-export const fixtures = [
+export const fixtures: readonly {
+  id: LintId;
+  negative: string;
+  options?: LintOptions;
+  positive: string;
+}[] = [
+  {
+    id: 'unreachable-clause',
+    positive: 'on demo x\nend demo\non demo 1\nend demo',
+    negative: 'on demo x where x > 1\nend demo\non demo 1\nend demo',
+  },
+  {
+    id: 'pin-trap',
+    positive: 'script variable orderId = 1\non demo {order: orderId}\nend demo',
+    negative:
+      'script variable orderId = 1\non demo {order: ^orderId}\nend demo',
+  },
+  {
+    id: 'is-empty-on-missing-key',
+    positive: script('put {} into m\nif the "title" of m is empty then say 1'),
+    negative: script('if the "title" of {title: ""} is empty then say 1'),
+  },
+  {
+    id: 'try-write-before-fail',
+    positive:
+      'script variable count = 0\n' +
+      script(
+        'try\nput 1 into count\nthrow {code: "oops"}\ncatch e\nsay e\nend try',
+      ),
+    negative:
+      'script variable count = 0\n' +
+      script('try\nput 1 / 0 into count\ncatch e\nsay e\nend try'),
+  },
+  {
+    id: 'serialised-self-join',
+    positive:
+      'on ping, queued\nend ping\n' +
+      script('wait for all\nsend ping to me and wait\nend wait'),
+    negative:
+      'on ping\nend ping\n' +
+      script('wait for all\nsend ping to me and wait\nend wait'),
+  },
+  {
+    id: 'shadows-builtin',
+    positive: 'constant min = 1\n' + script('say min'),
+    negative: 'constant minimum = 1\n' + script('say minimum'),
+  },
+  {
+    id: 'unknown-message',
+    positive: 'on other\nend other',
+    negative: 'on demo\nend demo',
+    options: { manifest: fixtureManifest },
+  },
   {
     id: 'advanced-construct',
     positive: 'on demo {order: ^orderId}\nend demo',
@@ -122,4 +181,4 @@ export const fixtures = [
     positive: script('put "0000-01-01T00:00:00Z" as instant into x'),
     negative: script('put " 2024-02-29T00:00:00Z " as instant into x'),
   },
-] as const;
+];

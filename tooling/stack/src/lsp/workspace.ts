@@ -173,7 +173,12 @@ export const analyzeWorkspace = (
         })),
       );
     }
-    const lints = lintSyntax(p.tree, { profile });
+    const lints = lintSyntax(p.tree, {
+      profile,
+      manifest,
+      bindings: result.tree,
+      checkOptions: { unit: document.library ? 'library' : 'script' },
+    });
     diagnostics.push(
       ...lints.map(l => ({
         range: rangeAt(document.text, l.span.start, l.span.end),

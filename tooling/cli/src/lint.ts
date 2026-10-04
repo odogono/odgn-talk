@@ -1,14 +1,22 @@
 // Every I/O concern stays here; the shared Lint engine is browser-safe.
 import { readFileSync } from 'node:fs';
-import { lint, type LintProfile } from '@odgn/northtalk-tooling/lint';
+import {
+  lint,
+  readManifest,
+  type LintProfile,
+} from '@odgn/northtalk-tooling/lint';
 
 export const lintFiles = (
   files: readonly string[],
   profile: LintProfile,
+  manifestFile?: string,
 ): number => {
+  const manifest = manifestFile
+    ? readManifest(readFileSync(manifestFile, 'utf8'))
+    : null;
   let code = 0;
   for (const file of files) {
-    const result = lint(readFileSync(file, 'utf8'), { profile });
+    const result = lint(readFileSync(file, 'utf8'), { profile, manifest });
     for (const { error } of result.diagnostics) {
       console.error(
         `${file}:${error.tok.line}:${error.tok.col}: ${error.code}: ${error.message}`,

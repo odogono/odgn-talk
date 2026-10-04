@@ -11,7 +11,7 @@ export const verifyLspFeatures = (): number => {
       language: '1.0-rc.2',
       grants: [],
       libraries: [],
-      messages: [],
+      messages: [{ name: 'demo', args: [], receivers: [] }],
       objects: [],
     },
   });
