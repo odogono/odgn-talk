@@ -277,8 +277,7 @@ func TestScriptReplyAcceptance(t *testing.T) {
 	}
 }
 
-// Script-only Joins agree with TS ordinary and save/restore execution. Mixed
-// Capability members remain deferred, so these cases pin their own acceptance.
+// Script-only Joins retain their own acceptance alongside mixed Joins.
 func TestScriptJoinAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
 	names := []string{"suspension/script-joins", "suspension/join-closing-position", "suspension/join-preemption", "limits/join-retention", "limits/script-join-width"}
@@ -327,6 +326,33 @@ func TestOrdinaryOperationAcceptance(t *testing.T) {
 			}
 			if _, err := r.execute(c); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestSuspendingOperationAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"suspension/answers", "suspension/joins", "suspension/capability-resumption", "capabilities/optional-args-join", "capabilities/revoke-in-flight", "limits/max-wait-minimum", "limits/max-join-minimum", "reload/reload-carry-and-discard"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if reason := runner.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Errorf("required suspending Operation case missing from gate: %s", c.Name)
 			}
 		})
 	}

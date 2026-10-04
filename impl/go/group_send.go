@@ -57,8 +57,11 @@ func (g *Group) reply(call CallID, answer corevalue.Value, reason string, failur
 	for _, s := range g.scripts {
 		for _, x := range s.runs {
 			if x.run.Join != nil {
+				x.removeMemberTimer(string(call))
 				if x.run.SettleJoin(string(call), machine.SendResume{Answer: answer, Reason: reason, Error: failure}) {
 					x.deadline = nil
+					x.memberTimers = nil
+					g.cancelPendingAbandons(x)
 					x.how = "resume"
 					s.queue = append(s.queue, workItem{run: x})
 				}

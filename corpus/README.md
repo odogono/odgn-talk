@@ -129,8 +129,8 @@ retained across open-body preemption, pending state at suspension, tightened wid
 limits and body-error abandonment before a later unwind fault. The paired
 `load-diagnostics/missing-handler-wait` case rejects a plain local Handler call
 that could conceal an indirect nested Join. All five retain their `Unblessed`
-headers for first human review. The mixed-Capability `suspension/joins` case remains
-outside the Go subset.
+headers for first human review. The mixed-Capability `suspension/joins` case also
+agrees on ordinary Go execution.
 
 Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
 `argument-shapes`, `load-checks`, `host-failures`, `charge-faults` and
@@ -138,8 +138,17 @@ Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
 agree on Go, TS ordinary execution and TS save/restore before blessing. They pin
 atomic declared costs, Optional arguments, alias Grants, revocation, trimming and
 caught raises before later Host calls. Their `Unblessed` headers await first human
-review. Suspending Capability calls, Capability Join members, Library needs and
-Standard factories remain outside this Go slice.
+review. Library needs and Standard factories remain outside this Go slice.
+
+Reviewed `suspension/answers`, mixed `suspension/joins`, `optional-args-join`,
+`revoke-in-flight` and the `max-wait-minimum`/`max-join-minimum` cases now pass
+unchanged on Go. The new `suspension/capability-resumption` regression agrees on
+Go, TS ordinary execution and TS save/restore. It covers early answers across Join
+body preemption, conversion/late Fuel under a Pump cap, fail-fast input ordering,
+late-cost faults preserving earlier Segments, Run cancellation and Reload
+abandonment. Its `Unblessed` header remains for first human review. The reviewed
+`reload/reload-carry-and-discard` case also passes unchanged; full Go
+lifecycle/limits and save/restore acceptance remain #135/#136.
 
 The `suspension/join-closing-position` regression pins failed replies and timeouts
 at a Join's closing `end`, including bare `end`, `end wait` and a local Handler.

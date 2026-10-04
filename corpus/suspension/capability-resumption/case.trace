@@ -1,0 +1,86 @@
+# Unblessed: paired Go/TS ordinary and TS save/restore output awaits first human review.
+> load s identity=59ac3b1e1d8ecb6644e9acf70380975d2d6ad5781d10aeac7f464c04def5f034
+> deliver d1 to=s message=gather
+> pump clock=2026-09-30T09:00:00Z fuel-cap=41
+call s/r1.c1 op=api.fetch args=[1]
+preempt s/r1 start delivery=d1 handler=gather clause=1 by=cap fuel=41 alloc=0
+pumped state=sliced fuel=41
+> answer s/r1.c1 value=1 fuel=5
+> pump clock=2026-09-30T09:00:01Z fuel-cap=1
+preempt s/r1 continue by=cap fuel=1 alloc=0
+pumped state=sliced fuel=1
+> pump clock=2026-09-30T09:00:01Z
+call s/r1.c2 op=api.fetch args=[2]
+seg s/r1 continue fuel=23 alloc=0 state=328 end=join-end
+pumped state=idle fuel=23 next=2026-09-30T09:00:03Z
+> answer s/r1.c2 value=2
+> pump clock=2026-09-30T09:00:01Z fuel-cap=1
+preempt s/r1 resume by=cap fuel=7 alloc=96
+pumped state=sliced fuel=7
+> pump clock=2026-09-30T09:00:01Z
+seg s/r1 continue fuel=4 alloc=0 state=32 end=return
+run s/r1 outcome=completed delivery=d1 handler=gather value=[1, 2] fuel=76 alloc=96
+pumped state=idle fuel=4
+> deliver d2 to=s message=gather
+> pump clock=2026-09-30T09:00:01Z
+call s/r2.c1 op=api.fetch args=[1]
+call s/r2.c2 op=api.fetch args=[2]
+seg s/r2 start delivery=d2 handler=gather clause=1 fuel=65 alloc=0 state=360 end=join-end
+pumped state=idle fuel=65 next=2026-09-30T09:00:03Z
+> fail s/r2.c2 error={code: "gone"}
+> answer s/r2.c1 value=9
+> pump clock=2026-09-30T09:00:01Z
+note s/r2.c1 kind=late-answer
+raise s/r2 code="gone" at=s:15 pos=10:5
+abandon s/r2.c1
+seg s/r2 resume fuel=8 alloc=16 state=32 end=return
+run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=73 alloc=16
+pumped state=idle fuel=8
+> deliver d3 to=s message=fault
+> pump clock=2026-09-30T09:00:01Z
+call s/r3.c1 op=api.fetch args=[3]
+seg s/r3 start delivery=d3 handler=fault clause=1 fuel=18 alloc=0 state=256 end=ask-wait
+pumped state=idle fuel=18 next=2026-09-30T09:00:03Z
+> answer s/r3.c1 value=3
+> pump clock=2026-09-30T09:00:01Z
+call s/r3.c2 op=api.fetch args=[4]
+seg s/r3 resume fuel=16 alloc=16 state=264 end=ask-wait
+pumped state=idle fuel=16 next=2026-09-30T09:00:03Z
+> answer s/r3.c2 value=4 fuel=100
+> pump clock=2026-09-30T09:00:01Z
+fault s/r3 limit=fuel at=s:40 pos=20:3
+seg s/r3 resume fuel=0 alloc=0 state=32 end=fault
+run s/r3 outcome=limit-fault delivery=d3 handler=fault limit=fuel fuel=34 alloc=16
+pumped state=idle fuel=0
+> deliver d4 to=s message=cancel
+> pump clock=2026-09-30T09:00:01Z
+call s/r4.c1 op=api.fetch args=[5]
+seg s/r4 start delivery=d4 handler=cancel clause=1 fuel=15 alloc=0 state=256 end=ask-wait
+pumped state=idle fuel=15 next=2026-09-30T09:00:03Z
+> cancel-run s/r4
+> answer s/r4.c1 value=5
+> pump clock=2026-09-30T09:00:01Z
+note s/r4.c1 kind=late-answer
+seg s/r4 resume fuel=5 alloc=0 state=32 end=cancel
+abandon s/r4.c1
+run s/r4 outcome=cancelled delivery=d4 handler=cancel fuel=20 alloc=0
+pumped state=idle fuel=5
+> vars
+vars s seen=77 stage=4
+> deliver d5 to=s message=cancel
+> request d6 to=s message=cancel
+> pump clock=2026-09-30T09:00:01Z fuel-cap=15
+call s/r5.c1 op=api.fetch args=[5]
+seg s/r5 start delivery=d5 handler=cancel clause=1 fuel=15 alloc=0 state=288 end=ask-wait
+pumped state=sliced fuel=15 next=2026-09-30T09:00:03Z
+> reload s carry=yes source="script variable stage=0" & newline & "on go" & newline & "return stage" & newline & "end go" identity=f17a7374dfe28ead924aa3a0cd8b6d5078ddc6ae1cdf33bb8ba4419e941a4469
+stopped s reason="reload" discarded=[s/r5] dropped=[d6] abandoned=[s/r5.c1]
+> answer s/r5.c1 value=6
+> deliver d7 to=s message=go
+> pump clock=2026-09-30T09:00:01Z
+note s/r5.c1 kind=late-answer
+seg s/r6 start delivery=d7 handler=go clause=1 fuel=7 alloc=0 state=16 end=return
+run s/r6 outcome=completed delivery=d7 handler=go value=4 fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars s stage=4

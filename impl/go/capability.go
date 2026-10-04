@@ -3,6 +3,8 @@ package northtalk
 import (
 	"context"
 	"errors"
+	"fmt"
+	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	"slices"
 	"sync"
 	"time"
@@ -208,3 +210,43 @@ func (s *Script) Revoke(grantName string) {
 }
 
 func modeName(m Mode) string { return []string{"immediate", "suspending", "fire-and-forget"}[m] }
+
+// Answer queues a suspending call's settlement for the next Pump.
+func (c *Call) Answer(v Value) { c.AnswerWithCost(v, 0) }
+
+// AnswerWithCost charges late Fuel with result conversion on resumption.
+func (c *Call) AnswerWithCost(v Value, fuel int64) {
+	if fuel < 0 || fuel > 9007199254740991 {
+		panic(&HostError{InvalidValue, "invalid late Fuel"})
+	}
+	c.queueSettlement("answer", v, nil, fuel)
+}
+
+// Fail queues a copied ScriptError; nil fails as host error.
+func (c *Call) Fail(e *ScriptError) {
+	var copy *ScriptError
+	if e != nil {
+		clone := *e
+		copy = &clone
+	}
+	c.queueSettlement("fail", Nothing, copy, 0)
+}
+func (c *Call) queueSettlement(kind string, v Value, e *ScriptError, fuel int64) {
+	g := c.group
+	fields := map[string]string{}
+	if kind == "answer" {
+		fields["value"] = coretrace.Display(v.inner)
+		if fuel != 0 {
+			fields["fuel"] = fmt.Sprint(fuel)
+		}
+	} else {
+		fields["error"] = coretrace.Display(hostFailureValue(e))
+	}
+	g.mu.Lock()
+	g.inputs = append(g.inputs, delivery{kind: kind, reply: c.id, fields: fields, settlement: &operationSettlement{value: v, err: e, fuel: fuel}})
+	ready := g.options.OnReady
+	g.mu.Unlock()
+	if ready != nil {
+		ready()
+	}
+}

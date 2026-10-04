@@ -25,15 +25,17 @@ type Group struct {
 	traceQueue []string
 	recording  bool
 
-	mu           sync.Mutex
-	core         *Core
-	options      GroupOptions
-	scripts      []*Script
-	inputs       []delivery
-	nextDelivery int64
-	nextTimer    int64
-	clock        time.Time
-	pumping      bool
+	mu               sync.Mutex
+	core             *Core
+	options          GroupOptions
+	scripts          []*Script
+	inputs           []delivery
+	cancelRunsQueued bool
+	nextDelivery     int64
+	calls            map[CallID]*operationCall
+	nextTimer        int64
+	clock            time.Time
+	pumping          bool
 }
 type Script struct {
 	group    *Group
@@ -50,17 +52,18 @@ type Script struct {
 	debt     int64
 }
 type delivery struct {
-	id       DeliveryID
-	script   *Script
-	message  Message
-	pending  *Pending
-	decision *Deciding
-	cancel   DeliveryID
-	kind     string
-	fields   map[string]string
-	from     RunID
-	during   *corevalue.Value // non-nil only for an internal error message
-	reply    CallID
+	id         DeliveryID
+	script     *Script
+	message    Message
+	pending    *Pending
+	decision   *Deciding
+	cancel     DeliveryID
+	kind       string
+	fields     map[string]string
+	from       RunID
+	during     *corevalue.Value // non-nil only for an internal error message
+	settlement *operationSettlement
+	reply      CallID
 }
 type execution struct {
 	raisesWritten int
@@ -71,6 +74,7 @@ type execution struct {
 	clause        int // selected body index; -1 until accepted
 	how           string
 	deadline      *big.Int
+	memberTimers  []memberTimer
 	timerOrder    int64
 	parked        bool
 	deciding      bool
@@ -398,6 +402,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.pumping = true
 	inputs := g.inputs
 	g.inputs = nil
+	g.cancelRunsQueued = false
 	g.mu.Unlock()
 	defer func() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }()
 
@@ -410,8 +415,12 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		if d.cancel != "" {
 			g.record("cancel-delivery", true, []string{string(d.cancel)}, nil)
 		} else {
-			if d.kind == "revoke" {
+			if d.kind == "cancel-run" {
+				g.record(d.kind, true, []string{d.fields["run"]}, nil)
+			} else if d.kind == "revoke" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)
+			} else if d.settlement != nil {
+				g.record(d.kind, true, []string{string(d.reply)}, d.fields)
 			} else {
 				g.record(d.kind, true, []string{string(d.id)}, d.fields)
 			}
@@ -500,6 +509,9 @@ func (g *Group) Inspect() Inspection {
 			if x.run.SendWait {
 				run.Status, run.Wait, run.Calls = Suspended, "send-wait", []CallID{x.waitCall}
 				run.Until = time.Time{}
+				if x.run.OperationWait {
+					run.Wait = "ask-wait"
+				}
 			}
 			if j := x.run.Join; j != nil && j.Waiting && !j.Ready {
 				run.Status, run.Wait = Suspended, "join-end"

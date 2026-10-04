@@ -35,7 +35,7 @@ func QueuePolicy(b *lower.Body) string {
 func Supported(i lower.Instruction) bool {
 
 	switch i.Name {
-	case "ask", "tell", "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
+	case "ask-wait", "join-ask", "ask", "tell", "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
 		return true
 	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "veto", "pass", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait", "wait-for", "wait-for-any", "send", "send-wait", "join-start", "join-send", "join-end":
 		return true

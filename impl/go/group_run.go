@@ -79,40 +79,71 @@ func deadlineTime(ns *big.Int) time.Time {
 }
 func (g *Group) fireTimers() {
 	type timer struct {
-		s *Script
-		x *execution
+		s        *Script
+		x        *execution
+		member   *memberTimer
+		deadline *big.Int
+		order    int64
 	}
 	var due []timer
 	now := clockNanos(g.clock)
 	for _, s := range g.scripts {
 		for _, x := range s.runs {
 			if x.deadline != nil && x.deadline.Cmp(now) <= 0 {
-				due = append(due, timer{s, x})
+				due = append(due, timer{s: s, x: x, deadline: x.deadline, order: x.timerOrder})
+			}
+			for n := range x.memberTimers {
+				t := &x.memberTimers[n]
+				if t.deadline.Cmp(now) <= 0 {
+					due = append(due, timer{s: s, x: x, member: t, deadline: t.deadline, order: t.order})
+				}
 			}
 		}
 	}
 	sort.Slice(due, func(i, j int) bool {
-		a, b := due[i].x, due[j].x
+		a, b := due[i], due[j]
 		if cmp := a.deadline.Cmp(b.deadline); cmp != 0 {
 			return cmp < 0
 		}
-		return a.timerOrder < b.timerOrder
+		return a.order < b.order
 	})
 	for _, t := range due {
+		if t.member != nil {
+			j := t.x.run.Join
+			if j == nil || j.Ready {
+				continue
+			}
+			p := machine.SendResume{Timeout: true, AfterMS: t.member.ms}
+			if pending := g.calls[CallID(t.member.id)]; pending != nil {
+				p.Capability = true
+				p.Call = t.member.id
+				pending.pending = false
+				pending.cancel()
+			}
+			if t.x.run.SettleJoin(t.member.id, p) {
+				g.cancelPendingAbandons(t.x)
+				t.x.memberTimers = nil
+				t.x.how = "resume"
+				t.s.queue = append(t.s.queue, workItem{run: t.x})
+			}
+			continue
+		}
 		if t.x.run.EventWait != nil {
 			t.x.run.TimeoutEvent()
 		}
-		if j := t.x.run.Join; j != nil && j.Waiting && !j.Ready {
-			for _, m := range j.Members {
-				if m.Reply == nil {
-					t.x.run.SettleJoin(m.ID, machine.SendResume{Timeout: true, AfterMS: int64(t.x.maxWait() / time.Millisecond)})
-					break
-				}
-			}
-		}
+
 		if t.x.run.SendWait {
+			p := machine.SendResume{Timeout: true, AfterMS: int64(t.x.maxWait() / time.Millisecond)}
+			if t.x.run.OperationWait {
+				pending := g.calls[t.x.waitCall]
+				p.Capability = true
+				p.Call = string(t.x.waitCall)
+				p.AfterMS = int64(operationWait(pending.op, t.x) / time.Millisecond)
+				pending.pending = false
+				pending.cancel()
+			}
 			g.abandonSend(t.x)
-			t.x.run.SettleSend(machine.SendResume{Timeout: true, AfterMS: int64(t.x.maxWait() / time.Millisecond)})
+			t.x.run.SettleSend(p)
 		}
 		t.x.deadline = nil
 		t.x.how = "resume"
@@ -158,6 +189,14 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	// Drain inputs in order before timers and turns. Cancellation either
 	// removes a message or queues a suspended Run's cleanup at this position.
 	for _, d := range inputs {
+		if d.kind == "cancel-run" {
+			g.applyCancelRun(d)
+			continue
+		}
+		if d.settlement != nil {
+			g.settleOperation(d)
+			continue
+		}
 		if d.kind == "revoke" {
 			if grant := d.script.grants[d.fields["grant"]]; grant != nil {
 				grant.revoked = true
@@ -267,8 +306,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
 				if r.SendResume != nil || r.Join != nil && r.Join.Ready {
-					r.ResumeSend()
-					r.ResumeJoin()
+					resume := func(p machine.SendResume) (corevalue.Value, *corevalue.Value) {
+						return g.resumeOperation(p, &result.Reports)
+					}
+					r.ResumeSendOperation(resume)
+					r.ResumeJoinOperation(resume)
 					g.writeRaises(x, raised)
 					raised = len(r.Raises)
 				}
@@ -296,7 +338,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					return ok
 				}, func(grant, op string, args []corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value, bool) {
 					return g.operation(s, x, grant, op, args, pay, &result.Reports)
-				})
+				}, func() { g.landCancelRuns() })
 				if r.Status != machine.Dispatching {
 					break
 				}
@@ -357,13 +399,19 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				} else if r.Join != nil {
 					common["end"] = "join-end"
 					if r.BeginJoinWait() {
+						g.cancelPendingAbandons(x)
 						s.queue = append(s.queue, workItem{run: x})
 					} else {
-						x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
+						g.installJoinTimers(x)
 					}
 				} else if r.SendWait {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
 					common["end"] = "send-wait"
+					if r.OperationWait {
+						common["end"] = "ask-wait"
+						p := g.calls[x.waitCall]
+						x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(operationWait(p.op, x))))
+					}
 				} else {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
 					common["end"] = "wait"
@@ -431,6 +479,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					}
 				})
 			}
+			g.discardOperationCalls(x)
 			s.active = nil
 			for j, live := range s.runs {
 				if live == x {
@@ -439,6 +488,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					break
 				}
 			}
+		}
+		if g.landCancelRuns() {
+			progress = true
 		}
 		if !progress || o.FuelCap > 0 && result.FuelUsed >= o.FuelCap {
 			break
@@ -460,6 +512,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	var next *big.Int
 	for _, s := range g.scripts {
 		for _, x := range s.runs {
+			for _, t := range x.memberTimers {
+				if next == nil || t.deadline.Cmp(next) < 0 {
+					next = t.deadline
+				}
+			}
 			if x.deadline != nil && (next == nil || x.deadline.Cmp(next) < 0) {
 				next = x.deadline
 			}
@@ -567,6 +624,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 		}
 		g.record("fault", false, []string{string(x.id)}, fields)
 		for _, id := range r.FaultAbandons {
+			g.abandonOperation(id)
 			g.record("abandon", false, []string{id}, nil)
 		}
 		r.FaultAbandons = nil
@@ -680,8 +738,10 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 	}
 	x.segment++
 	x.deadline = nil
+	x.memberTimers = nil
 	x.parked = false
 	g.abandonSend(x)
+	g.discardOperationCalls(x)
 	x.run.Cancel(s.limits.CleanupBudget)
 	if !queued {
 		x.how = "resume"
@@ -748,11 +808,15 @@ func (g *Group) writeRaises(x *execution, from int) {
 
 func (g *Group) writeAbandon(x *execution) {
 	for _, id := range x.run.Abandons {
+		g.abandonOperation(id)
 		g.record("abandon", false, []string{id}, nil)
 	}
 	x.run.Abandons = nil
 	if x.abandonCall != "" {
+		g.abandonOperation(string(x.abandonCall))
 		g.record("abandon", false, []string{string(x.abandonCall)}, nil)
 		x.abandonCall = ""
 	}
+
+	g.pruneOperationCalls(x)
 }

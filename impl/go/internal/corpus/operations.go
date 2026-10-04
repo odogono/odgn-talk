@@ -4,15 +4,17 @@ import (
 	"fmt"
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"strconv"
+	"time"
 )
 
 type operationReplay struct {
+	calls map[talk.CallID]*talk.Call
 	defs  map[string]*talk.CapabilityDef
 	stubs map[string][]map[string]Field
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
-	out := &operationReplay{defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}}
+	out := &operationReplay{calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
 	for _, raw := range rawOps {
@@ -54,6 +56,9 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				e := entry.(Setup)
 				op.Errors = append(op.Errors, talk.ErrorDecl{Code: e["code"].(string)})
 			}
+		}
+		if ms, ok := row["maxPending"].(int64); ok {
+			op.MaxPending = time.Duration(ms) * time.Millisecond
 		}
 		key := name + "." + op.Name
 		invoke := func(c *talk.Call, args []talk.Value) (talk.Value, error) {
@@ -102,7 +107,14 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		case talk.FireAndForget:
 			op.Fire = func(c *talk.Call, args []talk.Value) error { _, e := invoke(c, args); return e }
 		case talk.Suspending:
-			op.Start = func(*talk.Call, []talk.Value) error { return nil }
+			op.Start = func(c *talk.Call, args []talk.Value) error {
+				out.calls[c.ID()] = c
+				if len(out.stubs[key]) > 0 {
+					_, err := invoke(c, args)
+					return err
+				}
+				return nil
+			}
 		}
 		byName[name] = append(byName[name], op)
 	}

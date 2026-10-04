@@ -175,13 +175,13 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Capability Join Members and Object Message Path `send` instructions, foreign Function Value calls with
-`and wait`, imported calls, suspending Capability Operations and Object properties stop at a
+Object Message Path `send` instructions, foreign Function Value calls with
+`and wait`, imported calls and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Message Paths, Broadcast Decisions and
-pending Capability calls belong to #134; complete cancellation and Stop Script acceptance to
+before that boundary. Message Paths and Broadcast Decisions belong to #134;
+complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -211,15 +211,16 @@ their `Unblessed` headers remain until the first human review.
 `matching-fuel-exhaustion` and `pattern-size-made-at-run-time` also pass, but
 complete limits acceptance belongs to
 [#135](https://github.com/odogono/odgn-talk/issues/135).
-`pattern-size-literal-limit` requires Reload from
-[#136](https://github.com/odogono/odgn-talk/issues/136) as well.
+`pattern-size-literal-limit` also passes through ordinary Reload; Go save/restore
+remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 
 ## Group embedding
 
-`New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`, `Inspect`,
-`Counters` and `TraceSink` implement their handoff signatures. Core compilation
-caches are mutex-protected and Groups have separate live state. Load supports
-standalone Scripts with named Capability Grants; Object bindings are refused. Other unimplemented public declarations are omitted.
+`New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`,
+`Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
+signatures. Core compilation caches are mutex-protected and Groups have separate
+live state. Load supports standalone Scripts with named Capability Grants;
+Object bindings are refused. Other unimplemented public declarations are omitted.
 
 Any-goroutine deliveries reserve mailbox capacity before joining the input
 queue. A Pump takes one Clock reading, drains accepted inputs in order, and
@@ -230,6 +231,14 @@ Clock readings, invalid values and Function Values from other Groups are refused
 Clock readings outside the language's year 1–9999 range currently panic during
 conversion; returning `invalid value` for them is tracked in
 [#282](https://github.com/odogono/odgn-talk/issues/282).
+
+`Script.Reload` checks and initializes new code against kept, unrevoked Grants
+before discarding old work. A rejected Reload leaves calls and revocation state
+intact. Successful Reload abandons pending calls without Script finally cleanup,
+drops queued messages, settles Requests/reply senders as stopped, carries variables
+by name when requested, and preserves counters. Carry uses the active Segment's
+rollback base for preempted Runs; Function Values from the old code become stale.
+Sticky `Stop`, `Extend`, Library replacement and scoped lifecycle remain deferred.
 
 ### Ordinary Capability Operations
 
@@ -263,12 +272,25 @@ uses across the whole Script, including unused function bodies. `Script.Revoke`
 queues revocation in Host-input order; retained aliases remain independent.
 Library needs and imported uses are deferred with Library linking.
 
-Suspending declarations participate in load checks, but `ask … and wait` and
-Capability Join members still stop at their untouched implementation boundaries.
+Suspending `ask … and wait` invokes `Start` once after the same atomic precharge.
+`Call.Answer`, `AnswerWithCost` and `Fail` may run on any goroutine, append Host
+inputs and call `OnReady`; answers queued during `Start` wait for the next Pump.
+The waiting Run retains a 48-byte pending call, then its answer or failure Data
+when ready. Validation, result/Data conversion and any late Fuel are charged on
+its resuming turn, under the Run budgets, Script slice and Pump cap. Conversion
+faults roll back that Segment while preserving earlier committed effects.
+Duplicate and abandoned settlements are recorded and ignored.
+
+`MaxPending`, or the effective Run `MaxWait` when it is zero, bounds each call
+from suspension using the Pump Clock. Timeout raises `timeout` with `after` and
+Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
+pending Call Contexts; revocation leaves in-flight calls alone and blocks later
+starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
+in machine state.
 Standard Capability factories, Object execution, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
-automatic, and carry a background Context because they finish synchronously.
+automatic. Immediate and fire-and-forget calls carry a background Context.
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
@@ -283,6 +305,8 @@ Resumption starts a new Segment snapshot at its actual turn; Fuel and allocation
 remain cumulative over the Run. A suspension charges the wait before checking
 retained Persistent State. Cancelling a suspended Request removes its timer and
 queues finally cleanup in input order, preserving committed earlier Segments.
+`CancelRun` also queues cancellation and may land during a Pump at an instruction
+boundary; ordinary settlements still wait for the next Pump.
 Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.
@@ -348,30 +372,32 @@ reports `send-wait` and the pending call id, with no `until` for `MaxWait`.
 Object Message Paths and foreign Function Value calls remain at their
 untouched implementation boundaries.
 
-`wait for all … end` supports waiting sends to named Scripts and ownerless
-`me`. Each member starts where reached, leaves `it` unchanged, and receives a
+`wait for all … end` supports ordinary Capability calls and waiting sends to named
+Scripts and ownerless `me`, including mixed Joins. Each member starts where reached, leaves `it` unchanged, and receives a
 call id in start order. The closing `end` suspends once; its ready resumption
 assembles replies in start order and allocates their result List. A Join that
 starts no dynamic members returns `[]` immediately without a Segment boundary.
-The first receiver failure raises `send failed` with its 1-based `index` at the
-closing `join-end` instruction. Other pending replies are abandoned in start
-order while their receivers continue. Body errors, limit faults and sender
+The first arriving failure raises the member's own error with its 1-based `index`
+at the closing `join-end` instruction; Script receiver failures use `send failed`.
+Other pending members are abandoned in start order, cancelling Capability Contexts
+while Script receivers continue. Capability results convert and charge in start order. Body errors, limit faults and sender
 cancellation also abandon pending members; cancellation runs normal cleanup.
 
 Each pending member counts 48 bytes toward Persistent State, including across
 preemption in an open Join. Early replies replace their pending-call size with
-the retained answer; a ready failure retains only its receiver error map. Replies
+the retained answer; a ready failure retains its Capability Data or receiver error map. Replies
 arriving before a preempted Join closes are kept in arrival order. A Run's
 `MaxJoin`, including a tightened Delivery override, faults before charging the
-member that would exceed it. `MaxWait` begins when the Join closes and is not
-reset when another member replies. Script-only members share that deadline;
+member that would exceed it. Each member's `MaxPending` or effective `MaxWait`
+begins when the Join closes and is not reset when another member replies.
+Script members share the Run's `MaxWait` deadline;
 Pump Fuel Caps, Script Fuel Slices and unwind charges still apply when the caller resumes. Inspection reports
 `join-end`, pending member ids in start order, and no `until` for call timeouts.
 
 A plain local Handler call to a may-suspend Handler is rejected with
 `missing and wait`; function-style calls to a may-suspend Handler are rejected
-with `can't suspend here`. A call cannot hide a nested Join. Capability members
-(`join-ask`) and Object Message Paths remain at their untouched boundaries.
+with `can't suspend here`. A call cannot hide a nested Join. Object Message Paths
+remain at their untouched boundaries.
 Join failures and timeouts use the closing `end` token's source position,
 for bare `end` and `end wait`, including Joins in local Handlers and block
 Lambdas. The `join-end` PC and 1-based member `index` stay unchanged; a failed

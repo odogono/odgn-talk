@@ -1,5 +1,5 @@
 # Closing Join positions corrected with explicit maintainer approval in #286.
-# TS ordinary/save-restore agree; Go Capability execution remains unavailable.
+# Go ordinary execution and TS ordinary/save-restore agree.
 # joins: d1 joins four members, answered out of order; d2 starts none; d3's
 # second fetch fails, so its first, still pending, is abandoned and its late
 # answer noted; d4's only member runs past its 5 s; and d5's body throws

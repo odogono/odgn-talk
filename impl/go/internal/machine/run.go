@@ -34,6 +34,7 @@ type Limits struct {
 	Depth, Pattern, Join    int
 }
 type State struct {
+	Gone                              bool
 	Group                             any
 	Me                                value.Value
 	Unit                              *lower.Unit
@@ -63,6 +64,7 @@ type Run struct {
 	Join           *Join
 	Abandons       []string
 	FaultAbandons  []string
+	OperationWait  bool
 	SendWait       bool
 	SendResume     *SendResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
@@ -253,13 +255,19 @@ type SendFunc func(to, message string, args []value.Value, wait bool) bool
 func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 	r.ExecuteHosted(slice, paid, send, nil)
 }
-func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation OperationFunc) {
+func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation OperationFunc, boundary ...func()) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
 	r.Status = Running
 	start := r.Fuel
 	for r.Status == Running {
+		if len(boundary) > 0 {
+			boundary[0]()
+			if r.Status != Running {
+				break
+			}
+		}
 		f := &r.Frames[len(r.Frames)-1]
 		b := r.State.Unit.Bodies[f.Body]
 		i := b.Code[f.PC]
@@ -273,13 +281,18 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.Status = Dispatching
 			break
 		}
-		if i.Name == "ask" || i.Name == "tell" {
+		if i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
+			if i.Name == "join-ask" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
+				r.fault("join")
+				break
+			}
 			if operation == nil {
 				r.Status = Blocked
 				break
 			}
 			n := i.Operands()[2].Index
 			args := slices.Clone(f.Stack[len(f.Stack)-n:])
+			wasCancelling := r.Cancelling
 			result, err, blocked := operation(i.Operands()[0].Text, i.Operands()[1].Text, args, func(fuel, alloc int64) bool {
 				if f.Clause {
 					fuel += 4
@@ -295,6 +308,12 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 				}
 				return true
 			})
+			if len(boundary) > 0 {
+				boundary[0]()
+			}
+			if !wasCancelling && r.Cancelling {
+				continue
+			}
 			if blocked {
 				r.Status = Blocked
 				break
@@ -310,6 +329,10 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 					f.Stack = append(f.Stack, result)
 				}
 				f.PC++
+				if i.Name == "ask-wait" {
+					r.Status = Suspended
+					r.checkRetainedState()
+				}
 			}
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
 				r.Status = Preempted
@@ -402,6 +425,11 @@ func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
 	}
 	n := i.Operands()[0].Index
 	fn := f.Stack[len(f.Stack)-n-1]
+	if fn.Kind == value.Function {
+		if home, ok := fn.Function.Owner.(*State); ok && home.Gone {
+			return false
+		}
+	}
 	return fn.Kind == value.Function && fn.Function.Owner != nil && fn.Function.Body >= 0 && fn.Function.Owner != r.State
 }
 
