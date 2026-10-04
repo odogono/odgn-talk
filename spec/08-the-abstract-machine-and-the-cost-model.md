@@ -1,6 +1,6 @@
 # 8. The Abstract Machine and the Cost Model
 
-_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md).
+_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md).
 
 Every Script and Library compiles to a code unit for one Abstract Machine: a stack machine with numbered local slots. The instruction set, and the exact instructions each construct lowers to, are normative, including which local slot each name gets and the order of the constant pool ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). Each instruction is one language-level operation, and is charged Fuel by the Cost Model. So both Cores charge the same Fuel, fault at the same instruction and report the same positions, and a Disassembly Case can pin a Script's lowering exactly ([chapter 11](11-the-trace-and-conformance.md)).
 
@@ -735,7 +735,7 @@ Each operation runs one of four kinds of run:
 
 ## The Cost Model
 
-The Cost Model says how much Fuel and allocation each instruction is charged, and how large each value counts as ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). It is [`costs.toml`](data/costs.toml), versioned on its own: a change to a rate, a size or the lowering is a new Cost Model version, and re-blesses the corpus ([chapter 0](00-introduction.md#versions)).
+The Cost Model says how much Fuel and allocation each instruction is charged, and how large each value counts as ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). It is [`costs.toml`](data/costs.toml), versioned on its own: a change to a rate, a size or the lowering is a new Cost Model version, and re-blesses the corpus ([chapter 0](00-introduction.md#versions)), except for provisional Cost Model 0 under [Changes to Cost Model 0](#changes-to-cost-model-0) and the [prerelease lowering exception](#prerelease-cost-model-exception).
 
 > **Note.** Cost Model 0 is provisional. Its rates keep a simple instruction at about 1 Fuel and scale bulk work by its size, but they aren't measured. Cost Model 1 is calibrated against both Cores once they pass the seed corpus ([Appendix C](appendix-c-handed-off-open.md)).
 
@@ -963,7 +963,7 @@ For literal pieces L0, L1, … Ln separated by holes e1, … en, after chapter 1
 
 ### Prerelease Cost Model exception
 
-While language 1.0 is unreleased and Cost Model is 0, a language prerelease revision may change lowering without advancing Cost Model 0. This explicit exception preserves the reservation of Cost Model 1 for calibration; the version-change requirement otherwise remains in force (ADR 0053).
+While language 1.0 is unreleased and Cost Model is 0, a language prerelease revision may change lowering without advancing Cost Model 0. This explicit exception preserves the reservation of Cost Model 1 for calibration; the version-change requirement otherwise remains in force ([ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md)).
 
 ## Outside parity
 
