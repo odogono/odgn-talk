@@ -402,11 +402,12 @@ Join failures and timeouts use the closing `end` token's source position,
 for bare `end` and `end wait`, including Joins in local Handlers and block
 Lambdas. The `join-end` PC and 1-based member `index` stay unchanged; a failed
 reply retains the receiver's own Error map and source position.
-Go still attributes a Lambda Error's `at.handler` to its generated body name
-rather than the enclosing Handler or function, and captured Function Values
-have allocation/Persistent State differences from TS;
-[#289](https://github.com/odogono/odgn-talk/issues/289) tracks their Spec
-reconciliation. The closing token's line and column are correct in either body.
+Lambda Errors name their enclosing Handler or function in `at.handler`, while
+the generated body-table identities and PCs remain unchanged. Function Value
+sizes count captured Values; the `items` measure is zero for a Function Value,
+as Cost Model 0 specifies. `errors/lambda-capture-parity` agrees on Go, TS and
+TS save/restore for captured Join failures/timeouts and nested Lambdas. Its
+`Unblessed` marker remains for first human review.
 
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched

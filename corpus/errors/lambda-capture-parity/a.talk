@@ -1,0 +1,38 @@
+on go n
+  try
+    put given
+      wait for all
+        send ping with n to b and wait
+        send ping with n + 1 to b and wait
+      end
+    end given into f
+    f() and wait
+  catch e
+    return e
+  end try
+end go
+
+on timeout n
+  try
+    put given
+      wait for all
+        send slow with n to b and wait
+      end
+    end given into f
+    f() and wait
+  catch e
+    return e
+  end try
+end timeout
+
+on nested n
+  try
+    put given x
+      put given y: n / y into inner
+      return inner(x)
+    end given into outer
+    return outer(0)
+  catch e
+    return e
+  end try
+end nested

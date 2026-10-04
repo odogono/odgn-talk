@@ -79,9 +79,6 @@ func measure(name string, v value.Value) int64 {
 		if v.Kind == value.List {
 			return int64(len(v.Items))
 		}
-		if v.Kind == value.Function && v.Function != nil {
-			return int64(len(v.Function.Captures))
-		}
 		if v.Kind == value.Range && v.Items[0].Kind == value.Number && v.Items[1].Kind == value.Number {
 			a, ok := v.Items[0].Number.Integer()
 			b, ok2 := v.Items[1].Number.Integer()
