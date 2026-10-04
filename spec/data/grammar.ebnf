@@ -25,8 +25,17 @@ QuoteFence     ::= '"""' '"'*  /* maximal run; closing length must match */
 RawCharacter   ::= [#x0-#x10FFFF]  /* excludes fence-length or longer quote runs */
 StaticBacktick ::= '`' ( BacktickCharacter | TextEscape )* '`'
 InterpolatedText ::= '`' ( BacktickCharacter | TextEscape | InterpolationHole )* '`'
-BacktickCharacter ::= [^`\\]  /* excludes the start of ${ */
-TextEscape     ::= '\\' [#x0-#x10FFFF]  /* full escape extent/validation: chapter 1 */
+BacktickCharacter ::= [^`#x5C]  /* excludes the start of ${ */
+TextEscape     ::= #x5C ( EscapeCharacter | '0' | HexEscape | UnicodeEscape
+                   | LineContinuation | IdentityEscapeCharacter )
+                   /* '0' must not be followed by a decimal digit */
+EscapeCharacter ::= [bfnrtv]
+HexEscape      ::= 'x' HexDigit HexDigit
+UnicodeEscape  ::= 'u' HexDigit HexDigit HexDigit HexDigit
+                 | 'u{' HexDigit+ '}'  /* value at most #x10FFFF */
+HexDigit       ::= [0-9A-Fa-f]
+LineContinuation ::= LineBreak | #x2028 | #x2029
+IdentityEscapeCharacter ::= [^0-9bfnrtvxu#xA#xD#x2028#x2029]
 InterpolationHole ::= '${' Expression '}'  /* ordinary nested expression syntax */
 Punctuator     ::= '...' | '..' | '&' | '=' | '<>' | '<=' | '>=' | '<<' | '>>'
                  | '<' | '>' | '+' | '-' | '*' | '/' | '^' | '(' | ')' | '['

@@ -1,6 +1,6 @@
 # 1. Lexical structure
 
-_Draws on:_ [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md).
+_Draws on:_ [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md).
 
 This chapter turns source text into tokens. [Chapter 2](02-grammar.md) turns tokens into a parse. The lexical productions are the `tokens` and `units` sections of [`grammar.ebnf`](data/grammar.ebnf), shown below.
 
@@ -55,8 +55,17 @@ QuoteFence     ::= '"""' '"'*  /* maximal run; closing length must match */
 RawCharacter   ::= [#x0-#x10FFFF]  /* excludes fence-length or longer quote runs */
 StaticBacktick ::= '`' ( BacktickCharacter | TextEscape )* '`'
 InterpolatedText ::= '`' ( BacktickCharacter | TextEscape | InterpolationHole )* '`'
-BacktickCharacter ::= [^`\\]  /* excludes the start of ${ */
-TextEscape     ::= '\\' [#x0-#x10FFFF]  /* full escape extent/validation: chapter 1 */
+BacktickCharacter ::= [^`#x5C]  /* excludes the start of ${ */
+TextEscape     ::= #x5C ( EscapeCharacter | '0' | HexEscape | UnicodeEscape
+                   | LineContinuation | IdentityEscapeCharacter )
+                   /* '0' must not be followed by a decimal digit */
+EscapeCharacter ::= [bfnrtv]
+HexEscape      ::= 'x' HexDigit HexDigit
+UnicodeEscape  ::= 'u' HexDigit HexDigit HexDigit HexDigit
+                 | 'u{' HexDigit+ '}'  /* value at most #x10FFFF */
+HexDigit       ::= [0-9A-Fa-f]
+LineContinuation ::= LineBreak | #x2028 | #x2029
+IdentityEscapeCharacter ::= [^0-9bfnrtvxu#xA#xD#x2028#x2029]
 InterpolationHole ::= '${' Expression '}'  /* ordinary nested expression syntax */
 Punctuator     ::= '...' | '..' | '&' | '=' | '<>' | '<=' | '>=' | '<<' | '>>'
                  | '<' | '>' | '+' | '-' | '*' | '/' | '^' | '(' | ')' | '['
@@ -107,7 +116,14 @@ A **Raw Text Literal** opens with a maximal run of at least three double quotes 
 
 **Interpolated Text** opens and closes with a backtick. `${expression}` is an **Interpolation Hole**; other braces are literal. Holes use the ordinary expression grammar, including multiline expressions, comments, nested strings and nested interpolation. An empty hole is `empty interpolation`. Delimiters inside nested syntax do not close the containing hole or text.
 
-Backticks use JavaScript template escapes: `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, `\0` (not before a decimal digit), `\xHH`, `\uHHHH`, `\u{H…}`, escaped backslash/backtick/dollar, identity escapes, and backslash line continuation. Legacy octal and malformed escapes are `invalid text escape`, at the backslash. Escaped surrogate pairs are combined; an unpaired surrogate is invalid. No escape is added to ordinary double-quoted text. Escape processing never introduces interpolation.
+Backticks use the following escapes, matching JavaScript template escape behavior:
+
+- **Character escapes:** `\b`, `\f`, `\n`, `\r`, `\t` and `\v` produce U+0008, U+000C, U+000A, U+000D, U+0009 and U+000B respectively. `\0` produces U+0000 only when the next source character is not a decimal digit.
+- **Hexadecimal and Unicode escapes:** `\xHH` has exactly two hexadecimal digits; `\uHHHH` has exactly four. `\u{H…}` has one or more hexadecimal digits and a value at most U+10FFFF. Hexadecimal digits are ASCII `0`–`9`, `A`–`F` or `a`–`f`.
+- **Line continuation:** a backslash followed by physical LF, CRLF, CR, U+2028 or U+2029 contributes no character. A CRLF pair is one continuation.
+- **Identity escapes:** a backslash followed by any other source scalar contributes that scalar alone. This includes escaped backslash, backtick and dollar; `\${` produces literal `${`, and `\q` produces `q`. The digits `1`–`9`, malformed `\x` or `\u` forms, and `\0` followed by a decimal digit are never identity escapes.
+
+Malformed escapes and legacy octal forms are `invalid text escape`, reported at the offending backslash. An escaped high surrogate U+D800–U+DBFF followed in the decoded literal piece by a low surrogate U+DC00–U+DFFF forms one scalar; an unpaired surrogate is invalid. No escape is added to ordinary double-quoted text. Escape processing never introduces interpolation.
 
 An immediate physical newline after either opener selects **margin-stripped form**. The closer must be preceded on its physical line only by spaces/tabs; ordinary code may follow it. That exact whitespace prefix is the margin. Remove the opening newline, the newline immediately preceding the closer's margin, and one margin prefix from each content line. A whitespace-only line shorter than the margin is allowed only when it is a prefix of the margin, and becomes empty. Otherwise report `invalid text indentation` at the first mismatching source position. Preserve remaining whitespace, additional blank lines and trailing spaces. Lines inside hole expressions use ordinary code rules; nested literals own their margins. An inline-start literal preserves all its content whitespace, even when it spans lines.
 
