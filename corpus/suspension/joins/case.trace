@@ -1,3 +1,5 @@
+# Closing Join positions corrected with explicit maintainer approval in #286.
+# TS ordinary/save-restore agree; Go Capability execution remains unavailable.
 # joins: d1 joins four members, answered out of order; d2 starts none; d3's
 # second fetch fails, so its first, still pending, is abandoned and its late
 # answer noted; d4's only member runs past its 5 s; and d5's body throws
@@ -49,7 +51,7 @@ pumped state=idle fuel=569 next=2026-09-30T09:00:05Z
 > pump clock=2026-09-30T09:00:01Z
 seg board/r1 resume fuel=16 alloc=272 state=895 end=return
 run board/r1 outcome=completed delivery=d1 handler=gather fuel=164 alloc=394
-raise board/r3 code="no feed" at=board:16 pos=7:5
+raise board/r3 code="no feed" at=board:16 pos=12:5
 abandon board/r3.c1
 seg board/r3 resume fuel=18 alloc=478 state=1018 end=return
 run board/r3 outcome=completed delivery=d3 handler=gather fuel=166 alloc=600
@@ -57,12 +59,12 @@ pumped state=idle fuel=34 next=2026-09-30T09:00:05Z
 > answer board/r3.c1 value=3
 > pump clock=2026-09-30T09:00:05Z
 note board/r3.c1 kind=late-answer
-raise board/r4 code="timeout" at=board:16 pos=7:5
+raise board/r4 code="timeout" at=board:16 pos=12:5
 abandon board/r4.c1
 seg board/r4 resume fuel=17 alloc=591 state=1245 end=return
 run board/r4 outcome=completed delivery=d4 handler=gather fuel=106 alloc=664
 pumped state=idle fuel=17
 
 > vars
-vars board results=[[], "stop", [1, "a!", 2, "b!"], {code: "no feed", capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 7, column: 5}, index: 3}, {code: "timeout", after: 5000 ms, capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 7, column: 5}, index: 1}]
+vars board results=[[], "stop", [1, "a!", 2, "b!"], {code: "no feed", capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 12, column: 5}, index: 3}, {code: "timeout", after: 5000 ms, capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 12, column: 5}, index: 1}]
 vars shop

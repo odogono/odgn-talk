@@ -595,3 +595,37 @@ test('no code unit with a syntax error or a load diagnostic', () => {
   expect(unknown.unit).toBeNull();
   expect(unknown.diagnostics.map(d => d.code)).toEqual(['unknown name']);
 });
+
+for (const ending of ['end', 'end wait']) {
+  for (const [context, source, line] of [
+    [
+      'Handler',
+      `on go\n wait for all\n  send ping to me and wait\n ${ending} -- close\nend`,
+      4,
+    ],
+    [
+      'local Handler',
+      `on go\n query and wait\nend\non query\n wait for all\n  send ping to me and wait\n ${ending}\nend`,
+      7,
+    ],
+    [
+      'block Lambda',
+      `on go\n put given\n  wait for all\n   send ping to me and wait\n  ${ending}\n end given into f\n f() and wait\nend`,
+      5,
+    ],
+  ] as const) {
+    test(`a Join in a ${context} maps ${ending} to its closing token`, () => {
+      const unit = compile(source);
+      const close = unit.code.findIndex(ins => ins.op === 'join-end');
+      expect(close).toBeGreaterThan(-1);
+      expect(unit.code[close]).toMatchObject({
+        line,
+        col: context === 'block Lambda' ? 3 : 2,
+      });
+      expect(unit.code[close + 1]).toMatchObject({
+        op: 'store',
+        line: line - 2,
+      });
+    });
+  }
+}

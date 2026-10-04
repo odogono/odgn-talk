@@ -1,0 +1,11 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "a"
+source = "a.talk"
+limits = { maxWaitMs = 1000 }
+[[scripts]]
+name = "b"
+source = "b.talk"

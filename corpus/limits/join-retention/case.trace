@@ -5,7 +5,7 @@
 > deliver d1 to=a message=go
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping args=[7] wait=join
-fault a/r1 limit=persistent at=a:6 pos=2:2
+fault a/r1 limit=persistent at=a:6 pos=4:2
 abandon a/r1.c1
 seg a/r1 start delivery=d1 handler=go clause=1 fuel=48 alloc=48 state=0 end=fault
 run a/r1 outcome=limit-fault delivery=d1 handler=go limit=persistent fuel=48 alloc=48

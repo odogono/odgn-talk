@@ -87,6 +87,7 @@ quantities/incompatible-units
 quantities/value-encoding
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
+suspension/join-closing-position
 suspension/join-preemption
 suspension/nested-waits
 suspension/script-joins

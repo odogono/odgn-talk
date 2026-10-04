@@ -281,7 +281,7 @@ func TestScriptReplyAcceptance(t *testing.T) {
 // Capability members remain deferred, so these cases pin their own acceptance.
 func TestScriptJoinAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	names := []string{"suspension/script-joins", "suspension/join-preemption", "limits/join-retention", "limits/script-join-width"}
+	names := []string{"suspension/script-joins", "suspension/join-closing-position", "suspension/join-preemption", "limits/join-retention", "limits/script-join-width"}
 	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)

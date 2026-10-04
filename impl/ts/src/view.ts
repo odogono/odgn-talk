@@ -198,7 +198,7 @@ export type Stmt =
   | { duration: Expr; k: 'wait'; pos: Pos }
   | { event: Event; k: 'wait-for'; pos: Pos; timeout: Expr | null }
   | { branches: WaitBranch[]; k: 'wait-block'; pos: Pos }
-  | { body: Stmt[]; k: 'join'; pos: Pos }
+  | { body: Stmt[]; end: Pos; k: 'join'; pos: Pos }
   | { k: 'return' | 'veto'; pos: Pos; value: Expr | null }
   | { k: 'pass'; message: string; pos: Pos }
   | { k: 'exit' | 'next'; pos: Pos }
@@ -995,7 +995,12 @@ const wait = (node: SemanticNode, of: Of): Stmt => {
     return { k: 'wait', pos: at, duration: of<Expr>(children[1]) };
   }
   if (isToken(children[2], 'all')) {
-    return { k: 'join', pos: at, body: blockAt(node, 3, of) };
+    return {
+      k: 'join',
+      pos: at,
+      end: pos(children.find(child => isToken(child, 'end'))!),
+      body: blockAt(node, 3, of),
+    };
   }
   const third = children[2];
   if (third?.kind === 'node') {

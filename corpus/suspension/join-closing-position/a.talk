@@ -1,0 +1,24 @@
+script variable errors = []
+on direct n
+ try
+  wait for all
+   send ping with 1 to b and wait
+   send ping with n to b and wait
+  end
+ catch e
+  put e after errors
+ end try
+end direct
+on local n
+ try
+  query n and wait
+ catch e
+  put e after errors
+ end try
+end local
+on query n
+ wait for all
+  send ping with 1 to b and wait
+  send ping with n to b and wait
+ end wait
+end query
