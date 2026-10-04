@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues and specs live in GitHub Issues. See `docs/agents/issue-tracker.md`.
+For issue work, start with [repository identity and issue conventions](docs/agents/issue-tracker.md).
 
 ### Commits
 
@@ -18,7 +18,7 @@ Use a single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/ag
 
 ### Implementation navigation
 
-For implementation work, start with [the layout](README.md#layout) and [the task navigation table](impl/ts/README.md#task-navigation).
+For implementation work, start with [the layout](README.md#layout), then the [Go task map](impl/go/README.md#task-navigation) or [TS and tooling task map](impl/ts/README.md#task-navigation).
 
 ### Review
 
