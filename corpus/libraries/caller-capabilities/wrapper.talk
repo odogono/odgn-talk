@@ -1,0 +1,10 @@
+use fetch, hold from helper
+
+function read x
+  return fetch(x)
+end read
+
+on work
+  hold and wait
+  return it
+end work

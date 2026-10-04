@@ -1,0 +1,58 @@
+# Unblessed: paired Go/TS execution and TS save/restore await first human review.
+# Missing transitive/private needs, caller calls and charges, sequential suspending
+# answers, Library cleanup after cancellation, late answers and revocation.
+> add-library helper identity=ffc627371a9cf81d1cf1398481fc3760976500b638eb62574908ca69b61b73ee
+> add-library wrapper identity=f7da82f64078365a208757c0b5bc8b1ed4c366823ca77bb7c94ba08a41cd715f
+> load missing identity=5fd3c72b86e5f8e6cb7d4a9d7fe3521266e1ad9bf60bc19e8e1cd23abbaed09f
+diag missing code="missing grant" pos=1:1
+diag missing code="missing grant" pos=1:1
+diag missing code="missing grant" pos=1:1
+> load s identity=af906e4de2a1f1619aa97b726af086e087fcc9bb009099a47758165da8d1bc09
+> stub io.read value=7
+> deliver d1 to=s message=immediate
+> pump clock=2026-10-04T12:00:00Z
+call s/r1.c1 op=io.read args=[2] result=7
+seg s/r1 start delivery=d1 handler=immediate clause=1 fuel=58 alloc=42 state=40 end=return
+run s/r1 outcome=completed delivery=d1 handler=immediate fuel=58 alloc=42
+pumped state=idle fuel=58
+> deliver d2 to=s message=hold
+> pump clock=2026-10-04T12:00:01Z
+call s/r2.c1 op=io.pause args=[1]
+seg s/r2 start delivery=d2 handler=hold clause=1 fuel=44 alloc=0 state=472 end=ask-wait
+pumped state=idle fuel=44 next=2026-10-04T12:00:31Z
+> answer s/r2.c1 value=11 fuel=2
+> pump clock=2026-10-04T12:00:02Z
+call s/r2.c2 op=io.pause args=[2]
+seg s/r2 resume fuel=22 alloc=16 state=488 end=ask-wait
+pumped state=idle fuel=22 next=2026-10-04T12:00:32Z
+> answer s/r2.c2 value=22
+> pump clock=2026-10-04T12:00:02.5Z
+call s/r2.c3 op=io.note args=["cleanup"]
+seg s/r2 resume fuel=43 alloc=152 state=112 end=return
+run s/r2 outcome=completed delivery=d2 handler=hold fuel=109 alloc=168
+pumped state=idle fuel=43
+> deliver d3 to=s message=hold
+> pump clock=2026-10-04T12:00:03Z
+call s/r3.c1 op=io.pause args=[1]
+seg s/r3 start delivery=d3 handler=hold clause=1 fuel=44 alloc=0 state=544 end=ask-wait
+pumped state=idle fuel=44 next=2026-10-04T12:00:33Z
+> cancel-run s/r3
+> pump clock=2026-10-04T12:00:04Z
+call s/r3.c2 op=io.note args=["cleanup"]
+seg s/r3 resume fuel=15 alloc=0 state=112 end=cancel
+abandon s/r3.c1
+run s/r3 outcome=cancelled delivery=d3 handler=hold fuel=59 alloc=0
+pumped state=idle fuel=15
+> answer s/r3.c1 value=99
+> pump clock=2026-10-04T12:00:05Z
+note s/r3.c1 kind=late-answer
+pumped state=idle fuel=0
+> revoke s grant=io
+> deliver d4 to=s message=revoked
+> pump clock=2026-10-04T12:00:06Z
+raise s/r4 code="capability revoked" at=helper:7 pos=6:3
+seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=51 alloc=42 state=154 end=return
+run s/r4 outcome=completed delivery=d4 handler=revoked fuel=51 alloc=42
+pumped state=idle fuel=51
+> vars
+vars s log=[7, [11, 22], "capability revoked"]

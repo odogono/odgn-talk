@@ -8,13 +8,14 @@ import (
 )
 
 type operationReplay struct {
-	calls map[talk.CallID]*talk.Call
-	defs  map[string]*talk.CapabilityDef
-	stubs map[string][]map[string]Field
+	calls        map[talk.CallID]*talk.Call
+	defs         map[string]*talk.CapabilityDef
+	stubs        map[string][]map[string]Field
+	declarations talk.GrantDecls
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
-	out := &operationReplay{calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}}
+	out := &operationReplay{calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
 	for _, raw := range rawOps {
@@ -131,6 +132,10 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		}
 	}
 	for name, ops := range byName {
+		out.declarations[name] = map[string]talk.OperationCheck{}
+		for _, op := range ops {
+			out.declarations[name][op.Name] = talk.OperationCheck{Mode: op.Mode, Args: op.Args}
+		}
 		d, e := core.DefineCapability(name, ops...)
 		if e != nil {
 			return nil, e

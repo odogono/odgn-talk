@@ -1,0 +1,19 @@
+use read, work from wrapper
+script variable log = []
+
+on immediate
+  put read(2) after log
+end immediate
+
+on hold
+  work and wait
+  put it after log
+end hold
+
+on revoked
+  try
+    put read(2) after log
+  catch e
+    put the code of e after log
+  end try
+end revoked

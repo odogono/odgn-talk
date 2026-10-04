@@ -261,7 +261,7 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 				if !ok {
 					t.Fatal(parseErr)
 				}
-				actual = []Diagnostic{{e.Code, e.Pos}}
+				actual = []Diagnostic{{Code: e.Code, Pos: e.Pos}}
 			} else {
 				actual = Check(tree, Options{}).Diagnostics
 			}
@@ -273,7 +273,7 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 			for _, match := range record.FindAllStringSubmatch(string(trace), -1) {
 				line, _ := strconv.Atoi(match[2])
 				column, _ := strconv.Atoi(match[3])
-				expected = append(expected, Diagnostic{match[1], syntax.Position{Line: line, Column: column}})
+				expected = append(expected, Diagnostic{Code: match[1], Pos: syntax.Position{Line: line, Column: column}})
 			}
 			if len(expected) == 0 {
 				t.Fatal("case has no diagnostic records")

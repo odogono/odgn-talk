@@ -27,11 +27,6 @@ func ExecutionBackends() map[string]Backend {
 	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
 }
 func (executionBackend) Support(c Case) string {
-	if libraries, ok := c.Setup["libraries"].([]any); ok && len(libraries) > 0 {
-		if operations, ok := c.Setup["operations"].([]any); ok && len(operations) > 0 {
-			return "Library Capability needs validation remains deferred"
-		}
-	}
 	for _, feature := range []string{"factories", "objects"} {
 		if xs, ok := c.Setup[feature].([]any); ok && len(xs) > 0 {
 			return feature + " execution belongs to later Go steps"
@@ -101,7 +96,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
-	libraries, e := setupLibraries(core, c)
+	libraries, e := setupLibraries(core, c, operations.declarations)
 	if e != nil {
 		return nil, e
 	}
