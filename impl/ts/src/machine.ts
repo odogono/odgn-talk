@@ -1519,7 +1519,7 @@ export class Run {
       locals,
       stack: [],
       dispatch,
-      clauseCharge: dispatch !== null,
+      clauseCharge: body.kind === 'handler' && dispatch !== null,
       handler: body.kind === 'lambda' ? body.name.split(':')[0]! : body.name,
     });
   }

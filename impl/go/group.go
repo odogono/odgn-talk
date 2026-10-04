@@ -167,6 +167,12 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	s := &Script{group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
 	g.mu.Lock()
 	g.scripts = append(g.scripts, s)
+	for _, loaded := range g.scripts {
+		loaded.state.ScriptNames = append(loaded.state.ScriptNames, o.Name)
+		if loaded != s {
+			state.ScriptNames = append(state.ScriptNames, loaded.name)
+		}
+	}
 	g.mu.Unlock()
 	return s, nil
 }
@@ -428,6 +434,9 @@ func (g *Group) Inspect() Inspection {
 			run := RunView{ID: x.id, Status: status, Handler: x.handler}
 			if x.deadline != nil {
 				run.Status, run.Wait, run.Until = Suspended, "wait", deadlineTime(x.deadline)
+			}
+			if x.run.EventWait != nil {
+				run.Status, run.Wait = Suspended, x.run.EventWait.Kind
 			}
 			view.Runs = append(view.Runs, run)
 		}

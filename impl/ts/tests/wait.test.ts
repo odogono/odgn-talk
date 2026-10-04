@@ -11,9 +11,44 @@ import {
   type Call,
   type Library,
 } from '../src/index';
+import { num } from '../src/values';
 
 const t0 = parseInstant('2026-09-30T09:00:00Z');
 const at = (s: number) => t0 + BigInt(s) * 1_000_000_000n;
+
+test('event tests pay their instructions without a Handler Clause charge', () => {
+  const g = newGroup({ name: 'g' });
+  const s = g.load({
+    name: 's',
+    source: 'on watch\n wait for go x\nend watch\n',
+  });
+  s.deliver({ name: 'watch' });
+  g.pump(t0);
+  s.deliver({ name: 'go', args: [num(3)] });
+  // Observation finishes even beyond the cap. The incoming message has no
+  // Handler instructions; the matched waiter resumes in the next Pump.
+  expect(g.pump(t0, { fuelCap: 1 }).fuelUsed).toBe(7);
+});
+
+test('event Guard errors are recorded during observation before dispatch', () => {
+  const trace: string[] = [];
+  const g = newGroup({ name: 'g', trace: line => trace.push(line) });
+  const s = g.load({
+    name: 's',
+    source:
+      'on watch\n wait for\n when go x where 1 / 0 = 1 then return\n when go x then return\n end wait\nend watch\non go x\nend go\n',
+  });
+  s.deliver({ name: 'watch' });
+  g.pump(t0);
+  s.deliver({ name: 'go', args: [num(3)] });
+  g.pump(t0);
+  const skipped = trace.findIndex(line => line.startsWith('guard-skip s/r1 '));
+  expect(skipped).toBeGreaterThan(-1);
+  expect(trace[skipped]).toContain('code="division by zero"');
+  expect(skipped).toBeLessThan(
+    trace.findIndex(line => line.startsWith('seg s/r2 ')),
+  );
+});
 
 // Each load diagnostic as `code line:col`.
 const diagnostics = (source: string, libraries: Library[] = []) => {

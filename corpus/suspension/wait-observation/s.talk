@@ -1,0 +1,46 @@
+script variable seen = []
+script variable threshold = 0
+
+on watch id
+  wait for ping {id: ^id, n: n}
+  put ["match", n, it] after seen
+end watch
+
+on choose
+  wait for
+    when ping {id: id, n: n} where 1 / 0 = 1 then
+      put "unreachable" after seen
+    when ping {id: id, n: n} where n > threshold then
+      put "positive" after seen
+    when ping {id: id, n: n} then
+      put "fallback" after seen
+    after 2 s then
+      put "later" after seen
+    after 1 s then
+      put it after seen
+    after 1 s then
+      put "tie" after seen
+  end wait
+end choose
+
+on setLimit n
+  put n into threshold
+end setLimit
+
+on ping info
+  put "handled" after seen
+end ping
+
+on filtered
+  wait for ping info from s or 0 s
+  put it after seen
+end filtered
+
+on watchError
+  wait for error {code: c} from s
+  put c after seen
+end watchError
+
+on fail
+  return 1 / 0
+end fail

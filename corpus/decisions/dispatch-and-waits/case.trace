@@ -24,8 +24,8 @@ note observer/r3 kind=no-verdict
 seg observer/r3 start delivery=d3 handler=move clause=2 fuel=23 alloc=0 state=372 end=veto value=-1
 run observer/r3 outcome=completed delivery=d3 handler=move fuel=23 alloc=0
 seg observer/r2 resume fuel=14 alloc=16 state=16 end=return
-run observer/r2 outcome=completed delivery=d2 handler=watch fuel=39 alloc=56
-pumped state=idle fuel=48
+run observer/r2 outcome=completed delivery=d2 handler=watch fuel=35 alloc=56
+pumped state=idle fuel=44
 > decide d4 to=observer message=absent
 > pump clock=2026-09-30T10:00:03Z
 seg observer/r4 start delivery=d4 fuel=0 alloc=0 state=16 end=unhandled
