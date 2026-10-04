@@ -1,5 +1,5 @@
-# Event-test Fuel corrected from TS ordinary/save-restore agreement.
-# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
+# Corrected event-test Fuel agrees on Go and TS ordinary execution.
+# TS save/restore also agrees; Go save/restore remains tracked in #136.
 # wait-for: d1 waits for order 7 and d2 for a big payment or a refund. bank's
 # first payment is order 8, which matches neither; its second, order 7 for
 # 120, ends d1's wait but not d2's, whose Guard needs over 100 in `order`.

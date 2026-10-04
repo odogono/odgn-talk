@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -45,7 +46,8 @@ type handlerDispatch struct {
 	Args   []value.Value
 }
 type Frame struct {
-	Dispatch *handlerDispatch
+	Dispatch      *handlerDispatch
+	ReceiverNames map[int]string // operand-stack tokens, not Script Values
 
 	Body, PC      int
 	Locals, Stack []value.Value
@@ -229,13 +231,16 @@ func (r *Run) pay(fuel, alloc int64) bool {
 	return true
 }
 func (r *Run) Execute(slice int64) {
-	r.ExecuteSelected(slice, nil)
+	r.ExecuteSelected(slice, nil, nil)
 }
 
+// SendFunc commits a paid, non-waiting message. False means mailbox full.
+type SendFunc func(to, message string, args []value.Value) bool
+
 // ExecuteSelected notifies the scheduler when an entry clause's combined
-// charge succeeds, before the instruction commits any effects. The callback
-// belongs to this turn, so faults, preemption and cleanup cannot retain it.
-func (r *Run) ExecuteSelected(slice int64, paid func()) {
+// charge succeeds, before effects commit. Both callbacks belong to this turn;
+// faults, preemption and cleanup cannot retain them in Run state.
+func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
@@ -247,7 +252,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || i.Name == "send" && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}
@@ -268,6 +273,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		trial := *f
 		trial.Stack = slices.Clone(f.Stack)
 		trial.Locals = slices.Clone(f.Locals)
+		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
 		if (i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
 			r.fault("depth")
@@ -301,6 +307,10 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		}
 		f.Clause = false
 		trial.Clause = false
+		if err == nil && i.Name == "send" && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args) {
+			v := failure("mailbox full", value.Pair{Key: "to", Val: text(f.ReceiverNames[len(f.Stack)-1])})
+			err = &v
+		}
 		if err != nil {
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
@@ -453,6 +463,11 @@ func (r *Run) unwind(err value.Value) {
 			f = &r.Frames[frame]
 			f.Waiting = false
 			f.Stack = slices.Clone(f.Stack[:u.Depth])
+			for slot := range f.ReceiverNames {
+				if slot >= len(f.Stack) {
+					delete(f.ReceiverNames, slot)
+				}
+			}
 			f.PC = u.Target
 			switch u.Kind {
 			case "catch":
@@ -543,7 +558,10 @@ func (r *Run) RetainedSize() int64 {
 		for _, v := range f.Locals {
 			n = saturatingAdd(n, Size(v))
 		}
-		for _, v := range f.Stack {
+		for j, v := range f.Stack {
+			if f.ReceiverNames[j] != "" {
+				continue
+			}
 			n = saturatingAdd(n, Size(v))
 		}
 		size = saturatingAdd(size, n)

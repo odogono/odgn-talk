@@ -23,13 +23,14 @@ applying these corrections before Go can execute the cases, as a limited
 exception to chapter 11's [Bless rule](../../../spec/11-the-trace-and-conformance.md#bless).
 Their headers record that exception; it does not claim Go parity or change the
 rule for other cases. [Issue #277](https://github.com/odogono/odgn-talk/issues/277)
-tracks the remaining Go verification.
+tracks the remaining Go verification. The corrected `suspension/wait-for` case
+now agrees on actual Go execution after non-waiting Script sends were added;
+its records and TS save/restore replay also agree. Go save/restore remains #136.
 
 | Corrected case | Required Go facility |
 | --- | --- |
 | [decisions/broadcast-outcomes](../../../corpus/decisions/broadcast-outcomes/case.trace) | Broadcast Decisions, #134 |
 | [objects/wait-target](../../../corpus/objects/wait-target/case.trace) | Object routing, #134 |
-| [suspension/wait-for](../../../corpus/suspension/wait-for/case.trace) | Script sends, #134 |
 | [reload/extend-units](../../../corpus/reload/extend-units/case.trace) | Reload/extension units, #136 |
 
 Each correction removes 4 Fuel per executed event test. The `run` totals and

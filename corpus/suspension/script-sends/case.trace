@@ -1,0 +1,51 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Chapter 5: non-waiting sends use FIFO mailboxes, including send to me.
+# A full mailbox raises at the paid send; errors precede later send records.
+# Missing receivers and wrong-kind Values are caught; an already sent message
+# survives the sender's error. The receiver uses its own limits.
+> load a identity=94197197384dfb24f779907acbbdf4dc4c816002b62dea587731a09fa6f477a2
+> load b identity=609a67847b92371ad5d21b17bff497ee42069b2fe6548bb871920f6e7d793e01
+> deliver d1 to=a message=fire args=[1]
+> deliver d2 to=a message=missing
+> deliver d3 to=a message=wrong args=[42]
+> deliver d4 to=a message=cut
+> pump clock=2026-10-04T12:00:00Z
+send a/r1 to=b message=note args=[1]
+send a/r1 to=b message=note args=[2]
+raise a/r1 code="mailbox full" at=a:14 pos=5:4
+send a/r1 to=a message=self
+seg a/r1 start delivery=d1 handler=fire clause=1 fuel=151 alloc=289 state=185 end=return
+run a/r1 outcome=completed delivery=d1 handler=fire fuel=151 alloc=289
+seg b/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
+run b/r1 outcome=completed handler=note fuel=16 alloc=24
+raise a/r2 code="object gone" at=a:53 pos=17:16
+send a/r2 to=b message=note args=[7]
+seg a/r2 start delivery=d2 handler=missing clause=1 fuel=54 alloc=78 state=183 end=return
+run a/r2 outcome=completed delivery=d2 handler=missing fuel=54 alloc=78
+seg b/r2 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=112 end=return
+run b/r2 outcome=completed handler=note fuel=16 alloc=24
+raise a/r3 code="wrong kind" at=a:84 pos=25:3
+send a/r3 to=b message=note args=[8]
+seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=84 alloc=196 state=213 end=return
+run a/r3 outcome=completed delivery=d3 handler=wrong fuel=84 alloc=196
+seg b/r3 start from=a/r2 handler=note clause=1 fuel=16 alloc=24 state=136 end=return
+run b/r3 outcome=completed handler=note fuel=16 alloc=24
+send a/r4 to=b message=note args=[9]
+raise a/r4 code="sender failed" at=a:123 pos=33:2
+seg a/r4 start delivery=d4 handler=cut clause=1 fuel=43 alloc=96 state=181 end=error
+run a/r4 outcome=errored delivery=d4 handler=cut error={code: "sender failed", at: {unit: "a", handler: "cut", line: 33, column: 2}} fuel=43 alloc=96
+seg b/r4 start from=a/r3 handler=note clause=1 fuel=16 alloc=24 state=160 end=return
+run b/r4 outcome=completed handler=note fuel=16 alloc=24
+seg a/r5 start from=a/r1 handler=self clause=1 fuel=16 alloc=28 state=509 end=return
+run a/r5 outcome=completed handler=self fuel=16 alloc=28
+seg b/r5 start from=a/r4 handler=note clause=1 fuel=16 alloc=24 state=136 end=return
+run b/r5 outcome=completed handler=note fuel=16 alloc=24
+send a/r6 to=b message=note args=[0]
+seg a/r6 start from=a/r4 handler=error clause=1 fuel=38 alloc=48 state=177 end=return
+run a/r6 outcome=completed handler=error fuel=38 alloc=48
+seg b/r6 start from=a/r6 handler=note clause=1 fuel=16 alloc=24 state=160 end=return
+run b/r6 outcome=completed handler=note fuel=16 alloc=24
+pumped state=idle fuel=482
+> vars
+vars a seen=["b", "absent", ["object", 42], "self"]
+vars b got=[1, 2, 7, 8, 9, 0]

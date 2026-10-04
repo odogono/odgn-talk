@@ -1,0 +1,3 @@
+on go
+ send ping with 7 to b
+end go

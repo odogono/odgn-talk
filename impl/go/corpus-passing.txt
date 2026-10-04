@@ -31,6 +31,7 @@ limits/fuel-exhaustion-point
 limits/pattern-size-minimum
 limits/persistent-state-minimum
 limits/rollback-after-suspension
+limits/self-send-persistent
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/bad-number
@@ -74,6 +75,9 @@ quantities/value-encoding
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/nested-waits
+suspension/script-sends
+suspension/send-preemption
+suspension/wait-for
 suspension/wait-observation
 suspension/wait-precision
 suspension/wait-work-order

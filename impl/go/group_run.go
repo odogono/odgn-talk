@@ -254,6 +254,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					if !x.deciding {
 						seal(x.delivery, x.id, Allowed, Nothing, Completed)
 					}
+				}, func(to, message string, args []corevalue.Value) bool {
+					ok := g.send(x, to, message, args)
+					if ok {
+						r.PersistentBase = s.retainedOutside(x)
+					}
+					return ok
 				})
 				if r.Status != machine.Dispatching {
 					break
@@ -653,7 +659,7 @@ func (g *Group) replaceEarlier(s *Script, x *execution) {
 }
 
 func (g *Group) writeRaises(x *execution, from int) {
-	for _, raise := range x.run.Raises[from:] {
+	for _, raise := range x.run.Raises[max(from, x.raisesWritten):] {
 		fields := map[string]string{"at": fmt.Sprintf("%s:%d", x.delivery.script.name, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
 		name := "raise"
 		if raise.Guard {
@@ -666,4 +672,5 @@ func (g *Group) writeRaises(x *execution, from int) {
 		}
 		g.record(name, false, []string{string(x.id)}, fields)
 	}
+	x.raisesWritten = len(x.run.Raises)
 }

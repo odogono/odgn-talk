@@ -331,7 +331,7 @@ The generator downloads all ten files pinned by [`unicode.toml`](../../spec/data
 
 The committed `src/generated/unicode.ts` includes the source hashes. Runtime code imports only TS tables and uses no platform normalization, `Intl.Segmenter`, Unicode regular-expression properties or platform case mapping. Hangul normalization is algorithmic. Extended grapheme boundaries follow Unicode 18's UAX #29 revision 49, including its changed GB9c rule. The [Unicode license](src/generated/UNICODE-LICENSE.txt) accompanies the tables and is copied into `dist/` with the browser bundle.
 
-The event-test charging correction agrees with Go for four revised cases and the new `suspension/wait-observation` regression. Four further expectations were corrected with maintainer approval based on TS ordinary and save/restore agreement. These [TS-only corrections](../../docs/reviews/event-test-charging/README.md) do not establish Go parity; their remaining Go verification is tracked in [#277](https://github.com/odogono/odgn-talk/issues/277).
+The event-test charging correction agrees with Go for four revised cases and the new `suspension/wait-observation` regression. Four further expectations were corrected with maintainer approval based on TS ordinary and save/restore agreement. The corrected `suspension/wait-for` case now agrees on Go after non-waiting Script sends were implemented. The other three [TS-only corrections](../../docs/reviews/event-test-charging/README.md) still need Go verification, tracked in [#277](https://github.com/odogono/odgn-talk/issues/277).
 
 ## Verification and corpus selection
 
