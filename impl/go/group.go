@@ -30,6 +30,7 @@ type Group struct {
 	core             *Core
 	options          GroupOptions
 	libraries        map[string]*Library
+	objects          map[objectKey]*Object
 	scripts          []*Script
 	inputs           []delivery
 	cancelRunsQueued bool
@@ -66,6 +67,7 @@ type delivery struct {
 	during     *corevalue.Value // non-nil only for an internal error message
 	settlement *operationSettlement
 	reply      CallID
+	object     *Object
 }
 type execution struct {
 	raisesWritten int
@@ -177,19 +179,27 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		}
 		grants[name] = bound
 	}
-	if o.Owner != nil || len(o.Objects) > 0 {
-		return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
+	if o.Owner != nil {
+		if o.Owner.group != g {
+			return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
+		}
+		return nil, g.refuse(InvalidValue, "Owning Scripts and Message Paths are not available")
 	}
 	objects := []string{}
-	for name := range o.Objects {
+	bindings := map[string]corevalue.Value{}
+	for name, object := range o.Objects {
+		if object == nil || object.group != g {
+			return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
+		}
 		objects = append(objects, name)
+		bindings[name] = object.Value().inner
 	}
 	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, PatternSize: limits.PatternSize, Grants: declarations}, ids)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	state, e := machine.InitializeLinked(unit, g, states)
+	state, e := machine.InitializeLinkedBound(unit, g, states, corevalue.Value{}, bindings)
 	if e != nil {
 		pos := e.(*machine.InitError).Instruction.Pos
 		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: o.Name, Line: pos.Line, Col: pos.Column}}}
@@ -369,16 +379,11 @@ func validGroup(v corevalue.Value, g *Group) bool {
 		return v.Function != nil && v.Function.Group == g
 	}
 	if v.Kind == corevalue.Object {
-		o, ok := v.Object.Handle.(*Object)
-		if !ok {
+		if v.Object == nil {
 			return false
 		}
-		for _, s := range g.scripts {
-			if s.owner == o {
-				return true
-			}
-		}
-		return false
+		o, ok := v.Object.Handle.(*Object)
+		return ok && o != nil && o.group == g
 	}
 	for _, x := range v.Items {
 		if !validGroup(x, g) {
@@ -445,6 +450,8 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 				g.record(d.kind, true, []string{d.fields["run"]}, nil)
 			} else if d.kind == "revoke" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)
+			} else if d.kind == "dispose" {
+				g.record(d.kind, true, nil, d.fields)
 			} else if d.settlement != nil {
 				g.record(d.kind, true, []string{string(d.reply)}, d.fields)
 			} else {

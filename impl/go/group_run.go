@@ -189,6 +189,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	// Drain inputs in order before timers and turns. Cancellation either
 	// removes a message or queues a suspended Run's cleanup at this position.
 	for _, d := range inputs {
+		if d.kind == "dispose" {
+			d.object.disposed.Store(true)
+			continue
+		}
 		if d.kind == "cancel-run" {
 			g.applyCancelRun(d)
 			continue

@@ -73,6 +73,14 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		return integer(int64(match.Start + 1)), nil
 	case "kindOf":
 		return text(value.KindNames[v.Kind]), nil
+	case "objectKind", "isDisposed":
+		if v.Kind != value.Object {
+			return bad("object", v)
+		}
+		if name == "objectKind" {
+			return text(v.Object.Kind), nil
+		}
+		return boolean(v.Object.Disposed != nil && v.Object.Disposed.Load()), nil
 	case "rangeStart", "rangeEnd":
 		if v.Kind != value.Range {
 			return bad("range", v)

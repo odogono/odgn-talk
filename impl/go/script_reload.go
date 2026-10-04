@@ -64,12 +64,16 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 			declarations[name][opName] = check.OperationCheck{Mode: modeName(op.Mode), Args: args}
 		}
 	}
-	unit, loadError := g.core.compile(s.name, source, check.Options{Imports: exports, ImportCalls: calls, PatternSize: s.limits.PatternSize, Grants: declarations}, importIDs)
+	objects := make([]string, 0, len(s.state.Objects))
+	for name := range s.state.Objects {
+		objects = append(objects, name)
+	}
+	unit, loadError := g.core.compile(s.name, source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, PatternSize: s.limits.PatternSize, Grants: declarations}, importIDs)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	state, e := machine.InitializeLinked(unit, g, states)
+	state, e := machine.InitializeLinkedBound(unit, g, states, s.state.Me, s.state.Objects)
 	if e != nil {
 		pos := e.(*machine.InitError).Instruction.Pos
 		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: s.name, Line: pos.Line, Col: pos.Column}}}

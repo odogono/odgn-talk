@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
@@ -48,6 +49,7 @@ type Pair struct {
 type ObjectData struct {
 	Kind, ID string
 	Handle   any
+	Disposed *atomic.Bool // Core lifecycle state; identity and encoding ignore it.
 }
 type FunctionData struct {
 	CodeState  any

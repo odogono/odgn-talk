@@ -27,7 +27,7 @@ func ExecutionBackends() map[string]Backend {
 	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
 }
 func (executionBackend) Support(c Case) string {
-	for _, feature := range []string{"factories", "objects"} {
+	for _, feature := range []string{"factories"} {
 		if xs, ok := c.Setup[feature].([]any); ok && len(xs) > 0 {
 			return feature + " execution belongs to later Go steps"
 		}
@@ -65,13 +65,16 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
 	if scripts, ok := c.Setup["scripts"].([]any); ok {
 		for _, raw := range scripts {
 			setup := raw.(Setup)
+			if setup["owner"] != nil {
+				return "Owning Scripts and Message Paths remain deferred"
+			}
 			source, e := os.ReadFile(filepath.Join(c.Dir, setup["source"].(string)))
 			if e != nil {
 				return e.Error()
@@ -81,6 +84,10 @@ func (executionBackend) Support(c Case) string {
 				continue
 			}
 			options := check.Options{PatternSize: setupLimits(setup["limits"]).PatternSize}
+			bindings, _ := setup["objects"].(Setup)
+			for name := range bindings {
+				options.Objects = append(options.Objects, name)
+			}
 			checked := check.Check(tree, options)
 			if len(checked.Diagnostics) > 0 {
 				continue
@@ -113,6 +120,10 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		return nil, e
 	}
 	g := core.NewGroup(talk.GroupOptions{Trace: &lines})
+	objects, e := setupObjects(core, g, c.Setup)
+	if e != nil {
+		return nil, e
+	}
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
 		s := x.(Setup)
@@ -127,6 +138,14 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "dispose":
+			ref := fields["object"].Value.Object
+			if ref == nil {
+				return nil, fmt.Errorf("dispose requires Object")
+			}
+			if err := g.Dispose(objects[objectRef{ref.Kind, ref.ID}]); err != nil {
+				return nil, err
+			}
 		case "add-library":
 			if e := g.AddLibrary(libraries[r.IDs[0]]); e != nil {
 				if _, ok := e.(*talk.HostError); !ok {
@@ -209,7 +228,11 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				return nil, err
 			}
 			asUsed, _ := setup["grantsAsUsed"].(bool)
-			_, e = g.Load(talk.LoadOptions{Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed})
+			bindings, err := objects.bindings(setup)
+			if err != nil {
+				return nil, err
+			}
+			_, e = g.Load(talk.LoadOptions{Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
 			if e != nil {
 				if _, ok := e.(*talk.LoadError); !ok {
 					return nil, e

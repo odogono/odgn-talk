@@ -108,7 +108,7 @@ The three `counters/` cases pin lifetime work, mailbox and live state, fault rol
 
 The `event-test-slice-debt` and `event-test-group-cap` cases in `suspension/` pin observation Fuel, atomic waiter checks, dispatch ordering and slice debt. The `event-tests-fault-on-resume` case in `limits/` pins uncapped observation charges and the waiting Run's fault at its next resumed instruction. All three pass full and save/restore replay.
 
-The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation.
+The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation. Go supports registered handles, well-known bindings and queued disposal; the reviewed `builtins/object-kind` and `builtins/kind-of` traces pass unchanged in both Cores and are required by the Go passing gate. Object property execution and Message Path routing remain deferred in Go.
 
 The four `functions/` cases cover Host and foreign calls, cancellation, defaults and previously exported callbacks returned through Capability Stubs and answers.
 

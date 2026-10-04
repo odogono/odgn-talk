@@ -281,6 +281,11 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 func property(name string, v, d value.Value) (value.Value, *value.Value) {
 	bad := func(expected string) (value.Value, *value.Value) { e := wrong(expected, v); return value.Value{}, &e }
 	switch name {
+	case "id":
+		if v.Kind != value.Object {
+			return bad("object")
+		}
+		return text(v.Object.ID), nil
 	case "length":
 		if integerRange(v) {
 			a, _ := v.Items[0].Number.Integer()
