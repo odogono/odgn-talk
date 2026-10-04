@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 type Mode int
@@ -40,9 +41,18 @@ type Operation struct {
 	Start        func(c *Call, args []Value) error
 	Fire         func(c *Call, args []Value) error
 }
+
+// operationChecks are private refinements installed only by Standard factories.
+// Ordinary Host declarations cannot opt into catalogue failures or Core checks.
+type operationChecks struct {
+	arguments func([]corevalue.Value) *corevalue.Value
+	result    func(corevalue.Value) bool
+	failure   func(string, corevalue.Value) bool
+}
 type CapabilityDef struct {
-	name string
-	ops  map[string]Operation
+	name   string
+	ops    map[string]Operation
+	checks map[string]operationChecks
 }
 type Grant struct {
 	definition *CapabilityDef

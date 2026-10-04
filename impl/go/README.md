@@ -332,7 +332,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Calendar and Locale factories, Object execution, Capability Scopes and
+The Locale factory, Object execution, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
@@ -374,6 +374,30 @@ timeout and cancellation abandon the Call and cancel its Context. Late answers
 are traced and ignored. Both Operations retain the Script name and Grant
 binding, require copied valid costs and a non-nil implementation, and declare
 no Script error codes. Invalid read results and Host failures become `host error`.
+
+### Calendar Standard Capability
+
+`Core.CalendarCapability(CalendarImpl, Costs)` supplies the six fixed immediate
+Operations: `today`, `now`, `toCivil`, `toInstant`, `offset` and `zone`. The Host
+supplies timezone data and DST gap/overlap rules. Calls retain the caller's Grant
+binding and Pump Clock, including through Library frames. Omitted or Nothing
+zones are passed as `""` so the Host can use its binding's default; the Trace
+retains the supplied argument list.
+
+`toInstant` requires a date-time. With two arguments, the second text is a
+recognized disambiguation or a zone; with three, the second is a disambiguation
+and the third a zone. Omitted or Nothing disambiguation defaults to `compatible`.
+Domain checks follow Shape checks and precede charges and the Host crossing.
+Results are checked before conversion: `today` is date-only, `now` and `toCivil`
+include time, `toInstant` is an Instant, `offset` has exact Unit `s`, and `zone`
+is text. Invalid results become `host error`.
+
+Each Operation declares `unknown zone` with text `zone`; `toInstant` also declares
+`ambiguous time` with Civil Date `civil` and text `zone`. These catalogue failures
+are accepted only with valid fields and no reserved Data keys. Other Host
+failures become `host error`. The factory requires all six copied costs and a
+non-nil implementation. Factory checks are private to the definition; ordinary
+Capabilities cannot opt into Calendar errors by name or declaration.
 
 ### Scheduling and suspension
 
@@ -548,7 +572,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 169 cases, including all text-model, load-diagnostic,
+The gate contains 172 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -630,3 +654,9 @@ The reviewed `standard-console`, `standard-console-timeout` and
 Values, Library Grants, starting/late costs, the fixed timeout and abandonment.
 The reviewed `reload/function-staleness` trace passes with corrected Function
 Value display. A separate acceptance test requires all four cases in the gate.
+
+Three reviewed Calendar cases pass unchanged: `standard-calendar`,
+`standard-calendar-errors` and `standard-calendar-validation` under
+`capabilities/`. A required-case acceptance test protects all three, including
+optional arguments, declared failure fields, uncharged domain errors, malformed
+results and exact costs.

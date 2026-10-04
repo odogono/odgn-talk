@@ -49,6 +49,11 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return fail("wrong kind", fields...)
 		}
 	}
+	if check := grant.definition.checks[opName].arguments; check != nil {
+		if err := check(args); err != nil {
+			return corevalue.Value{}, err, false
+		}
+	}
 	fuel, _ := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel})
 	if !pay(fuel, op.Cost.Alloc) {
 		return corevalue.Value{}, nil, false
@@ -147,7 +152,10 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		}
 		for _, d := range generated.Errors.Error {
 			if d.Code == e.Code {
-				bad = "failure uses a catalogue code"
+				check := grant.definition.checks[opName].failure
+				if check == nil || !check(e.Code, data) {
+					bad = "failure uses an undeclared or malformed catalogue code"
+				}
 			}
 		}
 		for _, p := range data.Entries {
@@ -182,7 +190,8 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		}
 		return corevalue.Value{}, nil, false
 	}
-	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil {
+	checkResult := grant.definition.checks[opName].result
+	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil || checkResult != nil && !checkResult(result.inner) {
 		fields["error"] = "{}"
 		if record != nil {
 			record()

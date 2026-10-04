@@ -99,6 +99,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"schedule", "cancel"}
 		case "console":
 			names = []string{"write", "read"}
+		case "calendar":
+			names = []string{"today", "now", "toCivil", "toInstant", "offset", "zone"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -121,6 +123,17 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			out.declarations[name] = map[string]talk.OperationCheck{
 				"write": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.ValueShape}},
 				"read":  {Mode: talk.Suspending},
+			}
+		case "calendar":
+			def, err = core.CalendarCapability(replayCalendar{out}, costs)
+			optionalText := talk.Optional(talk.TextShape)
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"today":     {Mode: talk.Immediate, Args: []talk.Shape{optionalText}},
+				"now":       {Mode: talk.Immediate, Args: []talk.Shape{optionalText}},
+				"toCivil":   {Mode: talk.Immediate, Args: []talk.Shape{talk.InstantShape, optionalText}},
+				"toInstant": {Mode: talk.Immediate, Args: []talk.Shape{talk.CivilDateShape, optionalText, optionalText}},
+				"offset":    {Mode: talk.Immediate, Args: []talk.Shape{talk.InstantShape, optionalText}},
+				"zone":      {Mode: talk.Immediate, Args: []talk.Shape{optionalText}},
 			}
 		default:
 			return nil, fmt.Errorf("unsupported Standard Capability %s", name)
@@ -326,4 +339,25 @@ func (h replayConsole) Read(c *talk.Call) error {
 	}
 	_, err := h.replay.invoke("console.read", talk.Suspending, c)
 	return err
+}
+
+type replayCalendar struct{ replay *operationReplay }
+
+func (h replayCalendar) Today(c *talk.Call, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.today", talk.Immediate, c)
+}
+func (h replayCalendar) Now(c *talk.Call, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.now", talk.Immediate, c)
+}
+func (h replayCalendar) ToCivil(c *talk.Call, instant talk.Value, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.toCivil", talk.Immediate, c)
+}
+func (h replayCalendar) ToInstant(c *talk.Call, civil talk.Value, disambiguation, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.toInstant", talk.Immediate, c)
+}
+func (h replayCalendar) Offset(c *talk.Call, instant talk.Value, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.offset", talk.Immediate, c)
+}
+func (h replayCalendar) Zone(c *talk.Call, zone string) (talk.Value, error) {
+	return h.replay.invoke("calendar.zone", talk.Immediate, c)
 }
