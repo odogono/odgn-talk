@@ -116,7 +116,7 @@ func TestTraceBackendAndPassingGate(t *testing.T) {
 	if e := os.Mkdir(cdir, 0700); e != nil {
 		t.Fatal(e)
 	}
-	setup := "kind = \"trace\"\n[versions]\nlanguage = \"1.0-rc\"\ncostModel = \"0\"\n"
+	setup := "kind = \"trace\"\n[versions]\nlanguage = \"1.0-rc.2\"\ncostModel = \"0\"\n"
 	if e := os.WriteFile(filepath.Join(cdir, "case.toml"), []byte(setup), 0600); e != nil {
 		t.Fatal(e)
 	}

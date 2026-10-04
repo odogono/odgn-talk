@@ -1,8 +1,8 @@
 # Unblessed: new regression; first blessing awaits human review.
 # Replacing a sender abandons its reply and runs cleanup; the receiver keeps
 # running. Only the second sender receives its answer when both receivers end.
-> load a identity=031b6a5ec26ac7e8ce40e079769ee3547273cd1b3d82b02b3f3aefd6c3f35b14
-> load b identity=b934876bb0e768557aeae571a2edaceec18fadd3d471952179c4b206c0092bdb
+> load a identity=52b1f9e5034f4f8d8edc5ae220acff2629b011da21398ef2d7be848ef6cc591f
+> load b identity=e6811a89c68b6f688bde252d732bd5e04113eb59ecf41244bfecfb9d959fb921
 > deliver d1 to=a message=go args=[1]
 > deliver d2 to=a message=go args=[2]
 > pump clock=2026-10-04T12:00:00Z

@@ -2,7 +2,7 @@
 # Guard that selects the map. Its Fuel, allocation and state figures are
 # Cost Model 0's, as the TS Core blessed them.
 
-> load kinds identity=8229e8bd630078fbf4c729417a669d8884b62df5d44b95dabcb4f72afb1d94b0
+> load kinds identity=247cf96bf47cfc2406f24dc3113f5af58037bbef669be011a85acbb1ace86b92
 > deliver d1 to=kinds message=go
 > pump clock=2026-10-02T09:00:00Z
 seg kinds/r1 start delivery=d1 handler=go clause=1 fuel=412 alloc=1912 state=560 end=return

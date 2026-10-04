@@ -3,7 +3,7 @@
 # make-pattern has no result, so costs 20 Fuel and allocates nothing.
 # Dispatch, its operand and the matching catch/body add 31 Fuel; no frames
 # are unwound. Retained Text "pattern" and Number 42 total 23 + 16 = 39 bytes.
-> load splice identity=055c37f9c6f525f26b1e1c364129dc597af6904e08166bcdb8faf0fa1e38f079
+> load splice identity=cc116675927de387177e28b2c2b58344ea969d0562b48909f918cf29313e1f21
 > deliver d1 to=splice message=go
 > pump clock=2026-09-30T09:00:00Z
 raise splice/r1 code="wrong kind" at=splice:3 pos=6:9

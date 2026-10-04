@@ -56,14 +56,17 @@ describe('the stdlib Libraries', () => {
     ['split("", ",")', '[""]'],
     ['join([1, 2, 3], "-")', '"1-2-3"'],
     ['repeated("ab", 3)', '"ababab"'],
+    ['format("$${name} {old} $", {})', '"${name} {old} $"'],
+    ['format("${full name}", {"full name": "Ann"})', '"Ann"'],
+    ['format("${a.b!?}", {"a.b!?": 7})', '"7"'],
     ['lastOffset("aa", "aaa")', '1'],
     [
-      'format("{name} owes {amount}", {name: "Ann", amount: 2.50 GBP})',
+      'format("${name} owes ${amount}", {name: "Ann", amount: 2.50 GBP})',
       '"Ann owes 2.50 GBP"',
     ],
     [
-      'format("{x", {x: 1})',
-      'error {code: "out of domain", function: "format", value: "{x"}',
+      'format("${x", {x: 1})',
+      'error {code: "out of domain", function: "format", value: "${x"}',
     ],
     [`formatNumber(1234567.5, ${de}, 2)`, '"1.234.567,50"'],
     [`formatNumber(-1234.5, ${de})`, '"-1.234,5"'],
@@ -196,24 +199,36 @@ describe('the stdlib Libraries', () => {
       '[false, true, true, true]',
     ],
     [
-      'formatDate(makeDateTime(2026, 9, 27, 14, 5), "{day:2}/{month:2}/{year} {hour:2}:{minute:2}")',
+      'formatDate(makeDate(2026, 9, 27), "$${year} {old} $ ${year}-${month:2}-${day:2}")',
+      '"${year} {old} $ 2026-09-27"',
+    ],
+    [
+      'parseDate("${year} {old} $ 2026-09-27", "$${year} {old} $ ${year}-${month:2}-${day:2}")',
+      '2026-09-27',
+    ],
+    [
+      'formatDate(makeDate(2026, 9, 27), "{year}-{month}-{day}")',
+      'error {code: "out of domain", function: "formatDate", value: "{year}-{month}-{day}"}',
+    ],
+    [
+      'formatDate(makeDateTime(2026, 9, 27, 14, 5), "${day:2}/${month:2}/${year} ${hour:2}:${minute:2}")',
       '"27/09/2026 14:05"',
     ],
     [
-      'formatDate(makeDateTime(2026, 1, 1, 1, 2, 3, 123456789), "{year}{month}{day}{hour}{minute}{second}.{fraction:3} {weekday}")',
+      'formatDate(makeDateTime(2026, 1, 1, 1, 2, 3, 123456789), "${year}${month}${day}${hour}${minute}${second}.${fraction:3} ${weekday}")',
       '"202611123.123 4"',
     ],
     [
-      '[parseDate("2026-09-27", "{year}-{month}-{day}"), parseDate("2026-9-27 7:05:09", "{year}-{month}-{day} {hour}:{minute:2}:{second}")]',
+      '[parseDate("2026-09-27", "${year}-${month}-${day}"), parseDate("2026-9-27 7:05:09", "${year}-${month}-${day} ${hour}:${minute:2}:${second}")]',
       '[2026-09-27, 2026-09-27T07:05:09]',
     ],
     [
-      'parseDate("2026/09/27", "{year}-{month}-{day}")',
-      `error {code: "can't convert", value: "2026/09/27", to: "civil date", format: "{year}-{month}-{day}", offset: 5}`,
+      'parseDate("2026/09/27", "${year}-${month}-${day}")',
+      `error {code: "can't convert", value: "2026/09/27", to: "civil date", format: "\${year}-\${month}-\${day}", offset: 5}`,
     ],
     [
-      'formatDate(makeDate(2026, 1, 1), "{year}")',
-      'error {code: "out of domain", function: "formatDate", value: "{year}"}',
+      'formatDate(makeDate(2026, 1, 1), "${year}")',
+      'error {code: "out of domain", function: "formatDate", value: "${year}"}',
     ],
     [
       '[splitDuration(90061.5 s), splitDuration(-2 hr)]',

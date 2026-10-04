@@ -1,6 +1,6 @@
 # reload-carry-and-discard: Reload discards suspended and preempted Runs without finally, carries by name and preserves counters. Reset uses the new initialiser.
 
-> load s identity=a2429d059e500799e4edea91333b3f2bdac6287ac0af698797cef0bd16986101
+> load s identity=ccff3c25171efc5df395c8d3dd09d5a547f5d8e5996cfeb455d5ced0ab5582c7
 > request d1 to=s message=go
 > pump clock=1970-01-01T00:00:00Z
 seg s/r1 start delivery=d1 handler=go clause=1 fuel=23 alloc=16 state=192 end=wait until=1970-01-01T00:00:01Z
@@ -9,14 +9,14 @@ pumped state=idle fuel=23 next=1970-01-01T00:00:01Z
 > pump clock=1970-01-01T00:00:00Z fuel-cap=1
 preempt s/r2 start delivery=d2 handler=go clause=1 by=cap fuel=5 alloc=0
 pumped state=sliced fuel=5 next=1970-01-01T00:00:01Z
-> reload s carry=yes source="script variable n = 9" & newline & "script variable fresh = 4" & newline & "on go" & newline & "  return n + fresh" & newline & "end go" identity=5a3e8d236bc07436b2fdb9a1e8b86392de5e2a35df027ce91ae123d5e7e33715
+> reload s carry=yes source="script variable n = 9" & newline & "script variable fresh = 4" & newline & "on go" & newline & "  return n + fresh" & newline & "end go" identity=c8bf8affd933823721251f9658695ded6974e89976f305caf1dfb44e6c72d852
 stopped s reason="reload" discarded=[s/r1, s/r2]
 > deliver d3 to=s message=go
 > pump clock=1970-01-01T00:00:00Z
 seg s/r3 start delivery=d3 handler=go clause=1 fuel=12 alloc=16 state=32 end=return
 run s/r3 outcome=completed delivery=d3 handler=go value=6 fuel=12 alloc=16
 pumped state=idle fuel=12
-> reload s carry=no source="script variable n = 9" identity=f3e6ca6549ad06325e7af31ea279b72e04dae75368055da120a274f0d35913ee
+> reload s carry=no source="script variable n = 9" identity=914ae0b64b82b81688118b441c52ccd2285d6672b3994c353f8ac78538116550
 stopped s reason="reload"
 > vars
 vars s n=9

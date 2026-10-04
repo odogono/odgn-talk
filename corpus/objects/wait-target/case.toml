@@ -1,7 +1,7 @@
 # Object filters observe the Target only after its queued message reaches the correct Script.
 kind = "trace"
 [versions]
-language = "1.0-rc"
+language = "1.0-rc.2"
 costModel = "0"
 [[objectKinds]]
 name = "room"

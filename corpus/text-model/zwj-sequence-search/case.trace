@@ -5,7 +5,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load search identity=a85294c0d08715f369ce5b1143f03c6cae7a2f90407c3a99994ebed5e2fe8dd5
+> load search identity=356d985603df96e512a1cc38083e8693be4460d00dec57538d84df8c9a0a9d16
 > deliver d1 to=search message=go
 > pump clock=2026-09-30T09:00:00Z
 seg search/r1 start delivery=d1 handler=go clause=1 fuel=163 alloc=292 state=116 end=return

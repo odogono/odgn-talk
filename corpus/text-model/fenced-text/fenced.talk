@@ -1,0 +1,19 @@
+script variable result
+script variable order
+constant n = 3
+constant label = `count ${n}`
+constant raw = """"
+  raw ${name} and """
+  """"
+function mark value
+  put value after order
+  return value
+end mark
+
+on go
+  put [] into order
+  put [label, raw, `e${"́"}`, `${1}${2}x`, `nested ${`value ${the n of {n: 7}}`}`, `
+    first\
+    second
+    `, `\x41\u0042\u{1F600}\q \${name}\r`, `${mark(1)}${mark(2)}`, {`key`: 1, """raw""": 2}] into result
+end go

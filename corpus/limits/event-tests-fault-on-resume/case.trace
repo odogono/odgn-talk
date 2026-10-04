@@ -2,7 +2,7 @@
 # faulting it. A successful test later also runs to completion. cap=1
 # stops the incoming Handler before its first instruction both times;
 # the waiting Run faults only when the final Pump resumes it.
-> load s identity=9e40ebdd805e360c49fe2ffccbdccb051db92c99be4ac16e293eaec241db2ef1
+> load s identity=9a9141f18fcad9bc1c781dff6e11e63f6a4b876aae53cbf9f8c15f1d804c44bf
 > deliver d1 to=s message=watch limits={fuelPerRun: 15}
 > pump clock=2026-09-30T10:00:00Z
 seg s/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=224 end=wait-for-any

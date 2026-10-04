@@ -1,4 +1,4 @@
 # Pins `no item chunk` and its source position. New case for human review.
-> load bad identity=40f63d624693610659c6e698e3ce089605e2a6221e261b6dd08e1415e0ae174d
+> load bad identity=caba7ce5332fb910a1559e6161f047cf8f00e13e79acb275931a5a52b8b71137
 diag bad code="no item chunk" pos=2:20
 > vars

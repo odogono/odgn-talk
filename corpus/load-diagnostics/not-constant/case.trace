@@ -1,4 +1,4 @@
 # Pins `not constant` and its source position. New case for human review.
-> load bad identity=217aa68ac3def2955fcfd685d1c8d1d83f08ff6ba34cd7cea0aa55d367872e66
+> load bad identity=2a56931ac1d578a43cb0ce2e6543ef1789dab7f830398354427a1127ae950667
 diag bad code="not constant" pos=2:14
 > vars

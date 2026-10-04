@@ -1,5 +1,5 @@
 # Rollback keeps spent Fuel; queued cancellation starts no Run; failed cleanup is cancellation.
-> load s identity=2cdbcda51c191e7e7dfd80b2500fed5fc64d25e82e2e6dd41ebf871cf4946dac
+> load s identity=a1524e7afe2e7c1592893f89d1fa49e604abd422e4e049ca587cf4480a0f0634
 > counters s
 counters s fuel=0 alloc=0 runs=0 faults=0 state=16 mailbox=0
 > deliver d1 to=s message=spin

@@ -5,7 +5,7 @@
 kind = "trace"
 
 [versions]
-language = "1.0-rc"
+language = "1.0-rc.2"
 costModel = "0"
 
 [[scripts]]

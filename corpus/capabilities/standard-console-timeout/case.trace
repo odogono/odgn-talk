@@ -1,5 +1,5 @@
 # Console read has its fixed human-input deadline, despite Script MaxWait.
-> load s identity=8c381a83b394023d9be2c4b485215c1a55756b9addc3fdeb0caa739a9e8ec401
+> load s identity=9784bf5402ed30800ddabb2ba896cf0e43909adc045fc3034c3035cbc299c0f3
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T12:00:00Z
 call s/r1.c1 op=console.read args=[]

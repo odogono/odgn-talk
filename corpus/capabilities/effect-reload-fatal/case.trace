@@ -1,7 +1,7 @@
 # effect-reload-fatal: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=c0b0bc23c362336f891b1e77170f93ad0459a69f819fe89535fda92a26690c4b
+> load s identity=c495028e35d2aa70785a2f69e7a66f242bf03ce6b75136bbe2222cb1c482b10f
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > stub-effect s.r phase=begin status=ok
@@ -13,7 +13,7 @@ call s/r1.c1 op=r.open args=[] result=nothing
 scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
-> reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=fe48545740fdadf8b983b1e62c7d058da259291dd9dd697da47c6b7ec3de3108
+> reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=55b7ab7d1ed1a70d5ce3c686bb38edb437d12208f9052d820b73768e2f863443
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned
 effect s/r1.s1 grant=r phase=rollback status=failed

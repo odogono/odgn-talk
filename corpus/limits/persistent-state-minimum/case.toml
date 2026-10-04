@@ -4,7 +4,7 @@
 kind = "trace"
 
 [versions]
-language = "1.0-rc"
+language = "1.0-rc.2"
 costModel = "0"
 
 # `fill` spends about 16.8 million Fuel and allocates about 134 million, past

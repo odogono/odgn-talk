@@ -2,8 +2,8 @@
 # the Host, including the caller's Script and Operation costs. A Stub
 # supplies extra Fuel. The due timer's Delivery is an ordinary Host Input,
 # not a Core-owned timer; the runner replays it explicitly.
-> add-library helper identity=e352d8d1cc5c4139b8dd0470c9e8aa931eb6dd6a5d2c9f80852a93869d532f9a
-> load s identity=63dd0d79f9e3e5a27e335bef4e50c5a5cf64cf13625e53d7d772f73c09160bae
+> add-library helper identity=60a1692a058a389f5380b4a66fb1fdb37ba1c0494e55faa83fc0a8b1fc3a83a8
+> load s identity=05d7c4efe2c17063a4d515adf978c991391c8b0a0d72f5a56b4f3c45f191e897
 > stub timer.schedule charge=5
 > deliver d1 to=s message=go args=[2026-10-02T10:00:02Z]
 > pump clock=2026-10-02T10:00:00Z

@@ -8,7 +8,7 @@ export const verifyLspFeatures = (): number => {
     manifest: {
       kind: 'demo',
       version: '1',
-      language: '1.0-rc',
+      language: '1.0-rc.2',
       grants: [],
       libraries: [],
       messages: [],

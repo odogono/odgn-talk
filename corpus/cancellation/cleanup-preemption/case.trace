@@ -1,5 +1,5 @@
 # Cleanup uses its own budget, participates in cap preemption, and abandons once.
-> load s identity=c254be46ec47d6baca434d252cc67423a894062075be44960f714c51026d8ce1
+> load s identity=1fdc2239a4eade12a85eecd9e99597b2edd872e93cb966be329b71d28df260d2
 > deliver d1 to=s message=go
 > pump clock=2026-10-01T09:00:00Z
 call s/r1.c1 op=api.hold args=[]

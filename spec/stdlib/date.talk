@@ -177,21 +177,16 @@ private function readTemplate template, fn
   put 1 into i
   repeat while i <= n
     put item i of cs into c
-    if c = "{" and i < n and item (i + 1) of cs = "{" then
-      put "{" after literal
+    if c = "$" and i < n and item (i + 1) of cs = "$" then
+      put "$" after literal
       add 2 to i
-    else if c = "}" and i < n and item (i + 1) of cs = "}" then
-      put "}" after literal
-      add 2 to i
-    else if c = "}" then
-      outOfDomain(fn, template)
-    else if c = "{" then
-      put i + 1 into j
+    else if c = "$" and i < n and item (i + 1) of cs = "{" then
+      put i + 2 into j
       repeat while j <= n and item j of cs <> "}"
         add 1 to j
       end repeat
       if j > n then outOfDomain(fn, template)
-      put splitAt(characters (i + 1)..(j - 1) of template, ":") into halves
+      put splitAt(characters (i + 2)..(j - 1) of template, ":") into halves
       put item 1 of halves into token
       put nothing into width
       if the length of halves > 2 then outOfDomain(fn, template)

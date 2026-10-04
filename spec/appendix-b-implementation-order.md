@@ -40,7 +40,7 @@ The seed cases are unblessed: their output lines are written by hand ([`corpus/R
 
 ### When it is done
 
-Milestone 1 is done when both Cores conform to language 1.0-rc and Cost Model 0 ([chapter 11](11-the-trace-and-conformance.md#conformance)). Each passes every case, each Trace Case in both replays, and the Unicode test data, and each REPL replays every Session Transcript. Every case is blessed with both Cores agreeing, and CI runs the whole Corpus on both Cores for every change.
+Milestone 1 is done when both Cores conform to language 1.0-rc.2 and Cost Model 0 ([chapter 11](11-the-trace-and-conformance.md#conformance)). Each passes every case, each Trace Case in both replays, and the Unicode test data, and each REPL replays every Session Transcript. Every case is blessed with both Cores agreeing, and CI runs the whole Corpus on both Cores for every change.
 
 ## Milestone 2: the Example Hosts
 

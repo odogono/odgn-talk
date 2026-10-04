@@ -5,7 +5,7 @@
 # The matches are pinned. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> load search identity=8be578bce0b73d8fe0d29a6b33ff8990747e670c9d87faef9e5ad778d1788bc6
+> load search identity=1940519a6b52279689c01333b2f71e3e6100548649fea747dd619764bc0d3b67
 
 # 24 steps over three searches: from 0, from 3, and from 7, the end.
 > deliver d1 to=search message=go

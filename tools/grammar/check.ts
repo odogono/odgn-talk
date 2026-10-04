@@ -13,8 +13,9 @@
 // wrong mode, so all of those fail the check too.
 
 import grammar from '../../spec/data/grammar.toml';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { isRejectedSource } from '../machine/rejected-sources';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { newStats, parse, type Node, type Stats } from './parser';
 
 const ROOT = resolve(import.meta.dir, '../..');
@@ -179,7 +180,39 @@ for (const f of files(join(import.meta.dir, 'sketch'), '.talk')) {
   mustParse(readFileSync(f, 'utf8'), relative(ROOT, f));
 }
 for (const f of files(join(ROOT, 'corpus'), '.talk')) {
-  mustParse(readFileSync(f, 'utf8'), relative(ROOT, f));
+  const setupFile = join(dirname(f), 'case.toml');
+  const traceFile = join(dirname(f), 'case.trace');
+  let expected: RegExpExecArray | undefined;
+  if (isRejectedSource(f) && existsSync(setupFile) && existsSync(traceFile)) {
+    const setup = Bun.TOML.parse(readFileSync(setupFile, 'utf8')) as {
+      scripts?: { name: string; source: string }[];
+    };
+    const names = new Set(
+      setup.scripts?.filter(s => s.source === basename(f)).map(s => s.name),
+    );
+    expected = [
+      ...readFileSync(traceFile, 'utf8').matchAll(
+        /^diag (\S+) code="([^"]+)" pos=(\d+):(\d+)$/gm,
+      ),
+    ].find(
+      m => names.has(m[1]!) && grammar.syntax_error.some(e => e.code === m[2]),
+    );
+  }
+  if (expected) {
+    const { error } = parse(readFileSync(f, 'utf8'));
+    if (
+      !error ||
+      error.code !== expected[2] ||
+      error.tok.line !== Number(expected[3]) ||
+      error.tok.col !== Number(expected[4])
+    ) {
+      problems.push(
+        `${relative(ROOT, f)}: expected ${expected[2]} at ${expected[3]}:${expected[4]}`,
+      );
+    }
+  } else {
+    mustParse(readFileSync(f, 'utf8'), relative(ROOT, f));
+  }
 }
 for (const f of files(join(ROOT, 'spec/stdlib'), '.talk')) {
   mustParse(readFileSync(f, 'utf8'), relative(ROOT, f));

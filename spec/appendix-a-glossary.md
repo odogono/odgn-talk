@@ -518,4 +518,22 @@ _Avoid_: timestamp, date (unqualified)
 A calendar date with an optional time of day, and no time zone attached, e.g. `2026-09-27`. A date-only Civil Date is never equal to one with a time of day, and can't be ordered against it.
 _Avoid_: local date, naive date, date (unqualified)
 
+## Text construction
+
+**Raw Text Literal**:
+Text enclosed by a matching fence of three or more double quotes, preserving its content without interpolation or escapes, subject to the language's margin and normalization rules.
+_Avoid_: Line Text, heredoc
+
+**Interpolated Text**:
+Text written between backticks, with expression results inserted when it is evaluated.
+_Avoid_: Line Text, template value
+
+**Interpolation Hole**:
+An expression inside `${…}` in Interpolated Text, whose text form is inserted at that position.
+_Avoid_: placeholder (for an expression)
+
+**Format Template**:
+Ordinary text with `${…}` placeholders that a formatting function fills from supplied values or date fields. It contains no captured expressions.
+_Avoid_: Interpolated Text, template value
+
 <!-- end -->

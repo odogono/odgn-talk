@@ -6,7 +6,7 @@
 # domain`. Its Fuel, allocation and state figures are Cost Model 0's, as the
 # TS Core blessed them.
 
-> load stamps identity=be86f9e498e5c1e292ffa57e331284092b15b86d3d40b17cda5d0a4e9b3f3f88
+> load stamps identity=33f4755f0b373ea462b95ce24f2a080639d67199d84ee57a8baffb340f11d3e9
 > deliver d1 to=stamps message=go
 > deliver d2 to=stamps message=calendar
 > deliver d3 to=stamps message=hours

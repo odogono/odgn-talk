@@ -51,9 +51,11 @@ const diagnostic: Record<Mutation, string> = {
 const body = (h: HandlerChoice): string => {
   const head = `on ${h.name}${['suspend', 'timer'].includes(h.kind) && h.policy ? `, ${h.policy}` : ''}`;
   const add = `add ${h.value} to count`;
+  const fenced =
+    'put `value ${count}` into rendered\nput """\n  raw ${count}\n  """ into template';
   switch (h.kind) {
     case 'compute':
-      return `${head}\nrepeat ${h.repetitions} times\nif count >= 0 then\n${add}\nelse\nput 0 into count\nend if\nend repeat\nreturn count\nend ${h.name}`;
+      return `${head}\n${fenced}\nrepeat ${h.repetitions} times\nif count >= 0 then\n${add}\nelse\nput 0 into count\nend if\nend repeat\nreturn count\nend ${h.name}`;
     case 'dispatch':
       return `on ${h.name} n where n > ${h.value}\nput n into count\nend ${h.name}\non ${h.name} n\nput ${h.value} into count\nend ${h.name}`;
     case 'suspend':

@@ -1,8 +1,8 @@
 # Both tests complete despite cap=1. The incoming Handler stays ahead of
 # both ready watchers, which resume in wait order. The other Script runs
 # only in the next Pump, and observations are never charged twice.
-> load s identity=08e06cc0f967fe0425827bce784614465e76adccf8678c2d38ad984bf23c9333
-> load other identity=013ee3fa4f317da75c86a5d2b30c4c6db2ab1a283940898bd686ca05ed72c0bb
+> load s identity=838fb213165a21c897ef441b38bd835f25dafe012257c4bc41bf757e9aefdbd3
+> load other identity=42cf2de6fef4783d46e3641b644ea3186ab26fb639946384bdf08dfb5c444bcc
 > deliver d1 to=s message=watch args=[1]
 > deliver d2 to=s message=watch args=[2]
 > pump clock=2026-09-30T10:00:00Z

@@ -303,7 +303,7 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 | `join(xs, separator = "")` | The items of `xs`, each shown as `&` shows it, with `separator` between each pair |  |
 | `repeated(t, n)` | `n` copies of `t`, joined | `out of domain` |
 | `lastOffset(needle, t)` | The Character position where the last match of `needle`, a text or a Text Pattern, starts in `t`, or 0 if there is none |  |
-| `format(template, values)` | `template` with each `{name}` replaced by the value of that key of `values`, shown as `&` shows it | `out of domain` |
+| `format(template, values)` | `template` with each `${name}` replaced by the value of that key of `values`, shown as `&` shows it | `out of domain` |
 | `formatNumber(n, symbols, places = nothing)` | The number `n` written with a Locale's `numberSymbols`, rounded to `places` digits after the point if `places` is given | `out of domain` |
 | `parseNumber(t, symbols)` | The number `t` writes with a Locale's `numberSymbols` | `can't convert`, `out of domain` |
 
@@ -318,9 +318,9 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 - **`join(xs, separator = "")`** shows each item as `&` shows it, so a list of numbers joins without converting first.
 - **`repeated(t, n)`:** `n` is an integer, 0 or more.
 - **`lastOffset(needle, t)`** gives the start of the last of the successive matches the Match Search finds, taking a text needle as a Text Pattern that matches exactly that text. So `lastOffset("aa", "aaa")` is `1`.
-- **`format(template, values)`** is the language's only interpolation:
-  - `{name}` shows the value of the key `name` of the map `values`, as `&` shows it. `{{` and `}}` are literal braces.
-  - A name that isn't a key raises `out of domain` with `value` the name. An unclosed `{`, or a `}` that isn't doubled, raises it with `value` the template.
+- **`format(template, values)`** fills a Format Template:
+  - `${name}` shows the value of the key `name` of the map `values`, as `&` shows it. `$$` is a literal dollar. Other dollar signs and ordinary braces are literal.
+  - A name that isn't a key raises `out of domain` with `value` the name. An unterminated `${` raises it with `value` the template. Keys are looked up exactly, including spaces and punctuation; no expression is evaluated. `$${name}` produces literal `${name}`.
   - There is no width or precision: `pad` and `round` do that.
 
 > **Example.**
@@ -329,7 +329,7 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 > use format, pad, split from text
 >
 > on show
->   put format("{name} owes {amount}", {name: "Ann", amount: 2.50 GBP}) into owed   -- "Ann owes 2.50 GBP"
+>   put format("${name} owes ${amount}", {name: "Ann", amount: 2.50 GBP}) into owed   -- "Ann owes 2.50 GBP"
 >   put pad("id", 5, ".") into head   -- "id..."
 >   put split("a;b;c", ";") into parts   -- ["a", "b", "c"]
 > end show
@@ -555,18 +555,18 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 ### Templates
 
-`formatDate` and `parseDate` share one template language of named, numeric fields in braces ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md)).
+`formatDate` and `parseDate` share one template language of named, numeric fields in dollar-brace placeholders ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md)).
 
-- **Tokens:** `{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}` and `{weekday}`, each with an optional width `:n`, and `{fraction:n}`, the first n digits of the nanoseconds, with n from 1 to 9. `{{` and `}}` are literal braces. Everything else is literal text.
+- **Tokens:** `${year}`, `${month}`, `${day}`, `${hour}`, `${minute}`, `${second}` and `${weekday}`, each with an optional width `:n`, and `${fraction:n}`, the first n digits of the nanoseconds, with n from 1 to 9. `$$` is a literal dollar. Other dollar signs and ordinary braces are literal. Everything else is literal text.
 - **All numeric:** there are no names, no 12-hour clock and no AM/PM, which are Locale concerns. Month and day names come from the `locale` Capability.
-- **A valid template** holds `{year}`, `{month}` and `{day}`. A time token needs `{hour}` and `{minute}`. Each token appears at most once. Any other token, a missing width on `{fraction}`, an unclosed `{` or a `}` that isn't doubled is invalid. An invalid template raises `out of domain`, with `value` the template.
+- **A valid template** holds `${year}`, `${month}` and `${day}`. A time token needs `${hour}` and `${minute}`. Each token appears at most once. Any other token, a missing width on `${fraction}` or an unclosed `${` is invalid. An invalid template raises `out of domain`, with `value` the template.
 - **`formatDate(d, template)`:**
   - `d` is a Civil Date, so an Instant goes through `toCivil` or the `calendar` Capability first. A template with time tokens given a date-only value raises `out of domain`, with `value` the date.
-  - Digits are ASCII. `:n` pads with zeros to n digits and never truncates. `{fraction:n}` truncates the nanoseconds to n digits.
+  - Digits are ASCII. `:n` pads with zeros to n digits and never truncates. `${fraction:n}` truncates the nanoseconds to n digits.
 - **`parseDate(t, template)`:**
   - The whole text must match. Literal text matches exactly. A token with a width takes exactly that many ASCII digits, and one without takes the longest run of one or more.
   - Seconds and nanoseconds default to 0. The result is a date-only value unless the template has time tokens.
-  - A mismatch, or a `{weekday}` that disagrees with the date, raises `can't convert`, with `{value: t, to: "civil date", format: template, offset}` and `offset` the position of the first Character that doesn't fit, or of the weekday's digit.
+  - A mismatch, or a `${weekday}` that disagrees with the date, raises `can't convert`, with `{value: t, to: "civil date", format: template, offset}` and `offset` the position of the first Character that doesn't fit, or of the weekday's digit.
   - A field that matches but is outside its range raises `out of range`, as `makeDate` does.
 
 > **Example.**
@@ -576,8 +576,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 >
 > on stamp
 >   put makeDateTime(2026, 9, 27, 14, 5) into d
->   put formatDate(d, "{day:2}/{month:2}/{year} {hour:2}:{minute:2}") into shown   -- "27/09/2026 14:05"
->   put parseDate("2026-09-27", "{year}-{month}-{day}") into back   -- 2026-09-27
+>   put formatDate(d, "${day:2}/${month:2}/${year} ${hour:2}:${minute:2}") into shown   -- "27/09/2026 14:05"
+>   put parseDate("2026-09-27", "${year}-${month}-${day}") into back   -- 2026-09-27
 > end stamp
 > ```
 

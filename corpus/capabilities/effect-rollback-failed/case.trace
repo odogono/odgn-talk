@@ -1,7 +1,7 @@
 # effect-rollback-failed: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=5791d75748aca3fb718bd5deb43206e27a0d17e2a147040d8fbb4774b54c4de4
+> load s identity=2b261503c5e2e0259b6f7159d9474ad598a5a33d090494e73bbe734ce14bbc67
 > stub resource.write value=nothing
 > stub-effect s.r phase=begin status=ok
 > stub-effect s.r phase=rollback status=failed

@@ -116,3 +116,5 @@ A function is a Built-in only if it can't be written in the language: it needs t
 - Settled by #71: `isDisposed(o)` is a Built-in, so Guards may call it. It raises `wrong kind` for anything that isn't a Host Object (ADR 0016).
 - Narrowed by ADR 0043 (#176): `kindOf`, `functionArity` and `functionName` join the value Built-ins, so Scripts and Guards can read a value's kind and a Function Value's arity and name without `is a` chains or its display form.
 - Narrowed by ADR 0044 (#184): `objectKind` joins the value Built-ins, so Scripts and Guards can read a Host Object's Object Kind without its display form.
+
+- Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.

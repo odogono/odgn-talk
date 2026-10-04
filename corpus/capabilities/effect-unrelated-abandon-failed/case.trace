@@ -1,7 +1,7 @@
 # effect-unrelated-abandon-failed: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=0b0802a9a1b7d2eb3f41072785ed7a3a03e435a2554a2c3ca64130003ab88bdb
+> load s identity=916d622e49d99be4dd9d4074a309e76b4fbe94d232c836b7b8ea7c99246f2287
 > stub resource.openlock value=nothing
 > stub resource.write value=nothing
 > stub resource.unlock error={}

@@ -1,5 +1,6 @@
 import {
   parseSource,
+  syntaxText,
   type ParseError,
   type SyntaxElement,
   type SyntaxNode,
@@ -31,6 +32,23 @@ const leaves = (tree: SyntaxNode): Leaf[] => {
     const { element, depth, attachRight } = stack.pop()!;
     if (element.kind === 'token') {
       out.push({ token: element, depth, attachRight });
+      continue;
+    }
+    // Literal interiors are lossless: format surrounding code, never content.
+    if (element.rule === 'Interpolated') {
+      const first = element.children[0] as Token;
+      out.push({
+        token: {
+          ...first,
+          raw: syntaxText(element).slice(
+            first.leadingTrivia.reduce((n, t) => n + t.raw.length, 0),
+          ),
+          end: element.end,
+          t: 'template',
+        },
+        depth,
+        attachRight,
+      });
       continue;
     }
     const branchBlock =

@@ -1,4 +1,4 @@
 # Pins `default order` and its source position. New case for human review.
-> load bad identity=e125b8ce170ccba10efa052c0dc21a1abb5b98cad637ccd0ae221eb3ee2ae5b7
+> load bad identity=7c4d6ff514cc3818ae021c3476132bbe82639623cab780c06ff590b3b2719cb6
 diag bad code="default order" pos=1:19
 > vars

@@ -82,6 +82,10 @@ func TestSharedSyntaxExamples(t *testing.T) {
 			}
 			tree, err := Parse(string(source))
 			if err != nil {
+				trace, readErr := os.ReadFile(filepath.Join(filepath.Dir(file), "case.trace"))
+				if e, ok := err.(*Error); ok && readErr == nil && strings.Contains(string(trace), fmt.Sprintf("diag bad code=%q pos=%d:%d", e.Code, e.Pos.Line, e.Pos.Column)) {
+					return
+				}
 				t.Fatal(err)
 			}
 			if tree.Source() != string(source) {

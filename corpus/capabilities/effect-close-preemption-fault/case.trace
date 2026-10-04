@@ -1,7 +1,7 @@
 # effect-close-preemption-fault: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=a5f325ddb7a12c542e6d653c6d0ce5f883bcb141162f13506f5e436da95ff267
+> load s identity=e49d73ae4dfc503d6d05ca1bf12eb59dff9895ba21a43afc7556b4d56630e2c4
 > stub resource.open value=nothing
 > stub resource.write value=nothing
 > stub resource.close value=nothing

@@ -14,7 +14,7 @@
 # call is never refused later. `sink` handles both, in mailbox order.
 # Fuel, allocation and state figures are Cost Model 0's.
 
-> load sink identity=43a835402636b5c510cc9479b4e0b7908ce8f2fe125c60d4e783fd6259710538
+> load sink identity=7af8d5b0ffa5bee6f2bb48c4c788e58a09d2c22b735f4c0f31ad25deed68f204
 
 > deliver to=sink message=note args=[2]
 refused code="mailbox full"

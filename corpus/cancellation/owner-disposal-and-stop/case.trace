@@ -1,5 +1,5 @@
 # Disposal discards suspended, parked and preempted Runs, and queued Decisions.
-> load s identity=d99a5daea7f584be2307b7692f50f6695de3e3c76c8e6ecb0272e9c95207a31f
+> load s identity=19c3a1421c66bc50a5a2005a5b0d3642ecd49ecc8477bcf531448495509c9943
 > request d1 to=s message=go
 > deliver d2 to=s message=go
 > decide d3 to=s message=decide

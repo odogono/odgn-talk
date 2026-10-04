@@ -506,6 +506,10 @@ A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch
 > end try
 > ```
 
+## Interpolated Text
+
+Evaluate Interpolation Holes left to right, converting each result with `&` before evaluating the next hole. Insert each result once; its newlines are not indented and its `${…}` text is not interpreted again. Constants, Script Variable initializers, parameter defaults and Guards apply their existing expression restrictions inside every hole. A hole-free literal is a constant; a literal with holes is eligible in an initializer exactly when its expressions are eligible. Chapter 8 fixes lowering and charges.
+
 ## Outside parity
 
 _None._

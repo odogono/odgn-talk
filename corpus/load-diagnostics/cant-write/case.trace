@@ -1,4 +1,4 @@
 # Pins `can't write` and its source position. New case for human review.
-> load bad identity=10b1caf21722c88cb76255116570c2165b28c5e67659e1722026062249026b32
+> load bad identity=6fecf1a9fafe4eda71f4b7e5d4e94a9776a3d7c61c03037f1fa051bb41254f04
 diag bad code="can't write" pos=3:12
 > vars

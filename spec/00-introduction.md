@@ -14,13 +14,15 @@ The language's public name is **NorthTalk**. Script and Library source files use
 
 <!-- generated: version -->
 
-This is language **1.0-rc**, with Cost Model **0**.
+This is language **1.0-rc.2**, with Cost Model **0**.
 
 <!-- end -->
 
 The language version is the Spec's version. It pins the grammar, the Unicode version, the Unit Catalogue and the other catalogues, the display form and the Trace grammar ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). The Cost Model has a version of its own, which also covers the Abstract Machine, since a change to the lowering changes Fuel.
 
-The Spec is handed off as language 1.0-rc with a provisional Cost Model 0. Language 1.0 is declared once both Cores pass the seed corpus and Cost Model 1 has been calibrated against them ([ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md)).
+The Spec is handed off as language 1.0-rc.2 with a provisional Cost Model 0. Language 1.0 is declared once both Cores pass the seed corpus and Cost Model 1 has been calibrated against them ([ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md)).
+
+Language `1.0-rc.2` breaks compatibility with earlier prereleases: reusable text/date Format Templates require `${…}` and use `$$` for a literal dollar; bare braces are ordinary text. Update templates and regenerate pinned Library identities, saved-state compatibility keys and corpus expectations. Ordinary quoted text is unchanged. Before language 1.0, lowering changes may accompany a language prerelease while provisional Cost Model 0 stays at 0; Cost Model 1 remains reserved for calibration ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#prerelease-cost-model-exception)).
 
 ## What is normative
 

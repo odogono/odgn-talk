@@ -1,7 +1,7 @@
 # scope-preemption-save: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=229bbe888f0fd1c70cbd0c15ca9de343eabb61494cd3270d9100208ea0bef4d2
+> load s identity=342771b9f8304d463d3d1b8abed29d61ced0efd37a57c37aba252f4e926a5b25
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=go
@@ -22,6 +22,6 @@ seg s/r1 continue fuel=73 alloc=8 state=16 end=return
 run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=40
 pumped state=idle fuel=73
 > save s2
-> restore from=s2 fingerprint=e30ca8b3437bb59e5edd9dd6656d91a4969580f9867fe70c6c18923b4c3934cd mode=full
+> restore from=s2 fingerprint=42e8a24ecca54aea5905de7964ecd842ac6e0e1b5caf2156f5b1dc82f6cdadb2 mode=full
 > vars
 vars s count=2

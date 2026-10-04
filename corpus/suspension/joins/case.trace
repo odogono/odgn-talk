@@ -4,8 +4,8 @@
 # after starting one. Its Fuel, allocation and state figures are Cost Model
 # 0's, as the TS Core blessed them.
 
-> load board identity=5262508e2af316e9e1e1b35b2ddac89c86a32a0c466d7b53022ef83d4532b227
-> load shop identity=c4ee5fb1c5c94c888e6aa5a91f9b483b880a649bf348ece20c28735f2f5188d5
+> load board identity=f34645c4fbd2a45559399bf8168b3dac15cf02c166853ada1c12c6662ba720b7
+> load shop identity=56a24fcd8eada33b47cf958354844597fdff1fd83951d888f914a89b6974d98c
 > deliver d1 to=board message=gather args=[["a", "b"]]
 > deliver d2 to=board message=gather args=[[]]
 > deliver d3 to=board message=gather args=[["c", "d"]]

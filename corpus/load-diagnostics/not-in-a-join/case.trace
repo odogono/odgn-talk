@@ -1,5 +1,5 @@
 # Pins `not in a join` and its source position. New case for human review.
-> load bad identity=25c049c2e32194caeaba8c70f0a096770e4e75ae3b521d5d95de0f1fa8f9024b
+> load bad identity=b383ced2b730f675f64ea996069c6507f366f227333aabc458942f1706a9db01
 diag bad code="empty join" pos=2:1
 diag bad code="not in a join" pos=3:1
 > vars

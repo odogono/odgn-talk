@@ -1,8 +1,8 @@
 # Unblessed: new regression; first blessing awaits human review.
 # The 48-byte pending call puts the sender past its Persistent State limit.
 # The paid send survives the fault, but its reply is abandoned.
-> load a identity=882e34627492ea56b554559bb26d1425cd31f93d2c9c42dc0feadf2a8a039237
-> load b identity=daf876abd29bd87415d630f46952e552d946edac4be8ab76557ec74ae1a20f49
+> load a identity=1930591fa6e287db7fecbeb081f10b240d9c861dfb9edff7a27eb6a761e6e369
+> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
 > deliver d1 to=a message=go
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping args=[7] wait=yes

@@ -1,7 +1,7 @@
 # scope-grants-as-used: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=006453c7afa2ccf44546a1450727f19bea3ed474a654cf56bd44ba7432110452
+> load s identity=21671f9ab7581bc81ccda3e10f879b1239aad496b289c4ec715ea43e00d74d5a
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=go
@@ -14,7 +14,7 @@ seg s/r1 start delivery=d1 handler=go clause=1 fuel=20 alloc=8 state=16 end=retu
 run s/r1 outcome=completed delivery=d1 handler=go fuel=20 alloc=8
 pumped state=idle fuel=20
 > save s1
-> restore from=s1 fingerprint=4ea0b92d08c17812a3344c0f5b86d60ce241e4fb95b06483e1a5f75048ffea40 mode=full
+> restore from=s1 fingerprint=cfa6b3a499b24c9dd9c33c361578e75807eaa3dc7cfcfd73ccde83962258ed10 mode=full
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d2 to=s message=go

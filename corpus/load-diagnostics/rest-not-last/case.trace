@@ -1,4 +1,4 @@
 # Pins `rest not last` and its source position. New case for human review.
-> load bad identity=5fe08a7e037512186b7a6827413afa4ab20d05dc9bc1307916c9b17637233fd5
+> load bad identity=1d52b9b4465a88a9bcf39f3631e6ef519e19e67c7ca6e2e5d9cc4428c50bf61f
 diag bad code="rest not last" pos=2:6
 > vars

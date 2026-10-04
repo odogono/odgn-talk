@@ -3,8 +3,8 @@
 # A full mailbox raises at the paid send; errors precede later send records.
 # Missing receivers and wrong-kind Values are caught; an already sent message
 # survives the sender's error. The receiver uses its own limits.
-> load a identity=94197197384dfb24f779907acbbdf4dc4c816002b62dea587731a09fa6f477a2
-> load b identity=609a67847b92371ad5d21b17bff497ee42069b2fe6548bb871920f6e7d793e01
+> load a identity=e192c5da7454b65fa6c065c42994d26644fdbedb9c30c965e94d49c4a61b791d
+> load b identity=7ca8d0dca0ca3988df8a8acd34568d66555878b8d3f5a5e3b61225fdd0d0f092
 > deliver d1 to=a message=fire args=[1]
 > deliver d2 to=a message=missing
 > deliver d3 to=a message=wrong args=[42]

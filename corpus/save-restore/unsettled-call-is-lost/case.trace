@@ -11,7 +11,7 @@
 # `call lost` is raised at the `ask … and wait` (shop:5, pos 9:5), and is an
 # ordinary error the Script catches.
 
-> load shop identity=2bb65d4e46650e963200ecf1ffb57c05e9277d2d3ea69c0eaae0e882cdd5ff6c
+> load shop identity=e6901fa17de3df611249514648f16b3b83aa46b6c95beadf433cfae7bbaa2ccb
 
 # Two pending calls, each with a maxPending deadline of 10:00:10, and a Run
 # in a 5 s `wait`.
@@ -27,7 +27,7 @@ seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=804 end
 pumped state=idle fuel=245 next=2026-09-30T10:00:05Z
 
 > save s1
-> restore from=s1 fingerprint=67b22fbcdcfd9229bcccff500d9a6dd48c84b2fbc293172541680c14ffaf149d mode=full pending=[shop/r1.c1, shop/r2.c1]
+> restore from=s1 fingerprint=7cc41345b6ebcf7a8ea8cb7f4dc7b22c68ba027ef05b999c9d1ceefb561392e1 mode=full pending=[shop/r1.c1, shop/r2.c1]
 
 # Only shop/r1.c1 is settled. Every deadline has passed by 10:00:20.
 > settle shop/r1.c1 how=answer value=12

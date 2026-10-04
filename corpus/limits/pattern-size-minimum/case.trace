@@ -16,7 +16,7 @@
 # and is never charged (chapter 8, Charging). Its figures are Cost Model
 # 0's, as the TS Core blessed them.
 
-> load patterns identity=1c536f68d5736d279f15ee8d4dc10a2dd7e2365619dd771744a6383219fbb2b3
+> load patterns identity=6a906cfc765cd886540663b0e47253c087dbe4ce99902ab576ccef35428952c0
 
 > deliver d1 to=patterns message=build args=[false]
 > pump clock=2026-09-28T09:00:00Z

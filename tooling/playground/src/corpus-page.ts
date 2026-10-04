@@ -37,11 +37,11 @@ const run = async () => {
     };
     try {
       if (
-        c.setup.versions.language !== '1.0-rc' ||
+        c.setup.versions.language !== '1.0-rc.2' ||
         c.setup.versions.costModel !== '0'
       ) {
         throw new Error(
-          'Unsupported case versions; expected language 1.0-rc / Cost Model 0',
+          'Unsupported case versions; expected language 1.0-rc.2 / Cost Model 0',
         );
       }
       const result =

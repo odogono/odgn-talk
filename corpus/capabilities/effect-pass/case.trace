@@ -1,7 +1,7 @@
 # effect-pass: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=7b0f86dbcd41b5edb084f6daca7d03edb00f9b3645361b2d6b78c29cd7448329
+> load s identity=0a73b79929bbc7f61aa3d0e2df9d4f7a38eef0f301d2fb6346e81a15dd076cd5
 > stub resource.write value=nothing
 > stub-effect s.r phase=begin status=ok
 > stub-effect s.r phase=commit status=ok

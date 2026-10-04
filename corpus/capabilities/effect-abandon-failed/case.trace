@@ -1,7 +1,7 @@
 # effect-abandon-failed: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=211b24eb42a34d0805b184608d7762efe16739ca6a2981712748416023067fb6
+> load s identity=a52d6d25f1414b707f405977b1e809b0be8aef2c153a87ecec9c8c61385c67c3
 > stub resource.open value=nothing
 > stub resource.close error={}
 > stub-effect s.r phase=begin status=ok

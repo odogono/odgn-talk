@@ -9,7 +9,7 @@
 #   10 s on, so they fire b, d, c, a. They are all one Script's, so they run
 #   in the order they became ready, and `fired` records it.
 
-> load sleeper identity=f19e6f51a1a4c96198fe7642c9241cc9737faf135850a43fa097a24459eca396
+> load sleeper identity=e1280a73ad067afb215f5ecb2fdc74f498a175121186768e55c19420592fb6e0
 
 > deliver d1 to=sleeper message=nap args=["a", 30 s]
 > deliver d2 to=sleeper message=nap args=["b", 10 s]
@@ -23,7 +23,7 @@ seg sleeper/r4 start delivery=d4 handler=nap clause=1 fuel=15 alloc=0 state=1012
 pumped state=idle fuel=60 next=2026-09-30T10:00:10Z
 
 > save s1
-> restore from=s1 fingerprint=d3f5d7a287c35e9b11f8609ab57629da0d0a27a8313b4ff1260b3b4a5fc89981 mode=full
+> restore from=s1 fingerprint=f3deb17fc137b709786aa5338127f3760d0f6aee835b13dfd8c806c6df4d6cae mode=full
 
 # Earlier than the saved reading: refused, and the Group is unchanged.
 > pump clock=2026-09-30T09:59:59Z

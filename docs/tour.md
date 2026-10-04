@@ -386,15 +386,15 @@ on librariesTour body
   put decodeJson(body) into data    -- JSON null becomes Nothing
   put toHex(<<0x0D, 0x0A>>) into hex
   put celsiusToFahrenheit(20) into f               -- 68
-  -- There is no interpolation syntax. `format` fills a template from a map:
-  put format("{who} has {n} items", {who: "Ann", n: 3}) into summary
+  -- `format` fills a reusable template from a map; backticks interpolate expressions immediately:
+  put format("${who} has ${n} items", {who: "Ann", n: 3}) into summary
 
   -- Civil Dates, built with the `date` Library:
   put makeDate(2026, 9, 27) into launch            -- a Civil Date: no time zone
   put launch + 1 month into nextMonth              -- 27 October 2026
   put "2026-09-27" as civil date into sameDay      -- no date literal: convert text
   put launch as text into iso                      -- "2026-09-27"
-  put formatDate(launch, "{day:2}/{month:2}/{year}") into shown  -- a template: "27/09/2026"
+  put formatDate(launch, "${day:2}/${month:2}/${year}") into shown  -- a template: "27/09/2026"
 
   -- Built-ins are always there, without an Import:
   put weekday(launch) into wd       -- 7: Sunday (Monday is 1)
@@ -614,3 +614,19 @@ end firstBytes
 - [`CONTEXT.md`](../CONTEXT.md): the glossary.
 - [`docs/adr/`](adr/): every decision and why it was made.
 - [`corpus/examples/orders-pricing/`](../corpus/examples/orders-pricing/): two Scripts talking to each other, as a conformance case.
+
+Backticks interpolate expressions, while raw fences preserve reusable placeholders:
+
+```talk
+let greeting be `Hello ${2 + 3}!`
+let prompt be `
+  Reply as JSON: {"answer": "..."}
+  Keep it under ${80} words.
+  `
+let template be """
+  Dear ${name},
+  Thanks for ordering ${qty} items.
+  """
+```
+
+An immediate newline after the opener selects closing-margin indentation; inline-start text preserves whitespace. Backticks interpret JavaScript-style escapes such as `\n`; ordinary double quotes and raw fences do not.

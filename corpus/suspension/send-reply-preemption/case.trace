@@ -1,8 +1,8 @@
 # Unblessed: new regression; first blessing awaits human review.
 # A receiver failure resumes through a local Handler frame. Its unwind spends
 # the Pump cap atomically before the caller's catch instructions can run.
-> load a identity=ce89396bb0518c8a0362d3b5191f97c2385f871b947c73db1501d868bb762585
-> load b identity=44a4a02c0e695f99cffffc1ef9408f0acf8bf89bab8fdf08dab65691d72d02e5
+> load a identity=1e45d82b5582ebd40818df3162473aaa2183c1c9497cc75c1fe7162f5f41df20
+> load b identity=e73280d674f73a9a5d37dd690f2375ca9ddb642e72d3cb6942d435f6da8108a2
 > deliver d1 to=a message=go
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping wait=yes

@@ -1,0 +1,13 @@
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "fenced"
+source = "fenced.talk"
+
+[[disassembly]]
+unit = "fenced"
+expected = "fenced.dis"

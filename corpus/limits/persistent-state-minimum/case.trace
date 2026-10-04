@@ -20,7 +20,7 @@
 # The Run-ending return checks Persistent State before its 2-Fuel charge;
 # that charge is not made when the cap is exceeded (chapter 8, Charging).
 
-> load hoard identity=d83a79b09187dc55876e233662514416750b4b84e00604f259c55f54b214c985
+> load hoard identity=335c5b8ce62bbbe160ca4fcd0f2906073fa143ae960185f8aa09665ba7b5d891
 
 > deliver d1 to=hoard message=fill
 > pump clock=2026-09-28T09:00:00Z

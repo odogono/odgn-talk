@@ -2,7 +2,7 @@
 # between the two Deliveries. Its Fuel, allocation and state figures are
 # Cost Model 0's, as the TS Core blessed them.
 
-> load router identity=050a979c1e4c910dcd1dd2fedb5633033fb3b74eaf94cadee817e80196b37ae1
+> load router identity=e713f719a8c719c969b8110004503040f753266ed4c1f43eb7ead7a2973b0bc2
 > deliver d1 to=router message=go
 > pump clock=2026-10-02T09:00:00Z
 raise router/r1 code="wrong kind" at=router:59 pos=11:9
