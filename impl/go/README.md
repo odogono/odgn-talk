@@ -347,12 +347,12 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 118 cases: all 12 text-model cases, all 36 load-diagnostic
+The gate contains 119 cases: all 12 text-model cases, all 37 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
 60 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 58-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 59-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their

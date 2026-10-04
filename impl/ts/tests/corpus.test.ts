@@ -188,6 +188,7 @@ test('the blessed text-model Trace Cases reproduce exactly', () => {
 });
 
 test.each([
+  'load-diagnostics/invalid-raw-text-closing-margin',
   'load-diagnostics/invalid-text-closing-margin',
   'limits/fenced-text-concat',
 ])('the fenced-text regression %s reproduces on both replay paths', name => {

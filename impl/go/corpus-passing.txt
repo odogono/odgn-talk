@@ -48,6 +48,7 @@ load-diagnostics/duplicate-name
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/initialiser-failed
+load-diagnostics/invalid-raw-text-closing-margin
 load-diagnostics/invalid-text-closing-margin
 load-diagnostics/invalid-text-delimiter
 load-diagnostics/invalid-text-escape
