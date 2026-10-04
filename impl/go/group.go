@@ -57,6 +57,7 @@ type delivery struct {
 	fields   map[string]string
 	from     RunID
 	during   *corevalue.Value // non-nil only for an internal error message
+	reply    CallID
 }
 type execution struct {
 	raisesWritten int
@@ -70,6 +71,9 @@ type execution struct {
 	timerOrder    int64
 	parked        bool
 	deciding      bool
+	calls         int64
+	waitCall      CallID
+	abandonCall   CallID
 }
 type workItem struct {
 	delivery delivery
@@ -438,6 +442,10 @@ func (g *Group) Inspect() Inspection {
 			}
 			if x.run.EventWait != nil {
 				run.Status, run.Wait = Suspended, x.run.EventWait.Kind
+			}
+			if x.run.SendWait {
+				run.Status, run.Wait, run.Calls = Suspended, "send-wait", []CallID{x.waitCall}
+				run.Until = time.Time{}
 			}
 			view.Runs = append(view.Runs, run)
 		}

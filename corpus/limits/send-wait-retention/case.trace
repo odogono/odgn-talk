@@ -1,0 +1,22 @@
+# Unblessed: new regression; first blessing awaits human review.
+# The 48-byte pending call puts the sender past its Persistent State limit.
+# The paid send survives the fault, but its reply is abandoned.
+> load a identity=882e34627492ea56b554559bb26d1425cd31f93d2c9c42dc0feadf2a8a039237
+> load b identity=daf876abd29bd87415d630f46952e552d946edac4be8ab76557ec74ae1a20f49
+> deliver d1 to=a message=go
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping args=[7] wait=yes
+fault a/r1 limit=persistent at=a:4 pos=2:2
+abandon a/r1.c1
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=28 alloc=48 state=0 end=fault
+run a/r1 outcome=limit-fault delivery=d1 handler=go limit=persistent fuel=28 alloc=48
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r1 outcome=completed handler=ping value=7 fuel=7 alloc=0
+pumped state=idle fuel=35
+> counters a
+counters a fuel=28 alloc=48 runs=1 faults=1 state=0 mailbox=0
+> counters b
+counters b fuel=7 alloc=0 runs=1 faults=0 state=0 mailbox=0
+> vars
+vars a
+vars b

@@ -149,7 +149,7 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Joins and waiting or Message Path `send` instructions, foreign Function Value calls with
+Joins and Message Path `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
@@ -202,6 +202,9 @@ visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
 on the next Pump; Fuel Cap limits the Group. Request cancellation joins the same
 queue, and Pending results settle after Pump records. Worker reentry, backwards
 Clock readings, invalid values and Function Values from other Groups are refused.
+Clock readings outside the language's year 1–9999 range currently panic during
+conversion; returning `invalid value` for them is tracked in
+[#282](https://github.com/odogono/odgn-talk/issues/282).
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
@@ -258,8 +261,28 @@ the queued message counts at its next Persistent State check. Budget faults
 prevent delivery; later sender faults, errors or
 cancellation preserve already sent messages. Plain `send` leaves `it` unchanged.
 Receiver Names remain plain frame data across preemption and contribute no
-Value size to Persistent State. `send … and wait`, Joins and Object Message
-Paths remain at their untouched implementation boundaries.
+Value size to Persistent State.
+
+`send … and wait` to a named Script or an ownerless `me` uses the same mailbox
+and message charge, then releases the sender's Script until the receiver ends.
+Each accepted waiting send gets a call id in that Run's start order. A reply
+resumes the sender at a new Segment and is stored in `it`, with no further
+send charge. Receiver errors, Limit Faults, cancellation, dropping and unmatched
+messages raise `send failed` at the sending instruction, with `reason` and,
+for an error, the receiver's error map. A send's reply wait is bounded by the
+sender Run's `MaxWait`, including a tightened Delivery override. A timeout raises
+`timeout`, with `after` in milliseconds. Sender cancellation runs its cleanup;
+cancellation, timeout and a retaining-state fault abandon the reply without
+cancelling the receiver.
+
+A pending reply counts 48 bytes toward the sender's Persistent State at
+suspension. Once the receiver ends, the ready sender retains the reply Value,
+or the receiver's error map for a failure, in place of that call. Resumption
+charges, including unwinding through local Handler frames, spend the Pump's
+Fuel cap and the Script's slice before following instructions run. Inspection
+reports `send-wait` and the pending call id, with no `until` for `MaxWait`.
+Joins, Object Message Paths and foreign Function Value calls remain at their
+untouched implementation boundaries.
 
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
@@ -315,9 +338,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 105 cases: all 11 text-model cases, all 30 load-diagnostic
+The gate contains 109 cases: all 11 text-model cases, all 30 load-diagnostic
 cases, all six Disassembly Cases, the three other Value Encoding cases, and
-55 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+59 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 50-case step-1 set and eight reviewed step-2 cases,
@@ -351,6 +374,12 @@ without Value size, and same-Segment Persistent State checks after self-send.
 Three other corrected TS traces need Go facilities outside
 this slice; their remaining Go parity is tracked in
 [#277](https://github.com/odogono/odgn-talk/issues/277).
+
+The reviewed `suspension/send-and-wait` Trace also passes unchanged, with replies,
+receiver errors, unmatched messages and timeout. Three new paired reply cases
+pin resumption unwinding under a Pump cap, pending-call retention faults, and
+replacement cancellation with cleanup and ignored late replies. They keep
+their `Unblessed` headers for first human review.
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

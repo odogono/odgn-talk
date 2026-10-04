@@ -60,6 +60,8 @@ type Run struct {
 	WaitNS         *big.Int
 	EventWait      *EventWait
 	EventResume    *EventResume
+	SendWait       bool
+	SendResume     *SendResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 	Vetoed         bool
@@ -234,8 +236,9 @@ func (r *Run) Execute(slice int64) {
 	r.ExecuteSelected(slice, nil, nil)
 }
 
-// SendFunc commits a paid, non-waiting message. False means mailbox full.
-type SendFunc func(to, message string, args []value.Value) bool
+// SendFunc commits a paid Script message, registering a reply when wait is true.
+// False means mailbox full.
+type SendFunc func(to, message string, args []value.Value, wait bool) bool
 
 // ExecuteSelected notifies the scheduler when an entry clause's combined
 // charge succeeds, before effects commit. Both callbacks belong to this turn;
@@ -252,7 +255,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || i.Name == "send" && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}
@@ -307,7 +310,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 		}
 		f.Clause = false
 		trial.Clause = false
-		if err == nil && i.Name == "send" && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args) {
+		if err == nil && (i.Name == "send" || i.Name == "send-wait") && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args, i.Name == "send-wait") {
 			v := failure("mailbox full", value.Pair{Key: "to", Val: text(f.ReceiverNames[len(f.Stack)-1])})
 			err = &v
 		}
@@ -532,6 +535,8 @@ func (r *Run) Cancel(budget int64) {
 		r.WaitNS = nil
 		r.EventWait = nil
 		r.EventResume = nil
+		r.SendWait = false
+		r.SendResume = nil
 	}
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
@@ -542,6 +547,16 @@ func (r *Run) Cancel(budget int64) {
 }
 func (r *Run) RetainedSize() int64 {
 	size := int64(96)
+	if r.SendWait {
+		size = saturatingAdd(size, 48)
+	}
+	if p := r.SendResume; p != nil {
+		if p.Reason == "" && !p.Timeout {
+			size = saturatingAdd(size, Size(p.Answer))
+		} else if p.Error.Kind != value.Nothing {
+			size = saturatingAdd(size, Size(p.Error))
+		}
+	}
 	if r.EventWait != nil {
 		for _, v := range r.EventWait.Values {
 			size = saturatingAdd(size, Size(v))

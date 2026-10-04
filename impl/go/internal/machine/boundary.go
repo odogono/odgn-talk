@@ -37,7 +37,7 @@ func Supported(i lower.Instruction) bool {
 	switch i.Name {
 	case "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
 		return true
-	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "veto", "pass", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait", "wait-for", "wait-for-any", "send":
+	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "veto", "pass", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait", "wait-for", "wait-for-any", "send", "send-wait":
 		return true
 	case "add", "subtract", "multiply", "divide", "div", "mod", "power", "negate", "concat", "range":
 		return true

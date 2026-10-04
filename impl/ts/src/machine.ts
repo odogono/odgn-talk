@@ -1721,10 +1721,16 @@ export class Run {
   // Suspend at the current instruction, a Segment's end: Persistent State,
   // this Run's frames included, is measured first (chapter 6, Limits).
   private suspend(s: Suspension) {
+    // A paid Script send is already in the receiver's mailbox. Its reply wait
+    // counts at this boundary, before `suspended` is installed for the scheduler.
+    const reply = s.k === 'send' ? partSize('pending call', 0, 0) : 0;
     if (
       this.charging &&
-      this.persistentState() + this.size() > this.limits.persistentState
+      this.persistentState() + this.size() + reply > this.limits.persistentState
     ) {
+      if (s.k === 'send') {
+        this.faultAbandons.push(s.id);
+      }
       throw new LimitFaultError('persistentState', this.frame.pc);
     }
     this.suspended = s;
@@ -2163,7 +2169,7 @@ export class Run {
 
   private faultNow(limit: LimitName, ins: Instruction) {
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
-    this.faultAbandons = this.abandonJoin();
+    this.faultAbandons.push(...this.abandonJoin());
     const code = this.frame.code;
     const handler = this.frame.handler;
     const rollback = this.script.variableNames.filter(

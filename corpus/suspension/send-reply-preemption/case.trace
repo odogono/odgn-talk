@@ -1,0 +1,33 @@
+# Unblessed: new regression; first blessing awaits human review.
+# A receiver failure resumes through a local Handler frame. Its unwind spends
+# the Pump cap atomically before the caller's catch instructions can run.
+> load a identity=ce89396bb0518c8a0362d3b5191f97c2385f871b947c73db1501d868bb762585
+> load b identity=44a4a02c0e695f99cffffc1ef9408f0acf8bf89bab8fdf08dab65691d72d02e5
+> deliver d1 to=a message=go
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c1 to=b message=ping wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=38 alloc=32 state=352 end=send-wait
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-04T12:00:00Z
+pumped state=idle fuel=53 next=2026-10-04T12:00:00Z
+> counters a
+counters a fuel=38 alloc=32 runs=1 faults=0 state=352 mailbox=0
+> pump clock=2026-10-04T12:00:00Z fuel-cap=15
+raise b/r1 code="bad" at=b:5 pos=3:2
+seg b/r1 resume fuel=15 alloc=48 state=0 end=error
+run b/r1 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 3, column: 2}} fuel=30 alloc=48
+pumped state=sliced fuel=15
+> counters a
+counters a fuel=38 alloc=32 runs=1 faults=0 state=595 mailbox=0
+> pump clock=2026-10-04T12:00:00Z fuel-cap=1
+raise a/r1 code="send failed" at=a:26 pos=9:2
+preempt a/r1 resume by=cap fuel=4 alloc=0
+pumped state=sliced fuel=4
+> counters a
+counters a fuel=42 alloc=32 runs=1 faults=0 state=994 mailbox=0
+> pump clock=2026-10-04T12:00:00Z
+seg a/r1 continue fuel=15 alloc=0 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=57 alloc=32
+pumped state=idle fuel=15
+> vars
+vars a
+vars b

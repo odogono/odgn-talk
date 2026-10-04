@@ -32,6 +32,7 @@ limits/pattern-size-minimum
 limits/persistent-state-minimum
 limits/rollback-after-suspension
 limits/self-send-persistent
+limits/send-wait-retention
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/bad-number
@@ -76,7 +77,10 @@ suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/nested-waits
 suspension/script-sends
+suspension/send-and-wait
 suspension/send-preemption
+suspension/send-reply-preemption
+suspension/send-wait-replacement
 suspension/wait-for
 suspension/wait-observation
 suspension/wait-precision
