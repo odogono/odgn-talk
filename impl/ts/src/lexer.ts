@@ -328,8 +328,9 @@ export class Lexer {
         closeLine--;
       }
       margin = s.slice(closeLine, i);
-      if (!/^[\t ]*$/.test(margin)) {
-        return error('invalid text indentation', closeLine);
+      const mismatch = margin.search(/[^\t ]/);
+      if (mismatch >= 0) {
+        return error('invalid text indentation', closeLine + mismatch);
       }
     }
     for (const part of parts) {

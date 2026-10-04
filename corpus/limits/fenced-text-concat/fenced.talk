@@ -1,0 +1,4 @@
+script variable result = "before"
+on go
+ put `a${1}b` into result
+end go

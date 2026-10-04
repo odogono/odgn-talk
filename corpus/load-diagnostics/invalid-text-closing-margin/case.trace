@@ -1,0 +1,6 @@
+# Unblessed: both Cores must report the first non-whitespace source scalar.
+> load backtick identity=0428b40d04324584ed0a341256c768a69b9c09b11b884ff987ad252fcb606616
+diag backtick code="invalid text indentation" pos=3:3
+> load raw identity=d5f39697a7e6933b1c0b7bae61f8151ca8824645314fd549ac06a54aba5fa6b7
+diag raw code="invalid text indentation" pos=3:3
+> vars

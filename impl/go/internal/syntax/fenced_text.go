@@ -125,8 +125,8 @@ func (l *Lexer) scanFenced(open int) (Token, error) {
 			closeLine--
 		}
 		margin = s[closeLine:i]
-		if strings.Trim(margin, " \t") != "" {
-			return fail("invalid text indentation", closeLine)
+		if suffix := strings.TrimLeft(margin, " \t"); suffix != "" {
+			return fail("invalid text indentation", i-len(suffix))
 		}
 	}
 	for index := range parts {

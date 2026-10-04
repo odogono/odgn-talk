@@ -1,0 +1,32 @@
+# Unblessed: interpolation faults and charges derived from Cost Model 0.
+# Dispatch (4), initial literal (1), hole constant (1), concat (4), and
+# following literal (1) spend 11 Fuel and allocate size("a1") = 18.
+# The following concat would spend 4 Fuel and allocate size("a1b") = 19.
+# Neither fault pays that concat; both map to the hole's ${ at 3:8 and
+# leave the Script Variable at its Segment-start value (size 22).
+# The successful Run adds concat (4), store-var (2), const (1), return (2):
+# 20 Fuel, 37 allocation, and retained size("a1b") = 19.
+> load fenced identity=4cb12298968489e17d15dc4c3c45e7488dea4bb08cd587edef511b4978d16974
+> deliver d1 to=fenced message=go limits={fuelPerRun: 11}
+> pump clock=2026-10-04T09:00:00Z
+fault fenced/r1 limit=fuel at=fenced:8 pos=3:8
+seg fenced/r1 start delivery=d1 handler=go clause=1 fuel=11 alloc=18 state=22 end=fault
+run fenced/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=11 alloc=18
+pumped state=idle fuel=11
+> vars
+vars fenced result="before"
+> deliver d2 to=fenced message=go limits={allocPerRun: 18}
+> pump clock=2026-10-04T09:00:00Z
+fault fenced/r2 limit=alloc at=fenced:8 pos=3:8
+seg fenced/r2 start delivery=d2 handler=go clause=1 fuel=11 alloc=18 state=22 end=fault
+run fenced/r2 outcome=limit-fault delivery=d2 handler=go limit=alloc fuel=11 alloc=18
+pumped state=idle fuel=11
+> vars
+vars fenced result="before"
+> deliver d3 to=fenced message=go
+> pump clock=2026-10-04T09:00:00Z
+seg fenced/r3 start delivery=d3 handler=go clause=1 fuel=20 alloc=37 state=19 end=return
+run fenced/r3 outcome=completed delivery=d3 handler=go fuel=20 alloc=37
+pumped state=idle fuel=20
+> vars
+vars fenced result="a1b"

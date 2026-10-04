@@ -1,0 +1,13 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "backtick"
+source = "backtick.talk"
+
+[[scripts]]
+name = "raw"
+source = "raw.talk"
