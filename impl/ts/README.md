@@ -347,9 +347,10 @@ boundary and retain replies arriving while an open body is preempted. Buffered
 replies are applied in arrival order at `join-end`; their answers and receiver
 error maps count toward Persistent State. The remaining suspension forms are
 under audit in [#281](https://github.com/odogono/odgn-talk/issues/281).
-Both lowerers currently anchor `join-end` diagnostics to the Join head's source
-position; [#286](https://github.com/odogono/odgn-talk/issues/286) tracks using the
-closing token.
+Join failures, timeouts and faults at `join-end` use the closing `end` token's
+source position, for bare `end` and `end wait`, including Joins in local Handlers
+and block Lambdas. Member indices remain 1-based, and failed replies retain the
+receiver's own Error map and source position.
 
 ```sh
 bun run lint

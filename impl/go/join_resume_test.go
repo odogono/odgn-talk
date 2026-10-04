@@ -37,7 +37,7 @@ end go`, Limits{AllocPerRun: tc.budget})
 			}
 			if tc.outcome == LimitFault {
 				// Accepted messages cost 48 each; the failed 64-byte result adds no charge.
-				if end.Limit != "alloc" || end.Alloc != 96 || end.At.PC != 9 || end.At.Line != 2 {
+				if end.Limit != "alloc" || end.Alloc != 96 || end.At.PC != 9 || end.At.Line != 5 {
 					t.Fatal(end)
 				}
 			} else if end.Alloc != 160 || end.Result.String() != "[7, 9]" {
@@ -82,11 +82,11 @@ end query`, Limits{})
 		t.Fatal(runs)
 	}
 	end := joinEnd(t, joinPump(t, g, 0, PumpOptions{}), "a")
-	if end.Outcome != Completed || end.Result.Get("code").String() != `"send failed"` || end.Result.Get("index").String() != "2" || end.Result.Get("at").Get("handler").String() != `"query"` || end.Result.Get("at").Get("line").String() != "11" || g.Inspect().Scripts[0].Vars[0].Val.String() != "true" {
+	if end.Outcome != Completed || end.Result.Get("code").String() != `"send failed"` || end.Result.Get("index").String() != "2" || end.Result.Get("at").Get("handler").String() != `"query"` || end.Result.Get("at").Get("line").String() != "14" || g.Inspect().Scripts[0].Vars[0].Val.String() != "true" {
 		t.Fatal(end)
 	}
 	records := strings.Join(trace, "\n")
-	if !strings.Contains(records, `raise a/r1 code="send failed" at=a:26 pos=11:2`) || strings.Count(records, "abandon a/r1.c1") != 1 {
+	if !strings.Contains(records, `raise a/r1 code="send failed" at=a:26 pos=14:2`) || strings.Count(records, "abandon a/r1.c1") != 1 {
 		t.Fatal(records)
 	}
 	receiver := joinEnd(t, joinPump(t, g, 2, PumpOptions{}), "b")

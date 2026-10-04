@@ -184,3 +184,45 @@ func TestLowerStandardLibraries(t *testing.T) {
 		})
 	}
 }
+
+func TestJoinMapsClosingToken(t *testing.T) {
+	for _, ending := range []string{"end", "end wait"} {
+		for _, tc := range []struct {
+			name, source string
+			line, column int
+		}{
+			{"Handler", "on go\n wait for all\n  send ping to me and wait\n " + ending + " -- close\nend", 4, 2},
+			{"local Handler", "on go\n query and wait\nend\non query\n wait for all\n  send ping to me and wait\n " + ending + "\nend", 7, 2},
+			{"block Lambda", "on go\n put given\n  wait for all\n   send ping to me and wait\n  " + ending + "\n end given into f\n f() and wait\nend", 5, 3},
+		} {
+			t.Run(tc.name+"/"+ending, func(t *testing.T) {
+				tree, err := syntax.Parse(tc.source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				checked := check.Check(tree, check.Options{})
+				if len(checked.Diagnostics) != 0 {
+					t.Fatal(checked.Diagnostics)
+				}
+				unit, err := Compile(checked, "test")
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, body := range unit.Bodies {
+					for _, ins := range body.Code {
+						if ins.Name == "join-end" {
+							found = true
+							if ins.Pos.Line != tc.line || ins.Pos.Column != tc.column {
+								t.Fatalf("closing position %+v, want %d:%d", ins.Pos, tc.line, tc.column)
+							}
+						}
+					}
+				}
+				if !found {
+					t.Fatal("no join-end instruction")
+				}
+			})
+		}
+	}
+}

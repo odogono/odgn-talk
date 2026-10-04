@@ -802,7 +802,7 @@ class BodyLowering {
         this.join++;
         yield this.block(s.body);
         this.join--;
-        this.emit(at, 'join-end');
+        this.emit(s.end, 'join-end');
         return void this.emit(at, 'store', 0);
     }
   }

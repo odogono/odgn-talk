@@ -332,9 +332,15 @@ A plain local Handler call to a may-suspend Handler is rejected with
 `missing and wait`; function-style calls to a may-suspend Handler are rejected
 with `can't suspend here`. A call cannot hide a nested Join. Capability members
 (`join-ask`) and Object Message Paths remain at their untouched boundaries.
-Both lowerers currently report the Join head's source position for its closing
-instruction; correcting source attribution is tracked in
-[#286](https://github.com/odogono/odgn-talk/issues/286).
+Join failures and timeouts use the closing `end` token's source position,
+for bare `end` and `end wait`, including Joins in local Handlers and block
+Lambdas. The `join-end` PC and 1-based member `index` stay unchanged; a failed
+reply retains the receiver's own Error map and source position.
+Go still attributes a Lambda Error's `at.handler` to its generated body name
+rather than the enclosing Handler or function, and captured Function Values
+have allocation/Persistent State differences from TS;
+[#289](https://github.com/odogono/odgn-talk/issues/289) tracks their Spec
+reconciliation. The closing token's line and column are correct in either body.
 
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
@@ -390,9 +396,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 124 cases: all 12 text-model cases, all 38 load-diagnostic
+The gate contains 125 cases: all 12 text-model cases, all 38 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-64 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+65 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
 delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,

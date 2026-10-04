@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -153,12 +154,12 @@ end go`, Limits{})
 		t.Fatal(end)
 	}
 	failure := g.Inspect().Scripts[0].Vars[0].Val
-	if failure.Get("code").String() != `"send failed"` || failure.Get("reason").String() != `"errored"` || failure.Get("index").String() != "2" || failure.Get("at").Get("line").String() != "4" || failure.Get("error").Get("code").String() != `"bad"` {
+	if failure.Get("code").String() != `"send failed"` || failure.Get("reason").String() != `"errored"` || failure.Get("index").String() != "2" || failure.Get("at").Get("line").String() != "7" || failure.Get("error").Get("code").String() != `"bad"` {
 		t.Fatal(failure)
 	}
 	records := strings.Join(trace, "\n")
-	// The join-end PC is normative; current lowerers retain the head source span.
-	if !strings.Contains(records, `raise a/r1 code="send failed" at=a:9 pos=4:3`) {
+	// Failure stays at join-end, with its closing token rather than the head.
+	if !strings.Contains(records, `raise a/r1 code="send failed" at=a:9 pos=7:3`) {
 		t.Fatal(records)
 	}
 	if strings.Count(records, "abandon a/r1.c1") != 1 || strings.Contains(records, "abandon a/r1.c2") || strings.Index(records, `raise a/r1 code="send failed"`) > strings.Index(records, "abandon a/r1.c1") {
@@ -253,11 +254,11 @@ end go`, Limits{MaxWait: time.Minute})
 		t.Fatal(second)
 	}
 	end := joinEnd(t, joinPump(t, g, 2, PumpOptions{}), "a")
-	if end.Outcome != Completed || end.Result.Get("code").String() != `"timeout"` || end.Result.Get("index").String() != "2" || end.Result.Get("after").String() != "2000 ms" || end.Result.Get("at").Get("line").String() != "3" {
+	if end.Outcome != Completed || end.Result.Get("code").String() != `"timeout"` || end.Result.Get("index").String() != "2" || end.Result.Get("after").String() != "2000 ms" || end.Result.Get("at").Get("line").String() != "6" {
 		t.Fatal(end)
 	}
 	records := strings.Join(trace, "\n")
-	if !strings.Contains(records, `raise a/r1 code="timeout" at=a:7 pos=3:3`) {
+	if !strings.Contains(records, `raise a/r1 code="timeout" at=a:7 pos=6:3`) {
 		t.Fatal(records)
 	}
 	if strings.Contains(records, "abandon a/r1.c1") || strings.Count(records, "abandon a/r1.c2") != 1 {
@@ -399,5 +400,74 @@ end go`, Limits{})
 	records := strings.Join(trace, "\n")
 	if strings.Count(records, "abandon a/r1.c1") != 1 || strings.Count(records, "abandon a/r1.c2") != 1 || strings.Contains(records, "abandon a/r2.") {
 		t.Fatal(records)
+	}
+}
+
+func TestJoinFailuresMapClosingTokenInCalledBodies(t *testing.T) {
+	for _, ending := range []string{"end", "end wait"} {
+		for _, failure := range []string{"reply", "timeout"} {
+			for _, context := range []string{"Handler", "local Handler", "block Lambda"} {
+				t.Run(context+"/"+failure+"/"+ending, func(t *testing.T) {
+					members := "wait for all\n   send ping to b and wait\n   send ping to c and wait\n  " + ending + " -- close"
+					body := members
+					if context == "local Handler" {
+						body = "query and wait"
+					}
+					if context == "block Lambda" {
+						body = "put given\n  " + members + "\n end given into f\n f() and wait"
+					}
+					source := "on go\n try\n  " + body + "\n catch e\n  return e\n end try\nend go"
+					if context == "local Handler" {
+						source += "\non query\n  " + members + "\nend query"
+					}
+					closingLine := 0
+					for i, line := range strings.Split(source, "\n") {
+						if strings.Contains(line, "-- close") {
+							closingLine = i + 1
+						}
+					}
+					var trace lines
+					g := New().NewGroup(GroupOptions{Trace: &trace})
+					a := joinLoad(t, g, "a", source, Limits{MaxWait: time.Second})
+					joinLoad(t, g, "b", "on ping\n wait 2 s\n return 7\nend ping", Limits{})
+					receiver := "on ping\n throw \"bad\"\nend ping"
+					if failure == "timeout" {
+						receiver = "on ping\n wait 2 s\n return 9\nend ping"
+					}
+					joinLoad(t, g, "c", receiver, Limits{})
+					a.Deliver(Message{Name: "go"})
+					r := joinPump(t, g, 0, PumpOptions{})
+					if failure == "timeout" {
+						r = joinPump(t, g, 1, PumpOptions{})
+					}
+					end := joinEnd(t, r, "a")
+					e := end.Result
+					code, index := "send failed", "2"
+					if failure == "timeout" {
+						code, index = "timeout", "1"
+					}
+					if end.Outcome != Completed || e.Get("code").String() != `"`+code+`"` || e.Get("index").String() != index || e.Get("at").Get("unit").String() != `"a"` || e.Get("at").Get("line").String() != fmt.Sprint(closingLine) || e.Get("at").Get("column").String() != "3" {
+						t.Fatal(end)
+					}
+					raised := false
+					for _, line := range trace {
+						if strings.HasPrefix(line, "raise a/r1 ") && strings.HasSuffix(line, fmt.Sprintf("pos=%d:3", closingLine)) {
+							raised = true
+						}
+					}
+					if !raised {
+						t.Fatal(trace)
+					}
+					if failure == "reply" {
+						receiverError := e.Get("error")
+						if e.Get("reason").String() != `"errored"` || receiverError.Get("code").String() != `"bad"` || receiverError.Get("at").Get("unit").String() != `"c"` || receiverError.Get("at").Get("line").String() != "2" || receiverError.Get("at").Get("column").String() != "2" {
+							t.Fatal(e)
+						}
+					} else if e.Get("after").String() != "1000 ms" {
+						t.Fatal(e)
+					}
+				})
+			}
+		}
 	}
 }

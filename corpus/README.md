@@ -132,6 +132,16 @@ that could conceal an indirect nested Join. All five retain their `Unblessed`
 headers for first human review. The mixed-Capability `suspension/joins` case remains
 outside the Go subset.
 
+The `suspension/join-closing-position` regression pins failed replies and timeouts
+at a Join's closing `end`, including bare `end`, `end wait` and a local Handler.
+Go, TS ordinary execution and TS save/restore agree on its complete Trace;
+the maintainer reviewed its first blessing in #286. The corrected `suspension/script-joins`,
+`limits/join-retention` and `disassembly/messages-and-waiting` expectations also
+agree on both Cores, with only source positions changed. See the
+[Join source-position reconciliation](../docs/reviews/join-source-positions/README.md)
+for the maintainer-approved mixed-Capability `suspension/joins` correction
+and the separate Lambda full-Trace parity limitation.
+
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
 ## The Disassembly Cases

@@ -638,6 +638,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Patterns:** a list or map pattern's `load s`, `list-item`, `list-rest` and `map-get` are that pattern's. A sub-pattern's own `store` or `pop`, the `store` of a name or `_` included, is the sub-pattern's.
 - **Chunks:** a `delimited by`'s `store t` is the outermost level's chunk word, and an ordinal's `const` its level's chunk word.
 - **Lambdas:** a `given …: e`'s `return`, and a Lambda's `raise no match`, are its `given`.
+- **Joins:** `join-end` is the closing `end` token, whether bare or written `end wait`. The Join's `join-start` and following `store 0` keep the `wait for all` head's position.
 - **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`.
