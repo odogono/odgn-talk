@@ -68,18 +68,22 @@ and no Bun or Node globals, and tests the CLI under both Bun and Node.
 `@odgn/northtalk-tooling/lint` is the browser-safe Lint engine over the TS Core's lossless recovering parser. It imports only `@odgn/northtalk`. It runs under Bun, Node, and browser workers; file and process handling belongs to [`tooling/cli`](../cli/). Tooling advice is outside parity and never changes loading, Trace lines or Fuel ([chapter 12](../../spec/12-sessions-and-tooling.md#layers-and-lints), [ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ```ts
-import { lint, lintSyntax } from '@odgn/northtalk-tooling/lint';
+import { lint, lintSyntax, readManifest } from '@odgn/northtalk-tooling/lint';
 import { parseSourceRecovering } from '@odgn/northtalk';
 
 const { lints, diagnostics } = lint(source, { profile: 'beginner' });
 const advice = lintSyntax(parseSourceRecovering(source).tree, {
   profile: 'standard',
 });
+const manifest = readManifest(manifestJSON); // Chapter 9's exported JSON.
+const hostAdvice = lint(source, { manifest }).lints;
 ```
 
 `lint` returns advice and syntax recovery diagnostics separately. `lintSyntax` reuses an existing lossless tree. Each Lint has `id`, `level`, `message` and a `span` (`start`, `end`, `line`, `col`). Offsets index the original TS string, and line/column positions are one-based Unicode scalar counts. Advice is sorted by source offset and then id. Error regions and malformed expressions are opaque, while enclosing blocks keep their valid siblings. The caller selects `beginner` or `standard`; the default is `standard`.
 
-The [catalogue](lints.toml) ships all eighteen ids, levels and wording templates. Eleven syntax-based Lints are implemented; seven binding/Host Manifest entries have `status = "planned"` and emit no advice (follow-up scope on [#241](https://github.com/odogono/odgn-talk/issues/241)). This engine does not perform binding, Grant or manifest checks.
+The [catalogue](lints.toml) implements all eighteen ids, retaining chapter 12's levels and wording templates. Binding advice uses the Core checker, while load diagnostics remain separate from Lints. Decode chapter 9's exported JSON with `readManifest(json)` and pass the resulting `HostManifest` as `manifest` to either API. Without a manifest, `unknown-message` emits no advice. Manifest Libraries are checked for their exports without executing their initializers or calling the Host. `checkOptions` supplies additional Core checker context; `bindings` can reuse the `SemanticTree` already checked from the same syntax tree, as the LSP does. Set `checkOptions.unit` to `library` when linting Library source: Library Handlers are not Host message entry points, and `shadows-builtin` describes Script names.
+
+Reachability is conservative: an earlier unguarded clause must cover the later clause's argument count and wildcard/name, literal, list or map patterns. Pins and Text/Binary Patterns are not compared for coverage. Key-emptiness advice recognizes literal maps, immutable map Constants, preceding straight-line map assignments and positive key-presence guards (`"key" is in the keys of m`), including short-circuit `and`. Unquoted Built-in properties and known Host Objects are not map key reads. Caught-error advice follows possible writes through branches, stops at exits and excludes nested Lambda bodies; it flags writes to Script Variables, not locals, and only inside a `try` with a `catch`. These are static hints, not proofs of runtime behavior.
 
 - `advanced-construct` reads generated `grammar.toml` tags and their Beginner Surface replacements. Syntax recognition maps pins, pinned Binary Pattern sizes, code point chunks/properties and lazy Text Pattern elements to those tags; the tags decide whether each is advanced.
 - `prefer-explicit-end` flags a bare ending at its `end` token, suggesting the matching name or keyword.
@@ -146,9 +150,9 @@ open these URIs can fetch their text with the `northtalk/librarySource` request
 (`{ uri }`, returning source text or null). A workspace source marked with the
 same Library name supplies an ordinary editable file URI instead.
 
-Without a manifest, diagnostics degrade to syntax and syntax Lints, with no
+Without a manifest, diagnostics include syntax and binding/syntax Lints, with no
 missing-manifest error; grammar completion, formatting and suspension marks
-remain available. Seven binding/manifest Lints remain tracked in [#241](https://github.com/odogono/odgn-talk/issues/241).
+remain available. `unknown-message` appears only with a manifest; normative load diagnostics remain separate from advice.
 The server does not infer Host Object property values or run Handlers to obtain
 hover values. A browser client needs virtual document support for embedded Library URIs.
 The stdio adapter supplies temporary file URIs for generic editors and includes

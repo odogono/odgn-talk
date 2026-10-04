@@ -30,7 +30,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "warning",
     "message": "An earlier clause for {message} always matches first.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "pin-trap",
@@ -38,7 +38,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "hint",
     "message": "{name} binds a new pattern name here. Use ^{name} to compare the Script Variable.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "is-empty-on-missing-key",
@@ -46,7 +46,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "hint",
     "message": "A missing key gives nothing, which is not empty. Check whether {key} exists first.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "whole-value-when",
@@ -62,7 +62,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "warning",
     "message": "{name} is written before a statement that may fail. A caught error does not roll this write back.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "inline-block-lambda",
@@ -102,7 +102,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "warning",
     "message": "All clauses for {message} opt out of concurrency. This Join sends to its own Script.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "key-shadows-property",
@@ -118,7 +118,7 @@ export const lintCatalogue = [
     "beginner": "hint",
     "standard": "hint",
     "message": "The Host Manifest does not declare the message {message}.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "ambiguous-ignoring-case",
@@ -134,7 +134,7 @@ export const lintCatalogue = [
     "beginner": "warning",
     "standard": "hint",
     "message": "{name} shadows a Built-in {kind}. Choose another name to keep the Built-in available.",
-    "status": "planned"
+    "status": "implemented"
   },
   {
     "id": "unconvertible-literal",
@@ -183,4 +183,218 @@ export const properties = [
   "characters",
   "bytes",
   "code points"
+] as const;
+export const builtins = [
+  {
+    "name": "min",
+    "kind": "function"
+  },
+  {
+    "name": "max",
+    "kind": "function"
+  },
+  {
+    "name": "codePoint",
+    "kind": "function"
+  },
+  {
+    "name": "fromCodePoint",
+    "kind": "function"
+  },
+  {
+    "name": "upper",
+    "kind": "function"
+  },
+  {
+    "name": "lower",
+    "kind": "function"
+  },
+  {
+    "name": "offset",
+    "kind": "function"
+  },
+  {
+    "name": "isDisposed",
+    "kind": "function"
+  },
+  {
+    "name": "objectKind",
+    "kind": "function"
+  },
+  {
+    "name": "rangeStart",
+    "kind": "function"
+  },
+  {
+    "name": "rangeEnd",
+    "kind": "function"
+  },
+  {
+    "name": "kindOf",
+    "kind": "function"
+  },
+  {
+    "name": "functionArity",
+    "kind": "function"
+  },
+  {
+    "name": "functionName",
+    "kind": "function"
+  },
+  {
+    "name": "abs",
+    "kind": "function"
+  },
+  {
+    "name": "floor",
+    "kind": "function"
+  },
+  {
+    "name": "ceiling",
+    "kind": "function"
+  },
+  {
+    "name": "truncate",
+    "kind": "function"
+  },
+  {
+    "name": "round",
+    "kind": "function"
+  },
+  {
+    "name": "sqrt",
+    "kind": "function"
+  },
+  {
+    "name": "exp",
+    "kind": "function"
+  },
+  {
+    "name": "ln",
+    "kind": "function"
+  },
+  {
+    "name": "log10",
+    "kind": "function"
+  },
+  {
+    "name": "power",
+    "kind": "function"
+  },
+  {
+    "name": "sin",
+    "kind": "function"
+  },
+  {
+    "name": "cos",
+    "kind": "function"
+  },
+  {
+    "name": "tan",
+    "kind": "function"
+  },
+  {
+    "name": "asin",
+    "kind": "function"
+  },
+  {
+    "name": "acos",
+    "kind": "function"
+  },
+  {
+    "name": "atan",
+    "kind": "function"
+  },
+  {
+    "name": "atan2",
+    "kind": "function"
+  },
+  {
+    "name": "fromFloat64",
+    "kind": "function"
+  },
+  {
+    "name": "fromFloat32",
+    "kind": "function"
+  },
+  {
+    "name": "toFloat64",
+    "kind": "function"
+  },
+  {
+    "name": "toFloat32",
+    "kind": "function"
+  },
+  {
+    "name": "year",
+    "kind": "function"
+  },
+  {
+    "name": "month",
+    "kind": "function"
+  },
+  {
+    "name": "day",
+    "kind": "function"
+  },
+  {
+    "name": "hour",
+    "kind": "function"
+  },
+  {
+    "name": "minute",
+    "kind": "function"
+  },
+  {
+    "name": "second",
+    "kind": "function"
+  },
+  {
+    "name": "nanosecond",
+    "kind": "function"
+  },
+  {
+    "name": "weekday",
+    "kind": "function"
+  },
+  {
+    "name": "dayOfYear",
+    "kind": "function"
+  },
+  {
+    "name": "isoWeek",
+    "kind": "function"
+  },
+  {
+    "name": "isoWeekYear",
+    "kind": "function"
+  },
+  {
+    "name": "hasTime",
+    "kind": "function"
+  },
+  {
+    "name": "toCivil",
+    "kind": "function"
+  },
+  {
+    "name": "toInstant",
+    "kind": "function"
+  },
+  {
+    "name": "pi",
+    "kind": "constant"
+  },
+  {
+    "name": "newline",
+    "kind": "constant"
+  },
+  {
+    "name": "tab",
+    "kind": "constant"
+  },
+  {
+    "name": "quote",
+    "kind": "constant"
+  }
 ] as const;

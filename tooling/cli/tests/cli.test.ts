@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { coreVersions } from '@odgn/northtalk';
 
 const main = resolve(import.meta.dir, '../src/main.ts');
 const corpus = resolve(import.meta.dir, '../../../corpus/sessions');
@@ -193,4 +194,39 @@ test('the Bun command runs through a bin symlink', () => {
   const result = Bun.spawnSync([process.execPath, bin, 'lint', file]);
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toContain('[key-shadows-property]');
+});
+
+test('lint reads an explicit Host Manifest and keeps checker diagnostics out of its exit status', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const file = join(dir, 'demo.talk');
+  const manifest = join(dir, 'host.talk-manifest.json');
+  writeFileSync(
+    file,
+    'constant min = 1\non demo\nput missing into x\nend demo',
+  );
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      kind: 'demo',
+      version: '1',
+      language: coreVersions.language,
+      grants: [],
+      libraries: [],
+      messages: [],
+      objects: [],
+      objectKinds: [],
+    }),
+  );
+  const result = run(['lint', '--manifest', manifest, file]);
+  expect(result.code).toBe(0);
+  expect(result.stdout).toContain('[unknown-message]');
+  expect(result.stdout).toContain('[shadows-builtin]');
+  expect(result.stderr).toBe('');
+  expect(run(['lint', file]).stdout).not.toContain('[unknown-message]');
+  expect(
+    run(['lint', '--manifest', join(dir, 'missing.json'), file]).code,
+  ).toBe(2);
+  expect(run(['lint', '--manifest']).code).toBe(2);
+  writeFileSync(manifest, '{}');
+  expect(run(['lint', '--manifest', manifest, file]).code).toBe(2);
 });

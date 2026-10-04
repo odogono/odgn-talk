@@ -1,8 +1,13 @@
 // Chapter 12 / ADR 0027: advice over the lossless Core tree, never load errors.
 import {
   canConvert,
+  checkSyntax,
+  exportsOf,
   parseSourceRecovering,
   text,
+  type CheckOptions,
+  type LibraryExport,
+  type SemanticTree,
   type SourceSpan,
   type SyntaxNode,
   type Token,
@@ -13,7 +18,10 @@ import {
   longJoinBodyLines,
   properties,
 } from './generated/lints';
+import { lintBindings } from './lint-bindings';
+import { grantDeclarations, type HostManifest } from './lsp/manifest';
 export { lintCatalogue } from './generated/lints';
+export { readManifest, type HostManifest } from './lsp/manifest';
 
 export type LintProfile = 'beginner' | 'standard';
 export type LintLevel = 'off' | 'hint' | 'warning';
@@ -24,7 +32,51 @@ export type Lint = {
   message: string;
   span: SourceSpan;
 };
-export type LintOptions = { profile?: LintProfile };
+export type LintOptions = {
+  /** Bindings already checked from this syntax tree, for editor callers. */
+  bindings?: SemanticTree;
+  checkOptions?: CheckOptions;
+  manifest?: HostManifest | null;
+  profile?: LintProfile;
+};
+
+// Manifests carry Library source, not executable Host callbacks. Infer export
+// kinds/contracts through the Core checker without loading or running it.
+const bindingTree = (tree: SyntaxNode, options: LintOptions): SemanticTree => {
+  if (options.bindings) {
+    return options.bindings;
+  }
+  const manifest = options.manifest;
+  let libraries: Record<string, Record<string, LibraryExport>> = {};
+  const sources = (manifest?.libraries ?? []).map(library => ({
+    ...library,
+    tree: parseSourceRecovering(library.source).tree,
+  }));
+  for (let pass = 0; pass <= sources.length; pass++) {
+    const next = Object.fromEntries(
+      sources.map(library => [
+        library.name,
+        exportsOf(
+          checkSyntax(library.tree, { unit: 'library', libraries }).tree,
+        ),
+      ]),
+    );
+    if (JSON.stringify(next) === JSON.stringify(libraries)) {
+      break;
+    }
+    libraries = next;
+  }
+  return checkSyntax(tree, {
+    ...(manifest
+      ? {
+          libraries,
+          grants: grantDeclarations(manifest),
+          objects: manifest.objects,
+        }
+      : {}),
+    ...options.checkOptions,
+  }).tree;
+};
 
 const nodes = (node: SyntaxNode) =>
   node.children.filter((child): child is SyntaxNode => child.kind === 'node');
@@ -127,10 +179,12 @@ type Context = {
 /** Lint an existing lossless tree. Error regions remain opaque; positions are original source spans. */
 export const lintSyntax = (
   tree: SyntaxNode,
-  { profile = 'standard' }: LintOptions = {},
+  options: LintOptions = {},
 ): Lint[] => {
+  const { profile = 'standard' } = options;
   const summaries = index(tree);
   const lints: Lint[] = [];
+  const emitted = new Set<string>();
   const tokensInLine = new Set<number>();
   const suppressed = new Map<number, Set<string>>();
   for (const token of tokensIn(tree, true)) {
@@ -150,25 +204,41 @@ export const lintSyntax = (
       tokensInLine.add(token.line);
     }
   }
-  const emit = (
+  const emitAt = (
     id: LintId,
-    at: Token,
+    span: SourceSpan,
     params: Record<string, string | number> = {},
   ) => {
     const entry = catalogue.get(id)!;
     const level = entry[profile];
-    if (level === 'off' || suppressed.get(at.line)?.has(id)) {
+    const key = `${id}:${span.start}`;
+    if (
+      level === 'off' ||
+      suppressed.get(span.line)?.has(id) ||
+      emitted.has(key)
+    ) {
       return;
     }
+    emitted.add(key);
     lints.push({
       id,
       level,
       message: entry.message.replaceAll(/{([a-z]+)}/g, (_, key: string) =>
         String(params[key] ?? `{${key}}`),
       ),
-      span: { start: at.pos, end: at.end, line: at.line, col: at.col },
+      span,
     });
   };
+  const emit = (
+    id: LintId,
+    at: Token,
+    params?: Record<string, string | number>,
+  ) =>
+    emitAt(
+      id,
+      { start: at.pos, end: at.end, line: at.line, col: at.col },
+      params,
+    );
   const advanced = (construct: string, at: Token) => {
     // This is a syntax-to-tag lookup, not a classification list. Only tags
     // generated from grammar.toml enable advice or supply its replacement.
@@ -456,6 +526,12 @@ export const lintSyntax = (
       });
     }
   }
+  lintBindings(
+    bindingTree(tree, options),
+    options.manifest,
+    emitAt,
+    options.checkOptions?.unit,
+  );
   return lints.sort(
     (a, b) => a.span.start - b.span.start || a.id.localeCompare(b.id),
   );

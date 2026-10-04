@@ -2,6 +2,7 @@
 // Tooling catalogue plus Spec tags/properties, copied for browser workers.
 import catalogue from '../../tooling/stack/lints.toml';
 import grammar from '../../spec/data/grammar.toml';
+import { builtins } from '../../impl/ts/src/generated/syntax';
 import { resolve } from 'node:path';
 
 type Entry = {
@@ -38,7 +39,12 @@ const content =
   `export const lintCatalogue = ${JSON.stringify(entries, null, 2)} as const;\n` +
   `export const longJoinBodyLines = ${threshold};\n` +
   `export const advancedTags = ${JSON.stringify(grammar.advanced, null, 2)} as const;\n` +
-  `export const properties = ${JSON.stringify(grammar.properties, null, 2)} as const;\n`;
+  `export const properties = ${JSON.stringify(grammar.properties, null, 2)} as const;\n` +
+  `export const builtins = ${JSON.stringify(
+    builtins.map(({ name, kind }) => ({ name, kind })),
+    null,
+    2,
+  )} as const;\n`;
 const path = resolve(
   import.meta.dir,
   '../../tooling/stack/src/generated/lints.ts',

@@ -34,7 +34,7 @@ flags = "a Handler Clause that an earlier clause always wins over"
 beginner = "warning"
 standard = "warning"
 message = "An earlier clause for {message} always matches first."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "pin-trap"
@@ -42,7 +42,7 @@ flags = "a pattern name that shadows a Script Variable, and so binds rather than
 beginner = "warning"
 standard = "hint"
 message = "{name} binds a new pattern name here. Use ^{name} to compare the Script Variable."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "is-empty-on-missing-key"
@@ -50,7 +50,7 @@ flags = "`is empty` on a key the map may lack"
 beginner = "warning"
 standard = "hint"
 message = "A missing key gives nothing, which is not empty. Check whether {key} exists first."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "whole-value-when"
@@ -66,7 +66,7 @@ flags = "a Script Variable written inside `try` before a statement that can fail
 beginner = "warning"
 standard = "warning"
 message = "{name} is written before a statement that may fail. A caught error does not roll this write back."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "inline-block-lambda"
@@ -106,7 +106,7 @@ flags = "a Join that sends to `me` for a message whose clauses all opt out of co
 beginner = "warning"
 standard = "warning"
 message = "All clauses for {message} opt out of concurrency. This Join sends to its own Script."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "key-shadows-property"
@@ -122,7 +122,7 @@ flags = "a Handler for a message the Host Manifest doesn't declare"
 beginner = "hint"
 standard = "hint"
 message = "The Host Manifest does not declare the message {message}."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "ambiguous-ignoring-case"
@@ -138,7 +138,7 @@ flags = "a Script name that shadows a Built-in Constant or function"
 beginner = "warning"
 standard = "hint"
 message = "{name} shadows a Built-in {kind}. Choose another name to keep the Built-in available."
-status = "planned"
+status = "implemented"
 
 [[lint]]
 id = "unconvertible-literal"

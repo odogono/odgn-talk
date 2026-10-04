@@ -54,6 +54,35 @@ const manifest = {
   objectKinds: [],
   objects: [],
 };
+
+test('LSP publishes binding advice separately from load errors and updates manifest-only advice', () => {
+  const { server, sent } = setup(
+    'constant min = 1\non other\nput missing into x\nend other',
+  );
+  const diagnostics = (sent.at(-1)!.params as Published).diagnostics;
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'unknown name',
+        source: 'northtalk',
+        severity: 1,
+      }),
+      expect.objectContaining({
+        code: 'shadows-builtin',
+        source: 'northtalk lint',
+        severity: 2,
+      }),
+      expect.objectContaining({
+        code: 'unknown-message',
+        source: 'northtalk lint',
+        severity: 4,
+      }),
+    ]),
+  );
+  server.configure({ manifest: null });
+  const without = (sent.at(-1)!.params as Published).diagnostics;
+  expect(without.map(d => d.code)).toEqual(['shadows-builtin']);
+});
 const setup = (source: string, withManifest = true) => {
   const sent: RpcMessage[] = [];
   const server = createLanguageServer(message => sent.push(message));
