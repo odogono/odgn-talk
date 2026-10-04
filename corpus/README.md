@@ -173,3 +173,11 @@ The Session Transcripts under [`sessions/`](sessions/) were written by hand and 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 
 The 43 `scope-*` and `effect-*` cases under `capabilities/` cover scope slots, automatic cleanup, participant outcomes, cancellation cleanup, disablement, code changes and Save refusal. They pass TS normal and save/restore replay, plus replay using recorded Host results with Stub inputs removed. Their first human review is pending in #222. The [matrix reconciliation](capabilities/scoped-effects.md) identifies executable native Host tests and the unimplemented Message Layer transport coverage. Go parity remains unverified.
+
+The Go ordinary Library slice also passes the reviewed `libraries/calls`,
+`libraries/errors`, `libraries/registration`, `stdlib/calls`,
+`stdlib/errors-name-the-call` and `builtins/function-values` cases unchanged.
+These pin transitive imports, defaults, shared Function code, source-ordered
+Handler clauses, registration refusals, Library errors/faults and caller-facing
+Standard Library errors. Library needs validation/trimming and Capability
+execution through Library frames remain the next #134 slice.

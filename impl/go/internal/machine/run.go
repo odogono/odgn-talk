@@ -34,6 +34,8 @@ type Limits struct {
 	Depth, Pattern, Join    int
 }
 type State struct {
+	Stdlib                            bool
+	Libraries                         map[string]*State
 	Gone                              bool
 	Group                             any
 	Me                                value.Value
@@ -47,6 +49,7 @@ type handlerDispatch struct {
 	Args   []value.Value
 }
 type Frame struct {
+	Code          *State
 	Dispatch      *handlerDispatch
 	ReceiverNames map[int]string // operand-stack tokens, not Script Values
 
@@ -104,6 +107,7 @@ type Cleanup struct {
 	Entry int
 }
 type Raised struct {
+	Unit    string
 	Handler string
 
 	Guard bool
@@ -125,7 +129,13 @@ func Initialize(unit *lower.Unit) (*State, error) {
 // InitializeBound establishes home identity and Host bindings before evaluating
 // initializers, including captured Function Values. Initializers are uncharged.
 func InitializeBound(unit *lower.Unit, group any, me value.Value, objects map[string]value.Value) (*State, error) {
-	s := &State{Unit: unit, Group: group, Me: me, Variables: make([]value.Value, len(unit.Variables)), Definitions: make([]value.Value, len(unit.Definitions)), Objects: objects}
+	return initializeLinked(unit, group, me, objects, nil)
+}
+func InitializeLinked(unit *lower.Unit, group any, libraries map[string]*State) (*State, error) {
+	return initializeLinked(unit, group, value.Value{}, nil, libraries)
+}
+func initializeLinked(unit *lower.Unit, group any, me value.Value, objects map[string]value.Value, libraries map[string]*State) (*State, error) {
+	s := &State{Libraries: libraries, Unit: unit, Group: group, Me: me, Variables: make([]value.Value, len(unit.Variables)), Definitions: make([]value.Value, len(unit.Definitions)), Objects: objects}
 	if s.Objects == nil {
 		s.Objects = map[string]value.Value{}
 	}
@@ -174,9 +184,10 @@ func (r *Run) nextClause() {
 	r.pushFrame(body, r.Arguments)
 }
 
-func (r *Run) pushFrame(body int, args []value.Value) {
-	b := r.State.Unit.Bodies[body]
-	f := Frame{Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
+func (r *Run) pushFrame(body int, args []value.Value) { r.pushCodeFrame(r.State, body, args) }
+func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
+	b := code.Unit.Bodies[body]
+	f := Frame{Code: code, Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
 	copy(f.Locals[1:], args)
 	if b.Checked.During != "" {
 		f.Locals[b.Checked.Slot(b.Checked.During)] = r.During
@@ -190,7 +201,7 @@ func (r *Run) SetDuring(v value.Value) {
 	r.During = v
 	for j := range r.Frames {
 		f := &r.Frames[j]
-		b := r.State.Unit.Bodies[f.Body].Checked
+		b := f.Code.Unit.Bodies[f.Body].Checked
 		if b.During != "" {
 			f.Locals[b.Slot(b.During)] = v
 		}
@@ -269,7 +280,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 		}
 		f := &r.Frames[len(r.Frames)-1]
-		b := r.State.Unit.Bodies[f.Body]
+		b := f.Code.Unit.Bodies[f.Body]
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
@@ -358,7 +369,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		trial.Locals = slices.Clone(f.Locals)
 		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
-		if (i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
+		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
 			r.fault("depth")
 			break
 		}
@@ -496,7 +507,7 @@ func (r *Run) Drop() {
 
 func (r *Run) raise(err value.Value) {
 	code := err.Get("code").Text
-	raised := Raised{Handler: enclosingHandler(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: code, PC: r.PC, Instruction: r.At}
+	raised := Raised{Unit: r.CurrentCode().Unit.Name, Handler: enclosingHandler(r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: code, PC: r.PC, Instruction: r.At}
 	// The first applicable unwind entry decides whether this is a Guard skip.
 search:
 	for frame := len(r.Frames) - 1; frame >= 0; frame-- {
@@ -505,7 +516,7 @@ search:
 		if f.Waiting {
 			place--
 		}
-		for _, u := range r.State.Unit.Bodies[f.Body].UnwindEntries() {
+		for _, u := range f.Code.Unit.Bodies[f.Body].UnwindEntries() {
 			if place >= u.First && place <= u.Last {
 				raised.Guard = u.Kind == "guard"
 				if raised.Guard && frame == len(r.Frames)-1 && (r.At.Name == "branch-false" || r.At.Name == "branch-true") && code == "wrong kind" {
@@ -531,7 +542,19 @@ func (r *Run) positionedError(err value.Value) value.Value {
 	// Errors add their instruction position only when absent; map keys follow
 	// the error catalogue's order.
 	if !hasKey(err, "at") {
-		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(r.State.Unit.Name)}, {Key: "handler", Val: text(enclosingHandler(r.State.Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked))}, {Key: "line", Val: integer(int64(r.At.Pos.Line))}, {Key: "column", Val: integer(int64(r.At.Pos.Column))}})
+		f := r.Frames[len(r.Frames)-1]
+		code, pos := f.Code, r.At.Pos
+		if code.Stdlib {
+			for j := len(r.Frames) - 2; j >= 0; j-- {
+				caller := r.Frames[j]
+				if !caller.Code.Stdlib {
+					code, f = caller.Code, caller
+					pos = code.Unit.Bodies[f.Body].Code[f.PC-1].Pos
+					break
+				}
+			}
+		}
+		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(code.Unit.Name)}, {Key: "handler", Val: text(enclosingHandler(code.Unit.Bodies[f.Body].Checked))}, {Key: "line", Val: integer(int64(pos.Line))}, {Key: "column", Val: integer(int64(pos.Column))}})
 		err.Entries = append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at})
 	}
 	return err
@@ -543,7 +566,7 @@ func (r *Run) unwind(err value.Value) {
 		if f.Waiting {
 			place--
 		}
-		for _, u := range r.State.Unit.Bodies[f.Body].UnwindEntries() {
+		for _, u := range f.Code.Unit.Bodies[f.Body].UnwindEntries() {
 			if place < u.First || place > u.Last || r.Cancelling && u.Kind != "finally" {
 				continue
 			}
@@ -696,12 +719,12 @@ func (r *Run) failClause() {
 	if len(d.Bodies) > 0 {
 		body := d.Bodies[0]
 		d.Bodies = d.Bodies[1:]
-		r.pushFrame(body, d.Args)
+		r.pushCodeFrame(f.Code, body, d.Args)
 		r.Frames[len(r.Frames)-1].Dispatch = d
 		return
 	}
 	caller := &r.Frames[len(r.Frames)-1]
-	b := r.State.Unit.Bodies[caller.Body]
+	b := caller.Code.Unit.Bodies[caller.Body]
 	r.At = b.Code[caller.PC-1]
 	r.PC = b.First + caller.PC - 1
 	r.raise(failure("no match"))
@@ -722,7 +745,7 @@ func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
 		}
 		deadline = new(big.Int).Add(r.ClockNS, ns)
 	case "wait-for", "wait-for-any":
-		entry := r.State.Unit.Events[i.Operands()[0].Index]
+		entry := f.Code.Unit.Events[i.Operands()[0].Index]
 		w, err := r.eventWait(i.Name, entry, f.Stack[len(f.Stack)-eventValueCount(entry):])
 		if err != nil || w.Deadline == nil {
 			return false
@@ -735,4 +758,12 @@ func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
 	// Go's signed seconds count starts at year 0001, 62135596800 seconds
 	// before the Unix epoch. Its upper bound must leave room for that offset.
 	return !seconds.IsInt64() || seconds.Cmp(big.NewInt(math.MaxInt64-62135596800)) > 0
+}
+
+// CurrentCode identifies the executing code unit independently of the Home Script.
+func (r *Run) CurrentCode() *State {
+	if len(r.Frames) == 0 {
+		return r.State
+	}
+	return r.Frames[len(r.Frames)-1].Code
 }

@@ -18,6 +18,7 @@ the authority; the TS Core is not a reference
 | Execution and resource costs | [machine](internal/machine/) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md), [limits](../../spec/06-errors-and-limits.md) | [machine tests](internal/machine/machine_test.go), [execution tests](execution_test.go), [limit cases](../../corpus/limits/) |
 | Dispatch, scheduling and waits | [Host inputs](group.go), [Run scheduling](group_run.go), [message observation](group_observe.go), [sends](group_send.go) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go) |
 | Capability Operations | [definitions and Grants](capability.go), [Shapes](shape.go), [load checks](internal/check/operations.go), [Host crossings](group_operation.go) | [Capabilities and Shapes](../../spec/09-embedding.md#capabilities), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [embedding tests](capability_test.go), [Capability cases](../../corpus/capabilities/) |
+| Libraries and Standard Library | [compilation and registration](library.go), [normative sources](stdlib.go), [Function binding](internal/machine/library.go) | [Libraries](../../spec/07-libraries-and-the-standard-library.md), [identity](../../spec/09-embedding.md#loading-and-libraries) | [public Library tests](library_test.go), [Library cases](../../corpus/libraries/), [stdlib cases](../../corpus/stdlib/) |
 | Text Patterns | [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go) | [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs) | [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/) |
 | Generated tables | [Go generator](../../tools/go/generate.ts), [Unicode generator](../../tools/unicode/generate.ts), [syntax generator](../../tools/syntax/generate.ts) → [tables](internal/generated/) | [Data Files](../../spec/README.md#data-files) | [generator tests](../../tools/go/generate.test.ts), [Unicode tests](internal/unicode/unicode_test.go) |
 | Corpus selection and parity | [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt) | [corpus commands and blessing](../../corpus/README.md#checking), [conformance](../../spec/11-the-trace-and-conformance.md) | [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go) |
@@ -93,7 +94,7 @@ bun run syntax:generate
 bun run check
 ```
 
-Emitters read Spec Data Files and pinned UCD sources, import no TS Core code and
+Emitters read Spec Data Files, normative Standard Library source and pinned UCD sources, import no TS Core code and
 use `gofmt`. Their `--check` modes refuse missing or stale output without writing.
 
 ## Front-end and lowering checks
@@ -102,7 +103,7 @@ Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
 and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
 match byte for byte, including pools, slots, positions,
 Unwind Tables and Event Tables; together they emit every declared opcode.
-Stdlib signatures can be linked for disassembly without executing Libraries.
+Stdlib sources are generated into Go unchanged and execute as ordinary Libraries.
 All load-diagnostic Trace Cases replay through public `Load`, including
 `initialiser failed` at the raising instruction's source-map position.
 
@@ -122,11 +123,40 @@ This keeps canonical code positions aligned with the existing Corpus.
 Handler call-graph analysis rejects plain calls to may-suspend Handlers and
 function-style calls that could suspend. Grant-aware loading checks Operation
 names, modes, argument counts and literal Shapes, including `say`. Decisions
-also check `veto` and `pass` reachability before suspension. Library linking,
-Library needs and Host Object property Shapes remain part of
-[#134](https://github.com/odogono/odgn-talk/issues/134). The subset rejects
-`wait for` in a Library as `not in a library`; imports and Library execution
-remain unavailable.
+also check `veto` and `pass` reachability before suspension. Imported Handlers
+carry their suspension requirement into the caller. Library restrictions reject
+Script state and message facilities, including unresolved commands that would
+climb a Message Path. Import-time Capability needs checks and Host Object property
+Shapes remain part of [#134](https://github.com/odogono/odgn-talk/issues/134).
+
+## Libraries and Standard Library
+
+`Core.CompileLibrary` checks stateless source with explicit imports and Operation
+Declarations. `Library.Imports` and `Needs` return copies; needs include direct,
+private, unused and transitive Operation references. Code identity includes source
+and dependency identities; the Host version label does not affect it.
+`Group.AddLibrary` requires matching dependencies first and atomically refuses
+missing or mismatched imports, reused names and reserved stdlib names. Private
+names and imported names are never re-exported. Imports are linked by name,
+including renames, without copying bodies into callers.
+
+Calls, Constants, defaults and Function Values execute in the calling Script's
+Run. Each frame owns its code unit, constant pool and Unwind Table, while Fuel,
+allocation, depth, rollback and retained state belong to the caller. Nested
+Function Values in shared Library Constants and defaults bind to each caller's
+Home without modifying the compiled Library. Imported Handler clauses dispatch
+in source order, and waits retain Library frames across Pump calls.
+
+Every Group holds the seven normative Standard Libraries. Their sources are
+embedded by `tools/go/generate.ts`; no TS implementation is imported. Catalogue
+errors from stdlib code name the nearest call in user code, while user
+Library errors retain the Library location. Reviewed traces pin ordinary calls,
+Function metadata, registration, faults, unwind charges and stdlib caller errors.
+
+Library Capability execution, import-time needs validation and Grant trimming
+remain the next #134 slice. Replacement/extension and save/restore of Library
+frames remain #136. Library Constants are shared fixed overhead, outside Script
+Persistent State.
 
 ## Values and codecs
 
@@ -270,7 +300,9 @@ a call join the next Pump; worker reentry is refused.
 `Script.Grants` returns fresh, sorted Operation lists. `GrantsAsUsed` trims direct
 uses across the whole Script, including unused function bodies. `Script.Revoke`
 queues revocation in Host-input order; retained aliases remain independent.
-Library needs and imported uses are deferred with Library linking.
+Import-time validation and Grant trimming using Library needs remain deferred
+under #134. Library Capability instructions remain unpaid at an explicit
+execution boundary; they cannot cross into Host functions yet.
 
 Suspending `ask … and wait` invokes `Start` once after the same atomic precharge.
 `Call.Answer`, `AnswerWithCost` and `Fail` may run on any goroutine, append Host
@@ -463,10 +495,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 134 cases: all 12 text-model cases, all 38 load-diagnostic
-cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-74 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
-delivery, suspension, observation, Queueing Policy, Decision and ordinary Capability cases. Trace cases replay through the
+The gate contains 157 cases, including all text-model, load-diagnostic,
+Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
+error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
@@ -518,3 +549,8 @@ for addition. Other cases retain first-divergence output or `SKIP` with a reason
 for unsupported facilities. Explicitly selecting an unsupported case fails.
 Transcript and save/restore backends belong to the later steps. The Go runner
 has no blessing mode and never changes expected Corpus lines.
+
+Six reviewed Library-related cases pass unchanged: `libraries/calls`,
+`libraries/errors`, `libraries/registration`, `stdlib/calls`,
+`stdlib/errors-name-the-call` and `builtins/function-values`. A separate
+acceptance test requires all six in the gate.

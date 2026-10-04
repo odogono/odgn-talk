@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { emitCatalogue } from './generate';
+import { emitCatalogue, emitStandardLibraries } from './generate';
 import { writeOutput } from './output';
 
 test('Go catalogues preserve heterogeneous counts and optional fields', () => {
@@ -36,4 +36,12 @@ test('checks refuse missing and stale Go output without overwriting it', async (
   } finally {
     await rm(dir, { recursive: true });
   }
+});
+
+test('embedded Standard Library sources preserve exact text and deterministic order', () => {
+  const source = 'constant t = "quote & \\ backslash"\n';
+  const output = emitStandardLibraries({ z: source, a: 'constant n = 1\n' });
+  expect(output.indexOf('"a":')).toBeLessThan(output.indexOf('"z":'));
+  const encoded = output.match(/"z":\s*("(?:[^"\\]|\\.)*")/)![1]!;
+  expect(JSON.parse(encoded)).toBe(source);
 });

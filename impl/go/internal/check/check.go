@@ -27,6 +27,7 @@ type Symbol struct {
 	Index              int
 	Node               *syntax.Node
 	Required, Maximum  int
+	MaySuspend         bool
 }
 type Options struct {
 	Library     bool
@@ -103,7 +104,7 @@ func (u *Unit) clash(n *syntax.Node) {
 	u.add("name clash", pos)
 }
 func (u *Unit) declaration(n *syntax.Node, s Symbol) {
-	if previous, ok := u.Symbols[s.Name]; ok && !(s.Kind == "handler" && previous.Kind == "handler") {
+	if previous, ok := u.Symbols[s.Name]; ok && !(s.Kind == "handler" && previous.Kind == "handler" && previous.Import == "" && s.Import == "") {
 		pos := n.Pos()
 		if n.NameToken.Kind == syntax.Word {
 			pos = n.NameToken.Pos
@@ -132,6 +133,9 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			u.declaration(n, Symbol{Kind: "definition", Name: n.Text, Index: len(u.Definitions)})
 			u.Definitions = append(u.Definitions, n.Text)
 		case "variable":
+			if options.Library {
+				u.add("not in a library", n.Pos())
+			}
 			u.declaration(n, Symbol{Kind: "variable", Name: n.Text, Index: len(u.Variables)})
 			u.Variables = append(u.Variables, n.Text)
 		case "function", "handler":
@@ -239,6 +243,9 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 				}
 				if x.Kind == "command" {
 					if s, ok := u.Resolve(b, x.Text); ok && s.Kind == "handler" {
+						if s.MaySuspend {
+							b.MaySuspend = true
+						}
 						for _, clause := range u.Bodies {
 							if clause.Kind == "handler" && clause.Name == s.Name && clause.MaySuspend {
 								b.MaySuspend = true
@@ -273,6 +280,14 @@ func (u *Unit) checkHandlerWaits() {
 			}
 			symbol, ok := u.Resolve(body, n.Text)
 			if !ok || symbol.Kind != "handler" {
+				return true
+			}
+			if symbol.MaySuspend {
+				if n.Kind == "call" {
+					u.add("can't suspend here", n.Pos())
+				} else {
+					u.add("missing and wait", n.Pos())
+				}
 				return true
 			}
 			for _, clause := range u.Bodies {
@@ -679,7 +694,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
 		u.add("not in a join", n.Pos())
 	}
-	if u.Options.Library && (n.Kind == "wait-for" || n.Kind == "wait-any") {
+	if u.Options.Library && (slices.Contains([]string{"wait-for", "wait-any", "send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
 		u.add("not in a library", n.Pos())
 	}
 	switch n.Kind {
@@ -816,6 +831,11 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	case "build":
 		u.bits(n)
 	case "command":
+		if u.Options.Library && n.Text != "say" {
+			if symbol, ok := u.Resolve(b, n.Text); !ok || symbol.Kind != "handler" {
+				u.add("not in a library", n.Pos())
+			}
+		}
 		if n.Text == "say" {
 			if len(n.Children) != 1 {
 				u.add("wrong argument count", n.Pos())

@@ -65,6 +65,7 @@ func constant(s string) (value.Value, error) {
 	return v, nil
 }
 func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.Value) {
+	code := f.Code
 	m := Measures{}
 	args := i.Operands()
 	idx := func(n int) int { return args[n].Index }
@@ -110,7 +111,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	}
 	switch i.Name {
 	case "const":
-		push(r.State.Constants[idx(0)])
+		push(code.Constants[idx(0)])
 	case "pop":
 		pop()
 	case "load":
@@ -126,11 +127,17 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		slot := idx(0)
 		effect = func() { r.State.Variables[slot] = v }
 	case "load-definition":
-		push(r.State.Definitions[slices.Index(r.State.Unit.Definitions, name(0))])
+		definition := name(0)
+		if library, exported, ok := strings.Cut(definition, ":"); ok {
+			lib := code.Libraries[library]
+			push(BindLibraryValue(lib.Definitions[slices.Index(lib.Unit.Definitions, exported)], r.State))
+		} else {
+			push(BindLibraryValue(code.Definitions[slices.Index(code.Unit.Definitions, definition)], r.State))
+		}
 	case "store-definition":
 		v := pop()
-		slot := slices.Index(r.State.Unit.Definitions, name(0))
-		effect = func() { r.State.Definitions[slot] = v }
+		slot := slices.Index(code.Unit.Definitions, name(0))
+		effect = func() { code.Definitions[slot] = v }
 	case "load-object":
 		if v, ok := r.State.Objects[name(0)]; ok {
 			push(v)
@@ -140,7 +147,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
 		}
 	case "me":
-		next := r.State.Unit.Bodies[f.Body].Code[f.PC+1].Name
+		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name
 		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send") {
 			receiver(r.State.Unit.Name)
 		} else {
@@ -214,25 +221,39 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				caller.Waiting = false
 			}
 		}
-	case "call":
-		body, n := idx(0), idx(1)
+	case "call", "call-import":
+		callee, body, n := code, idx(0), idx(1)
+		if i.Name == "call-import" {
+			library, exported, _ := strings.Cut(name(0), ":")
+			callee = code.Libraries[library]
+			for _, b := range callee.Unit.Bodies {
+				if b.Checked.Kind == "function" && b.Checked.Name == exported {
+					body = b.Index
+					break
+				}
+			}
+		}
 		m.Count = int64(n)
 		vs := take(n)
 		f.Waiting = true
-		b := r.State.Unit.Bodies[body]
+		b := callee.Unit.Bodies[body]
 		for j := n; j < len(b.Checked.Node.Params); j++ {
 			param := b.Checked.Node.Params[j]
-			slot := slices.Index(r.State.Unit.Definitions, b.Checked.Name+"."+param.Text)
-			vs = append(vs, r.State.Definitions[slot])
+			slot := slices.Index(callee.Unit.Definitions, b.Checked.Name+"."+param.Text)
+			vs = append(vs, BindLibraryValue(callee.Definitions[slot], r.State))
 		}
-		effect = func() { r.pushFrame(body, vs) }
+		effect = func() { r.pushCodeFrame(callee, body, vs) }
 	case "call-handler", "call-handler-wait":
 		n := idx(1)
 		vs := take(n)
 		m.Count = int64(n)
+		callee, handler := code, name(0)
+		if library, exported, ok := strings.Cut(handler, ":"); ok {
+			callee, handler = code.Libraries[library], exported
+		}
 		bodies := []int{}
-		for _, b := range r.State.Unit.Bodies {
-			if b.Checked.Kind == "handler" && b.Checked.Name == name(0) && len(b.Checked.Node.Params) == n {
+		for _, b := range callee.Unit.Bodies {
+			if b.Checked.Kind == "handler" && b.Checked.Name == handler && len(b.Checked.Node.Params) == n {
 				bodies = append(bodies, b.Index)
 			}
 		}
@@ -242,11 +263,22 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		f.Waiting = true
 		effect = func() {
-			r.pushFrame(bodies[0], vs)
+			r.pushCodeFrame(callee, bodies[0], vs)
 			r.Frames[len(r.Frames)-1].Dispatch = &handlerDispatch{Bodies: bodies[1:], Args: vs}
 		}
-	case "make-function", "make-closure":
-		body := r.State.Unit.Bodies[idx(0)]
+	case "make-function", "make-closure", "make-imported-function":
+		callee, bodyIndex := code, idx(0)
+		if i.Name == "make-imported-function" {
+			library, exported, _ := strings.Cut(name(0), ":")
+			callee = code.Libraries[library]
+			for _, b := range callee.Unit.Bodies {
+				if b.Checked.Kind == "function" && b.Checked.Name == exported {
+					bodyIndex = b.Index
+					break
+				}
+			}
+		}
+		body := callee.Unit.Bodies[bodyIndex]
 		captures := []value.Pair{}
 		if i.Name == "make-closure" {
 			m.Count = int64(idx(1))
@@ -259,7 +291,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if body.Checked.Kind == "function" {
 			functionName = body.Checked.Name
 		}
-		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: body.Checked.Name, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName}})
+		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName}})
 	case "call-value", "call-value-wait":
 		n := idx(0)
 		vs := take(n)
@@ -279,7 +311,11 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(failure("would suspend"))
 			break
 		}
-		body := r.State.Unit.Bodies[data.Body]
+		callee := home
+		if unit, ok := data.CodeState.(*State); ok {
+			callee = unit
+		}
+		body := callee.Unit.Bodies[data.Body]
 		maySuspend := body.Checked.MaySuspend
 		for _, ins := range body.Code {
 			for _, op := range generated.Machine.Instruction {
@@ -303,12 +339,12 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		for j := n; j < len(body.Checked.Node.Params); j++ {
-			slot := slices.Index(r.State.Unit.Definitions, body.Checked.Name+"."+body.Checked.Node.Params[j].Text)
-			vs = append(vs, r.State.Definitions[slot])
+			slot := slices.Index(callee.Unit.Definitions, body.Checked.Name+"."+body.Checked.Node.Params[j].Text)
+			vs = append(vs, BindLibraryValue(callee.Definitions[slot], r.State))
 		}
 		f.Waiting = true
 		effect = func() {
-			r.pushFrame(data.Body, vs)
+			r.pushCodeFrame(callee, data.Body, vs)
 			callee := &r.Frames[len(r.Frames)-1]
 			for _, capture := range data.Captures {
 				callee.Locals[body.Checked.Slot(capture.Key)] = capture.Val
@@ -322,7 +358,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		effect = func() { r.WaitNS = ns; r.Status = Suspended }
 	case "wait-for", "wait-for-any":
-		entry := r.State.Unit.Events[idx(0)]
+		entry := code.Unit.Events[idx(0)]
 		w, err := r.eventWait(i.Name, entry, take(eventValueCount(entry)))
 		if err != nil {
 			bad(*err)
@@ -473,7 +509,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		n := idx(1)
 		m.Count = int64(n)
 		vs := take(n)
-		keys := r.State.Constants[idx(0)]
+		keys := code.Constants[idx(0)]
 		pairs := make([]value.Pair, n)
 		for j := range pairs {
 			pairs[j] = value.Pair{Key: keys.Items[j].Text, Val: vs[j]}
@@ -546,11 +582,11 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			push(result)
 		}
 	case "bytes-field", "bytes-sized", "bytes-bits", "bin-start", "bin-literal", "bin-int", "bin-bits", "bin-bytes", "bin-rest", "bin-end":
-		err = binaryInstruction(f, i, r.State, &m)
+		err = binaryInstruction(f, i, code, &m)
 	case "make-pattern":
 		n := idx(1)
 		vs := take(n)
-		source := r.State.Constants[idx(0)].Text
+		source := code.Constants[idx(0)].Text
 		for _, v := range vs {
 			if v.Kind != value.Text && v.Kind != value.Pattern {
 				bad(wrong("pattern", v))
@@ -794,7 +830,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 	case "test-constant":
 		v := pop()
-		c := r.State.Constants[idx(0)]
+		c := code.Constants[idx(0)]
 		if !equal(v, c, len(args) == 3) {
 			jump()
 		}
@@ -811,10 +847,27 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if v.Kind != value.Map || v.Get("code").Kind != value.Text {
 			v = failure("bad throw")
 		}
+		if code.Stdlib && !hasKey(v, "message") && !hasKey(v, "at") {
+			for _, entry := range generated.Errors.Error {
+				if entry.Code == v.Get("code").Text {
+					fields := slices.DeleteFunc(slices.Clone(v.Entries), func(p value.Pair) bool { return p.Key == "code" })
+					v = failure(entry.Code, fields...)
+					break
+				}
+			}
+		}
 		bad(v)
 	case "end-cleanup":
 		c := r.Cleanup[len(r.Cleanup)-1]
-		effect = func() { r.Cleanup = r.Cleanup[:len(r.Cleanup)-1]; r.Frames[len(r.Frames)-1].PC--; r.unwind(c.Error) }
+		effect = func() {
+			r.Cleanup = r.Cleanup[:len(r.Cleanup)-1]
+			r.Frames[len(r.Frames)-1].PC--
+			if r.Cancelling {
+				r.unwind(c.Error)
+			} else {
+				r.raise(c.Error)
+			}
+		}
 	case "raise":
 		bad(failure(name(0)))
 	case "clause-fail":

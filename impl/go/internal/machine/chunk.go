@@ -308,6 +308,15 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 			return integer(int64(len(v.Entries))), nil
 		}
 		return bad("text, bytes, list or map")
+	case "bytes":
+		if v.Kind != value.Bytes {
+			return bad("bytes")
+		}
+		vs := make([]value.Value, len(v.Bytes))
+		for j, b := range v.Bytes {
+			vs[j] = integer(int64(b))
+		}
+		return value.NewList(vs), nil
 	case "keys", "values":
 		if v.Kind != value.Map {
 			return bad("map")

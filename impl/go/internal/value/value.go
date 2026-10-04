@@ -50,6 +50,7 @@ type ObjectData struct {
 	Handle   any
 }
 type FunctionData struct {
+	CodeState  any
 	Body       int
 	Owner      any
 	Group      any
