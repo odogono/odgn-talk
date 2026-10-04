@@ -1,0 +1,14 @@
+script variable saved = 0
+on go
+ put 1 into saved
+ wait for all
+  send ping with 7 to b and wait
+  send ping with 9 to b and wait
+ end wait
+end go
+on abort
+ wait for all
+  send ping with 11 to b and wait
+  throw "bad"
+ end wait
+end abort

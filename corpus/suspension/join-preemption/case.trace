@@ -1,0 +1,30 @@
+# Unblessed: new regression; first blessing awaits human review.
+# A reply arriving while the Join body is preempted survives the next Pump and TS save/restore.
+> load a identity=fed2684dfb43d501ca35f886004b149f93d36e8a14a3326b36c45720d434694c
+> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
+> deliver d1 to=a message=go
+> pump clock=2026-10-04T12:00:00Z fuel-slice=38
+send a/r1.c1 to=b message=ping args=[7] wait=join
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=38 alloc=48
+seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r1 outcome=completed handler=ping value=7 fuel=7 alloc=0
+pumped state=sliced fuel=45
+> counters a
+counters a fuel=38 alloc=48 runs=1 faults=0 state=192 mailbox=0
+> pump clock=2026-10-04T12:00:00Z
+send a/r1.c2 to=b message=ping args=[9] wait=join
+seg a/r1 continue fuel=34 alloc=48 state=240 end=join-end
+seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r2 outcome=completed handler=ping value=9 fuel=7 alloc=0
+seg a/r1 resume fuel=4 alloc=64 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value=[7, 9] fuel=76 alloc=160
+pumped state=idle fuel=45
+> vars
+vars a
+vars b
+> counters a
+counters a fuel=76 alloc=160 runs=1 faults=0 state=0 mailbox=0
+
+> vars
+vars a
+vars b

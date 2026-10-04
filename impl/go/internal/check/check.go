@@ -252,9 +252,40 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			}
 		}
 	}
+	u.checkHandlerWaits()
 	u.checkDecisions()
 	u.orderDiagnostics()
 	return u
+}
+
+// Check after suspension propagation so declaration order and indirect calls
+// cannot hide a Suspension Point, including a Join reached through a Handler.
+func (u *Unit) checkHandlerWaits() {
+	for _, body := range u.Bodies {
+		syntax.Walk(body.Node, func(n *syntax.Node) bool {
+			if n != body.Node && n.Kind == "lambda" {
+				return false
+			}
+			if n.Kind != "command" && n.Kind != "call" || n.Kind == "command" && syntax.HasFlag(n, "and") {
+				return true
+			}
+			symbol, ok := u.Resolve(body, n.Text)
+			if !ok || symbol.Kind != "handler" {
+				return true
+			}
+			for _, clause := range u.Bodies {
+				if clause.Kind == "handler" && clause.Name == symbol.Name && clause.MaySuspend {
+					if n.Kind == "call" {
+						u.add("can't suspend here", n.Pos())
+					} else {
+						u.add("missing and wait", n.Pos())
+					}
+					break
+				}
+			}
+			return true
+		})
+	}
 }
 
 // InitialiserFailed is the loader/Abstract Machine boundary: the raising

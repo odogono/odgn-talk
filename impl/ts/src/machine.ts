@@ -589,6 +589,8 @@ export type Member = {
   call: CallContext | null;
   id: string;
   ms: number;
+  /** A Script reply received before its preempted Join closes. */
+  reply?: Resumption;
 };
 /** What resumes a suspended Run. */
 export type Resumption =
@@ -790,8 +792,12 @@ export class Run {
   /** The calls a Limit Fault abandoned, which the Trace writes after it. */
   faultAbandons: string[] = [];
   /** The Join open in this Run, with the members it has started. */
-  private join: { frame: Frame; members: Member[]; start: number } | null =
-    null;
+  private join: {
+    frame: Frame;
+    members: Member[];
+    replies?: { id: string; reply: Resumption }[];
+    start: number;
+  } | null = null;
   // What a woken Run had suspended on, until its resume.
   private waitedOn: Suspension | null = null;
   private calls = 0;
@@ -1283,7 +1289,8 @@ export class Run {
     const pending = this.suspended;
     const members = this.resumption
       ? []
-      : (this.join?.members.filter(m => m.answer === undefined) ?? []);
+      : (this.join?.members.filter(m => m.answer === undefined && !m.reply) ??
+        []);
     this.join = null;
     for (const member of members) {
       member.abort?.abort();
@@ -1711,6 +1718,33 @@ export class Run {
     return this.resumption !== null;
   }
 
+  /** Retain a reply while a Fuel Slice has preempted an open Join's body. */
+  replyToOpenJoin(id: string, reply: Resumption): boolean {
+    const join = this.join;
+    if (!join || this.suspended || this.resumption) {
+      return false;
+    }
+    const member = join.members.find(m => m.id === id && !m.reply);
+    if (!member) {
+      return false;
+    }
+    member.reply = reply;
+    if (reply.k === 'reply' || reply.k === 'answer') {
+      member.answer = reply.value;
+    }
+    (join.replies ??= []).push({ id, reply });
+    return true;
+  }
+
+  /** Replay buffered replies in arrival order once the Join starts waiting. */
+  takeJoinReplies(): { id: string; reply: Resumption }[] {
+    const replies = this.join?.replies ?? [];
+    if (this.join) {
+      this.join.replies = [];
+    }
+    return replies;
+  }
+
   /** Make a suspended Run ready: its next step resumes it with `r`. */
   wake(r: Resumption) {
     this.resumption = r;
@@ -2108,11 +2142,16 @@ export class Run {
         }
         calls += when.captures.reduce((t, v) => t + sizeOf(v), 0);
       }
-    } else if (s?.k === 'join') {
-      for (const member of s.members) {
-        calls += member.answer
-          ? sizeOf(member.answer)
-          : partSize('pending call', 0, 0);
+    } else if (s?.k === 'join' || this.join) {
+      // The Join already owns its members before suspension is installed,
+      // and keeps them across preemption while its body is still open.
+      const members = s?.k === 'join' ? s.members : this.join!.members;
+      for (const member of members) {
+        calls += member.reply
+          ? resumptionSize(member.reply)
+          : member.answer
+            ? sizeOf(member.answer)
+            : partSize('pending call', 0, 0);
       }
     }
     return partSize('run', 0, calls + frames);
@@ -2147,7 +2186,7 @@ export class Run {
   // Abandon the open Join's members, signalling their Capability calls.
   private abandonJoin(): string[] {
     const members = (this.join?.members ?? []).filter(
-      member => member.answer === undefined,
+      member => member.answer === undefined && !member.reply,
     );
     this.join = null;
     for (const member of members) {
@@ -3474,7 +3513,7 @@ export class Run {
       case 'join-start':
         this.checkScopeBoundary();
         this.pay(key);
-        this.join = { frame, members: [], start: frame.pc };
+        this.join = { frame, members: [], replies: [], start: frame.pc };
         return next();
       case 'join-ask': {
         this.joinWidth();

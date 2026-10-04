@@ -447,6 +447,15 @@ func (g *Group) Inspect() Inspection {
 				run.Status, run.Wait, run.Calls = Suspended, "send-wait", []CallID{x.waitCall}
 				run.Until = time.Time{}
 			}
+			if j := x.run.Join; j != nil && j.Waiting && !j.Ready {
+				run.Status, run.Wait = Suspended, "join-end"
+				run.Until = time.Time{}
+				for _, m := range j.Members {
+					if m.Reply == nil {
+						run.Calls = append(run.Calls, CallID(m.ID))
+					}
+				}
+			}
 			view.Runs = append(view.Runs, run)
 		}
 		for _, item := range s.queue {

@@ -29,9 +29,11 @@ limits/event-tests-fault-on-resume
 limits/fault-at-dispatch
 limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
+limits/join-retention
 limits/pattern-size-minimum
 limits/persistent-state-minimum
 limits/rollback-after-suspension
+limits/script-join-width
 limits/self-send-persistent
 limits/send-wait-retention
 limits/wait-deadline
@@ -51,6 +53,7 @@ load-diagnostics/invalid-text-delimiter
 load-diagnostics/invalid-text-escape
 load-diagnostics/invalid-text-indentation
 load-diagnostics/leaves-finally
+load-diagnostics/missing-handler-wait
 load-diagnostics/name-clash
 load-diagnostics/needless-and-wait
 load-diagnostics/no-conversion
@@ -81,7 +84,9 @@ quantities/incompatible-units
 quantities/value-encoding
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
+suspension/join-preemption
 suspension/nested-waits
+suspension/script-joins
 suspension/script-sends
 suspension/send-and-wait
 suspension/send-preemption

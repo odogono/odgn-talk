@@ -340,8 +340,14 @@ new 48-byte pending reply. If retaining it faults, the accepted receiver message
 still runs and its reply is abandoned. The paired
 [`send-wait-retention`](../../corpus/limits/send-wait-retention/) regression
 pins this boundary alongside ordinary Go and TS save/restore execution.
-The corresponding retention boundaries for other suspension forms are under
-audit in [#281](https://github.com/odogono/odgn-talk/issues/281).
+Script-only Joins also count their pending members at the closing suspension
+boundary and retain replies arriving while an open body is preempted. Buffered
+replies are applied in arrival order at `join-end`; their answers and receiver
+error maps count toward Persistent State. The remaining suspension forms are
+under audit in [#281](https://github.com/odogono/odgn-talk/issues/281).
+Both lowerers currently anchor `join-end` diagnostics to the Join head's source
+position; [#286](https://github.com/odogono/odgn-talk/issues/286) tracks using the
+closing token.
 
 ```sh
 bun run lint

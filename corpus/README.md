@@ -83,6 +83,17 @@ The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-sen
 
 The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Three new reply regressions agree on Go, TS ordinary execution and TS save/restore replay before blessing: `suspension/send-reply-preemption` pins a failed reply's unwind spending a Pump cap before catch instructions; `limits/send-wait-retention` counts the 48-byte pending call at suspension, while preserving the receiver after a sender fault; `suspension/send-wait-replacement` pins abandonment, cleanup and late replies when a sender is replaced. These cases retain their `Unblessed` headers for first human review. Paired execution exposed and corrected TS's omitted pending-call size at a Script send's suspension boundary.
 
+The Script-only Join cases `suspension/script-joins`, `suspension/join-preemption`,
+`limits/join-retention` and `limits/script-join-width` agree on actual Go, TS ordinary
+execution and TS save/restore before blessing. They cover ordered and empty dynamic
+results, fail-fast abandonment with surviving receivers, queued self-sends, replies
+retained across open-body preemption, pending state at suspension, tightened width
+limits and body-error abandonment before a later unwind fault. The paired
+`load-diagnostics/missing-handler-wait` case rejects a plain local Handler call
+that could conceal an indirect nested Join. All five retain their `Unblessed`
+headers for first human review. The mixed-Capability `suspension/joins` case remains
+outside the Go subset.
+
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
 
