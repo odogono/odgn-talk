@@ -332,10 +332,31 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Standard Capability factories, Object execution, Capability Scopes and
+Console, Calendar and Locale factories, Object execution, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
+
+### Clock and Timer Standard Capabilities
+
+`Core.ClockCapability(Costs)` supplies the fixed immediate `now` Operation. It
+returns the Pump's Clock reading as an Instant, including nanoseconds, through
+an ordinary named Grant. It never reads the Host's wall clock.
+
+`Core.TimerCapability(TimerImpl, Costs)` supplies the fixed fire-and-forget
+`schedule` and `cancel` Operations. The Host receives the caller's Call, name,
+Instant, message text and data-only argument list. The Host stores timers by
+Script and name, replaces repeated names, and delivers due messages with
+`Script.Deliver`; the Core does not schedule durable timers itself. Arguments
+are checked before costs or Host calls. Neither factory declares Script errors,
+so Host failures become `host error`.
+
+Each Operation requires its own `Costs` entry. Fuel and allocation must be whole
+nonnegative safe integers; Go's zero-valued allocation means zero. Extra names
+are ignored and costs are copied, so later map changes cannot affect calls.
+Timer requires a non-nil implementation; an interface holding a nil pointer is
+refused too.
+Both factories use ordinary Grant trimming, Library needs and atomic charging.
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
@@ -508,7 +529,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 161 cases, including all text-model, load-diagnostic,
+The gate contains 165 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -579,3 +600,8 @@ and TS save/restore, retaining its `Unblessed` header for first human review. It
 pins private/transitive needs, caller calls and charges, nested suspension,
 Library cancellation cleanup, late answers and revocation. A separate acceptance
 test requires all four in the gate.
+
+Three reviewed Standard Capability cases pass unchanged: `standard-clock`,
+`standard-clock-fuel` and `standard-timer` under `capabilities/`. A separate
+acceptance test requires them in the gate, pinning nanosecond readings through
+Library calls, declared cost rollback, Timer Host charges and ordinary Deliveries.

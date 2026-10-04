@@ -116,7 +116,7 @@ The two `needs-*` cases in `libraries/` cover missing transitive Grants and susp
 
 The `grants-as-used`, `revoke-in-flight` and `revoke-reissue` cases in `capabilities/` cover trimming, code-change checks and revocation without abandoning a pending call, including save/restore replay and explicit Reissue.
 
-The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover nanosecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel.
+The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover nanosecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
 
 The `standard-console`, `standard-console-cancel` and `standard-console-timeout` cases cover Console calls through fixed declarations: a Library's `say` of nested Function Values, an empty input line, extra Fuel, cancellation and late answers, and the human-input deadline overriding a shorter Script `MaxWait`.
 

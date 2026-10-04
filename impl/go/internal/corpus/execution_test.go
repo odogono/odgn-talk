@@ -413,3 +413,30 @@ func TestLibraryCapabilityAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestClockTimerFactoryAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"capabilities/standard-clock", "capabilities/standard-clock-fuel", "capabilities/standard-timer"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Error("Clock/Timer acceptance case missing from gate")
+			}
+			if reason := runner.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
