@@ -1,9 +1,9 @@
 # GrantsAsUsed counts Library needs, trims io.unused and removes spare.
 # Extend cannot regain a discarded Operation. The runner's save/restore
 # replay rebinds the original wider template but keeps only io.read.
-> add-library helper identity=b9bb261f55629938425d91839560c3f69c9fff00db2bd757fd8608b2601c6f7c
-> load s identity=06a71442e103aa64a87daf2571a1ee7429b196a1e2cb3baf31cc1d10206fc88f
-> extend s source="on extra" & newline & "  ask io to unused" & newline & "end extra" identity=a26a065e765a4124daf7b1e911488bc63ba0b9b5d2da3151c41b63b0a6358f61
+> add-library helper identity=f6f438bac0045832c7aa4d9cabd8a8432e8361e9076539a591584f41d8f1fbca
+> load s identity=da929e66029d2f1fc692066035114903ebedcab33a3f3b687e4cbcedd5704eb5
+> extend s source="on extra" & newline & "  ask io to unused" & newline & "end extra" identity=7bfddb17beefbc0820b14b6d07eab0de9329d18b29e41c07343864eb1ab2f382
 diag s+1 code="unknown operation" pos=2:13
 > stub io.read value=7
 > deliver d1 to=s message=go

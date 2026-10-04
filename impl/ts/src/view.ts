@@ -603,6 +603,32 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         args: list >= 0 ? of<Expr[]>(children[list]) : [],
       } satisfies Expr;
     }
+    case 'Interpolated': {
+      let result: Expr = { k: 'text', value: (first as Leaf).text, pos: at };
+      for (let i = 1; i < children.length; i += 3) {
+        const holePos = pos(children[i]!);
+        result = {
+          k: 'binary',
+          op: 'concat',
+          l: result,
+          r: of<Expr>(children[i + 1]),
+          pos: holePos,
+          fold: false,
+        };
+        const value = (children[i + 2] as Leaf).text;
+        if (value) {
+          result = {
+            k: 'binary',
+            op: 'concat',
+            l: result,
+            r: { k: 'text', value, pos: holePos },
+            pos: holePos,
+            fold: false,
+          };
+        }
+      }
+      return result;
+    }
     case 'Primary':
       return primary(node, of);
     case 'Chunk': {

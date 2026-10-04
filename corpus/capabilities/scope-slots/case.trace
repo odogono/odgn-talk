@@ -1,7 +1,7 @@
 # scope-slots: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=0fd23efed1d3f5fecefa41b1efa5cea1f93d23726e27cb9d33e853bc0b94f7fc
+> load s identity=462406b5798cd135dab0ab75fcb44bc6cb253c7310f246029232ddf468af898f
 > stub resource.open value=nothing
 > stub resource.openlock value=nothing
 > stub resource.close value=nothing

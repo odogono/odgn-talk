@@ -9,7 +9,7 @@
 # second const 1, wait 10; the third const 1, return 2. Its allocation and
 # state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load napper identity=b3176f298178023b89a1ca0451de8ec2c484deae510944620d9c8091ee413b0c
+> load napper identity=c46e97b907f3ab435176889a095e4dab1d7024f7d50a17c62ed13c7536987e9d
 
 > deliver d1 to=napper message=nap
 > pump clock=2026-09-28T09:00:00Z

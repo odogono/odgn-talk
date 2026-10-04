@@ -3,7 +3,7 @@
 # undecided, and names the Run and its outcome. The uncaught error still
 # sends the Script its `error` message, whose Run holds no Verdict.
 
-> load bishop identity=098e6efad333ee93f1ad8315c3b2ee2cce1a80f6d9de5f542905f9e021579bd4
+> load bishop identity=759b7ab8a1cff69fc64a40950655e5414550e2b064e887ea07ba88ea1fa89635
 
 # c1 to e1 is along a rank, so `the ranks of m` is 0. The error ends the Run
 # before its seal. An undecided Verdict carries the Run's outcome, so its

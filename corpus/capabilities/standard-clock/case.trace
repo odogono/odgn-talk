@@ -1,8 +1,8 @@
 # Standard clock.now reads the Pump Clock, with no Stub or Host clock.
 # Library needs keep its Grant under GrantsAsUsed. A hidden save/restore
 # between Pumps must preserve the next nanosecond-accurate reading.
-> add-library helper identity=dc6b8cdb6a267ddbb6291fecf6977ab6aa8043e08d24d262bcfc82483d82407c
-> load s identity=c621a4d3174a8708121ed0dc4a07d500a5b7b2eaa7fc0487daaf435386c2ad8d
+> add-library helper identity=0f85c17067022b82a04f45cba24649ec4da9a3dbfb3abb0f347231fb37cf7453
+> load s identity=fb9bb3b6dc4ae0ed96edbac71124ef8126baac74887319a05bf40a916c81364e
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T10:00:00.123456789Z
 call s/r1.c1 op=clock.now args=[] result=2026-10-02T10:00:00.123456789Z

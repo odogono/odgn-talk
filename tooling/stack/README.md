@@ -25,7 +25,7 @@ Checking bindings or supplying a Host Manifest is unnecessary for formatting.
 There are no layout options. The formatter uses two spaces per block and one
 extra level for continuation lines and `match` / block `wait for` branch heads.
 It normalises spacing within each line, preserves token spelling and comment
-text, and keeps at most one consecutive blank line. It preserves all other
+text, and keeps at most one consecutive blank line outside fenced literals. Fenced literal content, including trailing spaces and blank lines, is preserved. It preserves all other
 line breaks, including their LF, CRLF or CR spelling, the BOM, and whether
 the source ends in a newline. Comments are only re-indented; trailing comments
 have one space before them. Spacing that distinguishes syntax, such as

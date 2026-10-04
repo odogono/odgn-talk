@@ -123,24 +123,19 @@ function format template, values
   put 1 into i
   repeat while i <= n
     put item i of cs into c
-    if c = "{" and i < n and item (i + 1) of cs = "{" then
-      put "{" after parts
+    if c = "$" and i < n and item (i + 1) of cs = "$" then
+      put "$" after parts
       add 2 to i
-    else if c = "{" then
-      put i + 1 into j
+    else if c = "$" and i < n and item (i + 1) of cs = "{" then
+      put i + 2 into j
       repeat while j <= n and item j of cs <> "}"
         add 1 to j
       end repeat
       if j > n then outOfDomain("format", template)
-      put characters (i + 1)..(j - 1) of template into name
+      put characters (i + 2)..(j - 1) of template into name
       if name is not in the keys of values then outOfDomain("format", name)
       put "" & the (name) of values after parts
       put j + 1 into i
-    else if c = "}" and i < n and item (i + 1) of cs = "}" then
-      put "}" after parts
-      add 2 to i
-    else if c = "}" then
-      outOfDomain("format", template)
     else
       put c after parts
       add 1 to i

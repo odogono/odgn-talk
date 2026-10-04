@@ -1,4 +1,4 @@
 # Pins `not in a script` and its source position. New case for human review.
-> load bad identity=c8177d539b555d7be1a7fdd47fb975706ad9a9d2ca591bdadb1c5105613efdc3
+> load bad identity=8e89037298a9f8d795ada971565cee43b9db83cdbaf0d68cacd087b70162382d
 diag bad code="not in a script" pos=1:1
 > vars

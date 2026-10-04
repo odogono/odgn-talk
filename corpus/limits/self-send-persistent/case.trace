@@ -1,8 +1,8 @@
 # Unblessed: new regression; first blessing awaits human review.
 # Self-addressed mailbox messages count at same-Segment return and wait.
 # The paid send survives the sender's Persistent State fault.
-> load returner identity=491294b81ddb295141d680eb7034cfd3688547fab6414108e188fe13c618d08e
-> load waiter identity=74b939715b5037fe8644b20b98ab6d537744bd87697cf4c89a95afe1419ab269
+> load returner identity=e943407eda8630d4f021ef56680d4fc5ac432f8e363935c2a614f52d954ee4f3
+> load waiter identity=c290c3468065ceb79d0f2b16ac3b518e77a2fd368f14de3a08de6b6eeaacf558
 > deliver d1 to=returner message=go
 > deliver d2 to=waiter message=go
 > pump clock=2026-10-04T12:00:00Z

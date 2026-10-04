@@ -3,8 +3,8 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load front identity=4ad82268be3003f3a7fb7565a3db66a182046a618166057a12793d561a24419e
-> load back identity=6d05f1138609088e315cbe1215494ce9cdf783ec5ab9cbfbd441dd877860099c
+> load front identity=6e3ce807c4dcad39276c7600c27a1330e91b1cce2b176921b757f5597dc7314b
+> load back identity=d85a63cae52f8d60d818ca9bc7eb4f4d8b7536eb8351999385b85803fe457075
 > deliver d1 to=front message=query args=["ok"]
 > deliver d2 to=front message=query args=["bad"]
 > deliver d3 to=front message=query args=["other"]

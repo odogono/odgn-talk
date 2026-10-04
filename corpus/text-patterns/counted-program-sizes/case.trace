@@ -1,9 +1,9 @@
 # Unblessed: new regression case, awaiting human review of its first blessing.
 # Programs contain 1, 4 and 4 instructions, including the trailing match.
 # Their logical sizes are 24, 48 and 48 bytes; loading is uncharged.
-> load zero identity=a3e7d8181023304ba70f8ff022d4f99bd8c25cc1b59f32619b200d1d40ad7314
-> load upper identity=a6f6273418be32fef1924721f03f77531b514bb44dd3e2f5b9072c7d1ac116a2
-> load lower identity=5ff605ada3c28fceaca8424309a0eb5abad35d3f6f43139cf6d3b59de3befca5
+> load zero identity=eabf6cca9e19f249a9155bd8d693b22e7bcca08fd7f1892a5ea0d9d8a1f82550
+> load upper identity=dc74997705f42a75add9b3a0be0345fc29fb81fe2de7faaeac138a4b3a0fc36a
+> load lower identity=877c0ab7e03d8b731ca471e74641f366510f0820f3e45646f5c3faaec9e13648
 > vars
 vars zero result=<0 words>
 vars upper result=<3 uppercase letters>

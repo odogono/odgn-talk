@@ -1,8 +1,8 @@
 # The child's pass spends 24 Fuel. At the cap, its climb is still in the old mailbox.
 # Moving the child then resumes from its current parent, without a second child Run.
-> load child identity=2c34f27b50dec4a4f1d023c50894befa65ad3c93a172497f642c569cc163e418
-> load old identity=b2734f3d18572a104b784ed73c1f814776a9dfd3243f8d597780f876b913c1b9
-> load next identity=25fe93634bc093c6dfda050212b11f006cb34769bfdba03a7443835737a264a7
+> load child identity=e4e388fb7ee4a4c950110070b96c0ca57dad22da11a674beff05beeb21ed8beb
+> load old identity=d5e8e2ae982820e833a89e261e85627d4d3e0c84056f5b13099c518197a01da1
+> load next identity=54b66da01a7d9c9f80e3d0436c1080fb588c9a1fe18e85d7e747e037c7ca6979
 > set-parent object=<object room "child"> parent=<object room "old">
 > request d1 to=child message=ping
 > pump clock=2026-09-30T09:00:00Z fuel-cap=24

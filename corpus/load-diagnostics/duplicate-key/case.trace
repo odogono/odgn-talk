@@ -1,4 +1,4 @@
 # Pins `duplicate key` and its source position. New case for human review.
-> load bad identity=86de38c0bce7c0298f5a475bc68451bff3ddaf7e72be55884a0116efad615a20
+> load bad identity=e936fad16aed3125e881312fa23831ed16f5323dd307efa32d76da6480eac97d
 diag bad code="duplicate key" pos=2:15
 > vars

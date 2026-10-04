@@ -12,7 +12,7 @@ northtalk lsp
 northtalk debug <script> [--trace <file>]
 ```
 
-- **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt, and an empty line ends it, so a real syntax error shows.
+- **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt until the whole Entry is complete; final EOF reports unfinished syntax.
 - **The foreground:** while the latest Entry's Run waits only for a deadline under the real Clock, the REPL sleeps until it. While it waits on `console`'s `read`, the next line answers it. Otherwise the prompt returns, and the REPL pumps at each background deadline.
 - **Ctrl-C** is `:cancel` of the Run the prompt waits for, and a Transcript records it as `:cancel`. At the prompt it drops an unfinished Entry.
 - **`--transcript <file>`** records the session as it goes: each Entry and recorded Session Command, each real Clock reading, each line typed for `read`, and each line printed.

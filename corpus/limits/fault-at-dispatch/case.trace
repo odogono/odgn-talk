@@ -19,7 +19,7 @@
 # Pinned here: each fault's instruction, position and clause, and the Fuel
 # of all three Runs. Nothing is allocated, and `picker` keeps nothing.
 
-> load picker identity=6b736fa9e96dcd6c2c2c6723fee059fc5620f5e6f7a310f2892f6cd4d04e451e
+> load picker identity=585450e17758ce395d48c808f6c85962b813af43b38a5997173d12141358126e
 
 > deliver d1 to=picker message=pick args=[1] limits={fuelPerRun: 1}
 > pump clock=2026-09-30T09:00:00Z

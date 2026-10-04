@@ -1,0 +1,89 @@
+unit fenced script
+constants
+  0 3
+  1 "count "
+  2 "raw ${name} and " & quote & quote & quote
+  3 nothing
+  4 "e"
+  5 "́"
+  6 ""
+  7 1
+  8 2
+  9 "x"
+  10 "nested "
+  11 "value "
+  12 7
+  13 ["n"]
+  14 "firstsecond"
+  15 "AB😀q ${name}" & fromCodePoint(13)
+  16 ["key", "raw"]
+definitions
+  0 n
+  1 label
+  2 raw
+variables
+  0 result
+  1 order
+bodies
+  0 init initialiser () locals 1 0000..0009
+  1 function mark (value) locals 3 0010..0019
+  2 handler go clause 1 () locals 1 0020..0057
+code
+  0000 3:14 const 0 ; 3
+  0001 3:1 store-definition n
+  0002 4:18 const 1 ; "count "
+  0003 4:27 load-definition n
+  0004 4:25 concat
+  0005 4:1 store-definition label
+  0006 5:16 const 2 ; "raw ${name} and " & quote & quote & quote
+  0007 5:1 store-definition raw
+  0008 1:1 const 3 ; nothing
+  0009 1:1 return
+  0010 9:7 load 1 ; value
+  0011 9:3 store 2 ; (2)
+  0012 9:3 load-var 1 ; order
+  0013 9:3 load 2 ; (2)
+  0014 9:3 append
+  0015 9:3 store-var 1 ; order
+  0016 10:10 load 1 ; value
+  0017 10:3 return
+  0018 11:1 const 3 ; nothing
+  0019 11:1 return
+  0020 14:7 list 0
+  0021 14:3 store-var 1 ; order
+  0022 15:8 load-definition label
+  0023 15:15 load-definition raw
+  0024 15:20 const 4 ; "e"
+  0025 15:24 const 5 ; "́"
+  0026 15:22 concat
+  0027 15:31 const 6 ; ""
+  0028 15:34 const 7 ; 1
+  0029 15:32 concat
+  0030 15:38 const 8 ; 2
+  0031 15:36 concat
+  0032 15:36 const 9 ; "x"
+  0033 15:36 concat
+  0034 15:44 const 10 ; "nested "
+  0035 15:54 const 11 ; "value "
+  0036 15:76 const 12 ; 7
+  0037 15:72 map 13 1 ; ["n"]
+  0038 15:63 get-key "n"
+  0039 15:61 concat
+  0040 15:52 concat
+  0041 15:84 const 14 ; "firstsecond"
+  0042 18:8 const 15 ; "AB😀q ${name}" & fromCodePoint(13)
+  0043 18:44 const 6 ; ""
+  0044 18:52 const 7 ; 1
+  0045 18:47 call 1 1 ; mark
+  0046 18:45 concat
+  0047 18:62 const 8 ; 2
+  0048 18:57 call 1 1 ; mark
+  0049 18:55 concat
+  0050 18:76 const 7 ; 1
+  0051 18:90 const 8 ; 2
+  0052 18:68 map 16 2 ; ["key", "raw"]
+  0053 15:7 list 9
+  0054 15:3 store-var 0 ; result
+  0055 19:1 const 3 ; nothing
+  0056 19:1 return
+  0057 19:1 clause-fail

@@ -44,11 +44,20 @@ The pinned Unicode version is **18.0.0**.
 <!-- generated: ebnf.tokens -->
 
 ```ebnf
-Token          ::= Word | Number | Text | Unit | Punctuator | LineBreak
+Token          ::= Word | Number | Text | InterpolatedText | Unit | Punctuator | LineBreak
 Word           ::= [A-Za-z_] [A-Za-z0-9_]*
 Name           ::= Word  /* not a Reserved Word, and not `_` alone */
 Number         ::= [0-9]+ ( '.' [0-9]+ )? | '0x' [0-9A-Fa-f]+
-Text           ::= '"' [^"#xA#xD]* '"'
+Text           ::= QuotedText | RawText | StaticBacktick
+QuotedText     ::= '"' [^"#xA#xD]* '"'
+RawText        ::= QuoteFence RawCharacter* QuoteFence
+QuoteFence     ::= '"""' '"'*  /* maximal run; closing length must match */
+RawCharacter   ::= [#x0-#x10FFFF]  /* excludes fence-length or longer quote runs */
+StaticBacktick ::= '`' ( BacktickCharacter | TextEscape )* '`'
+InterpolatedText ::= '`' ( BacktickCharacter | TextEscape | InterpolationHole )* '`'
+BacktickCharacter ::= [^`\\]  /* excludes the start of ${ */
+TextEscape     ::= '\\' [#x0-#x10FFFF]  /* full escape extent/validation: chapter 1 */
+InterpolationHole ::= '${' Expression '}'  /* ordinary nested expression syntax */
 Punctuator     ::= '...' | '..' | '&' | '=' | '<>' | '<=' | '>=' | '<<' | '>>'
                  | '<' | '>' | '+' | '-' | '*' | '/' | '^' | '(' | ')' | '['
                  | ']' | '{' | '}' | ',' | ':' | "'s"
@@ -73,6 +82,8 @@ BinaryOpen     ::= '<<'  /* in operand position */
 
 ## Text literals
 
+These rules describe ordinary text enclosed by one double quote at each end (`"…"`). The fenced forms below have their own whitespace and escape rules.
+
 - **Exactly what it shows:** a text literal is the characters between its double quotes. There are no escapes, so `"C:\new"` holds a backslash and an `n`, and `<"\d">` matches a backslash and a `d`.
 - **One line:** a text literal can't contain a line break. Text with no closing quote before the end of its line is `unterminated text`, reported at the opening quote, and the scan of it ends at the line break.
 - **NFC:** a text literal's value is the NFC normalisation of its characters, like all text ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)).
@@ -87,6 +98,24 @@ BinaryOpen     ::= '<<'  /* in operand position */
 > ```
 
 > **Rationale.** Escapes can't be added later without changing every literal that already holds a backslash, and an unterminated quote that swallowed the rest of the Script would put the first error far from the mistake ([ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md)).
+
+## Fenced text
+
+Both forms produce ordinary text values; there is no separate template value kind.
+
+A **Raw Text Literal** opens with a maximal run of at least three double quotes and closes with exactly that many quotes. Shorter runs are content; a longer run is `invalid text delimiter`. Choose a fence longer than every content run. Raw text has no escapes or interpolation. A run of six quotes is an opening fence, not an empty three-quote literal; use separate-line fences for empty raw text.
+
+**Interpolated Text** opens and closes with a backtick. `${expression}` is an **Interpolation Hole**; other braces are literal. Holes use the ordinary expression grammar, including multiline expressions, comments, nested strings and nested interpolation. An empty hole is `empty interpolation`. Delimiters inside nested syntax do not close the containing hole or text.
+
+Backticks use JavaScript template escapes: `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, `\0` (not before a decimal digit), `\xHH`, `\uHHHH`, `\u{H…}`, escaped backslash/backtick/dollar, identity escapes, and backslash line continuation. Legacy octal and malformed escapes are `invalid text escape`, at the backslash. Escaped surrogate pairs are combined; an unpaired surrogate is invalid. No escape is added to ordinary double-quoted text. Escape processing never introduces interpolation.
+
+An immediate physical newline after either opener selects **margin-stripped form**. The closer must be preceded on its physical line only by spaces/tabs; ordinary code may follow it. That exact whitespace prefix is the margin. Remove the opening newline, the newline immediately preceding the closer's margin, and one margin prefix from each content line. A whitespace-only line shorter than the margin is allowed only when it is a prefix of the margin, and becomes empty. Otherwise report `invalid text indentation` at the first mismatching source position. Preserve remaining whitespace, additional blank lines and trailing spaces. Lines inside hole expressions use ordinary code rules; nested literals own their margins. An inline-start literal preserves all its content whitespace, even when it spans lines.
+
+Physical LF, CRLF and CR become LF. Strip source margins before decoding escapes; explicit `\r` still produces CR. Normalize literal values and the results of interpolation joins to NFC, never source. Inserted values undergo neither dedentation nor escape processing.
+
+Both forms are operands wherever an expression may start under the normal continuation rules. Raw text and hole-free backticks also satisfy every literal-only Text position. Backticks with holes are expressions, never computed literal keys or patterns.
+
+At final EOF report `unterminated text` at the unfinished fence, or `unterminated interpolation` at `${`, choosing the innermost unfinished construct. Ordinary quoted text retains its line-local error rule. Recovery after the first diagnostic is non-normative.
 
 ## Lines
 

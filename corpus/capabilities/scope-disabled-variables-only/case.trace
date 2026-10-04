@@ -1,9 +1,9 @@
 # scope-disabled-variables-only: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> add-library unused identity=81d5769a86ed04c867aef0459381eff9b4246f9d67ab5b328bfbab75cfedf5fd
-> add-library user identity=bb0d058ef65a75877ab277df20615734c5f1db49d2a24dbed06eb1196913ace4
-> load s identity=68fbe4b66950b90feda52f0ea23dbcba79260b5c86412f0dc9bcdd899e5a1808
+> add-library unused identity=9e8cfeaa03d7ee0dbe6341e7bc547b4ec0762a24fa2f8523babced4b84cd9d50
+> add-library user identity=82e71f84bc526e24d744a868fb416e7a66910bab719bdd38cc96de7abbebcd7e
+> load s identity=4169f171a2542af91f9e3d6177fcd45c7d90c188acf4146448cc0546e9a59ab3
 > stub resource.open value=nothing
 > stub resource.close error={}
 > deliver d1 to=s message=go
@@ -17,16 +17,16 @@ seg s/r1 start delivery=d1 handler=go clause=1 fuel=20 alloc=8 state=16 end=retu
 run s/r1 outcome=completed delivery=d1 handler=go fuel=20 alloc=8
 pumped state=idle fuel=20
 > save s1
-> restore from=s1 mismatch=variables-only withheld=[unused] fingerprint=70a251d217a116d956f5163b5cbc414167af6dd8af41c6075dad1774537c813c mode=variables-only
+> restore from=s1 mismatch=variables-only withheld=[unused] fingerprint=80429e896af805cb288c7607163dcb26987ba7ed5329f90c6a5133a518018d3b mode=variables-only
 > deliver d2 to=s message=go
 > pump clock=2026-10-02T00:00:00Z
 raise s/r2 code="capability disabled" at=s:4 pos=4:1
 seg s/r2 start delivery=d2 handler=go clause=1 fuel=8 alloc=0 state=16 end=error
 run s/r2 outcome=errored delivery=d2 handler=go error={code: "capability disabled", capability: "r", operation: "open", at: {unit: "s", handler: "go", line: 4, column: 1}} fuel=8 alloc=0
 pumped state=idle fuel=8
-> reload s carry=yes source="use one from user" & newline & "script variable count = 0" & newline & "on go" & newline & "ask r to open" & newline & "end go" identity=426e82c2b9eb013cbe1a355949f23e3c4064acf91b2367d5a05c20f859376c81
+> reload s carry=yes source="use one from user" & newline & "script variable count = 0" & newline & "on go" & newline & "ask r to open" & newline & "end go" identity=6f00f14bb41a224cb5407ede28d5cf8d27d9bbb16418273126c7421eac86797a
 stopped s reason="reload"
-> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=a2e4dad42f53cd7b9a208a3238d8f4ceff75173a8f8f5a8de8cb8a7dd4aff057
+> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=64abb39061cd00a83abf2e7b1a8546f3c699cf4f03b51410df33e5c8272b9dc8
 stopped s reason="reload"
 > deliver d3 to=s message=go
 > pump clock=2026-10-02T00:00:00Z

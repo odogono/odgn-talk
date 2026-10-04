@@ -1,6 +1,6 @@
-> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
-> extend session source="on nap" & newline & "  wait 60 s" & newline & "  say " & quote & "woke" & quote & newline & "end nap" identity=25b15064707bfae19d28a6c95bf74efacdf1cbf7f14aa0e587b29681e74df19e
-> extend session source="on entry1" & newline & "nap and wait" & newline & "end entry1" & newline identity=82753c91d0ada19cf25b64a2e6a043eab917e9250d5719b752197671651803ce
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on nap" & newline & "  wait 60 s" & newline & "  say " & quote & "woke" & quote & newline & "end nap" identity=db72d8de3073aa22a5648d38f090186b3267c316dcd650539163873557db3614
+> extend session source="on entry1" & newline & "nap and wait" & newline & "end entry1" & newline identity=d1a4b6ccbe0c331179ce1c150f06fe481b11899e9ab9ab8faefffa95aa76e3e4
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=27 alloc=0 state=256 end=wait until=2026-09-30T10:01:00Z
@@ -10,7 +10,7 @@ pumped state=idle fuel=27 next=2026-09-30T10:01:00Z
 seg session/r1 resume fuel=0 alloc=0 state=0 end=cancel
 run session/r1 outcome=cancelled delivery=d1 handler=entry1 fuel=27 alloc=0
 pumped state=idle fuel=0
-> extend session source="on entry2" & newline & "send nap to session" & newline & "end entry2" & newline identity=f9c32610fbc30b2f3ce7c2a1256002369f4743c91ee6741c7ed569b6431051b2
+> extend session source="on entry2" & newline & "send nap to session" & newline & "end entry2" & newline identity=84df8d49b70330d6f65cf92d993627ecc6174959bf67d2bbea9989dc2d0c6bac
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 send session/r2 to=session message=nap
@@ -18,7 +18,7 @@ seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=29 alloc=32 state=
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=29 alloc=32
 seg session/r3 start from=session/r2 handler=nap clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:01:00Z
 pumped state=idle fuel=44 next=2026-09-30T10:01:00Z
-> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=be716f1226d7e252f25c1be00d48ca4af2a21b8e29d49f8def413b35c8900d7e
+> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=258e03dc950b3e15bc2dcebbecd6bf4e64a70acbdf98027246dbb61368770e7f
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 send session/r4 to=session message=nap

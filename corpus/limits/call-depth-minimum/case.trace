@@ -14,7 +14,7 @@
 # each `subtract` and `add` result) and state figures are Cost Model 0's,
 # as the TS Core blessed them.
 
-> load deep identity=eb6b9272a112ebd0f69e73b39345bdb9fea92ab4ffaa935dd02f8b99ac001854
+> load deep identity=6188ce4f4e7226c26df2e929b4fdddeba268d2596d52f5ec3cb0648129a5ab7c
 
 > deliver d1 to=deep message=dive args=[998]
 > pump clock=2026-09-28T09:00:00Z

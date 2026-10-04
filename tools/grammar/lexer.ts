@@ -6,6 +6,7 @@
 // decision. Only `<`, `>`, `<<`, `>>` and the word after a numeric literal or
 // `as` change with the mode.
 
+import { Lexer as FencedLexer, type TextPart } from '../../impl/ts/src/lexer';
 import grammar from '../../spec/data/grammar.toml';
 import units from '../../spec/data/units.toml';
 
@@ -19,6 +20,7 @@ export type Mode =
 export type TokType =
   | 'num'
   | 'str'
+  | 'template'
   | 'word'
   | 'op'
   | 'unit'
@@ -35,6 +37,7 @@ export type Token = {
   end: number;
   line: number;
   mode: Mode;
+  parts?: TextPart[];
   pos: number;
   spaceBefore: boolean;
   t: TokType;
@@ -111,9 +114,11 @@ const unitProblem = (text: string): string | null => {
 };
 
 export class Lexer {
+  private fenced: FencedLexer;
   lineStarts: number[] = [0];
 
   constructor(public src: string) {
+    this.fenced = new FencedLexer(src);
     for (let i = 0; i < src.length; i++) {
       if (src[i] === '\n' || (src[i] === '\r' && src[i + 1] !== '\n')) {
         this.lineStarts.push(i + 1);
@@ -188,6 +193,9 @@ export class Lexer {
     }
     const c = s[pos]!;
     const rest = s.slice(pos, pos + 128);
+    if (c === '`' || rest.startsWith('"""')) {
+      return this.fenced.lex(start, mode);
+    }
 
     if (c === '\n') {
       return T('nl', String.raw`\n`, 1);

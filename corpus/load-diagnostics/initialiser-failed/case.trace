@@ -1,4 +1,4 @@
 # Pins `initialiser failed` and its source position. New case for human review.
-> load bad identity=d8f3ad6b666c3e125518ccb4c4d3665ac67820cbf2749160cfcdc9e6bb2e3de8
+> load bad identity=5e36e1ee2d10f9f2489be63b25bd6631aa34a98d259de2bc82818d2fc555d57d
 diag bad code="initialiser failed" pos=1:16
 > vars

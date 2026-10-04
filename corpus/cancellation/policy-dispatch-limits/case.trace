@@ -4,9 +4,9 @@
 # that rate cannot be paid. Replacement leaves earlier Runs intact unless it
 # can pay the complete first instruction charge (clause 4 + const 1).
 # A dropped Run also checks ending state, including accepted later messages.
-> load q identity=53267a1b9667fbdcef067d1fd4860b79fdaf672b32f92855b847ab966cc5414f
-> load d identity=38691e667be1641577b8e4538e61315ce26e61bdc3650ab0eed3775c5aaae1c1
-> load r identity=ab3644463bc93d17d27fa61c39a59272591af0deb072e4c99311a84de5714aab
+> load q identity=682787238b93f08bc296d33a04e3eb717697ecda87b5bb2089c411166f98fbd6
+> load d identity=664aed249a822f57f03cae458ee53fc0ae4f1b2c36f45d732a7fd6cde6e47aea
+> load r identity=511c3c28e3f3463a0715b5c16f4ba1ca7baafb66e66af3b51fa46bdcc2ed2ceb
 > deliver d1 to=q message=work args=[1]
 > deliver d2 to=q message=work args=[2]
 > deliver d3 to=d message=work

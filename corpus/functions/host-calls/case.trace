@@ -1,6 +1,6 @@
 # Host calls have no clause charge. tally costs 11 Fuel and allocates one number.
 # An invalid Host argument count never enters the body or spends execution Fuel.
-> load home identity=61bafa66a365d7549ecd26ec8ae1f6d248907acb45de9ec5a6a4affb94535375
+> load home identity=aba9b6d665e678e2da4b82cf9f36bb737956e11ea2248300ff1768cbd8922884
 > request d1 to=home message=exported
 > pump clock=2026-09-30T09:00:00Z
 seg home/r1 start delivery=d1 handler=exported clause=1 fuel=10 alloc=32 state=16 end=return

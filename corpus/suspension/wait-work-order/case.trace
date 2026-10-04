@@ -1,7 +1,7 @@
 # Unblessed: new regression; first blessing awaits human review.
 # Chapter 5: inputs precede timers; due timers order by deadline, then creation.
 # A cap leaves preempted and timer-ready Runs in FIFO order for the next Pump.
-> load s identity=2509d082d982c680f1cf0cabf9dbb6498df40724b6dccb68d3f1bdd78a1cf2fc
+> load s identity=b5c30fa707bb5511ea09a5d4a3db270328a22386b2f1f8ee0ed1b3c9e3118ab3
 > deliver d1 to=s message=nap args=[1, 3 s]
 > deliver d2 to=s message=nap args=[2, 1 s]
 > deliver d3 to=s message=nap args=[3, 1 s]

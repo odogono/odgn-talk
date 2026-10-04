@@ -1,4 +1,4 @@
 # Pins `leaves finally` and its source position. New case for human review.
-> load bad identity=5f4a20f0934db2c72e34b96d263797b0c0cdb5473ee8c0c44c9f936b31609f81
+> load bad identity=638fc5f48ca30130470c568c14cb5218e9ffe885f6019e4ef01e3074e0c7705f
 diag bad code="leaves finally" pos=4:1
 > vars

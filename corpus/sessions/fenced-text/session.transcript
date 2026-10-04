@@ -1,0 +1,14 @@
+> :clock virtual 2026-10-04T09:00:00Z
+> let message be `
+|   first
+|
+|   value ${1 +
+| 2}
+|   `
+> say message
+! unknown name at 1:5
+> `hello ${2 + 3}`
+"hello 5"
+> use format from text
+> format("""${name} $${literal}""", {name: "Ann"})
+"Ann ${literal}"

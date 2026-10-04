@@ -18,7 +18,7 @@
 # allocation. The Fuel figure pins the reading that the faulting
 # instruction's charge isn't counted.
 
-> load grower identity=a71a2b92c1a8656dc35c2aa2d4fcfecf7be44deb12961b1e348e09c6447208f8
+> load grower identity=fc653cc37e956c8f3b90fb7e624befec123abd3dbeaa7fc731946d80373cc238
 
 > deliver d1 to=grower message=grow limits={allocPerRun: 100}
 > pump clock=2026-09-28T09:00:00Z

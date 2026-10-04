@@ -1,6 +1,6 @@
 # A standard clock call pays its declared cost before producing an answer.
 # Fuel cutoff rolls back the Segment, and no call record reaches the Host.
-> load s identity=563de6092263b1ca6206e8ff726c9b15dd6256ad5378250bf9a124fb32b2c689
+> load s identity=0af19f57e2cb4e0a0f92490bfc027c572afe3f4c131319caa9d6fad534908e91
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T10:00:00Z
 fault s/r1 limit=fuel at=s:10 pos=4:3 rollback=[touched]

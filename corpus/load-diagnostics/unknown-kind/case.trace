@@ -1,4 +1,4 @@
 # Pins `unknown kind` and its source position. New case for human review.
-> load bad identity=b1294a54aafacd5445ae7115110aa8743c7d928be79c7384b9f1d5f29360a009
+> load bad identity=510a15eeb45c91b7c03fcceb0219e0bdda9b729265d615f58c1298f1de5c6e86
 diag bad code="unknown kind" pos=2:15
 > vars

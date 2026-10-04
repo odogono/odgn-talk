@@ -11,7 +11,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load fanout identity=72f20cf619838cbdcbbb5ab99df86851b810e6d2add3c5ea125cd17c16848514
+> load fanout identity=eb08a15c9f7fb08ddd116bdc220e3a68c5f64a04f973f91b22d59f22f542396a
 
 > deliver d1 to=fanout message=fan args=[257]
 > pump clock=2026-09-28T09:00:00Z

@@ -7,7 +7,7 @@
 # pads with two newlines. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> load padding identity=7b93c9898c2416b9a1ad71442efcbebba0fb5de8b169e4d32c53a9fd2bdd6a40
+> load padding identity=994c59be1fbdeff914df472de58d42867353c56c98596d4a79a9577a86e7abb1
 > deliver d1 to=padding message=go
 > pump clock=2026-09-30T09:00:00Z
 seg padding/r1 start delivery=d1 handler=go clause=1 fuel=105 alloc=85 state=102 end=return

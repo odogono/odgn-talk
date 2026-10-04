@@ -7,7 +7,7 @@
 # over the "z" of "ez" leaves one Character. Its Fuel, allocation and state
 # figures are Cost Model 0's, as the TS Core blessed them.
 
-> load seams identity=ce54c0b61c0b24cc2d8bc3f1d3b7fe5287208d7ec1abd2a0a74f0ce8d9afc836
+> load seams identity=ea2e89e71488d8ec107b41bca8cb9955bc21f6e9103784c95a679b06fe9a9d0a
 > deliver d1 to=seams message=go
 > pump clock=2026-09-30T09:00:00Z
 seg seams/r1 start delivery=d1 handler=go clause=1 fuel=105 alloc=201 state=149 end=return

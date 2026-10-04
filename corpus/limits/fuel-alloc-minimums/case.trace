@@ -19,7 +19,7 @@
 # At its end, ticks counts 16 and d2 is still a 32-byte mailbox message,
 # so state is 48. After d2 faults the mailbox is empty and state is 16.
 
-> load ticker identity=9a3714f918324088ca393462700269d9c1863404991f5daa0079141aab080eb8
+> load ticker identity=8a6dc59cf41eaba3977ca39f4020e8531dfeed77095c08ca29105dc0b29a7bfb
 
 > deliver to=ticker message=tick limits={fuelPerRun: 1000000001}
 refused code="invalid value"

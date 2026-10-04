@@ -957,6 +957,14 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 
 <!-- end -->
 
+## Fenced-text lowering
+
+For literal pieces L0, L1, … Ln separated by holes e1, … en, after chapter 1 processing: emit `const L0` even when empty; for each hole emit its ordinary lowering then `concat`, followed by `const Li` and `concat` only if Li is nonempty. With no holes emit exactly one text constant. Never fold hole expressions. Constant-pool ordering, NFC, Fuel and allocation use the existing rules. The initial constant maps to the opener; generated hole concatenation and following literal-append instructions map to that hole's `${`; expression instructions retain their own positions.
+
+### Prerelease Cost Model exception
+
+While language 1.0 is unreleased and Cost Model is 0, a language prerelease revision may change lowering without advancing Cost Model 0. This explicit exception preserves the reservation of Cost Model 1 for calibration; the version-change requirement otherwise remains in force (ADR 0053).
+
 ## Outside parity
 
 - **Representation:** a Core's byte encoding, dispatch technique, value representation and any JIT ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)).

@@ -6,7 +6,7 @@
 # 8, Compiling). The matches are pinned. Its Fuel, allocation and state
 # figures are Cost Model 0's, as the TS Core blessed them.
 
-> load search identity=983af1d5fd62ac4523e68f3d85643b61ca5937b61354cd1a2f31b7650f0c97f5
+> load search identity=666de22eacc740812dda08c9826fceb66e18d6356dce6d56cddf9f7fafe61583
 
 # The first program is 0 char "#", 1 class digit, 2 split 1 3 (the greedy
 # `digits`), 3 split 4 1 (the lazy outer repetition), 4 match. After each

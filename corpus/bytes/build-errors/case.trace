@@ -1,7 +1,7 @@
 # build-errors: `out of range` names the field's type, and `wrong kind` what
 # the field needs.
 
-> load builder identity=1b5ce9f1efab6c2b117dbbdd1841b0e02bd3c565a8c7e3b1d6e7448a209f3446
+> load builder identity=11e84339ef3ce666242938422498a4ce91ab3a993fa957e38caa5335e7f3798e
 > deliver d1 to=builder message=wide
 > deliver d2 to=builder message=byte
 > deliver d3 to=builder message=fraction

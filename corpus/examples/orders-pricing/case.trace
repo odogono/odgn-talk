@@ -4,8 +4,8 @@
 # allocation and state figures are Cost Model 0's, as the TS Core blessed
 # them.
 
-> load orders identity=a7f73192cc07f92314aed845c23d6b1f1d85c2dd24ac27d844098b8d45a77f46
-> load pricing identity=5adb400b9a91558d580a69fea97b8fd028e7612cc8a45a686ce47fc9da66bd9c
+> load orders identity=ea1f59ea5d6647aae205cc01d2a0a9d01992cce1933d36f8a2f4c0e634a16cf4
+> load pricing identity=cafc5ede31402ce8339f1e4bc3c363812eaa20a81a5f3ddb7ded3c3cc274d673
 
 # An order that crosses to the pricing Script and waits on a suspending call.
 # Both waits run out at the default 30 s `MaxWait`, the next deadline.

@@ -1,8 +1,8 @@
 # Unblessed: new regression; first blessing awaits human review.
 # Preemption after load-object retains a receiver Name, with zero Value size.
 # Continuing the sender commits exactly one send in the next Pump.
-> load a identity=7678ed4bff84dea02ee46ad3cb47123cc56ea73a4e41b5412e1dfacbc4fe7295
-> load b identity=daf876abd29bd87415d630f46952e552d946edac4be8ab76557ec74ae1a20f49
+> load a identity=d7fbd64a1c214d9d7eed76fe25ae47b0cc101e15d1319b99eeffa3a00cdbe7b9
+> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
 > deliver d1 to=a message=go
 > pump clock=2026-10-04T12:00:00Z fuel-slice=6
 preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=6 alloc=0

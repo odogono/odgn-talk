@@ -1,0 +1,8 @@
+> load fenced identity=f33adf12faaf1db4e8693bb9a6247915c50f54e58e70b7318a8fdd58bf825fee
+> deliver d1 to=fenced message=go
+> pump clock=2026-10-04T09:00:00Z
+seg fenced/r1 start delivery=d1 handler=go clause=1 fuel=128 alloc=775 state=456 end=return
+run fenced/r1 outcome=completed delivery=d1 handler=go fuel=128 alloc=775
+pumped state=idle fuel=128
+> vars
+vars fenced result=["count 3", "raw ${name} and " & quote & quote & quote, "é", "12x", "nested value 7", "firstsecond", "AB😀q ${name}" & fromCodePoint(13), "12", {key: 1, raw: 2}] order=[1, 2]

@@ -1,4 +1,4 @@
 # Pins `name clash` and its source position. New case for human review.
-> load bad identity=5ff339569f4a8aa43f5ca237254fd30edaa6b91e40dd22df57dfdf19e806bd0e
+> load bad identity=24911049e44672078e1e18ff7199b102c47a69564945c73e4c8ab258b5e06f19
 diag bad code="name clash" pos=2:6
 > vars

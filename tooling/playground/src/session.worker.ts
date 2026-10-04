@@ -65,7 +65,7 @@ const help = (name: string | undefined): string[] => {
   }
   return [
     'Enter a declaration, a statement or an expression. An unfinished one goes on',
-    'at the next line, and an empty line ends it. Cancel stops the Run the prompt',
+    'at the next line until the whole Entry is complete. Cancel stops the Run the prompt',
     'waits for. Apply enters the Script tab; saving a Library tab adds or replaces it.',
     '',
     ...all.filter(c => c.name !== ':quit').map(c => `  ${c.usage}`),
@@ -205,13 +205,6 @@ const line = (text: string) => {
     if (!text.trim()) {
       return;
     }
-  }
-  // An empty line ends an unfinished Entry, so its syntax error shows.
-  if (text.trim() === '' && entry.length) {
-    const source = entry.join('\n');
-    entry = [];
-    session.input(source);
-    return;
   }
   entry.push(text);
   const source = entry.join('\n');

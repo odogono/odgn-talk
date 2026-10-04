@@ -1,7 +1,7 @@
 # scope-failed-close: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=62a9689b19984409d328517ddf3f68f6ab209f7f5e98f6d079a00660b19f489c
+> load s identity=bbd59526950b85da124b3f6824d9ea654a68ecea7f1440fa88fc20223053ae34
 > stub resource.open value=nothing
 > stub resource.close error={}
 > stub resource.close value=nothing

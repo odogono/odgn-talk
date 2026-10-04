@@ -1,6 +1,6 @@
 # Host Inputs inside a Pump are replayed from their crossing functions.
-> load s identity=f67d894ee8542bff271d7fa91f25332f1fb9c8c3fe77867ee1fa5e97d47857b8
-> load t identity=5c0fe2109b1fc35d06e751103acdd468f4b1c7a3a86ab129dde2c5300fb0ef13
+> load s identity=7ff68c2c864213e13fc9c80274d7190bfa2b4453e33aeb5234b221ebe0ed2a37
+> load t identity=35e24a825c5a54d8a02b83a1773cc4504be212db46383d1dfdfeef39d07e8960
 > stub api.cancel value=1
 > deliver d1 to=s message=go
 > decide d2 to=t message=go

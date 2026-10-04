@@ -9,7 +9,7 @@
 # one. Its Fuel, allocation and state figures are Cost Model 0's, as the TS
 # Core blessed them.
 
-> load joiner identity=6e80b62c605727e9a5f8d8bf11abdaaee345fb29334e4fbba4e6c57a96b3cba5
+> load joiner identity=357744bc5f57befcb4784791eed445c99631b9fd46162965077c98a1f966ff98
 > request d1 to=joiner message=join args=["e", "́"]
 > pump clock=2026-09-30T09:00:00Z
 seg joiner/r1 start delivery=d1 handler=join clause=1 fuel=28 alloc=50 state=32 end=return

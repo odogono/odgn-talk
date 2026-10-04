@@ -1,4 +1,4 @@
 # Pins `not a property` and its source position. New case for human review.
-> load bad identity=b6a79080ba459c1cb3ca41bfb120b0c20e48106a309733c79fc27ef50644bc1d
+> load bad identity=e287168899eaca0599b17273fcad3b1a1570588e79ee9e33665e6fbbdff758ee
 diag bad code="not a property" pos=2:1
 > vars

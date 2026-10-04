@@ -1,7 +1,7 @@
 # No result means only the power base rate (8 Fuel), no result allocation.
 # The negative operand in base and reciprocal adds negate (2 Fuel, 16 bytes).
 # Each error pops one frame (4 Fuel), and dispatch costs 4 Fuel.
-> load domains identity=d6fba10770b729214933e96b87c621f0b000d0bf35972d2552408343f726e17e
+> load domains identity=180781cf179a5256d70a46fd23f2b8d3284fa32c597e341f621653f6fe00cd3b
 > deliver d1 to=domains message=base
 > deliver d2 to=domains message=reciprocal
 > deliver d3 to=domains message=large

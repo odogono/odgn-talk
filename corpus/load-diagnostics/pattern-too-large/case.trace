@@ -1,4 +1,4 @@
 # Pins `pattern too large` and its source position. New case for human review.
-> load bad identity=89833fc307880305a02f53f4447a76e98c5839fa936b3e8a122de454d4349b20
+> load bad identity=86c65664ab74eb60b76ad1ef15fb87002c37aabb9f107d1806be2d43e95cb81b
 diag bad code="pattern too large" pos=2:8
 > vars

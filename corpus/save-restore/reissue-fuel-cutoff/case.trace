@@ -1,13 +1,13 @@
 # A reissue that can't cover Charge faults at the saved ask, abandons the
 # pending Call, and preserves n=9 committed at the original suspension.
-> load s identity=005ff054399aba6ae6015f60df44459ab5c187e23f00a1e8ecd030fcb9fc19ba
+> load s identity=233b0d9ea1fbd20358085d07181bc31c0911a8c066e9531314fd566b79b748d2
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T10:00:00Z
 call s/r1.c1 op=api.hold args=[]
 seg s/r1 start delivery=d1 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
 pumped state=idle fuel=18 next=2026-09-30T10:00:30Z
 > save s1
-> restore from=s1 fingerprint=adb881cdac8f1a7985381dd423bfebc8ae413baa8697820abc9c26d0b308cb71 mode=full pending=[s/r1.c1]
+> restore from=s1 fingerprint=5a9a97ca22babdd64dde968f9f74dfb023bcff24ac3c570f9403060248e3977c mode=full pending=[s/r1.c1]
 > stub api.hold charge=1000
 > settle s/r1.c1 how=reissue
 > pump clock=2026-09-30T10:00:01Z

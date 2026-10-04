@@ -379,7 +379,7 @@ ChunkLevel     ::= Postfix ( 'delimited' 'by' Postfix )?
                    /* `delimited by` only after a Chunk Expression or a plural chunk property */
 Postfix        ::= Primary ( "'s" Key )*
 Key            ::= 'code' 'points' | Word
-Primary        ::= Number Unit? | Text | TextPattern | BinaryBuild | '(' Expression ')'
+Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | BinaryBuild | '(' Expression ')'
                  | List | Map | 'true' | 'false' | 'nothing' | 'it' | 'me'
                  | The | ReplaceExpression | MatchSearch | Chunk | Call | Name
 Call           ::= Name CallOpen ExpressionList? ')'
@@ -612,10 +612,15 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | Code | Raised when |
 | --- | --- |
 | `bad character` | A character outside a text literal or comment starts no token |
-| `unterminated text` | A text literal has no closing quote before the end of its line; reported at the opening quote |
+| `unterminated text` | An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener |
 | `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
 | `not a container` | A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token |
+| `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |
+| `empty interpolation` | An interpolation hole contains no expression |
+| `invalid text escape` | A backtick escape is malformed, octal, or produces an unpaired surrogate |
+| `invalid text indentation` | Fenced text does not match its closing margin |
+| `invalid text delimiter` | A raw closing quote run is longer than its opening fence |
 
 <!-- end -->
 

@@ -3,8 +3,8 @@
 # faults in `spin` and rolls `count` back. Its Fuel, allocation and state
 # figures are Cost Model 0's, as the TS Core blessed them.
 
-> add-library checks identity=b4ee220cc7fdbe5203db5a3d8d916c776f6f4f8a54a29e658df891f9335c7fb6
-> load meter identity=cb7756a0a882447248599d1ee2cd48b42bd2166e23dd66df83cf035b5f283f61
+> add-library checks identity=3869b9d265f265a48a05e571233e382ab6ba4e9822b13c9a70ee3532bbd881b6
+> load meter identity=15dd387407ecda2766aec827edc968c3ebbf3a058a257f410d75e30d6edc018c
 > deliver d1 to=meter message=go
 > deliver d2 to=meter message=leak
 > deliver d3 to=meter message=burn

@@ -1,8 +1,8 @@
 # effect-replace-fatal: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> add-library user identity=bb0d058ef65a75877ab277df20615734c5f1db49d2a24dbed06eb1196913ace4
-> load s identity=008a13e0799c9c3eceb2f549ff18e47078f9072cdad2c028d8dde16e1973a26f
+> add-library user identity=82e71f84bc526e24d744a868fb416e7a66910bab719bdd38cc96de7abbebcd7e
+> load s identity=4a2ef00394e35d1bb9fd40b5d8bc9c07d9936369e23595e32e747f38ce2b37da
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > stub-effect s.r phase=begin status=ok
@@ -14,7 +14,7 @@ call s/r1.c1 op=r.open args=[] result=nothing
 scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
-> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=a2e4dad42f53cd7b9a208a3238d8f4ceff75173a8f8f5a8de8cb8a7dd4aff057
+> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=64abb39061cd00a83abf2e7b1a8546f3c699cf4f03b51410df33e5c8272b9dc8
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned
 effect s/r1.s1 grant=r phase=rollback status=failed

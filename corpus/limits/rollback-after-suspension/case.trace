@@ -18,7 +18,7 @@
 # Variables. Its Fuel, allocation and state figures are Cost Model 0's, as
 # the TS Core blessed them.
 
-> load keeper identity=5fd93b2d8f0582327e3f82406b023c6092d376ff24c4ad0c573a00d9013868f8
+> load keeper identity=b8978be0b9dedc35a48a4962d0d96d700420389b300fe82efc0d5bbba58b5fd5
 
 > deliver d1 to=keeper message=first
 > pump clock=2026-09-28T09:00:00Z

@@ -2,7 +2,7 @@
 # The bulb is disposed between the two Deliveries. Its Fuel, allocation and
 # state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load lamp identity=1ad96edf83a9d7ea99a674151044c5b3939dba35a754250455516dd422455398
+> load lamp identity=4f77ad49e85a797f0e14f0ab6a14dd42c32d0829c531fee015471b3f251bec19
 > deliver d1 to=lamp message=go
 > pump clock=2026-09-30T09:00:00Z
 prop lamp/r1 object=<object light "bulb-1"> name=state op=get value="off"

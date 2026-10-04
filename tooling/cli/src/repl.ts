@@ -33,7 +33,8 @@ const help = (name: string | undefined): string[] => {
   }
   return [
     'Enter a declaration, a statement or an expression. An unfinished one',
-    'goes on at the next line; an empty line ends it. Ctrl-C cancels the',
+    'goes on at the next line until the whole Entry is complete.',
+    'Ctrl-C cancels the',
     'Run waiting at the prompt, and Ctrl-D or :quit ends the session.',
     '',
     ...commands.map(c => `  ${c.usage}`),
@@ -105,6 +106,10 @@ export const repl = ({
   const quit = () => {
     if (ended) {
       return;
+    }
+    if (entry.length) {
+      print(host.input(entry.join('\n')));
+      entry = [];
     }
     ended = true;
     for (const timer of [sleeping, background]) {
@@ -199,11 +204,6 @@ export const repl = ({
         settle();
         return;
       }
-    }
-    // An empty line ends an unfinished Entry, so its syntax error shows.
-    if (line.trim() === '' && entry.length) {
-      submit(entry.join('\n'));
-      return;
     }
     entry.push(line);
     const source = entry.join('\n');

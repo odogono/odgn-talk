@@ -14,11 +14,20 @@
 
 /* ## tokens */
 
-Token          ::= Word | Number | Text | Unit | Punctuator | LineBreak
+Token          ::= Word | Number | Text | InterpolatedText | Unit | Punctuator | LineBreak
 Word           ::= [A-Za-z_] [A-Za-z0-9_]*
 Name           ::= Word  /* not a Reserved Word, and not `_` alone */
 Number         ::= [0-9]+ ( '.' [0-9]+ )? | '0x' [0-9A-Fa-f]+
-Text           ::= '"' [^"#xA#xD]* '"'
+Text           ::= QuotedText | RawText | StaticBacktick
+QuotedText     ::= '"' [^"#xA#xD]* '"'
+RawText        ::= QuoteFence RawCharacter* QuoteFence
+QuoteFence     ::= '"""' '"'*  /* maximal run; closing length must match */
+RawCharacter   ::= [#x0-#x10FFFF]  /* excludes fence-length or longer quote runs */
+StaticBacktick ::= '`' ( BacktickCharacter | TextEscape )* '`'
+InterpolatedText ::= '`' ( BacktickCharacter | TextEscape | InterpolationHole )* '`'
+BacktickCharacter ::= [^`\\]  /* excludes the start of ${ */
+TextEscape     ::= '\\' [#x0-#x10FFFF]  /* full escape extent/validation: chapter 1 */
+InterpolationHole ::= '${' Expression '}'  /* ordinary nested expression syntax */
 Punctuator     ::= '...' | '..' | '&' | '=' | '<>' | '<=' | '>=' | '<<' | '>>'
                  | '<' | '>' | '+' | '-' | '*' | '/' | '^' | '(' | ')' | '['
                  | ']' | '{' | '}' | ',' | ':' | "'s"
@@ -143,7 +152,7 @@ ChunkLevel     ::= Postfix ( 'delimited' 'by' Postfix )?
                    /* `delimited by` only after a Chunk Expression or a plural chunk property */
 Postfix        ::= Primary ( "'s" Key )*
 Key            ::= 'code' 'points' | Word
-Primary        ::= Number Unit? | Text | TextPattern | BinaryBuild | '(' Expression ')'
+Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | BinaryBuild | '(' Expression ')'
                  | List | Map | 'true' | 'false' | 'nothing' | 'it' | 'me'
                  | The | ReplaceExpression | MatchSearch | Chunk | Call | Name
 Call           ::= Name CallOpen ExpressionList? ')'

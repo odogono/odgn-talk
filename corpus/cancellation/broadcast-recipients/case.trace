@@ -1,11 +1,11 @@
 # Recipients include a pending wait and a Script loaded after the Host call.
-> load a identity=37d8bce67984253140003f84f4b97c30ae797d18d374d9233e86a4c3de4c74b8
-> load b identity=242fe01abc2959b1f652f22cee8450f107efe8a7d84dde7e2436b039ef3e40e9
+> load a identity=3c4cfdd9a662fb739832ebef44b2cf62499ae4e83f2e020a27d4fb91d178028a
+> load b identity=4043835d5b5e7ff9749b2cb83dd7a21aa8f30d8296b6e3d21f72a512eeaf0cda
 > deliver d1 to=b message=watch
 > pump clock=2026-10-01T09:00:00Z
 seg b/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=208 end=wait-for
 pumped state=idle fuel=14
-> load c identity=42beb600f6db1c7149a617861c876f8f9154c2d5dc194b31002740c306cd4581
+> load c identity=ea582dccfca0cb33f105b7480101f95dd100adb994eb964ad7f6030a0765beaa
 > broadcast b1 message=go recipients=[a:d2, b:d3, c:d4]
 > pump clock=2026-10-01T09:00:00Z
 seg a/r1 start delivery=d2 broadcast=b1 handler=go clause=1 fuel=24 alloc=0 state=0 end=pass

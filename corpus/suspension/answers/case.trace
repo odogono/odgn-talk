@@ -3,7 +3,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load fetcher identity=8a51acdc61cd16d5f9c5636470c9af2dedb2f8257675437160697050281ae768
+> load fetcher identity=7d2b324b0133efb79403f05d0f0f76b0ba3340213ab1d1c98d08cc53c85eed70
 > deliver d1 to=fetcher message=fetch args=["a"]
 > deliver d2 to=fetcher message=fetch args=["b"]
 > deliver d3 to=fetcher message=fetch args=["c"]

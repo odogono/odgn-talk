@@ -3,7 +3,7 @@
 # `atan2(0, -1)` is pi. Its Fuel, allocation and state figures are Cost Model
 # 0's, as the TS Core blessed them.
 
-> load numbers identity=ecca9c0c1302219cdeaa9f0f3b20656ad38224c2819b0cea79ee8824b5e755e7
+> load numbers identity=0cec9d338326a7af8e73c35497935c037e48419f72576bf68af53cfed95da851
 > deliver d1 to=numbers message=go
 > pump clock=2026-09-30T09:00:00Z
 seg numbers/r1 start delivery=d1 handler=go clause=1 fuel=1408 alloc=1008 state=608 end=return

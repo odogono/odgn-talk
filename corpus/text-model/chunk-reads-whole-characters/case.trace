@@ -6,7 +6,7 @@
 # U+0301, and "b": 4 Characters and 9 code points. Its Fuel, allocation and
 # state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load chunks identity=ecb737b4736ccb02ecacb19919a8fa677c5790a520441d54d7343be87ae91cdf
+> load chunks identity=09b4a48a2eb57d02552073949ebc1acf7d51c59025011616e1c24bcea55b80c7
 > deliver d1 to=chunks message=go
 > pump clock=2026-09-30T09:00:00Z
 seg chunks/r1 start delivery=d1 handler=go clause=1 fuel=188 alloc=1928 state=300 end=return

@@ -469,7 +469,7 @@ raised_when = "A character outside a text literal or comment starts no token"
 
 [[syntax_error]]
 code = "unterminated text"
-raised_when = "A text literal has no closing quote before the end of its line; reported at the opening quote"
+raised_when = "An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener"
 
 [[syntax_error]]
 code = "bad unit"
@@ -485,3 +485,24 @@ raised_when = "A Container's root isn't a name, e.g. `put 1 into 3`; reported at
 
 [units]
 catalogue = "units.toml"
+
+
+[[syntax_error]]
+code = "unterminated interpolation"
+raised_when = "A hole is unclosed at EOF; reported at its dollar-brace opener"
+
+[[syntax_error]]
+code = "empty interpolation"
+raised_when = "An interpolation hole contains no expression"
+
+[[syntax_error]]
+code = "invalid text escape"
+raised_when = "A backtick escape is malformed, octal, or produces an unpaired surrogate"
+
+[[syntax_error]]
+code = "invalid text indentation"
+raised_when = "Fenced text does not match its closing margin"
+
+[[syntax_error]]
+code = "invalid text delimiter"
+raised_when = "A raw closing quote run is longer than its opening fence"

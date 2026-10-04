@@ -1,7 +1,6 @@
 // The Playground's editor: CodeMirror 6 with NorthTalk highlighting, a
 // breakpoint gutter, the paused line, suspension marks, and the language
 // server's diagnostics, completion, hover and navigation.
-import { grammar } from '@odgn/northtalk';
 import type { LspDiagnostic, Position } from '@odgn/northtalk-tooling/lsp';
 import {
   autocompletion,
@@ -14,11 +13,7 @@ import {
   historyKeymap,
   indentWithTab,
 } from '@codemirror/commands';
-import {
-  HighlightStyle,
-  StreamLanguage,
-  syntaxHighlighting,
-} from '@codemirror/language';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { lintGutter, setDiagnostics, type Diagnostic } from '@codemirror/lint';
 import {
   EditorState,
@@ -44,66 +39,9 @@ import {
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import type { LspClient } from './lsp-client';
+import { northtalk } from './language';
 
 // ------------------------------------------------------------- language
-
-const KEYWORDS = new Set([
-  ...(grammar as { reserved: string[] }).reserved,
-  'use',
-  'from',
-  'as',
-  'constant',
-  'script',
-  'variable',
-  'say',
-  'with',
-  'each',
-  'all',
-  'any',
-  'ignoring',
-  'case',
-  'contains',
-]);
-
-const northtalk = StreamLanguage.define<{ inString: boolean }>({
-  name: 'northtalk',
-  startState: () => ({ inString: false }),
-  token(stream, state) {
-    if (state.inString || stream.peek() === '"') {
-      if (!state.inString) {
-        stream.next();
-      }
-      state.inString = true;
-      while (!stream.eol()) {
-        if (stream.next() === '"') {
-          state.inString = false;
-          break;
-        }
-      }
-      // Text literals have no escapes, and may not cross a line.
-      state.inString = false;
-      return 'string';
-    }
-    if (stream.eatSpace()) {
-      return null;
-    }
-    if (stream.match('--')) {
-      stream.skipToEnd();
-      return 'comment';
-    }
-    if (stream.match(/^\d[\d_]*(\.\d+)?/u)) {
-      return 'number';
-    }
-    const word = stream.match(/^[\p{L}_][\p{L}\p{N}_]*/u) as
-      RegExpMatchArray | boolean;
-    if (word && typeof word !== 'boolean') {
-      return KEYWORDS.has(word[0].toLowerCase()) ? 'keyword' : 'variableName';
-    }
-    stream.next();
-    return 'operator';
-  },
-  tokenTable: {},
-});
 
 const style = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--keyword)', fontWeight: '600' },

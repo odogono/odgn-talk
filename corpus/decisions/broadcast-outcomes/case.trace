@@ -5,9 +5,9 @@
 # over an undecided error, and the report keeps both. Without a veto, that
 # error makes the next Broadcast undecided. No recipients means allowed.
 
-> load watcher identity=c6fdb2b39163d42a4061a7638242998b317de0fe7a98da480ed11a807f969967
-> load broken identity=e07b12dd455c3ea05197ba2f27b3da332e3bf28f90825b2134973fbb8ab5da7f
-> load decider identity=fe571133001cde212ad1aaf0ab541cc40cf90cf91be8a24285799bc8372d54a2
+> load watcher identity=9e79575e6c0893066c1942cec5fdb1522fccd104d9a1434d4e012e2855252f92
+> load broken identity=c570de4f22b2f78d74ec3bde9870d2461ad169c2f8df7ee6261171ff2e8616f5
+> load decider identity=9831e2226856f5e4b6eae8226a15e28506cbcd1a0015ce575d15078f888a51b9
 > deliver d1 to=watcher message=watch
 > pump clock=2026-09-30T10:00:00Z
 seg watcher/r1 start delivery=d1 handler=watch clause=1 fuel=14 alloc=0 state=224 end=wait-for

@@ -368,7 +368,7 @@ export class Parser {
 
   // Can this token, in operand position, start an expression?
   startsExpr(t: Token): boolean {
-    if (['num', 'str', 'patopen', 'binopen'].includes(t.t)) {
+    if (['num', 'str', 'template', 'patopen', 'binopen'].includes(t.t)) {
       return true;
     }
     if (t.t === 'op') {
@@ -1435,7 +1435,7 @@ export class Parser {
 
   // After a chunk word: does the next token start its index?
   startsIndex(t: Token): boolean {
-    if (t.t === 'num' || t.t === 'str') {
+    if (t.t === 'num' || t.t === 'str' || t.t === 'template') {
       return true;
     }
     if (t.t === 'op') {
@@ -1462,6 +1462,45 @@ export class Parser {
           return { k: 'Quantity', n: t.v, unit: this.next('unit').v };
         }
         return { k: 'Num', v: t.v };
+      }
+      case 'template': {
+        this.next();
+        let result: Node = {
+          k: 'Text',
+          v: t.parts![0]!.value,
+          line: t.line,
+          col: t.col,
+        };
+        for (let index = 0; index < t.parts!.length - 1; index++) {
+          const hole = t.parts![index]!.hole!;
+          const inner = new Parser(this.lx.src, this.stats);
+          inner.offset = hole.start;
+          inner.brackets = ['{'];
+          const at = this.lx.lex(hole.start, 'operand');
+          if (at.pos === hole.end) {
+            throw new SyntaxError(
+              { ...at, ...this.lx.where(hole.at), pos: hole.at },
+              'empty interpolation',
+              'empty interpolation',
+            );
+          }
+          const expression = inner.expr();
+          if (inner.peek(0, 'operator').pos !== hole.end) {
+            inner.fail(inner.peek(0, 'operator'), 'end of interpolation');
+          }
+          const where = this.lx.where(hole.at);
+          result = { k: '&', l: result, r: expression, ...where };
+          const value = t.parts![index + 1]!.value;
+          if (value) {
+            result = {
+              k: '&',
+              l: result,
+              r: { k: 'Text', v: value, ...where },
+              ...where,
+            };
+          }
+        }
+        return result;
       }
       case 'str':
         this.next();

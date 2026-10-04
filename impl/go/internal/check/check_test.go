@@ -254,11 +254,17 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			tree, err := syntax.Parse(string(source))
-			if err != nil {
-				t.Fatal(err)
+			tree, parseErr := syntax.Parse(string(source))
+			var actual []Diagnostic
+			if parseErr != nil {
+				e, ok := parseErr.(*syntax.Error)
+				if !ok {
+					t.Fatal(parseErr)
+				}
+				actual = []Diagnostic{{e.Code, e.Pos}}
+			} else {
+				actual = Check(tree, Options{}).Diagnostics
 			}
-			checked := Check(tree, Options{})
 			trace, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)
@@ -272,8 +278,8 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 			if len(expected) == 0 {
 				t.Fatal("case has no diagnostic records")
 			}
-			if !slices.Equal(checked.Diagnostics, expected) {
-				t.Fatalf("expected %v, got %v", expected, checked.Diagnostics)
+			if !slices.Equal(actual, expected) {
+				t.Fatalf("expected %v, got %v", expected, actual)
 			}
 		})
 	}
