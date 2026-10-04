@@ -1,3 +1,5 @@
+# Event-test Fuel corrected from TS ordinary/save-restore agreement.
+# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
 # A named delivery's owner Target does not match watched; the moved leaf does.
 > load old identity=af39b53cacb9c9bd6654006f37bec298c47fcda8a3dc3744b812f012781d5d22
 > load next identity=7b999f656e056790bbb2cf4cc70154312ed4c49152cfcc6c9b14abb91929536a
@@ -17,8 +19,8 @@ pumped state=idle fuel=16 next=2026-09-30T09:00:01Z
 seg next/r3 start delivery=d3 handler=ping clause=1 fuel=16 alloc=24 state=452 end=return
 run next/r3 outcome=completed delivery=d3 handler=ping fuel=16 alloc=24
 seg next/r1 resume fuel=25 alloc=24 state=104 end=return
-run next/r1 outcome=completed delivery=d1 handler=watch fuel=58 alloc=64
-pumped state=idle fuel=57
+run next/r1 outcome=completed delivery=d1 handler=watch fuel=54 alloc=64
+pumped state=idle fuel=53
 > vars
 vars old handled=[]
 vars next handled=[9, 4] observed=[4]

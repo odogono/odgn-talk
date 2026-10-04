@@ -646,6 +646,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
 		u.add("not in a join", n.Pos())
 	}
+	if u.Options.Library && (n.Kind == "wait-for" || n.Kind == "wait-any") {
+		u.add("not in a library", n.Pos())
+	}
 	switch n.Kind {
 	case "name", "pin":
 		if _, ok := u.Resolve(b, n.Text); !ok {
@@ -808,6 +811,16 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		return
 	}
 	if n.Kind == "event" {
+		for _, filter := range n.Children {
+			// A bare unresolved receiver Name denotes a Script. Expressions
+			// and captures resolve in the enclosing Handler, not the test body.
+			if filter.Kind == "name" {
+				if _, ok := u.Resolve(b, filter.Text); !ok {
+					continue
+				}
+			}
+			u.validate(filter, b, ctx)
+		}
 		if eventBody := u.Bodies[n]; eventBody != nil {
 			u.validateBody(eventBody, ctx)
 		}

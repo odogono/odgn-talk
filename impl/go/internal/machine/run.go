@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -38,13 +39,15 @@ type State struct {
 	Unit                              *lower.Unit
 	Constants, Variables, Definitions []value.Value
 	Objects                           map[string]value.Value
+	ScriptNames                       []string // receiver Names are not Values
 }
 type handlerDispatch struct {
 	Bodies []int
 	Args   []value.Value
 }
 type Frame struct {
-	Dispatch *handlerDispatch
+	Dispatch      *handlerDispatch
+	ReceiverNames map[int]string // operand-stack tokens, not Script Values
 
 	Body, PC      int
 	Locals, Stack []value.Value
@@ -55,9 +58,12 @@ type Frame struct {
 type Run struct {
 	Rollback       []string
 	WaitNS         *big.Int
+	EventWait      *EventWait
+	EventResume    *EventResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 	Vetoed         bool
+	Passed         bool
 	VetoReason     value.Value
 
 	Cancelling                 bool
@@ -225,13 +231,16 @@ func (r *Run) pay(fuel, alloc int64) bool {
 	return true
 }
 func (r *Run) Execute(slice int64) {
-	r.ExecuteSelected(slice, nil)
+	r.ExecuteSelected(slice, nil, nil)
 }
 
+// SendFunc commits a paid, non-waiting message. False means mailbox full.
+type SendFunc func(to, message string, args []value.Value) bool
+
 // ExecuteSelected notifies the scheduler when an entry clause's combined
-// charge succeeds, before the instruction commits any effects. The callback
-// belongs to this turn, so faults, preemption and cleanup cannot retain it.
-func (r *Run) ExecuteSelected(slice int64, paid func()) {
+// charge succeeds, before effects commit. Both callbacks belong to this turn;
+// faults, preemption and cleanup cannot retain them in Run state.
+func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
@@ -243,7 +252,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || i.Name == "send" && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}
@@ -255,7 +264,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 			break
 		}
 
-		if (i.Name == "return" || i.Name == "veto") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+		if (i.Name == "return" || i.Name == "veto" || i.Name == "pass") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
 			r.fault("persistent")
 			break
 		}
@@ -264,6 +273,7 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		trial := *f
 		trial.Stack = slices.Clone(f.Stack)
 		trial.Locals = slices.Clone(f.Locals)
+		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
 		if (i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
 			r.fault("depth")
@@ -297,6 +307,10 @@ func (r *Run) ExecuteSelected(slice int64, paid func()) {
 		}
 		f.Clause = false
 		trial.Clause = false
+		if err == nil && i.Name == "send" && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args) {
+			v := failure("mailbox full", value.Pair{Key: "to", Val: text(f.ReceiverNames[len(f.Stack)-1])})
+			err = &v
+		}
 		if err != nil {
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
@@ -339,6 +353,9 @@ func (r *Run) Resume() {
 	}
 	r.Base = slices.Clone(r.State.Variables)
 	r.WaitNS = nil
+	if r.EventResume != nil {
+		r.resumeEvent()
+	}
 	r.Status = Running
 }
 
@@ -446,6 +463,11 @@ func (r *Run) unwind(err value.Value) {
 			f = &r.Frames[frame]
 			f.Waiting = false
 			f.Stack = slices.Clone(f.Stack[:u.Depth])
+			for slot := range f.ReceiverNames {
+				if slot >= len(f.Stack) {
+					delete(f.ReceiverNames, slot)
+				}
+			}
 			f.PC = u.Target
 			switch u.Kind {
 			case "catch":
@@ -508,6 +530,8 @@ func (r *Run) Cancel(budget int64) {
 			r.Frames[len(r.Frames)-1].PC--
 		}
 		r.WaitNS = nil
+		r.EventWait = nil
+		r.EventResume = nil
 	}
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
@@ -518,12 +542,26 @@ func (r *Run) Cancel(budget int64) {
 }
 func (r *Run) RetainedSize() int64 {
 	size := int64(96)
+	if r.EventWait != nil {
+		for _, v := range r.EventWait.Values {
+			size = saturatingAdd(size, Size(v))
+		}
+	}
+	if p := r.EventResume; p != nil && !p.Timeout {
+		size = saturatingAdd(size, Size(p.Message))
+		for _, v := range p.Bindings {
+			size = saturatingAdd(size, Size(v))
+		}
+	}
 	for _, f := range r.Frames {
 		n := int64(64 + 8*len(f.Locals))
 		for _, v := range f.Locals {
 			n = saturatingAdd(n, Size(v))
 		}
-		for _, v := range f.Stack {
+		for j, v := range f.Stack {
+			if f.ReceiverNames[j] != "" {
+				continue
+			}
 			n = saturatingAdd(n, Size(v))
 		}
 		size = saturatingAdd(size, n)
@@ -556,14 +594,28 @@ func (r *Run) failClause() {
 // The embedding API uses time.Time for deadlines. Defer waits beyond its
 // representable range, without wrapping the timer or charging the instruction.
 func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
-	if i.Name != "wait" || r.ClockNS == nil {
+	if r.ClockNS == nil {
 		return false
 	}
-	ns, err := waitNanos(f.Stack[len(f.Stack)-1])
-	if err != nil {
+	var deadline *big.Int
+	switch i.Name {
+	case "wait":
+		ns, err := waitNanos(f.Stack[len(f.Stack)-1])
+		if err != nil {
+			return false
+		}
+		deadline = new(big.Int).Add(r.ClockNS, ns)
+	case "wait-for", "wait-for-any":
+		entry := r.State.Unit.Events[i.Operands()[0].Index]
+		w, err := r.eventWait(i.Name, entry, f.Stack[len(f.Stack)-eventValueCount(entry):])
+		if err != nil || w.Deadline == nil {
+			return false
+		}
+		deadline = w.Deadline
+	default:
 		return false
 	}
-	seconds := new(big.Int).Div(new(big.Int).Add(r.ClockNS, ns), big.NewInt(1e9))
+	seconds := new(big.Int).Div(deadline, big.NewInt(1e9))
 	// Go's signed seconds count starts at year 0001, 62135596800 seconds
 	// before the Unix epoch. Its upper bound must leave room for that offset.
 	return !seconds.IsInt64() || seconds.Cmp(big.NewInt(math.MaxInt64-62135596800)) > 0

@@ -100,6 +100,7 @@ Object property Shapes belong to
 `wrong argument`, `unknown operation`, `wrong mode`, `missing and wait`,
 `import cycle`, `missing grant`, `not in a library`, `veto outside a decision`,
 `after a suspension`, `wrong message` and `bad suffixes` depend on those facilities.
+The current subset already rejects `wait for` in a Library, as `not in a library`.
 
 ## Values and codecs
 
@@ -148,12 +149,12 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Other suspension and `send` instructions, foreign Function Value calls with
+Joins and waiting or Message Path `send` instructions, foreign Function Value calls with
 `and wait`, imported calls, Capability effects and Object properties stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Message Paths, Broadcast Decisions, event waits and
+before that boundary. Message Paths, Broadcast Decisions and
 pending calls belong to #134; complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
@@ -219,9 +220,51 @@ Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.
 
+Message waits support one-line `wait for`, optional timeouts, and block-form
+`when`/`after` branches. Every pending wait observes a dispatched message in
+registration order before Handler dispatch, without consuming it. Event tests
+use captured locals from registration and current Script Variables; failed
+patterns bind nothing, and Guard errors skip and report their branch. The first
+matching branch wins. Timers choose the earliest deadline, with source order
+breaking ties. A match retains its message and bindings until its Run resumes;
+cancellation removes subscriptions, timers and ready events before finally cleanup.
+Inspection shows `wait-for` or `wait-for-any` and the earliest deadline, if any.
+
+Event tests pay their own instructions, without a Handler Clause dispatch
+charge. Their Fuel and allocation accumulate on the waiting Run, uncapped
+there until its next resumed instruction. All observation work counts toward
+the Pump's receiving Script slice and Group cap. Observation finishes atomically
+even past those budgets; the incoming Run is then preempted before its first
+instruction, ahead of newly ready waiters, and slice overrun becomes debt.
+Internal `error` messages are observed even without an error Handler. Named
+Script filters resolve when waiting begins; missing names raise `object gone`,
+and other non-Object filters raise `wrong kind`. Object filters remain dependent
+on Object registration, while Object-addressed sends remain deferred.
+
+Non-waiting `send` to a named Script or an ownerless Script's `me` joins the
+receiver's work queue immediately during a Pump. Receivers never run inside the
+sender; FIFO order and sender Run identity are preserved. Named receivers can
+load after their senders, and their existence is checked when the receiver is
+loaded onto the operand stack. Missing names raise `object gone`; ordinary
+non-Object Values raise `wrong kind`. Mailbox capacity includes Host inputs
+accepted during the Pump. A full mailbox raises `mailbox full`, with the Script
+name as `to`, at the paid send; no message is delivered.
+
+The sender pays Cost Model 0's message charge: 20 Fuel plus the rounded-up
+message size divided by 32, allocating the message size. The message counts
+against the receiving Script's mailbox and its Run uses that Script's own
+limits. A self-send updates the sender's retained-state base immediately, so
+the queued message counts at its next Persistent State check. Budget faults
+prevent delivery; later sender faults, errors or
+cancellation preserve already sent messages. Plain `send` leaves `it` unchanged.
+Receiver Names remain plain frame data across preemption and contribute no
+Value size to Persistent State. `send … and wait`, Joins and Object Message
+Paths remain at their untouched implementation boundaries.
+
 Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
-message also allows. A deciding Handler keeps its Verdict open through
+message also allows. A matching pending wait allows a Decision before Handler
+dispatch. A deciding Handler keeps its Verdict open through
 preemption until its first Segment ends or suspends, sealing `Allowed`, or
 until `veto` completes its finally cleanup, sealing `Vetoed` with its reason.
 The vetoed Run completes with Nothing. Errors, faults, drops and cancellation
@@ -231,6 +274,9 @@ after sealing leaves the continuing Run alone. Load checks reject vetoes
 outside deciding entry Handlers, in locally called Handlers, or reachable
 after suspension, and reject passes reachable after suspension. Message Paths
 and Broadcast Decisions remain deferred, as does routing through Object handles.
+For a Script with no owner, `pass` completes its Run and reaches the end of the
+path, reporting `unhandled` and allowing an open Decision; Requests fail with
+`send failed`, reason `unhandled`.
 
 Queueing Policies apply to the selected entry clause after Destructuring and
 Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
@@ -252,8 +298,8 @@ binding holds the failed message before Guard tests and survives clause skips,
 local calls and preemption. An unmatched internal error never reports `unhandled`,
 and an error Run that errors sends no further message. A full mailbox, including
 reserved Host inputs, drops the error with an `error-dropped` Trace note. Queued
-errors count toward Persistent State; pending `wait for error` observation awaits
-the `wait for` implementation in #134.
+errors count toward Persistent State and can resume pending `wait for error`
+observers before Handler dispatch.
 
 Inspection and counters are worker calls; a refused call with no error return
 panics with `HostError`. Trace callbacks run without the input queue lock.
@@ -269,10 +315,10 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 103 cases: all 12 text-model cases, all 35 load-diagnostic
+The gate contains 112 cases: all 12 text-model cases, all 35 load-diagnostic
 cases, all seven Disassembly Cases, the three other Value Encoding cases, and
-46 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
-delivery, suspension, Queueing Policy and Decision cases. Trace cases replay through the
+55 additional math, dates, Quantities, Bytes, limits, Text Pattern, error
+delivery, suspension, observation, Queueing Policy and Decision cases. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 57-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
@@ -291,6 +337,20 @@ Three reviewed Decision cases pin errors, faults and preemption before sealing.
 A new Decision regression agrees on both Cores and retains its `Unblessed`
 header for first human review; it covers dispatch charges, dropping, veto
 cleanup, unmatched messages and a Run that resumes after its Verdict seals.
+Four observation traces reproduce the corrected event-test charge on both Cores,
+including atomic cap/slice overruns, debt, late Run faults and Decision sealing.
+A new observation regression also agrees on both Cores, retaining its `Unblessed`
+header for first human review; it covers pinned locals, live Script Variables,
+branch priority, Guard errors, non-consuming matches, sender filters, timeouts
+and internal error observation. The reviewed `suspension/wait-for` case now
+agrees on Go, including Script sends and sender filters. Three new send regressions
+agree on both Cores and retain their `Unblessed` headers for first human review;
+they pin FIFO and self sends, full/missing/invalid receiver errors, record order,
+immediate delivery surviving a sender error, and preempted receiver identity
+without Value size, and same-Segment Persistent State checks after self-send.
+Three other corrected TS traces need Go facilities outside
+this slice; their remaining Go parity is tracked in
+[#277](https://github.com/odogono/odgn-talk/issues/277).
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

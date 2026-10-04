@@ -1,3 +1,5 @@
+# Event-test Fuel corrected from TS ordinary/save-restore agreement.
+# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
 # extend-units: Extend keeps old frames and Function Values valid, links inherited Constants/defaults, rejects name reuse, and resumes event tests from the extension unit.
 
 > load s identity=c0d8add854de261af2be8ce91a9762dfe05a5480d9170c13ad572ee0af993311
@@ -24,8 +26,8 @@ seg s/r4 start delivery=d4 fuel=0 alloc=0 state=598 end=unhandled
 run s/r4 outcome=unhandled delivery=d4 fuel=0 alloc=0
 unhandled d4 message=answer args=[3]
 seg s/r3 resume fuel=14 alloc=0 state=240 end=return
-run s/r3 outcome=completed delivery=d3 handler=waiting fuel=44 alloc=40
-pumped state=idle fuel=30 next=1970-01-01T00:00:01Z
+run s/r3 outcome=completed delivery=d3 handler=waiting fuel=40 alloc=40
+pumped state=idle fuel=26 next=1970-01-01T00:00:01Z
 > pump clock=1970-01-01T00:00:01Z
 seg s/r1 resume fuel=11 alloc=16 state=64 end=return
 run s/r1 outcome=completed delivery=d1 handler=old fuel=32 alloc=48

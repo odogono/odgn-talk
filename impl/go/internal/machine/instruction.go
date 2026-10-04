@@ -69,7 +69,12 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	args := i.Operands()
 	idx := func(n int) int { return args[n].Index }
 	name := func(n int) string { return args[n].Text }
-	pop := func() value.Value { v := f.Stack[len(f.Stack)-1]; f.Stack = f.Stack[:len(f.Stack)-1]; return v }
+	pop := func() value.Value {
+		v := f.Stack[len(f.Stack)-1]
+		delete(f.ReceiverNames, len(f.Stack)-1)
+		f.Stack = f.Stack[:len(f.Stack)-1]
+		return v
+	}
 	push := func(v value.Value) {
 		f.Stack = append(f.Stack, v)
 		m.Result = v
@@ -78,9 +83,21 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	take := func(n int) []value.Value {
 		vs := slices.Clone(f.Stack[len(f.Stack)-n:])
 		f.Stack = f.Stack[:len(f.Stack)-n]
+		for slot := range f.ReceiverNames {
+			if slot >= len(f.Stack) {
+				delete(f.ReceiverNames, slot)
+			}
+		}
 		return vs
 	}
 	jump := func() { f.PC = args[len(args)-1].Index - 1 }
+	receiver := func(name string) {
+		push(value.Value{})
+		if f.ReceiverNames == nil {
+			f.ReceiverNames = map[int]string{}
+		}
+		f.ReceiverNames[len(f.Stack)-1] = name
+	}
 	var effect func()
 	var err *value.Value
 	bad := func(v value.Value) { err = &v }
@@ -115,9 +132,30 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		slot := slices.Index(r.State.Unit.Definitions, name(0))
 		effect = func() { r.State.Definitions[slot] = v }
 	case "load-object":
-		push(r.State.Objects[name(0)])
+		if v, ok := r.State.Objects[name(0)]; ok {
+			push(v)
+		} else if slices.Contains(r.State.ScriptNames, name(0)) {
+			receiver(name(0))
+		} else {
+			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
+		}
 	case "me":
-		push(r.State.Me)
+		if r.State.Me.Kind == value.Nothing && r.State.Unit.Bodies[f.Body].Code[f.PC+1].Name == "send" {
+			receiver(r.State.Unit.Name)
+		} else {
+			push(r.State.Me)
+		}
+	case "send":
+		if f.ReceiverNames[len(f.Stack)-1] == "" {
+			bad(wrong("object", pop()))
+			break
+		}
+		pop()
+		m.Args = take(idx(1))
+		m.InputSize = 32
+		for _, v := range m.Args {
+			m.InputSize = saturatingAdd(m.InputSize, Size(v))
+		}
 	case "target":
 		push(r.Target)
 	case "jump":
@@ -142,6 +180,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		default:
 			push(v)
 		}
+	case "pass":
+		effect = func() { r.Frames = nil; r.Passed = true; r.Status = Completed }
 	case "return", "veto":
 		v := pop()
 		effect = func() {
@@ -266,6 +306,14 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		effect = func() { r.WaitNS = ns; r.Status = Suspended }
+	case "wait-for", "wait-for-any":
+		entry := r.State.Unit.Events[idx(0)]
+		w, err := r.eventWait(i.Name, entry, take(eventValueCount(entry)))
+		if err != nil {
+			bad(*err)
+			break
+		}
+		effect = func() { r.EventWait = w; r.Status = Suspended }
 	case "call-builtin":
 		m.Args = take(idx(1))
 		v, e := builtin(name(0), m.Args, &m)

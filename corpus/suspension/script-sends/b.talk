@@ -1,0 +1,4 @@
+script variable got = []
+on note n
+ put n after got
+end note

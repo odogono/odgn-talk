@@ -13,6 +13,7 @@ import (
 )
 
 type Measures struct {
+	InputSize                                                 int64 // a message is an internal record, not a Value
 	ResultValues                                              []value.Value
 	InputPresent                                              bool
 	ResultPresent                                             bool
@@ -142,7 +143,7 @@ func formula(s string, m Measures, v value.Value) int64 {
 				switch subject {
 				case "input":
 					x = m.Input
-					if !m.InputPresent && m.Input.Kind == value.Nothing {
+					if !m.InputPresent && m.InputSize == 0 && m.Input.Kind == value.Nothing {
 						continue
 					}
 				case "result":
@@ -159,6 +160,9 @@ func formula(s string, m Measures, v value.Value) int64 {
 					}
 				}
 				n = measure(token[:at], x)
+				if subject == "input" && token[:at] == "size" && m.InputSize > 0 {
+					n = m.InputSize
+				}
 				if subject == "result" && m.ResultValues != nil {
 					n = 0
 					for _, result := range m.ResultValues {

@@ -1,7 +1,8 @@
-# Two failed Guards spend 22 observation Fuel in a slice of 5. Both
+# Two failed Guards spend 14 observation Fuel in a slice of 5. Both
 # watchers stay suspended; the incoming Run is preempted before dispatch.
-# Debt consumes the next three slices. The fourth permits one dispatch
-# instruction, and the fifth ends the Handler without observing again.
+# Debt consumes the next slice and most of the following one, which permits
+# one dispatch instruction. The next Pump ends the Handler without observing
+# again, and the final two Pumps have no work.
 > load s identity=6f9f2554c977d943c04dd760a17ecec5da04100420d7fd984f7f3b7a53990311
 > deliver d1 to=s message=watch
 > deliver d2 to=s message=watch
@@ -12,19 +13,19 @@ pumped state=idle fuel=28
 > deliver d3 to=s message=ping args=[-1]
 > pump clock=2026-09-30T10:00:01Z fuel-slice=5
 preempt s/r3 start delivery=d3 handler=ping clause=1 by=slice fuel=0 alloc=0
-pumped state=sliced fuel=22
+pumped state=sliced fuel=14
 > pump clock=2026-09-30T10:00:02Z fuel-slice=5
 pumped state=sliced fuel=0
 > pump clock=2026-09-30T10:00:03Z fuel-slice=5
-pumped state=sliced fuel=0
-> pump clock=2026-09-30T10:00:04Z fuel-slice=5
-pumped state=sliced fuel=0
-> pump clock=2026-09-30T10:00:05Z fuel-slice=5
 preempt s/r3 continue by=slice fuel=5 alloc=0
 pumped state=sliced fuel=5
-> pump clock=2026-09-30T10:00:06Z fuel-slice=5
+> pump clock=2026-09-30T10:00:04Z fuel-slice=5
 seg s/r3 continue fuel=2 alloc=0 state=416 end=return
 run s/r3 outcome=completed delivery=d3 handler=ping fuel=7 alloc=0
 pumped state=idle fuel=2
+> pump clock=2026-09-30T10:00:05Z fuel-slice=5
+pumped state=idle fuel=0
+> pump clock=2026-09-30T10:00:06Z fuel-slice=5
+pumped state=idle fuel=0
 > vars
 vars s

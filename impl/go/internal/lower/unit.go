@@ -44,23 +44,24 @@ type Body struct {
 	Index       int
 	DispatchEnd int // first instruction after parameter tests and the Guard
 }
-type eventBranch struct {
-	message  string
-	from     bool
-	body     int
-	captures int
-	binds    []int
-	after    bool
+type EventBranch struct {
+	Message    string
+	From       bool
+	FromScript string // an unresolved receiver Name, rather than a Value
+	Body       int
+	Captures   int
+	Binds      []int
+	After      bool
 }
-type event struct {
-	branches []eventBranch
-	timeout  bool
+type Event struct {
+	Branches []EventBranch
+	Timeout  bool
 }
 type Unit struct {
 	Name, Kind                                 string
 	Constants, Definitions, Variables, Objects []string
 	Bodies                                     []*Body
-	Events                                     []event
+	Events                                     []Event
 	checked                                    *check.Unit
 	byNode                                     map[*syntax.Node]*Body
 	state                                      *builder
@@ -440,31 +441,31 @@ func (u *Unit) Disassemble() string {
 		fmt.Fprintln(&out, "events")
 		for i, event := range u.Events {
 			branches := []string{}
-			for _, b := range event.branches {
-				if b.after {
+			for _, b := range event.Branches {
+				if b.After {
 					branches = append(branches, "after")
 					continue
 				}
-				s := "when " + b.message
-				if b.from {
+				s := "when " + b.Message
+				if b.From {
 					s += " from"
 				}
-				if b.body >= 0 {
-					s += fmt.Sprintf(" body %d", b.body)
+				if b.Body >= 0 {
+					s += fmt.Sprintf(" body %d", b.Body)
 				}
-				if b.captures > 0 {
-					s += fmt.Sprintf(" captures %d", b.captures)
+				if b.Captures > 0 {
+					s += fmt.Sprintf(" captures %d", b.Captures)
 				}
-				if len(b.binds) > 0 {
+				if len(b.Binds) > 0 {
 					items := []string{}
-					for _, slot := range b.binds {
+					for _, slot := range b.Binds {
 						items = append(items, strconv.Itoa(slot))
 					}
 					s += " binds " + strings.Join(items, ", ")
 				}
 				branches = append(branches, s)
 			}
-			if event.timeout {
+			if event.Timeout {
 				branches = append(branches, "or")
 			}
 			fmt.Fprintf(&out, "  %d %s\n", i, strings.Join(branches, "; "))

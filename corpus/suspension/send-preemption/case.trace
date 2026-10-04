@@ -1,0 +1,27 @@
+# Unblessed: new regression; first blessing awaits human review.
+# Preemption after load-object retains a receiver Name, with zero Value size.
+# Continuing the sender commits exactly one send in the next Pump.
+> load a identity=d7fbd64a1c214d9d7eed76fe25ae47b0cc101e15d1319b99eeffa3a00cdbe7b9
+> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
+> deliver d1 to=a message=go
+> pump clock=2026-10-04T12:00:00Z fuel-slice=6
+preempt a/r1 start delivery=d1 handler=go clause=1 by=slice fuel=6 alloc=0
+pumped state=sliced fuel=6
+> counters a
+counters a fuel=6 alloc=0 runs=1 faults=0 state=192 mailbox=0
+> counters b
+counters b fuel=0 alloc=0 runs=0 faults=0 state=0 mailbox=0
+> pump clock=2026-10-04T12:00:00Z
+send a/r1 to=b message=ping args=[7]
+seg a/r1 continue fuel=25 alloc=48 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=31 alloc=48
+seg b/r1 start from=a/r1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run b/r1 outcome=completed handler=ping value=7 fuel=7 alloc=0
+pumped state=idle fuel=32
+> counters a
+counters a fuel=31 alloc=48 runs=1 faults=0 state=0 mailbox=0
+> counters b
+counters b fuel=7 alloc=0 runs=1 faults=0 state=0 mailbox=0
+> vars
+vars a
+vars b
