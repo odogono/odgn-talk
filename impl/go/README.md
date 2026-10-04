@@ -322,9 +322,10 @@ including atomic cap/slice overruns, debt, late Run faults and Decision sealing.
 A new observation regression also agrees on both Cores, retaining its `Unblessed`
 header for first human review; it covers pinned locals, live Script Variables,
 branch priority, Guard errors, non-consuming matches, sender filters, timeouts
-and internal error observation. Four other TS traces still encode the old
-event-test overcharge and need Go facilities outside this slice; their proposed
-corrections are tracked in [#277](https://github.com/odogono/odgn-talk/issues/277).
+and internal error observation. Four other corrected TS traces
+need Go facilities outside this slice. Their maintainer-approved TS-only
+corrections do not establish Go parity, which remains tracked in
+[#277](https://github.com/odogono/odgn-talk/issues/277).
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason

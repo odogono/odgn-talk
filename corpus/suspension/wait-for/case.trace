@@ -1,3 +1,5 @@
+# Event-test Fuel corrected from TS ordinary/save-restore agreement.
+# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
 # wait-for: d1 waits for order 7 and d2 for a big payment or a refund. bank's
 # first payment is order 8, which matches neither; its second, order 7 for
 # 120, ends d1's wait but not d2's, whose Guard needs over 100 in `order`.
@@ -29,15 +31,15 @@ run bank/r2 outcome=completed delivery=d4 handler=settle fuel=41 alloc=246
 seg till/r5 start from=bank/r2 handler=paid clause=1 fuel=24 alloc=58 state=1041 end=return
 run till/r5 outcome=completed handler=paid fuel=24 alloc=58
 seg till/r1 resume fuel=19 alloc=550 state=849 end=return
-run till/r1 outcome=completed delivery=d1 handler=await fuel=72 alloc=590
-pumped state=idle fuel=262 next=2026-09-30T09:00:05Z
+run till/r1 outcome=completed delivery=d1 handler=await fuel=64 alloc=590
+pumped state=idle fuel=238 next=2026-09-30T09:00:05Z
 > pump clock=2026-09-30T09:00:05Z
 seg till/r2 resume fuel=30 alloc=31 state=640 end=return
-run till/r2 outcome=completed delivery=d2 handler=either fuel=77 alloc=31
+run till/r2 outcome=completed delivery=d2 handler=either fuel=69 alloc=31
 pumped state=idle fuel=30 next=2026-09-30T09:00:31Z
 > pump clock=2026-09-30T09:00:31Z
 seg till/r3 resume fuel=19 alloc=104 state=448 end=return
-run till/r3 outcome=completed delivery=d5 handler=await fuel=64 alloc=104
+run till/r3 outcome=completed delivery=d5 handler=await fuel=56 alloc=104
 pumped state=idle fuel=19
 
 > vars
