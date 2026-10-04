@@ -134,6 +134,9 @@ func InitializeBound(unit *lower.Unit, group any, me value.Value, objects map[st
 func InitializeLinked(unit *lower.Unit, group any, libraries map[string]*State) (*State, error) {
 	return initializeLinked(unit, group, value.Value{}, nil, libraries)
 }
+func InitializeLinkedBound(unit *lower.Unit, group any, libraries map[string]*State, me value.Value, objects map[string]value.Value) (*State, error) {
+	return initializeLinked(unit, group, me, objects, libraries)
+}
 func initializeLinked(unit *lower.Unit, group any, me value.Value, objects map[string]value.Value, libraries map[string]*State) (*State, error) {
 	s := &State{Libraries: libraries, Unit: unit, Group: group, Me: me, Variables: make([]value.Value, len(unit.Variables)), Definitions: make([]value.Value, len(unit.Definitions)), Objects: objects}
 	if s.Objects == nil {
@@ -284,7 +287,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
+		if !Supported(i) || deferredObjectProperty(f, i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}

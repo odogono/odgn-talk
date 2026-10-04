@@ -1,6 +1,8 @@
 # Cases the Go Core must continue to pass (issues #132, #133 and #134).
 # New regression cases retain Unblessed headers until their first human review.
 builtins/function-values
+builtins/kind-of
+builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding

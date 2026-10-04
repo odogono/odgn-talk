@@ -186,7 +186,9 @@ surrogates, duplicate NFC keys and noncanonical Base64, re-parses Text Patterns
 and resolves Object tags through its resolver. Plain JSON refuses non-JSON
 kinds with `not encodable`, including `kind` and the first depth-first `path`.
 Function Values have Home identity, capture equality and accessors, and are
-refused by storage encoding. Object registration belongs to #134.
+refused by storage encoding. Group-scoped Host Objects can be registered and
+resolved by the Host; parent relationships and property execution remain part
+of #134.
 
 Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
 the number limit. Some huge Unit exponents remain impractical when interval
@@ -207,7 +209,7 @@ iteration, branches, loops, catch/finally, binary construction/destructuring,
 Text Patterns and replacement, and non-suspending local Function Values with
 captures and named defaults. The Built-ins include number functions, IEEE float
 codecs, pinned case mapping, date fields and fixed-offset conversion, and Function
-Value metadata. Object lifecycle Built-ins depend on #134.
+Value metadata, plus `objectKind`, `isDisposed` and Core-held Object ids.
 
 Generated Cost Model 0 charges precede committed instruction changes. Fuel,
 allocation, depth and dynamic Pattern Size faults leave the faulting instruction
@@ -263,7 +265,9 @@ remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 `Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports standalone Scripts with named Capability Grants;
-Object bindings are refused. Other unimplemented public declarations are omitted.
+Owning Script bindings are refused; well-known Objects are checked for Group
+ownership and retained through Reload. Other unimplemented public declarations
+are omitted.
 
 Any-goroutine deliveries reserve mailbox capacity before joining the input
 queue. A Pump takes one Clock reading, drains accepted inputs in order, and
@@ -332,7 +336,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Object execution, Capability Scopes and
+Host Object property execution, Message Paths, Capability Scopes and
 Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
@@ -425,6 +429,29 @@ separators/signs, ten nonempty digit texts and positive integer grouping fields.
 `tag` must return well-formed tag text; case results are text with Core-owned NFC.
 Invalid results and every Host failure become `host error`. All eight costs are
 required and copied; the implementation must be non-nil.
+
+### Host Object handles and disposal
+
+`Core.DefineObjectKind(ObjectKindDef)` validates and copies a reusable declaration,
+including property Shapes, callbacks and safe costs. `Group.Object(kind, id,
+native)` registers a Group-scoped handle. Kind/id pairs are unique within the
+Group, even after disposal; different kinds and different Groups may reuse an
+id. Native state stays on the Host side. Well-known `LoadOptions.Objects`
+bindings are copied, checked for Group ownership and preserved through Reload.
+Host calls and Capability results accept registered handles, including nested
+containers, and refuse foreign handles.
+
+`Group.Dispose` queues an idempotent Host Input applied before turns at the next
+Pump. It may be called from any goroutine or a Host callback. `objectKind(o)`,
+`isDisposed(o)` and `the id of o` are Core-owned and usable in Guards. Disposal
+changes only lifecycle state: identity, equality, id, kind and Value Encoding
+remain available. Atomic lifecycle state permits concurrent metadata reads.
+Every accepted disposal input notifies `OnReady` after releasing the queue lock.
+
+Property callbacks and Shapes are declarations only in this subset. Reads of
+non-id Object keys stop at the implementation boundary before an instruction
+charge; property writes, Owning Scripts, `SetParent` and Message Path routing
+remain part of #134.
 
 ### Scheduling and suspension
 
@@ -599,7 +626,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 175 cases, including all text-model, load-diagnostic,
+The gate contains 177 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -692,3 +719,9 @@ Three reviewed Locale cases pass unchanged: `standard-locale`,
 `standard-locale-ranks` and `standard-locale-validation` under `capabilities/`.
 A required-case acceptance test protects all eight Operations, dense-rank
 sorting, option/tag validation, malformed answers and exact charges.
+
+The reviewed `builtins/object-kind` and `builtins/kind-of` cases pass unchanged
+through public Object registration, well-known bindings and queued disposal.
+A required-case acceptance test protects kind inspection for all Value kinds,
+identity and Guard behavior across Object kinds that share an id and after
+disposal, including exact Fuel, allocation and persistent state.

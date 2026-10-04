@@ -2,6 +2,7 @@ package northtalk
 
 import (
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
@@ -230,20 +231,24 @@ func (d Decimal) Uint64() (uint64, error) {
 }
 func (d Decimal) Float64Lossy() float64 { return d.inner.Float64() }
 
-// Object metadata is sufficient for display, equality and the Value Encoding.
-// Registration, properties and Group ownership arrive with the embedding.
-type ObjectKind struct{ name string }
+type ObjectKind struct {
+	name        string
+	props       map[string]Prop
+	parentKinds []string
+}
 type Object struct {
-	kind   *ObjectKind
-	id     string
-	native any
+	kind     *ObjectKind
+	id       string
+	native   any
+	group    *Group
+	disposed atomic.Bool
 }
 
 func (o *Object) ID() string        { return o.id }
 func (o *Object) Kind() *ObjectKind { return o.kind }
 func (o *Object) Native() any       { return o.native }
 func (o *Object) Value() Value {
-	return Value{corevalue.Value{Kind: corevalue.Object, Object: &corevalue.ObjectData{Kind: o.kind.name, ID: o.id, Handle: o}}}
+	return Value{corevalue.Value{Kind: corevalue.Object, Object: &corevalue.ObjectData{Kind: o.kind.name, ID: o.id, Handle: o, Disposed: &o.disposed}}}
 }
 func (v Value) AsObject() (*Object, bool) {
 	if v.Kind() != KindObject {

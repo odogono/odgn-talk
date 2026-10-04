@@ -521,3 +521,30 @@ func TestLocaleFactoryAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestObjectIdentityAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"builtins/object-kind", "builtins/kind-of"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		if !strings.Contains("\n"+string(listed), "\n"+name+"\n") {
+			t.Error("Object identity acceptance case missing from gate:", name)
+		}
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		if reason := runner.support(c); reason != "" {
+			t.Fatal(reason)
+		}
+		if _, err := runner.execute(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

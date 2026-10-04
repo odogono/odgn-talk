@@ -529,7 +529,9 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		} else {
 			k = key(k)
 		}
-		if v.Kind != value.Map {
+		if v.Kind == value.Object && k == "id" {
+			push(text(v.Object.ID))
+		} else if v.Kind != value.Map {
 			bad(wrong("map", v))
 		} else {
 			push(v.Get(k))
