@@ -271,9 +271,9 @@ visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
 on the next Pump; Fuel Cap limits the Group. Request cancellation joins the same
 queue, and Pending results settle after Pump records. Worker reentry, backwards
 Clock readings, invalid values and Function Values from other Groups are refused.
-Clock readings outside the language's year 1–9999 range currently panic during
-conversion; returning `invalid value` for them is tracked in
-[#282](https://github.com/odogono/odgn-talk/issues/282).
+Clock readings outside the language's year 1–9999 range are refused with
+`invalid value` before the Clock changes or queued inputs are drained. Refused
+Pumps are traced at the call, ahead of those still-queued inputs.
 
 `Script.Reload` checks and initializes new code against kept, unrevoked Grants
 before discarding old work. A rejected Reload leaves calls and revocation state

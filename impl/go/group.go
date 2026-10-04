@@ -393,7 +393,10 @@ func validGroup(v corevalue.Value, g *Group) bool {
 	return true
 }
 func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
-	fields := map[string]string{"clock": InstantFromTime(now).String()}
+	now = now.Round(0).UTC()
+	// Format the Host input without constructing a Value: refused Clocks can
+	// fall outside the Instant range, and must not panic while being traced.
+	fields := map[string]string{"clock": now.Format(time.RFC3339Nano)}
 	if o.FuelSlice > 0 {
 		fields["fuel-slice"] = strconv.FormatInt(o.FuelSlice, 10)
 	}
@@ -406,6 +409,11 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		g.recordRefusal("pump", nil, fields, ReentrantCall)
 		return PumpResult{}, &HostError{ReentrantCall, "Pump inside Pump"}
 	}
+	if now.Year() < 1 || now.Year() > 9999 {
+		g.mu.Unlock()
+		g.recordRefusal("pump", nil, fields, InvalidValue)
+		return PumpResult{}, &HostError{InvalidValue, "Clock outside year 1–9999"}
+	}
 	if now.Before(g.clock) {
 		g.mu.Unlock()
 		g.recordRefusal("pump", nil, fields, ClockBackwards)
@@ -416,7 +424,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		g.recordRefusal("pump", nil, fields, InvalidValue)
 		return PumpResult{}, &HostError{InvalidValue, "negative Pump budget"}
 	}
-	g.clock = now.Round(0).UTC()
+	g.clock = now
 	g.pumping = true
 	inputs := g.inputs
 	g.inputs = nil
