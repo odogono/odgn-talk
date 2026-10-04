@@ -3,7 +3,7 @@
 # A matching wait for allows before a deciding Handler's veto, so that veto
 # has no open Verdict. An unmatched message allows at the end of its path.
 
-> load observer identity=6ebfe68a6bcd5611757fa537d7892a41e2087fe8deba7c8f203f850b305f26f0
+> load observer identity=8753fe616a97a1a2470551f6d77b4c5b6a179b99862f969e9dc9dca598a67d1e
 > decide d1 to=observer message=move args=[1]
 > pump clock=2026-09-30T10:00:00Z
 guard-skip observer/r1 at=observer:17 pos=8:19 code="division by zero"

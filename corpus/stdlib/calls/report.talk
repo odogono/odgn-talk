@@ -21,5 +21,5 @@ on go
   put join(map(rows, given p: pad(p, 5, ".")), "|") into line
   put sum([1.50 m, 25 cm]) into total
   put [merge({a: 1}, {b: 2}), toHex(<<0xCA, 0xFE>>), encodeJson([1, nothing, true]), celsiusToFahrenheit(37)] into extra
-  put formatDate(makeDate(2026, 9, 30), "{day:2}.{month:2}.{year}") into stamp
+  put formatDate(makeDate(2026, 9, 30), "${day:2}.${month:2}.${year}") into stamp
 end go

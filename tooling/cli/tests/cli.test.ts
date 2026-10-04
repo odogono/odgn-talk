@@ -34,7 +34,7 @@ test('the REPL reads Entries a line at a time and records a Transcript that repl
       'end echo',
       'echo and wait',
       'typed',
-      '1 +',
+      '1 + return',
       '',
       ':help',
       ':quit',
@@ -43,7 +43,7 @@ test('the REPL reads Entries a line at a time and records a Transcript that repl
   );
   expect(code).toBe(0);
   expect(stdout).toStartWith(
-    '7.50 GBP\nhello Ann\ngot typed\n! unexpected token at 1:4\n',
+    '7.50 GBP\nhello Ann\ngot typed\n! unexpected token at 1:5\n',
   );
   const recorded = readFileSync(transcript, 'utf8');
   expect(recorded).toContain('> on greet name\n|   say "hello " & name\n');

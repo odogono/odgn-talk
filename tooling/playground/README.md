@@ -29,7 +29,7 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - When the tab drops a declaration, Apply offers a **Restart**. A Restart makes a fresh session from the Grants, the Clock and limits, the Library tabs and the Script tab, and starts a new Transcript.
 - **Library tabs:** **+ Library** adds one. Saving it (Ctrl/Cmd-S) records `:library add` the first time and `:library replace` after that. Renaming or closing a saved Library needs a Restart to take it out of the session.
 - **The console** is the live Session Transcript.
-  - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|`, and an empty line ends it.
+  - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete.
   - A `console` `read` is answered at the `<` prompt.
   - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
   - The **@ ~** box shows the Clock readings and Capability answers the Transcript records.

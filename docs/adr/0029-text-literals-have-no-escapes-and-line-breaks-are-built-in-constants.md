@@ -26,3 +26,5 @@ A text literal is exactly the Characters between its quotes. It has no escapes, 
   - Built-in functions keep ADR 0020's and ADR 0025's clash rules.
 - **`return`:** narrows ADR 0019. `return` in operand position is a syntax error. It is only the statement.
 - **Reversibility:** adding escapes later would change the meaning of every existing literal that contains a backslash, so it would need a new language version.
+
+- Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.

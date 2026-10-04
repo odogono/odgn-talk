@@ -119,6 +119,11 @@ const invariant = (
   mustCompile: boolean,
 ) => {
   const formatted = formatSource(source);
+  if (!mustCompile && parseSource(source).error) {
+    expect(formatted.source).toBe(source);
+    expect(formatted.error).toEqual(parseSource(source).error);
+    return;
+  }
   expect(formatted.error).toBeNull();
   expect(formatSource(formatted.source).source).toBe(formatted.source);
   expect(spelling(formatted.source)).toEqual(spelling(source));

@@ -1,7 +1,7 @@
 # scope-ordinary-error: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=6ce3c7a351cc5a6b04d48838c681ec9f34e6f380c1df970749a9f38e87142f43
+> load s identity=a0682d7f578fb393eea3526d209eff4b722bb90c1cd84cb485f1c1a82f6aca11
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=go

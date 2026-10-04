@@ -21,7 +21,7 @@
 # Core blessed them: `iterate-times` allocates 24, each `add` a number, 16,
 # and `next` nothing.
 
-> load counter identity=367431dc4011dea6cab92c5ac6ec27ce54628916d521f0709e94ed65b7fff087
+> load counter identity=e7b459e4e4c4331edbfe2a1c82c39b050a23303e46dbb32060800eae8e3fafc5
 
 # 70 passes: 993 Fuel, exactly the limit, so the Run completes.
 > deliver d1 to=counter message=bump args=[70]

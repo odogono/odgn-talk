@@ -3,7 +3,7 @@
 # keep their existing exponents and Units.
 # The four assignments cost 242 + 65 + 96 + 48 Fuel, plus clause 4 and ending 3.
 # Their allocation is 136 + 192 + 248 + 168; retained list sizes sum to 432.
-> load powers identity=b62a39c1a01aabf3b457601100a72864ab21b27400a17bc5aa2ec319d6283d96
+> load powers identity=089c0a16502c1e8c96caae3085435613ce362082e04539c4a0c89add4bc41c5c
 > deliver d1 to=powers message=go
 > pump clock=2026-09-30T09:00:00Z
 seg powers/r1 start delivery=d1 handler=go clause=1 fuel=458 alloc=744 state=432 end=return

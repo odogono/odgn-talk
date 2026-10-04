@@ -1,7 +1,7 @@
 # effect-ordinary-error: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=3ed714258af27a54fdfe071d269b5d18cccf9e5c29c27ea6d77de38495482009
+> load s identity=ec1f987f82eee9fa6d2a276e8ab00c3c43566fa59c50d283dddf0243f63938eb
 > stub resource.write value=nothing
 > stub-effect s.r phase=begin status=ok
 > stub-effect s.r phase=commit status=ok

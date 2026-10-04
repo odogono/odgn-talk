@@ -4,7 +4,7 @@
 # as a call. Its Fuel, allocation and state figures are Cost Model 0's, as
 # the TS Core blessed them.
 
-> load form identity=fda40ef7a41ecad6e1aec7e26442d20f543ccc2733257be69b1781a97329504b
+> load form identity=038913ffd950f365c088856c7192cb81f5a687a807f7cf94a59cc1a701e4ae91
 > deliver d1 to=form message=submit args=[{name: "a", tags: ["x"], weight: 2 kg}]
 > deliver d2 to=form message=submit args=[{name: "a", tags: ["x", 3]}]
 > deliver d3 to=form message=submit args=[{tags: []}]

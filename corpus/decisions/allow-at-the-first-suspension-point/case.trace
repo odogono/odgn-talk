@@ -6,7 +6,7 @@
 # same message reaches `veto` with no open Verdict: the Run just ends, the
 # Trace notes `no-verdict`, and there is no `decided` record.
 
-> load board identity=14444badb2b7ae640a37b9e88f31058cc3ffcc73ecbeb647ec8135d5ed6ac1f6
+> load board identity=914e21610fbf4dcc37ee9278da1b4d415b9751ec781f6e90c8bc3661eaddd041
 
 # The seal is at the `ask-wait` Segment end, so `decided` follows that `seg`.
 > decide d1 to=board message=beforeMove args=[{from: "a2", to: "a3"}]

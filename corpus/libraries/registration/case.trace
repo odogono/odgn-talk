@@ -3,15 +3,15 @@
 # the second top is added. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> add-library top identity=8694359bd4ac3217c6d3f0451d748f44dc9a0e54cf1668a2f6dfd96fce74ca86
+> add-library top identity=b46034c863e4e7803f50f51829e82b75b1c72002592ad4807b1101ab790a5a6b
 refused code="library mismatch"
-> add-library base identity=3e23a783b1e616e068dbb88a1c0c5c0fc02a810089a44394e5d536757678fde0
-> add-library base identity=3e23a783b1e616e068dbb88a1c0c5c0fc02a810089a44394e5d536757678fde0
+> add-library base identity=d4f4c056afddac4d06b962cb2c853890cee02fe1f3007d0391502c8f302c1b6b
+> add-library base identity=d4f4c056afddac4d06b962cb2c853890cee02fe1f3007d0391502c8f302c1b6b
 refused code="name reused"
-> add-library text identity=c6c76c3595f5cd029adcbab43e07efe5e09d98c1ab00d594827c938dba4e0fd3
+> add-library text identity=0bbeda49063ad785d80ce04e4ed26f7ad074a70f3b51132dbb8dfae291500e21
 refused code="reserved name"
-> add-library top identity=8694359bd4ac3217c6d3f0451d748f44dc9a0e54cf1668a2f6dfd96fce74ca86
-> load fine identity=2218244813d18defa58cff812af846c1b5919116b50c54f8c4cbcefb1c3633af
+> add-library top identity=b46034c863e4e7803f50f51829e82b75b1c72002592ad4807b1101ab790a5a6b
+> load fine identity=2fc350d0476140e826bc0870a012988abae28b8ddd10e88ac4e3683bf0f81a9f
 > deliver d1 to=fine message=go
 > pump clock=2026-09-30T09:00:00Z
 seg fine/r1 start delivery=d1 handler=go clause=1 fuel=45 alloc=16 state=16 end=return

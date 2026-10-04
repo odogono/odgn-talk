@@ -1,7 +1,7 @@
 # scope-reverse-abandonment: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=6b9022546bee7d37bf4f2f1fc122c2690f05eefb69e0c663d33240ecc2594da1
+> load s identity=c23b2ca56e3ef2ccca7fc6377bae6c12377f4dcc1c90961206bd36fc7b81e2fb
 > stub resource.open value=nothing
 > stub resource.open value=nothing
 > stub resource.openlock value=nothing

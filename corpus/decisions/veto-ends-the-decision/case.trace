@@ -4,8 +4,8 @@
 # knight's parent, never hears the move. A bare `veto` gives the reason
 # Nothing.
 
-> load board identity=736166141fcc832e924b54a4d59dff143ff1b7f5d42b8fa55b88b40915ea8bf4
-> load knight identity=5d39098237575309dc9dcf26323dcba496cc10c7ef6a49920f16fd2ace5aa1c6
+> load board identity=567fa34948cd961bd79b091a794ca78b6934d0344d20f87299cd61774996472d
+> load knight identity=a70f5ce37a761cc9499a1de146bdef0035b3ef82b043af0f5f6993f51d83e69b
 > set-parent object=<object piece "knight"> parent=<object board "board">
 
 # One of the knight's own pieces is on e5. The seal comes at the end of the

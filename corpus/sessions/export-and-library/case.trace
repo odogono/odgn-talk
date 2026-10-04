@@ -1,26 +1,26 @@
-> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
-> add-library greet identity=9696537d4fa0ba02aa754e5eb19c886e545f919568c7a5850e494273bf0f6480
-> extend session source="use shout from greet" identity=4a40859c5ae75456b4dd39205a1d5073c71984e73fdc8a775336be4b3b27bda0
-> extend session source="script variable word" & newline & "on entry1" & newline & "put " & quote & "hi" & quote & " into word" & newline & "end entry1" & newline identity=5b7ccd88e8bc7dc697d835f8ff33a6337144b01047f5a2ab388b531375e514ad
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> add-library greet identity=4e76a37798c80f20f2b089af99c45b10301385d461f712774eea285d96af9ff3
+> extend session source="use shout from greet" identity=184235f53789427093609dfd85dffc0670fbb67f3e941fbcc4ca50445d46eb43
+> extend session source="script variable word" & newline & "on entry1" & newline & "put " & quote & "hi" & quote & " into word" & newline & "end entry1" & newline identity=f0edc827850dd52d3d3281fb23500732a27a62fb6ac96145e32ffac2a7545016
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T09:59:59Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=18 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
 pumped state=idle fuel=10
-> extend session source="on entry2" & newline & "return shout(word)" & newline & "end entry2" & newline identity=97817f758be8ef31f56b219b2d6969eccdf801298125a39472919ae7921ab4e5
+> extend session source="on entry2" & newline & "return shout(word)" & newline & "end entry2" & newline identity=ccf7443718cb1e560127cc41e2e961f8f5af1260ab552f21235c751ea45d45a5
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=23 alloc=19 state=18 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 value="hi!" fuel=23 alloc=19
 pumped state=idle fuel=23
-> replace-library greet carry=yes source="function shout t" & newline & "  return t & " & quote & "!!" & quote & newline & "end shout" & newline identity=a54d199829c5d478cceb4597b7ad04c014a62117db303173763eeb5065a8f83e
+> replace-library greet carry=yes source="function shout t" & newline & "  return t & " & quote & "!!" & quote & newline & "end shout" & newline identity=8cc5cc5dc2e46e575dd0b66155512188dbc2036c3a640cca7bf330db6a6489a8
 stopped session reason="reload"
-> extend session source="on entry3" & newline & "return shout(word)" & newline & "end entry3" & newline identity=2ec221f918b6f21c7ac427cb54f673ba96a39598b286ce86a073dbd301b210e9
+> extend session source="on entry3" & newline & "return shout(word)" & newline & "end entry3" & newline identity=75feca8480ef0934783282b577b1ba154bf69f6f1650f8bb27fd25dd3f9fdab0
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:01Z
 seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=23 alloc=20 state=18 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 value="hi!!" fuel=23 alloc=20
 pumped state=idle fuel=23
-> extend session source="on hello" & newline & newline & "  say shout(" & quote & "hello" & quote & ")" & newline & "end hello" identity=b30e3c3d3e52f309046f26f61c566fd61fd2a94717c67f26cc4630a916b08c5f
+> extend session source="on hello" & newline & newline & "  say shout(" & quote & "hello" & quote & ")" & newline & "end hello" identity=cc6be75cda611ae71dfc5402d84ea0b0bf7d03a730b4dbcf676b6134849e3bf7
 > vars
 vars session word="hi"

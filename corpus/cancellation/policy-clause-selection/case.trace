@@ -2,7 +2,7 @@
 # Chapter 5: policies belong to the selected clause, after Destructuring and
 # Guards. A Guard error skips its replacing clause without cancelling Runs.
 # Chapter 8: dispatch survives preemption and charges each tried clause once.
-> load s identity=f68ea131446e4bbcc2d2524c8605cfcc22768a877562e2b458f6335e26e57b92
+> load s identity=b578a141f48aec2d38ae683ce427daa4f49407e815a66ccc7a07d18524c91ead
 > deliver d1 to=s message=work args=[[-1]]
 > deliver d2 to=s message=work args=[[1]]
 > request d3 to=s message=work args=[[2]]

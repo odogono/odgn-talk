@@ -71,3 +71,5 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
   - The display form needs only to read back in a Trace, as a Function Value's does (ADR 0025), not in source, where `2026-09-27` would lex as subtraction.
   - The `unconvertible-literal` Lint (ADR 0027) flags a literal text given to `as civil date` or `as instant` that can't convert.
 - Settled by #71: `timer` joins `clock` and `calendar` as a Standard Capability, with `schedule` and `cancel`, both fire-and-forget. It is the durable-timer pattern of ADR 0005.
+
+- Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.

@@ -6,7 +6,7 @@
 # Running). The matches and ranges are pinned. Its Fuel, allocation and
 # state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load search identity=da4381d7482c0902eecef16a51373f15b8f2d82bc02f2049fd01b649e710f9bb
+> load search identity=59bd9129a24e2e1a540b16a276e5d66669f412a415c4c909054bac786ecc2e30
 
 # Searches, with positions 0 to 4 between the Characters of "baab":
 #   from 0: empty at 0, range 1..0, kept (there is no last match)      2 steps

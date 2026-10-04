@@ -1,5 +1,5 @@
 # Domain checks precede Host calls; result refinements reject a date-time from today.
-> load s identity=23e5566f59e6db0a55aed606e2547c1ce248e2c668dd6c130182ef4c1de5ca57
+> load s identity=fc4a2abf3a5830a0bc6e5d0ce8bea3e7c2528e7910c79dc68f0f96622d77da29
 > deliver d1 to=s message=dateOnly
 > pump clock=2026-10-02T12:00:00Z
 raise s/r1 code="out of domain" at=s:4 pos=2:3

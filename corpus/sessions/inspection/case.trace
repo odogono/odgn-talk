@@ -1,13 +1,13 @@
-> load session identity=d9c1e866c6e98f233ce332fc323c8d13963161e3310ac18eadb67b2c03ba09b0
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
 > vars
 vars session
-> extend session source="script variable a" & newline & "on entry1" & newline & "put 1 into a" & newline & "end entry1" & newline identity=161cc1e1f5500c484b66aac16a4b375841792e72c12a71238c786a363e5c206a
+> extend session source="script variable a" & newline & "on entry1" & newline & "put 1 into a" & newline & "end entry1" & newline identity=e91a9ded3f934836db99fc6c365a3ef9f333afda2af6bc5aa8750625bfddd5d4
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
 pumped state=idle fuel=10
-> extend session source="script variable b" & newline & "on entry2" & newline & "put " & quote & "two" & quote & " into b" & newline & "end entry2" & newline identity=36b0db04fd9386de11cb58fa167cac9ab3b538e56d43aa5c8323c12aad6aad5e
+> extend session source="script variable b" & newline & "on entry2" & newline & "put " & quote & "two" & quote & " into b" & newline & "end entry2" & newline identity=ff6acb0fa960a584c33f61f2786b0107f37a6ce019043b4beec4f34f1bec8f02
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=10 alloc=0 state=35 end=return
@@ -15,8 +15,8 @@ run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=10 alloc=0
 pumped state=idle fuel=10
 > vars
 vars session a=1 b="two"
-> extend session source="on nap" & newline & "  wait 30 s" & newline & "end nap" identity=aeb8f598c5a9890e7ed499a746d6570aa7d9e03fcad003d43d7b727f6d1240e1
-> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=e32ecddbd30274f34f961a2cddb3460905a5f58cb49990774707710f23d1fa0e
+> extend session source="on nap" & newline & "  wait 30 s" & newline & "end nap" identity=5ca2c47e2c6f55fdac1d10fe4130ee67b8a0de3c2707094ff1535add2d663338
+> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=23da19cdeeba1a770132dde0c315408ee6432452621225f49d7f44409b175d70
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 send session/r3 to=session message=nap
@@ -28,7 +28,7 @@ pumped state=idle fuel=44 next=2026-09-30T10:00:30Z
 vars session a=1 b="two"
 > vars
 vars session a=1 b="two"
-> extend session source="on entry4" & newline & "repeat forever" & newline & "  add 1 to a" & newline & "end repeat" & newline & "end entry4" & newline identity=48405f1f543d688762be0d5b18c07bdc123cf0372d100d3ce4c715c529913335
+> extend session source="on entry4" & newline & "repeat forever" & newline & "  add 1 to a" & newline & "end repeat" & newline & "end entry4" & newline identity=d85bd24d72e0f5f6bbcc8881f0de368f76af84685402e892fb9bfd1d34b673e6
 > request d4 to=session message=entry4 limits={fuelPerRun: 100}
 > pump clock=2026-09-30T10:00:00Z
 fault session/r5 limit=fuel at=session+5:7 pos=3:3 rollback=[a]

@@ -1,5 +1,5 @@
 # Locale data and fallback belong to the Host; the Core checks fixed declarations.
-> load s identity=2e492ee40d30d10db3ffe593cb26e8f535210b6d9e617c85c1d3c919b0155c50
+> load s identity=c758185846d6ea11a5ca27cb4d52823b0497b0e2399a5682b41510ba822214ed
 > stub locale.compare value=-1
 > stub locale.upper value="İ"
 > stub locale.lower value="ı"

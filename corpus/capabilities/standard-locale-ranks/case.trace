@@ -1,6 +1,6 @@
 # Dense ranks keep equal-collation input order through a stable Library sort.
 # A missing key, a gap and a fractional rank are Host errors.
-> load s identity=5cc77a3f7ee6a164f6a3eb0062a0d37a1ec3e82bb1c9dfb73555f667a2a54629
+> load s identity=fba88f9b0822c1c38c4bc9faebecac5c55dce2273f37cdf7e530422271ea98d7
 > stub locale.rank value={b: 2, A: 1, a: 1} charge=5
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T12:00:00Z

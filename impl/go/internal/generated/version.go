@@ -6,5 +6,5 @@ type VersionTable struct {
 }
 
 var Version = VersionTable{
-	Language: "1.0-rc",
+	Language: "1.0-rc.2",
 }

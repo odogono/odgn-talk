@@ -8,7 +8,7 @@
 # Its allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load napper identity=752eb132778e19c7d1bf19e6e4b833698cf8777017c86e65e8c874deac78252b
+> load napper identity=07904ab818e7b647e660893326f167413826e080db44938d058723c07cae32f7
 
 > deliver d1 to=napper message=blink
 > pump clock=2026-09-28T09:00:00Z

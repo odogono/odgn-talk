@@ -1,6 +1,6 @@
 # A named delivery's owner Target does not match watched; the moved leaf does.
-> load old identity=1fed0c7b053c6b0236301950b41089d99f9657b14a7f69e6161ae122fc224af4
-> load next identity=79ebc91ba72d8cdbb412a01e7944f8f00006c277d73183bdb787b822daa5d9da
+> load old identity=af39b53cacb9c9bd6654006f37bec298c47fcda8a3dc3744b812f012781d5d22
+> load next identity=7b999f656e056790bbb2cf4cc70154312ed4c49152cfcc6c9b14abb91929536a
 > set-parent object=<object room "leaf"> parent=<object room "old">
 > deliver d1 to=next message=watch
 > pump clock=2026-09-30T09:00:00Z

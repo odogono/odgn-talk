@@ -13,8 +13,8 @@ import (
 
 func TestTextModelExecution(t *testing.T) {
 	files, _ := filepath.Glob("../../../../corpus/text-model/*/*.talk")
-	if len(files) != 10 {
-		t.Fatalf("expected ten execution cases, got %d", len(files))
+	if len(files) != 11 {
+		t.Fatalf("expected eleven execution cases, got %d", len(files))
 	}
 	figures := regexp.MustCompile(`clause=1 fuel=([0-9]+) alloc=([0-9]+) state=([0-9]+)`)
 	for _, file := range files {
@@ -32,7 +32,17 @@ func TestTextModelExecution(t *testing.T) {
 			if filepath.Base(file) == "joiner.talk" {
 				args = []value.Value{text("e"), text("\u0301")}
 			}
-			run := Start(s, 1, args, Limits{Fuel: 10000000, Alloc: 16777216, Depth: 200, Pattern: 10000})
+			handler := -1
+			for index, body := range unit.Bodies {
+				if body.Checked.Kind == "handler" {
+					handler = index
+					break
+				}
+			}
+			if handler < 0 {
+				t.Fatal("case has no handler")
+			}
+			run := Start(s, handler, args, Limits{Fuel: 10000000, Alloc: 16777216, Depth: 200, Pattern: 10000})
 			run.Execute(0)
 			if run.Status != Completed {
 				t.Fatalf("status=%d at=%s:%d error=%s", run.Status, run.At.Name, run.PC, run.Error.Display())

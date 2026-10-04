@@ -1,7 +1,7 @@
 # A passed Script-addressed message follows its previous owner's current parent and keeps its Target.
 kind = "trace"
 [versions]
-language = "1.0-rc"
+language = "1.0-rc.2"
 costModel = "0"
 [[objectKinds]]
 name = "room"

@@ -97,7 +97,7 @@ test('encoding selection reports the first differing source line', () => {
   try {
     writeFileSync(
       resolve(dir, 'case.toml'),
-      'kind = "encoding"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n',
+      'kind = "encoding"\n[versions]\nlanguage = "1.0-rc.2"\ncostModel = "0"\n',
     );
     writeFileSync(
       resolve(dir, 'case.encoding'),
@@ -124,7 +124,7 @@ test('selecting a Trace Case with a deferred input exits with a clear failure', 
   try {
     writeFileSync(
       resolve(dir, 'case.toml'),
-      'kind = "trace"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n',
+      'kind = "trace"\n[versions]\nlanguage = "1.0-rc.2"\ncostModel = "0"\n',
     );
     writeFileSync(resolve(dir, 'case.trace'), '> unsupported-input\n');
     const result = Bun.spawnSync([process.execPath, runner, dir]);
@@ -192,7 +192,7 @@ test('blessing a Trace Case keeps its comments before the inputs they preceded',
   try {
     writeFileSync(
       resolve(dir, 'case.toml'),
-      'kind = "trace"\n[versions]\nlanguage = "1.0-rc"\ncostModel = "0"\n[[scripts]]\nname = "a"\nsource = "a.talk"\n',
+      'kind = "trace"\n[versions]\nlanguage = "1.0-rc.2"\ncostModel = "0"\n[[scripts]]\nname = "a"\nsource = "a.talk"\n',
     );
     writeFileSync(resolve(dir, 'a.talk'), 'on go\n  return 1\nend go\n');
     writeFileSync(

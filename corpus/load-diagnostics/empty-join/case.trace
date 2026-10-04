@@ -1,4 +1,4 @@
 # Pins `empty join` and its source position. New case for human review.
-> load bad identity=875b0880e38ad3342a57799c3a67cdd4d3b845c07c3a3210db8ef6a7bd326796
+> load bad identity=aee220ebcd5841327f5accf8e423499be482289974e6e812d26099af767f0b53
 diag bad code="empty join" pos=2:1
 > vars

@@ -9,7 +9,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load waiter identity=8d3b57e377c5361183dcaa8b5969fc22d9da2f392e8ec9927f0f8ea9570c7db8
+> load waiter identity=dbdc828544d44bda3e8695567a33afe0aecbfaeddc312ddcec14371067b89487
 
 > deliver d1 to=waiter message=fetch args=["k1"]
 > pump clock=2026-09-28T09:00:00Z

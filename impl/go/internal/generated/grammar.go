@@ -756,7 +756,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "unterminated text",
-			RaisedWhen: "A text literal has no closing quote before the end of its line; reported at the opening quote",
+			RaisedWhen: "An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener",
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "bad unit",
@@ -769,6 +769,26 @@ var Grammar = GrammarTable{
 		GrammarTableSyntaxErrorEntry{
 			Code:       "not a container",
 			RaisedWhen: "A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "unterminated interpolation",
+			RaisedWhen: "A hole is unclosed at EOF; reported at its dollar-brace opener",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "empty interpolation",
+			RaisedWhen: "An interpolation hole contains no expression",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "invalid text escape",
+			RaisedWhen: "A backtick escape is malformed, octal, or produces an unpaired surrogate",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "invalid text indentation",
+			RaisedWhen: "Fenced text does not match its closing margin",
+		},
+		GrammarTableSyntaxErrorEntry{
+			Code:       "invalid text delimiter",
+			RaisedWhen: "A raw closing quote run is longer than its opening fence",
 		},
 	},
 	Units: GrammarTableUnits{

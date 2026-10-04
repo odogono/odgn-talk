@@ -1,6 +1,11 @@
 import type { Token } from './lexer';
 
 export type SyntaxErrorCode =
+  | 'unterminated interpolation'
+  | 'empty interpolation'
+  | 'invalid text escape'
+  | 'invalid text indentation'
+  | 'invalid text delimiter'
   | 'bad character'
   | 'unterminated text'
   | 'bad unit'
@@ -62,6 +67,7 @@ export type SyntaxRule =
   | 'Key'
   | 'Call'
   | 'Primary'
+  | 'Interpolated'
   | 'Chunk'
   | 'The'
   | 'List'

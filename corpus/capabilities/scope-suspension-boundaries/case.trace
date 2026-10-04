@@ -1,7 +1,7 @@
 # scope-suspension-boundaries: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=93cd80dfea9e98ace51b402672640e59394c8f6b41fafad6ebf760a5dc3da1c1
+> load s identity=dca94901eaef3e29471ce3537618702819f2ea4a3bea174f263da8bd37342718
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=b0

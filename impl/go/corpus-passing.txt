@@ -18,6 +18,7 @@ disassembly/containers
 disassembly/destructuring
 disassembly/errors-and-loops
 disassembly/expressions
+disassembly/fenced-text
 disassembly/messages-and-waiting
 errors/handler-backstop
 errors/handler-delivery
@@ -39,8 +40,12 @@ load-diagnostics/capture-in-repetition
 load-diagnostics/default-order
 load-diagnostics/duplicate-key
 load-diagnostics/duplicate-name
+load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/initialiser-failed
+load-diagnostics/invalid-text-delimiter
+load-diagnostics/invalid-text-escape
+load-diagnostics/invalid-text-indentation
 load-diagnostics/leaves-finally
 load-diagnostics/name-clash
 load-diagnostics/needless-and-wait
@@ -60,6 +65,7 @@ load-diagnostics/rest-not-last
 load-diagnostics/unknown-import
 load-diagnostics/unknown-kind
 load-diagnostics/unknown-name
+load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
 math/domain-errors
 math/floats
@@ -77,6 +83,7 @@ text-model/chunk-reads-whole-characters
 text-model/chunk-write-out-of-range
 text-model/chunk-write-padding
 text-model/combining-mark-search
+text-model/fenced-text
 text-model/host-text-joins-in-nfc
 text-model/host-text-normalised-to-nfc
 text-model/nfc-at-join-seams

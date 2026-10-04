@@ -1,12 +1,12 @@
 # function-staleness: An identical-source Reload still makes carried Function Values stale. A newly made value works, and staleness does not change the display form.
 
-> load s identity=220629bb80838530104ff511dcdfa6e7209e0869fa852d34c9c70c68a575a6d1
+> load s identity=c808e36858be458cfa2c85b10cd39ed6838d850f7af34678a81dc28dad866f42
 > deliver d1 to=s message=make
 > pump clock=1970-01-01T00:00:00Z
 seg s/r1 start delivery=d1 handler=make clause=1 fuel=13 alloc=32 state=32 end=return
 run s/r1 outcome=completed delivery=d1 handler=make fuel=13 alloc=32
 pumped state=idle fuel=13
-> reload s carry=yes source="script variable callback = nothing" & newline & "on make" & newline & "  put (given x: x + 1) into callback" & newline & "end make" & newline & "on go" & newline & "  return callback(2)" & newline & "end go" & newline identity=220629bb80838530104ff511dcdfa6e7209e0869fa852d34c9c70c68a575a6d1
+> reload s carry=yes source="script variable callback = nothing" & newline & "on make" & newline & "  put (given x: x + 1) into callback" & newline & "end make" & newline & "on go" & newline & "  return callback(2)" & newline & "end go" & newline identity=c808e36858be458cfa2c85b10cd39ed6838d850f7af34678a81dc28dad866f42
 stopped s reason="reload"
 > deliver d2 to=s message=go
 > pump clock=1970-01-01T00:00:00Z

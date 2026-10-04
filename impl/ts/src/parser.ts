@@ -174,10 +174,10 @@ class Parser {
   site = '';
 
   constructor(
-    src: string,
+    src: string | Lexer,
     private readonly recovering = false,
   ) {
-    this.lx = new Lexer(src);
+    this.lx = typeof src === 'string' ? new Lexer(src) : src;
   }
 
   private record(error: ParseError): void {
@@ -219,7 +219,21 @@ class Parser {
       this.size = size;
       let depth = 0;
       for (;;) {
-        const token = this.lx.lex(this.offset, 'operand');
+        let token = this.lx.lex(this.offset, 'operand');
+        if (token.t === 'error') {
+          token = {
+            ...token,
+            ...this.lx.tok(
+              'error',
+              token.v,
+              this.offset,
+              Math.max(this.offset + 1, token.end),
+              false,
+              'operand',
+              token.code,
+            ),
+          };
+        }
         if (token.t === 'eof' || token.t === 'nl') {
           break;
         }
@@ -389,7 +403,7 @@ class Parser {
   next(mode: Mode = 'operand'): Token {
     const t = this.peek(0, mode);
     if (t.t === 'error') {
-      throw new ParseError(t, t.code!, t.v);
+      this.lexicalFailure(t);
     }
     this.frames.at(-1)!.children.push(t);
     this.buf.shift();
@@ -413,9 +427,32 @@ class Parser {
     return this.peek(1, mode);
   }
 
+  private lexicalFailure(t: Token): never {
+    // Fences need their closing margin before decoding. Validate completed
+    // holes before reporting a later lexical error found by that lookahead.
+    for (const part of t.parts ?? []) {
+      const hole = part.hole!;
+      const inner = new Parser(this.lx);
+      inner.offset = hole.start;
+      inner.brackets = ['{'];
+      if (inner.peek(0).pos === hole.end) {
+        throw new ParseError(
+          this.lx.tok('error', '', hole.at, hole.start, false, 'operand'),
+          'empty interpolation',
+          'empty interpolation',
+        );
+      }
+      runTask(inner.expr());
+      if (inner.peek(0, 'operator').pos !== hole.end) {
+        inner.fail(inner.peek(0, 'operator'), 'the end of the interpolation');
+      }
+    }
+    throw new ParseError(t, t.code!, t.v);
+  }
+
   fail(t: Token, expected: string): never {
     if (t.t === 'error') {
-      throw new ParseError(t, t.code!, t.v);
+      this.lexicalFailure(t);
     }
     const got =
       t.t === 'nl'
@@ -528,7 +565,7 @@ class Parser {
 
   // Can this token, in operand position, start an expression?
   startsExpr(t: Token): boolean {
-    if (['num', 'str', 'patopen', 'binopen'].includes(t.t)) {
+    if (['num', 'str', 'template', 'patopen', 'binopen'].includes(t.t)) {
       return true;
     }
     if (t.t === 'op') {
@@ -1923,7 +1960,7 @@ class Parser {
 
   // After a chunk word: does the next token start its index?
   startsIndex(t: Token): boolean {
-    if (t.t === 'num' || t.t === 'str') {
+    if (t.t === 'num' || t.t === 'str' || t.t === 'template') {
       return true;
     }
     if (t.t === 'op') {
@@ -1956,6 +1993,8 @@ class Parser {
         }
         return { k: 'Num', v: t.v };
       }
+      case 'template':
+        return (yield this.interpolated(t)) as Node;
       case 'str':
         this.next();
         return { k: 'Text', v: t.v };
@@ -1985,6 +2024,64 @@ class Parser {
         return (yield this.wordPrimary(t)) as Node;
     }
     this.fail(t, 'an expression');
+  }
+
+  *interpolated(t: Token): ParseTask<Node> {
+    this.next();
+    this.frames.at(-1)!.children.pop();
+    const children: SyntaxElement[] = [];
+    try {
+      let cursor = t.pos;
+      for (const [index, part] of t.parts!.entries()) {
+        const end = part.hole?.at ?? t.end;
+        const literal = this.lx.tok(
+          'str',
+          part.value,
+          cursor,
+          end,
+          t.spaceBefore,
+          'operand',
+        );
+        if (index === 0) {
+          literal.leadingTrivia = t.leadingTrivia;
+        }
+        children.push(literal);
+        if (part.hole) {
+          const { at, start, end: holeEnd } = part.hole;
+          children.push(this.lx.tok('op', '${', at, start, false, 'operand'));
+          const inner = new Parser(this.lx);
+          inner.offset = start;
+          inner.brackets = ['{'];
+          if (inner.peek(0).pos === holeEnd) {
+            throw new ParseError(
+              this.lx.tok('error', '', at, start, false, 'operand'),
+              'empty interpolation',
+              'empty interpolation',
+            );
+          }
+          yield inner.expr();
+          if (inner.peek(0, 'operator').pos !== holeEnd) {
+            inner.fail(
+              inner.peek(0, 'operator'),
+              'the end of the interpolation',
+            );
+          }
+          children.push(inner.tree);
+          cursor = inner.offset;
+        }
+      }
+      this.frames.at(-1)!.children.push({
+        kind: 'node',
+        rule: 'Interpolated',
+        children,
+        start: t.leadingTrivia[0]?.pos ?? t.pos,
+        end: t.end,
+      });
+      return { k: 'Interpolated' };
+    } catch (error) {
+      this.frames.at(-1)!.children.push(t);
+      throw error;
+    }
   }
 
   *wordPrimary(t: Token): ParseTask<Node> {
@@ -2672,7 +2769,11 @@ export const parseEntry = (
     return { tree: parser.tree, kind, error: null };
   } catch (error) {
     if (error instanceof ParseError) {
-      return { tree: null, error, incomplete: error.tok.t === 'eof' };
+      return {
+        tree: null,
+        error,
+        incomplete: error.tok.t === 'eof' || error.tok.incomplete === true,
+      };
     }
     throw error;
   }

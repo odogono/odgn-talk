@@ -4,7 +4,7 @@
 # make-pattern costs 24 Fuel and allocates 32 bytes. Matching takes 2 steps,
 # costing 6 Fuel; dispatch and the remaining instructions cost 14 Fuel.
 # Retained state is 24 + 32 + 8 = 64 bytes.
-> load empty identity=750ad51ae6723af5b7f1910810574a74e64af8aa9294ab318cd52c35de681bd6
+> load empty identity=8c73551b14771840cd20e48006328d32b3545a36145acc9e679aba62c8efe031
 > deliver d1 to=empty message=go
 > pump clock=2026-09-30T09:00:00Z
 seg empty/r1 start delivery=d1 handler=go clause=1 fuel=44 alloc=32 state=64 end=return

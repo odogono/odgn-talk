@@ -3,7 +3,7 @@
 # Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load meter identity=0077598aae70e2687aff9f5abd4f590aaf79b37e1e6ae8ad08cfa62ce747d432
+> load meter identity=9804f989194d58021f70368c071f61784c0ff3e5c85101c5255b49617a6ba651
 > stub gauge.read value=1
 > stub gauge.read value=2 charge=50
 > deliver d1 to=meter message=read

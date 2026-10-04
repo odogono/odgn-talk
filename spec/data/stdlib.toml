@@ -449,7 +449,7 @@ gives = "The Character position where the last match of `needle`, a text or a Te
 library = "text"
 name = "format"
 call = "format(template, values)"
-gives = "`template` with each `{name}` replaced by the value of that key of `values`, shown as `&` shows it"
+gives = "`template` with each `${name}` replaced by the value of that key of `values`, shown as `&` shows it"
 errors = ["out of domain"]
 
 [[export]]

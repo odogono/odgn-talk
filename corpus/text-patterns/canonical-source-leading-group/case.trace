@@ -12,7 +12,7 @@
 # allocate 64 + 56 = 120; dispatch and the other instructions cost 19,
 # giving 81 Fuel (chapter 8, Cost Model 0).
 
-> load leading identity=caef8757781735599b058bc8c53fe82699b376ae94792589d6e8d68561867390
+> load leading identity=7ed516582c0898e42e3e7bb2b863b3a0188f43cf69ed0f4b82376dd96113ef4b
 > deliver d1 to=leading message=go
 > pump clock=2026-09-30T09:00:00Z
 seg leading/r1 start delivery=d1 handler=go clause=1 fuel=81 alloc=120 state=184 end=return

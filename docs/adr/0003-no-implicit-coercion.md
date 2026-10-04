@@ -15,3 +15,5 @@ Values never change kind by themselves. `"007" + 1` is an error, `"007" = "7.0"`
 - There are no global switches (`strictUnits`, `numberFormat`) that change how values behave.
 - Settled by #66: lists are ordered by `<` lexicographically, element by element, and a list that is a prefix of another comes first. The first unequal pair of elements decides, and if that pair can't be ordered the usual `<` error is raised. Maps stay unordered. So a list key sorts by several keys (`sortBy(rs, given r: [the city of r, the temp of r])`), and `min` and `max` work over lists of lists.
 - Settled by #69: there is no text interpolation syntax and no `&&`. "Interpolation" above means the `text` Library's `format` (ADR 0021), so the automatic conversion to text is the one `&`, `put`, `say` and `format` apply.
+
+- Narrowed by [ADR 0053](0053-backticks-interpolate-and-raw-fences-preserve-text.md): backticks now interpolate expressions using the same automatic text conversion as `&`.

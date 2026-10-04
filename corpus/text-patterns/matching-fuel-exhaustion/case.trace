@@ -28,7 +28,7 @@
 # The store-var is placed at the statement's put (8:3), not its target
 # hits (8:51), by chapter 8's Container-write position rule.
 
-> load search identity=f583396fdbd132dde3ed5b223049328eb2bf971ad8e47e332da45de9673b1ffb
+> load search identity=54eb19f556fe539b262a34aa9c3937a4de8b981763c7fd8c0618a7dfd473cde5
 
 # 6 Fuel used, and `match-all` needs 17 more: 23 is past 22.
 > deliver d1 to=search message=go limits={fuelPerRun: 22}

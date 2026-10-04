@@ -1,7 +1,7 @@
 # effect-begin-failed: lifecycle ordering and results specified by chapter 11.
 # TS expectations; first human review pending in #222. Go parity is unverified.
 
-> load s identity=11b06feaefe021747fb5287c2fe6786721929ebf24603b13f7bfd3a21a8c146e
+> load s identity=dfad5e245e9425ca16cdbcbc4963f147ba39f766a3797e7872afd2adf977ec5c
 > stub-effect s.r phase=begin status=failed
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T00:00:00Z

@@ -1,6 +1,6 @@
 # Calendar's fixed declarations, all six Operations and optional arguments.
 # Named-zone answers belong to the Host and are replayed as Stubs.
-> load s identity=d6c83628555b9a3f89e662dcf3f5bf2b87cd08e78eb41a3fe059ce41241c9f29
+> load s identity=87e1b2c341ac13d334e388676f7c8f3b55f099d070674bd085e753f62de43e1e
 > stub calendar.today value=2026-10-02
 > stub calendar.now value=2026-10-02T13:00:00
 > stub calendar.toCivil value=2026-10-02T13:00:00

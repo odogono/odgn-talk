@@ -8,7 +8,7 @@
 # which does nothing: its Run goes on and completes. Fuel, allocation and
 # state figures are Cost Model 0's.
 
-> load board identity=a8c4a0f291e3c4da23edb956e0ce900a224696d1a7c95138b74e8e5390ef4f4d
+> load board identity=f65b3a6ee8409eff04e452bcac58eff62060ced5f3b370f1f4aac608db90182a
 
 # The recount's first stretch spends the board's 100-Fuel slice, and d2
 # stays in the mailbox behind it.

@@ -2,7 +2,7 @@
 # a date-only value never equals a date-time. Its Fuel, allocation and state
 # figures are Cost Model 0's, as the TS Core blessed them.
 
-> load calendar identity=6f4b51dba2dcc944f3ce0689d9c90c53c10bfb1636cb89d83cd4698fb6f02998
+> load calendar identity=c9b3946581bad8b5e5723a9002f3f477fc9e923563233f02e1dc78e435d91cd7
 > deliver d1 to=calendar message=go
 > pump clock=2026-09-30T09:00:00Z
 seg calendar/r1 start delivery=d1 handler=go clause=1 fuel=201 alloc=536 state=408 end=return

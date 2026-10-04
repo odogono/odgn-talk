@@ -18,8 +18,8 @@
 # shop/r1's first stretch overruns it at the `ask`, which alone costs more
 # than 50, so shop takes no more turns in that Pump.
 
-> add-library fmt identity=f93dcb37f501fff8906707e36d05c8a331bd67778d2caf411c3f5efdc17664e3
-> load shop identity=c67633b90311c641ad5ea7c7b0514ebb4c85bb8ea236969879a100d5e77127c0
+> add-library fmt identity=3d60c22382da49ec7faf87ab6152c51711ef90643620de10caa493c534ce90c0
+> load shop identity=fa49bc24ace65ae8ac30396249fc06c2506421a834407c5a1bb692ff1baccdf8
 
 > deliver d1 to=shop message=order args=["A1"]
 > deliver d2 to=shop message=order args=["B2"]
@@ -32,10 +32,10 @@ pumped state=sliced fuel=144 next=2026-09-30T10:00:30Z
 
 # Replacing fmt stop-and-reloads shop in this Group. The restore below
 # replaces this Group, so this only changes which Libraries the Host holds.
-> replace-library fmt carry=yes source="function label sku" & newline & "  return " & quote & "No. " & quote & " & sku" & newline & "end label" & newline identity=baf19b308ae05d9492c812537b228a1d7ea558318b7d378030e5bb7e6b904a05
+> replace-library fmt carry=yes source="function label sku" & newline & "  return " & quote & "No. " & quote & " & sku" & newline & "end label" & newline identity=d2411f131d17ecf7f674624c576e3db83632cfd6dfce79b3b1ebdaf5211b5ca3
 stopped shop reason="reload" discarded=[shop/r1] dropped=[d2] abandoned=[shop/r1.c1]
 
-> restore from=s1 mismatch=variables-only fingerprint=82273b23e184ac0adb5d0244dcd33ce27d458491138cd19cac3f0ac4d1c6825a mode=variables-only discarded=[shop/r1] dropped=[d2] abandoned=[shop/r1.c1]
+> restore from=s1 mismatch=variables-only fingerprint=3324d1050801b474ee388ffdbd6ac7b76fb88913bd01114f821817a673a13839 mode=variables-only discarded=[shop/r1] dropped=[d2] abandoned=[shop/r1.c1]
 
 # The ids go on from the save's counters, and `orders` from its saved 1.
 > deliver d3 to=shop message=order args=["C3"]

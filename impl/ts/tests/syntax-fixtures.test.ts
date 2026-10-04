@@ -1,3 +1,4 @@
+import { isRejectedSource } from '../../../tools/machine/rejected-sources';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -68,6 +69,13 @@ for (const directory of ['corpus', 'spec/stdlib', 'tools/grammar/sketch']) {
     test(`Core lossless source: ${directory}/${path}`, () => {
       const source = readFileSync(resolve(root, directory, path), 'utf8');
       const result = parseSource(source);
+      if (result.error && isRejectedSource(resolve(root, directory, path))) {
+        const recovered = parseSourceRecovering(source);
+        expect(recovered.error).toEqual(result.error);
+        expect(syntaxText(recovered.tree)).toBe(source);
+        assertLossless(source, recovered.tree);
+        return;
+      }
       expect(result.error).toBeNull();
       expect(parseSourceRecovering(source)).toMatchObject({
         tree: result.tree,

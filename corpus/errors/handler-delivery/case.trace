@@ -5,7 +5,7 @@
 # The first Pump ends just after throw: clause 4 + const 1 + throw 10 + unwind 4.
 # The retained error message is 32 + size(error); during is metadata, not an arg.
 
-> load s identity=18dfc18d880fc3afce3336dc119c994124c2594b5874cb28485f16806486675d
+> load s identity=ef673caec9bfd76e201063552049ef2d362d4193d87d0e0087bc5e0bab17989e
 > request d1 to=s message=fail args=[7]
 > deliver d2 to=s message=next
 > pump clock=2026-09-30T10:00:00Z fuel-cap=19

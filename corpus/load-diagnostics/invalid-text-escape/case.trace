@@ -1,0 +1,3 @@
+> load bad identity=6de3a71234b2bf2efdb7b4889d12fb8a0c85a3fa9bb66acda90261c608345d1e
+diag bad code="invalid text escape" pos=1:15
+> vars

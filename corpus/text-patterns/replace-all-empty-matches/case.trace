@@ -11,7 +11,7 @@
 # Fuel is 4 dispatch + 2 constants + 20 matching + 8 next + 15 across
 # the three replacement bodies + 4 finish + 2 store-var + 3 ending = 58.
 
-> load edit identity=3ea9cbcb5a5b0299059f3ea9156492f99ae08b18212d47907fdacc8908e38fc4
+> load edit identity=b87c6cdff0ac399444a3893679e8775b3e59f4d53517b6e3fe8f10250386f513
 
 # Matches, with positions 0 to 3 between the Characters of "a-b": empty at
 # 0, "-" from 1 to 2, the empty match at 2 discarded, and empty at 3. 14

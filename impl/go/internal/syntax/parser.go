@@ -61,6 +61,20 @@ func (p *parser) look(index int, mode Mode) Token {
 		}
 		token, err := p.lexer.Next(lexicalMode)
 		if err != nil {
+			if e, ok := err.(*Error); ok {
+				for _, hole := range e.Earlier {
+					lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}}
+					lex.advance(hole.Start)
+					inner := &parser{lexer: lex, depth: 1, base: []int{0}}
+					if inner.peek(Operand).Start == hole.End {
+						panic(&Error{Code: "empty interpolation", Pos: lex.positionAt(hole.At)})
+					}
+					inner.expression()
+					if inner.peek(Operator).Start != hole.End {
+						inner.fail(inner.peek(Operator))
+					}
+				}
+			}
 			panic(err)
 		}
 		p.tokens = append(p.tokens, token)
@@ -103,7 +117,7 @@ func (p *parser) take(mode Mode) Token {
 	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be"}, token.Raw)
 	return token
 }
-func (p *parser) fail(t Token) { panic(&Error{"unexpected token", t.Pos}) }
+func (p *parser) fail(t Token) { panic(&Error{Code: "unexpected token", Pos: t.Pos}) }
 func (p *parser) expect(s string) Token {
 	t := p.peek(Operator)
 	if spelling(t) != s {
@@ -419,7 +433,7 @@ func (p *parser) container() *Node {
 		}
 	}
 	if root.Kind != "name" && !(root.Kind == "literal" && root.Text == "it") && !(root.Kind == "literal" && root.Text == "me" && n.Kind == "key") {
-		panic(&Error{"not a container", t.Pos})
+		panic(&Error{Code: "not a container", Pos: t.Pos})
 	}
 	return n
 }
@@ -624,7 +638,7 @@ func startsIndex(t Token) bool {
 	return startsOperand(t) && !slices.Contains([]string{"<", "<<"}, t.Raw)
 }
 func startsOperand(t Token) bool {
-	if t.Kind == Number || t.Kind == Text || isName(t) {
+	if t.Kind == Number || t.Kind == Text || t.Kind == Template || isName(t) {
 		return !slices.Contains(generated.Grammar.Follow, t.Raw)
 	}
 	return slices.Contains([]string{"(", "[", "{", "<", "<<", "-", "not", "given", "the", "every", "replace", "true", "false", "nothing", "it", "me"}, t.Raw)
@@ -831,6 +845,9 @@ func (p *parser) primary() *Node {
 			n.Params = []*Node{node("unit", p.take(AfterNumber))}
 		}
 		return n
+	case t.Kind == Template:
+		p.take(Operand)
+		return p.interpolated(t)
 	case t.Kind == Text:
 		p.take(Operand)
 		n := node("literal", t)
@@ -1360,4 +1377,37 @@ func SourceChildren(n *Node) []*Node {
 	})
 
 	return children
+}
+
+func (p *parser) interpolated(t Token) *Node {
+	literal := func(value string, pos Position) *Node {
+		token := Token{Kind: Text, Value: value, Pos: pos}
+		n := node("literal", token)
+		n.Text = value
+		return n
+	}
+	result := literal(t.Parts[0].Value, t.Pos)
+	for index, part := range t.Parts {
+		if part.Hole == nil {
+			break
+		}
+		hole := part.Hole
+		lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}}
+		lex.advance(hole.Start)
+		inner := &parser{lexer: lex, depth: 1, base: []int{0}}
+		at := lex.positionAt(hole.At)
+		if inner.peek(Operand).Start == hole.End {
+			panic(&Error{Code: "empty interpolation", Pos: at})
+		}
+		expression := inner.expression()
+		if inner.peek(Operator).Start != hole.End {
+			inner.fail(inner.peek(Operator))
+		}
+		op := Token{Kind: Punctuator, Raw: "&", Pos: at}
+		result = node("binary", op, result, expression)
+		if following := t.Parts[index+1].Value; following != "" {
+			result = node("binary", op, result, literal(following, at))
+		}
+	}
+	return result
 }

@@ -15,8 +15,9 @@ import (
 type Position struct{ Line, Column int }
 
 type Error struct {
-	Code string
-	Pos  Position
+	Code    string
+	Pos     Position
+	Earlier []TextHole
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("%s at %d:%d", e.Code, e.Pos.Line, e.Pos.Column) }
@@ -28,6 +29,7 @@ const (
 	Word
 	Number
 	Text
+	Template
 	Unit
 	Punctuator
 	LineBreak
@@ -48,6 +50,7 @@ const (
 // Token retains every source byte in Leading and Raw. Value differs from Raw
 // only for a Text token: it is the unquoted, pinned NFC value.
 type Token struct {
+	Parts               []TextPart
 	Kind                Kind
 	Raw, Leading, Value string
 	Start, End          int
@@ -94,7 +97,7 @@ func (l *Lexer) advance(end int) {
 }
 
 func (l *Lexer) fail(code string, pos Position) (Token, error) {
-	l.err = &Error{code, pos}
+	l.err = &Error{Code: code, Pos: pos}
 	return Token{}, l.err
 }
 
@@ -138,6 +141,16 @@ func (l *Lexer) Next(mode Mode) (Token, error) {
 			end, kind = start+unitEnd, Unit
 			goto done
 		}
+	}
+	if s[0] == '`' || strings.HasPrefix(s, "\"\"\"") {
+		result, err := l.scanFenced(start)
+		if err != nil {
+			l.err = err
+			return Token{}, err
+		}
+		result.Leading = token.Leading
+		l.advance(result.End)
+		return result, nil
 	}
 	switch {
 	case s[0] == '\r' || s[0] == '\n':

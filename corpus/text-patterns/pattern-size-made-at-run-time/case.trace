@@ -9,7 +9,7 @@
 # instruction and the rollback of `status` are pinned. Its Fuel, allocation
 # and state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load maker identity=7d1bad29ae6f001af7207221ff3d18dcd365a0efd0a129946be58fc54e921bef
+> load maker identity=58ec1a0123e771d5d9cad9fa598d76960f138a87436ee233f9cd22a50978f5f6
 
 # The spliced pattern is a nested group in the canonical source.
 > deliver d1 to=maker message=small

@@ -2,7 +2,7 @@
 
 <!-- generated: version -->
 
-This is language **1.0-rc**, with Cost Model **0**.
+This is language **1.0-rc.2**, with Cost Model **0**.
 
 <!-- end -->
 

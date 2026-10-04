@@ -244,7 +244,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 ### The formatter
 
 - **No options:** one layout for every project.
-- **Line breaks are never added or removed,** since a line break ends a statement. The formatter changes only indentation, 2 spaces per block, spacing within a line, and runs of blank lines, keeping at most one.
+- **Line breaks are never added or removed,** since a line break ends a statement. The formatter changes only indentation, 2 spaces per block, spacing within a line, and runs of blank lines, keeping at most one outside fenced literal content.
 - **Comments and tokens:** it keeps every comment exactly, only re-indenting it, and never changes a token's spelling.
 - **Its invariants,** held by the tooling's tests: formatting is idempotent, and it never changes a unit's canonical disassembly, apart from the source positions it shows.
 
@@ -285,6 +285,12 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 - **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`.
 - **Sharing** carries Script and Library sources, the launch Entry, setup commands and optionally a Session Transcript, which replays on opening. Older links default to an empty launch Entry. Locally restored sources and setup do not execute automatically.
 - **Static graphics:** the TS CLI and Playground supply a typed `canvas` Host capability, granted explicitly with `:grant canvas canvas`. Its operations, state and bounds are documented in the [Playground guide](../tooling/playground/README.md#static-canvas). Live evaluation preserves drawing state; fresh execution resets it. Browser display projects successful calls from the Trace; the CLI replays the same operations headlessly. Graphics are Host behavior, outside language parity. Go REPL support is a separate compatibility requirement.
+
+## Fenced text in sessions and tooling
+
+The REPL waits while a literal, hole or enclosing Entry is incomplete. Blank lines inside literals are content. Submit when the whole Entry is complete. Final EOF reports the innermost unfinished construct at its opener.
+
+The formatter preserves literal values, including all trailing whitespace and additional blank lines. When changing a margin-stripped literal's indentation, change its closing margin and corresponding content prefixes together. Preserve inline-start content. Highlight delimiters and literal content separately from ordinary code inside holes.
 
 ## Outside parity
 
