@@ -104,6 +104,9 @@ and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
 match byte for byte, including pools, slots, positions,
 Unwind Tables and Event Tables; together they emit every declared opcode.
 Stdlib sources are generated into Go unchanged and execute as ordinary Libraries.
+The shared `stdlib/template-migration` regression checks `${…}` placeholders,
+`$$`, literal braces, text keys, value conversion and date widths in `format`,
+`formatDate` and `parseDate`, including error fields, caller positions and costs.
 All load-diagnostic Trace Cases replay through public `Load`, including
 `initialiser failed` at the raising instruction's source-map position.
 
@@ -564,6 +567,10 @@ Six reviewed Library-related cases pass unchanged: `libraries/calls`,
 `libraries/errors`, `libraries/registration`, `stdlib/calls`,
 `stdlib/errors-name-the-call` and `builtins/function-values`. A separate
 acceptance test requires all six in the gate.
+
+The new `stdlib/template-migration` regression also agrees on Go, TS and
+TS save/restore, and is required in that gate. Its `Unblessed` header remains
+for first human review.
 
 Three reviewed Library Capability cases also pass unchanged: `libraries/needs-transitive`,
 `libraries/needs-suspending` and `capabilities/optional-args`. The new

@@ -73,6 +73,17 @@ allocation exhaustion, and Segment rollback. Both Cores reproduce their complete
 Traces, including TS save/restore replay. Their `Unblessed` headers remain for
 first human review.
 
+The `stdlib/template-migration` regression pins `${…}` placeholders and `$$`
+in the normative text/date Libraries. It covers literal braces, keys with spaces
+and punctuation, values inserted once, NFC joins, date widths and fractional
+seconds, and invalid templates' error fields and caller positions. Go and TS
+reproduce its complete Trace, including TS save/restore replay. Its `Unblessed`
+header remains for first human review. The `sessions/fenced-text` Transcript
+prints its margin-stripped multiline value, preserving a blank line and a
+multiline hole; it also executes interpolation and a raw Format Template.
+Session Transcripts run on TS; Go Session execution is tracked in
+[#137](https://github.com/odogono/odgn-talk/issues/137).
+
 The two new error-delivery regression cases (`handler-delivery` and
 `handler-backstop`) pin chapter 6's separate error Runs, FIFO order, `during`
 bindings before Guards, unmatched-message handling and prevention of recursive
