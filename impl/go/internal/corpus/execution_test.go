@@ -307,7 +307,7 @@ func TestScriptJoinAcceptance(t *testing.T) {
 // existing reviewed cases and new paired regressions protect this slice.
 func TestOrdinaryOperationAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	names := []string{"capabilities/calls", "capabilities/charge-faults", "capabilities/load-checks", "capabilities/argument-shapes", "capabilities/host-failures", "capabilities/optional-args-fuel", "capabilities/declared-allocation", "capabilities/ordinary-grants"}
+	names := []string{"capabilities/calls", "capabilities/charge-faults", "capabilities/load-checks", "capabilities/argument-shapes", "capabilities/host-failures", "capabilities/optional-args-fuel", "capabilities/declared-allocation", "capabilities/ordinary-grants", "limits/mailbox-depth"}
 	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)
