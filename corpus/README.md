@@ -129,7 +129,7 @@ test and gate.
 
 The `standard-locale`, `standard-locale-ranks` and `standard-locale-validation` cases cover all eight Locale Operations, Host data and fallback, stable sorting through dense ranks, malformed answers, option and tag checks, and save/restore replay.
 
-The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-validation` cases cover the six fixed Calendar Operations, optional arguments, valid and malformed catalogue failures, uncharged domain checks and result refinements, including save/restore replay.
+The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-validation` cases cover the six fixed Calendar Operations, optional arguments, valid and malformed catalogue failures, uncharged domain checks and result refinements, including save/restore replay. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
