@@ -1554,7 +1554,7 @@ export class Run {
   // ------------------------------------------------------------- charging
 
   /** Charge an instruction, faulting before it does anything if it can't pay. */
-  private pay(key: string, measured: Measured = this.m) {
+  private pay(key: string, measured: Measured = this.m, allocation = 0) {
     if (!this.charging) {
       return;
     }
@@ -1562,7 +1562,7 @@ export class Run {
     const own = charge(key, measured);
     this.payAmount(
       own.fuel + (frame.clauseCharge ? charge('clause').fuel : 0),
-      own.alloc,
+      own.alloc + allocation,
     );
   }
 
@@ -2604,8 +2604,7 @@ export class Run {
       ]);
     }
     const declared = op.cost.fuel;
-    this.pay(key, { declared });
-    this.payAmount(0, op.cost.alloc ?? 0);
+    this.pay(key, { declared }, op.cost.alloc ?? 0);
     if (op.mode === 'immediate' && op.segmentBound && !this.participant) {
       this.participant = { grantName, grant };
       const result = this.lifecycle('begin');

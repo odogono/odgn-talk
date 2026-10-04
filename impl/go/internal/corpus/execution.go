@@ -27,9 +27,17 @@ func ExecutionBackends() map[string]Backend {
 	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
 }
 func (executionBackend) Support(c Case) string {
-	for _, feature := range []string{"libraries", "operations", "factories", "objects"} {
+	for _, feature := range []string{"libraries", "factories", "objects"} {
 		if xs, ok := c.Setup[feature].([]any); ok && len(xs) > 0 {
 			return feature + " execution belongs to later Go steps"
+		}
+	}
+	if ops, ok := c.Setup["operations"].([]any); ok {
+		for _, raw := range ops {
+			op := raw.(Setup)
+			if op["scope"] != nil || op["segmentBound"] == true {
+				return "Scoped and Segment-bound Operations are not available"
+			}
 		}
 	}
 	b, e := os.ReadFile(filepath.Join(c.Dir, "case.trace"))
@@ -40,8 +48,12 @@ func (executionBackend) Support(c Case) string {
 	if e != nil {
 		return e.Error()
 	}
+	standards, _ := c.Setup["standard"].([]any)
 	for _, r := range records {
-		if r.Input && !strings.Contains("|load|deliver|request|decide|pump|vars|counters|", "|"+r.Name+"|") {
+		if r.Input && r.Name == "pump" && len(standards) > 0 {
+			return "Standard Capability factories remain deferred"
+		}
+		if r.Input && !strings.Contains("|load|deliver|request|decide|pump|vars|counters|stub|revoke|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -61,9 +73,6 @@ func (executionBackend) Support(c Case) string {
 			if len(checked.Diagnostics) > 0 {
 				continue
 			}
-			if grants, ok := setup["grants"].(Setup); ok && len(grants) > 0 {
-				return "Capability grants belong to step3"
-			}
 			unit, e := lower.Compile(checked, setup["name"].(string))
 			if e != nil {
 				return e.Error()
@@ -82,7 +91,12 @@ func (executionBackend) Support(c Case) string {
 }
 func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	var lines traceLines
-	g := talk.New().NewGroup(talk.GroupOptions{Trace: &lines})
+	core := talk.New()
+	operations, e := setupOperations(core, c.Setup)
+	if e != nil {
+		return nil, e
+	}
+	g := core.NewGroup(talk.GroupOptions{Trace: &lines})
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
 		s := x.(Setup)
@@ -97,6 +111,15 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "stub":
+			lines = append(lines, r.Raw)
+			operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
+		case "revoke":
+			s := g.Script(r.IDs[0])
+			if s == nil {
+				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
+			}
+			s.Revoke(fields["grant"].Raw)
 		case "load":
 			name := r.IDs[0]
 			setup := setups[name]
@@ -104,7 +127,12 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			if e != nil {
 				return nil, e
 			}
-			_, e = g.Load(talk.LoadOptions{Name: name, Source: string(b), Limits: setupLimits(setup["limits"])})
+			grants, err := operations.grants(setup)
+			if err != nil {
+				return nil, err
+			}
+			asUsed, _ := setup["grantsAsUsed"].(bool)
+			_, e = g.Load(talk.LoadOptions{Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed})
 			if e != nil {
 				if _, ok := e.(*talk.LoadError); !ok {
 					return nil, e

@@ -132,6 +132,15 @@ that could conceal an indirect nested Join. All five retain their `Unblessed`
 headers for first human review. The mixed-Capability `suspension/joins` case remains
 outside the Go subset.
 
+Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
+`argument-shapes`, `load-checks`, `host-failures`, `charge-faults` and
+`optional-args-fuel`. The new `declared-allocation` and `ordinary-grants` cases
+agree on Go, TS ordinary execution and TS save/restore before blessing. They pin
+atomic declared costs, Optional arguments, alias Grants, revocation, trimming and
+caught raises before later Host calls. Their `Unblessed` headers await first human
+review. Suspending Capability calls, Capability Join members, Library needs and
+Standard factories remain outside this Go slice.
+
 The `suspension/join-closing-position` regression pins failed replies and timeouts
 at a Join's closing `end`, including bare `end`, `end wait` and a local Handler.
 Go, TS ordinary execution and TS save/restore agree on its complete Trace;

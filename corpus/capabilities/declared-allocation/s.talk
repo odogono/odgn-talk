@@ -1,0 +1,6 @@
+on inspect
+ ask service to inspect
+end inspect
+on write
+ tell service to write
+end write

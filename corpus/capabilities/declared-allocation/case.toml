@@ -1,0 +1,19 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[operations]]
+capability = "service"
+name = "inspect"
+mode = "immediate"
+cost = { fuel = 7, alloc = 100 }
+[[operations]]
+capability = "service"
+name = "write"
+mode = "fire-and-forget"
+cost = { fuel = 7, alloc = 100 }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { service = { ops = "all" } }
+limits = { allocPerRun = 20 }
