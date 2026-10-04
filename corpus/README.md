@@ -149,7 +149,8 @@ Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
 agree on Go, TS ordinary execution and TS save/restore before blessing. They pin
 atomic declared costs, Optional arguments, alias Grants, revocation, trimming and
 caught raises before later Host calls. Their `Unblessed` headers await first human
-review. Library needs and Standard factories remain outside this Go slice.
+review. Library needs are now checked and retained when trimming Grants;
+Standard Capability factories remain separate Go work.
 
 Reviewed `suspension/answers`, mixed `suspension/joins`, `optional-args-join`,
 `revoke-in-flight` and the `max-wait-minimum`/`max-join-minimum` cases now pass
@@ -190,5 +191,12 @@ The Go ordinary Library slice also passes the reviewed `libraries/calls`,
 `stdlib/errors-name-the-call` and `builtins/function-values` cases unchanged.
 These pin transitive imports, defaults, shared Function code, source-ordered
 Handler clauses, registration refusals, Library errors/faults and caller-facing
-Standard Library errors. Library needs validation/trimming and Capability
-execution through Library frames remain the next #134 slice.
+Standard Library errors. Go now also passes `libraries/needs-transitive`, `libraries/needs-suspending` and
+`capabilities/optional-args` unchanged, with import-time needs checks, Grant
+trimming and Capability execution through caller-owned Library frames.
+
+The new `libraries/caller-capabilities` regression agrees on Go, TS ordinary
+execution and TS save/restore. It pins private/transitive needs, nested Library
+frame suspension and charges, cancellation cleanup, late answers and revocation.
+Its `Unblessed` header remains for first human review. Standard Capability
+factories, Host Objects and full lifecycle remain separate Go work.

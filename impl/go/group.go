@@ -142,7 +142,7 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 	return &HostError{code, detail}
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
-	exports, ids, states := libraryOptions(g.libraries)
+	exports, ids, states, calls := libraryOptions(g.libraries)
 	id := codeIdentity("script", o.Name, o.Source, ids)
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("load", []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)}, ReentrantCall)
@@ -184,7 +184,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	for name := range o.Objects {
 		objects = append(objects, name)
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, Objects: objects, PatternSize: limits.PatternSize, Grants: declarations}, ids)
+	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, PatternSize: limits.PatternSize, Grants: declarations}, ids)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
@@ -216,6 +216,19 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 				}
 				return true
 			})
+		}
+		for _, n := range tree.Declarations {
+			if n.Kind != "use" {
+				continue
+			}
+			if library := g.libraries[n.Text]; library != nil {
+				for _, need := range library.needs {
+					if used[need.Capability] == nil {
+						used[need.Capability] = map[string]bool{}
+					}
+					used[need.Capability][need.Operation] = true
+				}
+			}
 		}
 		for name, grant := range grants {
 			for op := range grant.operations {

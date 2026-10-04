@@ -1,10 +1,12 @@
 package check
 
 import (
+	"fmt"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
+	"slices"
 )
 
 type OperationCheck struct {
@@ -12,56 +14,113 @@ type OperationCheck struct {
 	Args []shape.Shape
 }
 
+// OperationUse keeps the original call for rechecking it against an importing
+// Script's Grant declarations. Identity distinguishes shared diamond imports.
+type OperationUse struct {
+	Unit     string
+	Identity [32]byte
+	Call     *syntax.Node
+}
+
+func OperationUses(tree *syntax.Tree, unit string) []OperationUse {
+	var uses []OperationUse
+	for _, decl := range tree.Declarations {
+		syntax.Walk(decl, func(n *syntax.Node) bool {
+			if n.Kind == "ask" || n.Kind == "tell" || n.Kind == "command" && n.Text == "say" {
+				uses = append(uses, OperationUse{Unit: unit, Call: n})
+			}
+			return true
+		})
+	}
+	slices.SortStableFunc(uses, func(a, b OperationUse) int {
+		if a.Call.Pos().Line != b.Call.Pos().Line {
+			return a.Call.Pos().Line - b.Call.Pos().Line
+		}
+		return a.Call.Pos().Column - b.Call.Pos().Column
+	})
+	return uses
+}
+
+func OperationNames(n *syntax.Node) (string, string) {
+	if n.Kind == "command" {
+		return "console", "write"
+	}
+	return n.Params[0].Text, n.Text
+}
+
 func (u *Unit) checkOperations() {
 	if u.Options.Grants == nil {
 		return
 	}
-	for _, decl := range u.Tree.Declarations {
-		syntax.Walk(decl, func(n *syntax.Node) bool {
-			say := n.Kind == "command" && n.Text == "say"
-			if !say && n.Kind != "ask" && n.Kind != "tell" {
-				return true
+	for _, site := range OperationUses(u.Tree, "") {
+		checkOperation(site.Call, u.Options.Grants, u.add)
+	}
+	if u.Options.Library {
+		return
+	}
+	for _, n := range u.Tree.Declarations {
+		if n.Kind != "use" {
+			continue
+		}
+		missing := map[[2]string]bool{}
+		for _, site := range u.Options.ImportCalls[n.Text] {
+			grant, op := OperationNames(site.Call)
+			report := func(code string, _ syntax.Position) {
+				pos := site.Call.Pos()
+				message := fmt.Sprintf("%s: %s.%s at %s:%d:%d", code, grant, op, site.Unit, pos.Line, pos.Column)
+				u.Diagnostics = append(u.Diagnostics, Diagnostic{Code: code, Pos: n.Pos(), Message: message})
 			}
-			grant, op := "console", "write"
-			grantPos, opPos := n.Pos(), n.Pos()
-			if !say {
-				grant = n.Params[0].Text
-				op = n.Text
-				grantPos = n.Params[0].FirstPos()
-				opPos = n.NameToken.Pos
-			}
-			ops, ok := u.Options.Grants[grant]
-			if !ok {
-				u.add("unknown operation", grantPos)
-				return true
-			}
-			d, ok := ops[op]
-			if !ok {
-				u.add("unknown operation", opPos)
-				return true
-			}
-			mode := "fire-and-forget"
-			if n.Kind == "ask" {
-				mode = "immediate"
-				if syntax.HasFlag(n, "and") {
-					mode = "suspending"
+			if _, ok := u.Options.Grants[grant][op]; !ok {
+				key := [2]string{grant, op}
+				if !missing[key] {
+					report("missing grant", n.Pos())
+					missing[key] = true
 				}
+			} else {
+				checkOperation(site.Call, u.Options.Grants, report)
 			}
-			if d.Mode != mode {
-				u.add("wrong mode", n.Pos())
-				return true
-			}
-			if say && len(n.Children) != 1 || !shape.Accepts(d.Args, len(n.Children)) {
-				u.add("wrong argument count", opPos)
-				return true
-			}
-			for i, arg := range n.Children {
-				if !literalFits(arg, d.Args[i]) {
-					u.add("wrong argument", arg.FirstPos())
-				}
-			}
-			return true
-		})
+		}
+	}
+}
+
+// Direct and imported calls use the same mode, arity and literal Shape rules.
+func checkOperation(n *syntax.Node, grants map[string]map[string]OperationCheck, report func(string, syntax.Position)) {
+	say := n.Kind == "command"
+	grant, op := OperationNames(n)
+	grantPos, opPos := n.Pos(), n.Pos()
+	if !say {
+		grantPos = n.Params[0].FirstPos()
+		opPos = n.NameToken.Pos
+	}
+	ops, ok := grants[grant]
+	if !ok {
+		report("unknown operation", grantPos)
+		return
+	}
+	d, ok := ops[op]
+	if !ok {
+		report("unknown operation", opPos)
+		return
+	}
+	mode := "fire-and-forget"
+	if n.Kind == "ask" {
+		mode = "immediate"
+		if syntax.HasFlag(n, "and") {
+			mode = "suspending"
+		}
+	}
+	if d.Mode != mode {
+		report("wrong mode", n.Pos())
+		return
+	}
+	if say && len(n.Children) != 1 || !shape.Accepts(d.Args, len(n.Children)) {
+		report("wrong argument count", opPos)
+		return
+	}
+	for i, arg := range n.Children {
+		if !literalFits(arg, d.Args[i]) {
+			report("wrong argument", arg.FirstPos())
+		}
 	}
 }
 

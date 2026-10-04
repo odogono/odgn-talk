@@ -129,8 +129,9 @@ names, modes, argument counts and literal Shapes, including `say`. Decisions
 also check `veto` and `pass` reachability before suspension. Imported Handlers
 carry their suspension requirement into the caller. Library restrictions reject
 Script state and message facilities, including unresolved commands that would
-climb a Message Path. Import-time Capability needs checks and Host Object property
-Shapes remain part of [#134](https://github.com/odogono/odgn-talk/issues/134).
+climb a Message Path. Library `wait for`, including Joins, is rejected.
+Host Object property Shapes remain part of
+[#134](https://github.com/odogono/odgn-talk/issues/134).
 
 ## Libraries and Standard Library
 
@@ -156,8 +157,17 @@ errors from stdlib code name the nearest call in user code, while user
 Library errors retain the Library location. Reviewed traces pin ordinary calls,
 Function metadata, registration, faults, unwind charges and stdlib caller errors.
 
-Library Capability execution, import-time needs validation and Grant trimming
-remain the next #134 slice. Replacement/extension and save/restore of Library
+Library calls to immediate, suspending and fire-and-forget Operations use the
+caller's named Grant, Host binding and charge/settlement path. Loading and Reload
+recheck every original Library call against the caller's modes, arity and literal
+Shapes, including private, unused and transitive uses. Missing Operations report
+one `missing grant` per distinct Operation at each `use` line; messages name the
+first original site in direct source order followed by import order. Shared
+diamond call sites are checked once per `use` line. `GrantsAsUsed` retains all
+Library needs. Revocation, cancellation cleanup and late answers belong to the
+caller Run, and a rejected Reload preserves pending calls.
+
+Replacement/extension and save/restore of Library
 frames remain #136. Library Constants are shared fixed overhead, outside Script
 Persistent State.
 
@@ -303,9 +313,9 @@ a call join the next Pump; worker reentry is refused.
 `Script.Grants` returns fresh, sorted Operation lists. `GrantsAsUsed` trims direct
 uses across the whole Script, including unused function bodies. `Script.Revoke`
 queues revocation in Host-input order; retained aliases remain independent.
-Import-time validation and Grant trimming using Library needs remain deferred
-under #134. Library Capability instructions remain unpaid at an explicit
-execution boundary; they cannot cross into Host functions yet.
+Library needs participate in load/Reload validation and Grant trimming, including
+private and transitive calls. Library Operations use the caller's binding and
+ordinary Host crossing; compiled code retains only call metadata and declarations.
 
 Suspending `ask … and wait` invokes `Start` once after the same atomic precharge.
 `Call.Answer`, `AnswerWithCost` and `Fail` may run on any goroutine, append Host
@@ -498,7 +508,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 157 cases, including all text-model, load-diagnostic,
+The gate contains 161 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -557,6 +567,15 @@ Six reviewed Library-related cases pass unchanged: `libraries/calls`,
 `libraries/errors`, `libraries/registration`, `stdlib/calls`,
 `stdlib/errors-name-the-call` and `builtins/function-values`. A separate
 acceptance test requires all six in the gate.
+
 The new `stdlib/template-migration` regression also agrees on Go, TS and
 TS save/restore, and is required in that gate. Its `Unblessed` header remains
 for first human review.
+
+Three reviewed Library Capability cases also pass unchanged: `libraries/needs-transitive`,
+`libraries/needs-suspending` and `capabilities/optional-args`. The new
+`libraries/caller-capabilities` regression agrees on Go, TS ordinary execution
+and TS save/restore, retaining its `Unblessed` header for first human review. It
+pins private/transitive needs, caller calls and charges, nested suspension,
+Library cancellation cleanup, late answers and revocation. A separate acceptance
+test requires all four in the gate.

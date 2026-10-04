@@ -37,6 +37,7 @@ type Library struct {
 	exports map[string]check.Symbol
 	state   *machine.State
 	needs   []OperationRef
+	calls   []check.OperationUse
 }
 
 func (l *Library) Name() string          { return l.source.Name }
@@ -46,18 +47,19 @@ func (l *Library) Identity() [32]byte    { return l.id }
 func (l *Library) Imports() []*Library   { return slices.Clone(l.imports) }
 func (l *Library) Needs() []OperationRef { return slices.Clone(l.needs) }
 
-func libraryOptions(libraries map[string]*Library) (map[string]map[string]check.Symbol, map[string][32]byte, map[string]*machine.State) {
+func libraryOptions(libraries map[string]*Library) (map[string]map[string]check.Symbol, map[string][32]byte, map[string]*machine.State, map[string][]check.OperationUse) {
 	exports := map[string]map[string]check.Symbol{}
 	ids := map[string][32]byte{}
 	states := map[string]*machine.State{}
+	calls := map[string][]check.OperationUse{}
 	for name, l := range libraries {
-		exports[name], ids[name], states[name] = l.exports, l.id, l.state
+		exports[name], ids[name], states[name], calls[name] = l.exports, l.id, l.state, l.calls
 	}
-	return exports, ids, states
+	return exports, ids, states, calls
 }
 
 // CompileLibrary checks immutable code; imports may also name the ambient stdlib.
-// Import-time Capability needs validation and execution remain deferred (#134).
+// Calls are rechecked against the importing Script's own Grants at load.
 func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error) {
 	available := maps.Clone(standardLibraries())
 	for _, l := range imports {
@@ -73,7 +75,7 @@ func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declaration
 }
 
 func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, declarations GrantDecls) (*Library, error) {
-	exports, ids, states := libraryOptions(available)
+	exports, ids, states, _ := libraryOptions(available)
 	if tree, err := syntax.Parse(src.Source); err == nil {
 		for _, n := range tree.Declarations {
 			if n.Kind == "use" && (n.Text == src.Name || reachesLibrary(available[n.Text], src.Name, map[*Library]bool{})) {
@@ -146,6 +148,26 @@ func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, 
 			}
 		}
 		l.exports[n.Text] = symbol
+	}
+	l.calls = check.OperationUses(tree, src.Name)
+	type siteKey struct {
+		identity [32]byte
+		pos      syntax.Position
+	}
+	sites := map[siteKey]bool{}
+	for j := range l.calls {
+		l.calls[j].Identity = l.id
+		sites[siteKey{l.id, l.calls[j].Call.Pos()}] = true
+	}
+	// Direct calls precede imports, which retain their first source import order.
+	for _, imported := range l.imports {
+		for _, site := range imported.calls {
+			key := siteKey{site.Identity, site.Call.Pos()}
+			if !sites[key] {
+				l.calls = append(l.calls, site)
+				sites[key] = true
+			}
+		}
 	}
 	for need := range needs {
 		l.needs = append(l.needs, need)
