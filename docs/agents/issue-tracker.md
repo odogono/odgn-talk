@@ -2,6 +2,10 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+## Repository identity
+
+Before loading implementation documentation for an issue, compare the issue URL's owner/repository with `git remote get-url origin`. Resolve a mismatch by selecting the matching project/workspace first; a shell directory change alone does not change the agent thread's workspace binding. Then check the issue's required base under [Specification handoffs](#specification-handoffs).
+
 ## Conventions
 
 - Create: `gh issue create --title "..." --body "..."`.

@@ -2,6 +2,36 @@
 
 The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). Their formats are in [chapter 11](../spec/11-the-trace-and-conformance.md) of the Spec.
 
+## Checking
+
+Run these commands from the repository root. Both runners resolve relative case selectors under `corpus/`, not the shell's current directory; use `text-model/chunk-write-padding`, not `corpus/text-model/chunk-write-padding`. Absolute case directories also work.
+
+| Runner | Entry point | Selection and gate |
+| --- | --- | --- |
+| TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or directory; `--list` reports support. Default execution excludes unblessed Trace Cases and Transcripts. |
+| Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), run inside `impl/go` | Named case directories; `--list` reports support, and `--check-passing` enforces [`corpus-passing.txt`](../impl/go/corpus-passing.txt). |
+
+For Go, after the [build/test prerequisites](../impl/go/README.md#build-and-test):
+
+```sh
+(cd impl/go && go run ./cmd/corpus text-model/chunk-write-padding)
+(cd impl/go && go run ./cmd/corpus --check-passing)
+```
+
+Only the TS runner has `--bless`, and it requires named cases; it writes Disassembly, Trace or Transcript expectations, not encoding cases. Producing expectations is not first-blessing approval: follow [the agreement and human-review rules](../spec/11-the-trace-and-conformance.md#bless) and the [seed review notes](#seed-blessing). The Go runner never writes expectations.
+
+```sh
+bun run corpus:check          # what CI runs: every case reads as chapter 11 says
+bun run grammar:check         # every .talk file here parses
+bun run machine:check         # and lowers
+bun run corpus:run            # the TS Core runs the case kinds it implements, and blessed Trace Cases
+bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
+```
+
+[`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+
+## Case navigation
+
 | Directory | What its cases pin |
 | --- | --- |
 | [`load-diagnostics/`](load-diagnostics/) | rejected loads: each step 1 diagnostic family and its source position ([chapter 2](../spec/02-grammar.md#load-time-diagnostics)); new TS-blessed cases awaiting human review (#250) |
@@ -85,7 +115,6 @@ The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Th
 
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
-
 ## The Disassembly Cases
 
 The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case, in both replays. Each awaits its first human review in the [#131](https://github.com/odogono/odgn-talk/issues/131) PR that adds it.
@@ -93,15 +122,3 @@ The Session Transcripts under [`sessions/`](sessions/) were written by hand and 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 
 The 43 `scope-*` and `effect-*` cases under `capabilities/` cover scope slots, automatic cleanup, participant outcomes, cancellation cleanup, disablement, code changes and Save refusal. They pass TS normal and save/restore replay, plus replay using recorded Host results with Stub inputs removed. Their first human review is pending in #222. The [matrix reconciliation](capabilities/scoped-effects.md) identifies executable native Host tests and the unimplemented Message Layer transport coverage. Go parity remains unverified.
-
-## Checking
-
-```sh
-bun run corpus:check          # what CI runs: every case reads as chapter 11 says
-bun run grammar:check         # every .talk file here parses
-bun run machine:check         # and lowers
-bun run corpus:run            # the TS Core runs the case kinds it implements, and blessed Trace Cases
-bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
-```
-
-[`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

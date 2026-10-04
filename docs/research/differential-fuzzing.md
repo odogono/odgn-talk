@@ -2,6 +2,14 @@
 
 Answers [#86](https://github.com/odogono/odgn-talk/issues/86), part of [#1](https://github.com/odogono/odgn-talk/issues/1). ADR 0009 and ADR 0018 make differential fuzzing a required practice, outside the spec: a nightly job generates Scripts, Host Inputs and limit sweeps, runs them on both Cores, compares the Traces, and commits every minimised divergence as a Trace Case. This note looks at how other language projects generate programs and schedules, how they shrink failures, and which oracles they use besides "the two implementations disagree". It then proposes a design for this language. Nothing here was built or run: it is a reading of papers, docs and tool sources, applied to the ADRs.
 
+## Historical proposal
+
+This research predates the implemented fuzzer and the scoped-effects contract. Use the [fuzzer guide](../../tooling/fuzz/README.md#oracle-contract) for current behavior, [chapter 10](../../spec/10-save-and-restore.md#saving) for Save eligibility, and [chapter 11](../../spec/11-the-trace-and-conformance.md#save-and-restore-replays) for replay parity. The proposal below is retained as rationale; these assumptions are superseded:
+
+- **Save eligibility:** a Pump boundary permits an attempt, not necessarily a snapshot. Live Capability Scopes, Segment participants and fatal effect uncertainty require `effects pending` ([ADR 0049](../adr/0049-live-host-effects-prevent-saving.md)). Replay checks the refusal without advancing execution and continues the original Group.
+- **Terminal outcomes:** a finite generated case may leave Runs suspended and Decisions open. Check for duplicate terminal outcomes within a restore epoch; do not require every started Run or Decision to finish before the case ends.
+- **Trace comparison:** same-input cross-Core comparison remains exact. Renaming locals changes code identity, so the renaming metamorphic relation compares a defined projection rather than raw Traces. Save/restore replay uses chapter 11's specified projection and eligibility rules; a change in Fuel Slice is not generally equivalent to merely adding `preempt` lines.
+
 ## Summary
 
 - **Generate valid Scripts by construction, not by filtering.** Csmith, YARPGen and `wasm-smith` all generate programs that are valid by construction, tracking the static facts that make a program legal as they generate it. For this language those facts are all known at load: Grants and each Operation's mode (for the both-ways `and wait` check, ADR 0019), which Handlers may suspend, whether a path in a `, deciding` Handler has crossed a possible Suspension Point (`veto` and `pass` placement, ADR 0031), and Guard purity. The language has no undefined behaviour to avoid (ADR 0003, ADR 0017), so the generator doesn't need Csmith's safe-math wrappers. It only needs to control how often Runs raise errors, as Fuzzilli does with its "correctness rate".

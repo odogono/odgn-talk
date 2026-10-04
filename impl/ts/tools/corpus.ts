@@ -1,7 +1,13 @@
 #!/usr/bin/env bun
 // Execute implemented Corpus case kinds. This is distinct from corpus:check,
 // which checks formats. Only `--bless` writes, and only the cases it names.
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { relative, resolve } from 'node:path';
 import {
   checkSource,
@@ -263,7 +269,20 @@ export const runCorpus = (args: string[]): number => {
     throw new Error('--bless needs the cases to bless');
   }
   const selected = paths.length
-    ? paths.flatMap(arg => casesUnder(resolve(corpusRoot, arg)))
+    ? paths.flatMap(arg => {
+        const path = resolve(corpusRoot, arg);
+        const corrected = arg.replace(/^(?:\.\/)?corpus\//, '');
+        if (
+          !existsSync(path) &&
+          corrected !== arg &&
+          existsSync(resolve(corpusRoot, corrected))
+        ) {
+          throw new Error(
+            `Case paths are relative to corpus/; use "${corrected}" instead of "${arg}"`,
+          );
+        }
+        return casesUnder(path);
+      })
     : // A Trace Case runs by default once blessed; until then, only when named.
       casesUnder(corpusRoot).filter(dir => {
         const { kind } = readSetup(dir);

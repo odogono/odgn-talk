@@ -361,3 +361,43 @@ test("every record the Core writes has corpus.toml's ids and keys, in its order"
     );
   }
 }, 60_000);
+
+test('corpus selectors accept corpus-relative and absolute paths from any working directory', () => {
+  const runner = resolve(import.meta.dir, '../tools/corpus.ts');
+  const name = 'text-model/host-text-normalised-to-nfc';
+  for (const selector of [
+    name,
+    resolve(import.meta.dir, '../../../corpus', name),
+  ]) {
+    const result = Bun.spawnSync([process.execPath, runner, selector], {
+      cwd: tmpdir(),
+    });
+    expect(result.exitCode).toBe(0);
+    expect(new TextDecoder().decode(result.stdout)).toContain(`PASS ${name}`);
+  }
+});
+
+test('redundant corpus prefixes fail with a corrected selector instead of running it', () => {
+  const runner = resolve(import.meta.dir, '../tools/corpus.ts');
+  const name = 'text-model/host-text-normalised-to-nfc';
+  for (const prefix of ['corpus/', './corpus/']) {
+    const result = Bun.spawnSync([process.execPath, runner, prefix + name]);
+    expect(result.exitCode).toBe(1);
+    expect(new TextDecoder().decode(result.stderr)).toContain(
+      `Case paths are relative to corpus/; use "${name}" instead of "${prefix + name}"`,
+    );
+    expect(new TextDecoder().decode(result.stdout)).toBe('');
+  }
+});
+
+test('missing corpus selectors retain their filesystem error without a misleading suggestion', () => {
+  const runner = resolve(import.meta.dir, '../tools/corpus.ts');
+  for (const selector of ['no-such-retro-case', 'corpus/no-such-retro-case']) {
+    const result = Bun.spawnSync([process.execPath, runner, selector]);
+    const error = new TextDecoder().decode(result.stderr);
+    expect(result.exitCode).toBe(1);
+    expect(error).toContain('ENOENT');
+    expect(error).toContain(selector);
+    expect(error).not.toContain('instead of');
+  }
+});
