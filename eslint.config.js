@@ -46,6 +46,7 @@ export default [
             './tooling/fuzz/tsconfig.json',
             './tooling/stack/tsconfig.json',
             './tooling/playground/tsconfig.json',
+            './bench/ts/tsconfig.json',
           ],
         },
       },
@@ -61,6 +62,8 @@ export default [
       'tooling/fuzz/src/worker.ts',
       'tooling/stack/tools/**/*.ts',
       'tooling/playground/tools/**/*.ts',
+      'bench/ts/src/main.ts',
+      'bench/ts/src/measure-ts.ts',
     ],
     rules: {
       // These command-line Hosts print their reports and diagnostics.

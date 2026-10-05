@@ -1,0 +1,12 @@
+-- A loop of calls to a small function: the cost of one call and return.
+function step acc, i
+  return acc + i
+end step
+
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    put step(total, i) into total
+  end repeat
+  return total
+end run

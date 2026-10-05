@@ -1,0 +1,10 @@
+-- A loop of calls to a Lambda that captures a local: Function Value calls.
+on run n
+  put 3 into k
+  put given acc, i: acc + i * k into step
+  put 0 into total
+  repeat for each i in 1..n
+    put step(total, i) into total
+  end repeat
+  return total
+end run
