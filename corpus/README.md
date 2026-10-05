@@ -159,7 +159,7 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
-The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. Go and TS agree byte for byte, including TS save/restore replay; its first blessing awaits human review. Four existing event-test Traces were corrected after paired execution, and four further expectations were corrected with maintainer approval from TS ordinary and save/restore agreement. This limited exception to the blessing rule does not establish Go parity. See the [charging reconciliation](../docs/reviews/event-test-charging/README.md) for the verification evidence and follow-up.
+The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. All eight corrected event-test Traces and this regression agree byte for byte on Go and TS in ordinary and save/restore replay, including `reload/extend-units`. The regression's first blessing awaits human review. Four corrections originally received maintainer approval from TS-only agreement; the [charging reconciliation](../docs/reviews/event-test-charging/README.md) records that limited exception and the subsequent complete Go verification for [#277](https://github.com/odogono/odgn-talk/issues/277).
 
 The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. `limits/self-send-persistent` was approved for #135 on 2026-10-05; the two suspension cases still await first human review. The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
 
@@ -218,8 +218,8 @@ The `suspension/argument-labels`, `objects/argument-labels` and
 target-first sends and replies, Message Path passes, event observation and `it`,
 selector-aware faults in nested Lambdas, Host Selector refusals, suspension
 checks and chunk/Unit traps. Go and TS agree on their complete ordinary and
-save/restore Traces. The TS `sessions/argument-labels` Transcript covers Entry
-recognition and positional/labelled Handlers sharing a first word. Their
+save/restore Traces. The `sessions/argument-labels` Transcript agrees on both
+Cores and covers Entry recognition and positional/labelled Handlers sharing a first word. Their
 `Unblessed` headers retain the first human review requirement.
 
 ## The Disassembly Cases

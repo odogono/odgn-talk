@@ -308,11 +308,28 @@ func TestDecisionReplayIgnoresCancellationAfterSeal(t *testing.T) {
 	}
 }
 
+// #277 requires all corrected event-test Traces and the observation regression.
+// ExecutionBackends compares ordinary and save/restore replay before the Runner
+// compares every record with the authoritative Trace.
 func TestEventObservationAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	cases, err := Discover(root, []string{"decisions/dispatch-and-waits", "limits/event-tests-fault-on-resume", "suspension/event-test-group-cap", "suspension/event-test-slice-debt", "suspension/wait-observation"})
+	names := []string{
+		"decisions/dispatch-and-waits",
+		"decisions/broadcast-outcomes",
+		"limits/event-tests-fault-on-resume",
+		"objects/wait-target",
+		"reload/extend-units",
+		"suspension/event-test-group-cap",
+		"suspension/event-test-slice-debt",
+		"suspension/wait-for",
+		"suspension/wait-observation",
+	}
+	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(cases) != 9 {
+		t.Fatalf("event-test acceptance: %d cases, want 9", len(cases))
 	}
 	b, err := os.ReadFile("../../corpus-passing.txt")
 	if err != nil {

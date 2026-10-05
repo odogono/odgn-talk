@@ -1,5 +1,5 @@
-# Event-test Fuel corrected from TS ordinary/save-restore agreement.
-# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
+# Corrected event-test Fuel agrees on Go and TS ordinary/save-restore execution.
+# Originally corrected from maintainer-approved TS-only agreement; see docs/reviews/event-test-charging/.
 # extend-units: Extend keeps old frames and Function Values valid, links inherited Constants/defaults, rejects name reuse, and resumes event tests from the extension unit.
 
 > load s identity=c0d8add854de261af2be8ce91a9762dfe05a5480d9170c13ad572ee0af993311

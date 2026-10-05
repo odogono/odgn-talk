@@ -27,6 +27,30 @@ func TestEntriesAndAtomicRedefinition(t *testing.T) {
 	}
 }
 
+func TestLabelledHandlerEntries(t *testing.T) {
+	h := New(Environment{})
+	for _, entry := range []struct {
+		source string
+		output []string
+	}{
+		{":clock virtual 2026-09-30T10:00:00Z", nil},
+		{"on move x to y\nsay x + y\nend move", nil},
+		{"move 3 to 4", []string{"7"}},
+		{"on move x toward y\nsay x * y\nend move", nil},
+		{"move 3 toward 4", []string{"12"}},
+		{"on move x\nsay x\nend move", nil},
+		{"move 9", []string{"9"}},
+		{"on move x to y\nsay x - y\nend move", nil},
+		{"move 5 to 2", []string{"3"}},
+		{"move 3 toward 4", []string{"12"}},
+		{"move 9", []string{"9"}},
+	} {
+		if out := h.Input(entry.source); !reflect.DeepEqual(out, entry.output) {
+			t.Fatalf("%s: got %v, want %v", entry.source, out, entry.output)
+		}
+	}
+}
+
 func TestVirtualClockIncludesEarliestInstantAndClampsRealReadings(t *testing.T) {
 	var records []Item
 	h := New(Environment{Now: func() time.Time { return time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC) }, Record: func(i Item) { records = append(records, i) }})

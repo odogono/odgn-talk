@@ -104,6 +104,8 @@ go run ./cmd/corpus sessions/save-restore
 Enter one declaration, statement or expression. Incomplete Entries continue at
 `|`, including open fences and interpolation holes. Blank literal lines remain
 content; final EOF diagnoses the innermost unfinished construct at its opener.
+An Entry beginning with a Handler Selector's first word is a Command Call;
+positional and labelled Handlers sharing that word remain distinct.
 Expressions print their value. `say` calls `console.write`. Foreground
 Runs wait for their console input or real-clock deadline; other suspended Runs
 produce background lines when later resumed. Ctrl-C cancels the foreground Run
@@ -943,11 +945,11 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 269 cases, including all text-model, load-diagnostic,
+The gate contains 277 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
+separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
 18 step-5 save/restore, Extend and replacement cases, and all eleven Session
 Transcripts, so removing a required case cannot silently
@@ -982,7 +984,11 @@ without Value size, and same-Segment Persistent State checks after self-send.
 The corrected `decisions/broadcast-outcomes` and `objects/wait-target` Traces
 also agree on Go after Broadcast Decisions and Object Message Paths were added.
 `reload/extend-units` passes unchanged, including old Function Values after
-Extend. Every supported Trace also runs with Save/Restore between Pumps,
+Extend. The nine-case event-test acceptance set requires all eight corrected
+Traces and the observation regression in the passing gate, with exact ordinary
+and save/restore replay. The [charging reconciliation](../../docs/reviews/event-test-charging/README.md)
+records their complete parity verification. Every supported Trace also runs
+with Save/Restore between Pumps,
 subject to chapter 11's exclusions for old Host handles. Live effects require an
 `effects pending` refusal with unchanged inspection and counters before replay
 continues on the original Group.
