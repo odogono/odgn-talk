@@ -1,6 +1,8 @@
 # undecided-on-cancel-delivery: a Host that can't wait cancels a Decision
-# before its seal, which leaves it undecided, `cancelled`, and a cancel after
-# the seal does nothing (ADR 0031, #79). Its figures are Cost Model 0's, blessed by the TS Core.
+# before its seal, which leaves it undecided, `cancelled` (ADR 0031, #79).
+# Native runner tests separately check that a cancel after the seal queues
+# nothing. Its Cost Model 0 figures agree on Go and TS; the corrected Trace
+# awaits human review in docs/reviews/delivery-cancellation/.
 
 kind = "trace"
 

@@ -66,6 +66,7 @@ test('the browser debug bundle replays, reverses and preserves Trace without Bun
     const build = await Bun.build({ entrypoints: [entry], target: 'browser' });
     expect(build.success).toBe(true);
     const context = {
+      AbortController,
       TextEncoder,
       TextDecoder,
       performance,

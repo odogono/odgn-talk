@@ -1,12 +1,15 @@
+# Unblessed: corrected by Go and TS agreement; human review of the removed
+# post-seal cancel input is pending. See docs/reviews/delivery-cancellation/.
 # undecided-on-cancel-delivery: the board is part-way through a long
 # `recount` when a Decision arrives. A preempted Run holds up its Script's
 # mailbox until its Segment ends, so the Decision waits there, and the Host
 # gives up on it with `cancel-delivery`. A Decision still in the mailbox is
 # removed, reported as a `run end` with no Run or Handler, and settles as
-# undecided, `cancelled`, with `run` left out of its entry. Then a Decision
-# that is allowed at its first Suspension Point is cancelled after its seal,
-# which does nothing: its Run goes on and completes. Fuel, allocation and
-# state figures are Cost Model 0's.
+# undecided, `cancelled`, with `run` left out of its entry. A second Decision
+# is allowed at its first Suspension Point and its Run goes on and completes.
+# Native replay tests additionally abort after its seal: that action queues
+# no Host Input, so it cannot appear in a canonical Trace. Fuel, allocation
+# and state figures are Cost Model 0's.
 
 > load board identity=f65b3a6ee8409eff04e452bcac58eff62060ced5f3b370f1f4aac608db90182a
 
@@ -36,9 +39,8 @@ seg board/r2 start delivery=d3 handler=beforeMove clause=1 fuel=74 alloc=0 state
 decided d3 verdict=allowed
 pumped state=idle fuel=74 next=2026-09-30T10:00:32Z
 
-# Cancelling after the seal does nothing, so the allowed Run isn't cancelled
-# and nothing is written for the cancel. The answer then resumes the Run.
-> cancel-delivery d3
+# The answer resumes the allowed Run. Native replay tests inject a prior
+# post-seal cancellation and require this same Trace, with no cancel line.
 > answer board/r2.c1 value=1
 > pump clock=2026-09-30T10:00:03Z
 seg board/r2 resume fuel=15 alloc=32 state=32 end=return

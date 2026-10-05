@@ -21,6 +21,38 @@ type traceLines []string
 
 func (l *traceLines) Record(line string) { *l = append(*l, line) }
 
+type replayDelivery struct {
+	cancel    context.CancelFunc
+	done      <-chan struct{}
+	cancelled bool
+}
+
+func (d *replayDelivery) cancelAndWait(ready <-chan struct{}) error {
+	if d.cancelled {
+		return nil
+	}
+	d.cancelled = true
+	select {
+	case <-d.done:
+		d.cancel()
+		return nil
+	default:
+	}
+	// Discard earlier notifications, then wait for context.AfterFunc to queue
+	// cancellation through the public API before replaying the next Host input.
+	select {
+	case <-ready:
+	default:
+	}
+	d.cancel()
+	select {
+	case <-ready:
+		return nil
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("Delivery cancellation did not notify onReady")
+	}
+}
+
 // Controls recorded inside a Pump are issued at their recorded Host crossing.
 type crossingReplay struct {
 	lines    *traceLines
@@ -80,7 +112,18 @@ func (executionBackend) Support(c Case) string {
 		return e.Error()
 	}
 	standards, _ := c.Setup["standard"].([]any)
+	cancellable := map[string]bool{}
 	for _, r := range records {
+		if r.Input && len(r.IDs) > 0 {
+			switch r.Name {
+			case "request", "decide", "decide-broadcast", "call-value":
+				cancellable[r.IDs[0]] = true
+			case "cancel-delivery":
+				if !cancellable[r.IDs[0]] {
+					return "Delivery cancellation requires a Request, Decision or Host call context"
+				}
+			}
+		}
 		if r.Input && r.Name == "pump" {
 			for _, raw := range standards {
 				name := raw.(Setup)["capability"].(string)
@@ -96,7 +139,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|stop|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -171,7 +214,14 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
-	g := core.NewGroup(talk.GroupOptions{Trace: crossings})
+	ready := make(chan struct{}, 1)
+	g := core.NewGroup(talk.GroupOptions{Trace: crossings, OnReady: func() {
+		select {
+		case ready <- struct{}{}:
+		default:
+		}
+	}})
+	deliveries := map[string]*replayDelivery{}
 	control := func(r Record) error {
 		name := r.IDs[0]
 		if r.Name == "cancel-run" {
@@ -214,6 +264,14 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "cancel-delivery":
+			d := deliveries[r.IDs[0]]
+			if d == nil {
+				return nil, fmt.Errorf("unknown cancellable Delivery %s", r.IDs[0])
+			}
+			if err := d.cancelAndWait(ready); err != nil {
+				return nil, err
+			}
 		case "set-parent":
 			ref := fields["object"].Value.Object
 			if ref == nil {
@@ -247,7 +305,12 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				o := setupOverride(f)
 				limits = &o
 			}
-			if _, _, err := g.Call(context.Background(), fn, args, limits); err != nil {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			id, pending, err := g.Call(ctx, fn, args, limits)
+			if err == nil {
+				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
+			} else {
 				if _, ok := err.(*talk.HostError); !ok && err != talk.ErrMailboxFull {
 					return nil, err
 				}
@@ -378,24 +441,36 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				m.Args = append(m.Args, x)
 			}
 			var e error
+			var id talk.DeliveryID
+			var pending *talk.Pending
+			var decision *talk.Deciding
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			if r.Name == "broadcast" {
 				_, e = g.Broadcast(m)
 			} else if r.Name == "decide-broadcast" {
-				_, _, e = g.DecideBroadcast(context.Background(), m)
+				var bid talk.BroadcastID
+				bid, decision, e = g.DecideBroadcast(ctx, m)
+				id = talk.DeliveryID(bid)
 			} else if target != nil {
 				if r.Name == "request" {
-					_, _, e = g.Request(context.Background(), target, m)
+					id, pending, e = g.Request(ctx, target, m)
 				} else if r.Name == "decide" {
-					_, _, e = g.Decide(context.Background(), target, m)
+					id, decision, e = g.Decide(ctx, target, m)
 				} else {
 					_, e = g.Deliver(target, m)
 				}
 			} else if r.Name == "request" {
-				_, _, e = s.Request(context.Background(), m)
+				id, pending, e = s.Request(ctx, m)
 			} else if r.Name == "decide" {
-				_, _, e = s.Decide(context.Background(), m)
+				id, decision, e = s.Decide(ctx, m)
 			} else {
 				_, e = s.Deliver(m)
+			}
+			if pending != nil {
+				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
+			} else if decision != nil {
+				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: decision.Done()}
 			}
 			if e != nil && e != talk.ErrMailboxFull {
 				if _, ok := e.(*talk.HostError); !ok {

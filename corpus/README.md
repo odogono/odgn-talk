@@ -65,6 +65,13 @@ The original 198 seed cases execute on the TS Core, which supplied their first b
 
 The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
 
+The corrected `decisions/undecided-on-cancel-delivery` seed agrees on Go and TS
+through public cancellation contexts/signals. Its post-seal cancellation queues
+no input under chapter 9, so that line is removed from the canonical Trace and
+injected by native replay tests instead. All output records and costs are
+unchanged. Its `Unblessed` header awaits human review of the correction; see the
+[reconciliation](../docs/reviews/delivery-cancellation/README.md).
+
 The fenced-text regression cases `load-diagnostics/invalid-text-closing-margin`,
 `load-diagnostics/invalid-raw-text-closing-margin` and `limits/fenced-text-concat`
 pin the first offending scalar in a raw or
