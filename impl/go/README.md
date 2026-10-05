@@ -313,8 +313,12 @@ before being stored in `it`; fire-and-forget calls leave `it` unchanged. An
 accepted Host effect remains committed when later conversion or Script code faults.
 
 A valid custom `ScriptError` raises its code, message and Data with Operation
-identity. Catalogue codes, reserved Data keys, undeclared codes, invalid results,
-plain errors and panics become `host error`, with Host-only detail in `CallFailed`.
+identity. Data must be a Map or Nothing; other kinds and foreign Group values
+become `host error`. Catalogue codes, reserved Data keys, undeclared codes,
+invalid results, plain errors and panics also become `host error`, with Host-only
+detail in `CallFailed`. Returned failures and queued `Call.Fail` inputs retain
+Error maps in the Trace even when Data collides with the error envelope. Valid
+Nothing/map failures retain their ordinary conversion costs and budget checks.
 Calls carry the named Grant, binding, Pump Clock, Run and Segment identity.
 Caught raises precede subsequent Host call records. Host inputs accepted during
 a call join the next Pump; worker reentry is refused.

@@ -47,7 +47,11 @@ func hostFailureValue(e *ScriptError) corevalue.Value {
 		}
 		fields = append(fields, e.Data.inner.Entries...)
 	}
-	v, _ := corevalue.NewMap(fields)
+	v, err := corevalue.NewMap(fields)
+	if err != nil {
+		// Keep the Host input's error field a map; resumption validates the raw failure.
+		v, _ = corevalue.NewMap(nil)
+	}
 	return v
 }
 func (g *Group) settleOperation(d delivery) {

@@ -129,7 +129,14 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 			return hostError(fmt.Sprint(err))
 		}
 		data := e.Data.inner
-		if data.Kind != corevalue.Map {
+		if data.Kind != corevalue.Map && data.Kind != corevalue.Nothing {
+			fields["error"] = "{}"
+			if record != nil {
+				record()
+			}
+			return hostError("failure Data is neither a map nor Nothing")
+		}
+		if data.Kind == corevalue.Nothing {
 			data, _ = corevalue.NewMap(nil)
 		}
 		failed := []corevalue.Pair{{Key: "code", Val: mustText(e.Code)}}
@@ -144,8 +151,13 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		if bad != "" {
 			fields["error"] = "{}"
 		} else {
-			v, _ := corevalue.NewMap(failed)
-			fields["error"] = coretrace.Display(v)
+			v, mapError := corevalue.NewMap(failed)
+			if mapError != nil {
+				fields["error"] = "{}"
+				bad = "failure uses a reserved Data key"
+			} else {
+				fields["error"] = coretrace.Display(v)
+			}
 		}
 		if record != nil {
 			record()
