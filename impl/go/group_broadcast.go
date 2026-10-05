@@ -88,6 +88,9 @@ func (g *Group) prepareBroadcasts(inputs []delivery) []delivery {
 		if d.kind == "dispose" {
 			stopped[d.object.owner] = true
 		}
+		if d.kind == "stop" {
+			stopped[d.script] = true
+		}
 		if d.cancel != "" || d.kind == "cancel-run" {
 			for _, s := range g.scripts {
 				for _, x := range s.runs {

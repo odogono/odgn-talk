@@ -104,7 +104,7 @@ func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (coreva
 			err = &ScriptError{Code: p.FailureCode, Message: p.FailureMessage, Data: Value{p.FailureData}}
 		}
 	}
-	v, e, _ := g.completeOperation(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, nil, Value{p.Answer}, err, map[string]string{}, nil, p.Fuel, reports)
+	v, e, _ := g.completeOperation(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, nil, Value{p.Answer}, err, map[string]string{}, nil, p.Fuel, reports, pending.x.run.Cancelling)
 	return v, e
 }
 func (g *Group) abandonOperation(id string) {

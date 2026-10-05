@@ -26,38 +26,39 @@ type Group struct {
 	traceQueue []string
 	recording  bool
 
-	mu               sync.Mutex
-	core             *Core
-	options          GroupOptions
-	libraries        map[string]*Library
-	objects          map[objectKey]*Object
-	scripts          []*Script
-	inputs           []delivery
-	unrouted         []delivery
-	orphanReplies    []delivery
-	stoppedSends     map[*Script]bool
-	cancelRunsQueued bool
-	nextDelivery     int64
-	nextBroadcast    int64
-	calls            map[CallID]*operationCall
-	nextTimer        int64
-	clock            time.Time
-	pumping          bool
+	mu             sync.Mutex
+	core           *Core
+	options        GroupOptions
+	libraries      map[string]*Library
+	objects        map[objectKey]*Object
+	scripts        []*Script
+	inputs         []delivery
+	unrouted       []delivery
+	orphanReplies  []delivery
+	stoppedSends   map[*Script]bool
+	controlsQueued bool
+	nextDelivery   int64
+	nextBroadcast  int64
+	calls          map[CallID]*operationCall
+	nextTimer      int64
+	clock          time.Time
+	pumping        bool
 }
 type Script struct {
-	group    *Group
-	name     string
-	state    *machine.State
-	limits   Limits
-	queue    []workItem
-	runs     []*execution
-	active   *execution
-	counters Counters
-	grants   map[string]*Grant
-	stopped  bool // protected by group.mu
-	owner    *Object
-	reserved int
-	debt     int64
+	group      *Group
+	name       string
+	state      *machine.State
+	limits     Limits
+	queue      []workItem
+	runs       []*execution
+	active     *execution
+	counters   Counters
+	grants     map[string]*Grant
+	stopped    bool // protected by group.mu
+	stopReason string
+	owner      *Object
+	reserved   int
+	debt       int64
 }
 type delivery struct {
 	id         DeliveryID
@@ -70,6 +71,7 @@ type delivery struct {
 	cancel     DeliveryID
 	kind       string
 	fields     map[string]string
+	reason     string // unencoded Stop reason
 	from       RunID
 	during     *corevalue.Value // non-nil only for an internal error message
 	settlement *operationSettlement
@@ -96,6 +98,7 @@ type execution struct {
 	deciding      bool
 	segment       int
 	calls         int64
+	stopReason    *string // Stop landed at this Run's Host crossing
 	waitCall      CallID
 	abandonCall   CallID
 }
@@ -501,7 +504,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.pumping = true
 	inputs := g.inputs
 	g.inputs = nil
-	g.cancelRunsQueued = false
+	g.controlsQueued = false
 	g.mu.Unlock()
 	defer func() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }()
 	inputs = g.prepareBroadcasts(inputs)
@@ -515,7 +518,9 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		if d.cancel != "" {
 			g.record("cancel-delivery", true, []string{string(d.cancel)}, nil)
 		} else {
-			if d.kind == "cancel-run" {
+			if d.kind == "stop" {
+				g.record(d.kind, true, []string{d.script.name}, d.fields)
+			} else if d.kind == "cancel-run" {
 				g.record(d.kind, true, []string{d.fields["run"]}, nil)
 			} else if d.kind == "revoke" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)

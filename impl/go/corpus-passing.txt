@@ -6,8 +6,10 @@ builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
+cancellation/broadcast-recipients
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/host-crossings
 cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
@@ -62,6 +64,7 @@ errors/handler-delivery
 errors/lambda-capture-parity
 examples/orders-pricing
 functions/foreign-calls
+functions/host-calls
 libraries/caller-capabilities
 libraries/calls
 libraries/errors

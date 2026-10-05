@@ -12,7 +12,8 @@ import (
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-func (g *Group) property(s *Script, x *execution, object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report) (corevalue.Value, *corevalue.Value) {
+func (g *Group) property(s *Script, x *execution, object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value) {
+	wasCancelling := x.run.Cancelling
 	o := object.Object.Handle.(*Object) // only Group-checked Values reach execution
 	key := "get-key"
 	if set {
@@ -69,13 +70,16 @@ func (g *Group) property(s *Script, x *execution, object corevalue.Value, name s
 		fields["op"] = "set"
 		fields["value"] = coretrace.Display(input)
 	}
-	record := func() { g.record("prop", false, []string{string(x.id)}, fields) }
+	record := func() { g.record("prop", false, []string{string(x.id)}, fields); boundary() }
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(o.kind.name)}, {Key: "operation", Val: mustText(name)}}
 	hostError := func(detail string) (corevalue.Value, *corevalue.Value) {
 		*reports = append(*reports, &CallFailed{Script: s.name, Operation: OperationRef{Capability: o.kind.name, Operation: name}, Detail: detail})
 		return fail("host error", named...)
 	}
 	conversion := func(v corevalue.Value) bool {
+		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
+			return false
+		}
 		fuel, alloc := machine.Charge("capability", machine.Measures{Result: v, ResultPresent: true})
 		return x.run.PayHost(fuel-10, alloc)
 	}

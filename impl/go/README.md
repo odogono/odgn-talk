@@ -230,9 +230,10 @@ adapter stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Complete cancellation and Stop Script acceptance belongs to
-[#135](https://github.com/odogono/odgn-talk/issues/135),
-and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
+before that boundary. Group cancellation and Stop Script are supported as described
+below; scoped lifecycle support remains under
+[#134](https://github.com/odogono/odgn-talk/issues/134), and save/restore under
+[#136](https://github.com/odogono/odgn-talk/issues/136).
 
 ## Text Patterns
 
@@ -266,7 +267,7 @@ remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 ## Group embedding
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
-`Call`, `Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
+`Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports Scripts with named Capability Grants and an optional
 Owning Object. Owners and well-known Objects are checked for Group ownership and
@@ -290,8 +291,26 @@ drops queued messages, settles Requests/reply senders as stopped, carries variab
 by name when requested, and preserves counters. Carry uses the active Segment's
 rollback base for preempted Runs; Function Values from the old code become stale.
 A successful Reload restarts Script-addressed execution; a disposed owner
-remains skipped by Object routing. The explicit `Stop` Host API, `Extend`, Library
-replacement and scoped lifecycle remain deferred. Owner disposal applies sticky Stop semantics.
+remains skipped by Object routing. `Extend`, Library replacement and scoped
+lifecycle remain deferred.
+
+`Script.Stop` is queued and sticky. It discards running, parked and suspended
+Runs without `finally`, rolls back an active Segment, and drops mailbox messages.
+Waiting callers fail with `send failed`, reason `stopped`; open Decisions become
+undecided with outcome `cancelled`. Stop reports list discarded Runs, dropped
+Deliveries and abandoned calls. Pending Capability contexts are cancelled.
+Owner disposal uses the same termination path with reason `owner disposed`.
+
+Repeated Stops preserve the first reason and emit no additional Stop report
+unless later accepted messages need dropping. Those messages still obey mailbox
+admission limits. Broadcasts omit stopped Scripts. A Group whose Scripts are all
+stopped pumps as `stopped`; Reload clears the sticky state and reason.
+
+Stops issued during Pump land at its next Host crossing or end, like `CancelRun`.
+A crossing records its Host result, then the control input, before result
+conversion. An interrupted current Run ends its Stretch as `stop` before the
+Stop report, without a RunEnd or cleanup. Cancelling a crossing also skips
+conversion of the discarded result; cleanup crossings retain their own charges.
 
 ### Function Value calls
 
@@ -319,9 +338,8 @@ instruction, before any execution charge or unwind. It cannot enter catch or
 finally cleanup. Defaults and captures use the same binding as Script calls.
 Context cancellation uses ordinary Delivery cancellation.
 
-The reviewed `functions/foreign-calls` case passes unchanged. The live-call,
-default and arity prefix of `functions/host-calls` also matches; its remaining
-inputs require the explicit Stop API tracked by #135. Full Go save/restore of
+The reviewed `functions/foreign-calls` and full `functions/host-calls` cases pass
+unchanged, including Stop and stale Host calls. Full Go save/restore of
 pending Function calls remains part of #136.
 
 ### Ordinary Capability Operations
@@ -558,8 +576,8 @@ Resumption starts a new Segment snapshot at its actual turn; Fuel and allocation
 remain cumulative over the Run. A suspension charges the wait before checking
 retained Persistent State. Cancelling a suspended Request removes its timer and
 queues finally cleanup in input order, preserving committed earlier Segments.
-`CancelRun` also queues cancellation and may land during a Pump at an instruction
-boundary; ordinary settlements still wait for the next Pump.
+`CancelRun` also queues cancellation and may land during a Pump at a Host crossing
+or Pump end; ordinary settlements still wait for the next Pump.
 Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.
@@ -695,9 +713,9 @@ undecided outcomes, which win over allowed; an empty Broadcast is allowed.
 Vetoes and undecided outcomes retain recipient order across Fuel Slices. Context
 cancellation removes or cancels only recipients with an open Verdict; already
 sealed Runs continue. Reload and disposal settle only the affected recipients.
-The two reviewed Broadcast Decision cases pass unchanged. The recipient prefix
-of `cancellation/broadcast-recipients` also matches; its remaining inputs need
-the explicit Stop API tracked by #135. Broadcast save/restore remains with #136.
+The two reviewed Broadcast Decision cases and full
+`cancellation/broadcast-recipients` case pass unchanged, including prior Stop
+inputs. Broadcast save/restore remains with #136.
 
 Queueing Policies apply to the selected entry clause after Destructuring and
 Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
@@ -736,7 +754,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 191 cases, including all text-model, load-diagnostic,
+The gate contains 194 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

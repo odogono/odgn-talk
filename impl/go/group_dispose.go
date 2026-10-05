@@ -8,10 +8,22 @@ import (
 // An owner disposal stops already-started Runs. Object-addressed mailbox
 // messages still follow their current paths, while direct messages are dropped.
 func (g *Group) disposeOwner(s *Script, reports *[]Report, settlements *[]func(), seal func(delivery, RunID, Verdict, Value, Outcome)) {
+	g.stopScript(s, "owner disposed", reports, settlements, seal)
+}
+
+func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settlements *[]func(), seal func(delivery, RunID, Verdict, Value, Outcome)) {
 	g.mu.Lock()
+	already := s.stopped
+	if !already {
+		s.stopReason = reason
+	}
 	s.stopped = true
+	reason = s.stopReason
 	g.mu.Unlock()
-	stop := &Stop{Script: s.name, Reason: "owner disposed"}
+	if already && len(s.runs) == 0 && len(s.queue) == 0 {
+		return
+	}
+	stop := &Stop{Script: s.name, Reason: reason}
 	runs, queue := s.runs, s.queue
 	if s.active != nil {
 		s.state.Variables = s.active.run.Base

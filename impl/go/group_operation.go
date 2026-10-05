@@ -23,7 +23,8 @@ type CallFailed struct {
 }
 
 func (*CallFailed) isReport() {}
-func (g *Group) operation(s *Script, x *execution, grantName, opName string, args []corevalue.Value, pay func(int64, int64) bool, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
+func (g *Group) operation(s *Script, x *execution, grantName, opName string, args []corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value, bool) {
+	wasCancelling := x.run.Cancelling
 	grant := s.grants[grantName]
 	op := grant.definition.ops[opName]
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
@@ -72,15 +73,16 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	if call.charged != 0 {
 		fields["charged"] = fmt.Sprint(call.charged)
 	}
-	record := func() { g.record("call", false, []string{string(call.id)}, fields) }
+	record := func() { g.record("call", false, []string{string(call.id)}, fields); boundary() }
 	if call.reached || errors.Is(err, ErrLimit) {
 		record()
 		cancel()
-		x.run.FaultHostFuel()
+		if x.run.Status != machine.Stopped {
+			x.run.FaultHostFuel()
+		}
 		return corevalue.Value{}, nil, false
 	}
 	if op.Mode == Suspending && err == nil {
-		record()
 		if g.calls == nil {
 			g.calls = map[CallID]*operationCall{}
 		}
@@ -93,17 +95,18 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			x.run.SendWait = true
 			x.run.OperationWait = true
 		}
+		record()
 		return corevalue.Value{}, nil, false
 	}
 	if op.Mode == Suspending {
 		cancel()
 	}
-	return g.completeOperation(s, x, grantName, opName, op, call, args, result, err, fields, record, 0, reports)
+	return g.completeOperation(s, x, grantName, opName, op, call, args, result, err, fields, record, 0, reports, wasCancelling)
 }
 
 // completeOperation runs on the Run's turn, so validation and conversion belong
 // to the resuming Segment, including a failure's Data.
-func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, args []corevalue.Value, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report) (corevalue.Value, *corevalue.Value, bool) {
+func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, args []corevalue.Value, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report, wasCancelling bool) (corevalue.Value, *corevalue.Value, bool) {
 	grant := s.grants[grantName]
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
 	fail := func(code string, fields ...corevalue.Pair) (corevalue.Value, *corevalue.Value, bool) {
@@ -116,6 +119,9 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		return fail("host error", named...)
 	}
 	conversion := func(v corevalue.Value, late int64) bool {
+		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
+			return false
+		}
 		after, alloc := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel, Result: v, ResultPresent: true})
 		return x.run.PayHost(after-10-op.Cost.Fuel+late, alloc)
 	}

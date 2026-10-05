@@ -21,6 +21,34 @@ type traceLines []string
 
 func (l *traceLines) Record(line string) { *l = append(*l, line) }
 
+// Controls recorded inside a Pump are issued at their recorded Host crossing.
+type crossingReplay struct {
+	lines    *traceLines
+	controls map[string][][]Record
+	apply    func(Record) error
+	err      error
+}
+
+func (r *crossingReplay) Record(line string) {
+	r.lines.Record(line)
+	parts := strings.SplitN(line, " ", 3)
+	if len(parts) < 2 || parts[0] != "call" && parts[0] != "prop" {
+		return
+	}
+	key := parts[0] + " " + parts[1]
+	queue := r.controls[key]
+	if len(queue) == 0 {
+		return
+	}
+	controls := queue[0]
+	r.controls[key] = queue[1:]
+	for _, control := range controls {
+		if err := r.apply(control); err != nil {
+			r.err = err
+		}
+	}
+}
+
 type executionBackend struct{}
 
 func ExecutionBackends() map[string]Backend {
@@ -65,7 +93,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|stop|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -107,6 +135,30 @@ func (executionBackend) Support(c Case) string {
 }
 func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	var lines traceLines
+	crossings := &crossingReplay{lines: &lines, controls: map[string][][]Record{}}
+	inside := map[int]bool{}
+	inPump, crossing := false, ""
+	for i, r := range records {
+		if r.Input && r.Name == "pump" {
+			inPump = true
+			crossing = ""
+		}
+		if !r.Input && r.Name == "pumped" {
+			inPump = false
+		}
+		if inPump && !r.Input && (r.Name == "call" || r.Name == "prop") && len(r.IDs) > 0 {
+			crossing = r.Name + " " + r.IDs[0]
+			crossings.controls[crossing] = append(crossings.controls[crossing], nil)
+		}
+		if inPump && r.Input && (r.Name == "stop" || r.Name == "cancel-run") {
+			if crossing == "" {
+				return nil, fmt.Errorf("%s inside Pump has no Host crossing", r.Name)
+			}
+			queue := crossings.controls[crossing]
+			queue[len(queue)-1] = append(queue[len(queue)-1], r)
+			inside[i] = true
+		}
+	}
 	core := talk.New()
 	operations, e := setupOperations(core, c.Setup)
 	if e != nil {
@@ -116,7 +168,30 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
-	g := core.NewGroup(talk.GroupOptions{Trace: &lines})
+	g := core.NewGroup(talk.GroupOptions{Trace: crossings})
+	control := func(r Record) error {
+		name := r.IDs[0]
+		if r.Name == "cancel-run" {
+			name, _, _ = strings.Cut(name, "/r")
+		}
+		s := g.Script(name)
+		if s == nil {
+			return fmt.Errorf("unknown Script %s", name)
+		}
+		if r.Name == "cancel-run" {
+			s.CancelRun(talk.RunID(r.IDs[0]))
+		} else {
+			for _, f := range r.Fields {
+				if f.Key == "reason" {
+					s.Stop(f.Value.Text)
+					return nil
+				}
+			}
+			return fmt.Errorf("Stop has no reason")
+		}
+		return nil
+	}
+	crossings.apply = control
 	objects, e := setupObjects(core, g, c.Setup)
 	if e != nil {
 		return nil, e
@@ -127,8 +202,8 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		s := x.(Setup)
 		setups[s["name"].(string)] = s
 	}
-	for _, r := range records {
-		if !r.Input {
+	for i, r := range records {
+		if !r.Input || inside[i] {
 			continue
 		}
 		fields := map[string]Field{}
@@ -222,13 +297,10 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		case "stub":
 			lines = append(lines, r.Raw)
 			operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
-		case "cancel-run":
-			name, _, _ := strings.Cut(r.IDs[0], "/r")
-			s := g.Script(name)
-			if s == nil {
-				return nil, fmt.Errorf("unknown Script %s", name)
+		case "stop", "cancel-run":
+			if err := control(r); err != nil {
+				return nil, err
 			}
-			s.CancelRun(talk.RunID(r.IDs[0]))
 		case "revoke":
 			s := g.Script(r.IDs[0])
 			if s == nil {
@@ -334,6 +406,9 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
 			opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)
 			result, e := g.Pump(now, opts)
+			if crossings.err != nil {
+				return nil, crossings.err
+			}
 			for _, report := range result.Reports {
 				if end, ok := report.(*talk.RunEnd); ok && end.Result.Kind() == talk.KindFunction {
 					functions[end.Result.String()] = end.Result

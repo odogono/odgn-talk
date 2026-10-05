@@ -27,6 +27,7 @@ const (
 	Dispatching
 	Parked
 	Dropped
+	Stopped // embedding Stop discards this Run without Script cleanup
 )
 
 type Limits struct {
@@ -352,6 +353,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			if len(boundary) > 0 {
 				boundary[0]()
+			}
+			if r.Status == Stopped {
+				break
 			}
 			if !wasCancelling && r.Cancelling {
 				continue
