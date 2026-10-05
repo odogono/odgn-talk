@@ -93,14 +93,16 @@ backtick closing margin, generated joins' `${` source position, exact Fuel and
 allocation exhaustion, and Segment rollback. Both Cores reproduce their complete
 Traces, including TS save/restore replay. The maintainer approved
 `limits/fenced-text-concat` for #135 on 2026-10-05; the two load diagnostics
-retain their `Unblessed` headers for first human review.
+were approved for #275 on 2026-10-05; see the
+[fenced-text approval record](../docs/reviews/fenced-text-blessings/README.md).
 
 The `stdlib/template-migration` regression pins `${…}` placeholders and `$$`
 in the normative text/date Libraries. It covers literal braces, keys with spaces
 and punctuation, values inserted once, NFC joins, date widths and fractional
 seconds, and invalid templates' error fields and caller positions. Go and TS
-reproduce its complete Trace, including TS save/restore replay. Its `Unblessed`
-header remains for first human review. The `sessions/fenced-text` Transcript
+reproduce its complete Trace, including TS save/restore replay. Its
+expectations were approved for #275 on 2026-10-05, along with the corrected
+`sessions/fenced-text` Transcript and its Trace. The Transcript
 prints its margin-stripped multiline value, preserving a blank line and a
 multiline hole; it also executes interpolation and a raw Format Template.
 Session Transcripts run on TS; Go Session execution is tracked in

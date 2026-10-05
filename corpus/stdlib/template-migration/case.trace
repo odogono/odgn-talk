@@ -1,4 +1,4 @@
-# Unblessed: new template migration regression awaiting first human review.
+# First blessing approved by the maintainer on 2026-10-05 for #275.
 # Text keys retain spaces/punctuation; inserted placeholders are not reparsed.
 # Bare braces, dollar doubling, widths, fractional seconds and NFC are pinned.
 # Invalid templates retain their error fields and caller source positions.

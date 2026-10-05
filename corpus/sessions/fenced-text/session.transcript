@@ -1,4 +1,4 @@
-# Unblessed: corrected multiline output awaiting first human review.
+# Corrected expectations approved by the maintainer on 2026-10-05 for #275.
 > :clock virtual 2026-10-04T09:00:00Z
 > put `
 |   first

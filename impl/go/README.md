@@ -963,8 +963,9 @@ Six reviewed Library-related cases pass unchanged: `libraries/calls`,
 acceptance test requires all six in the gate.
 
 The new `stdlib/template-migration` regression also agrees on Go, TS and
-TS save/restore, and is required in that gate. Its `Unblessed` header remains
-for first human review.
+TS save/restore, and is required in that gate. Its first blessing was approved
+by the maintainer on 2026-10-05 for #275; see the
+[fenced-text approval record](../../docs/reviews/fenced-text-blessings/README.md).
 
 Three reviewed Library Capability cases also pass unchanged: `libraries/needs-transitive`,
 `libraries/needs-suspending` and `capabilities/optional-args`. The new
