@@ -51,8 +51,17 @@ const diagnostic: Record<Mutation, string> = {
 const body = (h: HandlerChoice): string => {
   const head = `on ${h.name}${['suspend', 'timer'].includes(h.kind) && h.policy ? `, ${h.policy}` : ''}`;
   const add = `add ${h.value} to count`;
-  const fenced =
-    'put `value ${count}` into rendered\nput """\n  raw ${count}\n  """ into template';
+  const interpolated = [
+    '`value ${count}`',
+    '`\n  value ${count}\n  `',
+    '`value ${count +\n-- hole continuation\n0}`',
+    '`value ${`${count}`}`',
+    '`v\\u{61}lue ${count}`',
+  ][h.value - 1]!;
+  const fence = '"'.repeat(3 + (h.repetitions % 3));
+  const margin = h.repetitions % 2 ? '\t ' : '  ';
+  const raw = `${fence}\n${margin}raw \${count}  \n\n${margin}${'"'.repeat(fence.length - 1)}\n${margin}${fence}`;
+  const fenced = `put ${interpolated} into rendered\nput ${raw} into template`;
   switch (h.kind) {
     case 'compute':
       return `${head}\n${fenced}\nrepeat ${h.repetitions} times\nif count >= 0 then\n${add}\nelse\nput 0 into count\nend if\nend repeat\nreturn count\nend ${h.name}`;
@@ -82,7 +91,7 @@ export const sources = (scripts: ScriptChoice[]) =>
   scripts.map(s => ({
     name: s.name,
     source: `${s.name}.talk`,
-    text: `script variable count = 0\n${s.handlers.map(body).join('\n')}`,
+    text: `script variable count = 0\nscript variable rendered = ""\nscript variable template = ""\n${s.handlers.map(body).join('\n')}`,
   }));
 export const regenerate = (c: FuzzCase): FuzzCase => {
   const updated = structuredClone(c);

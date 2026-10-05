@@ -62,3 +62,11 @@ test('escaped interpolation remains string content', () => {
   ]);
   expect(current.regions).toEqual([]);
 });
+
+test('a raw closer must match the maximal quote run exactly', () => {
+  const current = state();
+  tokens('"""', current);
+  expect(tokens('""""', current)).toEqual([['""""', 'invalid']]);
+  expect(current.regions).toEqual([{ kind: 'raw', width: 3 }]);
+  expect(tokens('""" + 1', current)).toContainEqual(['1', 'number']);
+});
