@@ -23,9 +23,13 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup) (objectReplay
 		props, _ := row["props"].([]any)
 		for _, raw := range props {
 			p := raw.(Setup)
-			shape, err := setupShape(p["shape"])
-			if err != nil {
-				return nil, err
+			shape := talk.AnyShape
+			if raw, ok := p["shape"]; ok {
+				var err error
+				shape, err = setupShape(raw)
+				if err != nil {
+					return nil, err
+				}
 			}
 			name := p["name"].(string)
 			prop := talk.Prop{Name: name, Shape: shape, Get: func(o *talk.Object) (talk.Value, error) { return o.Native().(map[string]talk.Value)[name], nil }}

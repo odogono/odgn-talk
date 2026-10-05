@@ -175,6 +175,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	s.state = state
 	g.mu.Lock()
 	s.stopped = false
+	s.stopReason = ""
 	g.mu.Unlock()
 	for name, grant := range s.grants {
 		if grant.revoked {

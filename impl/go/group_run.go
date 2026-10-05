@@ -204,6 +204,19 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			settlements = append(settlements, func() { d.pending.settle(Nothing, sendFailure("unhandled", nil)) })
 		}
 	}
+	land := func(current *execution) bool {
+		return g.landControls(func(d delivery) {
+			if current != nil && d.script.active == current {
+				if current.stopReason == nil {
+					reason := d.reason
+					current.stopReason = &reason
+					current.run.Status = machine.Stopped
+				}
+			} else {
+				g.stopScript(d.script, d.reason, &result.Reports, &settlements, seal)
+			}
+		})
+	}
 
 	defer func() {
 		for _, settle := range settlements {
@@ -231,6 +244,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		}
 	}
 	for _, d := range drained {
+		if d.kind == "stop" {
+			g.stopScript(d.script, d.reason, &result.Reports, &settlements, seal)
+			continue
+		}
 		if d.kind == "broadcast" || d.kind == "decide-broadcast" {
 			seal(d, "", Allowed, Nothing, Completed)
 			continue
@@ -480,10 +497,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					}
 					return err
 				}, func(grant, op string, args []corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value, bool) {
-					return g.operation(s, x, grant, op, args, pay, &result.Reports)
+					return g.operation(s, x, grant, op, args, pay, &result.Reports, func() { land(x) })
 				}, func(object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value) {
-					return g.property(s, x, object, name, set, input, pay, &result.Reports)
-				}, func() { g.landCancelRuns() })
+					return g.property(s, x, object, name, set, input, pay, &result.Reports, func() { land(x) })
+				})
 				if r.Status != machine.Dispatching {
 					break
 				}
@@ -527,6 +544,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				x.how = "continue"
 				skipped[s] = true
 				result.State = Sliced
+				continue
+			}
+			if r.Status == machine.Stopped {
+				s.state.Variables = r.Base
+				common["state"], common["end"] = fmt.Sprint(s.persistentWithoutRun(x)), "stop"
+				g.record("seg", false, []string{string(x.id), x.how}, common)
+				g.stopScript(s, *x.stopReason, &result.Reports, &settlements, seal)
 				continue
 			}
 			if r.Status == machine.Blocked {
@@ -646,7 +670,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			g.reply(d.reply, corevalue.Value{}, "unhandled", corevalue.Value{})
 		}
 		g.orphanReplies = nil
-		if g.landCancelRuns() {
+		if land(nil) {
 			progress = true
 		}
 		if !progress || o.FuelCap > 0 && result.FuelUsed >= o.FuelCap {
@@ -897,7 +921,7 @@ func (s *Script) retainedOutside(exclude *execution) int64 {
 }
 
 func (g *Group) cancelExecution(s *Script, x *execution) {
-	if x.run.Cancelling {
+	if x.run.Cancelling || x.run.Status == machine.Stopped {
 		return
 	}
 	queued := x == s.active
