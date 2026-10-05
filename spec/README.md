@@ -32,6 +32,8 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 
 ## Data Files
 
+Before editing grammar, instructions or catalogues, use the [change-impact guide](../docs/agents/spec-changes.md) to identify generators, Core/tooling coverage requirements and delivery boundaries.
+
 | File | Holds | Shown in |
 | --- | --- | --- |
 | [`version.toml`](data/version.toml) | The language version | [0](00-introduction.md) |

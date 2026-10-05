@@ -1,0 +1,37 @@
+# TS and tooling task navigation
+
+Start with the row for your task, then read the linked rules and tests. Read the
+[implementation guide](README.md) when you need feature details or limitations.
+List paths with `rg --files` in the relevant directory before opening files by
+name. For domain terms, use [CONTEXT.md](../../CONTEXT.md); for rationale, use the
+[ADR index](../../docs/adr/README.md).
+
+All commands below run from the repository root. On a fresh worktree, run
+`bun install --frozen-lockfile` and `bun run unicode:check` before focused tests;
+the Unicode check prepares and verifies the pinned test data. See the
+[Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
+Files, grammar, or lowering.
+
+| Task | Implementation | Rules | Tests and cases | First check |
+| --- | --- | --- | --- | --- |
+| Parsing and name/binding checks | [parser](src/parser.ts), [syntax tree](src/syntax.ts), [Selectors](src/selectors.ts), [checker](src/checker.ts) | [grammar](../../spec/02-grammar.md) | [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts) | `bun test impl/ts/tests/parser.test.ts impl/ts/tests/checker.test.ts` |
+| Lowering and execution | [lowering](src/lowering.ts), [machine](src/machine.ts) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](tests/lowering.test.ts), [disassembly cases](../../corpus/disassembly/) | `bun test impl/ts/tests/lowering.test.ts` |
+| Scheduling and Capabilities | [Group](src/group.ts), [Capabilities](src/capabilities.ts) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts) | `bun test impl/ts/tests/group.test.ts impl/ts/tests/capabilities.test.ts` |
+| Real file cleanup and publication | [File Example Host](examples/files/) | [file lifecycle examples](../../spec/embedding/scoped-effects.md#file-handle-cleanup) | [Temporary-file integration tests](examples/files/files.test.ts) | `bun test impl/ts/examples/files/files.test.ts` |
+| Save and restore | [snapshot](src/snapshot.ts), [Group](src/group.ts) | [save and restore](../../spec/10-save-and-restore.md) | [save/restore tests](tests/save-restore.test.ts) | `bun test impl/ts/tests/save-restore.test.ts` |
+| Sessions, Transcripts and CLI | [Session Host](src/session/host.ts), [Transcript codec/replay](src/session/transcript.ts), [CLI](../../tooling/cli/) | [sessions and tooling](../../spec/12-sessions-and-tooling.md) | [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session corpus](../../corpus/sessions/) | `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts` |
+| Formatting source | [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts) | [formatter](../../spec/12-sessions-and-tooling.md#the-formatter) | [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/) | `bun test tooling/stack/tests/format.test.ts` |
+| Lints and CLI advice | [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/) | [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints) | [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts) | `bun test tooling/stack/tests/lint.test.ts` |
+| Editor language server | [LSP entry](../../tooling/stack/src/lsp.ts), [features](../../tooling/stack/src/lsp/features.ts), [workspace analysis](../../tooling/stack/src/lsp/workspace.ts), [Manifest](../../tooling/stack/src/lsp/manifest.ts), [stdio CLI](../../tooling/cli/src/lsp.ts) | [LSP](../../spec/12-sessions-and-tooling.md#the-lsp), [Host Manifest](../../spec/09-embedding.md#the-host-manifest-format) | [Language-feature tests](../../tooling/stack/tests/lsp.test.ts), [stdio fixture workspace](../../tooling/cli/tests/lsp-runtime.test.ts) | `bun test tooling/stack/tests/lsp.test.ts` |
+| Testing user Scripts | [Test runner](../../tooling/cli/src/test.ts) over the public Group API | [Testing Scripts](../../tooling/cli/README.md#testing-scripts), [ADR 0056](../../docs/adr/0056-user-scripts-are-tested-by-a-black-box-test-script.md) | [CLI tests](../../tooling/cli/tests/cli.test.ts) | `bun test tooling/cli/tests/cli.test.ts` |
+| Live debugging | [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Core hooks](README.md#tooling-debug-hooks) | [Live debugger tests](../../tooling/stack/tests/debug.test.ts), [Trace parity](../../tooling/stack/tests/debug-corpus.test.ts), [CLI tests](../../tooling/cli/tests/debug.test.ts) | `bun test tooling/stack/tests/debug.test.ts` |
+| Trace replay debugging | [Shared replay driver](src/replay.ts), [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug-replay.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs) | [Navigation tests](../../tooling/stack/tests/replay-debug.test.ts), [Trace and Transcript parity](../../tooling/stack/tests/replay-debug-corpus.test.ts) | `bun test tooling/stack/tests/replay-debug.test.ts` |
+| The Playground | [language/highlighting](../../tooling/playground/src/language.ts), [declaration Apply](../../tooling/playground/src/declarations.ts), [session](../../tooling/playground/src/session.ts), [workers](../../tooling/playground/src/session.worker.ts), [page](../../tooling/playground/src/main.ts) | [The Playground](../../spec/12-sessions-and-tooling.md#the-playground), [ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md) | [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser) | `bun test tooling/playground/tests` |
+| Differential fuzzing | [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts) | [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [research](../../docs/research/differential-fuzzing.md) | [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts) | `bun test tooling/fuzz/tests` |
+| Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Unicode tests](tests/unicode.test.ts) | `bun run syntax:check` |
+
+The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
+
+Terminal input and multiline Entry handling live in [CLI repl.ts](../../tooling/cli/src/repl.ts); editor highlighting lives in [Playground language.ts](../../tooling/playground/src/language.ts). Corpus selection lives in [tools/corpus.ts](tools/corpus.ts), with Trace execution in [tools/trace-case.ts](tools/trace-case.ts); use `bun run corpus:run sessions` for the Session cases.
+
+These checks start the feedback loop; use the implementation guide and CI workflows for broader validation before completing a change.

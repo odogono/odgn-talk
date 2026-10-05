@@ -1,5 +1,11 @@
 # Event-test charging reconciliation
 
+This record describes the staged verification of the correction in
+[PR #278](https://github.com/odogono/odgn-talk/pull/278). Current support is
+described in the [Go save/restore and Extend guide](../../../impl/go/README.md#save-restore-and-code-updates).
+[PR #360](https://github.com/odogono/odgn-talk/pull/360) records complete follow-up
+verification for [#277](https://github.com/odogono/odgn-talk/issues/277) below.
+
 The Go `wait for` implementation exposed a TS dispatch overcharge. Chapter 8's
 [Charging rule](../../../spec/08-the-abstract-machine-and-the-cost-model.md#charging)
 adds the `clause` rate to Handler Clauses. Its
@@ -70,8 +76,11 @@ the passing gate and reproduces their complete Traces in both modes. All 276
 cases in the committed Go gate also passed on both Cores at that checkout,
 protecting every earlier passing case. The initial full race run exposed a
 pre-existing `sessions/argument-labels` failure: the Go Session Host classified
-labelled calls by the complete Selector instead of its first word. PR #360
-corrects that lookup without changing expected records, adds the case to the
-passing gate and updates the eleven-Transcript acceptance count.
+labelled calls by the complete Selector instead of its first word.
+[PR #359](https://github.com/odogono/odgn-talk/pull/359) supplied the correction,
+passing-gate entry and eleven-Transcript acceptance count on `main`. PR #360
+retains an additional regression for labelled/positional calls and redefinition
+of one Selector while preserving the others. The updated 277-case Go gate and
+full Go race suite pass with that correction.
 `suspension/wait-observation` retains its `Unblessed` header;
 replay agreement does not approve its first blessing.
