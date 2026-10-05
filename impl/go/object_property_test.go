@@ -319,13 +319,13 @@ func TestObjectPropertyGuardIdentityAndDynamicBoundary(t *testing.T) {
 	}
 	g := core.NewGroup(GroupOptions{})
 	o, _ := g.Object(kind, "bulb", nil)
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on go o where the label of o = \"on\"\n return 1\nend go"})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "on go o where the label of o = \"on\"\n return 1\nend go\non go o\n return 2\nend go"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "go", Args: []Value{o.Value()}})
 	result, err := g.Pump(time.Date(2026, 10, 4, 21, 0, 0, 0, time.UTC), PumpOptions{})
-	if err != nil || calls != 0 || len(result.Reports) != 0 {
+	if err != nil || calls != 0 || joinEnd(t, result, "s").Result.String() != "2" {
 		t.Fatal(result, err, calls)
 	}
 }

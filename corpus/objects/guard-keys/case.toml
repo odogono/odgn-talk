@@ -1,0 +1,20 @@
+# Dynamic Guards read map keys or Core Object ids; other Object keys skip without Host calls.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "label", shape = "text", readOnly = true }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { label = '"on"' }
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

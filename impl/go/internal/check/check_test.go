@@ -249,6 +249,9 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 		if strings.Contains(file, "initialiser-failed/") {
 			continue
 		} // Executed in lower's initializer boundary test.
+		if strings.Contains(file, "object-properties/") {
+			continue // Declaration-backed checks run through the embedding in corpus.TestObjectPropertyAcceptance.
+		}
 		t.Run(filepath.Base(filepath.Dir(file)), func(t *testing.T) {
 			source, err := os.ReadFile(filepath.Join(filepath.Dir(file), "bad.talk"))
 			if err != nil {

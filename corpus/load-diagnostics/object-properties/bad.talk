@@ -1,0 +1,8 @@
+on go
+  set the label of bulb to "off"
+  set the "label" of bulb to "off"
+  set the ("label") of bulb to "off"
+  set bulb's label to "off"
+  set the (("label")) of bulb to "off"
+  set the absent of bulb to 1
+end go

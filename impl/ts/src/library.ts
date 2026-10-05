@@ -2,7 +2,12 @@
 // added to any number of Groups, and linked into each Script and Library
 // that imports it. A unit's code identity covers the identities of the
 // Libraries it imports directly.
-import { checkSource, type CheckResult, type ExistingName } from './checker';
+import {
+  checkSource,
+  type CheckResult,
+  type CheckOptions,
+  type ExistingName,
+} from './checker';
 import { checkEffectCall, operationUses, type GrantDecls } from './effects';
 import type { SemanticNode } from './semantic';
 import { LoadError, type LoadDiagnostic } from './errors';
@@ -175,11 +180,13 @@ export const prepare = (
   objects?: readonly string[],
   grants?: GrantDecls,
   existing?: Readonly<Record<string, ExistingName>>,
+  properties?: Pick<CheckOptions, 'objectProperties' | 'ownerProperties'>,
 ) => {
   const checked = checkSource(source, {
     unit,
     existing,
     objects,
+    ...properties,
     grants,
     libraries: Object.fromEntries(
       [...available.values()].map(l => [l.name, compiled.get(l)!.exports]),

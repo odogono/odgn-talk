@@ -24,8 +24,8 @@ func TestExecutionBackends(t *testing.T) {
 			})
 		}
 	}
-	if count != 49 {
-		t.Fatalf("expected 49 Trace cases, got %d", count)
+	if count != 50 {
+		t.Fatalf("expected 50 Trace cases, got %d", count)
 	}
 }
 
@@ -55,8 +55,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 60 {
-		t.Fatalf("required set: %d cases, want 60", count)
+	if count != 61 {
+		t.Fatalf("required set: %d cases, want 61", count)
 	}
 }
 
@@ -550,22 +550,28 @@ func TestObjectIdentityAcceptance(t *testing.T) {
 }
 
 func TestObjectPropertyAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"objects/properties", "objects/guard-keys", "load-diagnostics/object-properties"}
 	listed, err := os.ReadFile("../../corpus-passing.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains("\n"+string(listed), "\nobjects/properties\n") {
-		t.Fatal("Object property acceptance case missing from gate")
-	}
-	cases, err := Discover("../../../../corpus", []string{"objects/properties"})
+	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner := Runner{Root: "../../../../corpus", Output: io.Discard, Backends: ExecutionBackends()}
-	if reason := runner.support(cases[0]); reason != "" {
-		t.Fatal(reason)
-	}
-	if _, err := runner.execute(cases[0]); err != nil {
-		t.Fatal(err)
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Fatal("Object property acceptance case missing from gate")
+			}
+			if reason := runner.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

@@ -1,0 +1,25 @@
+# Known Object declarations reject literal read-only writes and Host Guard reads.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "label", shape = "text", readOnly = true }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { label = '"on"' }
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }
+
+[[scripts]]
+name = "guard"
+source = "guard.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

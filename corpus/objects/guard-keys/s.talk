@@ -1,0 +1,42 @@
+script variable log = []
+
+on literal o where the label of o = "on"
+  put "map" after log
+end literal
+on literal o
+  put "skip" after log
+end literal
+
+on computed o, k where the (k) of o = "on"
+  put "map" after log
+end computed
+on computed o, k
+  put "skip" after log
+end computed
+
+on identity o, k where the (k) of o = "bulb-1"
+  put "identity" after log
+end identity
+on identity o, k
+  put "skip" after log
+end identity
+
+on objectLiteral
+  literal bulb
+end objectLiteral
+on objectComputed
+  computed bulb, "label"
+end objectComputed
+on objectIdentity
+  identity bulb, "id"
+end objectIdentity
+
+on quoted o where the "length" of o = "on"
+  put "map" after log
+end quoted
+on quoted o
+  put "skip" after log
+end quoted
+on objectQuoted
+  quoted bulb
+end objectQuoted

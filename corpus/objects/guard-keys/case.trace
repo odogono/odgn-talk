@@ -1,0 +1,54 @@
+# Unblessed: pure dynamic Object Guard keys and costs await human review (#305).
+> load s identity=9647981b6629e1d860d1329251a8985d5d846406821002538b354257c321b9e9
+> deliver d1 to=s message=literal args=[{label: "on"}]
+> pump clock=2026-10-05T09:00:00Z
+seg s/r1 start delivery=d1 handler=literal clause=1 fuel=25 alloc=27 state=43 end=return
+run s/r1 outcome=completed delivery=d1 handler=literal fuel=25 alloc=27
+pumped state=idle fuel=25
+> deliver d2 to=s message=objectLiteral
+> pump clock=2026-10-05T09:00:01Z
+guard-skip s/r2 at=s:5 pos=3:20 code="wrong kind"
+seg s/r2 start delivery=d2 handler=objectLiteral clause=1 fuel=43 alloc=28 state=71 end=return
+run s/r2 outcome=completed delivery=d2 handler=objectLiteral fuel=43 alloc=28
+pumped state=idle fuel=43
+> deliver d3 to=s message=computed args=[{label: "on"}, "label"]
+> pump clock=2026-10-05T09:00:02Z
+seg s/r3 start delivery=d3 handler=computed clause=1 fuel=26 alloc=27 state=98 end=return
+run s/r3 outcome=completed delivery=d3 handler=computed fuel=26 alloc=27
+pumped state=idle fuel=26
+> deliver d4 to=s message=objectComputed
+> pump clock=2026-10-05T09:00:03Z
+guard-skip s/r4 at=s:29 pos=10:24 code="wrong kind"
+seg s/r4 start delivery=d4 handler=objectComputed clause=1 fuel=45 alloc=28 state=126 end=return
+run s/r4 outcome=completed delivery=d4 handler=objectComputed fuel=45 alloc=28
+pumped state=idle fuel=45
+> deliver d5 to=s message=objectIdentity
+> pump clock=2026-10-05T09:00:04Z
+seg s/r5 start delivery=d5 handler=objectIdentity clause=1 fuel=44 alloc=32 state=158 end=return
+run s/r5 outcome=completed delivery=d5 handler=objectIdentity fuel=44 alloc=32
+pumped state=idle fuel=44
+> dispose object=<object light "bulb-1">
+> deliver d6 to=s message=objectComputed
+> pump clock=2026-10-05T09:00:05Z
+guard-skip s/r6 at=s:29 pos=10:24 code="wrong kind"
+seg s/r6 start delivery=d6 handler=objectComputed clause=1 fuel=45 alloc=28 state=186 end=return
+run s/r6 outcome=completed delivery=d6 handler=objectComputed fuel=45 alloc=28
+pumped state=idle fuel=45
+> deliver d7 to=s message=objectIdentity
+> pump clock=2026-10-05T09:00:06Z
+seg s/r7 start delivery=d7 handler=objectIdentity clause=1 fuel=44 alloc=32 state=218 end=return
+run s/r7 outcome=completed delivery=d7 handler=objectIdentity fuel=44 alloc=32
+pumped state=idle fuel=44
+> deliver d8 to=s message=quoted args=[{length: "on"}]
+> pump clock=2026-10-05T09:00:07Z
+seg s/r8 start delivery=d8 handler=quoted clause=1 fuel=25 alloc=27 state=245 end=return
+run s/r8 outcome=completed delivery=d8 handler=quoted fuel=25 alloc=27
+pumped state=idle fuel=25
+> deliver d9 to=s message=objectQuoted
+> pump clock=2026-10-05T09:00:08Z
+guard-skip s/r9 at=s:96 pos=34:19 code="wrong kind"
+seg s/r9 start delivery=d9 handler=objectQuoted clause=1 fuel=43 alloc=28 state=273 end=return
+run s/r9 outcome=completed delivery=d9 handler=objectQuoted fuel=43 alloc=28
+pumped state=idle fuel=43
+> vars
+vars s log=["map", "skip", "map", "skip", "identity", "skip", "identity", "map", "skip"]

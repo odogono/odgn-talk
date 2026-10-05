@@ -40,8 +40,14 @@ export type CheckOptions = {
   grants?: GrantDecls;
   /** Exports supplied by the Library loader; kind-only entries defer call-count checks. */
   libraries?: Readonly<Record<string, Readonly<Record<string, LibraryExport>>>>;
+  /** Literal property names mapped to setter availability, by bound Object name. */
+  objectProperties?: Readonly<
+    Record<string, Readonly<Record<string, boolean>>>
+  >;
   /** Well-known Host Object names bound at load. */
   objects?: readonly string[];
+  /** Setter availability for an Owning Script's me. */
+  ownerProperties?: Readonly<Record<string, boolean>>;
   /** Whether the source is a Script (the default) or a Library. */
   unit?: 'script' | 'library';
 };
@@ -1034,7 +1040,13 @@ export const checkSyntax = (
   const root = converted.get(syntax) as SemanticNode;
   const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
     diagnostics.push({ code, span: at.span, message: `${code}: ${at.text}` });
-  checkControl(root, options.unit ?? 'script', reportAt);
+  checkControl(
+    root,
+    options.unit ?? 'script',
+    reportAt,
+    options.objectProperties,
+    options.ownerProperties,
+  );
   checkConstructs(root, reportAt);
   if (options.grants) {
     checkEffects(root, options.grants, reportAt);

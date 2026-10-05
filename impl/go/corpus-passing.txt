@@ -112,6 +112,7 @@ load-diagnostics/not-in-a-join
 load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
 load-diagnostics/nothing-to-fold
+load-diagnostics/object-properties
 load-diagnostics/outside-a-loop
 load-diagnostics/pattern-too-large
 load-diagnostics/rest-not-last
@@ -125,6 +126,7 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+objects/guard-keys
 objects/properties
 quantities/arithmetic-through-base-units
 quantities/incompatible-units

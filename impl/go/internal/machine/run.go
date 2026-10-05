@@ -296,12 +296,15 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			break
 		}
 		prop := propertyRequest(f, i)
+		if prop != nil && inGuard(f) {
+			prop = nil // ordinary key evaluation raises wrong kind without a Host call
+		}
 		if prop != nil || i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
 			if i.Name == "join-ask" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
 				r.fault("join")
 				break
 			}
-			if prop != nil && (property == nil || inGuard(f)) || prop == nil && operation == nil {
+			if prop != nil && property == nil || prop == nil && operation == nil {
 				r.Status = Blocked
 				break
 			}

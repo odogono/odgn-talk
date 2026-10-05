@@ -1,26 +1,27 @@
+# Unblessed: corrected runtime alias and costs await human review (#305).
 # properties: `colour` isn't a property of a light, so it reads as Nothing.
 # The bulb is disposed between the two Deliveries. Its Fuel, allocation and
-# state figures are Cost Model 0's, as the TS Core blessed them.
+# state figures use Cost Model 0 and agree in both Cores.
 
-> load lamp identity=4f77ad49e85a797f0e14f0ab6a14dd42c32d0829c531fee015471b3f251bec19
+> load lamp identity=d0259e259ed2af9dce90efffe47850131c62a496a46ea08428f073a0eb029167
 > deliver d1 to=lamp message=go
 > pump clock=2026-09-30T09:00:00Z
 prop lamp/r1 object=<object light "bulb-1"> name=state op=get value="off"
 prop lamp/r1 object=<object light "bulb-1"> name=watts op=get value=60
 prop lamp/r1 object=<object light "bulb-1"> name=state op=set value="on"
 prop lamp/r1 object=<object light "bulb-1"> name=state op=get value="on"
-raise lamp/r1 code="read only" at=lamp:30 pos=10:5
-raise lamp/r1 code="wrong kind" at=lamp:47 pos=15:5
-seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=128 alloc=1244 state=1094 end=return
-run lamp/r1 outcome=completed delivery=d1 handler=go fuel=128 alloc=1244
-pumped state=idle fuel=128
+raise lamp/r1 code="read only" at=lamp:32 pos=11:5
+raise lamp/r1 code="wrong kind" at=lamp:49 pos=16:5
+seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=130 alloc=1244 state=1094 end=return
+run lamp/r1 outcome=completed delivery=d1 handler=go fuel=130 alloc=1244
+pumped state=idle fuel=130
 > dispose object=<object light "bulb-1">
 > deliver d2 to=lamp message=later
 > pump clock=2026-09-30T09:00:01Z
-raise lamp/r2 code="object gone" at=lamp:83 pos=25:9
+raise lamp/r2 code="object gone" at=lamp:85 pos=26:9
 seg lamp/r2 start delivery=d2 handler=later clause=1 fuel=45 alloc=577 state=1609 end=return
 run lamp/r2 outcome=completed delivery=d2 handler=later fuel=45 alloc=577
 pumped state=idle fuel=45
 
 > vars
-vars lamp log=[["bulb-1", "off", 60, nothing], "on", {code: "read only", at: {unit: "lamp", handler: "go", line: 10, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, at: {unit: "lamp", handler: "go", line: 15, column: 5}}, false, [true, "bulb-1"], {code: "object gone", object: <object light "bulb-1">, at: {unit: "lamp", handler: "later", line: 25, column: 9}}]
+vars lamp log=[["bulb-1", "off", 60, nothing], "on", {code: "read only", at: {unit: "lamp", handler: "go", line: 11, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, at: {unit: "lamp", handler: "go", line: 16, column: 5}}, false, [true, "bulb-1"], {code: "object gone", object: <object light "bulb-1">, at: {unit: "lamp", handler: "later", line: 26, column: 9}}]

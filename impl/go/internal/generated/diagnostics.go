@@ -221,7 +221,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a guard",
-			RaisedWhen: "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a Host Object property other than `id`",
+			RaisedWhen: "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id",
 			At:         "the call's name, the Lambda's `given`, or the key's `the` or `'s`",
 			Sources: []string{
 				"ADR 0025",
@@ -300,7 +300,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "can't write",
-			RaisedWhen: "A Container is rooted in a Constant, a Lambda puts into a captured local, or `set` writes a read-only property of a Host Object whose kind is known at load",
+			RaisedWhen: "A Container is rooted in a Constant, a Lambda puts into a captured local, or `set` writes a read-only property of a Host Object whose kind and key are known at load",
 			At:         "the Container's root, or `set`",
 			Sources: []string{
 				"ADR 0016",

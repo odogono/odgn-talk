@@ -194,7 +194,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		objects = append(objects, name)
 		bindings[name] = object.Value().inner
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, PatternSize: limits.PatternSize, Grants: declarations}, ids)
+	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), PatternSize: limits.PatternSize, Grants: declarations}, ids)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError

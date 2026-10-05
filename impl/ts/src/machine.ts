@@ -1983,6 +1983,13 @@ export class Run {
       this.pay(key, { result: id });
       return id;
     }
+    const guard = this.frame.code.unit.unwind.some(
+      e =>
+        e.kind === 'guard' && this.frame.pc >= e.start && this.frame.pc < e.end,
+    );
+    if (guard) {
+      throw wrongKind('map', v);
+    }
     if (o.disposed) {
       throw new ScriptError('object gone', [['object', v]]);
     }
