@@ -1,0 +1,41 @@
+# message-path: a Delivery to a Host Object goes to its Owning Script, or to
+# its nearest ancestor's, by the parents the Core holds, rechecked at dispatch.
+# `pass` sends the message on up from the owner's parent, and `the target`
+# stays the object it was addressed to. A message past the last Owning
+# Script is `unhandled`, with its `target` (spec chapter 5, The Message
+# Path).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "board"
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "main"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[objects]]
+kind = "piece"
+id = "pawn"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "main" }
+
+[[scripts]]
+name = "knight"
+source = "knight.talk"
+owner = { kind = "piece", id = "knight" }

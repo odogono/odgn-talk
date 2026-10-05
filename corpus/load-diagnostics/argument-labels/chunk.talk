@@ -1,0 +1,3 @@
+on go
+  move word toward x
+end go

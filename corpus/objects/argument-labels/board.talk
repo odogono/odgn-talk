@@ -1,0 +1,7 @@
+-- board.talk: the message-path case's board, which owns the board object.
+
+script variable heard = []
+
+on move m to square
+  put [the id of me, the id of the target, m, square] after heard
+end move

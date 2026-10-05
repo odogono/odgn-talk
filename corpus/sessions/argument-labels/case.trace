@@ -1,0 +1,35 @@
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on move x to y" & newline & "  say x + y" & newline & "end move" identity=5d1097e73f75fda10412ac9a0dc105a35deced1467f4804dbaeaf4f6340199e0
+> extend session source="on entry1" & newline & "move 3 to 4" & newline & "end entry1" & newline identity=0fee8e0cbce262ed60ca22bc7a24e2072761b92c86d81a9fc9b8577c2519cb71
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T09:00:00Z
+call session/r1.c1 op=console.write args=[7]
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=41 alloc=16 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=41 alloc=16
+pumped state=idle fuel=41
+> extend session source="on move x toward y" & newline & "  say x * y" & newline & "end move" identity=e4d8d8d8fe140a73cbce3d67075b178452aa41fbcaa458e4e8ed95ca4dff8c8c
+> extend session source="on entry2" & newline & "move 3 toward 4" & newline & "end entry2" & newline identity=15025d3052cef50182b4fcf06d7203d469e1c707251ad825cf970323373d1a47
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T09:00:00Z
+call session/r2.c1 op=console.write args=[12]
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=41 alloc=16 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=41 alloc=16
+pumped state=idle fuel=41
+> extend session source="on move x" & newline & "  say x" & newline & "end move" identity=8619ab347eb1f164e9b4c37331b45fa6d2e18322105f76942b9d75f0f13a6045
+> extend session source="on entry3" & newline & "move 9" & newline & "end entry3" & newline identity=e65d89315e3634870f8a087e6c304bf7aa4d572ee8de4429fb076e48c1f432a0
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T09:00:00Z
+call session/r3.c1 op=console.write args=[9]
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=35 alloc=0 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=35 alloc=0
+pumped state=idle fuel=35
+> extend session source="on entry4" & newline & "move 4 to 5" & newline & "end entry4" & newline identity=0db4da3312c3e7e185941994704de7a6cfc9d150a6500a578caae7373fcf7e11
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T09:00:00Z
+call session/r4.c1 op=console.write args=[9]
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=41 alloc=16 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=41 alloc=16
+pumped state=idle fuel=41
+> vars
+vars session
+# Unblessed: new labelled Session Entries; first blessing awaits human review.

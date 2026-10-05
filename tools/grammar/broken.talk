@@ -452,3 +452,186 @@ end t
 on t body, n
   put << body as n bytes >> into b
 end t
+
+-- case: keyword-shaped Command Call arguments read `rest` as an Argument Label
+-- expect: unexpected token at 2:17
+on t
+  log error rest
+end t
+-- case: a label with no argument
+-- expect: unexpected token at 2:17
+on t
+  move knight to
+end t
+-- case: a trailing label doesn't continue the line
+-- expect: unexpected token at 2:17
+on t
+  move knight to
+    "e4"
+end t
+-- case: a label-first head (`to` is reserved, so it can't be a parameter)
+-- expect: unexpected token at 1:7
+on go to x
+end go
+-- case: a label-first head with an open label reads it as a parameter
+-- expect: unexpected token at 1:15
+on go toward x
+end go
+-- case: a comma after a labelled parameter
+-- expect: unexpected token at 1:26
+on move piece to square, speed
+end move
+-- case: a label after more than one leading parameter
+-- expect: unexpected token at 1:18
+on move piece, x to square
+end move
+-- case: a comma after a labelled argument
+-- expect: unexpected token at 2:20
+on t
+  move knight to sq, 3
+end t
+-- case: a label after a positional argument list
+-- expect: unexpected token at 2:18
+on t
+  move knight, 3 to sq
+end t
+-- case: target-first `send` without the colon
+-- expect: unexpected token at 2:17
+on t
+  send to board move knight to "e4"
+end t
+-- case: `in` is still `put`'s preposition, never a label
+-- expect: unexpected token at 2:14
+on t
+  put knight in sq
+end t
+-- case: `in` can't be a label in a Command Call either
+-- expect: unexpected token at 2:15
+on t
+  move knight in sq
+end t
+-- case: `with` can't be a label
+-- expect: unexpected token at 2:12
+on t
+  fill box with water
+end t
+-- case: `from` can't be a label
+-- expect: unexpected token at 2:15
+on t
+  move knight from sq
+end t
+-- case: `from` can't be a label in a Handler head
+-- expect: unexpected token at 1:15
+on move piece from square
+end move
+-- case: `of` can't be a label
+-- expect: unexpected token at 2:13
+on t
+  take king of board
+end t
+-- case: hazard, a chunk word before an open label reads as a Chunk Expression
+-- expect: unexpected token at 2:20
+on t
+  move word toward x
+end t
+-- case: hazard, a Unit-named label after a number lexes as a Quantity
+-- expect: unexpected token at 2:13
+on t
+  scale 3 m 4
+end t
+-- case: a parenthesised number avoids the Unit hazard
+-- expect: parses
+on t
+  scale (3) m 4
+end t
+-- case: `from` can't be a label, so in `wait for` it is the source
+-- expect: unexpected token at 2:26
+on t
+  wait for move p from a to b
+end t
+-- case: regression, a keyword-shaped mistake becomes a labelled call
+-- expect: unexpected token at 2:17
+on t
+  log error rest
+end t
+-- case: regression, a missing operator becomes a labelled call
+-- expect: unexpected token at 2:18
+on t
+  say total count
+end t
+
+-- case: operator-shaped label contains never continues a head
+-- expect: unexpected token at 1:19
+on move p contains
+q
+end move
+
+-- case: operator-shaped label contains never continues an event
+-- expect: unexpected token at 2:26
+on t
+ wait for move p contains
+q
+end t
+
+-- case: operator-shaped label contains ends a pass statement
+-- expect: parses
+on move p contains q
+ pass move contains
+end move
+
+-- case: operator-shaped label matches never continues a head
+-- expect: unexpected token at 1:18
+on move p matches
+q
+end move
+
+-- case: operator-shaped label matches never continues an event
+-- expect: unexpected token at 2:25
+on t
+ wait for move p matches
+q
+end t
+
+-- case: operator-shaped label matches ends a pass statement
+-- expect: parses
+on move p matches q
+ pass move matches
+end move
+
+-- case: operator-shaped label mod never continues a head
+-- expect: unexpected token at 1:14
+on move p mod
+q
+end move
+
+-- case: operator-shaped label mod never continues an event
+-- expect: unexpected token at 2:21
+on t
+ wait for move p mod
+q
+end t
+
+-- case: operator-shaped label mod ends a pass statement
+-- expect: parses
+on move p mod q
+ pass move mod
+end move
+
+-- case: operator-shaped label div never continues a head
+-- expect: unexpected token at 1:14
+on move p div
+q
+end move
+
+-- case: operator-shaped label div never continues an event
+-- expect: unexpected token at 2:21
+on t
+ wait for move p div
+q
+end t
+
+-- case: operator-shaped label div ends a pass statement
+-- expect: parses
+on move p div q
+ pass move div
+end move

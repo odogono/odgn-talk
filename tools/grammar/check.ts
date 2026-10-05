@@ -222,14 +222,6 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// Argument Labels (ADR 0055), which the Cores' tests don't read until both
-// Cores parse them.
-mustParse(
-  readFileSync(join(import.meta.dir, 'labels/sketch.talk'), 'utf8'),
-  'tools/grammar/labels/sketch.talk',
-);
-broken(join(import.meta.dir, 'labels/broken.talk'));
-
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

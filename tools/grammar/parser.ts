@@ -313,7 +313,7 @@ export class Parser {
   // Handler head or an event.
   labelled(item: () => Node, labels: string[], items: Node[]) {
     while (this.isLabel(this.peek(0, 'operator'))) {
-      labels.push(this.next('operator').v);
+      labels.push(this.next('operand').v);
       items.push(item());
     }
   }
@@ -729,7 +729,7 @@ export class Parser {
         const name = this.messageName('a message name after `pass`');
         const labels: string[] = [];
         while (this.isLabel(this.peek(0, 'operator'))) {
-          labels.push(this.next('operator').v);
+          labels.push(this.next('operand').v);
         }
         return { k: 'Pass', name: this.selector(name, labels) };
       }
@@ -966,7 +966,7 @@ export class Parser {
     )) {
       pats.push(this.pattern());
       while (this.isLabel(this.peek(0, 'operator'))) {
-        labels.push(this.next('operator').v);
+        labels.push(this.next('operand').v);
         pats.push(this.pattern());
       }
       while (!labels.length && this.isOp(this.peek(0, 'operator'), ',')) {

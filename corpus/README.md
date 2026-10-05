@@ -212,6 +212,15 @@ and captured Values have the specified allocation and retained sizes. Its
 
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
+The `suspension/argument-labels`, `objects/argument-labels` and
+`load-diagnostics/argument-labels` cases pin labelled Clauses and calls,
+target-first sends and replies, Message Path passes, event observation and `it`,
+selector-aware faults in nested Lambdas, Host Selector refusals, suspension
+checks and chunk/Unit traps. Go and TS agree on their complete ordinary and
+save/restore Traces. The TS `sessions/argument-labels` Transcript covers Entry
+recognition and positional/labelled Handlers sharing a first word. Their
+`Unblessed` headers retain the first human review requirement.
+
 ## The Disassembly Cases
 
 The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript retains its `Unblessed` header pending first human review.

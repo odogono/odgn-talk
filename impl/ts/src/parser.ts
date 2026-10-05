@@ -43,6 +43,8 @@ const SINGULAR = words(grammar.chunk.map(c => c.singular));
 const PLURAL = words(grammar.chunk.map(c => c.plural));
 const ORDINALS = new Set<string>(grammar.ordinals);
 const PROPERTIES = new Set<string>(grammar.properties);
+const LABEL_RESERVED = new Set<string>(grammar.labels.reserved);
+const LABEL_EXCLUDED = new Set<string>(grammar.labels.excluded);
 const FOLLOW = new Set<string>(grammar.follow);
 const DECISIONS = new Set<string>(grammar.decision);
 const PAT_KEYWORDS = new Set<string>(grammar.text_patterns.keywords);
@@ -483,6 +485,35 @@ class Parser {
   isName(t: Token) {
     return t.t === 'word' && !RESERVED.has(t.v) && t.v !== '_';
   }
+  isLabel(t: Token) {
+    return (
+      t.t === 'word' &&
+      (this.isName(t) || LABEL_RESERVED.has(t.v)) &&
+      !LABEL_EXCLUDED.has(t.v)
+    );
+  }
+  label(): string {
+    const frame = this.enter('Label');
+    // A label is not a continuing expression operator, even when spelled `mod`.
+    try {
+      return this.next('operand').v;
+    } finally {
+      this.leave(frame);
+    }
+  }
+  selector(name: string, labels: string[]): string {
+    return labels.length ? `${[name, ...labels].join(':')}:` : name;
+  }
+  *labelled(
+    item: () => ParseTask<Node>,
+    labels: string[],
+    items: Node[],
+  ): ParseTask<void> {
+    while (this.isLabel(this.peek(0, 'operator'))) {
+      labels.push(this.label());
+      items.push((yield item()) as Node);
+    }
+  }
   isOp(t: Token, ...vs: string[]) {
     return t.t === 'op' && vs.includes(t.v);
   }
@@ -722,6 +753,7 @@ class Parser {
       const suffixes: string[] = [];
       let during: string | null = null;
       const t = this.peek(0);
+      const labels: string[] = [];
       if (!(
         t.t === 'nl' ||
         t.t === 'eof' ||
@@ -729,6 +761,7 @@ class Parser {
         this.isOp(t, ',')
       )) {
         params.push((yield this.pattern()) as Node);
+        yield this.labelled(() => this.pattern(), labels, params);
       }
       // Parameters, then a Guard, then suffixes. After a comma, a suffix word
       // is always a suffix, so it can't be a parameter name there.
@@ -736,6 +769,9 @@ class Parser {
       let canGuard = true;
       for (;;) {
         const c = this.peek(0, 'operator');
+        if (inParams && this.isLabel(c)) {
+          this.fail(c, 'an Argument Label after one leading parameter only');
+        }
         if (canGuard && this.isWord(c, 'where')) {
           this.next('operator');
           guard = (yield this.expr()) as Node;
@@ -757,6 +793,8 @@ class Parser {
           this.next();
           during = this.next().v;
           inParams = canGuard = false;
+        } else if (inParams && labels.length) {
+          this.fail(w, 'a suffix (no commas between labelled parameters)');
         } else if (inParams) {
           params.push((yield this.pattern()) as Node);
         } else {
@@ -777,7 +815,7 @@ class Parser {
       const end = this.endBlock(name, on, true);
       return {
         k: 'Handler',
-        name,
+        name: this.selector(name, labels),
         params,
         guard,
         suffixes,
@@ -1018,14 +1056,17 @@ class Parser {
             : null,
         };
       }
-      case 'pass':
+      case 'pass': {
         this.next();
-        return {
-          k: 'Pass',
-          name: (yield this.messageName(
-            'a message name after `pass`',
-          )) as string,
-        };
+        const name = (yield this.messageName(
+          'a message name after `pass`',
+        )) as string;
+        const labels: string[] = [];
+        while (this.isLabel(this.peek(0, 'operator'))) {
+          labels.push(this.label());
+        }
+        return { k: 'Pass', name: this.selector(name, labels) };
+      }
       case 'exit':
         this.next();
         this.expectWord('repeat');
@@ -1061,13 +1102,32 @@ class Parser {
         wait: (yield this.andWait()) as boolean,
       };
     }
-    const args = this.startsExpr(p) ? ((yield this.exprList()) as Node[]) : [];
     return {
-      k: 'Command',
-      name,
-      args,
+      ...((yield this.commandPhrase(name)) as Node),
       wait: (yield this.andWait()) as boolean,
     };
+  }
+
+  *commandPhrase(name: string): ParseTask<Node> {
+    const args: Node[] = [];
+    const labels: string[] = [];
+    if (this.startsExpr(this.peek(0))) {
+      const frame = this.enter('ExpressionList');
+      try {
+        args.push((yield this.expr()) as Node);
+        if (this.isOp(this.peek(0, 'operator'), ',')) {
+          while (this.isOp(this.peek(0, 'operator'), ',')) {
+            this.next('operator');
+            args.push((yield this.expr()) as Node);
+          }
+        } else {
+          yield this.labelled(() => this.expr(), labels, args);
+        }
+      } finally {
+        this.leave(frame);
+      }
+    }
+    return { k: 'Command', name: this.selector(name, labels), args };
   }
 
   *exprList(): ParseTask<Node[]> {
@@ -1131,6 +1191,20 @@ class Parser {
     const frame = this.enter('Send');
     try {
       this.next();
+      if (this.atWord('to')) {
+        this.next();
+        const target = (yield this.expr()) as Node;
+        this.expectOp(':');
+        const msg = (yield this.messageName('a message name')) as string;
+        const phrase = (yield this.commandPhrase(msg)) as Node;
+        return {
+          k: 'Send',
+          msg: phrase.name,
+          args: phrase.args,
+          target,
+          wait: (yield this.andWait()) as boolean,
+        };
+      }
       const msg = (yield this.messageName('a message name')) as string;
       let args: Node[] = [];
       if (this.atWord('with')) {
@@ -1270,6 +1344,7 @@ class Parser {
     try {
       const name = (yield this.messageName('an event name')) as string;
       const pats: Node[] = [];
+      const labels: string[] = [];
       let from: Node | null = null;
 
       const t = this.peek(0);
@@ -1280,7 +1355,8 @@ class Parser {
         this.atEventFrom()
       )) {
         pats.push((yield this.pattern()) as Node);
-        while (this.isOp(this.peek(0, 'operator'), ',')) {
+        yield this.labelled(() => this.pattern(), labels, pats);
+        while (!labels.length && this.isOp(this.peek(0, 'operator'), ',')) {
           this.next('operator');
           pats.push((yield this.pattern()) as Node);
         }
@@ -1290,7 +1366,7 @@ class Parser {
         // A postfix-level operand, so `… from okButton or 30 s` leaves `or` to the timeout.
         from = (yield this.chunkLevel()) as Node;
       }
-      return { k: 'Event', name, pats, from };
+      return { k: 'Event', name: this.selector(name, labels), pats, from };
     } finally {
       this.leave(frame);
     }

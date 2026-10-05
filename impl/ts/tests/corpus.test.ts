@@ -448,3 +448,21 @@ test('missing corpus selectors retain their filesystem error without a misleadin
     expect(error).not.toContain('instead of');
   }
 });
+
+for (const name of [
+  'suspension/argument-labels',
+  'objects/argument-labels',
+  'load-diagnostics/argument-labels',
+  'sessions/argument-labels',
+]) {
+  test(`argument labels corpus: ${name}`, () => {
+    const dir = resolve(import.meta.dir, '../../../corpus', name);
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+    );
+    const result = name.startsWith('sessions/')
+      ? runTranscriptCase(dir)
+      : runTraceCase(dir, setup as never);
+    expect(result.divergence).toBeUndefined();
+  });
+}

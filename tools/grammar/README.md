@@ -13,9 +13,8 @@ bun tools/grammar/check.ts --tree tools/grammar/sketch/05-text-patterns.talk
 | `lexer.ts` | the modal lexer; the parser names the mode of every token |
 | `parser.ts` | the parser: no mark or reset, `peek(2)` throws, and every decision that reads the second token names a `[[decision]]` in `grammar.toml` |
 | `check.ts` | parses everything below and fails on a syntax error, a relex, a third token of lookahead, a wrong first error in `broken.talk`, or a listed decision nothing takes |
-| `sketch/` | the syntax sketch from `prototype/joins-sketch`, updated to the Spec's spellings |
+| `sketch/` | the syntax sketch from `prototype/joins-sketch`, updated to the Spec's spellings, including Argument Labels in `labels.talk` |
 | `broken.talk` | deliberately broken sources, each with the first error it must give |
-| `labels/` | a sketch and broken sources for Argument Labels ([ADR 0055](../../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)), which the Cores' tests don't read until both Cores parse labels |
 
 The check also parses every `talk` code block in `docs/` and `spec/`, and every `.talk` file in `corpus/`. A block that doesn't start with a declaration is parsed as a Handler body. An example that must fail goes in a plain code block.
 

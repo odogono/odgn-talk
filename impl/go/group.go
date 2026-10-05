@@ -401,6 +401,10 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		g.mu.Unlock()
 		return refused(WrongGroup, "receiver does not belong to Group")
 	}
+	if address.function == nil && !syntax.ValidMessageSelector(m.Name, len(m.Args)) {
+		g.mu.Unlock()
+		return refused(InvalidValue, "malformed message Selector or argument count")
+	}
 	m.Args = slices.Clone(m.Args)
 	for _, v := range m.Args {
 		if !validGroup(v.inner, g) {

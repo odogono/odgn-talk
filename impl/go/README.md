@@ -153,6 +153,13 @@ Help and quit are terminal actions and are not recorded.
 
 ## Front-end and lowering checks
 
+Argument Labels in Handler heads, Command Calls, target-first `send`, `pass`
+and `wait for` form Selectors as [chapter 2](../../spec/02-grammar.md#argument-labels)
+specifies. `move p to sq` names `move:to:`; positional calls retain `move`.
+Selectors identify Clauses, Message Paths, wait events and their `it`, and Trace
+records. Host Deliveries, Requests, Broadcasts and Decisions reject malformed
+colon-containing names or mismatched argument counts at the call with `invalid value`.
+
 Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
 and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
 match byte for byte, including pools, slots, positions,

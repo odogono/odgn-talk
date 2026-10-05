@@ -1,3 +1,4 @@
+import { validMessageSelector } from './selectors';
 import {
   DebugController,
   machineDebug,
@@ -2776,6 +2777,15 @@ export class Group {
       this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw error;
     };
+    if (!fn && !validMessageSelector(m.name, m.args?.length ?? 0)) {
+      refuse(
+        'invalid value',
+        new HostError(
+          'invalid value',
+          'Malformed message Selector or argument count',
+        ),
+      );
+    }
     try {
       this.checkFunctionGroups(m.args ?? []);
     } catch (error) {
@@ -2895,6 +2905,14 @@ export class Group {
 
   private queueBroadcast(m: Message, id: string, decision?: Decision) {
     const record = decision ? 'decide-broadcast' : 'broadcast';
+    if (!validMessageSelector(m.name, m.args?.length ?? 0)) {
+      this.trace(recordLine(record, [], messageFields(m), true));
+      this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
+      throw new HostError(
+        'invalid value',
+        'Malformed message Selector or argument count',
+      );
+    }
     this.checkFunctionGroups(
       m.args ?? [],
       recordLine(record, [], messageFields(m), true),

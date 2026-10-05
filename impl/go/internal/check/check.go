@@ -729,6 +729,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	}
+	if n.Kind == "pass" && ctx.lambda == 0 && b.Kind == "handler" && n.Text != b.Name {
+		u.add("wrong message", n.NameToken.Pos)
+	}
 	if ctx.lambda > 0 && (n.Kind == "pass" || n.Kind == "target") {
 		u.add("not in a lambda", n.Pos())
 	}
