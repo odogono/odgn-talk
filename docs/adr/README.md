@@ -56,3 +56,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0052: Canvas is a deterministic Host capability](0052-canvas-is-a-deterministic-host-capability.md)
 - [0053: Backticks interpolate and raw fences preserve text](0053-backticks-interpolate-and-raw-fences-preserve-text.md)
 - [0054: Benchmarks live outside the Cores and only advise the Cost Model](0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md)
+- [0055: Handlers name their parameters with Argument Labels that join the Selector](0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)

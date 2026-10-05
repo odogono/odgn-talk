@@ -300,6 +300,14 @@ _Avoid_: advanced mode, extension, expert feature
 An `on <message> … end` block that runs when its message or event reaches the Script. Its ending may repeat the message name as `end <message>`.
 _Avoid_: callback, listener, function
 
+**Argument Label**:
+A word in a Handler's head, and at its call sites, that names the parameter after it, e.g. `to` in `on move piece to square` and `move knight to "e4"`.
+_Avoid_: keyword (that means a Reserved Word or a contextual keyword), named argument, parameter name
+
+**Selector**:
+A message's name together with its Argument Labels, written `move:to:`. Two Handlers with different Selectors handle different messages, and a message with no labels keeps its plain name.
+_Avoid_: signature, method name
+
 **Handler Clause**:
 One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
 _Avoid_: overload
