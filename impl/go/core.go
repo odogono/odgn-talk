@@ -28,10 +28,11 @@ type Core struct {
 }
 
 type compileKey struct {
-	Identity    [32]byte
-	Objects     string
-	PatternSize int
-	Grants      string
+	Identity         [32]byte
+	Objects          string
+	ObjectProperties string
+	PatternSize      int
+	Grants           string
 }
 
 func New() *Core { return &Core{units: map[compileKey]*lower.Unit{}} }
@@ -98,6 +99,7 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)
 	declarations, _ := json.Marshal(options.Grants)
+	properties, _ := json.Marshal(options.ObjectProperties)
 	kind := "script"
 	if options.Library {
 		kind = "library"
@@ -106,7 +108,7 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	if len(imports) > 0 {
 		ids = imports[0]
 	}
-	key := compileKey{codeIdentity(kind, name, source, ids), strings.Join(objects, "\x00"), options.PatternSize, string(declarations)}
+	key := compileKey{codeIdentity(kind, name, source, ids), strings.Join(objects, "\x00"), string(properties), options.PatternSize, string(declarations)}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.units == nil {

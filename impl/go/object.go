@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"slices"
 	"unicode/utf8"
 )
@@ -9,8 +10,8 @@ const DuplicateObjectID HostErrorCode = "duplicate object id"
 
 // Prop declares a Host property. Get and Set run inside Pump, after the
 // instruction and declared cost are paid. Results and failures are validated
-// and their conversion charged. Set nil makes a property read-only at runtime;
-// declaration-aware read-only Load checks remain tracked in #305.
+// and their conversion charged. Set nil makes a property read-only. Load and
+// Reload reject writes when the Object binding and literal key are known.
 type Prop struct {
 	Name    string
 	Shape   Shape
@@ -88,4 +89,17 @@ func (g *Group) Dispose(o *Object) error {
 		ready()
 	}
 	return nil
+}
+
+func objectProperties(bindings map[string]corevalue.Value) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for name, v := range bindings {
+		o := v.Object.Handle.(*Object)
+		props := map[string]bool{}
+		for key, prop := range o.kind.props {
+			props[key] = prop.Set != nil
+		}
+		out[name] = props
+	}
+	return out
 }

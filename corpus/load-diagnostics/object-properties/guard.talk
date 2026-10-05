@@ -1,0 +1,10 @@
+on go k where the (k) of bulb = "on"
+end go
+on second where the label of (bulb) = "on"
+end second
+on third where the label of (me) = "on"
+end third
+on fourth where the label of (the target) = "on"
+end fourth
+on quoted where the "length" of bulb = "on"
+end quoted

@@ -51,6 +51,7 @@ import {
 } from './snapshot';
 import {
   makeObject,
+  propertyChecks,
   objectKind,
   rebindObject,
   stateOf,
@@ -1876,6 +1877,8 @@ export class Group {
       this.libraries,
       objects,
       declarationsOf(grants),
+      undefined,
+      propertyChecks(o.objects ?? {}, o.owner),
     );
     this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
     const limits = { ...defaultLimits, ...o.limits };
@@ -2009,6 +2012,8 @@ export class Group {
       libraries,
       Object.keys(s.objects),
       declarationsOf(grants),
+      undefined,
+      propertyChecks(s.objects, s.owner?.handle),
     );
     const loaded = this.loadPrepared(s.name, p, s.limits);
     const staged: ScriptState = {
@@ -2145,6 +2150,7 @@ export class Group {
       Object.keys(s.objects),
       declarationsOf(availableGrants(s)),
       existing,
+      propertyChecks(s.objects, s.owner?.handle),
     );
     const identity = codeIdentity(
       'extension',

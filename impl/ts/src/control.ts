@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from './checker';
+import type { CheckOptions, DiagnosticCode } from './checker';
 import { grammar } from './generated/syntax';
 import type {
   SemanticElement,
@@ -116,12 +116,28 @@ const keyText = (key: SemanticNode) =>
   leaves(key)
     .map(leaf => leaf.text)
     .join(' ');
-/** Descend through single-child productions to the construct they wrap. */
+/** Descend through production wrappers and grouping parentheses. */
 const unwrap = (node: SemanticNode): SemanticNode => {
-  while (node.children.length === 1 && node.children[0]!.kind === 'node') {
-    node = node.children[0] as SemanticNode;
+  for (;;) {
+    if (node.children.length === 1 && node.children[0]!.kind === 'node') {
+      node = node.children[0] as SemanticNode;
+      continue;
+    }
+    const [open, expression, close] = node.children;
+    if (
+      node.rule === 'Primary' &&
+      node.children.length === 3 &&
+      open?.kind === 'token' &&
+      open.text === '(' &&
+      expression?.kind === 'node' &&
+      close?.kind === 'token' &&
+      close.text === ')'
+    ) {
+      node = expression;
+      continue;
+    }
+    return node;
   }
-  return node;
 };
 /** `me`, `the target` and well-known object names are Host Objects known at load. */
 const isHostObject = (element: SemanticElement | undefined) => {
@@ -140,6 +156,45 @@ const isHostObject = (element: SemanticElement | undefined) => {
       (head?.kind === 'name' && head.binding?.kind === 'object'))
   );
 };
+// Read the last key step without inferring the kind of an intermediate result.
+const objectKey = (
+  element: SemanticNode,
+): { base: SemanticElement; key: string | null } | null => {
+  const node = unwrap(element);
+  if (node.rule === 'The') {
+    const second = node.children[1];
+    const base = node.children.at(-1)!;
+    if (second?.kind === 'node' && second.rule === 'Key') {
+      return { base, key: keyText(second) };
+    }
+    if (second?.kind === 'token' && second.type === 'str') {
+      return { base, key: second.text };
+    }
+    if (second?.kind === 'token' && second.text === '(') {
+      const expression = node.children[2];
+      const literal =
+        expression?.kind === 'node' ? unwrap(expression).children[0] : null;
+      return {
+        base,
+        key:
+          literal?.kind === 'token' && literal.type === 'str'
+            ? literal.text
+            : null,
+      };
+    }
+  }
+  if (node.rule === 'Postfix' && node.children.length >= 3) {
+    const key = node.children.at(-1)!;
+    if (key.kind === 'node' && key.rule === 'Key') {
+      return {
+        base: { ...node, children: node.children.slice(0, -2) },
+        key: keyText(key),
+      };
+    }
+  }
+  return null;
+};
+
 /** A Host Object key read calls the Host, unless it is `id` or a Built-in property. */
 const hostKey = (key: string) => key !== 'id' && !properties.has(key);
 
@@ -166,7 +221,9 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
           child.kind === 'node' && child.rule === 'Key',
       );
       const literal = node.children[1];
+      const computed = literal?.kind === 'token' && literal.text === '(';
       if (
+        (computed && objectKey(node)?.key !== 'id') ||
         (key && hostKey(keyText(key))) ||
         (literal?.kind === 'token' &&
           literal.type === 'str' &&
@@ -202,6 +259,8 @@ export const checkControl = (
   root: SemanticNode,
   unit: 'script' | 'library',
   report: Report,
+  objectProperties?: CheckOptions['objectProperties'],
+  ownerProperties?: CheckOptions['ownerProperties'],
 ) => {
   const work: { context: Context; node: SemanticNode }[] = [
     { node: root, context: outside },
@@ -280,6 +339,29 @@ export const checkControl = (
         break;
       case 'SimpleStatement': {
         const [head, next] = node.children;
+        if (word(head, 'set') && next?.kind === 'node') {
+          const step = objectKey(next);
+          if (step?.key !== null && step && step.base.kind === 'node') {
+            const base = unwrap(step.base);
+            const root = base.children[0];
+            const props =
+              base.rule === 'Primary' && base.children.length === 1
+                ? word(root, 'me')
+                  ? ownerProperties
+                  : root?.kind === 'name' &&
+                      root.binding?.kind === 'object' &&
+                      Object.hasOwn(objectProperties ?? {}, root.text)
+                    ? objectProperties![root.text]
+                    : undefined
+                : undefined;
+            if (
+              props &&
+              (!Object.hasOwn(props, step.key) || !props[step.key])
+            ) {
+              report("can't write", head);
+            }
+          }
+        }
         if (unit === 'library' && (word(head, 'pass') || word(head, 'veto'))) {
           report('not in a library', head);
         }

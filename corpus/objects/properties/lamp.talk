@@ -3,11 +3,12 @@
 script variable log = []
 
 on go
+  put bulb into b
   put [the id of bulb, the state of bulb, the watts of bulb, the colour of bulb] after log
   set the state of bulb to "on"
   put the state of bulb after log
   try
-    set the watts of bulb to 100
+    set the watts of b to 100
   catch e
     put e after log
   end try

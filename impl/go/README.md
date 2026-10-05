@@ -130,9 +130,12 @@ also check `veto` and `pass` reachability before suspension. Imported Handlers
 carry their suspension requirement into the caller. Library restrictions reject
 Script state and message facilities, including unresolved commands that would
 climb a Message Path. Library `wait for`, including Joins, is rejected.
-Host Object property Shapes are checked at runtime. Declaration-aware read-only
-Load and Reload checks remain tracked in
-[#305](https://github.com/odogono/odgn-talk/issues/305).
+Host Object property Shapes are checked at runtime. Load and Reload use copied
+property declarations to reject writes to missing or read-only properties when
+the well-known binding and literal key are known. Quoted and parenthesized Text
+literals count as known keys; computed keys and local aliases defer to runtime.
+Compilation cache keys include setter availability, so identical source checked
+against one Object declaration cannot bypass another declaration’s checks.
 
 ## Libraries and Standard Library
 
@@ -461,18 +464,19 @@ charged for conversion. Panics, invalid results and malformed failures raise
 Each actual call writes a `prop` record before later raises or cancellation.
 Host effects survive later conversion faults or Script Segment rollback.
 
-Disposed handles reject every non-id key read, including missing keys, and
-every property write with `object gone`. Identity inspection remains available.
+Outside Guards, disposed handles reject every non-id key read, including missing
+keys, and every property write with `object gone`. Identity inspection remains available.
 Property callbacks may queue ordinary Host inputs; these wait for the next
 Pump, while `CancelRun` may land at the crossing and run finally cleanup.
 
-Direct non-id reads on well-known Object names in Guards are rejected at Load.
-A dynamically supplied Object's non-id Guard read stops before the instruction
-charge and never calls the Host; complete declaration-aware Load/Reload and
-Guard acceptance is tracked in [#305](https://github.com/odogono/odgn-talk/issues/305).
-Well-known read-only writes currently raise `read only` at runtime; the Spec's
-load-time refusal is part of that issue. Owning Scripts, `SetParent` and Message
-Path routing remain part of #134.
+Guards reject known Object non-id keys at Load, including computed keys unless
+they are the Text literal `id`. Parentheses preserve known roots and literal keys.
+A dynamic Guard reads map keys or the Core-held Object `id`; other Object keys
+raise `wrong kind` (expected map), charge the ordinary key instruction and skip
+the Guard clause without calling the Host. This also applies after disposal.
+Missing or read-only setters reached through dynamic keys or aliases still raise
+`read only` at runtime. Owning Scripts, `SetParent` and Message Path routing remain
+part of #134.
 
 ### Scheduling and suspension
 
@@ -647,11 +651,11 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 178 cases, including all text-model, load-diagnostic,
+The gate contains 180 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 60-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 61-case step-1 set and eight reviewed step-2 cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
@@ -747,7 +751,11 @@ A required-case acceptance test protects kind inspection for all Value kinds,
 identity and Guard behavior across Object kinds that share an id and after
 disposal, including exact Fuel, allocation and persistent state.
 
-The reviewed `objects/properties` trace also passes unchanged, including Get/Set
-ordering, declared and conversion costs, read-only and Shape errors, missing
-keys and disposal. A required-case acceptance test protects it in the gate.
-The fixture's known read-only write is included in the load-check gap in #305.
+The corrected `objects/properties` fixture uses a local alias for its runtime
+read-only write; Get/Set ordering, declared and conversion costs, Shape errors,
+missing keys and disposal remain covered. Its added alias costs two Fuel and
+shifts later instruction and source positions. New `load-diagnostics/object-properties`
+and `objects/guard-keys` cases pin Load diagnostics, map keys, live/disposed Object
+Guard skips and Core ids. Both Cores agree on every record and cost before
+recording expectations. These three traces retain `Unblessed` headers for human
+review, and required-case tests protect them in the Go gate.

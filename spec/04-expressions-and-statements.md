@@ -101,7 +101,7 @@ Nothing else sets it. A Join Member leaves it unchanged inside the Join's body.
 
 - **`the k of x` and `x's k`** read the Built-in property `k` if `k` is one (below), and otherwise the key `k`. `the "k" of x` always reads a key, and `the (e) of x` reads the key that `e` gives, which must be text, or `wrong kind` is raised.
 - **On a map,** a key gives its value, or Nothing if the map has no such key.
-- **On a Host Object,** a key reads the Host's property ([chapter 9](09-embedding.md)), and `id` gives its Core-held id. A key its Object Kind doesn't define gives Nothing, as a map's missing key does. Reading any key but `id` of a disposed object raises `object gone`.
+- **On a Host Object,** `id` gives its Core-held id. Outside Guards, any other key reads the Host's property ([chapter 9](09-embedding.md)); a key its Object Kind doesn't define gives Nothing, as a map's missing key does, and reading it on a disposed object raises `object gone`. [Guards](#guards) use the pure key rules below and never call the Host.
 - **On anything else,** Nothing included, reading a key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`.
 
 The Built-in properties:
@@ -427,7 +427,7 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 - **`put e after c`** and **`put e before c`**: if `c` holds a list, `e` becomes its last or first element, as one element. If `c` holds text, the text form of `e` is joined on, as `&` does. Anything else raises `wrong kind` with `expected` `"text"`.
 - **`put ...e after c`** and **`before`** splice the elements of the list `e` into the list `c`. Either one not being a list raises `wrong kind` with `expected` `"list"`.
 - **`let p be e`** matches `e` against the pattern `p` and binds its names, or raises `no match`.
-- **`set c to e`** writes a property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind is known at load, and otherwise raises `read only`. A disposed object raises `object gone`. `set` on a bare variable is a load error.
+- **`set c to e`** writes a property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
 
 ### Arithmetic statements
 
@@ -493,7 +493,8 @@ A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch
 
 - **When:** it is evaluated after its pattern matches, with the pattern's names bound.
 - **What it may use:** literals, operators, conversions, Chunk Expressions, keys and Built-in properties, Text Patterns, Built-in functions and Built-in Constants. It may read the pattern's names, the body's locals, Script Variables and a Host Object's `id`, and compare Host Objects by identity.
-- **What it may not use:** a call to anything but a Built-in, including a Script or Library function, a Handler and a Function Value (a call through a name that shadows a Built-in is one), a Lambda, and a Host Object property other than `id`. Any of these is a load error. So a Guard never runs Script code, never calls the Host and never suspends.
+- **What it may not use:** a call to anything but a Built-in, including a Script or Library function, a Handler and a Function Value (a call through a name that shadows a Built-in is one), a Lambda, and a Host Object property other than `id` where the object is known at load (`me`, `the target` or a well-known Object name). Any of these is a load error. A computed key on such an object is allowed only when it is the text literal `"id"`. So a Guard never runs Script code, never calls the Host and never suspends.
+- **Dynamic keys:** a key of a value whose kind is not known at load is evaluated without a Host call. Maps use their ordinary key lookup; an Object permits only `id`. Any other Object key raises `wrong kind` with `expected` `"map"`, charged as the key instruction, and skips the clause as any Guard error does. This applies to disposed Objects too, and to literal and computed keys.
 - **Its result:** the clause is chosen only when the Guard gives `true`. `false` skips it. So does any other value and any error, which is never raised into the Run. `try`, `on error` and the Run's report don't see it, and the Trace records the skip.
 
 > **Example.**

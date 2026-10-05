@@ -1,6 +1,7 @@
 // Chapter 9's Host Objects: Object Kinds with their properties, defined once
 // per process, and the Group-scoped handles a Host makes, whose parents,
 // disposal and Owning Script the Core holds (ADR 0016).
+import type { CheckOptions } from './checker';
 import type { Cost, Shape } from './capabilities';
 import { objectValue, type Value } from './values';
 
@@ -92,4 +93,24 @@ export const rebindObject = (state: ObjectState, native: unknown): void => {
     native,
     value: objectValue({ kind: kind.name, id, handle: state }),
   });
+};
+
+/** Loading checks declarations without retaining Host callbacks in checked code. */
+export const propertyChecks = (
+  objects: Readonly<Record<string, HostObject>>,
+  owner?: HostObject,
+): Pick<CheckOptions, 'objectProperties' | 'ownerProperties'> => {
+  const props = (kind: ObjectKind) =>
+    Object.fromEntries(
+      [...kind.props].map(([name, prop]) => [name, !!prop.set]),
+    );
+  return {
+    objectProperties: Object.fromEntries(
+      Object.entries(objects).map(([name, object]) => [
+        name,
+        props(object.kind),
+      ]),
+    ),
+    ownerProperties: owner ? props(owner.kind) : undefined,
+  };
 };

@@ -31,12 +31,13 @@ type Symbol struct {
 	MaySuspend         bool
 }
 type Options struct {
-	Library     bool
-	Objects     []string
-	ImportCalls map[string][]OperationUse
-	Imports     map[string]map[string]Symbol
-	PatternSize int
-	Grants      map[string]map[string]OperationCheck
+	Library          bool
+	Objects          []string
+	ObjectProperties map[string]map[string]bool // property name -> writable, by bound Object name
+	ImportCalls      map[string][]OperationUse
+	Imports          map[string]map[string]Symbol
+	PatternSize      int
+	Grants           map[string]map[string]OperationCheck
 }
 type Body struct {
 	Node       *syntax.Node
@@ -688,15 +689,13 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		}
 	}
 	if ctx.guard && (n.Kind == "key" || n.Kind == "key-computed") {
-		base := n.Children[len(n.Children)-1]
+		base := unparen(n.Children[len(n.Children)-1])
 		s, _ := u.Resolve(b, base.Text)
-		if base.Kind == "name" && s.Kind == "object" || base.Kind == "literal" && base.Text == "me" {
-			id := n.Kind == "key" && n.Text == "id"
-			if n.Kind == "key-computed" {
-				k := n.Children[0]
-				id = k.Kind == "literal" && k.Token.Kind == syntax.Text && k.Text == "id"
-			}
-			if !id && (n.Kind == "key-computed" || !slices.Contains(generated.Grammar.Properties, n.Text)) {
+		if base.Kind == "name" && s.Kind == "object" || base.Kind == "literal" && base.Text == "me" || base.Kind == "target" {
+			key, literal := literalKey(n)
+			id := literal && key == "id"
+			builtin := n.Kind == "key" && slices.Contains(generated.Grammar.Properties, n.Text) && (len(n.Params) == 0 || n.Params[0].Token.Kind != syntax.Text)
+			if !id && !builtin {
 				u.add("not in a guard", n.Pos())
 			}
 		}
@@ -776,8 +775,17 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	case "set":
-		if n.Children[0].Kind != "key" && n.Children[0].Kind != "key-computed" {
+		target := n.Children[0]
+		if target.Kind != "key" && target.Kind != "key-computed" {
 			u.add("not a property", n.Pos())
+		} else {
+			base := unparen(target.Children[len(target.Children)-1])
+			s, _ := u.Resolve(b, base.Text)
+			props, known := u.Options.ObjectProperties[base.Text]
+			key, literal := literalKey(target)
+			if base.Kind == "name" && s.Kind == "object" && known && literal && !props[key] {
+				u.add("can't write", n.Pos())
+			}
 		}
 	case "delimited":
 		hasItem := false

@@ -228,7 +228,8 @@ func (u *Unit) expression(n *syntax.Node) {
 		u.expression(n.Children[0])
 		op := "get-key"
 		arg := quote(n.Text)
-		if slices.Contains(generated.Grammar.Properties, n.Text) {
+		// Quoting always names a key, even when it spells a Built-in property.
+		if slices.Contains(generated.Grammar.Properties, n.Text) && (len(n.Params) == 0 || n.Params[0].Token.Kind != syntax.Text) {
 			op = "property"
 			arg = n.Text
 		}

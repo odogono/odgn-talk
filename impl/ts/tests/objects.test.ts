@@ -4,6 +4,7 @@ import {
   defineObjectKind,
   encodeValue,
   HostError,
+  LoadError,
   newGroup,
   parseInstant,
   readDisplay,
@@ -81,5 +82,152 @@ describe('Host Objects', () => {
     expect((await ok.result).toString()).toBe('"hi!"');
     const error = await lost.result.catch((error_: unknown) => error_);
     expect((error as ScriptError).code).toBe('send failed');
+  });
+});
+
+describe('Object property Load checks', () => {
+  test('read-only literal writes reject Load, Reload and cached source declarations', () => {
+    const readonly = defineObjectKind({
+      name: 'checked-light',
+      props: { label: { get: () => text('on') } },
+    });
+    const writable = defineObjectKind({
+      name: 'checked-light',
+      props: { label: { get: () => text('on'), set: () => {} } },
+    });
+    for (const target of [
+      'the label of bulb',
+      'the "label" of bulb',
+      'the ("label") of bulb',
+      'the (("label")) of bulb',
+      "bulb's label",
+    ]) {
+      const source = `on go\n set ${target} to "off"\nend go`;
+      for (const kind of [writable, readonly, writable]) {
+        const g = newGroup({ name: 'g' });
+        const bulb = g.object(kind, 'bulb', null);
+        if (kind === readonly) {
+          expect(() =>
+            g.load({ name: 's', source, objects: { bulb } }),
+          ).toThrow(LoadError);
+        } else {
+          expect(() =>
+            g.load({ name: 's', source, objects: { bulb } }),
+          ).not.toThrow();
+        }
+      }
+    }
+    const g = newGroup({ name: 'g' });
+    const bulb = g.object(readonly, 'bulb', null);
+    const s = g.load({
+      name: 's',
+      source: 'on go\n return 1\nend go',
+      objects: { bulb },
+    });
+    expect(() =>
+      s.reload(
+        'on go\n set the label of bulb to "off"\nend go',
+        'carry variables',
+      ),
+    ).toThrow(LoadError);
+    expect(() =>
+      s.extend('on write\n set the label of bulb to "off"\nend write'),
+    ).toThrow(LoadError);
+    expect(() =>
+      g.load({
+        name: 'missing',
+        source: 'on go\n set the absent of bulb to 1\nend go',
+        objects: { bulb },
+      }),
+    ).toThrow(LoadError);
+    const owned = g.object(readonly, 'owned', null);
+    expect(() =>
+      g.load({
+        name: 'owned',
+        source: 'on go\n set the label of me to "off"\nend go',
+        owner: owned,
+      }),
+    ).toThrow(LoadError);
+  });
+});
+
+describe('Object Guard keys', () => {
+  test('dynamic keys skip Objects without calling Host and retain map lookup', () => {
+    let calls = 0;
+    const kind = defineObjectKind({
+      name: 'guard-light',
+      props: {
+        label: {
+          get: () => {
+            calls++;
+            return text('on');
+          },
+        },
+      },
+    });
+    for (const expression of [
+      'the label of o',
+      'the "label" of o',
+      'the "length" of o',
+      'the (k) of o',
+    ]) {
+      const lines: string[] = [];
+      const g = newGroup({ name: 'g', trace: line => lines.push(line) });
+      const bulb = g.object(kind, 'bulb', null);
+      const s = g.load({
+        name: 's',
+        source: `on go o, k where ${expression} = "on"\n return 1\nend go\non go o, k\n return 2\nend go`,
+      });
+      s.deliver({
+        name: 'go',
+        args: [readDisplay('{label: "on", length: "on"}'), text('label')],
+      });
+      g.pump(now);
+      s.deliver({ name: 'go', args: [bulb.value, text('label')] });
+      g.pump(now);
+      expect(
+        lines
+          .filter(line => line.startsWith('run '))
+          .map(line => line.match(/value=(\d+)/)?.[1]),
+      ).toEqual(['1', '2']);
+      expect(
+        lines.some(
+          line =>
+            line.startsWith('guard-skip s/r2 ') &&
+            line.includes('code="wrong kind"'),
+        ),
+      ).toBe(true);
+      expect(calls).toBe(0);
+    }
+  });
+  test('known Object computed Guard keys require literal id', () => {
+    const g = newGroup({ name: 'g' });
+    const bulb = g.object(room, 'bulb', null);
+    for (const expression of [
+      'the (k) of bulb',
+      'the ("label") of bulb',
+      'the (("label")) of bulb',
+      'the label of the target',
+      'the (k) of me',
+      'the label of (bulb)',
+      'the label of (me)',
+      'the label of (the target)',
+      'the "length" of bulb',
+    ]) {
+      expect(() =>
+        g.load({
+          name: 's',
+          objects: { bulb },
+          source: `on go k where ${expression} = "on"\nend go`,
+        }),
+      ).toThrow(LoadError);
+    }
+    expect(() =>
+      g.load({
+        name: 'id',
+        objects: { bulb },
+        source: 'on go where the (("id")) of bulb = "bulb"\nend go',
+      }),
+    ).not.toThrow();
   });
 });
