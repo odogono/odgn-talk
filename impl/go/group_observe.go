@@ -30,7 +30,7 @@ func (g *Group) observe(s *Script, d delivery, allow func()) (fuel, alloc int64)
 	sender, _, _ := strings.Cut(string(d.from), "/")
 	for _, x := range waits {
 		raised := len(x.run.Raises)
-		f, a, matched := x.run.Observe(d.message.Name, args, corevalue.Value{}, sender)
+		f, a, matched := x.run.Observe(d.message.Name, args, d.targetValue(), sender)
 		fuel += f
 		alloc += a
 		g.writeRaises(x, raised)

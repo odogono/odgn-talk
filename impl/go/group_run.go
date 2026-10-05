@@ -25,16 +25,17 @@ func (s *Script) start(d delivery) {
 	fuel, alloc, width := s.limits.FuelPerRun, s.limits.AllocPerRun, s.limits.MaxJoin
 	if o := d.message.Limits; o != nil {
 		if o.MaxJoin > 0 {
-			width = o.MaxJoin
+			width = min(width, o.MaxJoin)
 		}
 		if o.FuelPerRun > 0 {
-			fuel = o.FuelPerRun
+			fuel = min(fuel, o.FuelPerRun)
 		}
 		if o.AllocPerRun > 0 {
-			alloc = o.AllocPerRun
+			alloc = min(alloc, o.AllocPerRun)
 		}
 	}
 	r := machine.StartDelivery(s.state, d.message.Name, args, machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width})
+	r.Target = d.targetValue()
 	if d.during != nil {
 		r.SetDuring(*d.during)
 	}
@@ -166,7 +167,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			report.Vetoes = []Veto{{Script: d.script.name, Run: run, Reason: reason}}
 		}
 		if verdict == Undecided {
-			report.Undecided = []UndecidedBy{{Script: d.script.name, Run: run, Outcome: outcome}}
+			name := ""
+			if d.script != nil {
+				name = d.script.name
+			}
+			report.Undecided = []UndecidedBy{{Script: name, Run: run, Outcome: outcome}}
 		}
 		if !d.decision.seal(report) {
 			return
@@ -175,6 +180,15 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		g.recordDecided(report)
 		settlements = append(settlements, d.decision.finish)
 	}
+	terminal := func(d delivery) {
+		g.unhandled(d, &result.Reports)
+		g.reply(d.reply, corevalue.Value{}, "unhandled", corevalue.Value{})
+		seal(d, "", Allowed, Nothing, UnhandledOutcome)
+		if d.pending != nil {
+			settlements = append(settlements, func() { d.pending.settle(Nothing, sendFailure("unhandled", nil)) })
+		}
+	}
+
 	defer func() {
 		for _, settle := range settlements {
 			settle()
@@ -190,7 +204,26 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	// removes a message or queues a suspended Run's cleanup at this position.
 	for _, d := range inputs {
 		if d.kind == "dispose" {
-			d.object.disposed.Store(true)
+			g.mu.Lock()
+			already := d.object.disposed.Swap(true)
+			owner := d.object.owner
+			g.mu.Unlock()
+			if !already && owner != nil {
+				g.disposeOwner(owner, &result.Reports, &settlements, seal)
+			}
+			continue
+		}
+		if d.kind == "set-parent" {
+			g.mu.Lock()
+			code := g.parentError(d.object, d.parent)
+			if code == "" {
+				d.object.parent = d.parent
+			}
+			g.mu.Unlock()
+			if code != "" {
+				result.Reports = append(result.Reports, &HostError{code, "invalid queued parent relationship"})
+				g.record("refused", false, nil, map[string]string{"code": corevalue.DisplayText(string(code))})
+			}
 			continue
 		}
 		if d.kind == "cancel-run" {
@@ -208,43 +241,80 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.cancel == "" {
-			d.script.queue = append(d.script.queue, workItem{delivery: d})
+			if moved, changed := g.moveDelivery(d); changed {
+				if moved.script == nil {
+					g.unrouted = append(g.unrouted, moved)
+				}
+				continue
+			}
+			if d.script == nil {
+				g.unrouted = append(g.unrouted, d)
+			} else {
+				d.script.queue = append(d.script.queue, workItem{delivery: d})
+				if d.script.stopped {
+					g.disposeOwner(d.script, &result.Reports, &settlements, seal)
+				}
+			}
 			continue
 		}
-		s := d.script
 		found := false
-		for j, item := range s.queue {
-			q := item.delivery
-			if item.run == nil && q.id == d.cancel {
-				s.queue = slices.Delete(s.queue, j, j+1)
-				g.release(s)
-				report := &RunEnd{Script: s.name, Delivery: q.id, Outcome: Cancelled}
-				result.Reports = append(result.Reports, report)
-				g.record("run", false, nil, map[string]string{"outcome": "cancelled", "delivery": string(q.id), "fuel": "0", "alloc": "0"})
-				if q.pending != nil {
-					settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })
-				}
-				seal(q, "", Undecided, Nothing, Cancelled)
+		cancelQueued := func(q delivery, script string) {
+			result.Reports = append(result.Reports, &RunEnd{Script: script, Delivery: q.id, Outcome: Cancelled})
+			g.record("run", false, nil, map[string]string{"outcome": "cancelled", "delivery": string(q.id), "fuel": "0", "alloc": "0"})
+			if q.pending != nil {
+				settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })
+			}
+			seal(q, "", Undecided, Nothing, Cancelled)
+		}
+		for j, q := range g.unrouted {
+			if q.id == d.cancel {
+				g.unrouted = slices.Delete(g.unrouted, j, j+1)
+				cancelQueued(q, "")
 				found = true
 				break
 			}
 		}
-		if !found {
-			for _, x := range s.runs {
-				if x.delivery.id == d.cancel {
-					g.cancelExecution(s, x)
+		for _, s := range g.scripts {
+			if found {
+				break
+			}
+			for j, item := range s.queue {
+				q := item.delivery
+				if item.run == nil && q.id == d.cancel {
+					s.queue = slices.Delete(s.queue, j, j+1)
+					g.release(s)
+					cancelQueued(q, s.name)
+					found = true
 					break
 				}
 			}
+			if !found {
+				for _, x := range s.runs {
+					if x.delivery.id == d.cancel {
+						g.cancelExecution(s, x)
+						found = true
+						break
+					}
+				}
+			}
+		}
+
+	}
+	for _, d := range g.unrouted {
+		moved, _ := g.moveDelivery(d)
+		if moved.script == nil {
+			terminal(moved)
 		}
 	}
+	g.unrouted = nil
+
 	// Only timers retained from an earlier Pump fire, after Host inputs.
 	g.fireTimers()
 
 	for {
 		progress := false
 		for _, s := range g.scripts {
-			if skipped[s] || s.active == nil && len(s.queue) == 0 {
+			if s.stopped || skipped[s] || s.active == nil && len(s.queue) == 0 {
 				continue
 			}
 			if o.FuelSlice > 0 && used[s] >= budget[s] {
@@ -269,6 +339,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					s.active.run.Resume()
 				} else {
 					d := item.delivery
+					if moved, changed := g.moveDelivery(d); changed {
+						if moved.script == nil {
+							terminal(moved)
+						}
+						progress = true
+						continue
+					}
 					g.release(s)
 					fuel, alloc := g.observe(s, d, func() { seal(d, "", Allowed, Nothing, Completed) })
 					used[s] += fuel
@@ -334,12 +411,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					if !x.deciding {
 						seal(x.delivery, x.id, Allowed, Nothing, Completed)
 					}
-				}, func(to, message string, args []corevalue.Value, wait bool) bool {
-					ok := g.send(x, to, message, args, wait)
-					if ok {
+				}, func(to machine.Receiver, message string, args []corevalue.Value, wait bool) *corevalue.Value {
+					err := g.send(x, to, message, args, wait, &result.Reports)
+					if err == nil {
 						r.PersistentBase = s.retainedOutside(x)
 					}
-					return ok
+					return err
 				}, func(grant, op string, args []corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value, bool) {
 					return g.operation(s, x, grant, op, args, pay, &result.Reports)
 				}, func(object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value) {
@@ -450,29 +527,23 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if r.Passed {
 				reason = "unhandled"
 			}
-			g.reply(x.delivery.reply, report.Result.inner, reason, r.Error)
+			climbed := (report.Outcome == UnhandledOutcome || r.Passed) && x.delivery.during == nil && g.climb(x)
+			if !climbed {
+				g.reply(x.delivery.reply, report.Result.inner, reason, r.Error)
+			}
 			if report.Outcome == Errored && x.delivery.message.Name != "error" {
 				g.queueError(s, x)
 			}
-			if (report.Outcome == UnhandledOutcome || r.Passed) && x.delivery.during == nil {
-				unhandled := &Unhandled{Delivery: x.delivery.id, Message: x.delivery.message}
-				result.Reports = append(result.Reports, unhandled)
-				fields := map[string]string{"message": x.delivery.message.Name}
-				if len(x.delivery.message.Args) > 0 {
-					fields["args"] = argsDisplay(x.delivery.message.Args)
-				}
-				var ids []string
-				if x.delivery.id != "" {
-					ids = []string{string(x.delivery.id)}
-				}
-				g.record("unhandled", false, ids, fields)
+			if !climbed && (report.Outcome == UnhandledOutcome || r.Passed) && x.delivery.during == nil {
+				g.unhandled(x.delivery, &result.Reports)
 			}
-			if report.Outcome == UnhandledOutcome || r.Passed {
+
+			if !climbed && (report.Outcome == UnhandledOutcome || r.Passed) {
 				seal(x.delivery, x.id, Allowed, Nothing, UnhandledOutcome)
-			} else if report.Outcome != Completed {
+			} else if !climbed && report.Outcome != Completed {
 				seal(x.delivery, x.id, Undecided, Nothing, report.Outcome)
 			}
-			if p := x.delivery.pending; p != nil {
+			if p := x.delivery.pending; p != nil && !climbed {
 				settlements = append(settlements, func() {
 					if report.Outcome == Completed && !r.Passed {
 						p.settle(report.Result, nil)
@@ -495,6 +566,16 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 			}
 		}
+		for _, s := range g.scripts {
+			if g.stoppedSends[s] {
+				g.disposeOwner(s, &result.Reports, &settlements, seal)
+			}
+		}
+		g.stoppedSends = nil
+		for _, d := range g.orphanReplies {
+			g.reply(d.reply, corevalue.Value{}, "unhandled", corevalue.Value{})
+		}
+		g.orphanReplies = nil
 		if g.landCancelRuns() {
 			progress = true
 		}
@@ -513,6 +594,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		if s.active != nil && s.active.run.Status != machine.Blocked || len(s.queue) > 0 && s.active == nil {
 			result.State = Sliced
 		}
+	}
+	allStopped := len(g.scripts) > 0
+	for _, s := range g.scripts {
+		allStopped = allStopped && s.stopped
+	}
+	if allStopped {
+		result.State = Stopped
 	}
 	fields := map[string]string{"state": []string{"idle", "sliced", "stopped"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)}
 	var next *big.Int
@@ -568,7 +656,7 @@ func (g *Group) queueError(s *Script, x *execution) {
 		{Key: "args", Val: corevalue.NewList(args)},
 	})
 	s.queue = append(s.queue, workItem{delivery: delivery{
-		script: s, message: Message{Name: "error", Args: []Value{{x.run.Error}}},
+		script: s, target: s.owner, message: Message{Name: "error", Args: []Value{{x.run.Error}}},
 		from: x.id, during: &during,
 	}})
 }

@@ -259,9 +259,17 @@ func (r *Run) Execute(slice int64) {
 	r.ExecuteSelected(slice, nil, nil)
 }
 
-// SendFunc commits a paid Script message, registering a reply when wait is true.
-// False means mailbox full.
-type SendFunc func(to, message string, args []value.Value, wait bool) bool
+// Receiver keeps Script-name tokens separate from Object Values. Up sends
+// begin at the current owner's parent.
+type Receiver struct {
+	Name   string
+	Object value.Value
+	Up     bool
+}
+
+// SendFunc commits a paid message and registers a reply when wait is true.
+// A returned error is raised at the paid instruction.
+type SendFunc func(to Receiver, message string, args []value.Value, wait bool) *value.Value
 
 // ExecuteSelected notifies the scheduler when an entry clause's combined
 // charge succeeds, before effects commit. Both callbacks belong to this turn;
@@ -287,7 +295,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -422,9 +430,13 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		}
 		f.Clause = false
 		trial.Clause = false
-		if err == nil && (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && !send(f.ReceiverNames[len(f.Stack)-1], i.Operands()[0].Text, m.Args, i.Name != "send") {
-			v := failure("mailbox full", value.Pair{Key: "to", Val: text(f.ReceiverNames[len(f.Stack)-1])})
-			err = &v
+		if err == nil && (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") {
+			recipient := Receiver{Up: i.Name == "send-up" || i.Name == "send-up-wait"}
+			if !recipient.Up {
+				recipient.Name = f.ReceiverNames[len(f.Stack)-1]
+				recipient.Object = f.Stack[len(f.Stack)-1]
+			}
+			err = send(recipient, i.Operands()[0].Text, m.Args, i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up-wait")
 		}
 		if err != nil {
 			r.raise(*err)

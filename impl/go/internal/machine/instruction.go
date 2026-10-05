@@ -163,18 +163,25 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		} else {
 			effect = func() { r.Status = Suspended }
 		}
-	case "send", "send-wait", "join-send":
-		if f.ReceiverNames[len(f.Stack)-1] == "" {
-			bad(wrong("object", pop()))
-			break
+	case "send", "send-wait", "join-send", "send-up", "send-up-wait":
+		if i.Name != "send-up" && i.Name != "send-up-wait" {
+			name := f.ReceiverNames[len(f.Stack)-1]
+			v := pop()
+			if name == "" && v.Kind != value.Object {
+				bad(wrong("object", v))
+				break
+			}
+			if v.Kind == value.Object && v.Object.Disposed != nil && v.Object.Disposed.Load() {
+				bad(failure("object gone", value.Pair{Key: "object", Val: v}))
+				break
+			}
 		}
-		pop()
 		m.Args = take(idx(1))
 		m.InputSize = 32
 		for _, v := range m.Args {
 			m.InputSize = saturatingAdd(m.InputSize, Size(v))
 		}
-		if i.Name == "send-wait" {
+		if i.Name == "send-wait" || i.Name == "send-up-wait" {
 			effect = func() { r.SendWait = true; r.Status = Suspended }
 		}
 	case "target":

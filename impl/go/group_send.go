@@ -9,36 +9,70 @@ import (
 
 // A paid Script send joins the work queue immediately, never the Host input
 // queue. Capacity includes accepted Host inputs, even during this Pump.
-func (g *Group) send(x *execution, to, message string, args []corevalue.Value, wait bool) bool {
+func (g *Group) send(x *execution, to machine.Receiver, message string, args []corevalue.Value, wait bool, reports *[]Report) *corevalue.Value {
+	d := delivery{message: Message{Name: message}, from: x.id}
 	g.mu.Lock()
-	s := g.script(to) // the receiver token was validated by load-object or me
-	if s.reserved >= s.limits.MailboxDepth {
+	label := to.Name
+	if to.Up {
+		d.target = x.delivery.script.owner
+		d.path = true
+		d.after = x.delivery.script.owner
+		if d.after != nil {
+			d.script = g.nearestOwner(d.after.parent)
+		}
+	} else if to.Object.Kind == corevalue.Object {
+		d.target = to.Object.Object.Handle.(*Object)
+		d.path = true
+		d.script = g.nearestOwner(d.target)
+		label = Value{to.Object}.String()
+	} else {
+		d.script = g.script(to.Name)
+		if d.script != nil {
+			d.target = d.script.owner
+		}
+	}
+	if d.script != nil && d.script.reserved >= d.script.limits.MailboxDepth {
 		g.mu.Unlock()
-		return false
+		receiver := d.targetValue()
+		if to.Up {
+			receiver = mustText(d.script.name)
+		} else if to.Object.Kind != corevalue.Object {
+			receiver = mustText(to.Name)
+		}
+		return machine.MailboxFull(receiver)
 	}
-	s.reserved++
+	if d.script != nil {
+		d.script.reserved++
+	}
 	g.mu.Unlock()
-	vs := make([]Value, len(args))
-	for j, v := range args {
-		vs[j] = Value{v}
+	for _, v := range args {
+		d.message.Args = append(d.message.Args, Value{v})
 	}
-	from := x.id
-	var reply CallID
 	if wait {
 		x.calls++
-		reply = CallID(fmt.Sprintf("%s.c%d", x.id, x.calls))
+		d.reply = CallID(fmt.Sprintf("%s.c%d", x.id, x.calls))
 		if x.run.Join != nil {
-			x.run.AddJoinMember(string(reply))
+			x.run.AddJoinMember(string(d.reply))
 		} else {
-			x.waitCall = reply
+			x.waitCall = d.reply
 		}
-		from = RunID(reply)
+		d.from = RunID(d.reply)
 	}
-	s.queue = append(s.queue, workItem{delivery: delivery{script: s, message: Message{Name: message, Args: vs}, from: from, reply: reply}})
 	g.writeRaises(x, x.raisesWritten)
-	fields := map[string]string{"to": to, "message": message}
-	if len(vs) > 0 {
-		fields["args"] = argsDisplay(vs)
+	if d.script == nil {
+		g.unhandled(d, reports)
+		if wait {
+			g.orphanReplies = append(g.orphanReplies, d)
+		}
+		return nil
+	}
+	d.script.queue = append(d.script.queue, workItem{delivery: d})
+	if to.Up {
+		label = d.script.name
+	}
+	fields := map[string]string{"to": label, "message": message}
+	if len(d.message.Args) > 0 {
+		fields["args"] = argsDisplay(d.message.Args)
 	}
 	if wait {
 		fields["wait"] = "yes"
@@ -46,8 +80,14 @@ func (g *Group) send(x *execution, to, message string, args []corevalue.Value, w
 			fields["wait"] = "join"
 		}
 	}
-	g.record("send", false, []string{string(from)}, fields)
-	return true
+	g.record("send", false, []string{string(d.from)}, fields)
+	if d.script.stopped {
+		if g.stoppedSends == nil {
+			g.stoppedSends = map[*Script]bool{}
+		}
+		g.stoppedSends[d.script] = true
+	}
+	return nil
 }
 
 func (g *Group) reply(call CallID, answer corevalue.Value, reason string, failure corevalue.Value) {
@@ -90,7 +130,7 @@ func (g *Group) abandonSend(x *execution) {
 
 func (x *execution) maxWait() time.Duration {
 	if o := x.delivery.message.Limits; o != nil && o.MaxWait > 0 {
-		return o.MaxWait
+		return min(o.MaxWait, x.delivery.script.limits.MaxWait)
 	}
 	return x.delivery.script.limits.MaxWait
 }

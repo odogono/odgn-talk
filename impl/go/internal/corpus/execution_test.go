@@ -575,3 +575,37 @@ func TestObjectPropertyAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestMessagePathAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"objects/message-path", "objects/moving-mailbox", "objects/moving-climb", "objects/sends", "objects/wait-target", "decisions/pass-up-the-message-path", "cancellation/owner-disposal-and-stop", "decisions/veto-ends-the-decision"}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != len(names) {
+		t.Fatal(len(cases))
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, line := range strings.Split(string(b), "\n") {
+		listed[line] = true
+	}
+	for _, name := range names {
+		if !listed[name] {
+			t.Error("Message Path case missing from passing gate:", name)
+		}
+	}
+
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

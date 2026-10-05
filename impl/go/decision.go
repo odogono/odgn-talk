@@ -90,11 +90,11 @@ func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, 
 	return s.group.decide(s, ctx, m)
 }
 func (g *Group) Decide(ctx context.Context, to *Object, m Message) (DeliveryID, *Deciding, error) {
-	return g.decide(g.receiver(to), ctx, m)
+	return g.decide(nil, ctx, m, to)
 }
-func (g *Group) decide(s *Script, ctx context.Context, m Message) (DeliveryID, *Deciding, error) {
+func (g *Group) decide(s *Script, ctx context.Context, m Message, objects ...*Object) (DeliveryID, *Deciding, error) {
 	d := &Deciding{done: make(chan struct{})}
-	id, _, err := g.enqueue(s, m, ctx, false, d)
+	id, _, err := g.enqueue(s, m, ctx, false, d, objects...)
 	if err != nil {
 		return "", nil, err
 	}

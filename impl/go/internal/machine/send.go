@@ -76,3 +76,10 @@ func sendResumeError(p SendResume) value.Value {
 }
 
 func (r *Run) ResumeSend() { r.ResumeSendOperation(nil) }
+
+// MailboxFull constructs the ordinary send error using the resolved receiver.
+// Script-name tokens become Text; Host Object receivers retain their identity.
+func MailboxFull(to value.Value) *value.Value {
+	err := failure("mailbox full", value.Pair{Key: "to", Val: to})
+	return &err
+}

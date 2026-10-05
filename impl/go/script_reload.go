@@ -68,7 +68,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	for name := range s.state.Objects {
 		objects = append(objects, name)
 	}
-	unit, loadError := g.core.compile(s.name, source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(s.state.Objects), PatternSize: s.limits.PatternSize, Grants: declarations}, importIDs)
+	unit, loadError := g.core.compile(s.name, source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(s.state.Objects), OwnerProperties: ownerProperties(s.owner), PatternSize: s.limits.PatternSize, Grants: declarations}, importIDs)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
@@ -173,6 +173,9 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	s.state.Gone = true
 	state.ScriptNames = slices.Clone(s.state.ScriptNames)
 	s.state = state
+	g.mu.Lock()
+	s.stopped = false
+	g.mu.Unlock()
 	for name, grant := range s.grants {
 		if grant.revoked {
 			delete(s.grants, name)
