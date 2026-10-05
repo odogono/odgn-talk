@@ -1,0 +1,16 @@
+-- A computed message name in `send` (ADR 0057). `bun tools/grammar/check.ts`
+-- parses this file. The Cores' tests don't read it yet; it moves into
+-- ../sketch and ../../machine/lowering.talk once both Cores parse a computed
+-- name and machine.toml holds its instructions.
+
+on forwarding next, order
+  send (next) with order to me
+  send (next) with order to me and wait
+  wait for all
+    send (next) with order to me and wait
+  end wait
+end forwarding
+
+on moving board, knight
+  send ("move:" & "to:") with knight, "e4" to board and wait
+end moving

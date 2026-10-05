@@ -34,7 +34,7 @@ A Name that is none of these is a load error, except as a `send`'s receiver or a
 - **Built-ins may be shadowed:** a Script's own variable, parameter, Capture, Constant, function or Handler, and an Import, may take the name of a Built-in Constant or a Built-in function. The Script's name wins inside that Script, so a Built-in added in a later language version never stops an existing Script from loading ([ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)).
 
 > **Note.** A local's scope is its whole body, so `put day(d) into day` makes `day` a local throughout, and `day(d)` then calls it and raises `wrong kind`. The `shadows-builtin` Lint warns about every shadowed Built-in ([chapter 12](12-sessions-and-tooling.md)).
-- **Other positions:** a message name after `on`, `send` or `pass`, a Grant name after `ask` or `tell`, and an Operation name after `to` aren't resolved this way ([chapter 5](05-handlers-messages-and-scheduling.md)). `me` and `the target` are also chapter 5's.
+- **Other positions:** a message name after `on`, `send` or `pass`, a Grant name after `ask` or `tell`, and an Operation name after `to` aren't resolved this way ([chapter 5](05-handlers-messages-and-scheduling.md)). A `send`'s bracketed message name is an ordinary expression. `me` and `the target` are also chapter 5's.
 
 ### Constants and Script Variables
 

@@ -1278,6 +1278,7 @@ export const errorMessages = {
   "no match": "The value doesn't match the pattern",
   "send failed": "No answer came: the receiver's Run ended {reason}",
   "mailbox full": "The mailbox of {to} is full",
+  "bad message name": "{name} can't name a message with {arguments} arguments",
   "capability revoked": "The Grant for {capability} is revoked, so {operation} can't be called",
   "wrong kind": "Expected {expected}, but got {got}: {value}",
   "can't convert": "Can't convert {value} to {to}",

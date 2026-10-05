@@ -101,7 +101,7 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' ( MessageName ( 'with' ExpressionList )? 'to' Expression
+Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' ExpressionList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
