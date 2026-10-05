@@ -1,4 +1,4 @@
-# Unblessed: corrected multiline output awaiting first human review.
+# Corrected expectations approved by the maintainer on 2026-10-05 for #275.
 > load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
 > extend session source="script variable message" & newline & "on entry1" & newline & "put `" & newline & "  first" & newline & newline & "  value ${1 +" & newline & "2}" & newline & "  ` into message" & newline & "end entry1" & newline identity=7e98f705ed0703e5cc488555dbfa4c7bb236e49981c7fc6a10b627512d4c7984
 > request d1 to=session message=entry1
