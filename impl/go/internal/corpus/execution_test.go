@@ -738,3 +738,29 @@ func TestForeignFunctionAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestCapabilityCallbackAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"functions/capability-callbacks"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 1 {
+		t.Fatal("missing callback case")
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	n, err := r.execute(cases[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 25 {
+		t.Fatalf("got %d records, want 25", n)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains("\n"+string(listed), "\nfunctions/capability-callbacks\n") {
+		t.Fatal("Capability callback case missing from passing gate")
+	}
+}

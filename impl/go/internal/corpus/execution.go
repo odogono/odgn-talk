@@ -242,11 +242,11 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		return nil
 	}
 	crossings.apply = control
-	objects, e := setupObjects(core, g, c.Setup)
+	objects, e := setupObjects(core, g, c.Setup, operations.values)
 	if e != nil {
 		return nil, e
 	}
-	functions := map[string]talk.Value{}
+	values := operations.values
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
 		s := x.(Setup)
@@ -288,10 +288,13 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			if ref == nil {
 				return nil, fmt.Errorf("call-value requires Function")
 			}
-			fn := functions[fields["fn"].Raw]
+			fn, err := values.construct(fields["fn"].Value)
+			if err != nil {
+				return nil, err
+			}
 			var args []talk.Value
 			for _, v := range fields["args"].Value.Items {
-				x, err := construct(v)
+				x, err := values.construct(v)
 				if err != nil {
 					return nil, err
 				}
@@ -332,7 +335,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				return nil, fmt.Errorf("unknown call %s", r.IDs[0])
 			}
 			if r.Name == "answer" {
-				v, e := construct(fields["value"].Value)
+				v, e := values.construct(fields["value"].Value)
 				if e != nil {
 					return nil, e
 				}
@@ -346,7 +349,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 					var data []talk.Pair
 					for _, p := range v.Entries {
 						if p.Key != "code" && p.Key != "message" {
-							value, e := construct(p.Val)
+							value, e := values.construct(p.Val)
 							if e != nil {
 								return nil, e
 							}
@@ -431,7 +434,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				m.Limits = &o
 			}
 			for _, v := range fields["args"].Value.Items {
-				x, e := construct(v)
+				x, e := values.construct(v)
 				if e != nil {
 					return nil, e
 				}
@@ -485,8 +488,16 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				return nil, crossings.err
 			}
 			for _, report := range result.Reports {
-				if end, ok := report.(*talk.RunEnd); ok && end.Result.Kind() == talk.KindFunction {
-					functions[end.Result.String()] = end.Result
+				switch report := report.(type) {
+				case *talk.RunEnd:
+					values.receive(report.Result)
+					if report.Error != nil {
+						values.receive(report.Error.Data)
+					}
+				case *talk.Unhandled:
+					for _, arg := range report.Message.Args {
+						values.receive(arg)
+					}
 				}
 			}
 			if e != nil {
@@ -495,7 +506,16 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				}
 			}
 		case "vars":
-			g.Inspect()
+			for _, script := range g.Inspect().Scripts {
+				for _, entry := range script.Vars {
+					values.receive(entry.Val)
+				}
+				for _, message := range script.Mailbox {
+					for _, arg := range message.Message.Args {
+						values.receive(arg)
+					}
+				}
+			}
 		case "counters":
 			s := g.Script(r.IDs[0])
 			if s == nil {

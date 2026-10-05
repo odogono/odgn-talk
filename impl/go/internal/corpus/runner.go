@@ -306,8 +306,12 @@ func runEncoding(c Case) (int, error) {
 }
 
 // construct crosses the actual Host constructors, as chapter 11 requires.
-// Reading syntax is kept separate so later backends can bind opaque handles.
+// Replay may resolve opaque handles while retaining the public constructors.
 func construct(v value.Value) (talk.Value, error) {
+	return constructWith(v, nil)
+}
+
+func constructWith(v value.Value, resolve func(value.Value) (talk.Value, error)) (talk.Value, error) {
 	switch v.Kind {
 	case value.Nothing:
 		return talk.Nothing, nil
@@ -334,7 +338,7 @@ func construct(v value.Value) (talk.Value, error) {
 		items := make([]talk.Value, len(v.Items))
 		for i, item := range v.Items {
 			var e error
-			items[i], e = construct(item)
+			items[i], e = constructWith(item, resolve)
 			if e != nil {
 				return talk.Nothing, e
 			}
@@ -346,7 +350,7 @@ func construct(v value.Value) (talk.Value, error) {
 	case value.Map:
 		pairs := make([]talk.Pair, len(v.Entries))
 		for i, p := range v.Entries {
-			item, e := construct(p.Val)
+			item, e := constructWith(p.Val, resolve)
 			if e != nil {
 				return talk.Nothing, e
 			}
@@ -355,6 +359,9 @@ func construct(v value.Value) (talk.Value, error) {
 		return talk.Map(pairs...)
 	case value.Pattern:
 		return talk.DecodeValue([]byte(`{"$pattern":`+value.JSONString(v.Text, false)+`}`), nil)
+	}
+	if resolve != nil {
+		return resolve(v)
 	}
 	return talk.Nothing, fmt.Errorf("opaque Host value requires replay binding")
 }

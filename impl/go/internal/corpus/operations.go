@@ -8,6 +8,7 @@ import (
 )
 
 type operationReplay struct {
+	values       *replayValues
 	calls        map[talk.CallID]*talk.Call
 	defs         map[string]*talk.CapabilityDef
 	stubs        map[string][]map[string]Field
@@ -15,7 +16,7 @@ type operationReplay struct {
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
-	out := &operationReplay{calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
+	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
 	for _, raw := range rawOps {
@@ -69,6 +70,9 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		}
 		key := name + "." + op.Name
 		invoke := func(c *talk.Call, args []talk.Value) (talk.Value, error) {
+			for _, arg := range args {
+				out.values.receive(arg)
+			}
 			return out.invoke(key, op.Mode, c)
 		}
 		switch op.Mode {
@@ -79,6 +83,9 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		case talk.Suspending:
 			op.Start = func(c *talk.Call, args []talk.Value) error {
 				out.calls[c.ID()] = c
+				for _, arg := range args {
+					out.values.receive(arg)
+				}
 				if len(out.stubs[key]) > 0 {
 					_, err := invoke(c, args)
 					return err
@@ -274,6 +281,7 @@ func setupShape(raw any) (talk.Shape, error) {
 type replayTimer struct{ replay *operationReplay }
 
 func (t replayTimer) Schedule(c *talk.Call, name string, at talk.Value, message string, args talk.Value) error {
+	t.replay.values.receive(args)
 	_, err := t.replay.invoke("timer.schedule", talk.FireAndForget, c)
 	return err
 }
@@ -306,7 +314,7 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 		var entries []talk.Pair
 		for _, p := range v.Entries {
 			if p.Key != "code" && p.Key != "message" {
-				x, e := construct(p.Val)
+				x, e := o.values.construct(p.Val)
 				if e != nil {
 					return talk.Nothing, e
 				}
@@ -317,7 +325,7 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 		return talk.Nothing, &talk.ScriptError{Code: code.Text, Message: v.Get("message").Text, Data: data}
 	}
 	if value, ok := stub["value"]; ok {
-		return construct(value.Value)
+		return o.values.construct(value.Value)
 	}
 	return talk.Nothing, nil
 }
@@ -352,6 +360,7 @@ func setupStandardCosts(row Setup, names []string) (talk.Costs, error) {
 type replayConsole struct{ replay *operationReplay }
 
 func (h replayConsole) Write(c *talk.Call, value talk.Value) error {
+	h.replay.values.receive(value)
 	_, err := h.replay.invoke("console.write", talk.FireAndForget, c)
 	return err
 }

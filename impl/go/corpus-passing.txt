@@ -78,6 +78,7 @@ errors/handler-backstop
 errors/handler-delivery
 errors/lambda-capture-parity
 examples/orders-pricing
+functions/capability-callbacks
 functions/foreign-calls
 functions/host-calls
 functions/host-cancellation
