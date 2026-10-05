@@ -12,7 +12,7 @@ on move piece
 end move
 
 -- Reserved and contextual words that may be labels.
-on slide piece from start to finish by steps
+on slide piece across start to finish by steps
   repeat steps times
     nudge piece toward finish
   end repeat
@@ -38,7 +38,7 @@ end castle
 on play
   -- Labelled Command Calls, with expressions in each slot.
   move knight to "e" & "4"
-  slide rook from "a1" to "a" & 8 by 2 * 3
+  slide rook across "a1" to "a" & 8 by 2 * 3
   -- `and wait` after a label's argument.
   move knight to "e4" and wait
   -- A positional call is unchanged.
@@ -62,6 +62,6 @@ on play
     when move p then log "plain"
     after 5 s then log "slow"
   end wait
-  -- `from` and an operand is always the event's source.
+  -- `from` is never a label, so it is always the event's source.
   wait for move p to sq from board
 end play

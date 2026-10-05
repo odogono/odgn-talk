@@ -54,10 +54,11 @@ const SIZE_UNITS = new Set<string>(grammar.binary_patterns.size_units);
 const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
-// Spike for #338, on only with `labels`: the Reserved Words that may also be
-// Argument Labels, and the contextual words that may not.
-const LABEL_RESERVED = new Set(['to', 'from', 'by']);
-const LABEL_EXCLUDED = new Set(['with']);
+// Spike for #338, on only with `labels`: the Reserved Word that may also be
+// an Argument Label, and the contextual words that may not. `from` is out
+// because `wait for … from` reads it as the event's source.
+const LABEL_RESERVED = new Set(['to']);
+const LABEL_EXCLUDED = new Set(['with', 'from']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
 const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
 const endSuffixExpected = (name: string, at: Token) =>
@@ -970,8 +971,7 @@ export class Parser {
       atFrom()
     )) {
       pats.push(this.pattern());
-      // `from` and an operand is always the source (#338 spike).
-      while (!atFrom() && this.isLabel(this.peek(0, 'operator'))) {
+      while (this.isLabel(this.peek(0, 'operator'))) {
         labels.push(this.next('operator').v);
         pats.push(this.pattern());
       }

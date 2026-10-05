@@ -17,8 +17,8 @@ bun tools/grammar/check.ts --labels --tree tools/grammar/spike/labels.talk
 
 Each labelled form gets the Selector `move:to:`. The words that may be labels:
 
-- any non-reserved Name, except `with`;
-- the Reserved Words `to`, `from` and `by`.
+- any non-reserved Name, except `with` and `from`;
+- the Reserved Word `to`.
 
 | File | What it is |
 | --- | --- |
@@ -40,7 +40,8 @@ Each labelled form gets the Selector `move:to:`. The words that may be labels:
 
   In both, the error moves to the token after the would-be label.
 - **A label at the end of a line doesn't continue the line.** An open set can't join `CONTINUING_WORDS`, because operator-position words such as `times` validly end lines (`repeat 3 times`). So `move knight to` followed by `"e4"` on the next line is an error. Use brackets to split a long call.
-- **`from` in `wait for` stays the event's source.** In `wait for move p from a to b`, `from a` is read as the source. So a Selector with a `from` label can't be waited for in labelled form. That needs a decision: drop `from` from the label words, or give the source a different spelling.
+- **`from` is not a label.** `wait for move p from a to b` reads `from a` as the event's source, so a Selector with a `from` label couldn't be waited for in labelled form. Decided on #338: drop `from` from the label words.
+- **Worse errors are accepted.** Decided on #338: the open vocabulary stays, even though some mistakes now fail at the end of the line.
 - **Hazards behave as D8 says.**
   - `move word toward x` reads `word toward …` as a Chunk Expression and fails at `x`.
   - `scale 3 m 4` lexes `3 m` and fails at `4`.
