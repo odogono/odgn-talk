@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # Chapters 5/6/8: a parked Run pays dispatch before checking retained state.
 # Dropping pays dispatch only and faults at the first body instruction when
 # that rate cannot be paid. Replacement leaves earlier Runs intact unless it

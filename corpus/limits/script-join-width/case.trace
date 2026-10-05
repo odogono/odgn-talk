@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # A tightened MaxJoin faults before the second send charge, rolls back variables and preserves the first receiver.
 > load a identity=36a5db7b4bff225074c5c7401d25bb39a8d8b56a0e134932f2034ef0910b126b
 > load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c

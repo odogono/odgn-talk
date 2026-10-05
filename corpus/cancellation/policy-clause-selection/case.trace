@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # Chapter 5: policies belong to the selected clause, after Destructuring and
 # Guards. A Guard error skips its replacing clause without cancelling Runs.
 # Chapter 8: dispatch survives preemption and charges each tried clause once.

@@ -1,4 +1,5 @@
-# Unblessed: interpolation faults and charges derived from Cost Model 0.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
+# Interpolation faults and charges derived from Cost Model 0.
 # Dispatch (4), initial literal (1), hole constant (1), concat (4), and
 # following literal (1) spend 11 Fuel and allocate size("a1") = 18.
 # The following concat would spend 4 Fuel and allocate size("a1b") = 19.

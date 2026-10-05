@@ -1,5 +1,6 @@
 # effect-suspension-commit-failed: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-05 for #326.
+# Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
 > load s identity=6fcc9c83eaafb83ef92581bfbb068e56a88d554028c155a570e805b95a679375
 > stub resource.write value=nothing

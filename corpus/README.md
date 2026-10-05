@@ -61,15 +61,20 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 
 ## Seed blessing
 
-The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except the Session Transcripts' and scoped-effect cases' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
+The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except the Session Transcripts' and scoped-effect cases outside the approved step-4 set (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
 
 The corrected `capabilities/scope-slots` and `scope-suspension-boundaries`
 Traces agree on Go and TS, including TS save/restore replay. Rejected scope
 calls and suspension boundaries consume no guarded instruction Fuel or
 allocation, while dispatch and unwind still apply. They are required by the Go
-passing gate. The related `effect-participant-conflict` correction agrees in
-TS ordinary and save/restore execution; Go Segment-bound Operations remain
-unsupported. All original #222 first-review headers are retained. See the
+passing gate. The related `effect-participant-conflict` correction now agrees
+on Go ordinary execution and TS ordinary/save-restore execution. Go supports
+Segment-bound Operations following #340. The maintainer approved the first
+blessings of seven limit/cancellation regressions and 22 effect cases on
+2026-10-05 for #135 and #326; see the
+[approval record](../docs/reviews/go-step-four-blessings/README.md). Scope cases
+outside that set retain their #222 first-review headers. Four effect cases
+requiring Save or Library replacement remain deferred to #136. See the
 [boundary audit and expectation diff](../docs/reviews/scope-guard-charging/README.md).
 
 The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
@@ -86,8 +91,9 @@ The fenced-text regression cases `load-diagnostics/invalid-text-closing-margin`,
 pin the first offending scalar in a raw or
 backtick closing margin, generated joins' `${` source position, exact Fuel and
 allocation exhaustion, and Segment rollback. Both Cores reproduce their complete
-Traces, including TS save/restore replay. Their `Unblessed` headers remain for
-first human review.
+Traces, including TS save/restore replay. The maintainer approved
+`limits/fenced-text-concat` for #135 on 2026-10-05; the two load diagnostics
+retain their `Unblessed` headers for first human review.
 
 The `stdlib/template-migration` regression pins `${…}` placeholders and `$$`
 in the normative text/date Libraries. It covers literal braces, keys with spaces
@@ -151,9 +157,9 @@ The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover t
 
 The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. Go and TS agree byte for byte, including TS save/restore replay; its first blessing awaits human review. Four existing event-test Traces were corrected after paired execution, and four further expectations were corrected with maintainer approval from TS ordinary and save/restore agreement. This limited exception to the blessing rule does not establish Go parity; [#277](https://github.com/odogono/odgn-talk/issues/277) tracks the remaining verification. See the [charging reconciliation](../docs/reviews/event-test-charging/README.md) for the corrections and required Go facilities.
 
-The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. All three new cases await first human review. The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
+The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. `limits/self-send-persistent` was approved for #135 on 2026-10-05; the two suspension cases still await first human review. The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
 
-The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Three new reply regressions agree on Go, TS ordinary execution and TS save/restore replay before blessing: `suspension/send-reply-preemption` pins a failed reply's unwind spending a Pump cap before catch instructions; `limits/send-wait-retention` counts the 48-byte pending call at suspension, while preserving the receiver after a sender fault; `suspension/send-wait-replacement` pins abandonment, cleanup and late replies when a sender is replaced. These cases retain their `Unblessed` headers for first human review. Paired execution exposed and corrected TS's omitted pending-call size at a Script send's suspension boundary.
+The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Three new reply regressions agree on Go, TS ordinary execution and TS save/restore replay before blessing: `suspension/send-reply-preemption` pins a failed reply's unwind spending a Pump cap before catch instructions; `limits/send-wait-retention` counts the 48-byte pending call at suspension, while preserving the receiver after a sender fault; `suspension/send-wait-replacement` pins abandonment, cleanup and late replies when a sender is replaced. `limits/send-wait-retention` was approved for #135 on 2026-10-05; the two suspension cases retain their `Unblessed` headers for first human review. Paired execution exposed and corrected TS's omitted pending-call size at a Script send's suspension boundary.
 
 The Script-only Join cases `suspension/script-joins`, `suspension/join-preemption`,
 `limits/join-retention` and `limits/script-join-width` agree on actual Go, TS ordinary
@@ -162,8 +168,10 @@ results, fail-fast abandonment with surviving receivers, queued self-sends, repl
 retained across open-body preemption, pending state at suspension, tightened width
 limits and body-error abandonment before a later unwind fault. The paired
 `load-diagnostics/missing-handler-wait` case rejects a plain local Handler call
-that could conceal an indirect nested Join. All five retain their `Unblessed`
-headers for first human review. The mixed-Capability `suspension/joins` case also
+that could conceal an indirect nested Join. `limits/join-retention` and
+`limits/script-join-width` were approved for #135 on 2026-10-05; the two suspension
+cases and the load diagnostic retain their `Unblessed` headers for first human
+review. The mixed-Capability `suspension/joins` case also
 agrees on ordinary Go execution.
 
 Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
