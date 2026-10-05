@@ -13,7 +13,7 @@ func (r *Run) PayHost(fuel, alloc int64) bool { return r.pay(fuel, alloc) }
 
 // ChargeHost refuses unpaid work without faulting until the Host returns.
 func (r *Run) ChargeHost(fuel int64) bool {
-	if r.Cancelling && fuel > r.CleanupBudget-r.CleanupFuel || !r.Cancelling && r.Limits.Fuel > 0 && fuel > r.Limits.Fuel-r.Fuel {
+	if r.Cancelling && fuel > r.CleanupBudget-r.CleanupFuel || !r.Cancelling && (r.Limits.Fuel > 0 || r.Limits.Bounded) && fuel > r.Limits.Fuel-r.Fuel {
 		return false
 	}
 	return r.pay(fuel, 0)

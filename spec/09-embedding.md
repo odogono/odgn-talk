@@ -127,7 +127,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 - **Libraries:** `CompileLibrary(src, imports, declarations)` checks Capability calls against explicit Operation modes and argument Shapes, and compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
 - **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
-- **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)).
+- **Limits** are set per Script at load, and some can be tightened per Delivery ([chapter 6](06-errors-and-limits.md#limits)). In Go, a nonzero `LimitOverride` field always overrides; a zero field overrides only when its corresponding bit is marked in `Set` (for example, `Set: OverrideFuelPerRun` with `FuelPerRun: 0`). This preserves omitted numeric fields while allowing an explicit zero budget.
 
 ## Capability Scopes and Segment-bound effects
 

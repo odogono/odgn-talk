@@ -129,7 +129,7 @@ func (r Runner) execute(c Case) (int, error) {
 		}
 		return len(actual), nil
 	} else if c.Kind == "transcript" {
-		filename = "case.transcript"
+		filename = "session.transcript"
 	}
 	b, e := os.ReadFile(filepath.Join(c.Dir, filename))
 	if e != nil {
