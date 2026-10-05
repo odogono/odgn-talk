@@ -1,0 +1,13 @@
+{
+  "name": "@odgn/northtalk-bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@odgn/northtalk": "workspace:*",
+    "mitata": "^1.0.34"
+  }
+}

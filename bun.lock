@@ -12,6 +12,13 @@
         "typescript": "~6.0.0",
       },
     },
+    "bench/ts": {
+      "name": "@odgn/northtalk-bench",
+      "dependencies": {
+        "@odgn/northtalk": "workspace:*",
+        "mitata": "^1.0.34",
+      },
+    },
     "impl/ts": {
       "name": "@odgn/northtalk",
     },
@@ -165,6 +172,8 @@
     "@nkzw/eslint-plugin": ["@nkzw/eslint-plugin@2.0.0", "", { "peerDependencies": { "eslint": ">= 9" } }, "sha512-IoU8kOqHfnf7se2dGxMD/7RPm6WVjzjOjWSo7FulRx3lJzuZvXioSkT5Nd82l66DH3Pl2whw74lPT1di3KMwFA=="],
 
     "@odgn/northtalk": ["@odgn/northtalk@workspace:impl/ts"],
+
+    "@odgn/northtalk-bench": ["@odgn/northtalk-bench@workspace:bench/ts"],
 
     "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
 
@@ -567,6 +576,8 @@
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
     "minimatch": ["minimatch@3.1.5", "", { "dependencies": { "brace-expansion": "^1.1.7" } }, "sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w=="],
+
+    "mitata": ["mitata@1.0.34", "", {}, "sha512-Mc3zrtNBKIMeHSCQ0XqRLo1vbdIx1wvFV9c8NJAiyho6AjNfMY8bVhbS12bwciUdd1t4rj8099CH3N3NFahaUA=="],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 

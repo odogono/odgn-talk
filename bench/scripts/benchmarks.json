@@ -1,0 +1,28 @@
+{
+  "benchmarks": [
+    {
+      "name": "core/loop",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": { "n": 100, "expect": "5050" }
+    },
+    {
+      "name": "core/fib",
+      "n": 15,
+      "expect": "610",
+      "smoke": { "n": 10, "expect": "55" }
+    },
+    {
+      "name": "core/calls",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": { "n": 100, "expect": "5050" }
+    },
+    {
+      "name": "core/lambdas",
+      "n": 2000,
+      "expect": "6003000",
+      "smoke": { "n": 100, "expect": "15150" }
+    }
+  ]
+}

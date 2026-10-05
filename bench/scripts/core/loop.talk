@@ -1,0 +1,10 @@
+-- A counting loop: the cost of the loop itself and integer addition.
+on run n
+  put 0 into total
+  put 0 into i
+  repeat while i < n
+    add 1 to i
+    add i to total
+  end repeat
+  return total
+end run
