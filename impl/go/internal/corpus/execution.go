@@ -87,9 +87,6 @@ func ExecutionBackends() map[string]Backend {
 	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
 }
 func (executionBackend) Support(c Case) string {
-	if c.Name == "capabilities/scope-slots" || c.Name == "capabilities/scope-suspension-boundaries" {
-		return "scope guard Fuel expectations conflict with Spec charging; tracked in #323"
-	}
 	for _, feature := range []string{"factories"} {
 		if xs, ok := c.Setup[feature].([]any); ok && len(xs) > 0 {
 			return feature + " execution belongs to later Go steps"

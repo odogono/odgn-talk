@@ -431,12 +431,13 @@ Script's named Grant and continues remaining cleanup. Later calls raise
 names in sorted order; disabled state survives Reload and has no reset API.
 Explicit close failures leave the scope open and usable.
 
-Eleven existing scope traces pass unchanged. `scope-slots` and
-`scope-suspension-boundaries` await reconciliation of their Fuel expectations
-with the normative precharge guard rule in
-[#323](https://github.com/odogono/odgn-talk/issues/323). Their expectations are
-preserved. Scope cases requiring save/restore remain under #136; Segment-bound
-effects and Library replacement remain separate work.
+Thirteen scope traces pass, including `scope-slots` and
+`scope-suspension-boundaries` with corrected guard Fuel and allocation
+expectations. Both Cores agree on the complete Traces; the
+[charging reconciliation](../../docs/reviews/scope-guard-charging/README.md)
+records the boundary audit. The original first-review headers remain pending
+human review in #222. Scope cases requiring save/restore remain under #136;
+Segment-bound effects and Library replacement remain separate work.
 
 ### Clock and Timer Standard Capabilities
 

@@ -138,7 +138,10 @@ test('one participant shares Operations and commits with Script Variables', () =
 });
 test('aliases conflict before their Host effects; ordinary errors commit', () => {
   const { group, host } = start('ask db to change\nask alias to change');
-  expect(group.pump(now).reports).toContainEqual(
+  const result = group.pump(now);
+  // 4 dispatch + 12 first call + 1 store into `it` + 4 unwind.
+  expect(result.fuelUsed).toBe(21);
+  expect(result.reports).toContainEqual(
     expect.objectContaining({
       outcome: 'errored',
       error: expect.objectContaining({ code: 'segment participant conflict' }),

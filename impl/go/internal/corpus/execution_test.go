@@ -668,7 +668,7 @@ func TestStopAcceptance(t *testing.T) {
 }
 
 func TestScopeAcceptance(t *testing.T) {
-	cases, err := Discover("../../../../corpus", []string{"capabilities/scope-cancel-run", "capabilities/scope-close-conversion", "capabilities/scope-conversion-fault", "capabilities/scope-dispose", "capabilities/scope-failed-close", "capabilities/scope-limit-fault", "capabilities/scope-malformed-acquisition", "capabilities/scope-ordinary-error", "capabilities/scope-reverse-abandonment", "capabilities/scope-revoked-cleanup", "capabilities/scope-stop"})
+	cases, err := Discover("../../../../corpus", []string{"capabilities/scope-cancel-run", "capabilities/scope-close-conversion", "capabilities/scope-conversion-fault", "capabilities/scope-dispose", "capabilities/scope-failed-close", "capabilities/scope-limit-fault", "capabilities/scope-malformed-acquisition", "capabilities/scope-ordinary-error", "capabilities/scope-reverse-abandonment", "capabilities/scope-revoked-cleanup", "capabilities/scope-slots", "capabilities/scope-stop", "capabilities/scope-suspension-boundaries"})
 	if err != nil {
 		t.Fatal(err)
 	}
