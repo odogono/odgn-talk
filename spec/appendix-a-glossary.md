@@ -218,6 +218,22 @@ _Avoid_: type definitions, SDK, d.ts, host profile
 A piece of advice from tooling about a Script that loads. It never rejects code, and unlike a load-time diagnostic, parity doesn't cover it.
 _Avoid_: warning (unqualified), diagnostic (unqualified)
 
+**Test Script**:
+A Script an author writes to test their own Scripts. It runs beside them in a fresh Script Group for each test, and reaches them only by message. Tooling runs it, and nothing it produces is normative.
+_Avoid_: test suite, spec file, fixture
+
+**Test Handler**:
+A Handler of a Test Script that takes no parameters and is named `test` and then a capital, such as `testIncrements`. Each one is one test, which passes only when every Run it causes completes and every message it causes is handled.
+_Avoid_: test case (the Corpus has cases), test method
+
+**Harness**:
+The Capability only a Test Script is granted, through which it answers the calls the Scripts under test make, reads the calls they made, and moves the Clock on.
+_Avoid_: mock framework, fixture, test double
+
+**Test Library**:
+The Library a Test Script imports its assertions from. It is supplied by the tooling that runs the test, and is not part of the Standard Library.
+_Avoid_: assert library, test framework
+
 **Benchmark**:
 One named, measured workload, written once as a Script and run on each Core, and where it has a counterpart, in a Peer Language. It measures speed, not behaviour, and nothing it produces is normative.
 _Avoid_: perf test, operation (that word means a Capability's action)

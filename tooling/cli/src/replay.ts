@@ -8,37 +8,65 @@ import {
   writeTranscript,
 } from '@odgn/northtalk/session';
 
-export const replay = (
+/** A replay's outcome: its line count, or the first line that differs. */
+export type Replayed =
+  | { lines: number; ok: true }
+  | { actual?: string; expected?: string; line: number; ok: false };
+
+/** Replays a Transcript, and compares what it printed with the recording. */
+export const replayFile = (
   file: string,
-  { trace: traceFile }: { trace?: string | undefined } = {},
-): number => {
+  trace?: (line: string) => void,
+): Replayed => {
   const recorded = readFileSync(file, 'utf8');
-  const trace: string[] = [];
+  const lines: string[] = [];
   const { host, items } = replayTranscript(parseTranscript(recorded), {
     capabilities: canvasCapabilities,
-    trace: line => trace.push(line),
+    trace: line => lines.push(line),
   });
   // Every Trace ends with `> vars` (chapter 11, Running a case).
-  if (trace.filter(line => line.startsWith('> ')).at(-1) !== '> vars') {
+  if (lines.filter(line => line.startsWith('> ')).at(-1) !== '> vars') {
     host.inspect();
   }
-  if (traceFile) {
-    writeFileSync(traceFile, trace.map(line => `${line}\n`).join(''));
-  }
+  lines.forEach(line => trace?.(line));
   const expected = recorded.split('\n');
   const actual = writeTranscript(items).split('\n');
   for (let i = 0; i < Math.max(expected.length, actual.length); i++) {
     if (expected[i] !== actual[i]) {
-      console.error(
-        [
-          `${file}:${i + 1}: the replay differs`,
-          `  expected: ${expected[i] ?? '(end of the Transcript)'}`,
-          `  actual:   ${actual[i] ?? '(end of the Transcript)'}`,
-        ].join('\n'),
-      );
-      return 1;
+      return {
+        ok: false,
+        line: i + 1,
+        ...(expected[i] === undefined ? {} : { expected: expected[i] }),
+        ...(actual[i] === undefined ? {} : { actual: actual[i] }),
+      };
     }
   }
-  console.log(`${file}: replays the same (${actual.length - 1} lines)`);
+  return { ok: true, lines: actual.length - 1 };
+};
+
+/** The lines that explain a replay that differs. */
+export const differs = (
+  file: string,
+  result: Extract<Replayed, { ok: false }>,
+): string[] => [
+  `${file}:${result.line}: the replay differs`,
+  `  expected: ${result.expected ?? '(end of the Transcript)'}`,
+  `  actual:   ${result.actual ?? '(end of the Transcript)'}`,
+];
+
+export const replay = (
+  file: string,
+  { trace: traceFile }: { trace?: string | undefined } = {},
+): number => {
+  const trace: string[] = [];
+  const result = replayFile(file, line => trace.push(line));
+  if (traceFile) {
+    writeFileSync(traceFile, trace.map(line => `${line}\n`).join(''));
+  }
+  if (!result.ok) {
+    console.error(differs(file, result).join('\n'));
+    return 1;
+  }
+  console.log(`${file}: replays the same (${result.lines} lines)`);
   return 0;
 };
