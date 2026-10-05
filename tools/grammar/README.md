@@ -15,6 +15,7 @@ bun tools/grammar/check.ts --tree tools/grammar/sketch/05-text-patterns.talk
 | `check.ts` | parses everything below and fails on a syntax error, a relex, a third token of lookahead, a wrong first error in `broken.talk`, or a listed decision nothing takes |
 | `sketch/` | the syntax sketch from `prototype/joins-sketch`, updated to the Spec's spellings |
 | `broken.talk` | deliberately broken sources, each with the first error it must give |
+| `spike/` | the throwaway Argument Label spike for [#338](https://github.com/odogono/odgn-talk/issues/338), checked only with `--labels` |
 
 The check also parses every `talk` code block in `docs/` and `spec/`, and every `.talk` file in `corpus/`. A block that doesn't start with a declaration is parsed as a Handler body. An example that must fail goes in a plain code block.
 

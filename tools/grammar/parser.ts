@@ -54,6 +54,10 @@ const SIZE_UNITS = new Set<string>(grammar.binary_patterns.size_units);
 const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
+// Spike for #338, on only with `labels`: the Reserved Words that may also be
+// Argument Labels, and the contextual words that may not.
+const LABEL_RESERVED = new Set(['to', 'from', 'by']);
+const LABEL_EXCLUDED = new Set(['with']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
 const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
 const endSuffixExpected = (name: string, at: Token) =>
@@ -117,6 +121,9 @@ export class Parser {
   constructor(
     src: string,
     public stats: Stats = newStats(),
+    // Spike for #338: Argument Labels in Handler heads, Command Calls,
+    // target-first `send`, `pass` and `wait for`.
+    public labels = false,
   ) {
     this.lx = new Lexer(src);
   }
@@ -296,6 +303,25 @@ export class Parser {
   isName(t: Token) {
     return t.t === 'word' && !RESERVED.has(t.v) && t.v !== '_';
   }
+  // Spike for #338: a word that may be an Argument Label. Every decision on
+  // it reads one token, in operator position, after a complete parameter or
+  // argument.
+  isLabel(t: Token) {
+    return (
+      this.labels &&
+      t.t === 'word' &&
+      (this.isName(t) || LABEL_RESERVED.has(t.v)) &&
+      !LABEL_EXCLUDED.has(t.v)
+    );
+  }
+  // `label arg label arg …` after a leading argument, for a Command Call, a
+  // Handler head or an event.
+  labelled(item: () => Node, labels: string[], items: Node[]) {
+    while (this.isLabel(this.peek(0, 'operator'))) {
+      labels.push(this.next('operator').v);
+      items.push(item());
+    }
+  }
   isOp(t: Token, ...vs: string[]) {
     return t.t === 'op' && vs.includes(t.v);
   }
@@ -337,6 +363,11 @@ export class Parser {
       this.fail(t, `${what} (\`all\` can't name a message)`);
     }
     return this.name(what);
+  }
+  // Spike for #338: `move:to:` for `move` with the label `to`; a message with
+  // no labels keeps its plain name.
+  selector(name: string, labels: string[]): string {
+    return labels.length ? `${[name, ...labels].join(':')}:` : name;
   }
   endOfStatement() {
     const t = this.peek(0, 'operator');
@@ -464,6 +495,7 @@ export class Parser {
     const suffixes: string[] = [];
     let during: string | null = null;
     const t = this.peek(0);
+    const labels: string[] = [];
     if (!(
       t.t === 'nl' ||
       t.t === 'eof' ||
@@ -471,6 +503,7 @@ export class Parser {
       this.isOp(t, ',')
     )) {
       params.push(this.pattern());
+      this.labelled(() => this.pattern(), labels, params);
     }
     // Parameters, then a Guard, then suffixes. After a comma, a suffix word
     // is always a suffix, so it can't be a parameter name there.
@@ -478,6 +511,9 @@ export class Parser {
     let canGuard = true;
     for (;;) {
       const c = this.peek(0, 'operator');
+      if (inParams && this.isLabel(c)) {
+        this.fail(c, 'an Argument Label after one leading parameter only');
+      }
       if (canGuard && this.isWord(c, 'where')) {
         this.next('operator');
         guard = this.expr();
@@ -496,6 +532,8 @@ export class Parser {
         this.next();
         during = this.next().v;
         inParams = canGuard = false;
+      } else if (inParams && labels.length) {
+        this.fail(w, 'a suffix (no commas between labelled parameters)');
       } else if (inParams) {
         params.push(this.pattern());
       } else {
@@ -518,7 +556,7 @@ export class Parser {
     this.endOfStatement();
     return {
       k: 'Handler',
-      name,
+      name: this.selector(name, labels),
       params,
       guard,
       suffixes,
@@ -691,12 +729,15 @@ export class Parser {
           value: this.startsExpr(this.peek(0)) ? this.expr() : null,
         };
       }
-      case 'pass':
+      case 'pass': {
         this.next();
-        return {
-          k: 'Pass',
-          name: this.messageName('a message name after `pass`'),
-        };
+        const name = this.messageName('a message name after `pass`');
+        const labels: string[] = [];
+        while (this.isLabel(this.peek(0, 'operator'))) {
+          labels.push(this.next('operator').v);
+        }
+        return { k: 'Pass', name: this.selector(name, labels) };
+      }
       case 'exit':
         this.next();
         this.expectWord('repeat');
@@ -729,8 +770,21 @@ export class Parser {
         wait: this.andWait(),
       };
     }
-    const args = this.startsExpr(p) ? this.exprList() : [];
-    return { k: 'Command', name, args, wait: this.andWait() };
+    return { ...this.commandPhrase(name), wait: this.andWait() };
+  }
+
+  // A Command Call's arguments: a list, or one argument and then `label arg`
+  // pairs (#338 spike).
+  commandPhrase(name: string): Node {
+    const args = this.startsExpr(this.peek(0)) ? [this.expr()] : [];
+    const labels: string[] = [];
+    if (args.length && this.isOp(this.peek(0, 'operator'), ',')) {
+      this.next('operator');
+      args.push(...this.exprList());
+    } else if (args.length) {
+      this.labelled(() => this.expr(), labels, args);
+    }
+    return { k: 'Command', name: this.selector(name, labels), args };
   }
 
   exprList(): Node[] {
@@ -777,6 +831,22 @@ export class Parser {
 
   send(): Node {
     this.next();
+    // Spike for #338: `send to <target>: <command phrase>`. `to` is reserved,
+    // so it can't be a message name, and one token decides.
+    if (this.labels && this.atWord('to')) {
+      this.next();
+      const target = this.expr();
+      this.expectOp(':');
+      const msg = this.messageName('a message name');
+      const phrase = this.commandPhrase(msg);
+      return {
+        k: 'Send',
+        msg: phrase.name,
+        args: phrase.args,
+        target,
+        wait: this.andWait(),
+      };
+    }
     const msg = this.messageName('a message name');
     let args: Node[] = [];
     if (this.atWord('with')) {
@@ -888,6 +958,7 @@ export class Parser {
   event(): Node {
     const name = this.messageName('an event name');
     const pats: Node[] = [];
+    const labels: string[] = [];
     let from: Node | null = null;
     const atFrom = () =>
       this.atOperatorWord('from') && this.startsExpr(this.la2('wait-from'));
@@ -899,7 +970,12 @@ export class Parser {
       atFrom()
     )) {
       pats.push(this.pattern());
-      while (this.isOp(this.peek(0, 'operator'), ',')) {
+      // `from` and an operand is always the source (#338 spike).
+      while (!atFrom() && this.isLabel(this.peek(0, 'operator'))) {
+        labels.push(this.next('operator').v);
+        pats.push(this.pattern());
+      }
+      while (!labels.length && this.isOp(this.peek(0, 'operator'), ',')) {
         this.next('operator');
         pats.push(this.pattern());
       }
@@ -909,7 +985,7 @@ export class Parser {
       // A postfix-level operand, so `… from okButton or 30 s` leaves `or` to the timeout.
       from = this.chunkLevel();
     }
-    return { k: 'Event', name, pats, from };
+    return { k: 'Event', name: this.selector(name, labels), pats, from };
   }
 
   ifStatement(): Node {
@@ -1473,7 +1549,7 @@ export class Parser {
         };
         for (let index = 0; index < t.parts!.length - 1; index++) {
           const hole = t.parts![index]!.hole!;
-          const inner = new Parser(this.lx.src, this.stats);
+          const inner = new Parser(this.lx.src, this.stats, this.labels);
           inner.offset = hole.start;
           inner.brackets = ['{'];
           const at = this.lx.lex(hole.start, 'operand');
@@ -2069,8 +2145,9 @@ export class Parser {
 export const parse = (
   src: string,
   stats: Stats = newStats(),
+  labels = false,
 ): { ast: Node[] | null; error: SyntaxError | null; stats: Stats } => {
-  const p = new Parser(src, stats);
+  const p = new Parser(src, stats, labels);
   try {
     return { ast: p.source(), error: null, stats };
   } catch (error) {
