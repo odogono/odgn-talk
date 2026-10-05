@@ -1,5 +1,5 @@
-# Event-test Fuel corrected from TS ordinary/save-restore agreement.
-# Maintainer-approved TS-only correction; Go parity remains tracked in #277.
+# Corrected event-test Fuel agrees on Go and TS ordinary execution.
+# TS save/restore also agrees; Go save/restore remains tracked in #136.
 # A named delivery's owner Target does not match watched; the moved leaf does.
 > load old identity=af39b53cacb9c9bd6654006f37bec298c47fcda8a3dc3744b812f012781d5d22
 > load next identity=7b999f656e056790bbb2cf4cc70154312ed4c49152cfcc6c9b14abb91929536a

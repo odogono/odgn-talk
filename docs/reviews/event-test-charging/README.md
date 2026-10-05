@@ -32,7 +32,7 @@ Broadcast Decisions were added; its reviewed expectations remain unchanged.
 
 | Corrected case | Required Go facility |
 | --- | --- |
-| [reload/extend-units](../../../corpus/reload/extend-units/case.trace) | Reload/extension units, #136 |
+| [reload/extend-units](../../../corpus/reload/extend-units/case.trace) | Extension units (`Extend`), #136; ordinary Reload is implemented |
 
 Each correction removes 4 Fuel per executed event test. The `run` totals and
 receiving `pumped` totals decrease; these four cases have no observation-budget

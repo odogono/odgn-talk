@@ -800,7 +800,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 207 cases, including all text-model, load-diagnostic,
+The gate contains 209 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -832,9 +832,13 @@ agree on both Cores and retain their `Unblessed` headers for first human review;
 they pin FIFO and self sends, full/missing/invalid receiver errors, record order,
 immediate delivery surviving a sender error, and preempted receiver identity
 without Value size, and same-Segment Persistent State checks after self-send.
-Three other corrected TS traces need Go facilities outside
-this slice; their remaining Go parity is tracked in
+The corrected `decisions/broadcast-outcomes` and `objects/wait-target` Traces
+also agree on Go after Broadcast Decisions and Object Message Paths were added.
+Only `reload/extend-units` still requires Go's deferred `Extend` facility;
+its remaining Go parity is tracked in
 [#277](https://github.com/odogono/odgn-talk/issues/277).
+Go save/restore replay parity remains deferred to
+[#136](https://github.com/odogono/odgn-talk/issues/136).
 
 The reviewed `suspension/send-and-wait` Trace also passes unchanged, with replies,
 receiver errors, unmatched messages and timeout. Three new paired reply cases
