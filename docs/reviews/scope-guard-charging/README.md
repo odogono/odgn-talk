@@ -56,9 +56,12 @@ save/restore replay produced the same Trace. Only then were the two scope
 expectations written with the TS blessing command. Both cases are now required
 by Go's scope acceptance test and `corpus-passing.txt`.
 
-The participant-conflict fixture was checked in TS ordinary and save/restore
-replay. Go's backend explicitly does not support Segment-bound Operations, so
-this correction makes no Go parity claim. Its 21 Fuel is 4 dispatch + 12 for
+At the time of this audit, the participant-conflict fixture was checked in TS
+ordinary and save/restore replay only; Go did not yet support Segment-bound
+Operations. Since #340, Go also reproduces the corrected ordinary Trace. The
+maintainer approved that case's first blessing for #326 on 2026-10-05; see the
+[step-4 approval record](../go-step-four-blessings/README.md).
+Its 21 Fuel is 4 dispatch + 12 for
 the successful first call and Nothing conversion + 1 store into `it` + 4 unwind.
 The conflicting second call contributes no instruction charge or Host work.
 

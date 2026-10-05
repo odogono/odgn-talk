@@ -1,5 +1,6 @@
 # effect-rollback-failed: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-05 for #326.
+# Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
 > load s identity=2b261503c5e2e0259b6f7159d9474ad598a5a33d090494e73bbe734ce14bbc67
 > stub resource.write value=nothing

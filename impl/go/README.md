@@ -444,7 +444,10 @@ multiple Segments. Whole-case replay of `effect-close-preemption-fault` and
 `effect-replace-fatal` await Library replacement. Those facilities remain under
 [#136](https://github.com/odogono/odgn-talk/issues/136). Native tests separately
 exercise participant preemption, fatal Reload, Stop and disposal boundaries;
-Save itself is not implemented.
+Save itself is not implemented. The maintainer approved the first blessings of
+the 22 supported effect cases on 2026-10-05; the
+[step-4 approval record](../../docs/reviews/go-step-four-blessings/README.md)
+lists the cases and remaining replay requirements.
 
 ### Capability Scopes
 
@@ -862,8 +865,9 @@ blessing, covering work ordering, cap-held resumptions, nanosecond rounding and
 long durations. The reviewed Queueing Policy case also passes; two new
 policy regressions agree on both Cores before blessing, covering selected
 clauses, Guard skips, preemption, and dispatch and Persistent State limits.
-Their `Unblessed` headers remain until human review. Listing a new regression
-case here protects it while its first human blessing review remains pending.
+The maintainer approved both policy regressions for #135 on 2026-10-05.
+Listing an unreviewed regression case here protects it while its first human
+blessing review remains pending.
 Three reviewed Decision cases pin errors, faults and preemption before sealing.
 A new Decision regression agrees on both Cores and retains its `Unblessed`
 header for first human review; it covers dispatch charges, dropping, veto
@@ -875,8 +879,9 @@ header for first human review; it covers pinned locals, live Script Variables,
 branch priority, Guard errors, non-consuming matches, sender filters, timeouts
 and internal error observation. The reviewed `suspension/wait-for` case now
 agrees on Go, including Script sends and sender filters. Three new send regressions
-agree on both Cores and retain their `Unblessed` headers for first human review;
-they pin FIFO and self sends, full/missing/invalid receiver errors, record order,
+agree on both Cores; `limits/self-send-persistent` was approved for #135 on
+2026-10-05, while the two suspension cases retain their `Unblessed` headers.
+They pin FIFO and self sends, full/missing/invalid receiver errors, record order,
 immediate delivery surviving a sender error, and preempted receiver identity
 without Value size, and same-Segment Persistent State checks after self-send.
 The corrected `decisions/broadcast-outcomes` and `objects/wait-target` Traces
@@ -890,8 +895,9 @@ Go save/restore replay parity remains deferred to
 The reviewed `suspension/send-and-wait` Trace also passes unchanged, with replies,
 receiver errors, unmatched messages and timeout. Three new paired reply cases
 pin resumption unwinding under a Pump cap, pending-call retention faults, and
-replacement cancellation with cleanup and ignored late replies. They keep
-their `Unblessed` headers for first human review.
+replacement cancellation with cleanup and ignored late replies.
+`limits/send-wait-retention` was approved for #135 on 2026-10-05; the two
+suspension cases keep their `Unblessed` headers for first human review.
 
 Six reviewed ordinary Capability cases and `limits/mailbox-depth` pass unchanged: calls, argument Shapes,
 load checks, Host failures, charge faults and omitted optional arguments.

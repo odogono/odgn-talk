@@ -1,5 +1,6 @@
 # effect-decision-ok: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-05 for #326.
+# Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
 > load s identity=c578665109002f546899c9e4c4bba4ee3c15e1ae97804f073b1548022075e2b4
 > stub resource.write value=nothing

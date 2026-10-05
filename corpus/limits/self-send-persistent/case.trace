@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # Self-addressed mailbox messages count at same-Segment return and wait.
 # The paid send survives the sender's Persistent State fault.
 > load returner identity=e943407eda8630d4f021ef56680d4fc5ac432f8e363935c2a614f52d954ee4f3

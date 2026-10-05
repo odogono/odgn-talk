@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # Pending Join members count at suspension; a retention fault preserves accepted receiver work.
 > load a identity=6ff150626fa0fea22fe2be15a804bfd4f3eae4791da14508fb9270458c74329f
 > load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c

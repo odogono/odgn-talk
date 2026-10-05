@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #135.
 # The 48-byte pending call puts the sender past its Persistent State limit.
 # The paid send survives the fault, but its reply is abandoned.
 > load a identity=1930591fa6e287db7fecbeb081f10b240d9c861dfb9edff7a27eb6a761e6e369
