@@ -29,10 +29,10 @@ type Stop struct {
 func (*Stop) isReport() {}
 
 // Reload validates and checks carried state before terminating old Runs and
-// rolling back their participants. Library replacement is not supported yet.
+// rolling back their participants.
 func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	g := s.group
-	exports, importIDs, states, calls := libraryOptions(g.libraries)
+	_, importIDs, _, _ := libraryOptions(g.libraries)
 	fields := map[string]string{"source": corevalue.DisplayText(source), "carry": "no", "identity": fmt.Sprintf("%x", codeIdentity("script", s.name, source, importIDs))}
 	if carry == CarryVariables {
 		fields["carry"] = "yes"
@@ -49,6 +49,16 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	if carry != ResetVariables && carry != CarryVariables {
 		return nil, g.refuse(InvalidValue, "invalid carry policy")
 	}
+	state, e := s.prepareReload(source, carry)
+	if e != nil {
+		return nil, e
+	}
+	return s.applyReload(state, source)
+}
+
+func (s *Script) prepareReload(source string, carry CarryOver) (*machine.State, error) {
+	g := s.group
+	exports, importIDs, states, calls := libraryOptions(g.libraries)
 	declarations := map[string]map[string]check.OperationCheck{}
 	for name, grant := range s.grants {
 		if grant.revoked && !grant.disabled {
@@ -101,6 +111,13 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 			return nil, g.refuse(HostErrorCode("state too large"), "carried Script Variables exceed Persistent State")
 		}
 	}
+	return state, nil
+}
+
+func (s *Script) applyReload(state *machine.State, source string) ([]Report, error) {
+	g := s.group
+	_, importIDs, _, _ := libraryOptions(g.libraries)
+	wasStopped := s.stopped
 	stop := &Stop{Script: s.name, Reason: "reload"}
 	var reports []Report
 	for _, x := range s.runs {
@@ -177,8 +194,10 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 		}
 		stopFields["abandoned"] = ids(xs)
 	}
-	g.record("stopped", false, []string{s.name}, stopFields)
-	reports = append(reports, stop)
+	if !wasStopped {
+		g.record("stopped", false, []string{s.name}, stopFields)
+		reports = append(reports, stop)
+	}
 	for _, x := range runs {
 		reports = append(reports, g.settleReloadDelivery(s, x.delivery, x.id)...)
 	}
@@ -190,6 +209,9 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	s.state.Gone = true
 	state.ScriptNames = slices.Clone(s.state.ScriptNames)
 	s.state = state
+	s.source = source
+	s.extensions = nil
+	s.identity = codeIdentity("script", s.name, source, importIDs)
 	g.mu.Lock()
 	s.stopped = false
 	s.stopReason = ""

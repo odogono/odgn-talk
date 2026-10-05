@@ -10,16 +10,16 @@ type Join struct {
 	Waiting, Ready bool
 	Failure        *SendResume
 	Index          int
-	early          []joinReply
+	Early          []JoinReply
 }
 type JoinMember struct {
 	WaitMS int64
 	ID     string
 	Reply  *SendResume
 }
-type joinReply struct {
-	id    string
-	reply SendResume
+type JoinReply struct {
+	ID    string
+	Reply SendResume
 }
 
 func (r *Run) AddJoinMember(id string) { r.Join.Members = append(r.Join.Members, JoinMember{ID: id}) }
@@ -38,7 +38,7 @@ func (r *Run) SettleJoin(id string, p SendResume) bool {
 		}
 		m.Reply = &p
 		if !j.Waiting {
-			j.early = append(j.early, joinReply{id, p})
+			j.Early = append(j.Early, JoinReply{id, p})
 			return false
 		}
 		if p.Reason != "" || p.Timeout || p.Failed {
@@ -64,18 +64,18 @@ func (r *Run) SettleJoin(id string, p SendResume) bool {
 	return false
 }
 
-// BeginJoinWait applies early replies in arrival order, just as replies to an
+// BeginJoinWait applies Early replies in arrival order, just as replies to an
 // already suspended Join are applied. Pending timers are installed by Group.
 func (r *Run) BeginJoinWait() bool {
 	j := r.Join
-	early := j.early
-	j.early = nil
+	Early := j.Early
+	j.Early = nil
 	for n := range j.Members {
 		j.Members[n].Reply = nil
 	}
 	j.Waiting = true
-	for _, reply := range early {
-		r.SettleJoin(reply.id, reply.reply)
+	for _, reply := range Early {
+		r.SettleJoin(reply.ID, reply.Reply)
 	}
 	return j.Ready
 }

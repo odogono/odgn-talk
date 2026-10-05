@@ -52,3 +52,21 @@ func (r *replayValues) construct(v value.Value) (talk.Value, error) {
 		return talk.Nothing, fmt.Errorf("unknown replay handle %s", v.Display())
 	})
 }
+
+func (r *replayValues) hasReceivedFunction(v value.Value) bool {
+	if v.Kind == value.Function {
+		_, received := r.functions[v.Display()]
+		return received
+	}
+	for _, item := range v.Items {
+		if r.hasReceivedFunction(item) {
+			return true
+		}
+	}
+	for _, pair := range v.Entries {
+		if r.hasReceivedFunction(pair.Val) {
+			return true
+		}
+	}
+	return false
+}

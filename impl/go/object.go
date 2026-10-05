@@ -44,6 +44,12 @@ func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 		}
 		kind.props[prop.Name] = prop
 	}
+	c.mu.Lock()
+	if c.objectKinds == nil {
+		c.objectKinds = map[string]*ObjectKind{}
+	}
+	c.objectKinds[kind.name] = kind
+	c.mu.Unlock()
 	return kind, nil
 }
 

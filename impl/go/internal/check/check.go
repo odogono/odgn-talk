@@ -31,6 +31,8 @@ type Symbol struct {
 	MaySuspend         bool
 }
 type Options struct {
+	Existing *Unit // preceding extension declarations, with stable variable slots
+
 	Library          bool
 	Objects          []string
 	OwnerProperties  map[string]bool
@@ -121,6 +123,21 @@ func (u *Unit) declaration(n *syntax.Node, s Symbol) {
 }
 func Check(tree *syntax.Tree, options Options) *Unit {
 	u := &Unit{Tree: tree, Options: options, Symbols: map[string]Symbol{}, Bodies: map[*syntax.Node]*Body{}}
+	if previous := options.Existing; previous != nil {
+		for node, body := range previous.Bodies {
+			u.Bodies[node] = body
+		}
+		u.Definitions = slices.Clone(previous.Definitions)
+		u.Variables = slices.Clone(previous.Variables)
+		for name, symbol := range previous.Symbols {
+			for _, body := range previous.Bodies {
+				if body.Name == symbol.Name && body.MaySuspend {
+					symbol.MaySuspend = true
+				}
+			}
+			u.Symbols[name] = symbol
+		}
+	}
 	if u.Options.PatternSize == 0 {
 		for _, l := range generated.Limits.Limit {
 			if l.Go == "PatternSize" {
@@ -200,6 +217,13 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 	}
 	// Every initializer is checked against only Constants above its declaration.
 	available := map[string]bool{}
+	if options.Existing != nil {
+		for name, symbol := range options.Existing.Symbols {
+			if symbol.Kind == "definition" {
+				available[name] = true
+			}
+		}
+	}
 	for _, n := range tree.Declarations {
 		if n.Private && !options.Library {
 			u.add("not in a script", n.Pos())
@@ -268,6 +292,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 	u.checkHandlerWaits()
 	u.checkDecisions()
 	u.orderDiagnostics()
+	u.Options.Existing = nil
 	return u
 }
 
@@ -275,6 +300,9 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 // cannot hide a Suspension Point, including a Join reached through a Handler.
 func (u *Unit) checkHandlerWaits() {
 	for _, body := range u.Bodies {
+		if u.inheritedBody(body) {
+			continue
+		}
 		syntax.Walk(body.Node, func(n *syntax.Node) bool {
 			if n != body.Node && n.Kind == "lambda" {
 				return false
@@ -1175,4 +1203,15 @@ func (u *Unit) binarySizes(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	}
+}
+
+// Inherited bodies retain their original bindings. Only the new Entry is
+// checked against the extended name table; inherited metadata remains usable
+// for suspension and Decision checks on calls from that Entry.
+func (u *Unit) inheritedBody(body *Body) bool {
+	if u.Options.Existing == nil {
+		return false
+	}
+	_, inherited := u.Options.Existing.Bodies[body.Node]
+	return inherited
 }

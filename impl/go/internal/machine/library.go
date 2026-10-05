@@ -7,14 +7,17 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-func functionCode(code *State, name string) string {
+func functionCode(code *State, body int, name string) string {
 	// Lambda body names include the enclosing Handler/function for internal
 	// identity. Display uses only the given token's line and column.
 	if parts := strings.Split(name, ":"); len(parts) > 1 {
 		name = strings.Join(parts[len(parts)-2:], ":")
 	}
-	if code.Unit.Kind != "library" {
+	if code.Unit.Kind != "library" && codeName(code, body) == code.Unit.Name {
 		return name
+	}
+	if code.Unit.Kind != "library" {
+		return codeName(code, body) + ":" + name
 	}
 	return code.Unit.Name + ":" + name
 }

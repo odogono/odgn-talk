@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/replay"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -91,4 +92,13 @@ func (objects objectReplay) bindings(setup Setup) (map[string]*talk.Object, erro
 		out[name] = o
 	}
 	return out, nil
+}
+
+func restoredObjects(group *talk.Group) objectReplay {
+	out := objectReplay{}
+	for _, raw := range replay.Objects(group) {
+		o := raw.Handle.(*talk.Object)
+		out[objectRef{raw.Kind, o.ID()}] = o
+	}
+	return out
 }

@@ -1,4 +1,4 @@
-# Cases the Go Core must continue to pass (issues #132, #133, #134 and #135).
+# Cases the Go Core must continue to pass (issues #132–#136).
 # New regression cases retain Unblessed headers until their first human review.
 
 builtins/function-values
@@ -27,6 +27,7 @@ capabilities/effect-cancellation-commit-failed
 capabilities/effect-cancellation-error
 capabilities/effect-cancellation-limit
 capabilities/effect-close-conversion
+capabilities/effect-close-preemption-fault
 capabilities/effect-commit-failed
 capabilities/effect-commit-unknown
 capabilities/effect-completion
@@ -37,10 +38,14 @@ capabilities/effect-ordinary-error
 capabilities/effect-participant-conflict
 capabilities/effect-pass
 capabilities/effect-reload-carry
+capabilities/effect-reload-fatal
+capabilities/effect-replace-fatal
+capabilities/effect-replace-library
 capabilities/effect-rollback-failed
 capabilities/effect-segment-roundtrip
 capabilities/effect-suspension-commit-failed
 capabilities/effect-unrelated-abandon-failed
+capabilities/grants-as-used
 capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args
@@ -48,14 +53,19 @@ capabilities/optional-args-fuel
 capabilities/optional-args-join
 capabilities/ordinary-grants
 capabilities/revoke-in-flight
+capabilities/revoke-reissue
 capabilities/scope-cancel-run
 capabilities/scope-close-conversion
 capabilities/scope-conversion-fault
+capabilities/scope-disabled-reject
+capabilities/scope-disabled-variables-only
 capabilities/scope-dispose
 capabilities/scope-failed-close
+capabilities/scope-grants-as-used
 capabilities/scope-limit-fault
 capabilities/scope-malformed-acquisition
 capabilities/scope-ordinary-error
+capabilities/scope-preemption-save
 capabilities/scope-reverse-abandonment
 capabilities/scope-revoked-cleanup
 capabilities/scope-slots
@@ -73,6 +83,8 @@ capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
 capabilities/standard-timer
+counters/lifetime
+counters/variables-only
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
@@ -185,8 +197,22 @@ objects/wait-target
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+reload/extend-units
+reload/extension-state-cap
 reload/function-staleness
 reload/reload-carry-and-discard
+reload/replacement-transitive
+save-restore/overdue-waits-fire-in-deadline-order
+save-restore/preempted-run-keeps-segment-base
+save-restore/reissue-charge-slice
+save-restore/reissue-fuel-cutoff
+save-restore/send-and-wait-pair-restores
+save-restore/settle-answer-and-fail
+save-restore/settle-reissue-and-adopt
+save-restore/unbound-grant-and-unresolved-object
+save-restore/unsettled-call-is-lost
+save-restore/variables-only-restore
+save-restore/withheld-library
 stdlib/calls
 stdlib/errors-name-the-call
 stdlib/template-migration

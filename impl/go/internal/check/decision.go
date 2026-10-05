@@ -7,6 +7,9 @@ import "github.com/odogono/odgn-talk/impl/go/internal/syntax"
 func (u *Unit) checkDecisions() {
 	called := map[string]bool{}
 	for _, b := range u.Bodies {
+		if u.inheritedBody(b) {
+			continue
+		}
 		syntax.Walk(b.Node, func(x *syntax.Node) bool {
 			if x != b.Node && (x.Kind == "lambda" || x.Kind == "event") {
 				return false
@@ -30,7 +33,7 @@ func (u *Unit) checkDecisions() {
 			}
 			return true
 		})
-		if deciding {
+		if deciding && !u.inheritedBody(b) {
 			f := decisionFlow{unit: u, body: b}
 			entry := f.node(nil, false)
 			f.block([]*decisionPoint{entry}, b.Node.Body, decisionContext{})

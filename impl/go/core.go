@@ -16,6 +16,11 @@ import (
 )
 
 const (
+	StateTooLarge      HostErrorCode = "state too large"
+	EffectsPending     HostErrorCode = "effects pending"
+	InvalidSave        HostErrorCode = "invalid save"
+	SaveMismatch       HostErrorCode = "save mismatch"
+	UnknownCall        HostErrorCode = "unknown call"
 	ClockBackwards     HostErrorCode = "clock backwards"
 	NameReused         HostErrorCode = "name reused"
 	ReentrantCall      HostErrorCode = "reentrant call"
@@ -24,8 +29,9 @@ const (
 )
 
 type Core struct {
-	mu    sync.Mutex
-	units map[compileKey]*lower.Unit
+	mu          sync.Mutex
+	units       map[compileKey]*lower.Unit
+	objectKinds map[string]*ObjectKind
 }
 
 type compileKey struct {

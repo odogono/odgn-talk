@@ -9,3 +9,18 @@ func enclosingHandler(body *check.Body) string {
 	}
 	return body.Name
 }
+
+func codeName(code *State, body int) string {
+	name := code.Unit.Bodies[body].CodeName
+	if name == "" {
+		name = code.Unit.Name
+	}
+	return name
+}
+func (r *Run) CodeName() string {
+	if len(r.Frames) == 0 {
+		return r.State.Unit.Name
+	}
+	f := r.Frames[len(r.Frames)-1]
+	return codeName(f.Code, f.Body)
+}

@@ -26,26 +26,35 @@ type Group struct {
 	traceQueue []string
 	recording  bool
 
-	mu             sync.Mutex
-	core           *Core
-	options        GroupOptions
-	libraries      map[string]*Library
-	objects        map[objectKey]*Object
-	scripts        []*Script
-	inputs         []delivery
-	unrouted       []delivery
-	orphanReplies  []delivery
-	stoppedSends   map[*Script]bool
-	controlsQueued bool
-	nextDelivery   int64
-	nextBroadcast  int64
-	calls          map[CallID]*operationCall
-	nextTimer      int64
-	clock          time.Time
-	pumping        bool
-	effectUnknown  bool // sticky: an external participant's state is unresolved
+	mu                sync.Mutex
+	core              *Core
+	options           GroupOptions
+	libraries         map[string]*Library
+	objects           map[objectKey]*Object
+	scripts           []*Script
+	inputs            []delivery
+	unrouted          []delivery
+	orphanReplies     []delivery
+	stoppedSends      map[*Script]bool
+	controlsQueued    bool
+	nextDelivery      int64
+	nextBroadcast     int64
+	calls             map[CallID]*operationCall
+	nextTimer         int64
+	nextSave          int64
+	restored          bool
+	unsettled         map[CallID]*Call
+	settlementsOpen   bool // protected by mu; closes when the first accepted Pump starts
+	deferredDecisions []*Decided
+	clock             time.Time
+	pumping           bool
+	effectUnknown     bool // sticky: an external participant's state is unresolved
 }
 type Script struct {
+	source     string
+	extensions []string
+	identity   [32]byte
+
 	group      *Group
 	name       string
 	state      *machine.State
@@ -287,7 +296,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 			}
 		}
 	}
-	s := &Script{grants: grants, group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
+	s := &Script{source: o.Source, identity: id, grants: grants, group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
 	g.mu.Lock()
 	if o.Owner != nil {
 		o.Owner.owner = s
@@ -513,6 +522,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		return PumpResult{}, &HostError{InvalidValue, "negative Pump budget"}
 	}
 	g.clock = now
+	g.settlementsOpen = false
 	g.pumping = true
 	inputs := g.inputs
 	g.inputs = nil
