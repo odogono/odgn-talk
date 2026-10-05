@@ -19,7 +19,9 @@ const usage = `Usage:
   northtalk fmt [--check] <file>…          format in place, or check layout
   northtalk fmt [--check] -                read source from stdin
   northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
-                                          print Lints (default: standard)`;
+                                          print Lints (default: standard)
+  northtalk test [--manifest <file>] [--only <text>] [<path>…]
+                                          run Test Scripts and Transcripts`;
 
 const main = async (args: string[]): Promise<number> => {
   const [command = 'repl', ...rest] = args[0]?.startsWith('--')
@@ -33,7 +35,13 @@ const main = async (args: string[]): Promise<number> => {
     const value = rest[i + 1];
     if (value === undefined || value.startsWith('--')) {
       throw new Error(
-        `${name} needs ${name === '--profile' ? 'a profile' : 'a file'}`,
+        `${name} needs ${
+          name === '--profile'
+            ? 'a profile'
+            : name === '--only'
+              ? 'some text'
+              : 'a file'
+        }`,
       );
     }
     rest.splice(i, 2);
@@ -98,6 +106,15 @@ const main = async (args: string[]): Promise<number> => {
       throw new Error(usage);
     }
     return replay(rest[0]!, { trace });
+  }
+  if (command === 'test') {
+    const manifest = option('--manifest');
+    const only = option('--only');
+    if (rest.some(arg => arg.startsWith('--'))) {
+      throw new Error(usage);
+    }
+    const { runTests } = await import('./test');
+    return runTests(rest.length ? rest : ['.'], { manifest, only });
   }
   if (command === 'help' || command === '--help' || command === '-h') {
     console.log(usage);

@@ -10,6 +10,7 @@ northtalk fmt [--check] -
 northtalk lint [--profile beginner|standard] [--manifest <file>] <file>...
 northtalk lsp
 northtalk debug <script> [--trace <file>]
+northtalk test [--manifest <file>] [--only <text>] [<path>…]
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt until the whole Entry is complete; final EOF reports unfinished syntax.
@@ -40,6 +41,50 @@ node tooling/cli/dist/main.js lint --profile beginner example.talk
 The shared [Lint engine](../stack/) supplies advice in `standard` by default. It prints `file:line:column: level [id] message` on stdout, with the Core's original source positions. Both shipped profiles contain only hints and warnings; Lints never reject a Script or make the command fail. Syntax errors are separate, printed on stderr; recovery lets advice after an error appear too. Exit codes are 0 for advice alone, 1 for syntax errors, and 2 for invalid arguments or file errors. The command implements all eighteen catalogue entries using the Core parser and checker without loading or executing the Script. Add `--manifest host.talk-manifest.json` to supply chapter 9's Host Manifest, including Library and well-known Object bindings. `unknown-message` is silent without a manifest. Checker load diagnostics do not become Lints or change the lint command's exit status; an invalid or unreadable manifest is a file/argument error (exit 2).
 
 A standalone `-- lint: ignore <id>` comment suppresses that id on the next physical line. Blank lines break adjacency. The [catalogue](../stack/lints.toml) records wording, profile levels and the Join threshold. The linter leaves source files unchanged. The REPL remains Bun-only.
+
+## Testing Scripts
+
+`northtalk test` runs the tests an author writes for their own Scripts ([ADR 0056](../../docs/adr/0056-user-scripts-are-tested-by-a-black-box-test-script.md)). This section is the whole convention. It is Tooling, not normative, and a runner for another Core can follow it as written.
+
+```sh
+bun run northtalk test
+bun run northtalk test --manifest host.talk-manifest.json examples/
+bun run northtalk test --only testIncrements counter.test.talk
+```
+
+- **What runs:** each path is a file or a directory searched recursively, skipping dot directories and `node_modules`. The default is `.`. Two kinds of file are tests:
+  - A **Test Script** (`*.test.talk`): each parameterless Handler named `test` and then a capital, such as `on testIncrements`, is one test.
+  - A **Session Transcript** (`*.transcript`): it is one test, replayed as `northtalk replay` replays it, with its own `:grant` and `:mock` lines.
+- **The Group:**
+  - Every test gets a fresh Script Group.
+  - It holds every other `.talk` file in the Test Script's directory, each named by its file stem, and the Test Script itself, named `<stem>Test`.
+  - The Test Script reaches the others only by message: `send inc to counter and wait`.
+  - An optional `on setup` runs before each test.
+- **Grants:**
+  - Every Script gets `console`, a `clock`, a `calendar` in UTC and the root `locale`. Each Grant in the `--manifest` Host Manifest is also given as a mock with the manifest's Operation Shapes, and the manifest's Libraries are loaded.
+  - Without a manifest, a Script that uses another Capability doesn't load.
+  - Host Objects and `timer` aren't offered.
+- **The harness Capability:** granted to the Test Script only. `<op>` names a manifest Operation as `<grant>.<operation>`, or `console.read`.
+  - `tell harness to stub "<op>", value` queues an answer for the next call of `<op>`.
+  - `tell harness to stubFail "<op>", {code: "…", …}` queues a failure for it.
+  - `ask harness to calls "<op>"` gives the argument lists of every call so far, oldest first.
+  - `ask harness to advance 3 s and wait` moves the Clock on. Each deadline it passes fires in order.
+  - A call of an immediate or suspending Operation with nothing queued fails with `unstubbed call`. A fire-and-forget call is only recorded.
+- **The test Library:** `use assert, assertEqual from test`.
+  - `assert(condition, message)` throws `{code: "assertion failed", message}` unless `condition` is `true`.
+  - `assertEqual(actual, expected)` throws `{code: "assertion failed", expected, actual}` unless they are equal under `=`.
+  - Any other `throw` fails a test too.
+- **The Clock:**
+  - Each test starts at `2026-01-01T00:00:00Z`.
+  - Time moves only on `advance`, or when the test waits with nothing else able to run. Then it jumps to the next deadline, so `wait for reply or 10 s` times out at once.
+  - A test that waits for something that can never come fails.
+- **The pass rule:** a test passes when its Run completes, no Run in the Group errors and no message goes unhandled. After the test Run ends, the Group runs on to idle without moving the Clock, so a background error still fails it.
+- **Output:**
+  - stdout has `ok <file> <test>` for a pass.
+  - A failure prints `FAIL <file>:<line>:<col> <test>`, each problem indented, and the console output as `  | ` lines. The position is where the error was raised. For an assertion, or a failure with no position, it's the Test Handler's.
+  - A summary line ends the output.
+  - `--only <text>` keeps the tests whose `<file> <test>` contains the text.
+  - Exit codes: 0 when every test passes, 1 on any failure or when no tests are found, and 2 for invalid arguments, a missing path or an invalid manifest.
 
 ## Language server
 

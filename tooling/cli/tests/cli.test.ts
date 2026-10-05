@@ -230,3 +230,248 @@ test('lint reads an explicit Host Manifest and keeps checker diagnostics out of 
   writeFileSync(manifest, '{}');
   expect(run(['lint', '--manifest', manifest, file]).code).toBe(2);
 });
+
+// A directory of Scripts under test, a Test Script and a Host Manifest
+// granting `http`.
+const testDir = (tests: string) => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  writeFileSync(
+    join(dir, 'counter.talk'),
+    [
+      'script variable n = 0',
+      'on inc',
+      '  add 1 to n',
+      '  return n',
+      'end inc',
+      'on boom',
+      '  throw {code: "bad"}',
+      'end boom',
+      'on later',
+      '  wait for ping or 10 s',
+      '  if it is nothing then return "timed out"',
+      '  return "pinged"',
+      'end later',
+      'on fetch url',
+      '  ask http to get url and wait',
+      '  return it',
+      'end fetch',
+      'on log line',
+      '  tell http to note line',
+      'end log',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(join(dir, 'counter.test.talk'), tests);
+  const manifest = join(dir, 'host.talk-manifest.json');
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      kind: 'demo',
+      version: '1',
+      language: coreVersions.language,
+      grants: [
+        {
+          name: 'http',
+          capability: 'http',
+          operations: [
+            { name: 'get', mode: 'suspending', args: ['text'] },
+            { name: 'note', mode: 'fire-and-forget', args: ['text'] },
+          ],
+        },
+      ],
+      libraries: [],
+      messages: [],
+      objects: [],
+      objectKinds: [],
+    }),
+  );
+  return { dir, manifest };
+};
+
+test('test runs each Test Handler against the Scripts beside it', () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assert, assertEqual from test',
+      'script variable seed = 0',
+      'on setup',
+      '  put 5 into seed',
+      'end setup',
+      'on testIncrements',
+      '  send inc to counter and wait',
+      '  assertEqual(it, 1)',
+      '  assertEqual(seed, 5)',
+      'end testIncrements',
+      'on testFreshGroup',
+      '  send inc to counter and wait',
+      '  assert(it = 1)',
+      'end testFreshGroup',
+      'on testWithParameters x',
+      'end testWithParameters',
+      'on helper',
+      'end helper',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(0);
+  const file = join(dir, 'counter.test.talk');
+  expect(stdout).toBe(
+    [
+      `ok ${file} testIncrements`,
+      `ok ${file} testFreshGroup`,
+      '2 passed, 0 failed',
+      '',
+    ].join('\n'),
+  );
+});
+
+test('test reports a failed assertion, a background error and an unhandled message', () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assert, assertEqual from test',
+      'on testEqual',
+      '  send inc to counter and wait',
+      '  assertEqual(it, 2)',
+      'end testEqual',
+      'on testThrows',
+      '  say "about to fail"',
+      '  assert(false, "nope")',
+      'end testThrows',
+      'on testBackground',
+      '  send boom to counter',
+      'end testBackground',
+      'on testUnhandled',
+      '  send nope to counter',
+      'end testUnhandled',
+      'on testStuck',
+      '  wait for never',
+      'end testStuck',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  const file = join(dir, 'counter.test.talk');
+  expect(stdout).toContain(
+    `FAIL ${file}:2:1 testEqual\n  counterTest testEqual errored: {code: "assertion failed", expected: 2, actual: 1}\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${file}:6:1 testThrows\n  counterTest testThrows errored: {code: "assertion failed"}\n    nope\n  | about to fail\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${join(dir, 'counter.talk')}:7:3 testBackground\n  counter boom errored: {code: "bad"}\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${file}:13:1 testUnhandled\n  counter has no Handler for nope\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${file}:16:1 testStuck\n  testStuck waits for something that never comes\n`,
+  );
+  expect(stdout).toEndWith('0 passed, 5 failed\n');
+  // --only picks tests by file and name.
+  const only = run(['test', '--manifest', manifest, '--only', 'Equal', dir]);
+  expect(only.stdout).toEndWith('0 passed, 1 failed\n');
+  expect(run(['test', '--only', 'nothing', dir])).toMatchObject({
+    code: 1,
+    stderr: 'No tests found\n',
+  });
+});
+
+test('test grants the Host Manifest as mocks the harness answers', () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assertEqual from test',
+      'on testStub',
+      '  tell harness to stub "http.get", {status: 200}',
+      '  send fetch with "u" to counter and wait',
+      '  assertEqual(it, {status: 200})',
+      '  ask harness to calls "http.get"',
+      '  assertEqual(it, [["u"]])',
+      'end testStub',
+      'on testFire',
+      '  send log with "hi" to counter and wait',
+      '  ask harness to calls "http.note"',
+      '  assertEqual(it, [["hi"]])',
+      'end testFire',
+      'on testStubFail',
+      '  tell harness to stubFail "http.get", {code: "missing"}',
+      '  send fetch with "u" to counter',
+      'end testStubFail',
+      'on testUnstubbed',
+      '  send fetch with "u" to counter',
+      'end testUnstubbed',
+      'on testUnknown',
+      '  tell harness to stub "http.nope", 1',
+      'end testUnknown',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  const file = join(dir, 'counter.test.talk');
+  const counter = join(dir, 'counter.talk');
+  expect(stdout).toContain(`ok ${file} testStub\n`);
+  expect(stdout).toContain(`ok ${file} testFire\n`);
+  expect(stdout).toContain(
+    `FAIL ${counter}:15:3 testStubFail\n  counter fetch errored: {code: "missing", capability: "http", operation: "get"}\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${counter}:15:3 testUnstubbed\n  counter fetch errored: {code: "unstubbed call", capability: "http", operation: "get"}\n    No answer is queued for http.get\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${file}:22:3 testUnknown\n  counterTest testUnknown errored: {code: "no such operation", name: "http.nope", capability: "harness", operation: "stub"}\n`,
+  );
+  // Without the manifest, the Script that uses `http` doesn't load.
+  expect(run(['test', dir]).stdout).toContain(`counter.talk doesn't load: `);
+});
+
+test('test runs on a virtual Clock the harness moves on', () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assertEqual from test',
+      'on testTimeout',
+      '  send later to counter and wait',
+      '  assertEqual(it, "timed out")',
+      'end testTimeout',
+      'on testAdvance',
+      '  ask clock to now',
+      '  put it into before',
+      '  send later to counter',
+      '  ask harness to advance 3 s and wait',
+      '  ask clock to now',
+      '  assertEqual(it - before, 3 s)',
+      'end testAdvance',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(stdout).toEndWith('2 passed, 0 failed\n');
+  expect(code).toBe(0);
+});
+
+test('test replays Session Transcripts as tests', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const recorded = readFileSync(
+    join(corpus, 'basics/session.transcript'),
+    'utf8',
+  );
+  writeFileSync(join(dir, 'good.transcript'), recorded);
+  writeFileSync(
+    join(dir, 'bad.transcript'),
+    recorded.replace('7.50 GBP\n', '8 GBP\n'),
+  );
+  const { code, stdout } = run(['test', dir]);
+  expect(code).toBe(1);
+  expect(stdout).toContain(`ok ${join(dir, 'good.transcript')}\n`);
+  expect(stdout).toContain(`FAIL ${join(dir, 'bad.transcript')}:`);
+  expect(stdout).toContain('    expected: 8 GBP\n    actual:   7.50 GBP\n');
+  expect(stdout).toEndWith('1 passed, 1 failed\n');
+});
+
+test('test refuses a missing path and other files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  writeFileSync(join(dir, 'plain.talk'), 'on go\nend go\n');
+  expect(run(['test', join(dir, 'missing')]).code).toBe(2);
+  expect(run(['test', join(dir, 'plain.talk')]).code).toBe(2);
+  expect(run(['test', '--only']).code).toBe(2);
+});
