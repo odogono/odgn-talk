@@ -3,6 +3,7 @@ import {
   units,
   Lexer,
   parseSource,
+  parseSourceRecovering,
   exportsOf,
   type Binding,
   type SemanticName,
@@ -40,9 +41,47 @@ const location = (
   uri: analysis.document.uri,
   range: rangeAt(analysis.document.text, start, end),
 });
-const targetKey = (analysis: Analysis, name: SemanticName): string | null => {
+const resolvedBinding = (
+  analysis: Analysis,
+  name: SemanticName,
+): Binding | null => {
   if (name.binding) {
-    return bindingKey(analysis, name.binding);
+    return name.binding;
+  }
+  if (name.role !== 'message') {
+    return null;
+  }
+  const send = analysis.nodes.find(
+    n =>
+      n.rule === 'Send' &&
+      n.span.start <= name.span.start &&
+      name.span.end <= n.span.end,
+  );
+  if (send) {
+    const to = send.children.findIndex(
+      c => c.kind === 'token' && c.text === 'to',
+    );
+    const receiver = send.children[to + 1];
+    // A different Script or Object has its own Message Path. Only an explicit
+    // self receiver can resolve to a Handler in this document.
+    if (receiver?.kind !== 'node') {
+      return null;
+    }
+    const leaves = semanticElements(receiver).filter(c => c.kind !== 'node');
+    if (leaves.length !== 1 || leaves[0]?.text !== 'me') {
+      return null;
+    }
+  }
+  return (
+    analysis.checked.tree.scopes[0]?.bindings.find(
+      b => b.kind === 'handler' && b.name === name.text,
+    ) ?? null
+  );
+};
+const targetKey = (analysis: Analysis, name: SemanticName): string | null => {
+  const binding = resolvedBinding(analysis, name);
+  if (binding) {
+    return bindingKey(analysis, binding);
   }
   if (name.role !== 'import') {
     return null;
@@ -261,6 +300,117 @@ export const rename = (
   return { changes };
 };
 
+// Selector parts are wire names; source-facing signatures keep labels between arguments.
+const messagePhrase = (selector: string): string => {
+  if (!selector.includes(':')) {
+    return selector;
+  }
+  const parts = selector.slice(0, -1).split(':');
+  return parts.map((part, i) => `${part} arg${i + 1}`).join(' ');
+};
+const handlerHead = (
+  analysis: Analysis,
+  selector: string,
+): string | undefined => {
+  const declaration = analysis.names.find(
+    n => n.role === 'declaration' && n.text === selector,
+  );
+  const node =
+    declaration &&
+    analysis.nodes.find(
+      n =>
+        n.rule === 'Handler' &&
+        n.span.start <= declaration.span.start &&
+        declaration.span.end <= n.span.end,
+    );
+  if (!node) {
+    return undefined;
+  }
+  const syntax = elements<SyntaxElement>(analysis.syntax).find(
+    (e): e is SyntaxNode =>
+      e.kind === 'node' &&
+      e.rule === 'Handler' &&
+      e.start <= declaration!.span.start &&
+      declaration!.span.end <= e.end,
+  );
+  const boundary = syntax?.children.find(
+    (e): e is Token =>
+      e.kind === 'token' && (e.t === 'nl' || ['where', ','].includes(e.v)),
+  );
+  return analysis.document.text
+    .slice(node.span.start, boundary?.pos ?? node.span.end)
+    .trim();
+};
+
+const labelCompletion = (before: string, selectors: string[]) => {
+  const syntax = elements<SyntaxElement>(parseSourceRecovering(before).tree);
+  const offset = before.length;
+  for (const node of syntax
+    .filter((e): e is SyntaxNode => e.kind === 'node')
+    .reverse()) {
+    if (!['Handler', 'Send', 'SimpleStatement'].includes(node.rule)) {
+      continue;
+    }
+    const list = node.children.find(
+      (e): e is SyntaxNode => e.kind === 'node' && e.rule === 'ExpressionList',
+    );
+    const children = list?.children ?? node.children;
+    const labels = children
+      .filter((e): e is SyntaxNode => e.kind === 'node' && e.rule === 'Label')
+      .map(e => e.children[0] as Token);
+    const active = labels.find(t => t.pos <= offset && offset <= t.end);
+    const prior = labels.filter(t => t.end < (active?.pos ?? offset));
+    const args = children
+      .filter(
+        (e): e is SyntaxNode =>
+          e.kind === 'node' && ['Expression', 'Pattern'].includes(e.rule),
+      )
+      .filter(e =>
+        elements<SyntaxElement>(e).some(
+          t => t.kind === 'token' && t.t !== 'eof',
+        ),
+      );
+    const last = args.at(-1);
+    if (
+      !last ||
+      args.length !== prior.length + 1 ||
+      (!active && (last.end >= offset || before.slice(last.end).trim()))
+    ) {
+      continue;
+    }
+    const message = node.children.find(
+      (e): e is SyntaxNode => e.kind === 'node' && e.rule === 'MessageName',
+    );
+    const head = message
+      ? elements<SyntaxElement>(message).find(
+          (e): e is Token => e.kind === 'token',
+        )
+      : node.children[0];
+    if (head?.kind !== 'token') {
+      continue;
+    }
+    const result = [
+      ...new Set(
+        selectors
+          .filter(name => name.includes(':'))
+          .flatMap(name => {
+            const parts = name.slice(0, -1).split(':');
+            const next = parts[prior.length + 1];
+            return parts[0] === head.v &&
+              prior.every((t, i) => parts[i + 1] === t.v) &&
+              next?.startsWith(active?.v ?? '')
+              ? [next]
+              : [];
+          }),
+      ),
+    ];
+    if (result.length) {
+      return result.map(label => item(label, 14));
+    }
+  }
+  return [];
+};
+
 // Only the parser's original incomplete diagnostic is authoritative. Resuming
 // a lexer after an invalid escape would re-read a closer as a new opener and
 // incorrectly suppress completion in subsequent code.
@@ -317,9 +467,13 @@ export const completion = (
   }
   if (
     /^\s*on\s+[\p{L}\p{N}_]*$/u.test(line) ||
-    /\bsend\s+[\p{L}\p{N}_]*$/u.test(line)
+    /\bsend\s+[\p{L}\p{N}_]*$/u.test(line) ||
+    /\bsend\s+to\s+.+:\s*[\p{L}\p{N}_]*$/u.test(line)
   ) {
-    return (manifest?.messages ?? []).map(name => item(name, 3));
+    const legacySend = /\bsend\s+[\p{L}\p{N}_]*$/u.test(line);
+    return (manifest?.messages ?? [])
+      .filter(name => !legacySend || !name.includes(':'))
+      .map(name => item(messagePhrase(name), 3));
   }
   const use = /^\s*use\s+[^\n]*$/.test(line);
   if (use) {
@@ -343,6 +497,15 @@ export const completion = (
         item(name, 6, doc.document.library),
       ),
     );
+  }
+  const labels = labelCompletion(before, [
+    ...(manifest?.messages ?? []),
+    ...(analysis.checked.tree.scopes[0]?.bindings
+      .filter(b => b.kind === 'handler')
+      .map(b => b.name) ?? []),
+  ]);
+  if (labels.length) {
+    return labels;
   }
   if (/[0-9](?:\.[0-9]*)?[\p{L}]*$/u.test(line)) {
     return units.map(unit => item(unit.name, 11, unit.kind));
@@ -395,13 +558,37 @@ export const completion = (
     scope = analysis.checked.tree.scopes[scope]?.parent ?? undefined;
   }
   const partial = /[\p{L}\p{N}_]*$/u.exec(line)![0];
-  return analysis.checked.tree.scopes
+  const commandPosition = /^\s*[\p{L}\p{N}_]*$/u.test(line);
+  const messages = commandPosition
+    ? (manifest?.messages ?? [])
+        .filter(name => name.startsWith(partial))
+        .map(name => item(messagePhrase(name), 3))
+    : [];
+  const bindings = analysis.checked.tree.scopes
     .filter(s => scopes.has(s.id))
     .flatMap(s =>
       s.bindings
-        .filter(b => b.name.startsWith(partial))
-        .map(b => item(b.name, b.kind === 'function' ? 3 : 6)),
+        .filter(
+          b =>
+            b.name.startsWith(partial) &&
+            (commandPosition || !b.name.includes(':')),
+        )
+        .map(b =>
+          item(
+            b.kind === 'handler' && b.name.includes(':')
+              ? (handlerHead(analysis, b.name)?.replace(/^on\s+/i, '') ??
+                  messagePhrase(b.name))
+              : b.name,
+            b.kind === 'function' || (commandPosition && b.kind === 'handler')
+              ? 3
+              : 6,
+          ),
+        ),
     );
+  return [
+    ...bindings,
+    ...messages.filter(m => !bindings.some(b => b.label === m.label)),
+  ];
 };
 
 export const hover = (
@@ -435,7 +622,7 @@ export const hover = (
   const name = nameAt(analysis, offset);
   const target = definition(all, analysis, offset);
   const home = target ? all.get(target.uri) : analysis;
-  const binding = name?.binding;
+  const binding = name ? resolvedBinding(analysis, name) : null;
   if (!name || !home) {
     return null;
   }
@@ -448,7 +635,7 @@ export const hover = (
     display = `${display}\nHome Script: ${analysis.document.library ?? analysis.document.uri}`;
   } else if (binding?.kind === 'function' || binding?.kind === 'handler') {
     // A Function Value in Library code acquires the importing Script's Home.
-    display = `Home Script: ${analysis.document.library ?? analysis.document.uri}\n${binding.kind} ${definitionName}`;
+    display = `Home Script: ${analysis.document.library ?? analysis.document.uri}\n${binding.kind === 'handler' ? (handlerHead(home, definitionName ?? '') ?? messagePhrase(definitionName ?? '')) : `function ${definitionName}`}`;
   }
   return display
     ? {

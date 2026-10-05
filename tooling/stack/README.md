@@ -34,7 +34,9 @@ It preserves all other
 line breaks, including their LF, CRLF or CR spelling, the BOM, and whether
 the source ends in a newline. Comments are only re-indented; trailing comments
 have one space before them. Spacing that distinguishes syntax, such as
-`say (x)` versus `say(x)` and `< <` versus `<<`, is retained.
+`say (x)` versus `say(x)` and `< <` versus `<<`, is retained. Labelled
+Handler heads, Command Calls, `pass`, event patterns and target-first `send`
+keep their labels and parse identically after formatting.
 
 From a clean checkout, with Bun 1.4.2, run these commands at the repository root:
 
@@ -144,6 +146,20 @@ reported at the importing `use` line. Constants are evaluated by the Core's
 initializer and shown in the display form. Operations show their manifest
 Declaration; Function Values show their Home Script. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
+
+Argument Labels participate through their full Selector: `move knight to "e4"`
+navigates to `on move piece to square`, separately from an unlabelled `move`.
+Static self sends resolve to local Handlers; other receivers' Message Paths
+are not inferred. Completion and hover show labelled source rather than
+colon-separated wire names. Manifest `messages[].name` contains the Selector,
+with no extra fields; the reader checks its parts and argument count and uses
+argument placeholders in completion. Between arguments, completion offers the
+next matching label. Legacy `send` completion offers only unlabelled messages.
+
+If an unknown Selector's final word is read as a label with no argument (such
+as `log error rest` or `say total count`), `likely-argument-label` advice points
+at that word alongside the Core's end-of-line error. It appears without a
+manifest too and is suppressed for known Handler or manifest Selectors.
 
 Interpolation holes participate in diagnostics, references, rename and Lints as
 ordinary code. Raw text and escaped placeholders remain literal. Completion

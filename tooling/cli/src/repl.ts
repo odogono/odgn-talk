@@ -11,7 +11,6 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { parseEntry } from '@odgn/northtalk';
 import { SessionHost, writeTranscript } from '@odgn/northtalk/session';
 import session from '../../../spec/data/session.toml';
 import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
@@ -207,8 +206,7 @@ export const repl = ({
     }
     entry.push(line);
     const source = entry.join('\n');
-    const parsed = parseEntry(source, () => false);
-    if (parsed.error && parsed.incomplete) {
+    if (host.incomplete(source)) {
       settle();
       return;
     }

@@ -165,6 +165,7 @@ export type {
 } from './semantic';
 export {
   syntaxText,
+  syntaxSelector,
   type SyntaxNode,
   type SyntaxElement,
   type SyntaxRule,
@@ -189,3 +190,5 @@ export { localeCapability, type LocaleImpl } from './locale-capability';
 /** Spec data for browser-safe tooling; these tables add no execution behavior. */
 export { grammar, units } from './generated/syntax';
 export { stdlibSources } from './generated/stdlib';
+
+export { validMessageSelector } from './selectors';

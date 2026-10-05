@@ -5,6 +5,9 @@ import {
   lowerTree,
   parseSourceRecovering,
   stdlibSources,
+  syntaxSelector,
+  type SyntaxElement,
+  type Token,
   UnitLoadError,
   type Binding,
   type LibraryExport,
@@ -160,6 +163,45 @@ export const analyzeWorkspace = (
         source: 'northtalk syntax',
         message: syntaxError.message,
       });
+    }
+    // ADR 0055's accidental-label traps fail only after the likely word. Keep
+    // the Core error, and offer advice only when that Selector has no Handler.
+    if (syntaxError && ['nl', 'eof'].includes(syntaxError.tok.t)) {
+      const syntax = elements<SyntaxElement>(p.tree);
+      const label = syntax
+        .filter((e): e is SyntaxNode => e.kind === 'node' && e.rule === 'Label')
+        .map(e => e.children[0] as Token)
+        .find(
+          t =>
+            t.line === syntaxError.tok.line &&
+            document.text.slice(t.end, syntaxError.tok.pos).trim() === '',
+        );
+      const command =
+        label &&
+        syntax.find(
+          (e): e is SyntaxNode =>
+            e.kind === 'node' &&
+            e.rule === 'SimpleStatement' &&
+            e.start <= label.pos &&
+            label.end <= e.end,
+        );
+      const head = command?.children[0];
+      if (label && command && head?.kind === 'token') {
+        const selector = syntaxSelector(command, head.v);
+        const known =
+          result.tree.scopes[0]?.bindings.some(
+            b => b.kind === 'handler' && b.name === selector,
+          ) || manifest?.messages.includes(selector);
+        if (!known) {
+          diagnostics.push({
+            range: rangeAt(document.text, label.pos, label.end),
+            severity: 4,
+            code: 'likely-argument-label',
+            source: 'northtalk advice',
+            message: `“${label.raw}” is read as an Argument Label and needs an argument. No known Handler has this Selector; check this word or separate positional arguments with a comma.`,
+          });
+        }
+      }
     }
     // Without a manifest we deliberately offer grammar-only diagnostics.
     if (manifest) {

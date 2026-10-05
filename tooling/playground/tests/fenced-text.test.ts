@@ -70,3 +70,43 @@ test('a raw closer must match the maximal quote run exactly', () => {
   expect(current.regions).toEqual([{ kind: 'raw', width: 3 }]);
   expect(tokens('""" + 1', current)).toContainEqual(['1', 'number']);
 });
+
+test('highlights parsed labels separately from arguments and ordinary names', () => {
+  for (const line of [
+    'on move piece toward square',
+    'move knight toward "e4"',
+    'send to board: move knight toward "e4"',
+    'wait for move piece toward square',
+    'pass move toward',
+  ]) {
+    const result = tokens(line, state());
+    expect(result).toContainEqual(['toward', 'labelName']);
+    expect(
+      result
+        .filter(([text]) => ['piece', 'square', 'knight'].includes(text))
+        .every(([, style]) => style === 'variableName'),
+    ).toBe(true);
+  }
+  expect(tokens('put toward into square', state())).toContainEqual([
+    'toward',
+    'variableName',
+  ]);
+  expect(tokens('move knight to "e4"', state())).toContainEqual([
+    'to',
+    'labelName',
+  ]);
+});
+
+test('continued arguments retain their command context for label highlighting', () => {
+  const current = state();
+  tokens('move (', current);
+  tokens('  1', current);
+  expect(tokens(') toward 2', current)).toContainEqual(['toward', 'labelName']);
+  const pattern = state();
+  tokens('on move [', pattern);
+  tokens(' piece', pattern);
+  expect(tokens('] toward square', pattern)).toContainEqual([
+    'toward',
+    'labelName',
+  ]);
+});

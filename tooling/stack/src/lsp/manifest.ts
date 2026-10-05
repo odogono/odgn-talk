@@ -1,5 +1,6 @@
 import {
   coreVersions,
+  validMessageSelector,
   type GrantDecls,
   type Kind,
   type Shape,
@@ -131,7 +132,14 @@ export const readManifest = (value: unknown): HostManifest => {
   return {
     grants,
     libraries,
-    messages: array(data.messages).map(v => string(record(v).name)),
+    messages: array(data.messages).map(v => {
+      const message = record(v);
+      const name = string(message.name);
+      if (!validMessageSelector(name, array(message.args).length)) {
+        throw new Error(`Invalid message Selector ${name}`);
+      }
+      return name;
+    }),
     objects: array(data.objects).map(v => string(record(v).name)),
   };
 };

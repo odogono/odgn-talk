@@ -1,7 +1,12 @@
 // The Script tab is the session source (ADR 0051). Apply compares the tab's
 // top-level declarations with the session's, and enters each new or changed
 // one as an Entry; one the tab no longer has can only go by a Restart.
-import { parseSource } from '@odgn/northtalk';
+import {
+  parseSource,
+  syntaxSelector,
+  type SyntaxNode,
+  type Token,
+} from '@odgn/northtalk';
 
 export type TabDeclaration = {
   /** What a redefinition replaces: a Handler, function, constant or Script Variable by name, or a `use` line by its text. */
@@ -13,7 +18,17 @@ export type TabDeclaration = {
 const NAMED =
   /^\s*(on|function|constant|script\s+variable)\s+([\p{L}_][\p{L}\p{N}_]*)/u;
 
-const keyOf = (source: string): string => {
+const keyOf = (source: string, declaration: SyntaxNode): string => {
+  const handler = declaration.children.find(
+    c => c.kind === 'node' && c.rule === 'Handler',
+  );
+  if (handler?.kind === 'node') {
+    const message = handler.children.find(
+      c => c.kind === 'node' && c.rule === 'MessageName',
+    ) as SyntaxNode;
+    const name = (message.children[0] as SyntaxNode).children[0] as Token;
+    return `on ${syntaxSelector(handler, name.v)}`;
+  }
   const named = NAMED.exec(source);
   return named
     ? `${named[1]!.replaceAll(/\s+/gu, ' ')} ${named[2]}`
@@ -37,7 +52,7 @@ export const splitDeclarations = (
       c.kind === 'node' && c.rule === 'Declaration'
         ? [
             {
-              key: keyOf(text.slice(c.start, c.end)),
+              key: keyOf(text.slice(c.start, c.end), c),
               source: text.slice(c.start, c.end).replace(/\s+$/u, ''),
             },
           ]

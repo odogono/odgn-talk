@@ -48,7 +48,7 @@ test('the browser LSP bundle checks, hovers and navigates without Bun, Node or H
       TextEncoder: typeof TextEncoder;
     } = { TextEncoder, TextDecoder };
     runInNewContext(await build.outputs[0]!.text(), context);
-    expect(context.result).toBe(4);
+    expect(context.result).toBe(6);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

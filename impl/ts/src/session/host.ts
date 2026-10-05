@@ -367,6 +367,12 @@ export class SessionHost {
     }
   }
 
+  /** Tooling's line prompt uses the same Entry classification as input(). */
+  incomplete(source: string): boolean {
+    const parsed = parseEntry(source, name => this.isHandler(name));
+    return Boolean(parsed.error && parsed.incomplete);
+  }
+
   /** An Entry or a Session Command. Returns the lines it printed. */
   input(source: string): string[] {
     this.paused();
