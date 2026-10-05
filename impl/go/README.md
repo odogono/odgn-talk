@@ -998,7 +998,11 @@ without Value size, and same-Segment Persistent State checks after self-send.
 The corrected `decisions/broadcast-outcomes` and `objects/wait-target` Traces
 also agree on Go after Broadcast Decisions and Object Message Paths were added.
 `reload/extend-units` passes unchanged, including old Function Values after
-Extend. Every supported Trace also runs with Save/Restore between Pumps,
+Extend. The nine-case event-test acceptance set requires all eight corrected
+Traces and the observation regression in the passing gate, with exact ordinary
+and save/restore replay. The [charging reconciliation](../../docs/reviews/event-test-charging/README.md)
+records their complete parity verification. Every supported Trace also runs
+with Save/Restore between Pumps,
 subject to chapter 11's exclusions for old Host handles. Live effects require an
 `effects pending` refusal with unchanged inspection and counters before replay
 continues on the original Group.

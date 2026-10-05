@@ -1,5 +1,4 @@
-# Corrected event-test Fuel agrees on Go and TS ordinary execution.
-# TS save/restore also agrees; Go save/restore remains tracked in #136.
+# Corrected event-test Fuel agrees on Go and TS ordinary/save-restore execution.
 # broadcast-outcomes: a pending wait makes its Script a recipient without a
 # Handler. Broadcasts never climb or report unhandled. A veto takes precedence
 # over an undecided error, and the report keeps both. Without a veto, that
