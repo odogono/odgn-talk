@@ -34,6 +34,15 @@ type Limits struct {
 	Fuel, Alloc, Persistent int64
 	Depth, Pattern, Join    int
 }
+
+// Scope is the most recently opened surviving Host scope. The embedding owns
+// slots; the machine uses this view to guard executed suspension boundaries.
+type Scope struct{ Grant, Name string }
+
+func (s *Scope) Error() value.Value {
+	return ErrorValue("scope open", value.Pair{Key: "capability", Val: text(s.Grant)}, value.Pair{Key: "scope", Val: text(s.Name)})
+}
+
 type State struct {
 	Stdlib                            bool
 	Libraries                         map[string]*State
@@ -61,6 +70,7 @@ type Frame struct {
 	Accepted      bool
 }
 type Run struct {
+	OpenScope      *Scope
 	Rollback       []string
 	WaitNS         *big.Int
 	EventWait      *EventWait
@@ -368,6 +378,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 				break
 			}
 			if err != nil {
+				if f.Clause && !pay(0, 0) {
+					break
+				}
 				r.raise(*err)
 			} else {
 				f.Stack = f.Stack[:len(f.Stack)-n]
@@ -411,6 +424,19 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		if i.Name == "make-pattern" && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text) > r.Limits.Pattern {
 			r.fault("pattern")
 			break
+		}
+		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
+			if f.Clause {
+				if !r.pay(4, 0) {
+					break
+				}
+				f.Clause = false
+			}
+			r.raise(r.OpenScope.Error())
+			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
+				r.Status = Preempted
+			}
+			continue
 		}
 		key := ""
 		for _, entry := range generated.Machine.Instruction {

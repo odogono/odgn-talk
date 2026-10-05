@@ -1,5 +1,6 @@
 # Cases the Go Core must continue to pass (issues #132, #133 and #134).
 # New regression cases retain Unblessed headers until their first human review.
+
 builtins/function-values
 builtins/kind-of
 builtins/object-kind
@@ -25,6 +26,17 @@ capabilities/optional-args-fuel
 capabilities/optional-args-join
 capabilities/ordinary-grants
 capabilities/revoke-in-flight
+capabilities/scope-cancel-run
+capabilities/scope-close-conversion
+capabilities/scope-conversion-fault
+capabilities/scope-dispose
+capabilities/scope-failed-close
+capabilities/scope-limit-fault
+capabilities/scope-malformed-acquisition
+capabilities/scope-ordinary-error
+capabilities/scope-reverse-abandonment
+capabilities/scope-revoked-cleanup
+capabilities/scope-stop
 capabilities/standard-calendar
 capabilities/standard-calendar-errors
 capabilities/standard-calendar-validation

@@ -632,6 +632,28 @@ func TestStopAcceptance(t *testing.T) {
 	}
 }
 
+func TestScopeAcceptance(t *testing.T) {
+	cases, err := Discover("../../../../corpus", []string{"capabilities/scope-cancel-run", "capabilities/scope-close-conversion", "capabilities/scope-conversion-fault", "capabilities/scope-dispose", "capabilities/scope-failed-close", "capabilities/scope-limit-fault", "capabilities/scope-malformed-acquisition", "capabilities/scope-ordinary-error", "capabilities/scope-reverse-abandonment", "capabilities/scope-revoked-cleanup", "capabilities/scope-stop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Root: "../../../../corpus", Output: io.Discard, Backends: ExecutionBackends()}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(b), "\n"+c.Name+"\n") {
+				t.Fatal("Scope acceptance missing from gate")
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestBroadcastDecisionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
 	cases, err := Discover(root, []string{"decisions/broadcast-outcomes", "decisions/broadcast-decision-reports-every-veto"})

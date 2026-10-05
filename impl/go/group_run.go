@@ -548,6 +548,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 			if r.Status == machine.Stopped {
 				s.state.Variables = r.Base
+				g.abandonScopes(s, x, &result.Reports)
 				common["state"], common["end"] = fmt.Sprint(s.persistentWithoutRun(x)), "stop"
 				g.record("seg", false, []string{string(x.id), x.how}, common)
 				g.stopScript(s, *x.stopReason, &result.Reports, &settlements, seal)
@@ -607,7 +608,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				s.active = nil
 				continue
 			}
-			report := g.finish(s, x, common, func() {
+			report := g.finish(s, x, common, &result.Reports, func() {
 				if r.Status == machine.Completed && !r.Passed && x.openVerdict() {
 					verdict := Allowed
 					if r.Vetoed {
@@ -785,7 +786,7 @@ func scriptError(v corevalue.Value) *ScriptError {
 	data, _ := corevalue.NewMap(fields)
 	return &ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: Value{data}}
 }
-func (g *Group) finish(s *Script, x *execution, common map[string]string, seal func()) *RunEnd {
+func (g *Group) finish(s *Script, x *execution, common map[string]string, reports *[]Report, seal func()) *RunEnd {
 	r := x.run
 	end, outcome := "return", Completed
 	if r.Passed {
@@ -836,6 +837,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 	}
 	g.abandonSend(x)
 	g.writeRaises(x, len(r.Raises))
+	g.abandonScopes(s, x, reports)
 	common["state"] = fmt.Sprint(s.persistentWithoutRun(x))
 	common["end"] = end
 	g.record("seg", false, []string{string(x.id), x.how}, common)

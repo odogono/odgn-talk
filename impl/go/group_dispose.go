@@ -38,6 +38,7 @@ func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settleme
 		seal(d, run, Undecided, Nothing, Cancelled)
 	}
 	for _, x := range runs {
+		g.abandonScopes(s, x, reports)
 		stop.DiscardedRuns = append(stop.DiscardedRuns, x.id)
 		if x.waitCall != "" {
 			stop.PendingCalls = append(stop.PendingCalls, x.waitCall)

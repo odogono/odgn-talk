@@ -98,7 +98,8 @@ type execution struct {
 	deciding      bool
 	segment       int
 	calls         int64
-	stopReason    *string // Stop landed at this Run's Host crossing
+	stopReason    *string     // Stop landed at this Run's Host crossing
+	scopes        []scopeSlot // surviving scopes in successful-opening order
 	waitCall      CallID
 	abandonCall   CallID
 }
@@ -265,6 +266,11 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 			}
 		}
 		for name, grant := range grants {
+			for op := range grant.operations {
+				if scope := grant.definition.ops[op].Scope; used[name][op] && scope != nil && scope.Opens != "" {
+					used[name][scope.Abandon] = true
+				}
+			}
 			for op := range grant.operations {
 				if !used[name][op] {
 					delete(grant.operations, op)
@@ -600,6 +606,12 @@ func (g *Group) Inspect() Inspection {
 	out := Inspection{}
 	for _, s := range g.scripts {
 		view := ScriptView{Name: s.name}
+		for name, grant := range s.grants {
+			if grant.disabled {
+				view.DisabledGrants = append(view.DisabledGrants, name)
+			}
+		}
+		slices.Sort(view.DisabledGrants)
 		line := "vars " + s.name
 		for j, name := range s.state.Unit.Variables {
 			v := Value{s.state.Variables[j]}

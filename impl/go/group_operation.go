@@ -32,6 +32,9 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		err := operationError(code, fields)
 		return corevalue.Value{}, &err, false
 	}
+	if grant.disabled {
+		return fail("capability disabled", named...)
+	}
 	if grant.revoked {
 		return fail("capability revoked", named...)
 	}
@@ -55,6 +58,27 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return corevalue.Value{}, err, false
 		}
 	}
+	if op.Mode == Suspending && x.run.OpenScope != nil {
+		err := x.run.OpenScope.Error()
+		return corevalue.Value{}, &err, false
+	}
+	if scope := op.Scope; scope != nil {
+		code, name := "", scope.Closes
+		if scope.Opens != "" {
+			name = scope.Opens
+			if x.scopeIndex(grantName, name) >= 0 {
+				code = "scope already open"
+			} else if x.run.Join != nil {
+				code = "scope in join"
+			}
+		} else if x.scopeIndex(grantName, name) < 0 {
+			code = "scope not open"
+		}
+		if code != "" {
+			err := scopeError(code, grantName, opName, name)
+			return corevalue.Value{}, &err, false
+		}
+	}
 	fuel, _ := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel})
 	if !pay(fuel, op.Cost.Alloc) {
 		return corevalue.Value{}, nil, false
@@ -63,17 +87,33 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	x.calls++
 	ctx, cancel := operationContext(op.Mode)
 	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost}
+	if op.Scope != nil {
+		call.scopeName = op.Scope.Closes
+		if op.Scope.Opens != "" {
+			call.scopeName = op.Scope.Opens
+		}
+	}
 	vs := make([]Value, len(args))
 	for i, v := range args {
 		vs[i] = Value{v}
 	}
 	result, err := invokeOperation(op, call, vs)
 	call.finish()
+	action := ""
+	if err == nil {
+		action = x.acknowledgeScope(grantName, grant, op)
+	}
 	fields := map[string]string{"op": grantName + "." + opName, "args": coretrace.Display(corevalue.NewList(args))}
 	if call.charged != 0 {
 		fields["charged"] = fmt.Sprint(call.charged)
 	}
-	record := func() { g.record("call", false, []string{string(call.id)}, fields); boundary() }
+	record := func() {
+		g.record("call", false, []string{string(call.id)}, fields)
+		if action != "" {
+			g.record("scope", false, []string{string(call.id)}, map[string]string{"grant": grantName, "name": call.scopeName, "action": action})
+		}
+		boundary()
+	}
 	if call.reached || errors.Is(err, ErrLimit) {
 		record()
 		cancel()
@@ -114,11 +154,18 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		return corevalue.Value{}, &e, false
 	}
 	hostError := func(detail string) (corevalue.Value, *corevalue.Value, bool) {
+		if call.automatic {
+			call.failureDetail = detail
+			return fail("host error", named...)
+		}
 		g.record("call-failed", false, []string{string(call.id)}, map[string]string{"op": grantName + "." + opName})
 		*reports = append(*reports, &CallFailed{Script: s.name, Call: call.id, Operation: OperationRef{Capability: grant.definition.name, Operation: opName}, Detail: detail})
 		return fail("host error", named...)
 	}
 	conversion := func(v corevalue.Value, late int64) bool {
+		if call.automatic {
+			return true
+		}
 		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
 			return false
 		}
