@@ -9,11 +9,13 @@ Before loading implementation documentation for an issue, compare the issue URL'
 ## Conventions
 
 - Create: `gh issue create --title "..." --body "..."`.
-- Read: `gh issue view <number> --comments`; fetch labels as needed.
+- Read: `gh issue view <number> --json number,title,body,state,labels,comments`.
 - List: `gh issue list --state open --json number,title,body,labels,comments`, with appropriate filters.
 - Comment: `gh issue comment <number> --body "..."`.
 - Label: `gh issue edit <number> --add-label "..."` or `--remove-label "..."`.
 - Close: `gh issue close <number> --comment "..."`.
+
+The JSON read includes comments; `--comments` is an alternative display mode and cannot be combined with `--json`.
 
 Run commands from this clone so `gh` infers `odogono/odgn-talk`.
 
@@ -24,7 +26,7 @@ Run commands from this clone so `gh` infers `odogono/odgn-talk`.
 ## Skill terminology
 
 - "Publish to the issue tracker": create a GitHub issue.
-- "Fetch the relevant ticket": read it with `gh issue view <number> --comments`.
+- "Fetch the relevant ticket": use the Read command under Conventions.
 
 ## Wayfinding operations
 
@@ -42,3 +44,15 @@ Before handing an implementation issue to another agent, identify its specificat
 If the design is uncommitted, mark it as uncommitted and give its worktree and exact file list. Prefer committing the design before handoff; carrying uncommitted files requires an explicit handoff naming those files.
 
 At the start of implementation, compare the checkout's branch and revision with the issue's required base and confirm the referenced specification is present. Resolve a mismatch before treating absent files as missing design or implementation. Preserve unrelated work when changing branches or carrying a design forward.
+
+Keep this block current in implementation handoffs as work lands:
+
+- **Implemented in:** merged PRs/commits and the acceptance criteria they satisfy.
+- **Remaining work:** concrete unchecked criteria, including deferred Data File changes.
+- **Required base:** specification commit/PR, branch and relevant spec sections.
+- **Approval still needed:** exact expectation files awaiting first blessing, with review links.
+
+At intake, reconcile that block with the checkout before planning implementation.
+An open issue may have only approval or verification work left. For grammar,
+opcodes or Advanced tags, use the [Spec change-impact guide](spec-changes.md)
+before deciding how to split specification and implementation PRs.

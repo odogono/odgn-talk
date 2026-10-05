@@ -18,7 +18,7 @@ Use a single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/ag
 
 ### Implementation navigation
 
-For implementation work, start with [the layout](README.md#layout), then the [Go task map](impl/go/README.md#task-navigation) or [TS and tooling task map](impl/ts/README.md#task-navigation).
+For implementation work, start with [the layout](README.md#layout), then the [Go task map](impl/go/NAVIGATION.md) or [TS and tooling task map](impl/ts/NAVIGATION.md).
 
 ### Review
 

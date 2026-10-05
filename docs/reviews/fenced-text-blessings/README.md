@@ -30,9 +30,10 @@ After recording approval, the three ordinary Trace Cases pass on both Cores,
 including Save/Restore replay. The Session Transcript passes on TS, including
 ordinary and Save/Restore Trace replay. Corpus format checks also pass.
 
-Go Session execution remains tracked in
-[#137](https://github.com/odogono/odgn-talk/issues/137); this approval does not
-assert Go Session conformance. The already-approved `limits/fenced-text-concat`
+At the approval recorded here, Go Session execution was separate work under
+[#137](https://github.com/odogono/odgn-talk/issues/137); this approval did not
+assert Go Session conformance. For current support, see the
+[Go Session guide](../../../impl/go/README.md#repl-and-session-transcripts). The already-approved `limits/fenced-text-concat`
 case retains its issue-135 approval record. Unrelated pending-review cases are
 outside this approval.
 
