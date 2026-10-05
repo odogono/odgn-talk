@@ -3,6 +3,7 @@ package corpus
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -183,7 +184,7 @@ func TestQueueingPolicyAcceptance(t *testing.T) {
 
 func TestDecisionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	cases, err := Discover(root, []string{"decisions/fault-before-seal", "decisions/undecided-on-an-error", "decisions/verdict-behind-a-fuel-slice", "decisions/script-verdict-boundaries"})
+	cases, err := Discover(root, []string{"decisions/fault-before-seal", "decisions/undecided-on-an-error", "decisions/verdict-behind-a-fuel-slice", "decisions/script-verdict-boundaries", "decisions/undecided-on-cancel-delivery"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +203,40 @@ func TestDecisionAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// An abort after sealing is a Host action, but it queues no Trace input.
+// Inject it separately because a canonical case.trace cannot retain that action.
+func TestDecisionReplayIgnoresCancellationAfterSeal(t *testing.T) {
+	cases, err := Discover("../../../../corpus", []string{"decisions/undecided-on-cancel-delivery"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := cases[0]
+	b, err := os.ReadFile(filepath.Join(c.Dir, "case.trace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(b)
+	records, err := ParseTrace(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected []string
+	for _, r := range records {
+		expected = append(expected, r.Raw)
+	}
+	inputs, err := ParseTrace(strings.Replace(source, "> answer board/r2.c1", "> cancel-delivery d3\n> answer board/r2.c1", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := (executionBackend{}).Run(c, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Compare(c.Name, expected, actual); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -679,7 +714,8 @@ func TestBroadcastDecisionAcceptance(t *testing.T) {
 
 func TestForeignFunctionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	cases, err := Discover(root, []string{"functions/foreign-calls"})
+	names := []string{"functions/foreign-calls", "functions/host-cancellation"}
+	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,15 +723,18 @@ func TestForeignFunctionAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains("\n"+string(b), "\nfunctions/foreign-calls\n") {
-		t.Fatal("foreign Function acceptance missing from gate")
-	}
-
 	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
-	if len(cases) != 1 {
+	if len(cases) != len(names) {
 		t.Fatal(len(cases))
 	}
-	if _, err := r.execute(cases[0]); err != nil {
-		t.Fatal(err)
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(b), "\n"+c.Name+"\n") {
+				t.Fatal("Function acceptance missing from gate")
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

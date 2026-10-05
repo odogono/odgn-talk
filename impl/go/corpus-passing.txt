@@ -60,6 +60,7 @@ decisions/fault-before-seal
 decisions/pass-up-the-message-path
 decisions/script-verdict-boundaries
 decisions/undecided-on-an-error
+decisions/undecided-on-cancel-delivery
 decisions/undecided-when-dropped
 decisions/verdict-behind-a-fuel-slice
 decisions/veto-ends-the-decision
@@ -77,6 +78,7 @@ errors/lambda-capture-parity
 examples/orders-pricing
 functions/foreign-calls
 functions/host-calls
+functions/host-cancellation
 libraries/caller-capabilities
 libraries/calls
 libraries/errors

@@ -25,6 +25,28 @@ import {
 import { runTranscriptCase } from '../tools/transcript-case';
 import { parseTranscript } from '../src/session';
 
+test('Decision cancellation replay uses the public signal and ignores cancellation after sealing', () => {
+  const dir = resolve(
+    import.meta.dir,
+    '../../../corpus/decisions/undecided-on-cancel-delivery',
+  );
+  const setup = Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8'));
+  const expected = readFileSync(resolve(dir, 'case.trace'), 'utf8')
+    .split('\n')
+    .filter(line => line && !line.startsWith('#'));
+  const inputs = [...expected];
+  inputs.splice(
+    inputs.indexOf('> answer board/r2.c1 value=1'),
+    0,
+    '> cancel-delivery d3',
+  );
+  for (const restoreBetweenPumps of [false, true]) {
+    expect(
+      replay(dir, setup as never, inputs, { restoreBetweenPumps }),
+    ).toEqual(expected);
+  }
+});
+
 test('the NFC encoding seed case executes every line through the public values', () => {
   const dir = resolve(
     import.meta.dir,

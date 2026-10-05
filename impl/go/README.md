@@ -727,7 +727,13 @@ until `veto` completes its finally cleanup, sealing `Vetoed` with its reason.
 The vetoed Run completes with Nothing. Errors, faults, drops and cancellation
 before sealing report `Undecided` with the Run's outcome. Reports appear at
 the seal, and futures settle after the Pump's records. Context cancellation
-after sealing leaves the continuing Run alone. Load checks reject vetoes
+after sealing leaves the continuing Run alone. The corpus runner replays
+`cancel-delivery` by cancelling the context passed to the public Request,
+Decision or Function Value call, waiting for `OnReady` before its next input.
+The complete Decision cancellation and Host Function Value cancellation cases
+pin mailbox removal, Verdicts, cleanup and exact costs. Native runner tests
+also abort a sealed Decision and require no queued input or cancellation.
+Load checks reject vetoes
 outside deciding entry Handlers, in locally called Handlers, or reachable
 after suspension, and reject passes reachable after suspension. Open Decisions
 follow Message Paths through `pass` and unmatched Runs.
@@ -793,7 +799,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 205 cases, including all text-model, load-diagnostic,
+The gate contains 207 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

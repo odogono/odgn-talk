@@ -996,6 +996,7 @@ const driveReplay = function* (
   let registered = new Map<string, Library>();
   const saved = new Map<string, Uint8Array>();
   const bound = new Map<string, Record<string, Grant<unknown>>>();
+  const cancellations = new Map<string, AbortController>();
   for (let cursor = 0; ; cursor++) {
     if (cursor === order.length) {
       if (!incremental) {
@@ -1127,7 +1128,12 @@ const driveReplay = function* (
           break;
         case 'call-value': {
           const m = messageOf(r);
-          group.call(value(r.fields.get('fn')!), m.args, { limits: m.limits });
+          const controller = new AbortController();
+          const call = group.call(value(r.fields.get('fn')!), m.args, {
+            limits: m.limits,
+            signal: controller.signal,
+          });
+          cancellations.set(call.id, controller);
           break;
         }
         case 'deliver':
@@ -1143,31 +1149,46 @@ const driveReplay = function* (
             throw new DeferredCaseError(`a Delivery to ${named}`);
           }
           const message = messageOf(r);
+          const controller = new AbortController();
+          const options = { signal: controller.signal };
           if (object) {
             if (r.name === 'deliver') {
               group.deliver(object, message);
             } else if (r.name === 'decide') {
-              group.decide(object, message);
+              const decision = group.decide(object, message, options);
+              cancellations.set(decision.id, controller);
             } else {
-              group.request(object, message);
+              const request = group.request(object, message, options);
+              cancellations.set(request.id, controller);
             }
           } else if (r.name === 'deliver') {
             to!.deliver(message);
           } else if (r.name === 'decide') {
-            to!.decide(message);
+            const decision = to!.decide(message, options);
+            cancellations.set(decision.id, controller);
           } else {
-            to!.request(message);
+            const request = to!.request(message, options);
+            cancellations.set(request.id, controller);
           }
           break;
         }
-        case 'decide-broadcast':
-          group.decideBroadcast(messageOf(r));
+        case 'decide-broadcast': {
+          const controller = new AbortController();
+          const decision = group.decideBroadcast(messageOf(r), {
+            signal: controller.signal,
+          });
+          cancellations.set(decision.id, controller);
           break;
+        }
         case 'broadcast':
           group.broadcast(messageOf(r));
           break;
         case 'cancel-delivery':
-          group.cancelDelivery(r.ids[0]!);
+          if (cancellations.has(r.ids[0]!)) {
+            cancellations.get(r.ids[0]!)!.abort();
+          } else {
+            group.cancelDelivery(r.ids[0]!);
+          }
           break;
         case 'cancel-run':
           group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
