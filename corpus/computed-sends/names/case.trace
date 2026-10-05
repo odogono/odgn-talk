@@ -1,4 +1,3 @@
-# Unblessed: new computed-name case; first blessing awaits human review.
 # `a` computes each message name. A Name and a Selector are each sent
 # without and with `and wait`, and then as two Join Members. Each `send`
 # record names the message as a static `send` would, and `b`'s Handlers

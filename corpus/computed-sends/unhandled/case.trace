@@ -1,4 +1,3 @@
-# Unblessed: new computed-name case; first blessing awaits human review.
 # `b` has no Handler for `missing` or `move:to:`, so each message climbs
 # and ends `unhandled` in `b`, as a static name would. The waiting send
 # raises `send failed` with `reason` `"unhandled"`.

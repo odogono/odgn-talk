@@ -1,4 +1,3 @@
-# Unblessed: new computed-name case; first blessing awaits human review.
 # `sink`'s mailbox depth is 1, and the first `send` fills it, so a good
 # name sent to `sink` raises `mailbox full`. `ghost` is no Script of the
 # Group, so a good name sent to it raises `object gone`. Every bad name
