@@ -63,7 +63,7 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 
 // Step 2 completes against reviewed TS-produced cases, with execution through
 // the public Group API and comparison of every Trace record. The limits cases
-// are tracked by #135; pattern-size-literal-limit also requires #136 Reload.
+// are covered separately by the step-4 acceptance gate below.
 func TestTextPatternStepTwoAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
 	names := []string{
@@ -98,6 +98,77 @@ func TestTextPatternStepTwoAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// Step 4 pins the exhaustion instruction, resource charges and rollback state
+// through public embedding execution. Segment-bound effects have their own gate.
+func TestLimitsStepFourAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	count := 0
+	for _, c := range cases {
+		required := strings.HasPrefix(c.Name, "limits/") || strings.HasPrefix(c.Name, "cancellation/") || c.Name == "text-patterns/matching-fuel-exhaustion" || c.Name == "text-patterns/pattern-size-literal-limit" || c.Name == "text-patterns/pattern-size-made-at-run-time"
+		if !required {
+			continue
+		}
+		count++
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("required step-4 case missing from passing gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if count != 32 {
+		t.Fatalf("required step-4 limits set: %d cases, want 32", count)
+	}
+}
+
+func TestSegmentEffectStepFourAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	count := 0
+	for _, c := range cases {
+		if !strings.HasPrefix(c.Name, "capabilities/effect-") {
+			continue
+		}
+		// Save/restore and Library replacement remain step 5 facilities.
+		if c.Name == "capabilities/effect-reload-fatal" || c.Name == "capabilities/effect-replace-fatal" || c.Name == "capabilities/effect-replace-library" || c.Name == "capabilities/effect-close-preemption-fault" {
+			continue
+		}
+		count++
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("required step-4 effect missing from passing gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if count != 22 {
+		t.Fatalf("required step-4 effect set: %d cases, want 22", count)
 	}
 }
 

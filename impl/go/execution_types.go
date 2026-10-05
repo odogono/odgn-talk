@@ -179,6 +179,27 @@ type EffectFailure struct {
 
 type EffectStatus string
 
+type SegmentContext struct {
+	Group      *Group
+	ScriptName string
+	RunID      RunID
+	GrantName  string
+	SegmentID  string
+	Binding    any
+	Now        time.Time
+}
+
+type EffectResult struct {
+	Status EffectStatus
+	Detail string
+}
+
+type SegmentLifecycle struct {
+	Begin    func(SegmentContext) EffectResult
+	Commit   func(SegmentContext) EffectResult
+	Rollback func(SegmentContext) EffectResult
+}
+
 const (
 	Idle   GroupState = iota // nothing runnable until an input or a deadline
 	Sliced                   // a slice or the cap ran out with work left

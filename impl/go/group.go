@@ -43,6 +43,7 @@ type Group struct {
 	nextTimer      int64
 	clock          time.Time
 	pumping        bool
+	effectUnknown  bool // sticky: an external participant's state is unresolved
 }
 type Script struct {
 	group      *Group
@@ -100,6 +101,8 @@ type execution struct {
 	calls         int64
 	stopReason    *string     // Stop landed at this Run's Host crossing
 	scopes        []scopeSlot // surviving scopes in successful-opening order
+	participant   *segmentParticipant
+	effect        *EffectFailure
 	waitCall      CallID
 	abandonCall   CallID
 }
@@ -168,6 +171,9 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	}
 	defer g.endWorker()
 	g.record("load", true, []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)})
+	if g.effectUnknown {
+		return nil, g.refuse(EffectStateUnknown, "Group has unresolved external effects")
+	}
 	if g.Script(o.Name) != nil {
 		return nil, g.refuse(NameReused, o.Name)
 	}

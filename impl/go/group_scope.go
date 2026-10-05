@@ -47,11 +47,18 @@ func (x *execution) updateOpenScope() {
 
 // Automatic calls use the saved implementation and binding, irrespective of
 // revocation or disablement. They finish before any Run outcome is published.
-func (g *Group) abandonScopes(s *Script, x *execution, reports *[]Report) {
-	for len(x.scopes) > 0 {
-		i := len(x.scopes) - 1
+func (g *Group) abandonScopes(s *Script, x *execution, reports *[]Report) *EffectFailure {
+	return g.abandonGrantScopes(s, x, "", reports)
+}
+
+func (g *Group) abandonGrantScopes(s *Script, x *execution, grantName string, reports *[]Report) *EffectFailure {
+	var participatingFailure *EffectFailure
+	for i := len(x.scopes) - 1; i >= 0; i-- {
 		slot := x.scopes[i]
-		x.scopes = x.scopes[:i]
+		if grantName != "" && slot.grantName != grantName {
+			continue
+		}
+		x.scopes = slices.Delete(x.scopes, i, i+1)
 		x.updateOpenScope()
 		op := slot.grant.definition.ops[slot.abandon]
 		x.calls++
@@ -79,10 +86,14 @@ func (g *Group) abandonScopes(s *Script, x *execution, reports *[]Report) {
 				detail = call.failureDetail
 			}
 			report := &EffectFailure{Script: s.name, Run: x.id, Grant: slot.grantName, Segment: call.segmentID, Phase: "abandon", Status: status, Scope: slot.name, Detail: detail}
+			if x.participant != nil && x.participant.name == slot.grantName && participatingFailure == nil {
+				participatingFailure = report
+			}
 			*reports = append(*reports, report)
 			g.record("effect-failure", false, []string{string(x.id)}, map[string]string{"grant": slot.grantName, "segment": call.segmentID, "phase": "abandon", "status": string(status), "scope": slot.name})
 		}
 	}
+	return participatingFailure
 }
 
 func scopeError(code, grant, operation, name string) corevalue.Value {

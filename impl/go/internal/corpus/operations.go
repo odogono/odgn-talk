@@ -12,17 +12,20 @@ type operationReplay struct {
 	calls        map[talk.CallID]*talk.Call
 	defs         map[string]*talk.CapabilityDef
 	stubs        map[string][]map[string]Field
+	effectStubs  map[string][]map[string]Field
 	declarations talk.GrantDecls
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
+	out.effectStubs = map[string][]map[string]Field{}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
 	for _, raw := range rawOps {
 		row := raw.(Setup)
 		name := row["capability"].(string)
 		op := talk.Operation{Name: row["name"].(string)}
+		op.SegmentBound, _ = row["segmentBound"].(bool)
 		switch row["mode"] {
 		case "immediate":
 			op.Mode = talk.Immediate
@@ -180,7 +183,28 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		for _, op := range ops {
 			out.declarations[name][op.Name] = talk.OperationCheck{Mode: op.Mode, Args: op.Args}
 		}
-		d, e := core.DefineCapability(name, ops...)
+		var d *talk.CapabilityDef
+		var e error
+		bound := false
+		for _, op := range ops {
+			bound = bound || op.SegmentBound
+		}
+		if bound {
+			hook := func(phase string) func(talk.SegmentContext) talk.EffectResult {
+				return func(ctx talk.SegmentContext) talk.EffectResult {
+					key := ctx.ScriptName + "." + ctx.GrantName + "." + phase
+					queue := out.effectStubs[key]
+					if len(queue) == 0 {
+						return talk.EffectResult{Status: talk.EffectUnknown, Detail: "missing lifecycle Stub: " + key}
+					}
+					out.effectStubs[key] = queue[1:]
+					return talk.EffectResult{Status: talk.EffectStatus(queue[0]["status"].Raw)}
+				}
+			}
+			d, e = core.DefineSegmentCapability(name, talk.SegmentLifecycle{Begin: hook("begin"), Commit: hook("commit"), Rollback: hook("rollback")}, ops...)
+		} else {
+			d, e = core.DefineCapability(name, ops...)
+		}
 		if e != nil {
 			return nil, e
 		}

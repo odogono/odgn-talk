@@ -16,10 +16,11 @@ import (
 )
 
 const (
-	ClockBackwards HostErrorCode = "clock backwards"
-	NameReused     HostErrorCode = "name reused"
-	ReentrantCall  HostErrorCode = "reentrant call"
-	WrongGroup     HostErrorCode = "wrong group"
+	ClockBackwards     HostErrorCode = "clock backwards"
+	NameReused         HostErrorCode = "name reused"
+	ReentrantCall      HostErrorCode = "reentrant call"
+	WrongGroup         HostErrorCode = "wrong group"
+	EffectStateUnknown HostErrorCode = "effect state unknown"
 )
 
 type Core struct {

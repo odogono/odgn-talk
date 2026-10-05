@@ -12,8 +12,19 @@ func (g *Group) disposeOwner(s *Script, reports *[]Report, settlements *[]func()
 }
 
 func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settlements *[]func(), seal func(delivery, RunID, Verdict, Value, Outcome)) {
+	if g.effectUnknown && !s.stopped {
+		// After fatal uncertainty, only the Group stop may publish termination.
+		// Later queued controls cannot change its reason or report order.
+		return
+	}
+	g.terminateScript(s, reason, reports, settlements, seal)
+}
+
+func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, settlements *[]func(), seal func(delivery, RunID, Verdict, Value, Outcome)) {
+	wasUnknown := g.effectUnknown
 	g.mu.Lock()
 	already := s.stopped
+	previousReason := s.stopReason
 	if !already {
 		s.stopReason = reason
 	}
@@ -25,6 +36,7 @@ func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settleme
 	}
 	stop := &Stop{Script: s.name, Reason: reason}
 	runs, queue := s.runs, s.queue
+	active, gone := s.active, s.state.Gone
 	if s.active != nil {
 		s.state.Variables = s.active.run.Base
 	}
@@ -39,6 +51,7 @@ func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settleme
 	}
 	for _, x := range runs {
 		g.abandonScopes(s, x, reports)
+		g.rollbackParticipant(s, x, reports)
 		stop.DiscardedRuns = append(stop.DiscardedRuns, x.id)
 		if x.waitCall != "" {
 			stop.PendingCalls = append(stop.PendingCalls, x.waitCall)
@@ -57,6 +70,19 @@ func (g *Group) stopScript(s *Script, reason string, reports *[]Report, settleme
 			stop.PendingCalls = append(stop.PendingCalls, x.abandonCall)
 		}
 		g.discardOperationCalls(x)
+	}
+	if !wasUnknown && g.effectUnknown {
+		// Cleanup discovered fatal uncertainty before publishing this Stop.
+		// Keep the discarded work available to the Group stop so its reports
+		// follow Script load order; cleared participants are never retried.
+		s.runs, s.queue, s.active = runs, queue, active
+		s.state.Gone = gone
+		g.mu.Lock()
+		s.stopped, s.stopReason = already, previousReason
+		g.mu.Unlock()
+		// The Pump's caller publishes the Group stop after ending any current
+		// Stretch. No further Script execution is allowed once uncertainty lands.
+		return
 	}
 	dropped := []delivery{}
 	for _, item := range queue {

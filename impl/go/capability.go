@@ -51,9 +51,10 @@ type operationChecks struct {
 	failure   func(string, corevalue.Value) bool
 }
 type CapabilityDef struct {
-	name   string
-	ops    map[string]Operation
-	checks map[string]operationChecks
+	name      string
+	ops       map[string]Operation
+	checks    map[string]operationChecks
+	lifecycle *SegmentLifecycle
 }
 type Grant struct {
 	definition *CapabilityDef
@@ -65,7 +66,18 @@ type Grant struct {
 
 func (d *CapabilityDef) Name() string { return d.name }
 func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error) {
-	d := &CapabilityDef{name: name, ops: map[string]Operation{}}
+	return c.defineCapability(name, nil, ops...)
+}
+
+func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+	if lifecycle.Begin == nil || lifecycle.Commit == nil || lifecycle.Rollback == nil {
+		return nil, &HostError{InvalidValue, "all Segment lifecycle hooks are required"}
+	}
+	return c.defineCapability(name, &lifecycle, ops...)
+}
+
+func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle}
 	for _, op := range ops {
 		invalid := func(detail string) (*CapabilityDef, error) { return nil, &HostError{InvalidValue, detail} }
 		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait"}, op.Name) {
@@ -77,8 +89,8 @@ func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, 
 		if op.Cost.Fuel < 0 || op.Cost.Alloc < 0 || op.Cost.Fuel > 9007199254740991 || op.Cost.Alloc > 9007199254740991 {
 			return invalid("invalid Operation cost")
 		}
-		if op.SegmentBound {
-			return invalid("Segment-bound Operations are not available")
+		if op.SegmentBound && (op.Mode != Immediate || lifecycle == nil) {
+			return invalid("Segment-bound Operations require immediate mode and lifecycle hooks")
 		}
 		if op.Scope != nil {
 			scope := *op.Scope
@@ -129,6 +141,20 @@ func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, 
 			return nil, &HostError{InvalidValue, "inconsistent scope abandonment Operations"}
 		}
 		abandons[s.Opens] = s.Abandon
+	}
+	scopeModes := map[string]bool{}
+	for _, op := range d.ops {
+		if op.Scope == nil {
+			continue
+		}
+		name := op.Scope.Closes
+		if op.Scope.Opens != "" {
+			name = op.Scope.Opens
+		}
+		if bound, exists := scopeModes[name]; exists && bound != op.SegmentBound {
+			return nil, &HostError{InvalidValue, "inconsistent Segment-bound scope Operations"}
+		}
+		scopeModes[name] = op.SegmentBound
 	}
 	return d, nil
 }
