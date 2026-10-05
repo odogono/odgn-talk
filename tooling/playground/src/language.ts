@@ -34,7 +34,16 @@ export const northtalkParser: StreamParser<State> = {
   token(stream, state) {
     const region = state.regions.at(-1);
     if (region?.kind === 'raw') {
-      if (stream.match('"'.repeat(region.width))) {
+      const quotes = stream.match(/^"{3,}/, false);
+      if (
+        quotes &&
+        typeof quotes !== 'boolean' &&
+        quotes[0].length >= region.width
+      ) {
+        stream.match(quotes[0]);
+        if (quotes[0].length > region.width) {
+          return 'invalid';
+        }
         state.regions.pop();
         return 'operator';
       }

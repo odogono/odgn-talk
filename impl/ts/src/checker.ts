@@ -21,7 +21,7 @@ import type {
   SemanticTree,
   SourceSpan,
 } from './semantic';
-import type { SyntaxElement, SyntaxNode } from './syntax';
+import { syntaxSelector, type SyntaxElement, type SyntaxNode } from './syntax';
 
 export type DiagnosticCode = (typeof diagnosticCodes)[number];
 export type Diagnostic = {
@@ -430,6 +430,9 @@ export const checkSyntax = (
                 }
               : undefined,
           );
+          if (element.rule === 'Handler') {
+            sites.get(name)!.name.text = syntaxSelector(element, name.v);
+          }
         }
         if (element.rule === 'Handler') {
           const during = ts.findIndex(t => t.v === 'during');
@@ -483,7 +486,10 @@ export const checkSyntax = (
         const parent = parents.get(element)!;
         const prefix = tokens(parent)[0];
         if (parent.rule === 'MessageName') {
-          mark(head, 'message');
+          mark(head, 'message').name.text = syntaxSelector(
+            parents.get(parent)!,
+            head.v,
+          );
         } else if (parent.rule === 'Parameter') {
           mark(head, 'binding', true);
         } else if (
@@ -555,7 +561,7 @@ export const checkSyntax = (
       }
       case 'SimpleStatement': {
         if (ts[0] === head && isName(head) && head.v !== 'next') {
-          mark(head, 'command');
+          mark(head, 'command').name.text = syntaxSelector(element, head.v);
         }
         break;
       }

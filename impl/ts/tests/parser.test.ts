@@ -91,3 +91,17 @@ test('deep syntax errors retain their normative first code and position', () => 
   expect(result.error?.code).toBe('unexpected token');
   expect(result.error?.tok).toMatchObject({ line: 1, col: 3014 });
 });
+
+test('argument labels preserve source in every message position', () => {
+  const source = `on move piece to square where square is "e4", queued
+  pass move to
+end move
+on play
+  move "knight" to "e4"
+  send to me: move "rook" to "a1" and wait
+  wait for move p to sq from me or 1 s
+end play`;
+  const parsed = parseSource(source);
+  expect(parsed.error).toBeNull();
+  expect(syntaxText(parsed.tree!)).toBe(source);
+});

@@ -61,7 +61,7 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 
 ## Seed blessing
 
-The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except the Session Transcripts' and scoped-effect cases outside the approved step-4 set (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
+The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except scoped-effect cases outside the approved step-4 set (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
 
 The corrected `capabilities/scope-slots` and `scope-suspension-boundaries`
 Traces agree on Go and TS, including TS save/restore replay. Rejected scope
@@ -93,18 +93,21 @@ backtick closing margin, generated joins' `${` source position, exact Fuel and
 allocation exhaustion, and Segment rollback. Both Cores reproduce their complete
 Traces, including TS save/restore replay. The maintainer approved
 `limits/fenced-text-concat` for #135 on 2026-10-05; the two load diagnostics
-retain their `Unblessed` headers for first human review.
+were approved for #275 on 2026-10-05; see the
+[fenced-text approval record](../docs/reviews/fenced-text-blessings/README.md).
 
 The `stdlib/template-migration` regression pins `${…}` placeholders and `$$`
 in the normative text/date Libraries. It covers literal braces, keys with spaces
 and punctuation, values inserted once, NFC joins, date widths and fractional
 seconds, and invalid templates' error fields and caller positions. Go and TS
-reproduce its complete Trace, including TS save/restore replay. Its `Unblessed`
-header remains for first human review. The `sessions/fenced-text` Transcript
+reproduce its complete Trace, including TS save/restore replay. Its
+expectations were approved for #275 on 2026-10-05, along with the corrected
+`sessions/fenced-text` Transcript and its Trace. The Transcript
 prints its margin-stripped multiline value, preserving a blank line and a
 multiline hole; it also executes interpolation and a raw Format Template.
-Session Transcripts run on TS; Go Session execution is tracked in
-[#137](https://github.com/odogono/odgn-talk/issues/137).
+Session Transcripts run unchanged on both Cores. The Go runner compares their
+recorded output and Trace, then replays that Trace independently through the
+public embedding API, ordinarily and with Save/Restore between Pumps.
 
 The two new error-delivery regression cases (`handler-delivery` and
 `handler-backstop`) pin chapter 6's separate error Runs, FIFO order, `during`
@@ -209,9 +212,18 @@ and captured Values have the specified allocation and retained sizes. Its
 
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
+The `suspension/argument-labels`, `objects/argument-labels` and
+`load-diagnostics/argument-labels` cases pin labelled Clauses and calls,
+target-first sends and replies, Message Path passes, event observation and `it`,
+selector-aware faults in nested Lambdas, Host Selector refusals, suspension
+checks and chunk/Unit traps. Go and TS agree on their complete ordinary and
+save/restore Traces. The TS `sessions/argument-labels` Transcript covers Entry
+recognition and positional/labelled Handlers sharing a first word. Their
+`Unblessed` headers retain the first human review requirement.
+
 ## The Disassembly Cases
 
-The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case, in both replays. Each awaits its first human review in the [#131](https://github.com/odogono/odgn-talk/issues/131) PR that adds it.
+The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript retains its `Unblessed` header pending first human review.
 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 

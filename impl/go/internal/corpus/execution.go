@@ -121,7 +121,7 @@ func (r *crossingReplay) Record(line string) {
 type executionBackend struct{}
 
 func ExecutionBackends() map[string]Backend {
-	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}}
+	return map[string]Backend{"trace": executionBackend{}, "disassembly": disassemblyBackend{}, "transcript": sessionBackend{}}
 }
 func (executionBackend) Support(c Case) string {
 	for _, feature := range []string{"factories"} {
@@ -250,7 +250,21 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
-	libraries, e := setupLibraries(core, c, operations.declarations)
+	declarations := talk.GrantDecls{}
+	for name, ops := range operations.declarations {
+		declarations[name] = ops
+	}
+	for _, raw := range c.Setup["scripts"].([]any) {
+		script := raw.(Setup)
+		grants, _ := script["grants"].(Setup)
+		for name, rawGrant := range grants {
+			grant := rawGrant.(Setup)
+			if capability, ok := grant["capability"].(string); ok && declarations[name] == nil {
+				declarations[name] = operations.declarations[capability]
+			}
+		}
+	}
+	libraries, e := setupLibraries(core, c, declarations)
 	if e != nil {
 		return nil, e
 	}
@@ -864,12 +878,16 @@ func setupOverride(f Field) talk.LimitOverride {
 		switch p.Key {
 		case "fuelPerRun":
 			o.FuelPerRun = n
+			o.Set |= talk.OverrideFuelPerRun
 		case "allocPerRun":
 			o.AllocPerRun = n
+			o.Set |= talk.OverrideAllocPerRun
 		case "maxWait":
 			o.MaxWait = time.Duration(n) * time.Millisecond
+			o.Set |= talk.OverrideMaxWait
 		case "maxJoin":
 			o.MaxJoin = int(n)
+			o.Set |= talk.OverrideMaxJoin
 		}
 	}
 	return o

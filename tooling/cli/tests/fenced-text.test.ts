@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { parseTranscript } from '@odgn/northtalk/session';
 
-const run = (stdin: string) => {
+const run = (stdin: string, args: string[] = []) => {
   const result = Bun.spawnSync(
-    [process.execPath, resolve(import.meta.dir, '../src/main.ts')],
+    [process.execPath, resolve(import.meta.dir, '../src/main.ts'), ...args],
     {
       stdin: new TextEncoder().encode(stdin),
     },
@@ -34,4 +37,31 @@ test.each([
 
 test('REPL waits for the enclosing Entry after a literal closes', () => {
   expect(run('on greet\n say `hello`\n\nend greet\ngreet\n')).toBe('hello\n');
+});
+
+test('REPL input and recording agree with the shared fenced-text Session Transcript', () => {
+  const items = parseTranscript(
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '../../../corpus/sessions/fenced-text/session.transcript',
+      ),
+      'utf8',
+    ),
+  ).filter(item => item.k !== 'comment');
+  const input =
+    items
+      .flatMap(item => (item.k === 'input' ? [item.source] : []))
+      .join('\n') + '\n';
+  const expected =
+    items.flatMap(item => (item.k === 'output' ? [item.text] : [])).join('\n') +
+    '\n';
+  const directory = mkdtempSync(join(tmpdir(), 'fenced-repl-'));
+  try {
+    const path = join(directory, 'session.transcript');
+    expect(run(input, ['--transcript', path])).toBe(expected);
+    expect(parseTranscript(readFileSync(path, 'utf8'))).toEqual(items);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

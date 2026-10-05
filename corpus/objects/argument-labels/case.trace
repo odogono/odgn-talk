@@ -1,0 +1,31 @@
+# Unblessed: labelled Selectors follow the Message Path and preserve the Target.
+> load board identity=41f90bf4739ac3f35d03125a7f5e37fd763573ece09c89bdb10819d0f9ce566c
+> load knight identity=ee7315a47d071454471e4ecb04c32302fa0c0b2003a3af05c23094f9cdef60f2
+> decide to=<object piece "knight"> message=move:with: args=[1, 2]
+refused code="invalid value"
+> request to=<object piece "knight"> message=move:to: args=[1]
+refused code="invalid value"
+> set-parent object=<object piece "knight"> parent=<object board "main">
+> set-parent object=<object piece "pawn"> parent=<object board "main">
+> deliver d1 to=<object piece "knight"> message=move:to: args=["near", "e4"]
+> deliver d2 to=<object piece "knight"> message=move:to: args=["far", "e5"]
+> deliver d3 to=<object piece "pawn"> message=move:to: args=["step", "d4"]
+> deliver d4 to=<object piece "knight"> message=move args=["plain"]
+> pump clock=2026-09-30T09:00:00Z
+seg board/r1 start delivery=d3 handler=move:to: clause=1 fuel=32 alloc=260 state=150 end=return
+run board/r1 outcome=completed delivery=d3 handler=move:to: fuel=32 alloc=260
+seg knight/r1 start delivery=d1 handler=move:to: clause=1 fuel=33 alloc=208 state=246 end=return
+run knight/r1 outcome=completed delivery=d1 handler=move:to: fuel=33 alloc=208
+seg knight/r2 start delivery=d2 handler=move:to: clause=1 fuel=50 alloc=206 state=284 end=pass
+run knight/r2 outcome=completed delivery=d2 handler=move:to: fuel=50 alloc=206
+seg board/r2 start delivery=d2 handler=move:to: clause=1 fuel=32 alloc=262 state=285 end=return
+run board/r2 outcome=completed delivery=d2 handler=move:to: fuel=32 alloc=262
+seg knight/r3 start delivery=d4 fuel=0 alloc=0 state=231 end=unhandled
+run knight/r3 outcome=unhandled delivery=d4 fuel=0 alloc=0
+seg board/r3 start delivery=d4 fuel=0 alloc=0 state=285 end=unhandled
+run board/r3 outcome=unhandled delivery=d4 fuel=0 alloc=0
+unhandled d4 message=move args=["plain"] target=<object piece "knight">
+pumped state=idle fuel=147
+> vars
+vars board heard=[["main", "pawn", "step", "d4"], ["main", "knight", "far", "e5"]]
+vars knight heard=[["knight", "near", "e4"], ["knight", "far", "e5"]]

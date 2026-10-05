@@ -85,7 +85,8 @@ export type SyntaxRule =
   | 'FieldType'
   | 'BinaryBuild'
   | 'Name'
-  | 'MessageName';
+  | 'MessageName'
+  | 'Label';
 
 export type SyntaxElement = SyntaxNode | Token;
 
@@ -116,4 +117,22 @@ export const syntaxText = (tree: SyntaxNode): string => {
     }
   }
   return parts.join('');
+};
+
+/** A labelled message uses its Selector as its semantic and dispatch name. */
+export const syntaxSelector = (node: SyntaxNode, name: string): string => {
+  const labels = node.children
+    .flatMap(child => {
+      if (child.kind !== 'node') {
+        return [];
+      }
+      if (child.rule === 'ExpressionList') {
+        return child.children.filter(
+          (c): c is SyntaxNode => c.kind === 'node' && c.rule === 'Label',
+        );
+      }
+      return child.rule === 'Label' ? [child] : [];
+    })
+    .map(label => (label.children[0] as Token).v);
+  return labels.length ? `${[name, ...labels].join(':')}:` : name;
 };

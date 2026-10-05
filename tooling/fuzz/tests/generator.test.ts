@@ -58,3 +58,24 @@ test('inapplicable symbolic actions are counted no-ops without invented Trace re
   expect(result.counts).toMatchObject({ applied: 0, noops: 2 });
   expect(result.trace).toEqual([]);
 });
+
+test('compute generation varies fences and exposes their values to Trace oracles', () => {
+  const literals = new Set<string>();
+  for (let seed = 1; seed <= 20; seed++) {
+    const c = generate(String(seed), { features: ['compute'], witness: true });
+    literals.add(c.setup.scripts![0]!.text!);
+    const result = execute(c);
+    expect(
+      result.trace.filter(line => /^(diag|raise|fault) /.test(line)),
+    ).toEqual([]);
+    expect(
+      result.trace.some(
+        line =>
+          line.startsWith('vars a ') &&
+          line.includes('rendered="value 0"') &&
+          line.includes('template='),
+      ),
+    ).toBe(true);
+  }
+  expect(literals.size).toBeGreaterThan(1);
+});

@@ -1531,7 +1531,10 @@ export class Run {
       stack: [],
       dispatch,
       clauseCharge: body.kind === 'handler' && dispatch !== null,
-      handler: body.kind === 'lambda' ? body.name.split(':')[0]! : body.name,
+      handler:
+        body.kind === 'lambda'
+          ? body.name.replace(/(?::\d+:\d+)+$/, '')
+          : body.name,
     });
   }
 
@@ -3688,9 +3691,9 @@ export class Run {
       case 'call-handler':
       case 'call-handler-wait': {
         // An imported Handler's clauses are its Library's.
-        const target = (a as string).includes(':')
-          ? code.library(a as string)
-          : { code, name: a as string };
+        const target = code.clauses.has(a as string)
+          ? { code, name: a as string }
+          : code.library(a as string);
         const clauses = target.code.clauses.get(target.name)!;
         const n = b as number;
         const args = this.frame.stack.slice(

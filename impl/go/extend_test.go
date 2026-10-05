@@ -131,3 +131,31 @@ func TestExtendDoesNotRecheckPriorBuiltinCalls(t *testing.T) {
 		t.Fatal(result.Reports)
 	}
 }
+
+func TestExtensionFaultReportNamesCodeUnit(t *testing.T) {
+	g := New().NewGroup(GroupOptions{})
+	s, err := g.Load(LoadOptions{Name: "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Extend("on go\nrepeat forever\nend repeat\nend go\n"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Deliver(Message{Name: "go", Limits: &LimitOverride{FuelPerRun: 20}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, report := range result.Reports {
+		if end, ok := report.(*RunEnd); ok && end.Outcome == LimitFault {
+			if end.At.Unit != "s+1" {
+				t.Fatalf("fault reported in %s, want s+1", end.At.Unit)
+			}
+			return
+		}
+	}
+	t.Fatal("missing fault report")
+}

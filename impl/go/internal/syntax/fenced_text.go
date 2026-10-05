@@ -51,7 +51,7 @@ func (l *Lexer) scanFenced(open int) (Token, error) {
 		if strings.HasPrefix(code, "unterminated") {
 			holes = nil
 		}
-		return Token{}, &Error{Code: code, Pos: l.positionAt(at), Earlier: holes}
+		return Token{}, &Error{Code: code, Pos: l.positionAt(at), Earlier: holes, Incomplete: strings.HasPrefix(code, "unterminated")}
 	}
 	for i < len(s) {
 		if (!raw && s[i] == '`') || (raw && s[i] == '"') {

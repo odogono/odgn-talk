@@ -30,7 +30,7 @@ The parsers and compiler under root `tools/` check the Spec; the Core implementa
 
 `@odgn/northtalk/session` exports `SessionHost`, chapter 12's Session Host. It does no I/O of its own: its environment supplies the Clock and takes the Trace, and each call returns the lines the session printed.
 
-- **Entries:** `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines.
+- **Entries:** a Session recognises a Handler Selector by its first word. `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines.
 - **Implicit Script Variables** are the Container roots an Entry puts into, and the names its binding Captures bind. A pattern's names stay the Run's locals, since a pattern may not bind a Script Variable.
 - **Lifecycle failures:** returned `effect failure` reports render their Grant, Segment, phase and status, and `effect-failed` Run outcomes print `! effect failed`. Effect-failed Runs never print an expression success value. Outside-Pump cleanup reports render too; fatal cleanup keeps the previous Session Source and user Library definitions. Session mocks have no scope or Segment-bound declarations.
 - **Following Runs:** the Session Host follows its Runs through a TS-internal hook that gives the Trace's `seg`, `call`, `run` and `unhandled` records as typed values ([ADR 0045](../../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md)). It never calls `inspect()` to decide what to print.
@@ -191,6 +191,16 @@ bun test impl/ts/tests/checker.test.ts
 ```
 
 Core tests check exact authored codes, scalar positions, diagnostic ordering, bindings and capture identities, all binding forms, function contracts, initializer/default references, control flow across nested Lambdas, loops and `finally` blocks, Handler suffixes, Guards, literal, kind, chunk and pattern rules, and deep input. The browser smoke test also exercises name resolution, binding/function contracts, control-flow and construct checks with platform Unicode functions disabled.
+
+## Argument Labels and Selectors
+
+Handler heads, Command Calls, target-first `send`, `pass` and `wait for` accept
+Argument Labels from `grammar.toml`'s `[labels]`, as [chapter 2](../../spec/02-grammar.md#argument-labels)
+specifies. `on move p to sq` and `move 1 to 2` name `move:to:`; positional
+`move 1, 2` still names `move`. Selectors identify Clauses, Message Paths,
+wait events and their `it`, and Trace records. Host Deliveries, Requests,
+Broadcasts and Decisions reject malformed colon-containing names or mismatched
+argument counts at the call with `invalid value`.
 
 ## Lowering and canonical disassembly
 

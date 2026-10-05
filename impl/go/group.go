@@ -401,6 +401,10 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		g.mu.Unlock()
 		return refused(WrongGroup, "receiver does not belong to Group")
 	}
+	if address.function == nil && !syntax.ValidMessageSelector(m.Name, len(m.Args)) {
+		g.mu.Unlock()
+		return refused(InvalidValue, "malformed message Selector or argument count")
+	}
 	m.Args = slices.Clone(m.Args)
 	for _, v := range m.Args {
 		if !validGroup(v.inner, g) {
@@ -415,7 +419,7 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 	if m.Limits != nil {
 		x := *m.Limits
 		m.Limits = &x
-		if x.FuelPerRun < 0 || x.AllocPerRun < 0 || x.MaxWait < 0 || x.MaxJoin < 0 || x.FuelPerRun > limits.FuelPerRun || x.AllocPerRun > limits.AllocPerRun || x.MaxWait > limits.MaxWait || x.MaxJoin > limits.MaxJoin || x.MaxWait%time.Millisecond != 0 {
+		if x.Set & ^(OverrideFuelPerRun|OverrideAllocPerRun|OverrideMaxWait|OverrideMaxJoin) != 0 || x.FuelPerRun < 0 || x.AllocPerRun < 0 || x.MaxWait < 0 || x.MaxJoin < 0 || x.FuelPerRun > limits.FuelPerRun || x.AllocPerRun > limits.AllocPerRun || x.MaxWait > limits.MaxWait || x.MaxJoin > limits.MaxJoin || x.MaxWait%time.Millisecond != 0 {
 			g.mu.Unlock()
 			return refused(InvalidValue, "invalid limit override")
 		}
@@ -602,10 +606,11 @@ func (g *Group) cancelDelivery(d delivery) {
 func overrideDisplay(o LimitOverride) string {
 	var pairs []corevalue.Pair
 	for _, p := range []struct {
-		k string
-		n int64
-	}{{"fuelPerRun", o.FuelPerRun}, {"allocPerRun", o.AllocPerRun}, {"maxWait", int64(o.MaxWait / time.Millisecond)}, {"maxJoin", int64(o.MaxJoin)}} {
-		if p.n != 0 {
+		k   string
+		n   int64
+		set LimitOverrideFields
+	}{{"fuelPerRun", o.FuelPerRun, OverrideFuelPerRun}, {"allocPerRun", o.AllocPerRun, OverrideAllocPerRun}, {"maxWait", int64(o.MaxWait / time.Millisecond), OverrideMaxWait}, {"maxJoin", int64(o.MaxJoin), OverrideMaxJoin}} {
+		if p.n != 0 || o.Set&p.set != 0 {
 			pairs = append(pairs, corevalue.Pair{Key: p.k, Val: corevalue.Value{Kind: corevalue.Number, Number: decimal.FromInt(p.n)}})
 		}
 	}

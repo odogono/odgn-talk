@@ -213,9 +213,9 @@ An Argument Label names the parameter after it, in a Handler's head and at its c
 - **Traps:** the existing reading wins. A chunk word before an open label starts a Chunk Expression (`move word toward x` reads `word toward …`), and a number before a Unit-named label is a Quantity (`scale 3 m 4`). Brackets avoid both: `move (word) toward x`, `scale (3) m 4`.
 - **Errors:** a word in operator position after an argument is now a label, so a mistake such as `log error rest` fails at the end of the line, where `rest` has no argument.
 
-> **Example.** This block isn't checked by the Cores' tests until both Cores parse labels. [`tools/grammar/labels/`](../tools/grammar/labels/sketch.talk) holds the same forms for `grammar:check`.
+> **Example.**
 >
-> ```text
+> ```talk
 > on move piece to square where square is not "e1", queued
 >   put square into the location of piece
 > end move

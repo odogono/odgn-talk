@@ -222,13 +222,6 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// Argument Labels (ADR 0055), which the Cores' tests don't read until both
-// Cores parse them.
-mustParse(
-  readFileSync(join(import.meta.dir, 'labels/sketch.talk'), 'utf8'),
-  'tools/grammar/labels/sketch.talk',
-);
-broken(join(import.meta.dir, 'labels/broken.talk'));
 // A computed message name in `send` (ADR 0057), which the Cores' tests don't
 // read until both Cores parse it.
 mustParse(

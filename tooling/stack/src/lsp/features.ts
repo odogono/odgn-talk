@@ -2,11 +2,13 @@ import {
   grammar,
   units,
   Lexer,
+  parseSource,
   exportsOf,
   type Binding,
   type SemanticName,
   type SemanticNode,
   type SyntaxElement,
+  type SyntaxNode,
   type Token,
 } from '@odgn/northtalk';
 import { formatSource } from '../format';
@@ -259,6 +261,13 @@ export const rename = (
   return { changes };
 };
 
+// Only the parser's original incomplete diagnostic is authoritative. Resuming
+// a lexer after an invalid escape would re-read a closer as a new opener and
+// incorrectly suppress completion in subsequent code.
+const unfinishedLiteral = (source: string): boolean => {
+  const { error } = parseSource(source);
+  return error?.tok.incomplete === true && error.code === 'unterminated text';
+};
 const item = (label: string, kind: number, detail?: string) => ({
   label,
   kind,
@@ -278,6 +287,7 @@ export const completion = (
     (e): e is Token => e.kind === 'token',
   );
   if (
+    unfinishedLiteral(before) ||
     tokens.some(
       t =>
         (t.t === 'str' && t.pos < offset && offset < t.end) ||
@@ -355,6 +365,31 @@ export const completion = (
     .at(-1);
   const scopes = new Set<number>([0]);
   let scope = node?.scope;
+  // Recovery can retain a Handler's syntax and parameter bindings while its
+  // semantic span ends at the last well-formed token before the broken body.
+  // Use that enclosing declaration for completion in an unfinished hole.
+  if (scope === undefined) {
+    const enclosing = elements<SyntaxElement>(analysis.syntax)
+      .filter(
+        (e): e is SyntaxNode =>
+          e.kind === 'node' &&
+          ['Handler', 'Function', 'Lambda'].includes(e.rule) &&
+          e.start <= offset &&
+          offset <= e.end,
+      )
+      .reverse();
+    for (const syntax of enclosing) {
+      const first = elements<SyntaxElement>(syntax).find(
+        (e): e is Token => e.kind === 'token',
+      );
+      scope = analysis.nodes.find(
+        n => n.rule === syntax.rule && n.span.start === first?.pos,
+      )?.scope;
+      if (scope !== undefined) {
+        break;
+      }
+    }
+  }
   while (scope !== undefined && scope !== null) {
     scopes.add(scope);
     scope = analysis.checked.tree.scopes[scope]?.parent ?? undefined;

@@ -415,3 +415,66 @@ describe('Host errors and refusals', () => {
     ]);
   });
 });
+
+test('labelled selectors select clauses and target-first sends return replies', async () => {
+  const { g, lines } = group();
+  const a = g.load({
+    name: 'a',
+    source: `on go
+  send to b: move 3 to 4 and wait
+  return it
+end go`,
+  });
+  g.load({
+    name: 'b',
+    source: `on move x
+  return 99
+end move
+on move x to y where y = 0
+  pass move to
+end move
+on move x to y
+  return x + y
+end move`,
+  });
+  const request = a.request({ name: 'go' });
+  await g.pump(clock);
+  expect((await request.result).toString()).toBe('7');
+  expect(lines.some(line => line.includes('message=move:to:'))).toBe(true);
+});
+
+test('Host message selectors reject malformed parts and mismatched arity at the call', () => {
+  const { g, lines } = group();
+  const s = g.load({ name: 's', source: 'on go\nend go' });
+  for (const name of [
+    'move:',
+    'move:to',
+    'move::to:',
+    ':to:',
+    'move:from:',
+    'move:with:',
+    'move:in:',
+    'all:to:',
+    'on:to:',
+    'move:_:',
+    'move:to:\n',
+  ]) {
+    for (const input of [
+      () => s.deliver({ name, args: [num(1), num(2)] }),
+      () => s.request({ name, args: [num(1), num(2)] }),
+      () => g.broadcast({ name, args: [num(1), num(2)] }),
+    ]) {
+      expect(input).toThrow(HostError);
+      expect(lines.at(-1)).toBe('refused code="invalid value"');
+    }
+  }
+  expect(() => s.deliver({ name: 'move:to:', args: [num(1)] })).toThrow(
+    HostError,
+  );
+  expect(() =>
+    s.deliver({ name: 'move:to:', args: [num(1), num(2), num(3)] }),
+  ).toThrow(HostError);
+  expect(() =>
+    s.deliver({ name: 'move:to:', args: [num(1), num(2)] }),
+  ).not.toThrow();
+});

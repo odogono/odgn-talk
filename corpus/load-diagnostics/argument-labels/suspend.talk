@@ -1,0 +1,6 @@
+on move p to sq
+  wait 1 s
+end move
+on go
+  move 1 to 2
+end go

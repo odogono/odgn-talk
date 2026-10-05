@@ -1,0 +1,21 @@
+# Unblessed: labelled pass checks, syntax traps, suspension and selector clashes.
+> load bad identity=af1159183da5f435cbab8bed303b9b0951c9092b6bde6ea7b80efb0a9a95eef6
+diag bad code="wrong message" pos=2:8
+> load wrong-label identity=5730bb5b75f215ec43566a459ca9c160bbd1b76e8bf511ce5acb2e701c857d0e
+diag wrong-label code="wrong message" pos=2:8
+> load head identity=77936c4cf57d5cd5829d4df6b4885bada9c87e6af46dff3c49daa4062bb4e76e
+diag head code="unexpected token" pos=1:18
+> load chunk identity=d8b039c07c2b8826080c997255f3726e1f4709d4a5013c4b28a4281c01bb78f2
+diag chunk code="unexpected token" pos=2:20
+> load unit identity=3bfb5997c28bb29b822c520ff2aac4945f859cd19bbf640d65a6c646fd7b9679
+diag unit code="unexpected token" pos=2:13
+> load suspend identity=34b2e11c787ecb507acec865d24dcca97cc2d1080e7833a149e338e843f95c9c
+diag suspend code="missing and wait" pos=5:3
+> load clash identity=6c97655e3fb63f4b61652a5f2b7606a48b2b4b70e03ea11c1dfc093033c65fcd
+> deliver d1 to=clash message=go
+> pump clock=2026-09-30T09:00:00Z
+seg clash/r1 start delivery=d1 handler=go clause=1 fuel=25 alloc=0 state=0 end=return
+run clash/r1 outcome=completed delivery=d1 handler=go fuel=25 alloc=0
+pumped state=idle fuel=25
+> vars
+vars clash

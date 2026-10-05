@@ -683,3 +683,11 @@ describe('Debugging a session', () => {
     expect(host.inspect()).toBeNull();
   });
 });
+
+test('Session Entries recognise the first word of a labelled Handler', () => {
+  const { host } = session();
+  expect(host.input('on move x to y\n  say x + y\nend move')).toEqual([]);
+  expect(host.input('move 3 to 4')).toEqual(['7']);
+  expect(host.input('on move x toward y\n  say x * y\nend move')).toEqual([]);
+  expect(host.input('move 3 toward 4')).toEqual(['12']);
+});

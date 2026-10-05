@@ -1,0 +1,3 @@
+on move p to sq
+  pass move toward
+end move

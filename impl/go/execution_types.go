@@ -59,7 +59,21 @@ type Limits struct {
 	CleanupBudget   int64
 }
 
+// LimitOverrideFields marks explicitly supplied fields, including zero values.
+// Nonzero fields are always supplied, preserving the numeric-only API.
+type LimitOverrideFields uint8
+
+const (
+	OverrideFuelPerRun LimitOverrideFields = 1 << iota
+	OverrideAllocPerRun
+	OverrideMaxWait
+	OverrideMaxJoin
+)
+
+// LimitOverride tightens one Delivery. Zero fields are omitted unless marked
+// in Set; nonzero fields always override. A field that loosens is invalid value.
 type LimitOverride struct {
+	Set         LimitOverrideFields // zero numeric fields override only when marked here
 	FuelPerRun  int64
 	AllocPerRun int64
 	MaxWait     time.Duration // whole milliseconds

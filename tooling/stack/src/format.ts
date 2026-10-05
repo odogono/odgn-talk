@@ -1,6 +1,6 @@
 import {
   parseSource,
-  syntaxText,
+  Lexer,
   type ParseError,
   type SyntaxElement,
   type SyntaxNode,
@@ -14,43 +14,149 @@ export type FormatResult = {
 };
 
 type Leaf = {
+  attachLeft?: boolean;
   attachRight: boolean;
   depth: number;
   token: Token;
 };
 
-// Branch heads in match and block wait sit inside their block; their Block
-// productions add the second level for multiline branch bodies.
-const leaves = (tree: SyntaxNode): Leaf[] => {
+// Change only prefixes owned by this literal, never lines in a hole. The
+// parser has already checked that every prefix matches the exact old margin.
+const withMargin = (
+  token: Token,
+  source: string,
+  margin: string | null,
+  depth: number,
+): Token => {
+  if (margin === null) {
+    return token;
+  }
+  const raw = token.raw.replaceAll(
+    /(^(?=[\t ])|\r\n|\r|\n)([\t ]*)/g,
+    (match, newline: string, prefix: string, offset: number) => {
+      const start = token.pos + offset + newline.length;
+      if (start > 0 && !/[\n\r]/.test(source[start - 1]!)) {
+        return match;
+      }
+      const removed = Math.min(prefix.length, margin.length);
+      const rest = prefix.slice(removed);
+      const end = offset + newline.length + prefix.length;
+      // Short blank prefixes become empty; trailing spaces beyond the margin
+      // still belong to the value and must survive.
+      const next = source[token.pos + end];
+      const blank = next === undefined || /[\n\r]/.test(next);
+      return newline + (blank && !rest ? '' : indent(depth) + rest);
+    },
+  );
+  return { ...token, raw };
+};
+const marginOf = (
+  source: string,
+  open: number,
+  end: number,
+  width: number,
+): string | null => {
+  if (!/[\n\r]/.test(source[open + width] ?? '')) {
+    return null;
+  }
+  const close = end - width;
+  let start = close;
+  while (start > 0 && !/[\n\r]/.test(source[start - 1]!)) {
+    start--;
+  }
+  return source.slice(start, close);
+};
+const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
   const out: Leaf[] = [];
+  const lexer = new Lexer(source);
   const stack: {
+    attachLeft?: boolean;
     attachRight: boolean;
     depth: number;
     element: SyntaxElement;
   }[] = [{ element: tree, depth: 0, attachRight: false }];
   while (stack.length) {
-    const { element, depth, attachRight } = stack.pop()!;
+    const { element, depth, attachRight, attachLeft } = stack.pop()!;
     if (element.kind === 'token') {
-      out.push({ token: element, depth, attachRight });
+      const width = element.raw.startsWith('`')
+        ? 1
+        : /^"{3,}/.exec(element.raw)?.[0].length;
+      const token =
+        element.t === 'str' && width
+          ? withMargin(
+              element,
+              source,
+              marginOf(source, element.pos, element.end, width),
+              depth,
+            )
+          : element;
+      out.push({ token, depth, attachRight, attachLeft });
       continue;
     }
-    // Literal interiors are lossless: format surrounding code, never content.
     if (element.rule === 'Interpolated') {
       const first = element.children[0] as Token;
-      out.push({
-        token: {
-          ...first,
-          raw: syntaxText(element).slice(
-            first.leadingTrivia.reduce((n, t) => n + t.raw.length, 0),
-          ),
-          end: element.end,
-          t: 'template',
-        },
-        depth,
-        attachRight,
-      });
+      const margin = marginOf(source, first.pos, element.end, 1);
+      const children: typeof stack = [];
+      for (const [index, child] of element.children.entries()) {
+        if (child.kind === 'node') {
+          children.push({ element: child, depth, attachRight: false });
+        } else if (child.v === '${' && child.t === 'op') {
+          children.push({
+            element: child,
+            depth,
+            attachRight: true,
+            attachLeft: true,
+          });
+        } else {
+          let literal = child;
+          if (index > 0) {
+            // The lossless literal segment includes the hole's closing trivia
+            // and brace. Give those back to ordinary code formatting.
+            let cursor = child.pos;
+            const trivia: Token['leadingTrivia'][number][] = [];
+            let closer = lexer.lex(cursor, 'operator');
+            while (closer.t === 'nl') {
+              trivia.push(...closer.leadingTrivia, {
+                kind: 'continuation',
+                pos: closer.pos,
+                end: closer.end,
+                raw: closer.raw,
+                line: closer.line,
+                col: closer.col,
+              });
+              cursor = closer.end;
+              closer = lexer.lex(cursor, 'operator');
+            }
+            children.push({
+              element: {
+                ...closer,
+                leadingTrivia: [...trivia, ...closer.leadingTrivia],
+              },
+              depth,
+              attachRight: true,
+            });
+            literal = {
+              ...child,
+              pos: closer.end,
+              raw: source.slice(closer.end, child.end),
+            };
+          }
+          children.push({
+            element: {
+              ...withMargin(literal, source, margin, depth),
+              t: 'template',
+            },
+            depth,
+            attachRight: index < element.children.length - 1,
+            attachLeft: index > 0,
+          });
+        }
+      }
+      stack.push(...children.reverse());
       continue;
     }
+    // Branch heads in match and block wait sit inside their block; their
+    // Block productions add the second level for multiline branch bodies.
     const branchBlock =
       element.rule === 'Match' ||
       (element.rule === 'Wait' &&
@@ -93,6 +199,9 @@ const gap = (previous: Leaf, next: Leaf): string => {
     (a.t === 'patopen' && b.t === 'patopen')
   ) {
     return ' ';
+  }
+  if (next.attachLeft) {
+    return '';
   }
   if (
     (b.t === 'op' && [')', ']', '}', ',', ':', "'s", '..'].includes(b.v)) ||
@@ -140,7 +249,7 @@ export const formatSource = (source: string): FormatResult => {
     previous = null;
     continuation = continued;
   };
-  for (const leaf of leaves(parsed.tree)) {
+  for (const leaf of leaves(parsed.tree, source)) {
     const { token, depth } = leaf;
     for (const trivia of token.leadingTrivia) {
       switch (trivia.kind) {

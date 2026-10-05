@@ -53,6 +53,15 @@ export const grammar = {
     "nothing",
     "true"
   ],
+  "labels": {
+    "reserved": [
+      "to"
+    ],
+    "excluded": [
+      "from",
+      "with"
+    ]
+  },
   "chunk": [
     {
       "singular": "character",

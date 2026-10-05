@@ -255,7 +255,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		vs := take(n)
 		m.Count = int64(n)
 		callee, handler := code, name(0)
-		if library, exported, ok := strings.Cut(handler, ":"); ok {
+		if library, exported, ok := strings.Cut(handler, ":"); ok && code.Unit.Checked().Symbols[handler].Kind != "handler" {
 			callee, handler = code.Libraries[library], exported
 		}
 		bodies := []int{}

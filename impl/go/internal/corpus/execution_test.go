@@ -25,8 +25,8 @@ func TestExecutionBackends(t *testing.T) {
 			})
 		}
 	}
-	if count != 50 {
-		t.Fatalf("expected 50 Trace cases, got %d", count)
+	if count != 51 {
+		t.Fatalf("expected 51 Trace cases, got %d", count)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 61 {
-		t.Fatalf("required set: %d cases, want 61", count)
+	if count != 62 {
+		t.Fatalf("required set: %d cases, want 62", count)
 	}
 }
 
@@ -870,5 +870,35 @@ func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
 	}
 	if count != 18 {
 		t.Fatalf("required step-5 set: %d cases, want 18", count)
+	}
+}
+
+func TestArgumentLabelsAcceptance(t *testing.T) {
+	names := []string{"suspension/argument-labels", "objects/argument-labels", "load-diagnostics/argument-labels"}
+	cases, err := Discover("../../../../corpus", names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	passing := map[string]bool{}
+	for _, name := range strings.Split(string(data), "\n") {
+		passing[name] = true
+	}
+	runner := Runner{Root: "../../../../corpus", Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !passing[c.Name] {
+				t.Errorf("selector case missing from gate: %s", c.Name)
+			}
+			if reason := runner.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
