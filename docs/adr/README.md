@@ -55,3 +55,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0051: The Playground's Script tab is the session source](0051-the-playgrounds-script-tab-is-the-session-source.md)
 - [0052: Canvas is a deterministic Host capability](0052-canvas-is-a-deterministic-host-capability.md)
 - [0053: Backticks interpolate and raw fences preserve text](0053-backticks-interpolate-and-raw-fences-preserve-text.md)
+- [0054: Benchmarks live outside the Cores and only advise the Cost Model](0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md)

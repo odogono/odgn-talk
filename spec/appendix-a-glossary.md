@@ -218,6 +218,18 @@ _Avoid_: type definitions, SDK, d.ts, host profile
 A piece of advice from tooling about a Script that loads. It never rejects code, and unlike a load-time diagnostic, parity doesn't cover it.
 _Avoid_: warning (unqualified), diagnostic (unqualified)
 
+**Benchmark**:
+One named, measured workload, written once as a Script and run on each Core, and where it has a counterpart, in a Peer Language. It measures speed, not behaviour, and nothing it produces is normative.
+_Avoid_: perf test, operation (that word means a Capability's action)
+
+**Benchmark Suite**:
+The whole set of Benchmarks, run together to find a Core's slow paths and to compare it with its Peer Languages.
+_Avoid_: perf suite, test suite
+
+**Peer Language**:
+Another language a Benchmark is compared with: an embeddable scripting language such as Lua or Starlark, a relatable general-purpose one such as Python, or the Core's own host language as a ceiling.
+_Avoid_: competitor, rival, baseline (unqualified)
+
 **Lint Profile**:
 A named set of Lint levels, `beginner` or `standard`. The Host picks the default and a user may override it.
 _Avoid_: layer, level, mode
