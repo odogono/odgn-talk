@@ -69,6 +69,7 @@ type Run struct {
 	FaultAbandons  []string
 	OperationWait  bool
 	SendWait       bool
+	FunctionWait   bool
 	SendResume     *SendResume
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
@@ -262,9 +263,10 @@ func (r *Run) Execute(slice int64) {
 // Receiver keeps Script-name tokens separate from Object Values. Up sends
 // begin at the current owner's parent.
 type Receiver struct {
-	Name   string
-	Object value.Value
-	Up     bool
+	Name     string
+	Object   value.Value
+	Up       bool
+	Function value.Value
 }
 
 // SendFunc commits a paid message and registers a reply when wait is true.
@@ -295,7 +297,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") && send == nil {
+		if !Supported(i) || r.foreignWaitCall(f, i) && send == nil || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -398,7 +400,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		trial.Locals = slices.Clone(f.Locals)
 		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
-		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
+		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !r.foreignWaitCall(f, i) && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
 			r.fault("depth")
 			break
 		}
@@ -438,6 +440,12 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			err = send(recipient, i.Operands()[0].Text, m.Args, i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up-wait")
 		}
+		if err == nil && r.foreignWaitCall(f, i) {
+			n := i.Operands()[0].Index
+			fn := f.Stack[len(f.Stack)-n-1]
+			err = send(Receiver{Function: fn}, "", m.Args, true)
+		}
+
 		if err != nil {
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
@@ -461,8 +469,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 	}
 }
 
-// Foreign Function Value calls await the cross-Script reply implementation.
-// Keep their operands and charge untouched at that boundary.
+// A foreign wait uses a Group adapter; standalone execution leaves it untouched.
 func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
 	if i.Name != "call-value-wait" {
 		return false

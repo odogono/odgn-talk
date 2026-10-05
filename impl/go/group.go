@@ -71,6 +71,7 @@ type delivery struct {
 	during     *corevalue.Value // non-nil only for an internal error message
 	settlement *operationSettlement
 	reply      CallID
+	function   *corevalue.Value
 	target     *Object // fixed initial recipient
 	path       bool    // recheck the Object path before dispatch
 	after      *Object // climb from this previous owner, never from target
@@ -306,6 +307,14 @@ func (g *Group) deliver(s *Script, m Message, ctx context.Context, request bool)
 	return g.enqueue(s, m, ctx, request, nil)
 }
 func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, objects ...*Object) (DeliveryID, *Pending, error) {
+	address := delivery{}
+	if len(objects) > 0 {
+		address.target = objects[0]
+		address.path = true
+	}
+	return g.admit(s, m, ctx, request, decision, address)
+}
+func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, address delivery) (DeliveryID, *Pending, error) {
 	fields := map[string]string{"to": "unknown", "message": m.Name}
 	if s != nil {
 		fields["to"] = s.name
@@ -323,15 +332,21 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 	if decision != nil {
 		name = "decide"
 	}
+	if address.function != nil {
+		name = "call-value"
+		delete(fields, "to")
+		delete(fields, "message")
+		fields["fn"] = Value{*address.function}.String()
+	}
 	refused := func(code HostErrorCode, detail string) (DeliveryID, *Pending, error) {
 		g.recordRefusal(name, nil, fields, code)
 		return "", nil, &HostError{code, detail}
 	}
 	g.mu.Lock()
 	var target *Object
-	path := len(objects) > 0
+	path := address.path
 	if path {
-		target = objects[0]
+		target = address.target
 		if target == nil || target.group != g {
 			g.mu.Unlock()
 			return refused(WrongGroup, "Object does not belong to Group")
@@ -340,6 +355,12 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 		s = g.nearestOwner(target)
 	} else if s != nil {
 		target = s.owner
+	}
+	if address.function != nil {
+		s = g.script(address.function.Function.Home)
+		if s != nil {
+			target = s.owner
+		}
 	}
 	if !path && (s == nil || s.group != g) {
 		g.mu.Unlock()
@@ -377,13 +398,12 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 			ctx = context.Background()
 		}
 		p = &Pending{done: make(chan struct{})}
-		name = "request"
 	}
 	if s != nil {
 		s.reserved++
 	}
 
-	d := delivery{id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
+	d := delivery{function: address.function, id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
 	g.inputs = append(g.inputs, d)
 	if p != nil {
 		p.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
@@ -568,6 +588,9 @@ func (g *Group) Inspect() Inspection {
 			}
 			if x.run.SendWait {
 				run.Status, run.Wait, run.Calls = Suspended, "send-wait", []CallID{x.waitCall}
+				if x.run.FunctionWait {
+					run.Wait = "call-value-wait"
+				}
 				run.Until = time.Time{}
 				if x.run.OperationWait {
 					run.Wait = "ask-wait"

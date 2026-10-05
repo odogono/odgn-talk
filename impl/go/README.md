@@ -224,8 +224,8 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Standalone sends without a Group adapter, foreign Function Value calls with
-`and wait`, imported calls and standalone Object property calls without a Host
+Standalone sends and foreign Function Value calls without a Group adapter,
+unlinked imported calls and standalone Object property calls without a Host
 adapter stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
@@ -267,7 +267,7 @@ remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 ## Group embedding
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`,
-`Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
+`Call`, `Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports Scripts with named Capability Grants and an optional
 Owning Object. Owners and well-known Objects are checked for Group ownership and
@@ -293,6 +293,37 @@ rollback base for preempted Runs; Function Values from the old code become stale
 A successful Reload restarts Script-addressed execution; a disposed owner
 remains skipped by Object routing. The explicit `Stop` Host API, `Extend`, Library
 replacement and scoped lifecycle remain deferred. Owner disposal applies sticky Stop semantics.
+
+### Function Value calls
+
+A local Function Value call stays in the caller's Run. A foreign `f(x) and wait`
+pays the ordinary call charge, enters the Home Script's FIFO mailbox, and starts
+a concurrent Run without Handler Clause dispatch. It runs with the Home Script's
+Grants and limits; captures and named defaults bind in its own code unit, including
+imported functions. The caller's `MaxWait` bounds the reply. A plain foreign call
+raises `would suspend`, a stale value raises `function gone`, and a full Home
+mailbox raises `mailbox full` naming the Home Script. Failed admission creates
+no call id or receiver Run.
+
+Replies resume the caller in a new Segment without another call charge.
+Receiver errors and limits become `send failed`; caller timeout or cancellation
+abandons the reply while the Home Run continues. Inspection shows
+`call-value-wait` with its pending id, and Function Runs and queued calls use the
+Function Value's display label. Mailbox accounting retains the Function Value
+and its captures, as well as arguments.
+
+`Group.Call` admits a Host Function Value call like a Request, with Group and
+argument validation and optional tighter Run limits. Staleness is checked when
+inputs drain; a stale call fails `send failed`, reason `function gone`, without
+a Run or Fuel. A live call's arity mismatch is an error at the body's first
+instruction, before any execution charge or unwind. It cannot enter catch or
+finally cleanup. Defaults and captures use the same binding as Script calls.
+Context cancellation uses ordinary Delivery cancellation.
+
+The reviewed `functions/foreign-calls` case passes unchanged. The live-call,
+default and arity prefix of `functions/host-calls` also matches; its remaining
+inputs require the explicit Stop API tracked by #135. Full Go save/restore of
+pending Function calls remains part of #136.
 
 ### Ordinary Capability Operations
 
@@ -592,7 +623,8 @@ or the receiver's error map for a failure, in place of that call. Resumption
 charges, including unwinding through local Handler frames, spend the Pump's
 Fuel cap and the Script's slice before following instructions run. Inspection
 reports `send-wait` and the pending call id, with no `until` for `MaxWait`.
-Foreign Function Value calls remain at their untouched implementation boundary.
+Foreign Function Value calls use the Home Script mailbox and the same reply
+mechanism; see [Function Value calls](#function-value-calls).
 
 `wait for all … end` supports ordinary Capability calls and waiting sends to named
 Scripts, Host Objects and `me`, including mixed Joins. Each member starts where
@@ -685,7 +717,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 188 cases, including all text-model, load-diagnostic,
+The gate contains 189 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
