@@ -1,0 +1,67 @@
+-- The #338 spike: Argument Labels on Handlers, Command Calls and `send`.
+-- Parsed only by `bun tools/grammar/check.ts --labels`. Not a design.
+
+-- A labelled Handler: its Selector is `move:to:`.
+on move piece to square
+  put square into the location of piece
+end move
+
+-- A positional Handler that shares the first word is a different message.
+on move piece
+  move piece to "e1"
+end move
+
+-- Reserved and contextual words that may be labels.
+on slide piece across start to finish by steps
+  repeat steps times
+    nudge piece toward finish
+  end repeat
+end slide
+
+on nudge piece toward square
+  log "nudge"
+end nudge
+
+-- Clauses and Guards, a `, queued` suffix, and a pattern before a label.
+on castle king to [file, rank] where file is "g", queued
+  log "kingside"
+end castle
+
+on castle king to [file, rank] where file is "c", queued
+  log "queenside"
+end castle
+
+on castle {colour: c} as king to square, queued
+  pass castle to
+end castle
+
+on play
+  -- Labelled Command Calls, with expressions in each slot.
+  move knight to "e" & "4"
+  slide rook across "a1" to "a" & 8 by 2 * 3
+  -- `and wait` after a label's argument.
+  move knight to "e4" and wait
+  -- A positional call is unchanged.
+  greet "Ann", "Bob"
+  -- Labels after an `of` chain, a call and a group.
+  move item 1 of pieces to (the square of target)
+  move first(pieces) to "e4"
+  -- `to` is reserved, so a chunk word before it stays a Name.
+  move word to x
+  -- Target-first `send`, labelled and positional, with and without `and wait`.
+  send to board: move knight to "e4"
+  send to the parent of me: move knight to "e4" and wait
+  send to board: greet "Ann", "Bob"
+  send to board: reset
+  -- The old `send` is unchanged.
+  send greet with "Ann" to board
+  -- `wait for` a labelled message.
+  wait for move p to sq or 30 s
+  wait for
+    when move p to sq where sq is "e4" then log "centre"
+    when move p then log "plain"
+    after 5 s then log "slow"
+  end wait
+  -- `from` is never a label, so it is always the event's source.
+  wait for move p to sq from board
+end play
