@@ -219,6 +219,7 @@ save-restore/unbound-grant-and-unresolved-object
 save-restore/unsettled-call-is-lost
 save-restore/variables-only-restore
 save-restore/withheld-library
+sessions/argument-labels
 sessions/basics
 sessions/cancel
 sessions/export-and-library

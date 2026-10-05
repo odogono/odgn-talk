@@ -271,7 +271,8 @@ func (b consoleBinding) Write(c *talk.Call, v talk.Value) error { return b.h.Wri
 func (b consoleBinding) Read(c *talk.Call) error                { return b.h.ReadCall(c) }
 func (h *Host) isHandler(name string) bool {
 	for _, d := range h.declarations {
-		if d.kind == "handler" && d.names[0] == name {
+		// A Selector's first part names the Handler's Entries (chapter 12).
+		if d.kind == "handler" && strings.Split(d.names[0], ":")[0] == name {
 			return true
 		}
 		if d.kind == "use" {
