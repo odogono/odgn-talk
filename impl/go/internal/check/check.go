@@ -33,6 +33,7 @@ type Symbol struct {
 type Options struct {
 	Library          bool
 	Objects          []string
+	OwnerProperties  map[string]bool
 	ObjectProperties map[string]map[string]bool // property name -> writable, by bound Object name
 	ImportCalls      map[string][]OperationUse
 	Imports          map[string]map[string]Symbol
@@ -782,8 +783,12 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			base := unparen(target.Children[len(target.Children)-1])
 			s, _ := u.Resolve(b, base.Text)
 			props, known := u.Options.ObjectProperties[base.Text]
+			owner := base.Kind == "literal" && base.Text == "me" && u.Options.OwnerProperties != nil
+			if owner {
+				props, known = u.Options.OwnerProperties, true
+			}
 			key, literal := literalKey(target)
-			if base.Kind == "name" && s.Kind == "object" && known && literal && !props[key] {
+			if (owner || base.Kind == "name" && s.Kind == "object") && known && literal && !props[key] {
 				u.add("can't write", n.Pos())
 			}
 		}

@@ -27,7 +27,7 @@ type ObjectKindDef struct {
 }
 
 // DefineObjectKind copies a reusable process-level Object Kind declaration.
-// ParentKinds is manifest metadata; parent routing remains deferred.
+// ParentKinds is manifest metadata; it does not constrain SetParent.
 func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 	if def.Name == "" || !utf8.ValidString(def.Name) {
 		return nil, &HostError{InvalidValue, "invalid Object Kind name"}
@@ -71,7 +71,7 @@ type objectKey struct{ kind, id string }
 
 // Dispose queues an idempotent lifecycle change for the next Pump. A disposed
 // handle retains identity and encoding and remains a valid Group-owned Value.
-// Owning Scripts and parent relationships remain deferred with Message Paths.
+// Disposing an owner stops its Script; routing skips the disposed Object.
 func (g *Group) Dispose(o *Object) error {
 	if o == nil || o.group != g {
 		object := "nothing"
@@ -102,4 +102,56 @@ func objectProperties(bindings map[string]corevalue.Value) map[string]map[string
 		out[name] = props
 	}
 	return out
+}
+
+const ParentCycle HostErrorCode = "parent cycle"
+
+func (*HostError) isReport() {}
+
+// SetParent queues a parent change, rejecting known cycles and disposed children.
+// ParentKinds is metadata, not a restriction on the Message Path.
+func (g *Group) SetParent(o, parent *Object) error {
+	fields := map[string]string{"object": "nothing", "parent": "nothing"}
+	if o != nil {
+		fields["object"] = o.Value().String()
+	}
+	if parent != nil {
+		fields["parent"] = parent.Value().String()
+	}
+	g.mu.Lock()
+	code := g.parentError(o, parent)
+	if code != "" {
+		g.mu.Unlock()
+		g.recordRefusal("set-parent", nil, fields, code)
+		return &HostError{code, "invalid parent relationship"}
+	}
+	g.inputs = append(g.inputs, delivery{kind: "set-parent", object: o, parent: parent, fields: fields})
+	ready := g.options.OnReady
+	g.mu.Unlock()
+	if ready != nil {
+		ready()
+	}
+	return nil
+}
+
+// Caller holds g.mu, including when applying queued changes.
+func (g *Group) parentError(o, parent *Object) HostErrorCode {
+	if o == nil || o.group != g || parent != nil && parent.group != g {
+		return WrongGroup
+	}
+	if o.disposed.Load() {
+		return InvalidValue
+	}
+	for p := parent; p != nil; p = p.parent {
+		if p == o {
+			return ParentCycle
+		}
+	}
+	return ""
+}
+func ownerProperties(o *Object) map[string]bool {
+	if o == nil {
+		return nil
+	}
+	return objectProperties(map[string]corevalue.Value{"me": o.Value().inner})["me"]
 }

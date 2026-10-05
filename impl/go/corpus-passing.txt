@@ -8,6 +8,7 @@ bytes/build-errors
 bytes/value-encoding
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
@@ -40,10 +41,12 @@ dates/value-encoding
 decisions/allow-at-the-first-suspension-point
 decisions/dispatch-and-waits
 decisions/fault-before-seal
+decisions/pass-up-the-message-path
 decisions/script-verdict-boundaries
 decisions/undecided-on-an-error
 decisions/undecided-when-dropped
 decisions/verdict-behind-a-fuel-slice
+decisions/veto-ends-the-decision
 disassembly/calls-and-lambdas
 disassembly/containers
 disassembly/destructuring
@@ -127,7 +130,12 @@ math/fractional-power
 math/fractional-power-errors
 math/number-functions
 objects/guard-keys
+objects/message-path
+objects/moving-climb
+objects/moving-mailbox
 objects/properties
+objects/sends
+objects/wait-target
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding

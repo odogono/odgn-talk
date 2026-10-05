@@ -99,7 +99,10 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)
 	declarations, _ := json.Marshal(options.Grants)
-	properties, _ := json.Marshal(options.ObjectProperties)
+	properties, _ := json.Marshal(struct {
+		Objects map[string]map[string]bool
+		Owner   map[string]bool
+	}{options.ObjectProperties, options.OwnerProperties})
 	kind := "script"
 	if options.Library {
 		kind = "library"

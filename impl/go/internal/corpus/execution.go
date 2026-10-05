@@ -65,16 +65,13 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
 	if scripts, ok := c.Setup["scripts"].([]any); ok {
 		for _, raw := range scripts {
 			setup := raw.(Setup)
-			if setup["owner"] != nil {
-				return "Owning Scripts and Message Paths remain deferred"
-			}
 			source, e := os.ReadFile(filepath.Join(c.Dir, setup["source"].(string)))
 			if e != nil {
 				return e.Error()
@@ -138,6 +135,20 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			fields[f.Key] = f
 		}
 		switch r.Name {
+		case "set-parent":
+			ref := fields["object"].Value.Object
+			if ref == nil {
+				return nil, fmt.Errorf("set-parent requires Object")
+			}
+			var parent *talk.Object
+			if p := fields["parent"].Value.Object; p != nil {
+				parent = objects[objectRef{p.Kind, p.ID}]
+			}
+			if err := g.SetParent(objects[objectRef{ref.Kind, ref.ID}], parent); err != nil {
+				if _, ok := err.(*talk.HostError); !ok {
+					return nil, err
+				}
+			}
 		case "dispose":
 			ref := fields["object"].Value.Object
 			if ref == nil {
@@ -232,7 +243,14 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			_, e = g.Load(talk.LoadOptions{Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
+			var owner *talk.Object
+			if ref, ok := setup["owner"].(Setup); ok {
+				owner = objects[objectRef{ref["kind"].(string), ref["id"].(string)}]
+				if owner == nil {
+					return nil, fmt.Errorf("unknown owner %v", ref)
+				}
+			}
+			_, e = g.Load(talk.LoadOptions{Owner: owner, Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
 			if e != nil {
 				if _, ok := e.(*talk.LoadError); !ok {
 					return nil, e
@@ -240,8 +258,12 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			}
 		case "deliver", "request", "decide":
 			s := g.Script(fields["to"].Raw)
-			if s == nil {
-				return nil, fmt.Errorf("unknown Script %s", fields["to"].Raw)
+			var target *talk.Object
+			if ref := fields["to"].Value.Object; ref != nil {
+				target = objects[objectRef{ref.Kind, ref.ID}]
+			}
+			if s == nil && target == nil {
+				return nil, fmt.Errorf("unknown recipient %s", fields["to"].Raw)
 			}
 			m := talk.Message{Name: fields["message"].Raw}
 			if raw, ok := fields["limits"]; ok {
@@ -256,7 +278,15 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				m.Args = append(m.Args, x)
 			}
 			var e error
-			if r.Name == "request" {
+			if target != nil {
+				if r.Name == "request" {
+					_, _, e = g.Request(context.Background(), target, m)
+				} else if r.Name == "decide" {
+					_, _, e = g.Decide(context.Background(), target, m)
+				} else {
+					_, e = g.Deliver(target, m)
+				}
+			} else if r.Name == "request" {
 				_, _, e = s.Request(context.Background(), m)
 			} else if r.Name == "decide" {
 				_, _, e = s.Decide(context.Background(), m)

@@ -191,8 +191,8 @@ and resolves Object tags through its resolver. Plain JSON refuses non-JSON
 kinds with `not encodable`, including `kind` and the first depth-first `path`.
 Function Values have Home identity, capture equality and accessors, and are
 refused by storage encoding. Group-scoped Host Objects can be registered and
-resolved by the Host; parent relationships and Message Path routing remain part
-of #134.
+resolved by the Host. Group-owned parent relationships route messages to the
+nearest live Owning Script.
 
 Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
 the number limit. Some huge Unit exponents remain impractical when interval
@@ -224,13 +224,13 @@ return checks the state that will remain. Cancellation runs finally cleanup
 under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
-Object Message Path `send` instructions, foreign Function Value calls with
+Standalone sends without a Group adapter, foreign Function Value calls with
 `and wait`, imported calls and standalone Object property calls without a Host
 adapter stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Message Paths and Broadcast Decisions belong to #134;
+before that boundary. Broadcast Decisions belong to #134;
 complete cancellation and Stop Script acceptance to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
@@ -269,10 +269,10 @@ remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`,
 `Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
-live state. Load supports standalone Scripts with named Capability Grants;
-Owning Script bindings are refused; well-known Objects are checked for Group
-ownership and retained through Reload. Other unimplemented public declarations
-are omitted.
+live state. Load supports Scripts with named Capability Grants and an optional
+Owning Object. Owners and well-known Objects are checked for Group ownership and
+retained through Reload. Each live Object has at most one Owning Script. Other
+unimplemented public declarations are omitted.
 
 Any-goroutine deliveries reserve mailbox capacity before joining the input
 queue. A Pump takes one Clock reading, drains accepted inputs in order, and
@@ -290,7 +290,9 @@ intact. Successful Reload abandons pending calls without Script finally cleanup,
 drops queued messages, settles Requests/reply senders as stopped, carries variables
 by name when requested, and preserves counters. Carry uses the active Segment's
 rollback base for preempted Runs; Function Values from the old code become stale.
-Sticky `Stop`, `Extend`, Library replacement and scoped lifecycle remain deferred.
+A successful Reload restarts Script-addressed execution; a disposed owner
+remains skipped by Object routing. The explicit `Stop` Host API, `Extend`, Library
+replacement and scoped lifecycle remain deferred. Owner disposal applies sticky Stop semantics.
 
 ### Ordinary Capability Operations
 
@@ -345,7 +347,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Message Paths, Capability Scopes and Segment-bound effects remain part of #134. Definitions that request Scopes or
+Capability Scopes and Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
 
@@ -479,8 +481,37 @@ A dynamic Guard reads map keys or the Core-held Object `id`; other Object keys
 raise `wrong kind` (expected map), charge the ordinary key instruction and skip
 the Guard clause without calling the Host. This also applies after disposal.
 Missing or read-only setters reached through dynamic keys or aliases still raise
-`read only` at runtime. Owning Scripts, `SetParent` and Message Path routing remain
-part of #134.
+`read only` at runtime. Literal writes through `me` also use the owner
+Kind metadata at Load and Reload.
+
+### Object Message Paths
+
+`SetParent` queues parent changes and rejects known cycles and disposed children.
+Changes that become invalid while queued report a HostError in the next Pump.
+`ParentKinds` remains manifest metadata. Disposal preserves Object identity,
+stops its owning Script without finally cleanup, and routing skips to its parent.
+Later Script-addressed deliveries are accepted and dropped under the same Stop
+reason; Requests fail as stopped and open Decisions become undecided.
+
+Object-addressed Deliveries, Requests and Decisions route to the nearest live
+Owning Script. Accepted messages retain admission when a preceding parent input
+changes their receiver. Dispatch checks the current path before message
+observation or creating a Run; a moved message joins its new mailbox tail,
+even beyond depth, without Fuel. An unowned path ends with Unhandled and zero
+Fuel. Started, preempted and parked Runs stay in their Script.
+
+`me` is the owner or Nothing; `the target` remains the initially addressed Object,
+or the initially addressed Script's owner. `pass` and unmatched messages climb
+from the last owner's current parent, checking capacity for the climb. Pending
+Requests, waiting sends and open Decisions continue with the same ids. A full
+climb emits `climb-full` and ends unhandled. Every receiver applies its own limits,
+with Host overrides as additional caps.
+
+Script sends accept Objects, named Scripts and `me`. Unknown Command Calls send
+from the owner's parent; their `and wait` forms await the final receiver. At the
+end of a path, waiting senders fail with `send failed`, reason `unhandled`.
+The eight reviewed Message Path, Decision and owner-disposal corpus cases pin
+exact costs, movement order, Targets, Stop reports and Verdicts.
 
 ### Scheduling and suspension
 
@@ -521,8 +552,8 @@ even past those budgets; the incoming Run is then preempted before its first
 instruction, ahead of newly ready waiters, and slice overrun becomes debt.
 Internal `error` messages are observed even without an error Handler. Named
 Script filters resolve when waiting begins; missing names raise `object gone`,
-and other non-Object filters raise `wrong kind`. Object filters remain dependent
-on Object registration, while Object-addressed sends remain deferred.
+and other non-Object filters raise `wrong kind`. Object filters compare the
+Delivery's fixed Target; moved messages are observed only by the receiving Script.
 
 Non-waiting `send` to a named Script or an ownerless Script's `me` joins the
 receiver's work queue immediately during a Pump. Receivers never run inside the
@@ -561,12 +592,11 @@ or the receiver's error map for a failure, in place of that call. Resumption
 charges, including unwinding through local Handler frames, spend the Pump's
 Fuel cap and the Script's slice before following instructions run. Inspection
 reports `send-wait` and the pending call id, with no `until` for `MaxWait`.
-Object Message Paths and foreign Function Value calls remain at their
-untouched implementation boundaries.
+Foreign Function Value calls remain at their untouched implementation boundary.
 
 `wait for all … end` supports ordinary Capability calls and waiting sends to named
-Scripts and ownerless `me`, including mixed Joins. Each member starts where reached, leaves `it` unchanged, and receives a
-call id in start order. The closing `end` suspends once; its ready resumption
+Scripts, Host Objects and `me`, including mixed Joins. Each member starts where
+reached, leaves `it` unchanged, and receives a call id in start order. The closing `end` suspends once; its ready resumption
 assembles replies in start order and allocates their result List. A Join that
 starts no dynamic members returns `[]` immediately without a Segment boundary.
 The first arriving failure raises the member's own error with its 1-based `index`
@@ -588,8 +618,7 @@ Pump Fuel Caps, Script Fuel Slices and unwind charges still apply when the calle
 
 A plain local Handler call to a may-suspend Handler is rejected with
 `missing and wait`; function-style calls to a may-suspend Handler are rejected
-with `can't suspend here`. A call cannot hide a nested Join. Object Message Paths
-remain at their untouched boundaries.
+with `can't suspend here`. A call cannot hide a nested Join.
 Join failures and timeouts use the closing `end` token's source position,
 for bare `end` and `end wait`, including Joins in local Handlers and block
 Lambdas. The `join-end` PC and 1-based member `index` stay unchanged; a failed
@@ -612,8 +641,9 @@ before sealing report `Undecided` with the Run's outcome. Reports appear at
 the seal, and futures settle after the Pump's records. Context cancellation
 after sealing leaves the continuing Run alone. Load checks reject vetoes
 outside deciding entry Handlers, in locally called Handlers, or reachable
-after suspension, and reject passes reachable after suspension. Message Paths
-and Broadcast Decisions remain deferred, as does routing through Object handles.
+after suspension, and reject passes reachable after suspension. Open Decisions
+follow Message Paths through `pass` and unmatched Runs; Broadcast Decisions remain
+deferred.
 For a Script with no owner, `pass` completes its Run and reaches the end of the
 path, reporting `unhandled` and allowing an open Decision; Requests fail with
 `send failed`, reason `unhandled`.
@@ -655,7 +685,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 180 cases, including all text-model, load-diagnostic,
+The gate contains 188 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

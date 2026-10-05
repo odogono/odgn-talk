@@ -33,6 +33,9 @@ type Group struct {
 	objects          map[objectKey]*Object
 	scripts          []*Script
 	inputs           []delivery
+	unrouted         []delivery
+	orphanReplies    []delivery
+	stoppedSends     map[*Script]bool
 	cancelRunsQueued bool
 	nextDelivery     int64
 	calls            map[CallID]*operationCall
@@ -50,6 +53,7 @@ type Script struct {
 	active   *execution
 	counters Counters
 	grants   map[string]*Grant
+	stopped  bool // protected by group.mu
 	owner    *Object
 	reserved int
 	debt     int64
@@ -67,6 +71,10 @@ type delivery struct {
 	during     *corevalue.Value // non-nil only for an internal error message
 	settlement *operationSettlement
 	reply      CallID
+	target     *Object // fixed initial recipient
+	path       bool    // recheck the Object path before dispatch
+	after      *Object // climb from this previous owner, never from target
+	parent     *Object // SetParent input
 	object     *Object
 }
 type execution struct {
@@ -183,7 +191,12 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		if o.Owner.group != g {
 			return nil, g.refuse(WrongGroup, "Object is not registered in this Group")
 		}
-		return nil, g.refuse(InvalidValue, "Owning Scripts and Message Paths are not available")
+		g.mu.Lock()
+		invalid := o.Owner.disposed.Load() || o.Owner.owner != nil
+		g.mu.Unlock()
+		if invalid {
+			return nil, g.refuse(InvalidValue, "Object is disposed or already owned")
+		}
 	}
 	objects := []string{}
 	bindings := map[string]corevalue.Value{}
@@ -194,12 +207,16 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		objects = append(objects, name)
 		bindings[name] = object.Value().inner
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), PatternSize: limits.PatternSize, Grants: declarations}, ids)
+	me := corevalue.Value{}
+	if o.Owner != nil {
+		me = o.Owner.Value().inner
+	}
+	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), OwnerProperties: ownerProperties(o.Owner), PatternSize: limits.PatternSize, Grants: declarations}, ids)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
 	}
-	state, e := machine.InitializeLinkedBound(unit, g, states, corevalue.Value{}, bindings)
+	state, e := machine.InitializeLinkedBound(unit, g, states, me, bindings)
 	if e != nil {
 		pos := e.(*machine.InitError).Instruction.Pos
 		loadError = &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: o.Name, Line: pos.Line, Col: pos.Column}}}
@@ -253,6 +270,9 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	}
 	s := &Script{grants: grants, group: g, name: o.Name, state: state, limits: limits, owner: o.Owner}
 	g.mu.Lock()
+	if o.Owner != nil {
+		o.Owner.owner = s
+	}
 	g.scripts = append(g.scripts, s)
 	for _, loaded := range g.scripts {
 		loaded.state.ScriptNames = append(loaded.state.ScriptNames, o.Name)
@@ -276,27 +296,16 @@ func (s *Script) Request(ctx context.Context, m Message) (DeliveryID, *Pending, 
 	return s.group.deliver(s, m, ctx, true)
 }
 func (g *Group) Deliver(to *Object, m Message) (DeliveryID, error) {
-	s := g.receiver(to)
-	id, _, e := g.deliver(s, m, nil, false)
+	id, _, e := g.enqueue(nil, m, nil, false, nil, to)
 	return id, e
 }
 func (g *Group) Request(ctx context.Context, to *Object, m Message) (DeliveryID, *Pending, error) {
-	return g.deliver(g.receiver(to), m, ctx, true)
-}
-func (g *Group) receiver(to *Object) *Script {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for _, s := range g.scripts {
-		if s.owner == to && to != nil {
-			return s
-		}
-	}
-	return nil
+	return g.enqueue(nil, m, ctx, true, nil, to)
 }
 func (g *Group) deliver(s *Script, m Message, ctx context.Context, request bool) (DeliveryID, *Pending, error) {
 	return g.enqueue(s, m, ctx, request, nil)
 }
-func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool, decision *Deciding) (DeliveryID, *Pending, error) {
+func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, objects ...*Object) (DeliveryID, *Pending, error) {
 	fields := map[string]string{"to": "unknown", "message": m.Name}
 	if s != nil {
 		fields["to"] = s.name
@@ -319,7 +328,20 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 		return "", nil, &HostError{code, detail}
 	}
 	g.mu.Lock()
-	if s == nil || s.group != g {
+	var target *Object
+	path := len(objects) > 0
+	if path {
+		target = objects[0]
+		if target == nil || target.group != g {
+			g.mu.Unlock()
+			return refused(WrongGroup, "Object does not belong to Group")
+		}
+		fields["to"] = target.Value().String()
+		s = g.nearestOwner(target)
+	} else if s != nil {
+		target = s.owner
+	}
+	if !path && (s == nil || s.group != g) {
 		g.mu.Unlock()
 		return refused(WrongGroup, "receiver does not belong to Group")
 	}
@@ -330,16 +352,19 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 			return refused(WrongGroup, "argument belongs to another Group")
 		}
 	}
+	limits := DefaultLimits()
+	if s != nil {
+		limits = s.limits
+	}
 	if m.Limits != nil {
 		x := *m.Limits
 		m.Limits = &x
-		if x.FuelPerRun < 0 || x.AllocPerRun < 0 || x.MaxWait < 0 || x.MaxJoin < 0 || x.FuelPerRun > s.limits.FuelPerRun || x.AllocPerRun > s.limits.AllocPerRun || x.MaxWait > s.limits.MaxWait || x.MaxJoin > s.limits.MaxJoin || x.MaxWait%time.Millisecond != 0 {
+		if x.FuelPerRun < 0 || x.AllocPerRun < 0 || x.MaxWait < 0 || x.MaxJoin < 0 || x.FuelPerRun > limits.FuelPerRun || x.AllocPerRun > limits.AllocPerRun || x.MaxWait > limits.MaxWait || x.MaxJoin > limits.MaxJoin || x.MaxWait%time.Millisecond != 0 {
 			g.mu.Unlock()
 			return refused(InvalidValue, "invalid limit override")
 		}
 	}
-	queued := s.reserved
-	if queued >= s.limits.MailboxDepth {
+	if s != nil && s.reserved >= s.limits.MailboxDepth {
 		g.mu.Unlock()
 		g.recordRefusal(name, nil, fields, HostErrorCode("mailbox full"))
 		return "", nil, ErrMailboxFull
@@ -354,9 +379,11 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 		p = &Pending{done: make(chan struct{})}
 		name = "request"
 	}
-	s.reserved++
+	if s != nil {
+		s.reserved++
+	}
 
-	d := delivery{id: id, script: s, message: m, pending: p, decision: decision, kind: name, fields: fields}
+	d := delivery{id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
 	g.inputs = append(g.inputs, d)
 	if p != nil {
 		p.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
@@ -450,7 +477,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 				g.record(d.kind, true, []string{d.fields["run"]}, nil)
 			} else if d.kind == "revoke" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)
-			} else if d.kind == "dispose" {
+			} else if d.kind == "dispose" || d.kind == "set-parent" {
 				g.record(d.kind, true, nil, d.fields)
 			} else if d.settlement != nil {
 				g.record(d.kind, true, []string{string(d.reply)}, d.fields)
