@@ -610,6 +610,68 @@ func TestMessagePathAcceptance(t *testing.T) {
 	}
 }
 
+func TestBroadcastDecisionAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"decisions/broadcast-outcomes", "decisions/broadcast-decision-reports-every-veto"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(b), "\n"+c.Name+"\n") {
+				t.Fatal("Broadcast acceptance missing from gate")
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// The remaining inputs need the explicit Stop Host API tracked by #135.
+func TestBroadcastReviewedRecipientPrefix(t *testing.T) {
+	cases, err := Discover("../../../../corpus", []string{"cancellation/broadcast-recipients"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := cases[0]
+	b, err := os.ReadFile(c.Dir + "/case.trace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := ParseTrace(string(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := -1
+	for i, r := range records {
+		if r.Input && r.Name == "stop" {
+			stop = i
+			break
+		}
+	}
+	if stop < 0 {
+		t.Fatal("missing Stop boundary")
+	}
+	records = records[:stop]
+	lines, err := (executionBackend{}).Run(c, records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected []string
+	for _, r := range records {
+		expected = append(expected, r.Raw)
+	}
+	if strings.Join(lines, "\n") != strings.Join(expected, "\n") {
+		t.Fatalf("Broadcast prefix mismatch\nwant:\n%s\ngot:\n%s", strings.Join(expected, "\n"), strings.Join(lines, "\n"))
+	}
+}
+
 func TestForeignFunctionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
 	cases, err := Discover(root, []string{"functions/foreign-calls"})

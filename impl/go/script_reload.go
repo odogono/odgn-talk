@@ -191,7 +191,8 @@ func (g *Group) settleReloadDelivery(s *Script, d delivery, run RunID) []Report 
 	}
 	if decision := d.decision; decision != nil {
 		report := &Decided{Delivery: d.id, Verdict: Undecided, Undecided: []UndecidedBy{{Script: s.name, Run: run, Outcome: Cancelled}}}
-		if decision.seal(report) {
+		report = decision.sealReport(report)
+		if report != nil {
 			g.recordDecided(report)
 			decision.finish()
 			return []Report{report}

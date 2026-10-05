@@ -24,7 +24,7 @@ func Format(name string, input bool, ids []string, fields map[string]string) str
 					out.WriteString(key.Key)
 					out.WriteByte('=')
 					out.WriteString(v)
-				} else if !key.Optional {
+				} else if !key.Optional && !(key.Filled && key.Type == "ids") {
 					panic("missing Trace key " + name + "." + key.Key)
 				}
 			}

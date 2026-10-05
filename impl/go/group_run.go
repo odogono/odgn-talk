@@ -184,7 +184,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 			report.Undecided = []UndecidedBy{{Script: name, Run: run, Outcome: outcome}}
 		}
-		if !d.decision.seal(report) {
+		report.Broadcast = d.broadcast
+		if d.broadcast != "" {
+			report.Delivery = ""
+		}
+		report = d.decision.sealReport(report)
+		if report == nil {
 			return
 		}
 		result.Reports = append(result.Reports, report)
@@ -213,7 +218,23 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	}
 	// Drain inputs in order before timers and turns. Cancellation either
 	// removes a message or queues a suspended Run's cleanup at this position.
+	var drained []delivery
 	for _, d := range inputs {
+		if d.kind == "broadcast" || d.kind == "decide-broadcast" {
+			if len(d.children) == 0 {
+				drained = append(drained, d)
+			} else {
+				drained = append(drained, d.children...)
+			}
+		} else {
+			drained = append(drained, d)
+		}
+	}
+	for _, d := range drained {
+		if d.kind == "broadcast" || d.kind == "decide-broadcast" {
+			seal(d, "", Allowed, Nothing, Completed)
+			continue
+		}
 		if d.kind == "dispose" {
 			g.mu.Lock()
 			already := d.object.disposed.Swap(true)
@@ -277,16 +298,24 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		found := false
+		cancelBroadcast := strings.HasPrefix(string(d.cancel), "b")
+		matches := func(q delivery) bool {
+			return (q.id == d.cancel || cancelBroadcast && q.broadcast == BroadcastID(d.cancel)) && (q.decision == nil || !q.decision.isSealed())
+		}
 		cancelQueued := func(q delivery, script string) {
-			result.Reports = append(result.Reports, &RunEnd{Script: script, Delivery: q.id, Outcome: Cancelled})
-			g.record("run", false, nil, map[string]string{"outcome": "cancelled", "delivery": string(q.id), "fuel": "0", "alloc": "0"})
+			result.Reports = append(result.Reports, &RunEnd{Script: script, Delivery: q.id, Broadcast: q.broadcast, Outcome: Cancelled})
+			fields := map[string]string{"outcome": "cancelled", "delivery": string(q.id), "fuel": "0", "alloc": "0"}
+			if q.broadcast != "" {
+				fields["broadcast"] = string(q.broadcast)
+			}
+			g.record("run", false, nil, fields)
 			if q.pending != nil {
 				settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })
 			}
 			seal(q, "", Undecided, Nothing, Cancelled)
 		}
 		for j, q := range g.unrouted {
-			if q.id == d.cancel {
+			if matches(q) {
 				g.unrouted = slices.Delete(g.unrouted, j, j+1)
 				cancelQueued(q, "")
 				found = true
@@ -294,25 +323,32 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 		}
 		for _, s := range g.scripts {
-			if found {
+			if found && !cancelBroadcast {
 				break
 			}
-			for j, item := range s.queue {
+			for j := 0; j < len(s.queue); {
+				item := s.queue[j]
 				q := item.delivery
-				if item.run == nil && q.id == d.cancel {
+				if item.run == nil && matches(q) {
 					s.queue = slices.Delete(s.queue, j, j+1)
 					g.release(s)
 					cancelQueued(q, s.name)
 					found = true
-					break
+					if !cancelBroadcast {
+						break
+					}
+					continue
 				}
+				j++
 			}
-			if !found {
+			if !found || cancelBroadcast {
 				for _, x := range s.runs {
-					if x.delivery.id == d.cancel {
+					if matches(x.delivery) {
 						g.cancelExecution(s, x)
 						found = true
-						break
+						if !cancelBroadcast {
+							break
+						}
 					}
 				}
 			}
@@ -466,6 +502,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			g.writeRaises(x, raised)
 			common := map[string]string{"fuel": fmt.Sprint(delta), "alloc": fmt.Sprint(r.Alloc - alloc)}
 			if x.how == "start" {
+				if x.delivery.broadcast != "" {
+					common["broadcast"] = string(x.delivery.broadcast)
+				}
 				if x.delivery.id != "" {
 					common["delivery"] = string(x.delivery.id)
 				}
@@ -778,11 +817,14 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 	g.record("seg", false, []string{string(x.id), x.how}, common)
 	g.writeAbandon(x)
 	seal()
-	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
+	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Broadcast: x.delivery.broadcast, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
 	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	if x.delivery.broadcast != "" {
+		outputs["broadcast"] = string(x.delivery.broadcast)
+	}
 	if x.delivery.function != nil {
 		delete(outputs, "handler")
 		outputs["fn"] = Value{*x.delivery.function}.String()
