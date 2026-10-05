@@ -475,3 +475,12 @@ test('test refuses a missing path and other files', () => {
   expect(run(['test', join(dir, 'plain.talk')]).code).toBe(2);
   expect(run(['test', '--only']).code).toBe(2);
 });
+
+test('the REPL continues labelled calls using the loaded Handler first word', () => {
+  const { code, stdout } = run(
+    [],
+    'on move piece to square\n say piece & square\nend move\nmove (\n "knight"\n) to "e4"\n:quit\n',
+  );
+  expect(code).toBe(0);
+  expect(stdout).toBe('knighte4\n');
+});

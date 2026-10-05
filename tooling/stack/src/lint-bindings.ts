@@ -714,13 +714,17 @@ export const lintBindings = (
             ps.every((p, i) => covers(p, args[i]!)),
         )
       ) {
-        emit('unreachable-clause', message(clause)!.span, { message: name });
+        emit('unreachable-clause', message(clause)!.span, {
+          message: name.replaceAll(':', ' ').trim(),
+        });
       }
       if (!leaves(clause).some(t => t.text === 'where')) {
         earlier.push(args);
       }
       if (unit === 'script' && manifest && !manifest.messages.includes(name)) {
-        emit('unknown-message', message(clause)!.span, { message: name });
+        emit('unknown-message', message(clause)!.span, {
+          message: name.replaceAll(':', ' ').trim(),
+        });
       }
     }
   }

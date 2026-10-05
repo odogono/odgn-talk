@@ -45,6 +45,7 @@ import { northtalk } from './language';
 
 const style = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--keyword)', fontWeight: '600' },
+  { tag: tags.labelName, color: 'var(--keyword)', fontStyle: 'italic' },
   { tag: tags.string, color: 'var(--string)' },
   { tag: tags.number, color: 'var(--number)' },
   { tag: tags.comment, color: 'var(--comment)', fontStyle: 'italic' },
