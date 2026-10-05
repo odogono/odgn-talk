@@ -135,6 +135,38 @@ func (p *parser) accept(s string) bool {
 func isName(t Token) bool {
 	return t.Kind == Word && t.Raw != "_" && !slices.Contains(generated.Grammar.Reserved, t.Raw)
 }
+
+// Argument Labels are data-driven and read after a complete argument or pattern.
+func isLabel(t Token) bool {
+	return t.Kind == Word && (isName(t) || slices.Contains(generated.Grammar.Labels.Reserved, t.Raw)) && !slices.Contains(generated.Grammar.Labels.Excluded, t.Raw)
+}
+func selector(name string, labels []string) string {
+	if len(labels) == 0 {
+		return name
+	}
+	return name + ":" + strings.Join(labels, ":") + ":"
+}
+func (p *parser) labelled(item func() *Node, items *[]*Node) []string {
+	var labels []string
+	for isLabel(p.peek(Operator)) {
+		labels = append(labels, p.take(Operand).Raw)
+		*items = append(*items, item())
+	}
+	return labels
+}
+func (p *parser) commandPhrase(n *Node) {
+	if !startsOperand(p.peek(Operand)) {
+		return
+	}
+	n.Children = []*Node{p.expression()}
+	if p.at(",") {
+		for p.accept(",") {
+			n.Children = append(n.Children, p.expression())
+		}
+	} else {
+		n.Text = selector(n.Text, p.labelled(p.expression, &n.Children))
+	}
+}
 func (p *parser) name() Token {
 	t := p.peek(Operand)
 	if !isName(t) {
@@ -229,12 +261,18 @@ func (p *parser) declaration() *Node {
 				n.Params = append(n.Params, param)
 			} else {
 				n.Params = append(n.Params, p.bindingPattern())
+				if len(n.Params) == 1 {
+					n.Text = selector(n.Text, p.labelled(p.bindingPattern, &n.Params))
+				}
 			}
 			if !p.at(",") {
 				break
 			}
 			if n.Kind == "handler" && p.suffixStart() {
 				break
+			}
+			if n.Kind == "handler" && strings.Contains(n.Text, ":") {
+				p.fail(p.second(Operand))
 			}
 			p.take(Operator)
 		}
@@ -259,7 +297,7 @@ func (p *parser) declaration() *Node {
 			f.Body = p.block("end")
 			n.Branches = append(n.Branches, f)
 		}
-		n.End = p.closing(n.Text)
+		n.End = p.closing(name.Raw)
 		p.nl()
 	default:
 		p.fail(t)
@@ -364,6 +402,19 @@ func (p *parser) statement(inline bool) *Node {
 		p.expect("with")
 		n.Children = append(n.Children, p.expression())
 	case "send":
+		if p.atOperand("to") {
+			p.take(Operand)
+			n.Params = []*Node{p.expression()}
+			p.expect(":")
+			n.NameToken = p.name()
+			if n.NameToken.Raw == "all" {
+				p.fail(n.NameToken)
+			}
+			n.Text = n.NameToken.Raw
+			p.commandPhrase(n)
+			p.andWait(n)
+			break
+		}
 		name := p.name()
 		if name.Raw == "all" {
 			p.fail(name)
@@ -394,7 +445,16 @@ func (p *parser) statement(inline bool) *Node {
 	case "throw":
 		n.Children = []*Node{p.expression()}
 	case "pass":
-		n.Text = p.name().Raw
+		name := p.name()
+		n.NameToken = name
+		if name.Raw == "all" {
+			p.fail(name)
+		}
+		var labels []string
+		for isLabel(p.peek(Operator)) {
+			labels = append(labels, p.take(Operand).Raw)
+		}
+		n.Text = selector(name.Raw, labels)
 	case "exit":
 		p.expect("repeat")
 	default:
@@ -410,9 +470,7 @@ func (p *parser) statement(inline bool) *Node {
 			n.Children = []*Node{p.call(t)}
 		} else {
 			n.Kind = "command"
-			if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
-				n.Children = p.expressionList()
-			}
+			p.commandPhrase(n)
 		}
 		p.andWait(n)
 	}
@@ -571,6 +629,13 @@ func (p *parser) event(t Token) *Node {
 	e.Text = name.Raw
 	for !p.atOperand("\n") && !p.at("where") && !p.at("then") && !p.at("or") && !(p.at("from") && startsOperand(p.second(Operand))) {
 		e.Params = append(e.Params, p.bindingPattern())
+		if len(e.Params) == 1 {
+			labels := p.labelled(p.bindingPattern, &e.Params)
+			e.Text = selector(e.Text, labels)
+			if len(labels) > 0 {
+				break
+			}
+		}
 		if !p.accept(",") {
 			break
 		}

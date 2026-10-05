@@ -1,0 +1,2 @@
+on move p to sq, speed
+end move

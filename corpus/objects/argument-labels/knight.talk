@@ -1,0 +1,8 @@
+-- knight.talk: the message-path case's knight, which owns the knight.
+
+script variable heard = []
+
+on move m to square
+  put [the id of the target, m, square] after heard
+  if m is "far" then pass move to
+end move

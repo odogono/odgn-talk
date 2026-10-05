@@ -1,0 +1,9 @@
+function move x
+  return x
+end move
+on move p to sq
+  return p
+end move
+on go
+  move 1 to 2
+end go

@@ -407,6 +407,8 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         default: children[2] ? of<Expr>(children[2]) : null,
         pos: at,
       } satisfies Parameter;
+    case 'Label':
+      return (first as Leaf).text;
     case 'Name':
     case 'MessageName':
       return first?.kind === 'node'
@@ -426,7 +428,9 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       return simpleStatement(node, of);
     case 'ExpressionList':
       return children.flatMap(child =>
-        child.kind === 'node' ? [of<Expr>(child)] : [],
+        child.kind === 'node' && child.rule === 'Expression'
+          ? [of<Expr>(child)]
+          : [],
       );
     case 'AndWait':
     case 'IgnoringCase':
@@ -435,13 +439,22 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
     case 'Send': {
       const withAt = children.findIndex(child => isToken(child, 'with'));
       const toAt = children.findIndex(child => isToken(child, 'to'));
+      const targetFirst = toAt === 1;
+      const nameAt = targetFirst ? 4 : 1;
+      const listAt = nodeAt(nameAt + 1, 'ExpressionList');
       return {
         k: 'send',
         pos: at,
-        message: of<SemanticName>(children[1]).text,
-        args: withAt >= 0 ? of<Expr[]>(children[withAt + 1]) : [],
+        message: of<SemanticName>(children[nameAt]).text,
+        args: targetFirst
+          ? listAt >= 0
+            ? of<Expr[]>(children[listAt])
+            : []
+          : withAt >= 0
+            ? of<Expr[]>(children[withAt + 1])
+            : [],
         target: of<Expr>(children[toAt + 1]),
-        wait: nodeAt(toAt + 2, 'AndWait') >= 0,
+        wait: nodeAt(0, 'AndWait') >= 0,
       } satisfies Stmt;
     }
     case 'AskTell': {
@@ -470,7 +483,9 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         pats: children
           .slice(1, end)
           .flatMap(child =>
-            child.kind === 'node' ? [of<Pattern>(child)] : [],
+            child.kind === 'node' && child.rule === 'Pattern'
+              ? [of<Pattern>(child)]
+              : [],
           ),
         from: fromAt < 0 ? null : of<Expr>(children[fromAt + 1]),
       } satisfies Event;

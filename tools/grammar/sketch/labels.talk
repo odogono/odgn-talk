@@ -1,6 +1,4 @@
--- Argument Labels on Handlers, Command Calls, `send`, `pass` and `wait for`
--- (ADR 0055). `bun tools/grammar/check.ts` parses this file. The Cores' tests
--- don't read it yet; it moves into ../sketch/ once both Cores parse labels.
+-- Argument Labels and Selectors (ADR 0055).
 
 -- A labelled Handler: its Selector is `move:to:`.
 on move piece to square

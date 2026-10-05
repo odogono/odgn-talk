@@ -1,0 +1,84 @@
+# Unblessed: new selector regression; first blessing awaits human review.
+> load a identity=775c73d5032574699a0aa129fd79bd42dacce37f56fbcfacbf654e2a02824f72
+> load b identity=68b4df455f6f2516099afe01018b608543f5604d33ff68a7aa993e5bb69ac87f
+> deliver d1 to=a message=go
+> deliver d2 to=b message=go
+> pump clock=2026-09-30T09:00:00Z
+send a/r1.c1 to=b message=move:to: args=[3, 4] wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=103 alloc=144 state=352 end=send-wait
+seg b/r1 start delivery=d2 handler=go clause=1 fuel=64 alloc=80 state=128 end=return
+run b/r1 outcome=completed delivery=d2 handler=go fuel=64 alloc=80
+seg b/r2 start from=a/r1.c1 handler=move:to: clause=1 fuel=12 alloc=16 state=64 end=return
+run b/r2 outcome=completed handler=move:to: value=7 fuel=12 alloc=16
+send a/r1 to=b message=note args=["plain", 1]
+seg a/r1 resume fuel=47 alloc=93 state=328 end=wait-for until=2026-09-30T09:00:01Z
+seg b/r3 start from=a/r1 handler=note clause=1 fuel=22 alloc=146 state=141 end=return
+run b/r3 outcome=completed handler=note fuel=22 alloc=146
+pumped state=idle fuel=248 next=2026-09-30T09:00:01Z
+> deliver d3 to=a message=move:to: args=["knight", "e4"]
+> pump clock=2026-09-30T09:00:00Z
+raise a/r2 code="wrong kind" at=a:63 pos=17:12
+seg a/r2 start delivery=d3 handler=move:to: clause=2 fuel=24 alloc=0 state=536 end=error
+run a/r2 outcome=errored delivery=d3 handler=move:to: error={code: "wrong kind", expected: "number", got: "text", value: "knight", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=24 alloc=0
+seg a/r1 resume fuel=21 alloc=504 state=920 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=180 alloc=813
+pumped state=idle fuel=54
+> deliver d4 to=a message=branch
+> pump clock=2026-09-30T09:00:02Z
+seg a/r3 start delivery=d4 handler=branch clause=1 fuel=15 alloc=0 state=584 end=wait-for-any until=2026-09-30T09:00:03Z
+pumped state=idle fuel=15 next=2026-09-30T09:00:03Z
+> deliver d5 to=a message=move args=["plain"]
+> deliver d6 to=a message=move:to: args=["rook", "a1"]
+> pump clock=2026-09-30T09:00:02Z
+raise a/r4 code="wrong kind" at=a:70 pos=20:12
+seg a/r4 start delivery=d5 handler=move clause=1 fuel=13 alloc=0 state=654 end=error
+run a/r4 outcome=errored delivery=d5 handler=move error={code: "wrong kind", expected: "number", got: "text", value: "plain", at: {unit: "a", handler: "move", line: 20, column: 12}} fuel=13 alloc=0
+raise a/r5 code="wrong kind" at=a:63 pos=17:12
+seg a/r5 start delivery=d6 handler=move:to: clause=2 fuel=24 alloc=0 state=1154 end=error
+run a/r5 outcome=errored delivery=d6 handler=move:to: error={code: "wrong kind", expected: "number", got: "text", value: "rook", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=24 alloc=0
+pumped state=idle fuel=45 next=2026-09-30T09:00:03Z
+> deliver d7 to=a message=move:to: args=["bishop", "e4"]
+> pump clock=2026-09-30T09:00:02Z
+raise a/r6 code="wrong kind" at=a:63 pos=17:12
+seg a/r6 start delivery=d7 handler=move:to: clause=2 fuel=24 alloc=0 state=792 end=error
+run a/r6 outcome=errored delivery=d7 handler=move:to: error={code: "wrong kind", expected: "number", got: "text", value: "bishop", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=24 alloc=0
+seg a/r3 resume fuel=28 alloc=504 state=1176 end=return
+run a/r3 outcome=completed delivery=d4 handler=branch fuel=66 alloc=576
+pumped state=idle fuel=67
+> deliver d8 to=a message=fail
+> pump clock=2026-09-30T09:00:03Z
+raise a/r7 code="wrong kind" at=a:63 pos=17:12
+seg a/r7 start delivery=d8 handler=fail clause=1 fuel=42 alloc=0 state=600 end=error
+run a/r7 outcome=errored delivery=d8 handler=fail error={code: "wrong kind", expected: "number", got: "text", value: "bad", at: {unit: "a", handler: "move:to:", line: 17, column: 12}} fuel=42 alloc=0
+pumped state=idle fuel=42
+> deliver d9 to=a message=lambda:to: args=[1, 2]
+> pump clock=2026-09-30T09:00:03Z
+raise a/r8 code="division by zero" at=a:147 pos=33:20
+seg a/r8 start delivery=d9 handler=lambda:to: clause=1 fuel=51 alloc=64 state=600 end=error
+run a/r8 outcome=errored delivery=d9 handler=lambda:to: error={code: "division by zero", at: {unit: "a", handler: "lambda:to:", line: 33, column: 20}} fuel=51 alloc=64
+pumped state=idle fuel=51
+> vars
+vars a seen=[5, 20, 7, ["knight", "e4", {name: "move:to:", args: ["knight", "e4"]}], ["bishop", "e4", {name: "move:to:", args: ["bishop", "e4"]}]]
+vars b seen=[12, 6, ["plain", 1]]
+# Selectors are checked synchronously by every Host message input.
+> deliver to=a message=move: args=[1]
+refused code="invalid value"
+> request to=a message=move:to: args=[1]
+refused code="invalid value"
+> broadcast message=move:to: args=[1, 2, 3]
+refused code="invalid value"
+> decide-broadcast message=move:from: args=[1, 2]
+refused code="invalid value"
+> deliver to=a message=move:with: args=[1, 2]
+refused code="invalid value"
+> deliver to=a message=move:in: args=[1, 2]
+refused code="invalid value"
+> deliver to=a message=move::to: args=[1, 2, 3]
+refused code="invalid value"
+> deliver to=a message=move:to args=[1, 2]
+refused code="invalid value"
+> deliver to=a message=all:to: args=[1, 2]
+refused code="invalid value"
+> vars
+vars a seen=[5, 20, 7, ["knight", "e4", {name: "move:to:", args: ["knight", "e4"]}], ["bishop", "e4", {name: "move:to:", args: ["bishop", "e4"]}]]
+vars b seen=[12, 6, ["plain", 1]]

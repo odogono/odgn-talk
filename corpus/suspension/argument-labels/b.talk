@@ -1,0 +1,18 @@
+script variable seen = []
+function scale x
+  return x * 2
+end scale
+on scale x m y
+  return x * y
+end scale
+on go
+  scale (3) m 4
+  put it after seen
+  put scale(3) after seen
+end go
+on move x to y
+  return x + y
+end move
+on note x, y
+  put [x, y] after seen
+end note

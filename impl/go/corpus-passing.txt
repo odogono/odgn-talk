@@ -143,6 +143,7 @@ limits/self-send-persistent
 limits/send-wait-retention
 limits/wait-deadline
 limits/wait-zero-next-pump
+load-diagnostics/argument-labels
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here
@@ -187,6 +188,7 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+objects/argument-labels
 objects/guard-keys
 objects/message-path
 objects/moving-climb
@@ -217,6 +219,7 @@ stdlib/calls
 stdlib/errors-name-the-call
 stdlib/template-migration
 suspension/answers
+suspension/argument-labels
 suspension/capability-resumption
 suspension/event-test-group-cap
 suspension/event-test-slice-debt

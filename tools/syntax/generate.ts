@@ -63,6 +63,7 @@ const calendar = new Set(
 );
 const syntax = {
   reserved: grammar.reserved as string[],
+  labels: grammar.labels as { excluded: string[]; reserved: string[] },
   chunk: grammar.chunk as { plural: string; singular: string }[],
   ordinals: grammar.ordinals as string[],
   properties: grammar.properties as string[],

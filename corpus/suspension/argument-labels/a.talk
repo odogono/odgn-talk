@@ -1,0 +1,37 @@
+script variable seen = []
+on go
+  move 2 to 3
+  put it after seen
+  move 2
+  put it after seen
+  send to b: move 3 to 4 and wait
+  put it after seen
+  send to b: note "plain", 1
+  wait for move p to sq or 1 s
+  put [p, sq, it] after seen
+end go
+on move x to y where x = 0, queued
+  pass move to
+end move
+on move x to y, queued
+  return x + y
+end move
+on move x
+  return x * 10
+end move
+on branch
+  wait for
+    when move p to sq where sq = "e4" then put [p, sq, it] after seen
+    after 1 s then put "timeout" after seen
+  end wait
+end branch
+on fail
+  move "bad" to 4
+end fail
+on lambda x to y
+  put given z
+    put given n: n / 0 into inner
+    return inner(z)
+  end given into f
+  return f(x)
+end lambda

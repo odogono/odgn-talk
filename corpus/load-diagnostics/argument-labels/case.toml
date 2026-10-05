@@ -1,0 +1,25 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+[[scripts]]
+name = "wrong-label"
+source = "wrong-label.talk"
+[[scripts]]
+name = "head"
+source = "head.talk"
+[[scripts]]
+name = "chunk"
+source = "chunk.talk"
+[[scripts]]
+name = "unit"
+source = "unit.talk"
+[[scripts]]
+name = "suspend"
+source = "suspend.talk"
+[[scripts]]
+name = "clash"
+source = "clash.talk"

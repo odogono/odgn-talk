@@ -1,0 +1,21 @@
+# Unblessed: Session Entries recognise a Handler Selector by its first word.
+> :clock virtual 2026-09-30T09:00:00Z
+> on move x to y
+|   say x + y
+| end move
+> move 3 to 4
+7
+> on move x toward y
+|   say x * y
+| end move
+> move 3 toward 4
+12
+> on move x
+|   say x
+| end move
+> move 9
+9
+> move 3 to
+! unexpected token at 1:10
+> move 4 to 5
+9

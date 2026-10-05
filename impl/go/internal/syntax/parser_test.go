@@ -83,7 +83,7 @@ func TestSharedSyntaxExamples(t *testing.T) {
 			tree, err := Parse(string(source))
 			if err != nil {
 				trace, readErr := os.ReadFile(filepath.Join(filepath.Dir(file), "case.trace"))
-				if e, ok := err.(*Error); ok && readErr == nil && strings.Contains(string(trace), fmt.Sprintf("diag bad code=%q pos=%d:%d", e.Code, e.Pos.Line, e.Pos.Column)) {
+				if e, ok := err.(*Error); ok && readErr == nil && strings.Contains(string(trace), fmt.Sprintf("diag %s code=%q pos=%d:%d", strings.TrimSuffix(filepath.Base(file), ".talk"), e.Code, e.Pos.Line, e.Pos.Column)) {
 					return
 				}
 				t.Fatal(err)
@@ -169,5 +169,26 @@ func TestRejectedFunctionGuardAndReciprocal(t *testing.T) {
 		if !ok || e.Code != tc.code || e.Pos != (Position{Line: tc.line, Column: tc.col}) {
 			t.Errorf("%s: %v", tc.source, err)
 		}
+	}
+}
+
+func TestArgumentLabelsInEveryMessagePosition(t *testing.T) {
+	source := `on move piece to square where square is "e4", queued
+ pass move to
+end move
+on play
+ move "knight" to "e4"
+ send to me: move "rook" to "a1" and wait
+ wait for move p to sq from me or 1 s
+end play`
+	tree, err := Parse(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tree.Source() != source {
+		t.Fatal("source changed")
+	}
+	if tree.Declarations[0].Text != "move:to:" {
+		t.Fatal(tree.Declarations[0].Text)
 	}
 }

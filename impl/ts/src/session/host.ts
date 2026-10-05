@@ -789,7 +789,9 @@ export class SessionHost {
   private isHandler(name: string): boolean {
     return (
       this.implicit.has(name) ||
-      this.declarations.some(d => d.kind === 'handler' && d.names[0] === name)
+      this.declarations.some(
+        d => d.kind === 'handler' && d.names[0]?.split(':')[0] === name,
+      )
     );
   }
 
