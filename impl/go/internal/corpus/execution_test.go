@@ -153,10 +153,7 @@ func TestSegmentEffectStepFourAcceptance(t *testing.T) {
 		if !strings.HasPrefix(c.Name, "capabilities/effect-") {
 			continue
 		}
-		// Save/restore and Library replacement remain step 5 facilities.
-		if c.Name == "capabilities/effect-reload-fatal" || c.Name == "capabilities/effect-replace-fatal" || c.Name == "capabilities/effect-replace-library" || c.Name == "capabilities/effect-close-preemption-fault" {
-			continue
-		}
+
 		count++
 		t.Run(c.Name, func(t *testing.T) {
 			if !strings.Contains(listed, "\n"+c.Name+"\n") {
@@ -167,8 +164,8 @@ func TestSegmentEffectStepFourAcceptance(t *testing.T) {
 			}
 		})
 	}
-	if count != 22 {
-		t.Fatalf("required step-4 effect set: %d cases, want 22", count)
+	if count != 26 {
+		t.Fatalf("required effect set: %d cases, want 26", count)
 	}
 }
 
@@ -833,5 +830,45 @@ func TestCapabilityCallbackAcceptance(t *testing.T) {
 	}
 	if !strings.Contains("\n"+string(listed), "\nfunctions/capability-callbacks\n") {
 		t.Fatal("Capability callback case missing from passing gate")
+	}
+}
+
+// Step 5 replays each supported Trace both ordinarily and across quiescent
+// snapshots. Keep the complete save/restore family and replacement boundaries
+// in the acceptance gate independently of newly discovered passing cases.
+func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{"reload/extend-units", "reload/extension-state-cap", "reload/replacement-transitive", "capabilities/effect-close-preemption-fault", "capabilities/effect-reload-fatal", "capabilities/effect-replace-fatal", "capabilities/effect-replace-library"}
+	cases, err := Discover(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	count := 0
+	for _, c := range cases {
+		required := strings.HasPrefix(c.Name, "save-restore/")
+		for _, name := range names {
+			required = required || c.Name == name
+		}
+		if !required {
+			continue
+		}
+		count++
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("required step-5 case missing from gate: %s", c.Name)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if count != 18 {
+		t.Fatalf("required step-5 set: %d cases, want 18", count)
 	}
 }

@@ -1,6 +1,8 @@
 package corpus
 
 import (
+	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,5 +177,23 @@ func TestReplayRefusesUnknownCallbackInStub(t *testing.T) {
 	output := strings.Join(lines, "\n")
 	if !strings.Contains(output, "call-failed home/r1.c1 op=callbacks.get") || !strings.Contains(output, "vars home total=0") {
 		t.Fatalf("unreceived Stub callback accepted:\n%s", output)
+	}
+}
+
+func TestSnapshotExclusionsUseReceivedFunctionHandles(t *testing.T) {
+	values := newReplayValues()
+	function := value.Value{Kind: value.Function, Function: &value.FunctionData{Home: "s", Code: "s.fn", Name: "fn"}}
+	if values.hasReceivedFunction(function) {
+		t.Fatal("future Function suppresses an earlier snapshot")
+	}
+	// Only the binding's presence matters here: real handles are installed by
+	// receive at public Host crossings, never reconstructed from Display text.
+	values.functions[function.Display()] = talk.Nothing
+	if !values.hasReceivedFunction(value.NewList([]value.Value{function})) {
+		t.Fatal("nested old Host Function did not exclude snapshot")
+	}
+	text, _ := value.NewText(function.Display())
+	if values.hasReceivedFunction(text) {
+		t.Fatal("Text mistaken for a Function handle")
 	}
 }

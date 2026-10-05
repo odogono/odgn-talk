@@ -36,6 +36,8 @@ type unwind struct {
 	depth       int
 }
 type Body struct {
+	CodeName string
+
 	Checked     *check.Body
 	Code        []Instruction
 	Unwind      []unwind
@@ -65,6 +67,7 @@ type Unit struct {
 	checked                                    *check.Unit
 	byNode                                     map[*syntax.Node]*Body
 	state                                      *builder
+	codeName                                   string
 }
 type loop struct {
 	start, end *label
@@ -172,22 +175,41 @@ func (u *Unit) named(n *syntax.Node, store bool, pos syntax.Position) {
 
 // Compile accepts only a diagnostic-free checked unit. Temporary slots belong
 // to this compilation; compiling it again does not mutate its semantic form.
-func Compile(checked *check.Unit, name string) (*Unit, error) {
+func Compile(checked *check.Unit, name string) (*Unit, error) { return compile(checked, name, nil) }
+
+// Extend appends code without moving an existing body, constant or variable slot.
+func Extend(checked *check.Unit, previous *Unit, name string) (*Unit, error) {
+	return compile(checked, name, previous)
+}
+func (u *Unit) Checked() *check.Unit { return u.checked }
+
+func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	if len(checked.Diagnostics) != 0 {
 		return nil, fmt.Errorf("cannot lower rejected unit: %v", checked.Diagnostics)
 	}
-	u := &Unit{Name: name, Kind: "script", checked: checked, Definitions: checked.Definitions, Variables: checked.Variables, byNode: map[*syntax.Node]*Body{}}
+	u := &Unit{Name: name, codeName: name, Kind: "script", checked: checked, Definitions: checked.Definitions, Variables: checked.Variables, byNode: map[*syntax.Node]*Body{}}
 	if checked.Options.Library {
 		u.Kind = "library"
 	}
+	first := 0
+	if previous != nil {
+		u.Name = previous.Name
+		u.Constants = slices.Clone(previous.Constants)
+		u.Bodies = slices.Clone(previous.Bodies)
+		u.Events = slices.Clone(previous.Events)
+		for node, body := range previous.byNode {
+			u.byNode[node] = body
+		}
+		first = len(u.Bodies)
+	}
 	initNode := &syntax.Node{Kind: "init", Token: syntax.Token{Pos: syntax.Position{Line: 1, Column: 1}}, End: syntax.Token{Pos: syntax.Position{Line: 1, Column: 1}}}
 	initial := &check.Body{Node: initNode, Kind: "init", Name: "initialiser", Locals: []string{"it"}}
-	u.Bodies = append(u.Bodies, &Body{Checked: initial, Index: 0})
-	u.byNode[initNode] = u.Bodies[0]
+	u.Bodies = append(u.Bodies, &Body{CodeName: u.codeName, Checked: initial, Index: first})
+	u.byNode[initNode] = u.Bodies[first]
 	clauses := map[string]int{}
 	for _, n := range checked.Tree.Declarations {
 		if b := checked.Bodies[n]; b != nil {
-			lowered := &Body{Checked: cloneBody(b), Index: len(u.Bodies)}
+			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies)}
 			if b.Kind == "handler" {
 				clauses[b.Name]++
 				lowered.Clause = clauses[b.Name]
@@ -196,7 +218,7 @@ func Compile(checked *check.Unit, name string) (*Unit, error) {
 			u.byNode[n] = lowered
 		}
 	}
-	u.state = &builder{body: u.Bodies[0], overrides: map[string]int{}}
+	u.state = &builder{body: u.Bodies[first], overrides: map[string]int{}}
 	for _, n := range checked.Tree.Declarations {
 		switch n.Kind {
 		case "variable", "constant":
@@ -227,7 +249,7 @@ func Compile(checked *check.Unit, name string) (*Unit, error) {
 		}
 	}
 	pc := 0
-	for _, body := range u.Bodies {
+	for _, body := range u.Bodies[first:] {
 		for _, instruction := range body.Code {
 			for _, opcode := range generated.Machine.Instruction {
 				if opcode.Name == instruction.Name && opcode.Suspends {
@@ -253,7 +275,7 @@ func (u *Unit) extra(n *syntax.Node) *Body {
 	if b == nil {
 		panic(fmt.Sprintf("missing checked body at %v", n.Pos()))
 	}
-	body := &Body{Checked: cloneBody(b), Index: len(u.Bodies)}
+	body := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies)}
 	u.Bodies = append(u.Bodies, body)
 	u.byNode[n] = body
 	u.compileBody(body)

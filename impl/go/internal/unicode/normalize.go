@@ -60,6 +60,18 @@ func NFC(text string) (string, error) {
 	if text == "" {
 		return text, nil
 	}
+	// ASCII is already NFC. Keep large Text values out of scalar decomposition
+	// and composition, including the 64 MiB Persistent State corpus boundary.
+	ascii := true
+	for i := 0; i < len(text); i++ {
+		if text[i] >= utf8.RuneSelf {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return text, nil
+	}
 	var decomposed []rune
 	for _, cp := range text {
 		decomposed = decompose(decomposed, cp)

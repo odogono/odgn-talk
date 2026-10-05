@@ -19,11 +19,15 @@ type operationCall struct {
 	op      Operation
 	name    string
 	pending bool
+	args    []Value
+	rebound bool
 }
 type operationSettlement struct {
-	value Value
-	err   *ScriptError
-	fuel  int64
+	value   Value
+	err     *ScriptError
+	fuel    int64
+	restore *Settlement
+	reason  string
 }
 type memberTimer struct {
 	id       string
@@ -66,7 +70,7 @@ func (g *Group) settleOperation(d delivery) {
 	}
 	pending.pending = false
 	x, s := pending.x, pending.s
-	p := machine.SendResume{Capability: true, Call: string(d.reply), Answer: d.settlement.value.inner, Fuel: d.settlement.fuel, Failed: d.kind == "fail"}
+	p := machine.SendResume{Capability: true, Call: string(d.reply), Answer: d.settlement.value.inner, Fuel: d.settlement.fuel, Failed: d.kind == "fail", Reason: d.settlement.reason}
 	if e := d.settlement.err; e != nil {
 		p.FailureCode = e.Code
 		p.FailureMessage = e.Message
@@ -91,6 +95,10 @@ func (g *Group) settleOperation(d delivery) {
 func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (corevalue.Value, *corevalue.Value) {
 	pending := g.calls[CallID(p.Call)]
 	delete(g.calls, CallID(p.Call))
+	if p.Reason == "call lost" || p.Reason == "capability revoked" {
+		e := operationError(p.Reason, []corevalue.Pair{{Key: "capability", Val: mustText(pending.call.grantName)}, {Key: "operation", Val: mustText(pending.name)}})
+		return corevalue.Value{}, &e
+	}
 	if p.Timeout {
 		after, _ := corevalue.NewQuantity(decimal.FromInt(p.AfterMS), "ms")
 		e := operationError("timeout", []corevalue.Pair{{Key: "after", Val: after}, {Key: "capability", Val: mustText(pending.call.grantName)}, {Key: "operation", Val: mustText(pending.name)}})
@@ -119,6 +127,9 @@ func (g *Group) discardOperationCalls(x *execution) {
 		if p.x == x {
 			p.cancel()
 			delete(g.calls, id)
+			g.mu.Lock()
+			delete(g.unsettled, id)
+			g.mu.Unlock()
 		}
 	}
 }
@@ -175,6 +186,9 @@ func (g *Group) pruneOperationCalls(x *execution) {
 				p.cancel()
 			}
 			delete(g.calls, id)
+			g.mu.Lock()
+			delete(g.unsettled, id)
+			g.mu.Unlock()
 		}
 	}
 }

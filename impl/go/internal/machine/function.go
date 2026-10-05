@@ -48,9 +48,9 @@ func StartFunction(s *State, fn value.Value, args []value.Value, limits Limits) 
 		body := code.Unit.Bodies[fn.Function.Body]
 		r.At = body.Code[0]
 		r.PC = body.First
-		r.Raises = append(r.Raises, Raised{Unit: code.Unit.Name, Handler: enclosingHandler(body.Checked), Code: "wrong arity", Instruction: r.At, PC: r.PC})
+		r.Raises = append(r.Raises, Raised{Unit: codeName(code, fn.Function.Body), Handler: enclosingHandler(body.Checked), Code: "wrong arity", Instruction: r.At, PC: r.PC})
 		pos := r.At.Pos
-		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(code.Unit.Name)}, {Key: "handler", Val: text(enclosingHandler(body.Checked))}, {Key: "line", Val: integer(int64(pos.Line))}, {Key: "column", Val: integer(int64(pos.Column))}})
+		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(codeName(code, fn.Function.Body))}, {Key: "handler", Val: text(enclosingHandler(body.Checked))}, {Key: "line", Val: integer(int64(pos.Line))}, {Key: "column", Val: integer(int64(pos.Column))}})
 		r.Error, _ = value.NewMap(append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at}))
 		r.Error.CoreMessage = true
 		r.Status = Errored

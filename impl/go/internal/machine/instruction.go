@@ -298,7 +298,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if body.Checked.Kind == "function" {
 			functionName = body.Checked.Name
 		}
-		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName}})
+		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Index, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName}})
 	case "call-value", "call-value-wait":
 		n := idx(0)
 		vs := take(n)

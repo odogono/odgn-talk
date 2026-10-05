@@ -19,6 +19,7 @@ the authority; the TS Core is not a reference
 | Dispatch, scheduling and waits | [Host inputs](group.go), [Run scheduling](group_run.go), [message observation](group_observe.go), [sends](group_send.go) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go) |
 | Capability Operations | [definitions and Grants](capability.go), [Shapes](shape.go), [load checks](internal/check/operations.go), [Host crossings](group_operation.go) | [Capabilities and Shapes](../../spec/09-embedding.md#capabilities), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [embedding tests](capability_test.go), [Capability cases](../../corpus/capabilities/) |
 | Libraries and Standard Library | [compilation and registration](library.go), [normative sources](stdlib.go), [Function binding](internal/machine/library.go) | [Libraries](../../spec/07-libraries-and-the-standard-library.md), [identity](../../spec/09-embedding.md#loading-and-libraries) | [public Library tests](library_test.go), [Library cases](../../corpus/libraries/), [stdlib cases](../../corpus/stdlib/) |
+| Save, restore and code updates | [snapshot DTOs](save.go), [rehydration](restore.go), [settlements](settle.go), [Extend](script_extend.go), [replacement](library_replace.go) | [save and restore](../../spec/10-save-and-restore.md), [Fingerprint](../../spec/09-embedding.md#the-pump-and-the-group-fingerprint) | [snapshot tests](save_test.go), [extension tests](extend_test.go), [save/restore cases](../../corpus/save-restore/) |
 | Text Patterns | [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go) | [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs) | [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/) |
 | Generated tables | [Go generator](../../tools/go/generate.ts), [Unicode generator](../../tools/unicode/generate.ts), [syntax generator](../../tools/syntax/generate.ts) → [tables](internal/generated/) | [Data Files](../../spec/README.md#data-files) | [generator tests](../../tools/go/generate.test.ts), [Unicode tests](internal/unicode/unicode_test.go) |
 | Corpus selection and parity | [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt) | [corpus commands and blessing](../../corpus/README.md#checking), [conformance](../../spec/11-the-trace-and-conformance.md) | [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go) |
@@ -50,6 +51,8 @@ The feature sections below describe the supported subset and its limits. Follow 
   Go-private byte encoding round-trips each body's instruction stream.
 - `internal/machine/` executes checked code with heap frames, detached operand
   evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
+- `internal/snapshot/` encodes plain heap data and explicitly named Group/code
+  references; Host bindings and futures stay outside snapshots.
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
   Core's non-parity error wording from Trace values, including nested errors,
   while preserving Script and Host data named `message`.
@@ -171,9 +174,10 @@ diamond call sites are checked once per `use` line. `GrantsAsUsed` retains all
 Library needs. Revocation, cancellation cleanup and late answers belong to the
 caller Run, and a rejected Reload preserves pending calls.
 
-Replacement/extension and save/restore of Library
-frames remain #136. Library Constants are shared fixed overhead, outside Script
-Persistent State.
+Library frames, closures and imported constants survive full Group snapshots.
+`ReplaceLibrary` recompiles transitive dependents and reloads affected Scripts
+only after every dependent validates and all old effects clean up successfully.
+Library Constants are shared fixed overhead, outside Script Persistent State.
 
 ## Values and codecs
 
@@ -231,8 +235,47 @@ adapter stop at a
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
 before that boundary. Group cancellation and Stop Script are supported as described
-below. Segment-bound lifecycle is supported through participant hooks;
-save/restore remains under [#136](https://github.com/odogono/odgn-talk/issues/136).
+below. Segment-bound lifecycle is supported through participant hooks.
+Snapshots retain preempted and suspended Runs, including their rollback bases.
+
+## Save, restore and code updates
+
+`Group.Save` returns opaque `go/1` bytes for a Quiescent Group. It retains the
+Clock, sources and extensions, heap Values and closures, frames and rollback
+bases, budgets and slice debt, ordered work and input queues, pending replies,
+Decisions and Broadcasts, Objects and Grant state. It never starts work, drains
+inputs or calls Host cleanup. Live scopes or participants, including unresolved
+external effect state, refuse Save with `effects pending`.
+
+`Core.Restore` rebuilds code and checks the saved Group Fingerprint against
+current language/cost versions, Library identities, Grant declarations and
+limits. Saves are specific to the Go Core family and format; corrupt or
+unreadable bytes return `invalid save`. Native Object bindings, Host functions,
+lifecycle hooks and Host futures are supplied again rather than serialized.
+Missing Grant bindings become revoked; unresolved Objects become disposed.
+
+A full restore returns pending Capability calls by Script, Run and call order.
+Before its first accepted Pump, `Group.Settle` selects exactly one of `Answer`,
+`Fail`, `Reissue` or `Adopt` for each id. Reissue calls the rebound Host
+implementation with the original id and arguments, charges only additional Host
+Fuel, and keeps the original deadline. Adopt returns a new Call into the restored
+Group. Unsettled calls fail as `call lost` before due Timers on that first Pump.
+Old Calls and Request/Decision futures still belong to the original Group.
+
+`VariablesOnly` handles a readable mismatched save by carrying Script Variables
+by name from the prospective rollback view. It preserves counters, Objects,
+limits and revoked/disabled Grants, while discarding Runs, messages, Broadcasts
+and slice debt without `finally`. It lists discarded work and abandoned calls;
+open Decisions report `undecided` on the first Pump. Carried Function Values from
+the replaced Script code are stale.
+
+`Script.Extend` validates a new Entry against existing names and unrevoked
+Grants. It appends new code, definitions and initialized variables atomically,
+checking the Persistent State cap first. Existing frames, queues, Function
+Values and code bindings remain live. Extension source order and identities
+participate in the Script identity and Group Fingerprint. Reload and Library
+replacement validate the complete replacement before stopping old work; failed
+validation leaves existing execution intact.
 
 ## Text Patterns
 
@@ -261,13 +304,13 @@ their `Unblessed` headers remain until the first human review.
 exhaustion instructions, uncharged failing work and Segment rollback. A separate
 step-4 gate protects the Text Pattern limits alongside all limit and cancellation
 cases.
-`pattern-size-literal-limit` also passes through ordinary Reload; Go save/restore
-remains [#136](https://github.com/odogono/odgn-talk/issues/136).
+`pattern-size-literal-limit` also passes through Reload and snapshot replay.
 
 ## Group embedding
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
-`Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
+`Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `Reload`, `Extend`,
+`ReplaceLibrary`, `Save`, `Restore`, `Settle`, `Fingerprint` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports Scripts with named Capability Grants and an optional
 Owning Object. Owners and well-known Objects are checked for Group ownership and
@@ -291,8 +334,8 @@ drops queued messages, settles Requests/reply senders as stopped, carries variab
 by name when requested, and preserves counters. Carry uses the active Segment's
 rollback base for preempted Runs; Function Values from the old code become stale.
 A successful Reload restarts Script-addressed execution; a disposed owner
-remains skipped by Object routing. `Extend`, Library replacement and
-save/restore remain deferred.
+remains skipped by Object routing. Library replacement applies the same Reload
+rules to every Script that imports a changed dependency, including extensions.
 
 `Script.Stop` is queued and sticky. It discards running, parked and suspended
 Runs without `finally`, rolls back an active Segment, and drops mailbox messages.
@@ -341,8 +384,9 @@ finally cleanup. Defaults and captures use the same binding as Script calls.
 Context cancellation uses ordinary Delivery cancellation.
 
 The reviewed `functions/foreign-calls` and full `functions/host-calls` cases pass
-unchanged, including Stop and stale Host calls. Full Go save/restore of
-pending Function calls remains part of #136.
+unchanged, including Stop and stale Host calls. Full snapshots retain Function
+metadata, captures, pending calls and internal sender/receiver pairs. Host Function
+Values obtained from the original Group remain tied to that Group.
 
 The Corpus runner reuses the latest Function handle received with a given
 Display Form in Capability arguments, property writes, Run results and errors,
@@ -438,16 +482,14 @@ and any unsuccessful rollback, stop every Script as `effect state unknown`.
 Rollback is attempted once, and Load and Reload cannot revive this Group.
 Successful commit finalizes before observing controls queued by its hook.
 
-The runner passes 22 effect cases unchanged, including ordinary Reload and
-multiple Segments. Whole-case replay of `effect-close-preemption-fault` and
-`effect-reload-fatal` awaits Save refusal support; `effect-replace-library` and
-`effect-replace-fatal` await Library replacement. Those facilities remain under
-[#136](https://github.com/odogono/odgn-talk/issues/136). Native tests separately
-exercise participant preemption, fatal Reload, Stop and disposal boundaries;
-Save itself is not implemented. The maintainer approved the first blessings of
-the 22 supported effect cases on 2026-10-05; the
+The runner passes all 26 effect cases unchanged, including Save refusal at live
+participant boundaries, fatal Reload and Library replacement. A refused Save
+performs no cleanup, drains no inputs and changes no execution state or counters.
+Native tests also pin atomic replacement when a later Script's rollback fails.
+The maintainer approved the first blessings of the original 22 effect cases on
+2026-10-05; the
 [step-4 approval record](../../docs/reviews/go-step-four-blessings/README.md)
-lists the cases and remaining replay requirements.
+records that review. The four remaining cases execute unchanged in the step-5 gate.
 
 ### Capability Scopes
 
@@ -480,13 +522,13 @@ Script's named Grant and continues remaining cleanup. Later calls raise
 names in sorted order; disabled state survives Reload and has no reset API.
 Explicit close failures leave the scope open and usable.
 
-Thirteen scope traces pass, including `scope-slots` and
+All seventeen scope traces pass, including `scope-slots` and
 `scope-suspension-boundaries` with corrected guard Fuel and allocation
 expectations. Both Cores agree on the complete Traces; the
 [charging reconciliation](../../docs/reviews/scope-guard-charging/README.md)
 records the boundary audit. The original first-review headers remain pending
-human review in #222. Scope cases requiring save/restore remain under #136;
-Library replacement and save/restore remain under #136.
+human review in #222. Disabled Grants survive full and variables-only restore;
+Save refuses a preempted Run with live scope slots without abandoning them.
 
 ### Clock and Timer Standard Capabilities
 
@@ -810,7 +852,8 @@ cancellation removes or cancels only recipients with an open Verdict; already
 sealed Runs continue. Reload and disposal settle only the affected recipients.
 The two reviewed Broadcast Decision cases and full
 `cancellation/broadcast-recipients` case pass unchanged, including prior Stop
-inputs. Broadcast save/restore remains with #136.
+inputs. Snapshots preserve shared Broadcast Decision state and recipient order;
+variables-only restore queues discarded open Verdicts for its first Pump.
 
 Queueing Policies apply to the selected entry clause after Destructuring and
 Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
@@ -849,12 +892,13 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 233 cases, including all text-model, load-diagnostic,
+The gate contains 259 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
-limit/cancellation/Text Pattern cases and 22 Segment-bound effect cases,
+limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
+18 step-5 save/restore, Extend and replacement cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
@@ -886,11 +930,11 @@ immediate delivery surviving a sender error, and preempted receiver identity
 without Value size, and same-Segment Persistent State checks after self-send.
 The corrected `decisions/broadcast-outcomes` and `objects/wait-target` Traces
 also agree on Go after Broadcast Decisions and Object Message Paths were added.
-Only `reload/extend-units` still requires Go's deferred `Extend` facility;
-its remaining Go parity is tracked in
-[#277](https://github.com/odogono/odgn-talk/issues/277).
-Go save/restore replay parity remains deferred to
-[#136](https://github.com/odogono/odgn-talk/issues/136).
+`reload/extend-units` passes unchanged, including old Function Values after
+Extend. Every supported Trace also runs with Save/Restore between Pumps,
+subject to chapter 11's exclusions for old Host handles. Live effects require an
+`effects pending` refusal with unchanged inspection and counters before replay
+continues on the original Group.
 
 The reviewed `suspension/send-and-wait` Trace also passes unchanged, with replies,
 receiver errors, unmatched messages and timeout. Three new paired reply cases
@@ -909,8 +953,9 @@ raises before later Host calls. Their `Unblessed` headers await first human revi
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason
 for unsupported facilities. Explicitly selecting an unsupported case fails.
-Transcript and save/restore backends belong to the later steps. The Go runner
-has no blessing mode and never changes expected Corpus lines.
+Transcript execution remains a later step. Save/Restore replay is part of the
+Trace backend. The Go runner has no blessing mode and never changes expected
+Corpus lines.
 
 Six reviewed Library-related cases pass unchanged: `libraries/calls`,
 `libraries/errors`, `libraries/registration`, `stdlib/calls`,

@@ -284,7 +284,21 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.settlement != nil {
-			g.settleOperation(d)
+			if d.settlement.restore != nil {
+				p := g.calls[d.reply]
+				fuel := g.applyRestoredSettlement(d, &result.Reports)
+				if p != nil {
+					used[p.s] += fuel
+					p.s.counters.FuelTotal += fuel
+				}
+				result.FuelUsed += fuel
+				// A reissued Start is a Host crossing just like a first Start.
+				if p != nil {
+					land(p.x)
+				}
+			} else {
+				g.settleOperation(d)
+			}
 			continue
 		}
 		if d.kind == "revoke" {
@@ -388,6 +402,20 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	}
 
 	// Only timers retained from an earlier Pump fire, after Host inputs.
+	if g.restored {
+		for _, id := range orderedCalls(g.calls) {
+			if g.unsettled[id] != nil {
+				g.loseRestoredCall(id, "call lost")
+			}
+		}
+		g.unsettled = nil
+		g.restored = false
+	}
+	for _, report := range g.deferredDecisions {
+		result.Reports = append(result.Reports, report)
+		g.recordDecided(report)
+	}
+	g.deferredDecisions = nil
 	g.fireTimers()
 
 	for {
@@ -828,7 +856,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, report
 	case machine.Faulted:
 		end, outcome = "fault", LimitFault
 		s.counters.Faults++
-		fields := map[string]string{"limit": r.Limit, "at": fmt.Sprintf("%s:%d", r.CurrentCode().Unit.Name, r.PC), "pos": fmt.Sprintf("%d:%d", r.At.Pos.Line, r.At.Pos.Column)}
+		fields := map[string]string{"limit": r.Limit, "at": fmt.Sprintf("%s:%d", r.CodeName(), r.PC), "pos": fmt.Sprintf("%d:%d", r.At.Pos.Line, r.At.Pos.Column)}
 		if len(r.Rollback) > 0 {
 			fields["rollback"] = "[" + strings.Join(r.Rollback, ", ") + "]"
 		}

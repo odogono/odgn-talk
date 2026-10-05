@@ -8,6 +8,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
+	"github.com/odogono/odgn-talk/impl/go/internal/replay"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"os"
 	"path/filepath"
@@ -55,13 +56,49 @@ func (d *replayDelivery) cancelAndWait(ready <-chan struct{}) error {
 
 // Controls recorded inside a Pump are issued at their recorded Host crossing.
 type crossingReplay struct {
-	lines    *traceLines
-	controls map[string][][]Record
-	apply    func(Record) error
-	err      error
+	lines       *traceLines
+	controls    map[string][][]Record
+	apply       func(Record) error
+	err         error
+	hidden      bool
+	hiddenLines []string
+	roundTrip   bool
+	adopted     map[string]bool
+	saveIDs     map[string]string
+	visibleSave int
 }
 
 func (r *crossingReplay) Record(line string) {
+	if r.hidden {
+		r.hiddenLines = append(r.hiddenLines, line)
+		return
+	}
+	if r.roundTrip {
+		if strings.HasPrefix(line, "> settle ") {
+			record, e := parseRecord(line)
+			if e == nil && r.adopted[record.IDs[0]] {
+				delete(r.adopted, record.IDs[0])
+				return
+			}
+		}
+		if strings.HasPrefix(line, "> save ") {
+			actual := strings.TrimPrefix(line, "> save ")
+			r.visibleSave++
+			visible := fmt.Sprintf("s%d", r.visibleSave)
+			r.saveIDs[actual] = visible
+			line = "> save " + visible
+		}
+		if strings.HasPrefix(line, "> restore ") {
+			record, e := parseRecord(line)
+			if e == nil {
+				for _, f := range record.Fields {
+					if f.Key == "from" && r.saveIDs[f.Raw] != "" {
+						line = strings.Replace(line, "from="+f.Raw, "from="+r.saveIDs[f.Raw], 1)
+					}
+				}
+			}
+		}
+	}
 	r.lines.Record(line)
 	parts := strings.SplitN(line, " ", 3)
 	if len(parts) < 2 || parts[0] != "call" && parts[0] != "prop" {
@@ -128,7 +165,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|extend|save|restore|settle|replace-library|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -169,8 +206,22 @@ func (executionBackend) Support(c Case) string {
 	return ""
 }
 func (executionBackend) Run(c Case, records []Record) ([]string, error) {
+	ordinary, err := runExecution(c, records, false)
+	if err != nil {
+		return nil, err
+	}
+	restored, err := runExecution(c, records, true)
+	if err != nil {
+		return nil, fmt.Errorf("save/restore replay: %w", err)
+	}
+	if err := Compare(c.Name+" (save/restore)", ordinary, restored); err != nil {
+		return nil, err
+	}
+	return ordinary, nil
+}
+func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 	var lines traceLines
-	crossings := &crossingReplay{lines: &lines, controls: map[string][][]Record{}}
+	crossings := &crossingReplay{lines: &lines, controls: map[string][][]Record{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
 	inside := map[int]bool{}
 	inPump, crossing := false, ""
 	for i, r := range records {
@@ -238,6 +289,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
+	saves := map[string][]byte{}
 	values := operations.values
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
@@ -370,6 +422,150 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
 			}
 			s.Revoke(fields["grant"].Raw)
+		case "save":
+			saved, err := g.Save()
+			if err != nil {
+				if host, ok := err.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
+					return nil, err
+				}
+			} else {
+				saves[r.IDs[0]] = saved
+			}
+		case "restore":
+			selected := []*talk.Library{}
+			withheld := map[string]bool{}
+			for _, name := range fieldIDs(fields["withheld"]) {
+				withheld[name] = true
+			}
+			for name, l := range libraries {
+				if !withheld[name] {
+					selected = append(selected, l)
+				}
+			}
+			unbound := map[string]bool{}
+			for _, name := range fieldIDs(fields["unbound"]) {
+				unbound[name] = true
+			}
+			unresolved := map[objectRef]bool{}
+			for _, v := range fields["disposed"].Value.Items {
+				if v.Object != nil {
+					unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+				}
+			}
+			for _, v := range fields["unresolved"].Value.Items {
+				if v.Object != nil {
+					unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+				}
+			}
+			policy := talk.RejectMismatch
+			if fields["mismatch"].Raw == "variables-only" {
+				policy = talk.VariablesOnly
+			}
+			next, _, err := core.Restore(saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, Grants: func(script, name string) *talk.Grant {
+				if unbound[script+"."+name] {
+					return nil
+				}
+				grants, _ := operations.grants(setups[script])
+				return grants[name]
+			}, Resolve: func(kind, id string) (any, bool) {
+				key := objectRef{kind, id}
+				if unresolved[key] {
+					return nil, false
+				}
+				if obj := objects[key]; obj != nil {
+					return obj.Native(), true
+				}
+				return nil, false
+			}})
+			if err != nil {
+				if _, ok := err.(*talk.HostError); !ok {
+					return nil, err
+				}
+				continue
+			}
+			g = next
+			for name := range withheld {
+				delete(libraries, name)
+			}
+			if roundTrip {
+				crossings.visibleSave, _ = strconv.Atoi(strings.TrimPrefix(fields["from"].Raw, "s"))
+			}
+			// Reconstruct stable Object handles after restore.
+			objects = restoredObjects(g)
+			values.objects = objects
+
+		case "settle":
+			var settlement talk.Settlement
+			switch fields["how"].Raw {
+			case "answer":
+				v, err := values.construct(fields["value"].Value)
+				if err != nil {
+					return nil, err
+				}
+				settlement.Answer = &v
+			case "fail":
+				v := fields["error"].Value
+				data := []talk.Pair{}
+				for _, p := range v.Entries {
+					if p.Key != "code" && p.Key != "message" {
+						x, err := values.construct(p.Val)
+						if err != nil {
+							return nil, err
+						}
+						data = append(data, talk.KV(p.Key, x))
+					}
+				}
+				m, _ := talk.Map(data...)
+				settlement.Fail = &talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m}
+			case "adopt":
+				settlement.Adopt = true
+			case "reissue":
+				settlement.Reissue = true
+			}
+			call, err := g.Settle(talk.CallID(r.IDs[0]), settlement)
+			if err != nil {
+				if _, ok := err.(*talk.HostError); !ok {
+					return nil, err
+				}
+			} else if call != nil {
+				operations.calls[call.ID()] = call
+			}
+		case "replace-library":
+			imports := []*talk.Library{}
+			for name, l := range libraries {
+				if name != r.IDs[0] {
+					imports = append(imports, l)
+				}
+			}
+			l, err := core.CompileLibrary(talk.LibrarySource{Name: r.IDs[0], Source: fields["source"].Value.Text}, imports, operations.declarations)
+			if err != nil {
+				return nil, err
+			}
+			carry := talk.ResetVariables
+			if fields["carry"].Raw == "yes" {
+				carry = talk.CarryVariables
+			}
+			_, err = g.ReplaceLibrary(l, carry)
+			if err != nil {
+				if _, ok := err.(*talk.HostError); !ok {
+					if _, ok := err.(*talk.LoadError); !ok {
+						return nil, err
+					}
+				}
+			} else {
+				for _, raw := range replay.Libraries(g) {
+					lib := raw.(*talk.Library)
+					libraries[lib.Name()] = lib
+				}
+			}
+		case "extend":
+			if e := g.Script(r.IDs[0]).Extend(fields["source"].Value.Text); e != nil {
+				if _, ok := e.(*talk.HostError); !ok {
+					if _, ok := e.(*talk.LoadError); !ok {
+						return nil, e
+					}
+				}
+			}
 		case "reload":
 			s := g.Script(r.IDs[0])
 			if s == nil {
@@ -502,6 +698,107 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 					return nil, e
 				}
 			}
+			if roundTrip {
+				nextPump := -1
+				explicit := false
+				for j := i + 1; j < len(records); j++ {
+					if records[j].Input && records[j].Name == "pump" {
+						nextPump = j
+						break
+					}
+					if records[j].Input && (records[j].Name == "save" || records[j].Name == "restore") {
+						explicit = true
+					}
+				}
+				if nextPump >= 0 && !explicit {
+					// Chapter 11 excludes boundaries needing old Host handles.
+					crossesOldHandle := false
+					pendingIDs := map[string]bool{}
+					for _, id := range replay.Pending(g) {
+						pendingIDs[id] = true
+					}
+					for _, future := range records[i+1:] {
+						if !future.Input {
+							continue
+						}
+
+						if future.Name == "cancel-delivery" && deliveries[future.IDs[0]] != nil {
+							crossesOldHandle = true
+						}
+						for _, field := range future.Fields {
+							if values.hasReceivedFunction(field.Value) {
+								crossesOldHandle = true
+							}
+						}
+						if (future.Name == "answer" || future.Name == "fail") && operations.calls[talk.CallID(future.IDs[0])] != nil && !pendingIDs[future.IDs[0]] {
+							crossesOldHandle = true
+						}
+
+					}
+					if crossesOldHandle {
+						continue
+					}
+					// Save must still be attempted at a live-effect boundary.
+					crossings.hidden = true
+					before := g.Inspect()
+					counters := map[string]talk.Counters{}
+					for _, view := range before.Scripts {
+						counters[view.Name] = g.Script(view.Name).Counters()
+					}
+					crossings.hiddenLines = nil
+					saved, saveErr := g.Save()
+					if saveErr != nil {
+						saveLines := append([]string(nil), crossings.hiddenLines...)
+						after := g.Inspect()
+						for _, view := range after.Scripts {
+							if counters[view.Name] != g.Script(view.Name).Counters() {
+								return nil, fmt.Errorf("refused hidden Save changed counters")
+							}
+						}
+						crossings.hidden = false
+						if host, ok := saveErr.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
+							return nil, saveErr
+						}
+						if len(saveLines) != 2 || !strings.HasPrefix(saveLines[0], "> save ") || saveLines[1] != `refused code="effects pending"` {
+							return nil, fmt.Errorf("refused hidden Save emitted execution records: %v", saveLines)
+						}
+						if !reflect.DeepEqual(before, after) {
+							return nil, fmt.Errorf("refused hidden Save changed execution state")
+						}
+						continue
+					}
+					selected := []*talk.Library{}
+					for _, l := range libraries {
+						selected = append(selected, l)
+					}
+					next, result, restoreErr := core.Restore(saved, talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Grants: func(script, name string) *talk.Grant {
+						grants, _ := operations.grants(setups[script])
+						return grants[name]
+					}, Resolve: func(kind, id string) (any, bool) {
+						o := objects[objectRef{kind, id}]
+						if o == nil {
+							return nil, false
+						}
+						return o.Native(), true
+					}})
+					crossings.hidden = false
+					if restoreErr != nil {
+						return nil, restoreErr
+					}
+
+					g = next
+					objects = restoredObjects(g)
+					values.objects = objects
+					for _, p := range result.Pending {
+						call, err := g.Settle(p.ID, talk.Settlement{Adopt: true})
+						if err != nil {
+							return nil, err
+						}
+						operations.calls[p.ID] = call
+						crossings.adopted[string(p.ID)] = true
+					}
+				}
+			}
 		case "vars":
 			for _, script := range g.Inspect().Scripts {
 				for _, entry := range script.Vars {
@@ -576,4 +873,21 @@ func setupOverride(f Field) talk.LimitOverride {
 		}
 	}
 	return o
+}
+
+func gReady(ready chan struct{}) func() {
+	return func() {
+		select {
+		case ready <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func fieldIDs(f Field) []string {
+	s := strings.TrimSuffix(strings.TrimPrefix(f.Raw, "["), "]")
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ", ")
 }
