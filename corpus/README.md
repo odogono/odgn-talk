@@ -218,13 +218,13 @@ The `suspension/argument-labels`, `objects/argument-labels` and
 target-first sends and replies, Message Path passes, event observation and `it`,
 selector-aware faults in nested Lambdas, Host Selector refusals, suspension
 checks and chunk/Unit traps. Go and TS agree on their complete ordinary and
-save/restore Traces. The TS `sessions/argument-labels` Transcript covers Entry
-recognition and positional/labelled Handlers sharing a first word. Their
+save/restore Traces. The `sessions/argument-labels` Transcript agrees on both
+Cores and covers Entry recognition and positional/labelled Handlers sharing a first word. Their
 `Unblessed` headers retain the first human review requirement.
 
 ## The Disassembly Cases
 
-The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript retains its `Unblessed` header pending first human review.
+The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` and `argument-labels` Transcripts retain their `Unblessed` headers pending first human review.
 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 

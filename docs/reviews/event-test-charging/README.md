@@ -67,11 +67,11 @@ go -C impl/go run ./cmd/corpus --check-passing
 
 The Go `TestEventObservationAcceptance` test requires all nine cases to remain in
 the passing gate and reproduces their complete Traces in both modes. All 276
-cases in the committed Go gate also passed on both Cores at this checkout,
-protecting every earlier passing case. The Go scan additionally reported a
-`sessions/argument-labels` Trace mismatch outside that gate. The full race suite's
-Session acceptance test also fails on that case's missing gate entry and its
-expected Transcript count; a clean archive of the base revision reproduces all
-three failures. Go build, vet and the nine-case acceptance test with `-race`
-pass. `suspension/wait-observation` retains its `Unblessed` header;
+cases in the committed Go gate also passed on both Cores at that checkout,
+protecting every earlier passing case. The initial full race run exposed a
+pre-existing `sessions/argument-labels` failure: the Go Session Host classified
+labelled calls by the complete Selector instead of its first word. PR #360
+corrects that lookup without changing expected records, adds the case to the
+passing gate and updates the eleven-Transcript acceptance count.
+`suspension/wait-observation` retains its `Unblessed` header;
 replay agreement does not approve its first blessing.

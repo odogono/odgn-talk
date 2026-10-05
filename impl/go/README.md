@@ -120,6 +120,8 @@ go run ./cmd/corpus sessions/save-restore
 Enter one declaration, statement or expression. Incomplete Entries continue at
 `|`, including open fences and interpolation holes. Blank literal lines remain
 content; final EOF diagnoses the innermost unfinished construct at its opener.
+An Entry beginning with a Handler Selector's first word is a Command Call;
+positional and labelled Handlers sharing that word remain distinct.
 Expressions print their value. `say` calls `console.write`. Foreground
 Runs wait for their console input or real-clock deadline; other suspended Runs
 produce background lines when later resumed. Ctrl-C cancels the foreground Run
@@ -959,13 +961,13 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 269 cases, including all text-model, load-diagnostic,
+The gate contains 277 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
+separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
-18 step-5 save/restore, Extend and replacement cases, and all ten Session
+18 step-5 save/restore, Extend and replacement cases, and all eleven Session
 Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
