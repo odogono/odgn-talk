@@ -59,6 +59,7 @@ errors/handler-backstop
 errors/handler-delivery
 errors/lambda-capture-parity
 examples/orders-pricing
+functions/foreign-calls
 libraries/caller-capabilities
 libraries/calls
 libraries/errors

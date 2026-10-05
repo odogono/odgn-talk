@@ -34,13 +34,21 @@ func (s *Script) start(d delivery) {
 			alloc = min(alloc, o.AllocPerRun)
 		}
 	}
-	r := machine.StartDelivery(s.state, d.message.Name, args, machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width})
+	limits := machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width}
+	var r *machine.Run
+	if d.function != nil {
+		r = machine.StartFunction(s.state, *d.function, args, limits)
+	} else {
+		r = machine.StartDelivery(s.state, d.message.Name, args, limits)
+	}
 	r.Target = d.targetValue()
 	if d.during != nil {
 		r.SetDuring(*d.during)
 	}
 	handler := ""
-	if s.hasHandler(d.message.Name) {
+	if d.function != nil {
+		handler = Value{*d.function}.String()
+	} else if s.hasHandler(d.message.Name) {
 		handler = d.message.Name
 	}
 	s.active = &execution{run: r, delivery: d, id: RunID(fmt.Sprintf("%s/r%d", s.name, s.counters.Runs)), segment: 1, handler: handler, clause: -1, how: "start"}
@@ -61,6 +69,9 @@ func (s *Script) mailboxSize() int64 {
 		}
 		d := item.delivery
 		size += 32
+		if d.function != nil {
+			size += machine.Size(*d.function)
+		}
 		for _, v := range d.message.Args {
 			size += machine.Size(v.inner)
 		}
@@ -241,6 +252,14 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.cancel == "" {
+			if d.function != nil && (d.function.Function.Owner != d.script.state || d.script.state.Gone) {
+				g.release(d.script)
+				g.record("note", false, []string{string(d.id)}, map[string]string{"kind": "function-gone"})
+				if d.pending != nil {
+					settlements = append(settlements, func() { d.pending.settle(Nothing, sendFailure("function gone", nil)) })
+				}
+				continue
+			}
 			if moved, changed := g.moveDelivery(d); changed {
 				if moved.script == nil {
 					g.unrouted = append(g.unrouted, moved)
@@ -347,7 +366,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 						continue
 					}
 					g.release(s)
-					fuel, alloc := g.observe(s, d, func() { seal(d, "", Allowed, Nothing, Completed) })
+					var fuel, alloc int64
+					if d.function == nil {
+						fuel, alloc = g.observe(s, d, func() { seal(d, "", Allowed, Nothing, Completed) })
+					}
 					used[s] += fuel
 					result.FuelUsed += fuel
 					s.counters.FuelTotal += fuel
@@ -370,6 +392,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				continue
 			}
 			progress = true
+			// Host arity validation can raise before the first execution segment.
+			if x.how == "start" && x.delivery.function != nil && r.Status == machine.Errored {
+				g.writeRaises(x, x.raisesWritten)
+			}
 			fuel, alloc, raised := r.Fuel, r.Alloc, len(r.Raises)
 			slice := int64(0)
 			by := "slice"
@@ -446,7 +472,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				if x.delivery.from != "" {
 					common["from"] = string(x.delivery.from)
 				}
-				if x.handler != "" {
+				if x.delivery.function != nil {
+					common["fn"] = Value{*x.delivery.function}.String()
+				} else if x.handler != "" {
 					common["handler"] = x.handler
 				}
 				if r.Clause > 0 {
@@ -490,6 +518,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				} else if r.SendWait {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), big.NewInt(int64(x.maxWait())))
 					common["end"] = "send-wait"
+					if r.FunctionWait {
+						common["end"] = "call-value-wait"
+					}
 					if r.OperationWait {
 						common["end"] = "ask-wait"
 						p := g.calls[x.waitCall]
@@ -752,6 +783,10 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, seal f
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
 	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	if x.delivery.function != nil {
+		delete(outputs, "handler")
+		outputs["fn"] = Value{*x.delivery.function}.String()
+	}
 	if x.delivery.id == "" {
 		delete(outputs, "delivery")
 	}

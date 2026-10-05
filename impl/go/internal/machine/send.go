@@ -40,6 +40,7 @@ func (r *Run) ResumeSendOperation(resume ResumeOperationFunc) {
 	}
 	r.SendResume = nil
 	r.OperationWait = false
+	r.FunctionWait = false
 	f := &r.Frames[len(r.Frames)-1]
 	if p.Capability {
 		f.PC--

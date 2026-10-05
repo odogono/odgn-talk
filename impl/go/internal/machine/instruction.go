@@ -315,7 +315,18 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		if data.Owner != r.State {
-			bad(failure("would suspend"))
+			if i.Name == "call-value" {
+				bad(failure("would suspend"))
+				break
+			}
+			// Foreign arity and defaults are checked here before admission.
+			_, _, err := functionArguments(fn, vs)
+			if err != nil {
+				bad(*err)
+				break
+			}
+			m.Args = vs
+			effect = func() { r.SendWait = true; r.FunctionWait = true; r.Status = Suspended }
 			break
 		}
 		callee := home
@@ -335,28 +346,14 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(failure("would suspend"))
 			break
 		}
-		required := 0
-		for _, param := range body.Checked.Node.Params {
-			if body.Checked.Kind != "function" || len(param.Children) == 0 {
-				required++
-			}
-		}
-		if n < required || n > len(body.Checked.Node.Params) {
-			bad(failure("wrong arity"))
+		callee, vs, err := functionArguments(fn, vs)
+		if err != nil {
+			bad(*err)
 			break
 		}
-		for j := n; j < len(body.Checked.Node.Params); j++ {
-			slot := slices.Index(callee.Unit.Definitions, body.Checked.Name+"."+body.Checked.Node.Params[j].Text)
-			vs = append(vs, BindLibraryValue(callee.Definitions[slot], r.State))
-		}
 		f.Waiting = true
-		effect = func() {
-			r.pushCodeFrame(callee, data.Body, vs)
-			callee := &r.Frames[len(r.Frames)-1]
-			for _, capture := range data.Captures {
-				callee.Locals[body.Checked.Slot(capture.Key)] = capture.Val
-			}
-		}
+		effect = func() { r.pushFunction(callee, fn, vs) }
+
 	case "wait":
 		ns, err := waitNanos(pop())
 		if err != nil {

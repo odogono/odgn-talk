@@ -13,7 +13,13 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 	d := delivery{message: Message{Name: message}, from: x.id}
 	g.mu.Lock()
 	label := to.Name
-	if to.Up {
+	if to.Function.Kind == corevalue.Function {
+		d.function = &to.Function
+		d.message.Name = Value{to.Function}.String()
+		d.script = g.script(to.Function.Function.Home)
+		d.target = d.script.owner
+		label = d.script.name
+	} else if to.Up {
 		d.target = x.delivery.script.owner
 		d.path = true
 		d.after = x.delivery.script.owner
@@ -34,7 +40,7 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 	if d.script != nil && d.script.reserved >= d.script.limits.MailboxDepth {
 		g.mu.Unlock()
 		receiver := d.targetValue()
-		if to.Up {
+		if to.Up || to.Function.Kind == corevalue.Function {
 			receiver = mustText(d.script.name)
 		} else if to.Object.Kind != corevalue.Object {
 			receiver = mustText(to.Name)
@@ -71,6 +77,10 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 		label = d.script.name
 	}
 	fields := map[string]string{"to": label, "message": message}
+	if d.function != nil {
+		delete(fields, "message")
+		fields["fn"] = Value{*d.function}.String()
+	}
 	if len(d.message.Args) > 0 {
 		fields["args"] = argsDisplay(d.message.Args)
 	}

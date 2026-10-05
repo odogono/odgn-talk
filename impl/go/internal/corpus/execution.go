@@ -65,7 +65,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -121,6 +121,7 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	if e != nil {
 		return nil, e
 	}
+	functions := map[string]talk.Value{}
 	setups := map[string]Setup{}
 	for _, x := range c.Setup["scripts"].([]any) {
 		s := x.(Setup)
@@ -146,6 +147,30 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			}
 			if err := g.SetParent(objects[objectRef{ref.Kind, ref.ID}], parent); err != nil {
 				if _, ok := err.(*talk.HostError); !ok {
+					return nil, err
+				}
+			}
+		case "call-value":
+			ref := fields["fn"].Value.Function
+			if ref == nil {
+				return nil, fmt.Errorf("call-value requires Function")
+			}
+			fn := functions[fields["fn"].Raw]
+			var args []talk.Value
+			for _, v := range fields["args"].Value.Items {
+				x, err := construct(v)
+				if err != nil {
+					return nil, err
+				}
+				args = append(args, x)
+			}
+			var limits *talk.LimitOverride
+			if f, ok := fields["limits"]; ok {
+				o := setupOverride(f)
+				limits = &o
+			}
+			if _, _, err := g.Call(context.Background(), fn, args, limits); err != nil {
+				if _, ok := err.(*talk.HostError); !ok && err != talk.ErrMailboxFull {
 					return nil, err
 				}
 			}
@@ -304,7 +329,13 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 			opts := talk.PumpOptions{}
 			opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
 			opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)
-			if _, e := g.Pump(now, opts); e != nil {
+			result, e := g.Pump(now, opts)
+			for _, report := range result.Reports {
+				if end, ok := report.(*talk.RunEnd); ok && end.Result.Kind() == talk.KindFunction {
+					functions[end.Result.String()] = end.Result
+				}
+			}
+			if e != nil {
 				if _, ok := e.(*talk.HostError); !ok {
 					return nil, e
 				}

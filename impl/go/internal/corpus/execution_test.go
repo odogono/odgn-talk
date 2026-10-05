@@ -609,3 +609,67 @@ func TestMessagePathAcceptance(t *testing.T) {
 		})
 	}
 }
+
+func TestForeignFunctionAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"functions/foreign-calls"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains("\n"+string(b), "\nfunctions/foreign-calls\n") {
+		t.Fatal("foreign Function acceptance missing from gate")
+	}
+
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	if len(cases) != 1 {
+		t.Fatal(len(cases))
+	}
+	if _, err := r.execute(cases[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The reviewed Host Call prefix covers live calls, defaults and arity. The
+// remainder requires the explicit Stop Host API tracked separately by #135.
+func TestHostFunctionReviewedCalls(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"functions/host-calls"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := cases[0]
+	b, err := os.ReadFile(c.Dir + "/case.trace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := ParseTrace(string(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop := 0
+	for i, r := range records {
+		if r.Input && r.Name == "call-value" && len(r.IDs) > 0 && r.IDs[0] == "d5" {
+			stop = i
+			break
+		}
+	}
+	if stop == 0 {
+		t.Fatal("missing Host call boundary")
+	}
+	records = records[:stop]
+	lines, err := (executionBackend{}).Run(c, records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []string{}
+	for _, r := range records {
+		expected = append(expected, r.Raw)
+	}
+	if strings.Join(lines, "\n") != strings.Join(expected, "\n") {
+		t.Fatalf("Host Call trace mismatch\nwant:\n%s\ngot:\n%s", strings.Join(expected, "\n"), strings.Join(lines, "\n"))
+	}
+}
