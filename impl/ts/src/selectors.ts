@@ -29,3 +29,12 @@ export const validMessageSelector = (
     )
   );
 };
+// Chapter 5: a computed message name must be one a static `send` could
+// write, a Name or a Selector with one argument per part (ADR 0057).
+export const validComputedMessageName = (
+  message: string,
+  arity: number,
+): boolean =>
+  message.includes(':')
+    ? validMessageSelector(message, arity)
+    : name(message) && message !== 'all' && !reserved.has(message);

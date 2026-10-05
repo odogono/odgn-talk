@@ -202,6 +202,13 @@ wait events and their `it`, and Trace records. Host Deliveries, Requests,
 Broadcasts and Decisions reject malformed colon-containing names or mismatched
 argument counts at the call with `invalid value`.
 
+`send (e) with a to r` computes its message name ([ADR 0057](../../docs/adr/0057-a-send-may-compute-its-message-name.md)).
+It lowers to `send-named`, `send-named-wait` or `join-send-named`, which pop
+the name below the arguments. The name is checked before the receiver:
+non-text raises `wrong kind`, and text that isn't a Name or a Selector with one
+argument per part raises `bad message name`. A receiver Name for a Script the
+Group doesn't hold raises `object gone` at the send, after that check.
+
 ## Lowering and canonical disassembly
 
 ```ts

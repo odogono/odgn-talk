@@ -916,10 +916,12 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		for _, e := range n.Children {
 			u.validate(e, b, ctx)
 		}
-		for _, receiver := range n.Params {
-			if receiver.Kind != "name" {
-				u.validate(receiver, b, ctx)
-			}
+		if receiver := n.Params[0]; receiver.Kind != "name" {
+			u.validate(receiver, b, ctx)
+		}
+		// A computed message name is an ordinary expression (ADR 0057).
+		for _, name := range n.Params[1:] {
+			u.validate(name, b, ctx)
 		}
 		return
 	}

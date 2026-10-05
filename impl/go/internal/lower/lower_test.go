@@ -15,8 +15,8 @@ import (
 // slot, constant, Unwind Table entry and event. No TS implementation is used.
 func TestDisassemblyCorpus(t *testing.T) {
 	files, _ := filepath.Glob("../../../../corpus/disassembly/*/*.dis")
-	if len(files) != 8 {
-		t.Fatalf("expected eight units in seven cases, got %d", len(files))
+	if len(files) != 9 {
+		t.Fatalf("expected nine units in seven cases, got %d", len(files))
 	}
 	emitted := map[string]bool{}
 	for _, file := range files {

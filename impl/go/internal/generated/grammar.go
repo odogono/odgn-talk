@@ -763,6 +763,11 @@ var Grammar = GrammarTable{
 			Written:   "after a Text Pattern element, e.g. `text lazily`",
 			Beginner:  "a narrower element",
 		},
+		GrammarTableAdvancedEntry{
+			Construct: "A computed message name",
+			Written:   "`send (e) with a to r`, e.g. `send (next) with order to me`",
+			Beginner:  "a `match` or `if` that picks between `send`s that name their message",
+		},
 	},
 	SyntaxError: []GrammarTableSyntaxErrorEntry{
 		GrammarTableSyntaxErrorEntry{

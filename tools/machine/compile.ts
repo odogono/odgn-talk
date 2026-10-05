@@ -648,6 +648,7 @@ export class BodyCompiler {
       [
         'ask-wait',
         'send-wait',
+        'send-named-wait',
         'send-up-wait',
         'call-handler-wait',
         'wait',
@@ -2050,13 +2051,23 @@ export class BodyCompiler {
   }
 
   send(s: Node) {
+    // A computed name is evaluated first, below the arguments (ADR 0057).
+    if (s.name) {
+      this.expr(s.name);
+    }
     s.args.forEach((a: Node) => this.expr(a));
     this.expr(s.target);
     this.at(s);
-    if (s.wait && this.join) {
+    if (s.name) {
+      if (s.wait && this.join) {
+        return void this.emit('join-send-named', [s.args.length]);
+      }
+      this.emit(s.wait ? 'send-named-wait' : 'send-named', [s.args.length]);
+    } else if (s.wait && this.join) {
       return void this.emit('join-send', [s.msg, s.args.length]);
+    } else {
+      this.emit(s.wait ? 'send-wait' : 'send', [s.msg, s.args.length]);
     }
-    this.emit(s.wait ? 'send-wait' : 'send', [s.msg, s.args.length]);
     if (s.wait) {
       this.emit('store', [0], ['it']);
     }

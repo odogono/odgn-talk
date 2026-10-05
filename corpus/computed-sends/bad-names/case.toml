@@ -1,0 +1,19 @@
+# bad-names: a computed name is checked before the receiver and before
+# anything is sent. Each bad name goes to a receiver that would raise
+# `object gone` or `mailbox full`, and raises its own error instead
+# (chapter 5, A computed name; chapter 6, `bad message name`).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "sink"
+source = "sink.talk"
+limits = { mailboxDepth = 1 }

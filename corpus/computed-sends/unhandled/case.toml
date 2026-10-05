@@ -1,0 +1,18 @@
+# unhandled: a well-formed computed name that no Handler takes climbs the
+# Message Path as a static name does, and ends `unhandled`; with `and wait`
+# the sender's `send failed` has `reason` `"unhandled"` (chapter 5, A
+# computed name).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

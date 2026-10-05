@@ -1,0 +1,13 @@
+-- a.talk: sends b messages it has no Handler for.
+
+script variable seen = []
+
+on go
+  send ("missing") with 1 to b
+  send ("move:to:") with "knight", "e4" to b
+  try
+    send ("missing") with 2 to b and wait
+  catch {code: c, reason: r}
+    put [c, r] after seen
+  end try
+end go

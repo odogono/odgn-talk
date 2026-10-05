@@ -1,0 +1,40 @@
+# `relay` waits for `note` or `move:to:` and forwards what it saw by
+# `the name of it`; `relay2` forwards a Selector the same way. `a` has no
+# Handler for either, so each Delivery also ends `unhandled` in its own Run.
+> load a identity=69d1d8771fc075980f293a4630290f3ba0e56eb296de6971c565ddc5341b02d4
+> load b identity=9b076b9325da56efd3e1e6cd1314925e86d5745d4ec9caa287bf52479bbe40a7
+> deliver d1 to=a message=relay
+> pump clock=2026-10-05T09:00:00Z
+seg a/r1 start delivery=d1 handler=relay clause=1 fuel=14 alloc=0 state=288 end=wait-for-any
+pumped state=idle fuel=14
+> deliver d2 to=a message=note args=["hello"]
+> pump clock=2026-10-05T09:00:00Z
+seg a/r2 start delivery=d2 fuel=0 alloc=0 state=446 end=unhandled
+run a/r2 outcome=unhandled delivery=d2 fuel=0 alloc=0
+unhandled d2 message=note args=["hello"]
+send a/r1.c1 to=b message=note args=["hello"] wait=yes
+seg a/r1 resume fuel=40 alloc=53 state=511 end=send-wait
+seg b/r1 start from=a/r1.c1 handler=note clause=1 fuel=12 alloc=26 state=0 end=return
+run b/r1 outcome=completed handler=note value="note hello" fuel=12 alloc=26
+seg a/r1 resume fuel=19 alloc=164 state=102 end=return
+run a/r1 outcome=completed delivery=d1 handler=relay fuel=80 alloc=262
+pumped state=idle fuel=78
+> deliver d3 to=a message=relay2
+> pump clock=2026-10-05T09:00:00Z
+seg a/r3 start delivery=d3 handler=relay2 clause=1 fuel=15 alloc=0 state=326 end=wait-for until=2026-10-05T09:00:01Z
+pumped state=idle fuel=15 next=2026-10-05T09:00:01Z
+> deliver d4 to=a message=move:to: args=["knight", "e4"]
+> pump clock=2026-10-05T09:00:00Z
+seg a/r4 start delivery=d4 fuel=0 alloc=0 state=534 end=unhandled
+run a/r4 outcome=unhandled delivery=d4 fuel=0 alloc=0
+unhandled d4 message=move:to: args=["knight", "e4"]
+send a/r3.c1 to=b message=move:to: args=["knight", "e4"] wait=yes
+seg a/r3 resume fuel=31 alloc=72 state=558 end=send-wait
+seg b/r2 start from=a/r3.c1 handler=move:to: clause=1 fuel=17 alloc=48 state=0 end=return
+run b/r2 outcome=completed handler=move:to: value="knight@e4" fuel=17 alloc=48
+seg a/r3 resume fuel=13 alloc=33 state=135 end=return
+run a/r3 outcome=completed delivery=d3 handler=relay2 fuel=68 alloc=177
+pumped state=idle fuel=70
+> vars
+vars a seen=[["note", "note hello"], "knight@e4"]
+vars b

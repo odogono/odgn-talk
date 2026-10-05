@@ -1165,6 +1165,26 @@ export const instructions = [
     "suspends": true
   },
   {
+    "name": "send-named",
+    "cost": "send",
+    "operands": [
+      "count"
+    ],
+    "pops": "count + 2",
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "send-named-wait",
+    "cost": "send",
+    "operands": [
+      "count"
+    ],
+    "pops": "count + 2",
+    "pushes": 1,
+    "suspends": true
+  },
+  {
     "name": "send-up",
     "cost": "send",
     "operands": [
@@ -1242,6 +1262,16 @@ export const instructions = [
       "count"
     ],
     "pops": "count + 1",
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "join-send-named",
+    "cost": "send",
+    "operands": [
+      "count"
+    ],
+    "pops": "count + 2",
     "pushes": 0,
     "suspends": false
   },

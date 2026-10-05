@@ -171,6 +171,11 @@ export const advancedTags = [
     "construct": "`lazily`",
     "written": "after a Text Pattern element, e.g. `text lazily`",
     "beginner": "a narrower element"
+  },
+  {
+    "construct": "A computed message name",
+    "written": "`send (e) with a to r`, e.g. `send (next) with order to me`",
+    "beginner": "a `match` or `if` that picks between `send`s that name their message"
   }
 ] as const;
 export const properties = [

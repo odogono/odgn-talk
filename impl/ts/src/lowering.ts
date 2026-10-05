@@ -776,15 +776,26 @@ class BodyLowering {
         return void this.emit(at, 'store', 0);
       }
       case 'send': {
+        // A computed name is evaluated first, below the arguments (ADR 0057).
+        const message = s.message;
+        if (typeof message !== 'string') {
+          yield this.expr(message);
+        }
         for (const arg of s.args) {
           yield this.expr(arg);
         }
         yield this.expr(s.target);
         const n = s.args.length;
-        if (s.wait && this.join) {
-          return void this.emit(at, 'join-send', s.message, n);
+        if (typeof message !== 'string') {
+          if (s.wait && this.join) {
+            return void this.emit(at, 'join-send-named', n);
+          }
+          this.emit(at, s.wait ? 'send-named-wait' : 'send-named', n);
+        } else if (s.wait && this.join) {
+          return void this.emit(at, 'join-send', message, n);
+        } else {
+          this.emit(at, s.wait ? 'send-wait' : 'send', message, n);
         }
-        this.emit(at, s.wait ? 'send-wait' : 'send', s.message, n);
         if (s.wait) {
           this.emit(at, 'store', 0);
         }

@@ -57,6 +57,7 @@ import {
   wrongKind,
 } from './operations';
 import { readDisplay } from './readers';
+import { validComputedMessageName } from './selectors';
 import { standardChecks } from './standard-capability-checks';
 import {
   acceptsArgumentCount,
@@ -705,6 +706,12 @@ const resultDetail = (
 const keyValue = (k: string | number): Value =>
   typeof k === 'number' ? dec(String(k)) : text(k);
 // The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
+// The sends that pop a computed message name (ADR 0057).
+const namedSends = new Set([
+  'send-named',
+  'send-named-wait',
+  'join-send-named',
+]);
 const reservedKeys = new Set([
   'code',
   'message',
@@ -3419,8 +3426,10 @@ export class Run {
           frame.stack.push(object);
           return next();
         }
-        if (!this.host?.isScript(name)) {
-          // A receiver that names no Script of the Group (chapter 5, Sending).
+        // A receiver that names no Script of the Group (chapter 5, Sending).
+        // A computed name is checked first, so its send raises this.
+        const named = namedSends.has(unit.code[frame.pc + 1]?.op ?? '');
+        if (!named && !this.host?.isScript(name)) {
           throw new ScriptError('object gone', [['object', text(name)]]);
         }
         this.pay(key);
@@ -3435,7 +3444,10 @@ export class Run {
         const then = unit.code[frame.pc + 1]?.op;
         frame.stack.push(
           me.kind === 'nothing' &&
-            (then === 'send' || then === 'send-wait' || then === 'join-send')
+            (then === 'send' ||
+              then === 'send-wait' ||
+              then === 'join-send' ||
+              namedSends.has(then ?? ''))
             ? { k: 'receiver', name: this.script.name }
             : me,
         );
@@ -3557,18 +3569,42 @@ export class Run {
       case 'send':
       case 'send-wait':
       case 'join-send':
+      case 'send-named':
+      case 'send-named-wait':
+      case 'join-send-named':
       case 'send-up':
       case 'send-up-wait': {
-        if (ins.op === 'join-send') {
+        const join = ins.op === 'join-send' || ins.op === 'join-send-named';
+        if (join) {
           this.joinWidth();
         }
         const up = ins.op === 'send-up' || ins.op === 'send-up-wait';
-        const n = b as number;
+        const named = namedSends.has(ins.op);
+        const n = (named ? a : b) as number;
+        // A computed name, below the arguments, is checked before the
+        // receiver (chapter 5, A computed name).
+        let message = a as string;
+        if (named) {
+          const name = frame.stack.at(-n - 2) as Value;
+          if (name.kind !== 'text') {
+            throw wrongKind('text', name);
+          }
+          message = textForm(name);
+          if (!validComputedMessageName(message, n)) {
+            throw new ScriptError('bad message name', [
+              ['name', name],
+              ['arguments', dec(String(n))],
+            ]);
+          }
+        }
         // The receiver: a Script named at load, a Host Object, or, for a
         // Command Call with no Handler, the Message Path (chapter 5).
         const to = up ? null : frame.stack.at(-1)!;
         let target: ObjectState | string | null = null;
         if (to && !isValue(to) && to.k === 'receiver') {
+          if (named && !this.host?.isScript(to.name)) {
+            throw new ScriptError('object gone', [['object', text(to.name)]]);
+          }
           target = to.name;
         } else if (to) {
           const o = isValue(to) ? stateOf(to) : undefined;
@@ -3590,18 +3626,18 @@ export class Run {
           args.reduce((sum, v) => sum + sizeOf(v), 0),
         );
         m.inputSize = size;
-        if (ins.op !== 'send' && ins.op !== 'send-up') {
+        // A send that waits is a call, with an id of its own.
+        const waits =
+          ins.op !== 'send' && ins.op !== 'send-named' && ins.op !== 'send-up';
+        if (waits) {
           this.checkScopeBoundary();
         }
         this.pay(key);
-        // A send that waits is a call, with an id of its own.
-        const waits = ins.op !== 'send' && ins.op !== 'send-up';
         const id = waits ? `${this.id}.c${this.calls + 1}` : null;
-        const message = a as string;
         const reached = up
           ? this.host!.sendUp(message, args, id)
           : this.host!.send(target!, message, args, id);
-        frame.stack.length -= n + (up ? 0 : 1);
+        frame.stack.length -= n + (up ? 0 : 1) + (named ? 1 : 0);
         const object = typeof target === 'object' && target ? target : null;
         if (reached === null) {
           // Past the last Owning Script: `unhandled`, and nothing to wait on.
@@ -3626,13 +3662,13 @@ export class Run {
           message,
           args,
           ...(id ? { id } : {}),
-          ...(ins.op === 'join-send' ? { join: true } : {}),
+          ...(join ? { join: true } : {}),
         });
         if (!id) {
           return next();
         }
         this.calls++;
-        if (ins.op === 'join-send') {
+        if (join) {
           this.join!.members.push({
             id,
             call: null,

@@ -5,6 +5,8 @@
 # region, captures the waiting body's locals it reads, and returns the
 # values its patterns bind, which the event table's `binds` puts in the
 # waiting body's slots. A body that holds a Suspension Point may suspend.
+# `router` pins a computed message name: the name, then the arguments and
+# the receiver, and `send-named`, `send-named-wait` or `join-send-named`.
 
 kind = "disassembly"
 
@@ -43,6 +45,14 @@ objects = { warehouse = { kind = "store", id = "warehouse" } }
 name = "pricing"
 source = "pricing.talk"
 
+[[scripts]]
+name = "router"
+source = "router.talk"
+
 [[disassembly]]
 unit = "waiter"
 expected = "waiter.dis"
+
+[[disassembly]]
+unit = "router"
+expected = "router.dis"

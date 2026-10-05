@@ -1,0 +1,17 @@
+# names: `send (e)` sends the message the text `e` names, a Name or a
+# Selector, with and without `and wait`, and as Join Members (chapter 5,
+# A computed name; ADR 0057).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

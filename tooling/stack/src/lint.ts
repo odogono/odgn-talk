@@ -483,6 +483,9 @@ export const lintSyntax = (
     ) {
       advanced('The `code points` property', first);
     }
+    if (node.rule === 'Send' && direct[1]?.v === '(') {
+      advanced('A computed message name', direct[1]);
+    }
     if (node.rule === 'Element') {
       for (const token of direct) {
         if (token.v === 'lazily') {

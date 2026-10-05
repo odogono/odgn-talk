@@ -645,6 +645,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | The `code point` chunk | `code point 1 of s`, `code points 2..3 of s` | Characters |
 | The `code points` property | `the code points of s` | Characters |
 | `lazily` | after a Text Pattern element, e.g. `text lazily` | a narrower element |
+| A computed message name | `send (e) with a to r`, e.g. `send (next) with order to me` | a `match` or `if` that picks between `send`s that name their message |
 
 <!-- end -->
 

@@ -182,7 +182,8 @@ export type Stmt =
   | {
       args: Expr[];
       k: 'send';
-      message: string;
+      /** The message name, or for `send (e)` the expression that computes it. */
+      message: string | Expr;
       pos: Pos;
       target: Expr;
       wait: boolean;
@@ -442,10 +443,14 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       const targetFirst = toAt === 1;
       const nameAt = targetFirst ? 4 : 1;
       const listAt = nodeAt(nameAt + 1, 'ExpressionList');
+      // `send (e) …`: the bracketed expression computes the name (ADR 0057).
+      const computed = isToken(children[1], '(');
       return {
         k: 'send',
         pos: at,
-        message: of<SemanticName>(children[nameAt]).text,
+        message: computed
+          ? of<Expr>(children[2])
+          : of<SemanticName>(children[nameAt]).text,
         args: targetFirst
           ? listAt >= 0
             ? of<Expr[]>(children[listAt])

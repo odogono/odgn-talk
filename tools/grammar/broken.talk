@@ -500,6 +500,16 @@ end t
 on t
   send to board move knight to "e4"
 end t
+-- case: a computed message name has no target-first form (ADR 0057)
+-- expect: unexpected token at 2:15
+on t
+  send to me: (next) order
+end t
+-- case: a computed message name must be closed before `with`
+-- expect: unexpected token at 2:14
+on t
+  send (next with order to me
+end t
 -- case: `in` is still `put`'s preposition, never a label
 -- expect: unexpected token at 2:14
 on t

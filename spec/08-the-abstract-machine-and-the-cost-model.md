@@ -315,6 +315,8 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `tell` | `grant`, `operation`, `count` | count | 0 | Calls a fire-and-forget Operation | `wrong kind`, `capability revoked`, `host error`, `capability disabled` |
 | `send` | `message`, `count` | count + 1 | 0 | Pops the receiver and `count` arguments, and puts the message in the receiver's mailbox | `mailbox full`, `object gone`, `wrong kind` |
 | `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
+| `send-named` | `count` | count + 2 | 0 | Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
+| `send-named-wait` (suspends) | `count` | count + 2 | 1 | Sends as `send-named` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
 | `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full` |
 | `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open` |
 | `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind`, `scope open` |
@@ -323,6 +325,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `join-start` |  | 0 | 0 | Starts a Join | `scope open` |
 | `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled` |
 | `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind` |
+| `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
 | `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
 | `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
 | `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path |  |
@@ -511,6 +514,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `tell g to op a, …` | ⟦a⟧ … `tell` |
 | `say e` | ⟦e⟧ `tell console write 1` |
 | `send m with a, … to r` | ⟦a⟧ … ⟦r⟧ `send`, or `send-wait` `store 0`, or `join-send` in a Join |
+| `send (e) with a, … to r` | ⟦e⟧ ⟦a⟧ … ⟦r⟧ `send-named`, or `send-named-wait` `store 0`, or `join-send-named` in a Join |
 | `wait d` | ⟦d⟧ `wait` |
 | `wait for …` | [below](#waiting) |
 | `wait for all … end wait` | `join-start`, the body, `join-end` `store 0` |
@@ -743,7 +747,7 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 ### Charging
 
 - **At the instruction:** each instruction is charged its key's Fuel formula and its allocation formula, together, when it runs, with every measure taken from the values it works on. If either takes the Run past its limit, the Run has a Limit Fault at that instruction, before it does anything ([chapter 6](06-errors-and-limits.md#limit-faults)).
-- **Its own limit first:** an instruction that has a limit of its own checks it before its charge: a call checks the call depth, `make-pattern` the Text Pattern size, and `join-ask` and `join-send` `MaxJoin`. One that passes it faults on that limit, and is never charged. So `make-pattern` compiles its program and measures it, and is charged by its size only when it fits.
+- **Its own limit first:** an instruction that has a limit of its own checks it before its charge: a call checks the call depth, `make-pattern` the Text Pattern size, and `join-ask`, `join-send` and `join-send-named` `MaxJoin`. One that passes it faults on that limit, and is never charged. So `make-pattern` compiles its program and measures it, and is charged by its size only when it fits.
 - **Run-ending state check:** a `return` that ends the Run, `pass` and `veto` check Persistent State before their own Fuel and allocation, excluding the ending Run's frames. A breach faults at that instruction without its charge. Calls returning to a caller do not end the Run. Suspension still charges its instruction and any Host effect before measuring the state it retains.
 - **Fuel next:** Fuel is checked before allocation, so a Run past both faults on Fuel.
 - **A foreign Function Value call** uses `call-value-wait`'s `call` key (8 Fuel, no allocation), not the `send` key. Its receiver starts a Run with one frame and no Handler Clause, so dispatch charges no `clause`. The mailbox message's contents include the Function Value (including its captures) and supplied arguments. The caller's depth does not grow; subsequent calls in the receiver count toward its own call depth limit.

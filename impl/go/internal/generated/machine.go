@@ -1744,6 +1744,45 @@ var Machine = MachineTable{
 			},
 		},
 		MachineTableInstructionEntry{
+			Name:  "send-named",
+			Group: "effects",
+			Operands: []string{
+				"count",
+			},
+			Pops:     "count + 2",
+			Pushes:   0,
+			Suspends: false,
+			Cost:     "send",
+			Does:     "Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does",
+			Errors: []string{
+				"bad message name",
+				"mailbox full",
+				"object gone",
+				"wrong kind",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:  "send-named-wait",
+			Group: "effects",
+			Operands: []string{
+				"count",
+			},
+			Pops:     "count + 2",
+			Pushes:   1,
+			Suspends: true,
+			Cost:     "send",
+			Does:     "Sends as `send-named` does, then suspends until the reply",
+			Errors: []string{
+				"bad message name",
+				"mailbox full",
+				"object gone",
+				"wrong kind",
+				"send failed",
+				"timeout",
+				"scope open",
+			},
+		},
+		MachineTableInstructionEntry{
 			Name:  "send-up",
 			Group: "effects",
 			Operands: []string{
@@ -1869,6 +1908,24 @@ var Machine = MachineTable{
 			Cost:     "send",
 			Does:     "Starts a `send … and wait` as a Join Member",
 			Errors: []string{
+				"mailbox full",
+				"object gone",
+				"wrong kind",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:  "join-send-named",
+			Group: "effects",
+			Operands: []string{
+				"count",
+			},
+			Pops:     "count + 2",
+			Pushes:   0,
+			Suspends: false,
+			Cost:     "send",
+			Does:     "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does",
+			Errors: []string{
+				"bad message name",
 				"mailbox full",
 				"object gone",
 				"wrong kind",

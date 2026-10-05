@@ -1,0 +1,7 @@
+-- sink.talk: loaded with a mailbox depth of 1.
+
+script variable got = []
+
+on note x
+  put x after got
+end note

@@ -472,6 +472,11 @@ construct = "`lazily`"
 written = "after a Text Pattern element, e.g. `text lazily`"
 beginner = "a narrower element"
 
+[[advanced]]
+construct = "A computed message name"
+written = "`send (e) with a to r`, e.g. `send (next) with order to me`"
+beginner = "a `match` or `if` that picks between `send`s that name their message"
+
 [[syntax_error]]
 code = "bad character"
 raised_when = "A character outside a text literal or comment starts no token"

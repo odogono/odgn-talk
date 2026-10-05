@@ -1,0 +1,13 @@
+-- b.talk: the receiver in the names case.
+
+script variable seen = []
+
+on note x
+  put x after seen
+  return "noted " & x
+end note
+
+on move piece to square
+  put [piece, square] after seen
+  return piece & "@" & square
+end move

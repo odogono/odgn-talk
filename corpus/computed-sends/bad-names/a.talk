@@ -1,0 +1,63 @@
+-- a.talk: fills sink's mailbox, then sends bad names to sink and to
+-- `ghost`, a Script the Group doesn't hold. A Script isn't a value, so
+-- each receiver has a Handler of its own. Each error is kept whole.
+
+script variable seen = []
+
+on go
+  send note with 1 to sink
+  toSink 42, 1
+  toSeven 42, 1
+  toGhost "all", 1
+  toSink "all", 1
+  toSink "send", 1
+  toGhost "with", 1
+  toSink "not a name", 1
+  toSink "", 1
+  toSink "move:to:", 1
+  toGhost "move:", 1
+  toSink "move:in:", 2
+  toSink "move:to", 2
+  toGhost "note", 1
+  toSink "note", 1
+  try
+    send ("all") with 1 to ghost and wait
+  catch e
+    put e after seen
+  end try
+  try
+    wait for all
+      send (["note"]) with 1 to sink and wait
+    end wait
+  catch e
+    put e after seen
+  end try
+end go
+
+on toSink name, n
+  try
+    if n = 1 then
+      send (name) with "x" to sink
+    else
+      send (name) with "x", "y" to sink
+    end if
+  catch e
+    put e after seen
+  end try
+end toSink
+
+on toGhost name, n
+  try
+    send (name) with "x" to ghost
+  catch e
+    put e after seen
+  end try
+end toGhost
+
+on toSeven name, n
+  try
+    send (name) with "x" to 7
+  catch e
+    put e after seen
+  end try
+end toSeven

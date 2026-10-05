@@ -1,0 +1,18 @@
+-- a.talk: the sender in the names case. Each name is computed text.
+
+script variable seen = []
+
+on go
+  put "note" into plain
+  send (plain) with "sent" to b
+  send (plain) with "waited" to b and wait
+  put it after seen
+  send ("move:" & "to:") with "knight", "e4" to b
+  send ("move:to:") with "rook", "a1" to b and wait
+  put it after seen
+  wait for all
+    send (plain) with "joined" to b and wait
+    send ("move:to:") with "pawn", "e5" to b and wait
+  end wait
+  put it after seen
+end go

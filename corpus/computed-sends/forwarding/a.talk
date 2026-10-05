@@ -1,0 +1,19 @@
+-- a.talk: waits for either message, then forwards it to b by its name.
+
+script variable seen = []
+
+on relay
+  wait for
+    when note x then put x into arg
+    when move p to sq then put [p, sq] into arg
+  end wait
+  put the name of it into forwarded
+  send (forwarded) with arg to b and wait
+  put [forwarded, it] after seen
+end relay
+
+on relay2
+  wait for move p to sq or 1 s
+  send (the name of it) with p, sq to b and wait
+  put it after seen
+end relay2

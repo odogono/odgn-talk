@@ -417,17 +417,28 @@ func (p *parser) statement(inline bool) *Node {
 			p.andWait(n)
 			break
 		}
-		name := p.name()
-		if name.Raw == "all" {
-			p.fail(name)
+		// `send (<name>) with …`: a computed message name, kept after the
+		// receiver in Params. `(` can't start a Name, so one token decides
+		// (ADR 0057).
+		var computed *Node
+		if p.atOperand("(") {
+			computed = p.primary()
+		} else {
+			name := p.name()
+			if name.Raw == "all" {
+				p.fail(name)
+			}
+			n.Text = name.Raw
+			n.NameToken = name
 		}
-		n.Text = name.Raw
-		n.NameToken = name
 		if p.accept("with") {
 			n.Children = p.expressionList()
 		}
 		p.expect("to")
 		n.Params = []*Node{p.expression()}
+		if computed != nil {
+			n.Params = append(n.Params, computed)
+		}
 		p.andWait(n)
 	case "ask", "tell":
 		n.Params = []*Node{p.expression()}

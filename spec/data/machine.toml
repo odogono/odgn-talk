@@ -1357,6 +1357,28 @@ errors = ["mailbox full", "object gone", "wrong kind", "send failed", "timeout",
 does = "Sends as `send` does, then suspends until the reply"
 
 [[instruction]]
+name = "send-named"
+group = "effects"
+operands = ["count"]
+pops = "count + 2"
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind"]
+does = "Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does"
+
+[[instruction]]
+name = "send-named-wait"
+group = "effects"
+operands = ["count"]
+pops = "count + 2"
+pushes = 1
+suspends = true
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "send failed", "timeout", "scope open"]
+does = "Sends as `send-named` does, then suspends until the reply"
+
+[[instruction]]
 name = "send-up"
 group = "effects"
 operands = ["message", "count"]
@@ -1443,6 +1465,17 @@ suspends = false
 cost = "send"
 errors = ["mailbox full", "object gone", "wrong kind"]
 does = "Starts a `send … and wait` as a Join Member"
+
+[[instruction]]
+name = "join-send-named"
+group = "effects"
+operands = ["count"]
+pops = "count + 2"
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind"]
+does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does"
 
 [[instruction]]
 name = "join-end"
