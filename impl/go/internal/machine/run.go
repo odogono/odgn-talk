@@ -267,9 +267,9 @@ type SendFunc func(to, message string, args []value.Value, wait bool) bool
 // charge succeeds, before effects commit. Both callbacks belong to this turn;
 // faults, preemption and cleanup cannot retain them in Run state.
 func (r *Run) ExecuteSelected(slice int64, paid func(), send SendFunc) {
-	r.ExecuteHosted(slice, paid, send, nil)
+	r.ExecuteHosted(slice, paid, send, nil, nil)
 }
-func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation OperationFunc, boundary ...func()) {
+func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation OperationFunc, property PropertyFunc, boundary ...func()) {
 	if r.Status != Running && r.Status != Preempted {
 		return
 	}
@@ -287,7 +287,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || deferredObjectProperty(f, i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
+		if !Supported(i) || r.foreignWaitCall(f, i) || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send") && (send == nil || f.Stack[len(f.Stack)-1].Kind == value.Object) {
 			r.Status = Blocked
 			break
 		}
@@ -295,19 +295,26 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.Status = Dispatching
 			break
 		}
-		if i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
+		prop := propertyRequest(f, i)
+		if prop != nil || i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
 			if i.Name == "join-ask" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
 				r.fault("join")
 				break
 			}
-			if operation == nil {
+			if prop != nil && (property == nil || inGuard(f)) || prop == nil && operation == nil {
 				r.Status = Blocked
 				break
 			}
-			n := i.Operands()[2].Index
-			args := slices.Clone(f.Stack[len(f.Stack)-n:])
+			n := 0
+			var args []value.Value
+			if prop != nil {
+				n = prop.pops
+			} else {
+				n = i.Operands()[2].Index
+				args = slices.Clone(f.Stack[len(f.Stack)-n:])
+			}
 			wasCancelling := r.Cancelling
-			result, err, blocked := operation(i.Operands()[0].Text, i.Operands()[1].Text, args, func(fuel, alloc int64) bool {
+			pay := func(fuel, alloc int64) bool {
 				if f.Clause {
 					fuel += 4
 				}
@@ -321,7 +328,15 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 					notify()
 				}
 				return true
-			})
+			}
+			var result value.Value
+			var err *value.Value
+			blocked := false
+			if prop != nil {
+				result, err = property(prop.object, prop.name, prop.set, prop.input, pay)
+			} else {
+				result, err, blocked = operation(i.Operands()[0].Text, i.Operands()[1].Text, args, pay)
+			}
 			if len(boundary) > 0 {
 				boundary[0]()
 			}
@@ -339,7 +354,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 				r.raise(*err)
 			} else {
 				f.Stack = f.Stack[:len(f.Stack)-n]
-				if i.Name == "ask" {
+				if i.Name == "ask" || prop != nil && !prop.set {
 					f.Stack = append(f.Stack, result)
 				}
 				f.PC++

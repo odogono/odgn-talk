@@ -7,8 +7,10 @@ import (
 
 const DuplicateObjectID HostErrorCode = "duplicate object id"
 
-// Prop declares a Host property and its costs. Property execution is deferred;
-// registered handles currently support Core-held identity and disposal only.
+// Prop declares a Host property. Get and Set run inside Pump, after the
+// instruction and declared cost are paid. Results and failures are validated
+// and their conversion charged. Set nil makes a property read-only at runtime;
+// declaration-aware read-only Load checks remain tracked in #305.
 type Prop struct {
 	Name    string
 	Shape   Shape

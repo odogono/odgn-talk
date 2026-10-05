@@ -342,6 +342,8 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					return ok
 				}, func(grant, op string, args []corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value, bool) {
 					return g.operation(s, x, grant, op, args, pay, &result.Reports)
+				}, func(object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool) (corevalue.Value, *corevalue.Value) {
+					return g.property(s, x, object, name, set, input, pay, &result.Reports)
 				}, func() { g.landCancelRuns() })
 				if r.Status != machine.Dispatching {
 					break

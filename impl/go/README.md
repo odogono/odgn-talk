@@ -130,8 +130,9 @@ also check `veto` and `pass` reachability before suspension. Imported Handlers
 carry their suspension requirement into the caller. Library restrictions reject
 Script state and message facilities, including unresolved commands that would
 climb a Message Path. Library `wait for`, including Joins, is rejected.
-Host Object property Shapes remain part of
-[#134](https://github.com/odogono/odgn-talk/issues/134).
+Host Object property Shapes are checked at runtime. Declaration-aware read-only
+Load and Reload checks remain tracked in
+[#305](https://github.com/odogono/odgn-talk/issues/305).
 
 ## Libraries and Standard Library
 
@@ -187,7 +188,7 @@ and resolves Object tags through its resolver. Plain JSON refuses non-JSON
 kinds with `not encodable`, including `kind` and the first depth-first `path`.
 Function Values have Home identity, capture equality and accessors, and are
 refused by storage encoding. Group-scoped Host Objects can be registered and
-resolved by the Host; parent relationships and property execution remain part
+resolved by the Host; parent relationships and Message Path routing remain part
 of #134.
 
 Quantity comparison retains sequentially rounded Base Unit magnitudes beyond
@@ -221,7 +222,8 @@ under its separate Cleanup Budget. Execution tests cover each chapter area and
 pin the text-model fixtures' Fuel, allocation, positions and final variables.
 
 Object Message Path `send` instructions, foreign Function Value calls with
-`and wait`, imported calls and Object properties stop at a
+`and wait`, imported calls and standalone Object property calls without a Host
+adapter stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
@@ -336,8 +338,7 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Host Object property execution, Message Paths, Capability Scopes and
-Segment-bound effects remain part of #134. Definitions that request Scopes or
+Message Paths, Capability Scopes and Segment-bound effects remain part of #134. Definitions that request Scopes or
 Segment-bound behavior are refused. Ordinary calls have no scope, are not
 automatic. Immediate and fire-and-forget calls carry a background Context.
 
@@ -430,7 +431,7 @@ separators/signs, ten nonempty digit texts and positive integer grouping fields.
 Invalid results and every Host failure become `host error`. All eight costs are
 required and copied; the implementation must be non-nil.
 
-### Host Object handles and disposal
+### Host Object handles, properties and disposal
 
 `Core.DefineObjectKind(ObjectKindDef)` validates and copies a reusable declaration,
 including property Shapes, callbacks and safe costs. `Group.Object(kind, id,
@@ -448,10 +449,30 @@ changes only lifecycle state: identity, equality, id, kind and Value Encoding
 remain available. Atomic lifecycle state permits concurrent metadata reads.
 Every accepted disposal input notifies `OnReady` after releasing the queue lock.
 
-Property callbacks and Shapes are declarations only in this subset. Reads of
-non-id Object keys stop at the implementation boundary before an instruction
-charge; property writes, Owning Scripts, `SetParent` and Message Path routing
-remain part of #134.
+`the k of o`, quoted and computed keys invoke a declared property's `Get`;
+`set` invokes `Set` after checking the input Shape. A missing key reads Nothing;
+a missing or read-only setter raises `read only`. A Shape mismatch precedes the
+Host call and its charges. Instruction Fuel and declared Fuel/allocation are
+paid atomically before the callback. Get results and custom failure Data are
+validated for Shape or error-contract compliance and Group ownership, then
+charged for conversion. Panics, invalid results and malformed failures raise
+`host error` with the Object Kind and property names; Host detail stays in a
+`CallFailed` report with an empty Call id, since properties have no call id.
+Each actual call writes a `prop` record before later raises or cancellation.
+Host effects survive later conversion faults or Script Segment rollback.
+
+Disposed handles reject every non-id key read, including missing keys, and
+every property write with `object gone`. Identity inspection remains available.
+Property callbacks may queue ordinary Host inputs; these wait for the next
+Pump, while `CancelRun` may land at the crossing and run finally cleanup.
+
+Direct non-id reads on well-known Object names in Guards are rejected at Load.
+A dynamically supplied Object's non-id Guard read stops before the instruction
+charge and never calls the Host; complete declaration-aware Load/Reload and
+Guard acceptance is tracked in [#305](https://github.com/odogono/odgn-talk/issues/305).
+Well-known read-only writes currently raise `read only` at runtime; the Spec's
+load-time refusal is part of that issue. Owning Scripts, `SetParent` and Message
+Path routing remain part of #134.
 
 ### Scheduling and suspension
 
@@ -626,7 +647,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 177 cases, including all text-model, load-diagnostic,
+The gate contains 178 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
@@ -725,3 +746,8 @@ through public Object registration, well-known bindings and queued disposal.
 A required-case acceptance test protects kind inspection for all Value kinds,
 identity and Guard behavior across Object kinds that share an id and after
 disposal, including exact Fuel, allocation and persistent state.
+
+The reviewed `objects/properties` trace also passes unchanged, including Get/Set
+ordering, declared and conversion costs, read-only and Shape errors, missing
+keys and disposal. A required-case acceptance test protects it in the gate.
+The fixture's known read-only write is included in the load-check gap in #305.
