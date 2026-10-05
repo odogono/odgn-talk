@@ -343,6 +343,15 @@ The reviewed `functions/foreign-calls` and full `functions/host-calls` cases pas
 unchanged, including Stop and stale Host calls. Full Go save/restore of
 pending Function calls remains part of #136.
 
+The Corpus runner reuses the latest Function handle received with a given
+Display Form in Capability arguments, property writes, Run results and errors,
+unhandled-message reports and inspection values, including nested Lists and
+Maps. Host calls, message arguments, Capability Stub results and errors, and pending-call answers and
+failures share that binding. Unknown Function handles are refused; declared
+Objects reuse their registered handles. The reviewed
+`functions/capability-callbacks` case passes unchanged and is required in the
+Go passing gate.
+
 ### Ordinary Capability Operations
 
 `Core.DefineCapability` copies Operation declarations and validates their modes,
@@ -800,7 +809,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 209 cases, including all text-model, load-diagnostic,
+The gate contains 210 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

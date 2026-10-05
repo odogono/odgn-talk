@@ -10,7 +10,7 @@ import (
 type objectRef struct{ kind, id string }
 type objectReplay map[objectRef]*talk.Object
 
-func setupObjects(core *talk.Core, group *talk.Group, setup Setup) (objectReplay, error) {
+func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *replayValues) (objectReplay, error) {
 	kinds := map[string]*talk.ObjectKind{}
 	rows, _ := setup["objectKinds"].([]any)
 	for _, raw := range rows {
@@ -34,7 +34,11 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup) (objectReplay
 			name := p["name"].(string)
 			prop := talk.Prop{Name: name, Shape: shape, Get: func(o *talk.Object) (talk.Value, error) { return o.Native().(map[string]talk.Value)[name], nil }}
 			if p["readOnly"] != true {
-				prop.Set = func(o *talk.Object, v talk.Value) error { o.Native().(map[string]talk.Value)[name] = v; return nil }
+				prop.Set = func(o *talk.Object, v talk.Value) error {
+					values.receive(v)
+					o.Native().(map[string]talk.Value)[name] = v
+					return nil
+				}
 			}
 			for key, target := range map[string]*talk.Cost{"getCost": &prop.GetCost, "setCost": &prop.SetCost} {
 				cost, _ := p[key].(Setup)
@@ -50,6 +54,7 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup) (objectReplay
 		kinds[def.Name] = kind
 	}
 	objects := objectReplay{}
+	values.objects = objects
 	rows, _ = setup["objects"].([]any)
 	for _, raw := range rows {
 		row := raw.(Setup)
