@@ -521,9 +521,22 @@ type Limits struct {
 // LoadOptions.Limits take these values.
 func DefaultLimits() Limits
 
+// LimitOverrideFields marks explicitly supplied fields, including zero values.
+// Nonzero fields are always supplied, preserving the numeric-only API.
+type LimitOverrideFields uint8
+
+const (
+	OverrideFuelPerRun LimitOverrideFields = 1 << iota
+	OverrideAllocPerRun
+	OverrideMaxWait
+	OverrideMaxJoin
+)
+
 // LimitOverride tightens a Script's per-Run limits for one Delivery. A field
-// that would loosen a limit is "invalid value". Zero fields don't override.
+// that would loosen a limit is "invalid value". Zero fields do not override
+// unless marked in Set.
 type LimitOverride struct {
+	Set         LimitOverrideFields // zero numeric fields override only when marked here
 	FuelPerRun  int64
 	AllocPerRun int64
 	MaxWait     time.Duration // whole milliseconds

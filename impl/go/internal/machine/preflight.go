@@ -22,11 +22,11 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 			r.fault("fuel")
 			return false
 		}
-		if !r.Cancelling && r.Limits.Fuel > 0 && fuel > r.Limits.Fuel-r.Fuel {
+		if !r.Cancelling && (r.Limits.Fuel > 0 || r.Limits.Bounded) && fuel > r.Limits.Fuel-r.Fuel {
 			r.fault("fuel")
 			return false
 		}
-		if r.Limits.Alloc > 0 && alloc > r.Limits.Alloc-r.Alloc {
+		if (r.Limits.Alloc > 0 || r.Limits.Bounded) && alloc > r.Limits.Alloc-r.Alloc {
 			r.fault("alloc")
 			return false
 		}

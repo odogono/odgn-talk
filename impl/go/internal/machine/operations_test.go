@@ -233,7 +233,7 @@ func TestBytesPropertyRejectsUnaffordableConstructionBeforeEvaluation(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, limit := range []Limits{{Fuel: 100, Alloc: 1000000}, {Fuel: 1000000, Alloc: 100}} {
+	for _, limit := range []Limits{{Fuel: 100, Alloc: 1000000}, {Fuel: 1000000, Alloc: 100}, {Bounded: true, Fuel: 0, Alloc: 1000000}, {Bounded: true, Fuel: 1000000, Alloc: 0}} {
 		r := Start(s, 1, []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}, limit)
 		f := &r.Frames[0]
 		f.Stack = []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}
@@ -257,5 +257,12 @@ func TestFoldedMapComparisonChargesAllMatchedEntries(t *testing.T) {
 	b, _ := value.NewMap(right)
 	if !equal(a, b, true) || compared(a, b, true) != 17 {
 		t.Fatalf("equal=%v scanned=%d", equal(a, b, true), compared(a, b, true))
+	}
+}
+
+func TestZeroFuelHostChargeIsRefusedBeforeFaulting(t *testing.T) {
+	r := &Run{Limits: Limits{Bounded: true, Fuel: 0, Alloc: 100}}
+	if r.ChargeHost(1) || r.Status == Faulted || r.Fuel != 0 {
+		t.Fatalf("charge=%d status=%v", r.Fuel, r.Status)
 	}
 }

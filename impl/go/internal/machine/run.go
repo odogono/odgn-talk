@@ -31,6 +31,8 @@ const (
 )
 
 type Limits struct {
+	Bounded bool // embedding profiles specify Fuel, Alloc and Join, even at zero
+
 	Fuel, Alloc, Persistent int64
 	Depth, Pattern, Join    int
 }
@@ -252,11 +254,11 @@ func (r *Run) pay(fuel, alloc int64) bool {
 		r.fault("fuel")
 		return false
 	}
-	if !r.Cancelling && r.Limits.Fuel > 0 && fuel > r.Limits.Fuel-r.Fuel {
+	if !r.Cancelling && (r.Limits.Fuel > 0 || r.Limits.Bounded) && fuel > r.Limits.Fuel-r.Fuel {
 		r.fault("fuel")
 		return false
 	}
-	if r.Limits.Alloc > 0 && alloc > r.Limits.Alloc-r.Alloc {
+	if (r.Limits.Alloc > 0 || r.Limits.Bounded) && alloc > r.Limits.Alloc-r.Alloc {
 		r.fault("alloc")
 		return false
 	}
@@ -321,7 +323,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			prop = nil // ordinary key evaluation raises wrong kind without a Host call
 		}
 		if prop != nil || i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
-			if i.Name == "join-ask" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
+			if i.Name == "join-ask" && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 				r.fault("join")
 				break
 			}
@@ -398,7 +400,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if i.Name == "join-send" && r.Limits.Join > 0 && len(r.Join.Members) >= r.Limits.Join {
+		if i.Name == "join-send" && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 			r.fault("join")
 			break
 		}
@@ -534,7 +536,7 @@ func (r *Run) Resume() {
 func (r *Run) AcceptClause(dispatchOnly bool) bool {
 	f := &r.Frames[0]
 	if f.Clause {
-		if r.Limits.Fuel > 0 && 4 > r.Limits.Fuel-r.Fuel {
+		if (r.Limits.Fuel > 0 || r.Limits.Bounded) && 4 > r.Limits.Fuel-r.Fuel {
 			r.fault("fuel")
 			return false
 		}

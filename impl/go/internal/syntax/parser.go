@@ -117,7 +117,9 @@ func (p *parser) take(mode Mode) Token {
 	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be"}, token.Raw)
 	return token
 }
-func (p *parser) fail(t Token) { panic(&Error{Code: "unexpected token", Pos: t.Pos}) }
+func (p *parser) fail(t Token) {
+	panic(&Error{Code: "unexpected token", Pos: t.Pos, Incomplete: t.Kind == EOF})
+}
 func (p *parser) expect(s string) Token {
 	t := p.peek(Operator)
 	if spelling(t) != s {

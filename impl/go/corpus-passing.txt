@@ -213,6 +213,16 @@ save-restore/unbound-grant-and-unresolved-object
 save-restore/unsettled-call-is-lost
 save-restore/variables-only-restore
 save-restore/withheld-library
+sessions/basics
+sessions/cancel
+sessions/export-and-library
+sessions/fenced-text
+sessions/inspection
+sessions/mocks
+sessions/real-clock
+sessions/refusals
+sessions/save-restore
+sessions/virtual-clock
 stdlib/calls
 stdlib/errors-name-the-call
 stdlib/template-migration

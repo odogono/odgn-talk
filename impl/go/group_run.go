@@ -24,17 +24,17 @@ func (s *Script) start(d delivery) {
 	}
 	fuel, alloc, width := s.limits.FuelPerRun, s.limits.AllocPerRun, s.limits.MaxJoin
 	if o := d.message.Limits; o != nil {
-		if o.MaxJoin > 0 {
+		if o.MaxJoin > 0 || o.Set&OverrideMaxJoin != 0 {
 			width = min(width, o.MaxJoin)
 		}
-		if o.FuelPerRun > 0 {
+		if o.FuelPerRun > 0 || o.Set&OverrideFuelPerRun != 0 {
 			fuel = min(fuel, o.FuelPerRun)
 		}
-		if o.AllocPerRun > 0 {
+		if o.AllocPerRun > 0 || o.Set&OverrideAllocPerRun != 0 {
 			alloc = min(alloc, o.AllocPerRun)
 		}
 	}
-	limits := machine.Limits{Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width}
+	limits := machine.Limits{Bounded: true, Fuel: fuel, Alloc: alloc, Persistent: s.limits.PersistentState, Depth: s.limits.CallDepth, Pattern: s.limits.PatternSize, Join: width}
 	var r *machine.Run
 	if d.function != nil {
 		r = machine.StartFunction(s.state, *d.function, args, limits)
@@ -935,7 +935,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, report
 		report.Limit = r.Limit
 	}
 	if outcome == Errored || outcome == LimitFault {
-		report.At = Location{Unit: r.CurrentCode().Unit.Name, Handler: x.handler, Line: r.At.Pos.Line, Col: r.At.Pos.Column, PC: r.PC}
+		report.At = Location{Unit: r.CodeName(), Handler: x.handler, Line: r.At.Pos.Line, Col: r.At.Pos.Column, PC: r.PC}
 		if outcome == LimitFault && len(r.Frames) > 0 {
 			report.At.Handler = r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked.Name
 		}

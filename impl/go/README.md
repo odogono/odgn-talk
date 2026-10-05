@@ -3,8 +3,9 @@
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
 package `northtalk`. It provides immutable values, decimal arithmetic, pinned
 Unicode text, a front end and standalone Abstract Machine execution. Its Group
-embedding subset loads Scripts, accepts Deliveries and Requests, pumps Runs and
-emits canonical Trace records. The Spec, Data Files and Conformance Corpus are
+embedding interface loads Scripts, accepts Deliveries and Requests, pumps Runs and
+emits canonical Trace records. The Session Host provides Entries, Session
+Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and Conformance Corpus are
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
@@ -22,6 +23,7 @@ the authority; the TS Core is not a reference
 | Save, restore and code updates | [snapshot DTOs](save.go), [rehydration](restore.go), [settlements](settle.go), [Extend](script_extend.go), [replacement](library_replace.go) | [save and restore](../../spec/10-save-and-restore.md), [Fingerprint](../../spec/09-embedding.md#the-pump-and-the-group-fingerprint) | [snapshot tests](save_test.go), [extension tests](extend_test.go), [save/restore cases](../../corpus/save-restore/) |
 | Text Patterns | [lowering](internal/lower/pattern.go), [values](internal/value/pattern.go), [Pike VM](internal/machine/pattern.go) | [Text Pattern programs](../../spec/08-the-abstract-machine-and-the-cost-model.md#text-pattern-programs) | [public acceptance](pattern_test.go), [VM tests](internal/machine/pattern_test.go), [pattern cases](../../corpus/text-patterns/) |
 | Generated tables | [Go generator](../../tools/go/generate.ts), [Unicode generator](../../tools/unicode/generate.ts), [syntax generator](../../tools/syntax/generate.ts) → [tables](internal/generated/) | [Data Files](../../spec/README.md#data-files) | [generator tests](../../tools/go/generate.test.ts), [Unicode tests](internal/unicode/unicode_test.go) |
+| Sessions, REPL and Transcripts | [Host](session/), [drivers](driver/), [CLI](cmd/northtalk/) | [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md) | [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/) |
 | Corpus selection and parity | [CLI](cmd/corpus/main.go), [runner](internal/corpus/runner.go), [passing gate](corpus-passing.txt) | [corpus commands and blessing](../../corpus/README.md#checking), [conformance](../../spec/11-the-trace-and-conformance.md) | [runner tests](internal/corpus/corpus_test.go), [execution backends](internal/corpus/execution_test.go) |
 
 The feature sections below describe the supported subset and its limits. Follow Spec links for rules and the [ADR index](../../docs/adr/README.md) for rationale. The TS Core is a parity peer; root `tools/grammar/` and `tools/machine/` are Spec-checking prototypes. Update generated files through their generators.
@@ -56,14 +58,18 @@ The feature sections below describe the supported subset and its limits. Follow 
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
   Core's non-parity error wording from Trace values, including nested errors,
   while preserving Script and Host data named `message`.
-- `internal/corpus/` reads setups and runs encoding, disassembly and Trace
-  backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
+- `session/` owns Entries, implicit Script Variables, atomic redefinitions,
+  foreground/background Runs and Session Commands. It consumes Trace records
+  to present output; inspection occurs only for explicit inspection commands.
+- `driver/` owns Transcript parsing, recording/replay and terminal interaction;
+  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C.
+- `internal/corpus/` reads setups and runs encoding, disassembly, Trace and
+  Session Transcript backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
 
-The module has no third-party requirements and no `go.work`. Session tooling
-belongs to [#137](https://github.com/odogono/odgn-talk/issues/137); the planned
+The module has no third-party requirements and no `go.work`. Its Core,
 `session/`, `driver/` and `cmd/northtalk/` boundaries follow
 [ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md).
 
@@ -99,6 +105,51 @@ bun run check
 
 Emitters read Spec Data Files, normative Standard Library source and pinned UCD sources, import no TS Core code and
 use `gofmt`. Their `--check` modes refuse missing or stale output without writing.
+
+## REPL and Session Transcripts
+
+From `impl/go/`, run the Go REPL or record/replay a Transcript:
+
+```sh
+go run ./cmd/northtalk
+go run ./cmd/northtalk -transcript session.transcript -trace case.trace
+go run ./cmd/northtalk -replay ../../corpus/sessions/save-restore/session.transcript
+go run ./cmd/corpus sessions/save-restore
+```
+
+Enter one declaration, statement or expression. Incomplete Entries continue at
+`|`; expressions print their value. `say` calls `console.write`. Foreground
+Runs wait for their console input or real-clock deadline; other suspended Runs
+produce background lines when later resumed. Ctrl-C cancels the foreground Run
+or drops an unfinished Entry. Ctrl-D and `:quit` exit; `:help` lists Commands.
+Prompts, line editing and Ctrl-C presentation are outside Transcript parity.
+
+The Host supports `:grant`, `:mock`, `:stub`, `:answer`, `:fail`, `:clock`,
+`:limits`, `:cancel`, `:runs`, `:mailbox`, `:vars`, `:save`, `:restore`,
+`:library` and `:export`, as specified in
+[chapter 12](../../spec/12-sessions-and-tooling.md). Configure Grants and mock
+Operations before the first Entry. `:clock virtual 2026-09-30T10:00:00Z` makes
+later Pumps deterministic; `:clock advance 1 s` resumes due Runs. Saves retain
+Host stubs, limits and virtual-clock state along with the Group and adopt its
+pending calls on restore. Declaration and Library replacements are atomic;
+failed replacements keep the previous code and variables.
+
+`session.New(Environment{...})` embeds the Host without terminal or filesystem
+access. `Now` supplies real-clock readings; `Record` receives Transcript Items;
+`Trace` receives canonical Group records; `ReadFile` and `WriteFile` support
+Library loading and export. Call the Host from one goroutine. The supplied
+built-ins are console and clock; other Capabilities can be mocked. The Host
+currently offers no external suspending built-in, so replay refuses `~` answer
+records. The CLI loads `:library add NAME PATH` and exports ordinary Library and
+starter Script files with `:export DIR`.
+
+`driver.RunREPL` serializes Host calls and accepts an optional interrupt channel.
+The caller owns its input reader and must close it to release a blocked read
+when cancelling. `driver.ParseTranscript`, `WriteTranscript` and
+`ReplayTranscript` use the normative UTF-8/LF format. Replay supplies recorded
+real-clock readings and console answers, uses scratch export I/O, and returns
+actual recorded output; the CLI fails if it differs from the original file.
+Help and quit are terminal actions and are not recorded.
 
 ## Front-end and lowering checks
 
@@ -892,14 +943,14 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 259 cases, including all text-model, load-diagnostic,
+The gate contains 269 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
-18 step-5 save/restore, Extend and replacement cases,
-so removing a required case cannot silently
+18 step-5 save/restore, Extend and replacement cases, and all ten Session
+Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
 `Unblessed` headers remain until human review of the first blessing. Four
@@ -953,8 +1004,12 @@ raises before later Host calls. Their `Unblessed` headers await first human revi
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason
 for unsupported facilities. Explicitly selecting an unsupported case fails.
-Transcript execution remains a later step. Save/Restore replay is part of the
-Trace backend. The Go runner has no blessing mode and never changes expected
+Session Transcripts reproduce their existing output and `case.trace` unchanged.
+The original nine first blessings were reviewed under [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419);
+the later `fenced-text` regression retains its first-review header.
+Each emitted Trace also replays independently through the public embedding API,
+both ordinarily and with Save/Restore between Pumps. Save/Restore replay is part
+of the Trace backend. The Go runner has no blessing mode and never changes expected
 Corpus lines.
 
 Six reviewed Library-related cases pass unchanged: `libraries/calls`,

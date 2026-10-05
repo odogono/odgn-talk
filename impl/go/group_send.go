@@ -139,7 +139,7 @@ func (g *Group) abandonSend(x *execution) {
 }
 
 func (x *execution) maxWait() time.Duration {
-	if o := x.delivery.message.Limits; o != nil && o.MaxWait > 0 {
+	if o := x.delivery.message.Limits; o != nil && (o.MaxWait > 0 || o.Set&OverrideMaxWait != 0) {
 		return min(o.MaxWait, x.delivery.script.limits.MaxWait)
 	}
 	return x.delivery.script.limits.MaxWait
