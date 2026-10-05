@@ -1,0 +1,36 @@
+# Unblessed: new computed-name case; first blessing awaits human review.
+# `a` computes each message name. A Name and a Selector are each sent
+# without and with `and wait`, and then as two Join Members. Each `send`
+# record names the message as a static `send` would, and `b`'s Handlers
+# take them by their Selectors.
+> load a identity=d7ea2865c421a45cec7087cfe035a0eb73c9203307e7674a2fb2706d4b045348
+> load b identity=b7a7566778781286105311a26db75db3e7a97a28e9596a123c1b5e68d13e2bc2
+> deliver d1 to=a message=go
+> pump clock=2026-10-05T09:00:00Z
+send a/r1 to=b message=note args=["sent"]
+send a/r1.c1 to=b message=note args=["waited"] wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=56 alloc=106 state=284 end=send-wait
+seg b/r1 start from=a/r1 handler=note clause=1 fuel=21 alloc=54 state=98 end=return
+run b/r1 outcome=completed handler=note value="noted sent" fuel=21 alloc=54
+seg b/r2 start from=a/r1.c1 handler=note clause=1 fuel=21 alloc=58 state=74 end=return
+run b/r2 outcome=completed handler=note value="noted waited" fuel=21 alloc=58
+send a/r1 to=b message=move:to: args=["knight", "e4"]
+send a/r1.c2 to=b message=move:to: args=["rook", "a1"] wait=yes
+seg a/r1 resume fuel=69 alloc=202 state=360 end=send-wait
+seg b/r3 start from=a/r1 handler=move:to: clause=1 fuel=32 alloc=200 state=224 end=return
+run b/r3 outcome=completed handler=move:to: value="knight@e4" fuel=32 alloc=200
+seg b/r4 start from=a/r1.c2 handler=move:to: clause=1 fuel=32 alloc=192 state=232 end=return
+run b/r4 outcome=completed handler=move:to: value="rook@a1" fuel=32 alloc=192
+send a/r1.c3 to=b message=note args=["joined"] wait=join
+send a/r1.c4 to=b message=move:to: args=["pawn", "e5"] wait=join
+seg a/r1 resume fuel=82 alloc=155 state=429 end=join-end
+seg b/r5 start from=a/r1.c3 handler=note clause=1 fuel=21 alloc=58 state=332 end=return
+run b/r5 outcome=completed handler=note value="noted joined" fuel=21 alloc=58
+seg b/r6 start from=a/r1.c4 handler=move:to: clause=1 fuel=32 alloc=192 state=340 end=return
+run b/r6 outcome=completed handler=move:to: value="pawn@e5" fuel=32 alloc=192
+seg a/r1 resume fuel=13 alloc=174 state=174 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=220 alloc=637
+pumped state=idle fuel=379
+> vars
+vars a seen=["noted waited", "rook@a1", ["noted joined", "pawn@e5"]]
+vars b seen=["sent", "waited", ["knight", "e4"], ["rook", "a1"], "joined", ["pawn", "e5"]]

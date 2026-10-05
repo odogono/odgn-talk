@@ -1,0 +1,16 @@
+# forwarding: `send (the name of it)` forwards the message a `wait for` saw,
+# since `it`'s `name` is spelled as a computed name is (ADR 0057).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

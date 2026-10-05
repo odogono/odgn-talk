@@ -310,7 +310,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) && send == nil || r.unrepresentableWait(f, i) || (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") && send == nil {
+		if !Supported(i) || r.foreignWaitCall(f, i) && send == nil || r.unrepresentableWait(f, i) || sends(i.Name) && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -400,7 +400,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if i.Name == "join-send" && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
+		if (i.Name == "join-send" || i.Name == "join-send-named") && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 			r.fault("join")
 			break
 		}
@@ -427,7 +427,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("pattern")
 			break
 		}
-		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
+		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
 			if f.Clause {
 				if !r.pay(4, 0) {
 					break
@@ -464,13 +464,17 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		}
 		f.Clause = false
 		trial.Clause = false
-		if err == nil && (i.Name == "send" || i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up" || i.Name == "send-up-wait") {
+		if err == nil && sends(i.Name) {
 			recipient := Receiver{Up: i.Name == "send-up" || i.Name == "send-up-wait"}
 			if !recipient.Up {
 				recipient.Name = f.ReceiverNames[len(f.Stack)-1]
 				recipient.Object = f.Stack[len(f.Stack)-1]
 			}
-			err = send(recipient, i.Operands()[0].Text, m.Args, i.Name == "send-wait" || i.Name == "join-send" || i.Name == "send-up-wait")
+			message := i.Operands()[0].Text
+			if namedSend(i.Name) {
+				message = f.Stack[len(f.Stack)-len(m.Args)-2].Text
+			}
+			err = send(recipient, message, m.Args, i.Name != "send" && i.Name != "send-named" && i.Name != "send-up")
 		}
 		if err == nil && r.foreignWaitCall(f, i) {
 			n := i.Operands()[0].Index
@@ -838,4 +842,18 @@ func (r *Run) CurrentCode() *State {
 		return r.State
 	}
 	return r.Frames[len(r.Frames)-1].Code
+}
+
+// sends reports whether an instruction puts a message in a mailbox.
+func sends(name string) bool {
+	switch name {
+	case "send", "send-wait", "join-send", "send-up", "send-up-wait":
+		return true
+	}
+	return namedSend(name)
+}
+
+// namedSend reports whether a send pops a computed message name (ADR 0057).
+func namedSend(name string) bool {
+	return name == "send-named" || name == "send-named-wait" || name == "join-send-named"
 }

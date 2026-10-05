@@ -143,6 +143,11 @@ func (u *Unit) statement(n *syntax.Node) {
 			u.store(pos, 0)
 		}
 	case "send":
+		// A computed name is evaluated first, below the arguments (ADR 0057).
+		named := len(n.Params) > 1
+		if named {
+			u.expression(n.Params[1])
+		}
 		for _, arg := range n.Children {
 			u.expression(arg)
 		}
@@ -155,8 +160,13 @@ func (u *Unit) statement(n *syntax.Node) {
 				op = "send-wait"
 			}
 		}
-		u.emit(pos, op, text(n.Text), number(len(n.Children)))
-		if op == "send-wait" {
+		if named {
+			op = map[string]string{"send": "send-named", "send-wait": "send-named-wait", "join-send": "join-send-named"}[op]
+			u.emit(pos, op, number(len(n.Children)))
+		} else {
+			u.emit(pos, op, text(n.Text), number(len(n.Children)))
+		}
+		if op == "send-wait" || op == "send-named-wait" {
 			u.store(pos, 0)
 		}
 	case "wait":

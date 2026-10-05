@@ -1,0 +1,5 @@
+-- b.talk: takes only `note`.
+
+on note x
+  return x
+end note

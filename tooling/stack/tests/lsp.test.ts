@@ -147,6 +147,25 @@ describe('language server', () => {
     const { request } = setup('on demo\n put "2" into x\nend demo');
     expect(request('textDocument/completion', at(1, 7))).toEqual([]);
   });
+  test('treats a computed message name as an expression, with no message completion or definition', () => {
+    const { sent, request } = setup(
+      'on ping\nend ping\non demo next\n send ("ping") with 1 to me\n send (next) to me\nend demo\n',
+    );
+    const diagnostics = (sent.at(-1)!.params as Published).diagnostics;
+    expect(diagnostics.filter(d => d.severity === 1)).toEqual([]);
+    const names = request('textDocument/completion', at(3, 7)) as {
+      kind: number;
+      label: string;
+    }[];
+    expect(names.map(c => c.label)).toContain('next');
+    expect(names.filter(c => c.kind === 3)).toEqual([]);
+    expect(request('textDocument/completion', at(3, 9))).toEqual([]);
+    expect(request('textDocument/definition', at(3, 9))).toBeNull();
+    expect(request('textDocument/definition', at(4, 8)).range.start).toEqual({
+      line: 2,
+      character: 8,
+    });
+  });
   test('hovers evaluated Constants, Function Home Scripts and Operation Declarations', () => {
     const { request } = setup(
       'use answer, twice from maths\non demo\n put answer into x\n put twice into f\n ask http to fetch "url" and wait\nend demo\n',

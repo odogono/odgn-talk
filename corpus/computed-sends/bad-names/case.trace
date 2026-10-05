@@ -1,0 +1,40 @@
+# Unblessed: new computed-name case; first blessing awaits human review.
+# `sink`'s mailbox depth is 1, and the first `send` fills it, so a good
+# name sent to `sink` raises `mailbox full`. `ghost` is no Script of the
+# Group, so a good name sent to it raises `object gone`. Every bad name
+# raises its own error first, and no `send` record follows it: 42 and a
+# list are `wrong kind` with `expected` `"text"`, even to the receiver 7;
+# `all`, the Reserved Word `send`, text with a space, empty text, a
+# Selector with too few arguments, one part, an excluded label (`in`) or
+# no closing colon are `bad message name`. `with` is a contextual word, not
+# a Reserved Word, so it names a message and reaches `object gone`. A
+# waiting send and a Join Member check the name the same way.
+> load a identity=e218845331f89637744542dfd9965bbc475cc6e0d3931bfb0659548b279c2ce3
+> load sink identity=7837e47f8f9696950d3250024177e46f3cadfa4b7f0e51946188c4a061891d88
+> deliver d1 to=a message=go
+> pump clock=2026-10-05T09:00:00Z
+send a/r1 to=sink message=note args=[1]
+raise a/r1 code="wrong kind" at=a:114 pos=40:7
+raise a/r1 code="wrong kind" at=a:162 pos=59:5
+raise a/r1 code="bad message name" at=a:141 pos=51:5
+raise a/r1 code="bad message name" at=a:114 pos=40:7
+raise a/r1 code="bad message name" at=a:114 pos=40:7
+raise a/r1 code="object gone" at=a:141 pos=51:5
+raise a/r1 code="bad message name" at=a:114 pos=40:7
+raise a/r1 code="bad message name" at=a:114 pos=40:7
+raise a/r1 code="bad message name" at=a:114 pos=40:7
+raise a/r1 code="bad message name" at=a:141 pos=51:5
+raise a/r1 code="bad message name" at=a:120 pos=42:7
+raise a/r1 code="bad message name" at=a:120 pos=42:7
+raise a/r1 code="object gone" at=a:141 pos=51:5
+raise a/r1 code="mailbox full" at=a:114 pos=40:7
+raise a/r1 code="bad message name" at=a:66 pos=24:5
+raise a/r1 code="wrong kind" at=a:87 pos=30:7
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=938 alloc=8120 state=7995 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=938 alloc=8120
+seg sink/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=40 end=return
+run sink/r1 outcome=completed handler=note fuel=16 alloc=24
+pumped state=idle fuel=954
+> vars
+vars a seen=[{code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSeven", line: 59, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "send", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "not a name", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:to:", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "move:in:", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "bad message name", name: "move:to", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "mailbox full", to: "sink", at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "go", line: 24, column: 5}}, {code: "wrong kind", expected: "text", got: "list", value: ["note"], at: {unit: "a", handler: "go", line: 30, column: 7}}]
+vars sink got=[1]

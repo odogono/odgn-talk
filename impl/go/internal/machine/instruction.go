@@ -8,6 +8,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
@@ -141,14 +142,15 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "load-object":
 		if v, ok := r.State.Objects[name(0)]; ok {
 			push(v)
-		} else if slices.Contains(r.State.ScriptNames, name(0)) {
+		} else if slices.Contains(r.State.ScriptNames, name(0)) || namedSend(code.Unit.Bodies[f.Body].Code[f.PC+1].Name) {
+			// A computed name is checked first, so its send raises `object gone`.
 			receiver(name(0))
 		} else {
 			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
 		}
 	case "me":
 		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name
-		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send") {
+		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send" || namedSend(next)) {
 			receiver(r.State.Unit.Name)
 		} else {
 			push(r.State.Me)
@@ -163,7 +165,22 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		} else {
 			effect = func() { r.Status = Suspended }
 		}
-	case "send", "send-wait", "join-send", "send-up", "send-up-wait":
+	case "send", "send-wait", "join-send", "send-named", "send-named-wait", "join-send-named", "send-up", "send-up-wait":
+		n := 0
+		if namedSend(i.Name) {
+			// A computed name, below the arguments, is checked before the
+			// receiver (chapter 5, A computed name).
+			n = idx(0)
+			if v := f.Stack[len(f.Stack)-n-2]; v.Kind != value.Text {
+				bad(wrong("text", v))
+				break
+			} else if !syntax.ValidComputedMessageName(v.Text, n) {
+				bad(failure("bad message name", value.Pair{Key: "name", Val: v}, value.Pair{Key: "arguments", Val: integer(int64(n))}))
+				break
+			}
+		} else {
+			n = idx(1)
+		}
 		if i.Name != "send-up" && i.Name != "send-up-wait" {
 			name := f.ReceiverNames[len(f.Stack)-1]
 			v := pop()
@@ -171,17 +188,24 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(wrong("object", v))
 				break
 			}
+			if namedSend(i.Name) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
+				bad(failure("object gone", value.Pair{Key: "object", Val: text(name)}))
+				break
+			}
 			if v.Kind == value.Object && v.Object.Disposed != nil && v.Object.Disposed.Load() {
 				bad(failure("object gone", value.Pair{Key: "object", Val: v}))
 				break
 			}
 		}
-		m.Args = take(idx(1))
+		m.Args = take(n)
+		if namedSend(i.Name) {
+			pop()
+		}
 		m.InputSize = 32
 		for _, v := range m.Args {
 			m.InputSize = saturatingAdd(m.InputSize, Size(v))
 		}
-		if i.Name == "send-wait" || i.Name == "send-up-wait" {
+		if i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-up-wait" {
 			effect = func() { r.SendWait = true; r.Status = Suspended }
 		}
 	case "target":

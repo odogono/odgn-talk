@@ -1,0 +1,9 @@
+-- b.talk: the receiver in the forwarding case.
+
+on note x
+  return "note " & x
+end note
+
+on move piece to square
+  return piece & "@" & square
+end move

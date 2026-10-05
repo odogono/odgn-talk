@@ -336,6 +336,14 @@ test('self-Join advice requires waiting members and every receiving clause to op
     ).toEqual([]);
   }
   expect(advice(join('me'), 'serialised-self-join')).toEqual([]);
+  // A computed name can't tell which message it sends (ADR 0057).
+  expect(
+    advice(
+      'on ping, queued\nend ping\n' +
+        'on demo\nwait for all\nsend ("ping") to me and wait\nend wait\nend demo',
+      'serialised-self-join',
+    ),
+  ).toEqual([]);
 });
 
 test('binding advice keeps original spans, profiles, adjacency and recovery', () => {

@@ -1,0 +1,12 @@
+-- router.talk: a computed message name in `send` (ADR 0057). Part of the
+-- messages-and-waiting case. The name is lowered first, below the
+-- arguments, and the named sends carry only the argument count.
+
+on route next, order, board
+  send (next) with order to board
+  send (next) with order to board and wait
+  wait for all
+    send ("move:" & "to:") with order, "e4" to board and wait
+  end wait
+  return it
+end route

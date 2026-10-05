@@ -1,0 +1,28 @@
+# Unblessed: new computed-name case; first blessing awaits human review.
+# `b` has no Handler for `missing` or `move:to:`, so each message climbs
+# and ends `unhandled` in `b`, as a static name would. The waiting send
+# raises `send failed` with `reason` `"unhandled"`.
+> load a identity=f12e34a57fa4b6383af0568b95fba8b3331b445c3fa0821dafb883ebc49e442e
+> load b identity=7e34311d9c9fdd37e438eae23b7be73b5e377fbf63e71a82ad10636e40b1e80a
+> deliver d1 to=a message=go
+> pump clock=2026-10-05T09:00:00Z
+send a/r1 to=b message=missing args=[1]
+send a/r1 to=b message=move:to: args=["knight", "e4"]
+send a/r1.c1 to=b message=missing args=[2] wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=81 alloc=168 state=320 end=send-wait
+seg b/r1 start from=a/r1 fuel=0 alloc=0 state=120 end=unhandled
+run b/r1 outcome=unhandled fuel=0 alloc=0
+unhandled message=missing args=[1]
+seg b/r2 start from=a/r1 fuel=0 alloc=0 state=48 end=unhandled
+run b/r2 outcome=unhandled fuel=0 alloc=0
+unhandled message=move:to: args=["knight", "e4"]
+seg b/r3 start from=a/r1.c1 fuel=0 alloc=0 state=0 end=unhandled
+run b/r3 outcome=unhandled fuel=0 alloc=0
+unhandled message=missing args=[2]
+raise a/r1 code="send failed" at=a:16 pos=9:5
+seg a/r1 resume fuel=30 alloc=176 state=108 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=111 alloc=344
+pumped state=idle fuel=111
+> vars
+vars a seen=[["send failed", "unhandled"]]
+vars b

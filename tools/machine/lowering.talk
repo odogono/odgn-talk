@@ -28,3 +28,11 @@ on deleting m, k, x
   delete word 1 of line 5 of x
   delete item 1 of item 2 of x delimited by ";"
 end deleting
+
+on routing next, order
+  send (next) with order to me
+  send (next) with order to me and wait
+  wait for all
+    send (next) with order to me and wait
+  end wait
+end routing

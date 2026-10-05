@@ -83,6 +83,10 @@ capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
 capabilities/standard-timer
+computed-sends/bad-names
+computed-sends/forwarding
+computed-sends/names
+computed-sends/unhandled
 counters/lifetime
 counters/variables-only
 dates/civil-arithmetic

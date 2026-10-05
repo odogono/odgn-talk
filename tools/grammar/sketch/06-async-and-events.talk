@@ -129,3 +129,17 @@ end beforeClose
 -- ALT: on close door, deciding       -- decision mode as a suffix, like `replacing`
 -- ?? `before close` as a two-word message name breaks "handler names are one
 --    word". `beforeClose` or `closing`?
+
+-- A computed message name (ADR 0057): the bracketed text names the message,
+-- a Name or a Selector with one argument per part.
+on forwarding next, order
+  send (next) with order to me
+  send (next) with order to me and wait
+  wait for all
+    send (next) with order to me and wait
+  end wait
+end forwarding
+
+on moving board, knight
+  send ("move:" & "to:") with knight, "e4" to board and wait
+end moving
