@@ -39,6 +39,8 @@ dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
 decisions/allow-at-the-first-suspension-point
+decisions/broadcast-decision-reports-every-veto
+decisions/broadcast-outcomes
 decisions/dispatch-and-waits
 decisions/fault-before-seal
 decisions/pass-up-the-message-path

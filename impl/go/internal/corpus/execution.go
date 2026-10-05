@@ -65,7 +65,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|cancel-run|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -281,13 +281,13 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 					return nil, e
 				}
 			}
-		case "deliver", "request", "decide":
+		case "deliver", "request", "decide", "broadcast", "decide-broadcast":
 			s := g.Script(fields["to"].Raw)
 			var target *talk.Object
 			if ref := fields["to"].Value.Object; ref != nil {
 				target = objects[objectRef{ref.Kind, ref.ID}]
 			}
-			if s == nil && target == nil {
+			if s == nil && target == nil && r.Name != "broadcast" && r.Name != "decide-broadcast" {
 				return nil, fmt.Errorf("unknown recipient %s", fields["to"].Raw)
 			}
 			m := talk.Message{Name: fields["message"].Raw}
@@ -303,7 +303,11 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 				m.Args = append(m.Args, x)
 			}
 			var e error
-			if target != nil {
+			if r.Name == "broadcast" {
+				_, e = g.Broadcast(m)
+			} else if r.Name == "decide-broadcast" {
+				_, _, e = g.DecideBroadcast(context.Background(), m)
+			} else if target != nil {
 				if r.Name == "request" {
 					_, _, e = g.Request(context.Background(), target, m)
 				} else if r.Name == "decide" {

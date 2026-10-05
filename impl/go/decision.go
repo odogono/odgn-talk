@@ -39,11 +39,13 @@ func (d *Decided) isReport() {}
 
 // Deciding settles when the Verdict is sealed, independently of the Run's end.
 type Deciding struct {
-	mu     sync.Mutex
-	done   chan struct{}
-	sealed bool
-	result *Decided
-	stop   func() bool
+	mu        sync.Mutex
+	done      chan struct{}
+	sealed    bool
+	result    *Decided
+	stop      func() bool
+	broadcast *broadcastDecision
+	recipient int
 }
 
 func (d *Deciding) Done() <-chan struct{} { return d.done }
@@ -84,7 +86,24 @@ func (d *Deciding) seal(report *Decided) bool {
 	}
 	return true
 }
-func (d *Deciding) finish() { close(d.done) }
+func (d *Deciding) finish() {
+	if d.broadcast != nil {
+		close(d.broadcast.future.done)
+	} else {
+		close(d.done)
+	}
+}
+
+// sealReport seals one recipient; only the last returns the combined report.
+func (d *Deciding) sealReport(report *Decided) *Decided {
+	if !d.seal(report) {
+		return nil
+	}
+	if d.broadcast == nil {
+		return report
+	}
+	return d.broadcast.collect(d.recipient, report)
+}
 
 func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, error) {
 	return s.group.decide(s, ctx, m)
@@ -126,5 +145,9 @@ func (g *Group) recordDecided(d *Decided) {
 		}
 		fields["undecided"] = coretrace.Display(corevalue.NewList(entries))
 	}
-	g.record("decided", false, []string{string(d.Delivery)}, fields)
+	id := string(d.Delivery)
+	if d.Broadcast != "" {
+		id = string(d.Broadcast)
+	}
+	g.record("decided", false, []string{id}, fields)
 }

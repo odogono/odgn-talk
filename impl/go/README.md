@@ -230,8 +230,7 @@ adapter stop at a
 `Blocked` implementation boundary with the instruction and operands
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
-before that boundary. Broadcast Decisions belong to #134;
-complete cancellation and Stop Script acceptance to
+before that boundary. Complete cancellation and Stop Script acceptance belongs to
 [#135](https://github.com/odogono/odgn-talk/issues/135),
 and save/restore to [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -266,7 +265,7 @@ remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 
 ## Group embedding
 
-`New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Pump`,
+`New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
 `Call`, `Inspect`, `Counters`, `CancelRun`, `Reload` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports Scripts with named Capability Grants and an optional
@@ -662,7 +661,7 @@ as Cost Model 0 specifies. `errors/lambda-capture-parity` agrees on Go, TS and
 TS save/restore for captured Join failures/timeouts and nested Lambdas. Its
 `Unblessed` marker remains for first human review.
 
-Single-Script Decisions expose a `Deciding` future and a `Decided` report. An
+Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
 message also allows. A matching pending wait allows a Decision before Handler
 dispatch. A deciding Handler keeps its Verdict open through
@@ -674,11 +673,31 @@ the seal, and futures settle after the Pump's records. Context cancellation
 after sealing leaves the continuing Run alone. Load checks reject vetoes
 outside deciding entry Handlers, in locally called Handlers, or reachable
 after suspension, and reject passes reachable after suspension. Open Decisions
-follow Message Paths through `pass` and unmatched Runs; Broadcast Decisions remain
-deferred.
+follow Message Paths through `pass` and unmatched Runs.
 For a Script with no owner, `pass` completes its Run and reaches the end of the
 path, reporting `unhandled` and allowing an open Decision; Requests fail with
 `send failed`, reason `unhandled`.
+
+`Group.Broadcast` and `Group.DecideBroadcast` choose recipients when inputs
+drain, in Script load order: a Handler or a pending message wait makes a Script
+interested. Scripts loaded after the call can participate; earlier queued
+disposal or cancellation removes stopped Scripts or cancelled waits. Each
+recipient gets a Delivery id and its owner's Target. Broadcasts never climb
+Message Paths or emit an `unhandled` report, including after `pass`.
+
+Broadcast admission checks arguments and limit overrides against the Core's
+defaults. Each recipient keeps the tighter of its own limits and the override.
+Recipients join FIFO mailboxes even past capacity, since they are unknown at
+admission. Runs and start Segments carry the Broadcast id.
+
+A Broadcast Decision settles after every recipient seals. Any veto wins over
+undecided outcomes, which win over allowed; an empty Broadcast is allowed.
+Vetoes and undecided outcomes retain recipient order across Fuel Slices. Context
+cancellation removes or cancels only recipients with an open Verdict; already
+sealed Runs continue. Reload and disposal settle only the affected recipients.
+The two reviewed Broadcast Decision cases pass unchanged. The recipient prefix
+of `cancellation/broadcast-recipients` also matches; its remaining inputs need
+the explicit Stop API tracked by #135. Broadcast save/restore remains with #136.
 
 Queueing Policies apply to the selected entry clause after Destructuring and
 Guards. `queued` parks later Runs FIFO while the mailbox keeps flowing;
@@ -717,7 +736,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 189 cases, including all text-model, load-diagnostic,
+The gate contains 191 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

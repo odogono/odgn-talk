@@ -57,7 +57,7 @@ func (g *Group) moveDelivery(d delivery) (delivery, bool) {
 // previous owner so subsequent movement cannot restart at the original target.
 func (g *Group) climb(x *execution) bool {
 	d := x.delivery
-	if d.script.owner == nil {
+	if d.broadcast != "" || d.script.owner == nil {
 		return false
 	}
 	d.path, d.after = true, d.script.owner
@@ -80,6 +80,9 @@ func (g *Group) climb(x *execution) bool {
 	return true
 }
 func (g *Group) unhandled(d delivery, reports *[]Report) {
+	if d.broadcast != "" {
+		return
+	}
 	*reports = append(*reports, &Unhandled{Delivery: d.id, Message: d.message, Target: d.target})
 	fields := map[string]string{"message": d.message.Name}
 	if len(d.message.Args) > 0 {

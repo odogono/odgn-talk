@@ -38,6 +38,7 @@ type Group struct {
 	stoppedSends     map[*Script]bool
 	cancelRunsQueued bool
 	nextDelivery     int64
+	nextBroadcast    int64
 	calls            map[CallID]*operationCall
 	nextTimer        int64
 	clock            time.Time
@@ -60,6 +61,8 @@ type Script struct {
 }
 type delivery struct {
 	id         DeliveryID
+	broadcast  BroadcastID
+	children   []delivery // selected when the Pump drains a Broadcast
 	script     *Script
 	message    Message
 	pending    *Pending
@@ -338,6 +341,14 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		delete(fields, "message")
 		fields["fn"] = Value{*address.function}.String()
 	}
+	broadcast := address.kind == "broadcast"
+	if broadcast {
+		name = "broadcast"
+		if decision != nil {
+			name = "decide-broadcast"
+		}
+		delete(fields, "to")
+	}
 	refused := func(code HostErrorCode, detail string) (DeliveryID, *Pending, error) {
 		g.recordRefusal(name, nil, fields, code)
 		return "", nil, &HostError{code, detail}
@@ -362,7 +373,7 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 			target = s.owner
 		}
 	}
-	if !path && (s == nil || s.group != g) {
+	if !broadcast && !path && (s == nil || s.group != g) {
 		g.mu.Unlock()
 		return refused(WrongGroup, "receiver does not belong to Group")
 	}
@@ -390,8 +401,15 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		g.recordRefusal(name, nil, fields, HostErrorCode("mailbox full"))
 		return "", nil, ErrMailboxFull
 	}
-	g.nextDelivery++
-	id := DeliveryID(fmt.Sprintf("d%d", g.nextDelivery))
+	var id DeliveryID
+	var bid BroadcastID
+	if broadcast {
+		g.nextBroadcast++
+		bid = BroadcastID(fmt.Sprintf("b%d", g.nextBroadcast))
+	} else {
+		g.nextDelivery++
+		id = DeliveryID(fmt.Sprintf("d%d", g.nextDelivery))
+	}
 	var p *Pending
 	if request {
 		if ctx == nil {
@@ -403,7 +421,7 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		s.reserved++
 	}
 
-	d := delivery{function: address.function, id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
+	d := delivery{broadcast: bid, function: address.function, id: id, script: s, target: target, path: path, message: m, pending: p, decision: decision, kind: name, fields: fields}
 	g.inputs = append(g.inputs, d)
 	if p != nil {
 		p.stop = context.AfterFunc(ctx, func() { g.cancelDelivery(d) })
@@ -418,6 +436,9 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 	g.mu.Unlock()
 	if ready != nil {
 		ready()
+	}
+	if broadcast {
+		id = DeliveryID(bid)
 	}
 	return id, p, nil
 }
@@ -483,6 +504,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.cancelRunsQueued = false
 	g.mu.Unlock()
 	defer func() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }()
+	inputs = g.prepareBroadcasts(inputs)
 
 	accepted := inputs[:0]
 	for _, d := range inputs {
@@ -502,7 +524,11 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 			} else if d.settlement != nil {
 				g.record(d.kind, true, []string{string(d.reply)}, d.fields)
 			} else {
-				g.record(d.kind, true, []string{string(d.id)}, d.fields)
+				id := string(d.id)
+				if d.broadcast != "" {
+					id = string(d.broadcast)
+				}
+				g.record(d.kind, true, []string{id}, d.fields)
 			}
 		}
 	}
@@ -535,7 +561,11 @@ func (g *Group) cancelDelivery(d delivery) {
 		g.mu.Unlock()
 		return
 	}
-	g.inputs = append(g.inputs, delivery{cancel: d.id, script: d.script, pending: d.pending, decision: d.decision})
+	id := d.id
+	if d.broadcast != "" {
+		id = DeliveryID(d.broadcast)
+	}
+	g.inputs = append(g.inputs, delivery{cancel: id, script: d.script, pending: d.pending, decision: d.decision})
 	ready := g.options.OnReady
 	g.mu.Unlock()
 	if ready != nil {

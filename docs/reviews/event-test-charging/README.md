@@ -26,11 +26,12 @@ rule for other cases. [Issue #277](https://github.com/odogono/odgn-talk/issues/2
 tracks the remaining Go verification. The corrected `suspension/wait-for` case
 now agrees on actual Go execution after non-waiting Script sends were added;
 its records and TS save/restore replay also agree. Go save/restore remains #136.
+`decisions/broadcast-outcomes` now also agrees on actual Go execution after
+Broadcast Decisions were added; its reviewed expectations remain unchanged.
+`objects/wait-target` likewise agrees after Object Message Paths were added.
 
 | Corrected case | Required Go facility |
 | --- | --- |
-| [decisions/broadcast-outcomes](../../../corpus/decisions/broadcast-outcomes/case.trace) | Broadcast Decisions, #134 |
-| [objects/wait-target](../../../corpus/objects/wait-target/case.trace) | Object routing, #134 |
 | [reload/extend-units](../../../corpus/reload/extend-units/case.trace) | Reload/extension units, #136 |
 
 Each correction removes 4 Fuel per executed event test. The `run` totals and
