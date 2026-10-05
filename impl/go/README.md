@@ -231,9 +231,8 @@ adapter stop at a
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
 before that boundary. Group cancellation and Stop Script are supported as described
-below; Segment-bound lifecycle support remains under
-[#134](https://github.com/odogono/odgn-talk/issues/134), and save/restore under
-[#136](https://github.com/odogono/odgn-talk/issues/136).
+below. Segment-bound lifecycle is supported through participant hooks;
+save/restore remains under [#136](https://github.com/odogono/odgn-talk/issues/136).
 
 ## Text Patterns
 
@@ -258,9 +257,10 @@ absent Captures and compilation charges. Three new regression cases for empty
 literals, counted program sizes and wrong-kind splices agree on both Cores;
 their `Unblessed` headers remain until the first human review.
 
-`matching-fuel-exhaustion` and `pattern-size-made-at-run-time` also pass, but
-complete limits acceptance belongs to
-[#135](https://github.com/odogono/odgn-talk/issues/135).
+`matching-fuel-exhaustion` and `pattern-size-made-at-run-time` pass with exact
+exhaustion instructions, uncharged failing work and Segment rollback. A separate
+step-4 gate protects the Text Pattern limits alongside all limit and cancellation
+cases.
 `pattern-size-literal-limit` also passes through ordinary Reload; Go save/restore
 remains [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -292,7 +292,7 @@ by name when requested, and preserves counters. Carry uses the active Segment's
 rollback base for preempted Runs; Function Values from the old code become stale.
 A successful Reload restarts Script-addressed execution; a disposed owner
 remains skipped by Object routing. `Extend`, Library replacement and
-Segment-bound lifecycle remain deferred.
+save/restore remain deferred.
 
 `Script.Stop` is queued and sticky. It discards running, parked and suspended
 Runs without `finally`, rolls back an active Segment, and drops mailbox messages.
@@ -305,7 +305,8 @@ Owner disposal uses the same termination path with reason `owner disposed`.
 Repeated Stops preserve the first reason and emit no additional Stop report
 unless later accepted messages need dropping. Those messages still obey mailbox
 admission limits. Broadcasts omit stopped Scripts. A Group whose Scripts are all
-stopped pumps as `stopped`; Reload clears the sticky state and reason.
+stopped pumps as `stopped`; Reload clears an ordinary Stop
+state and reason. Fatal effect uncertainty stops the Group permanently.
 
 Stops issued during Pump land at its next Host crossing or end, like `CancelRun`.
 A crossing records its Host result, then the control input, before result
@@ -406,8 +407,44 @@ pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
 Ordinary calls have no scope and are not automatic. Immediate and
-fire-and-forget calls carry a background Context. Definitions requesting
-Segment-bound behavior are refused; participant hooks remain under #134.
+fire-and-forget calls carry a background Context. Segment-bound Operations use
+`DefineSegmentCapability` with synchronous lifecycle hooks, described below.
+
+### Segment-bound Operations
+
+`DefineSegmentCapability` takes a `SegmentLifecycle` with synchronous `Begin`,
+`Commit` and `Rollback` hooks. Segment-bound Operations must be immediate, and
+all lifecycle Operations for a scope agree on their Segment-bound status.
+Hooks receive the Group instance, binding, Script and named Grant, Run and
+Segment ids, and last observed Clock. They spend no Script resources; reentrant
+worker calls are refused. Hook results are `EffectOK`, `EffectFailed` or
+`EffectUnknown`; a panic or malformed result is unknown, with Host detail kept
+out of the Trace.
+
+The first paid Segment-bound call enrolls its named Grant before entering the
+Operation. Later calls share that participant, while another Grant alias raises
+`segment participant conflict` before charging or entering the Host. Preemption,
+caught errors and empty Joins retain the participant. Completion and ordinary
+errors commit after all boundary checks and scope abandonment; actual suspension
+commits before its report or Verdict. Limit Faults, Stop, disposal and successful
+Reload roll back. Cancellation first abandons the participating Grant's scopes
+and rolls back, then runs finally cleanup in a new Segment with its own participant.
+
+Failed participating abandonment prevents commit; an unrelated abandonment
+failure only disables its Grant. Definite non-commit restores the Segment's
+Script Variables and ends `effect failed`, failing waiting senders without a
+Limit Fault, Script catch/finally or an error Handler. Uncertain begin or commit,
+and any unsuccessful rollback, stop every Script as `effect state unknown`.
+Rollback is attempted once, and Load and Reload cannot revive this Group.
+Successful commit finalizes before observing controls queued by its hook.
+
+The runner passes 22 effect cases unchanged, including ordinary Reload and
+multiple Segments. Whole-case replay of `effect-close-preemption-fault` and
+`effect-reload-fatal` awaits Save refusal support; `effect-replace-library` and
+`effect-replace-fatal` await Library replacement. Those facilities remain under
+[#136](https://github.com/odogono/odgn-talk/issues/136). Native tests separately
+exercise participant preemption, fatal Reload, Stop and disposal boundaries;
+Save itself is not implemented.
 
 ### Capability Scopes
 
@@ -446,7 +483,7 @@ expectations. Both Cores agree on the complete Traces; the
 [charging reconciliation](../../docs/reviews/scope-guard-charging/README.md)
 records the boundary audit. The original first-review headers remain pending
 human review in #222. Scope cases requiring save/restore remain under #136;
-Segment-bound effects and Library replacement remain separate work.
+Library replacement and save/restore remain under #136.
 
 ### Clock and Timer Standard Capabilities
 
@@ -809,11 +846,12 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 210 cases, including all text-model, load-diagnostic,
+The gate contains 233 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 61-case step-1 set and eight reviewed step-2 cases,
+separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
+limit/cancellation/Text Pattern cases and 22 Segment-bound effect cases,
 so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their

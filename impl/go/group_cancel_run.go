@@ -12,10 +12,10 @@ func (s *Script) CancelRun(id RunID) {
 		ready()
 	}
 }
-func (g *Group) applyCancelRun(d delivery) {
+func (g *Group) applyCancelRun(d delivery, reports *[]Report) {
 	for _, x := range d.script.runs {
 		if string(x.id) == d.fields["run"] {
-			g.cancelExecution(d.script, x)
+			g.cancelExecution(d.script, x, reports)
 			return
 		}
 	}
@@ -23,7 +23,7 @@ func (g *Group) applyCancelRun(d delivery) {
 
 // Stop and cancellation may be taken from inputs while a Pump is running. All
 // ordinary settlements and Deliveries remain in the next Pump's queue.
-func (g *Group) landControls(stop func(delivery)) bool {
+func (g *Group) landControls(reports *[]Report, stop func(delivery)) bool {
 	g.mu.Lock()
 	if !g.controlsQueued {
 		g.mu.Unlock()
@@ -48,7 +48,7 @@ func (g *Group) landControls(stop func(delivery)) bool {
 			stop(d)
 		} else {
 			g.record("cancel-run", true, []string{d.fields["run"]}, nil)
-			g.applyCancelRun(d)
+			g.applyCancelRun(d, reports)
 		}
 	}
 	return len(landed) > 0

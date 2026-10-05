@@ -28,8 +28,8 @@ type Stop struct {
 
 func (*Stop) isReport() {}
 
-// Reload validates the replacement before abandoning scopes and pending calls.
-// Segment participants and Library replacement are not supported yet.
+// Reload validates and checks carried state before terminating old Runs and
+// rolling back their participants. Library replacement is not supported yet.
 func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	g := s.group
 	exports, importIDs, states, calls := libraryOptions(g.libraries)
@@ -43,6 +43,9 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	}
 	defer g.endWorker()
 	g.record("reload", true, []string{s.name}, fields)
+	if g.effectUnknown {
+		return nil, g.refuse(EffectStateUnknown, "Group has unresolved external effects")
+	}
 	if carry != ResetVariables && carry != CarryVariables {
 		return nil, g.refuse(InvalidValue, "invalid carry policy")
 	}
@@ -100,12 +103,25 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	}
 	stop := &Stop{Script: s.name, Reason: "reload"}
 	var reports []Report
+	for _, x := range s.runs {
+		g.abandonScopes(s, x, &reports)
+		g.rollbackParticipant(s, x, &reports)
+		if g.effectUnknown {
+			var settlements []func()
+			g.stopEffectGroup(&reports, &settlements, func(d delivery, run RunID, _ Verdict, _ Value, _ Outcome) {
+				reports = append(reports, g.settleReloadDelivery(d.script, d, run)...)
+			})
+			for _, settle := range settlements {
+				settle()
+			}
+			return reports, &HostError{EffectStateUnknown, "Reload participant rollback failed"}
+		}
+	}
 	queue, runs := s.queue, s.runs
 	s.queue = nil
 	s.runs = nil
 	s.active = nil
 	for _, x := range runs {
-		g.abandonScopes(s, x, &reports)
 		stop.DiscardedRuns = append(stop.DiscardedRuns, x.id)
 		// Keep the same call order as the machine, including Script replies.
 		if x.waitCall != "" {

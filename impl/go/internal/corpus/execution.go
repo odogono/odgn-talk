@@ -92,14 +92,6 @@ func (executionBackend) Support(c Case) string {
 			return feature + " execution belongs to later Go steps"
 		}
 	}
-	if ops, ok := c.Setup["operations"].([]any); ok {
-		for _, raw := range ops {
-			op := raw.(Setup)
-			if op["segmentBound"] == true {
-				return "Segment-bound Operations are not available"
-			}
-		}
-	}
 	b, e := os.ReadFile(filepath.Join(c.Dir, "case.trace"))
 	if e != nil {
 		return e.Error()
@@ -136,7 +128,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -252,7 +244,8 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		s := x.(Setup)
 		setups[s["name"].(string)] = s
 	}
-	for i, r := range records {
+	for _, i := range replayInputOrder(records) {
+		r := records[i]
 		if !r.Input || inside[i] {
 			continue
 		}
@@ -363,6 +356,10 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		case "stub":
 			lines = append(lines, r.Raw)
 			operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
+		case "stub-effect":
+			lines = append(lines, r.Raw)
+			key := r.IDs[0] + "." + fields["phase"].Raw
+			operations.effectStubs[key] = append(operations.effectStubs[key], fields)
 		case "stop", "cancel-run":
 			if err := control(r); err != nil {
 				return nil, err
@@ -525,6 +522,25 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 		}
 	}
 	return lines, nil
+}
+
+// Refused admissions are traced immediately; accepted inputs are traced only
+// when the Pump drains them. Queue the accepted inputs before retrying mailbox
+// refusals, while keeping their order and emitting the original Trace order.
+func replayInputOrder(records []Record) []int {
+	var order, refused []int
+	for i, r := range records {
+		if r.Input && i+1 < len(records) && records[i+1].Raw == `refused code="mailbox full"` {
+			refused = append(refused, i)
+			continue
+		}
+		if r.Input && r.Name == "pump" {
+			order = append(order, refused...)
+			refused = nil
+		}
+		order = append(order, i)
+	}
+	return append(order, refused...)
 }
 
 func setupLimits(raw any) talk.Limits {

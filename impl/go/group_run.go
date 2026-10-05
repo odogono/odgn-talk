@@ -205,7 +205,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		}
 	}
 	land := func(current *execution) bool {
-		return g.landControls(func(d delivery) {
+		landed := g.landControls(&result.Reports, func(d delivery) {
 			if current != nil && d.script.active == current {
 				if current.stopReason == nil {
 					reason := d.reason
@@ -216,6 +216,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				g.stopScript(d.script, d.reason, &result.Reports, &settlements, seal)
 			}
 		})
+		if current != nil && g.effectUnknown {
+			g.markEffectUnknown(current)
+		}
+		return landed
 	}
 
 	defer func() {
@@ -276,7 +280,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.kind == "cancel-run" {
-			g.applyCancelRun(d)
+			g.applyCancelRun(d, &result.Reports)
 			continue
 		}
 		if d.settlement != nil {
@@ -361,7 +365,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if !found || cancelBroadcast {
 				for _, x := range s.runs {
 					if matches(x.delivery) {
-						g.cancelExecution(s, x)
+						g.cancelExecution(s, x, &result.Reports)
 						found = true
 						if !cancelBroadcast {
 							break
@@ -379,6 +383,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		}
 	}
 	g.unrouted = nil
+	if g.effectUnknown {
+		g.stopEffectGroup(&result.Reports, &settlements, seal)
+	}
 
 	// Only timers retained from an earlier Pump fire, after Host inputs.
 	g.fireTimers()
@@ -484,7 +491,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				r.ExecuteHosted(remaining, func() {
 					if machine.QueuePolicy(s.state.Unit.Bodies[x.clause]) == "replacing" {
-						g.replaceEarlier(s, x)
+						g.replaceEarlier(s, x, &result.Reports)
 						r.PersistentBase = s.retainedOutside(x)
 					}
 					if !x.deciding {
@@ -506,7 +513,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				g.writeRaises(x, raised)
 				raised = len(r.Raises)
-				g.selectClause(s, x, func() { seal(x.delivery, x.id, Allowed, Nothing, Completed) })
+				g.selectClause(s, x, &result.Reports, func() { seal(x.delivery, x.id, Allowed, Nothing, Completed) })
 				if r.Status != machine.Running {
 					break
 				}
@@ -548,10 +555,14 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			}
 			if r.Status == machine.Stopped {
 				s.state.Variables = r.Base
-				g.abandonScopes(s, x, &result.Reports)
+				g.finalizeParticipant(s, x, &result.Reports)
 				common["state"], common["end"] = fmt.Sprint(s.persistentWithoutRun(x)), "stop"
 				g.record("seg", false, []string{string(x.id), x.how}, common)
-				g.stopScript(s, *x.stopReason, &result.Reports, &settlements, seal)
+				if g.effectUnknown {
+					g.stopEffectGroup(&result.Reports, &settlements, seal)
+				} else {
+					g.stopScript(s, *x.stopReason, &result.Reports, &settlements, seal)
+				}
 				continue
 			}
 			if r.Status == machine.Blocked {
@@ -564,6 +575,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				g.record("seg", false, []string{string(x.id), x.how}, common)
 				s.active = nil
 				continue
+			}
+			if r.Status == machine.Suspended {
+				g.finalizeParticipant(s, x, &result.Reports)
 			}
 			if r.Status == machine.Suspended {
 				g.nextTimer++
@@ -609,7 +623,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				continue
 			}
 			report := g.finish(s, x, common, &result.Reports, func() {
-				if r.Status == machine.Completed && !r.Passed && x.openVerdict() {
+				if r.Status == machine.Completed && x.effect == nil && !r.Passed && x.openVerdict() {
 					verdict := Allowed
 					if r.Vetoed {
 						verdict = Vetoed
@@ -617,8 +631,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					seal(x.delivery, x.id, verdict, Value{r.VetoReason}, Completed)
 				}
 			})
+			if report == nil {
+				g.stopEffectGroup(&result.Reports, &settlements, seal)
+				continue
+			}
 			result.Reports = append(result.Reports, report)
-			reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped"}[report.Outcome]
+			reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped", EffectFailureOutcome: "effect failed"}[report.Outcome]
 			if r.Passed {
 				reason = "unhandled"
 			}
@@ -643,7 +661,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					if report.Outcome == Completed && !r.Passed {
 						p.settle(report.Result, nil)
 					} else {
-						reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped"}[report.Outcome]
+						reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped", EffectFailureOutcome: "effect failed"}[report.Outcome]
 						if r.Passed {
 							reason = "unhandled"
 						}
@@ -673,6 +691,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		g.orphanReplies = nil
 		if land(nil) {
 			progress = true
+		}
+		if g.effectUnknown {
+			g.stopEffectGroup(&result.Reports, &settlements, seal)
 		}
 		if !progress || o.FuelCap > 0 && result.FuelUsed >= o.FuelCap {
 			break
@@ -837,17 +858,30 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, report
 	}
 	g.abandonSend(x)
 	g.writeRaises(x, len(r.Raises))
-	g.abandonScopes(s, x, reports)
+	g.finalizeParticipant(s, x, reports)
+	if g.effectUnknown {
+		end = "stop"
+	} else if x.effect != nil {
+		end, outcome = "effect-failed", EffectFailureOutcome
+		delete(common, "value")
+	}
 	common["state"] = fmt.Sprint(s.persistentWithoutRun(x))
 	common["end"] = end
 	g.record("seg", false, []string{string(x.id), x.how}, common)
 	g.writeAbandon(x)
+	if g.effectUnknown {
+		return nil
+	}
 	seal()
 	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Broadcast: x.delivery.broadcast, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
-	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	outputs := map[string]string{"outcome": []string{"completed", "errored", "limit-fault", "cancelled", "unhandled", "dropped", "effect-failed"}[outcome], "delivery": string(x.delivery.id), "handler": x.handler, "fuel": fmt.Sprint(r.Fuel), "alloc": fmt.Sprint(r.Alloc)}
+	if x.effect != nil {
+		report.Effect = x.effect
+		outputs["effect"] = effectDisplay(x.effect)
+	}
 	if x.delivery.broadcast != "" {
 		outputs["broadcast"] = string(x.delivery.broadcast)
 	}
@@ -922,8 +956,8 @@ func (s *Script) retainedOutside(exclude *execution) int64 {
 	return size
 }
 
-func (g *Group) cancelExecution(s *Script, x *execution) {
-	if x.run.Cancelling || x.run.Status == machine.Stopped {
+func (g *Group) cancelExecution(s *Script, x *execution, reports *[]Report) {
+	if g.effectUnknown || x.run.Cancelling || x.run.Status == machine.Stopped {
 		return
 	}
 	queued := x == s.active
@@ -931,6 +965,13 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 		if item.run == x {
 			queued = true
 			break
+		}
+	}
+	if x.participant != nil {
+		g.abandonGrantScopes(s, x, x.participant.name, reports)
+		g.rollbackParticipant(s, x, reports)
+		if g.effectUnknown {
+			return
 		}
 	}
 	x.segment++
@@ -946,7 +987,7 @@ func (g *Group) cancelExecution(s *Script, x *execution) {
 	}
 }
 
-func (g *Group) selectClause(s *Script, x *execution, allow func()) {
+func (g *Group) selectClause(s *Script, x *execution, reports *[]Report, allow func()) {
 	r := x.run
 	body := s.state.Unit.Bodies[r.Frames[0].Body]
 	policy := machine.QueuePolicy(body)
@@ -968,17 +1009,17 @@ func (g *Group) selectClause(s *Script, x *execution, allow func()) {
 	case busy && policy == "dropping":
 		r.Drop()
 	case policy == "replacing" && !r.Frames[0].Clause:
-		g.replaceEarlier(s, x)
+		g.replaceEarlier(s, x, reports)
 	}
 	if !x.deciding && (r.Status == machine.Running || r.Status == machine.Parked) && !r.Frames[0].Clause {
 		allow()
 	}
 }
 
-func (g *Group) replaceEarlier(s *Script, x *execution) {
+func (g *Group) replaceEarlier(s *Script, x *execution, reports *[]Report) {
 	for _, other := range s.runs {
 		if other != x && other.clause == x.clause && !other.openVerdict() {
-			g.cancelExecution(s, other)
+			g.cancelExecution(s, other, reports)
 		}
 	}
 }

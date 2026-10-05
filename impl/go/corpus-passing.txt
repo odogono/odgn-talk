@@ -1,4 +1,4 @@
-# Cases the Go Core must continue to pass (issues #132, #133 and #134).
+# Cases the Go Core must continue to pass (issues #132, #133, #134 and #135).
 # New regression cases retain Unblessed headers until their first human review.
 
 builtins/function-values
@@ -19,6 +19,28 @@ capabilities/argument-shapes
 capabilities/calls
 capabilities/charge-faults
 capabilities/declared-allocation
+capabilities/effect-abandon-failed
+capabilities/effect-begin-failed
+capabilities/effect-begin-unknown
+capabilities/effect-cancellation
+capabilities/effect-cancellation-commit-failed
+capabilities/effect-cancellation-error
+capabilities/effect-cancellation-limit
+capabilities/effect-close-conversion
+capabilities/effect-commit-failed
+capabilities/effect-commit-unknown
+capabilities/effect-completion
+capabilities/effect-decision-failed
+capabilities/effect-decision-ok
+capabilities/effect-operation-error
+capabilities/effect-ordinary-error
+capabilities/effect-participant-conflict
+capabilities/effect-pass
+capabilities/effect-reload-carry
+capabilities/effect-rollback-failed
+capabilities/effect-segment-roundtrip
+capabilities/effect-suspension-commit-failed
+capabilities/effect-unrelated-abandon-failed
 capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args
@@ -96,6 +118,7 @@ limits/fault-at-dispatch
 limits/fenced-text-concat
 limits/fuel-alloc-minimums
 limits/fuel-exhaustion-point
+limits/host-mailbox-depth
 limits/join-retention
 limits/mailbox-depth
 limits/max-join-minimum

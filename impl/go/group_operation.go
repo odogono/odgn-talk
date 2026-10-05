@@ -79,11 +79,23 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return corevalue.Value{}, &err, false
 		}
 	}
+	if op.SegmentBound && x.participant != nil && x.participant.name != grantName {
+		fields := append(named, corevalue.Pair{Key: "participant", Val: mustText(x.participant.name)})
+		return fail("segment participant conflict", fields...)
+	}
 	fuel, _ := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel})
 	if !pay(fuel, op.Cost.Alloc) {
 		return corevalue.Value{}, nil, false
 	}
 	g.writeRaises(x, x.raisesWritten)
+	if op.SegmentBound && x.participant == nil {
+		if failure := g.enrollParticipant(s, x, grantName, grant, reports); failure != nil {
+			if failure.Status == EffectUnknown {
+				return corevalue.Value{}, nil, false
+			}
+			return fail("host error", named...)
+		}
+	}
 	x.calls++
 	ctx, cancel := operationContext(op.Mode)
 	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost}
