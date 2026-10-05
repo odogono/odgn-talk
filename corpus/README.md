@@ -63,6 +63,15 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 
 The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except the Session Transcripts' and scoped-effect cases' (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
 
+The corrected `capabilities/scope-slots` and `scope-suspension-boundaries`
+Traces agree on Go and TS, including TS save/restore replay. Rejected scope
+calls and suspension boundaries consume no guarded instruction Fuel or
+allocation, while dispatch and unwind still apply. They are required by the Go
+passing gate. The related `effect-participant-conflict` correction agrees in
+TS ordinary and save/restore execution; Go Segment-bound Operations remain
+unsupported. All original #222 first-review headers are retained. See the
+[boundary audit and expectation diff](../docs/reviews/scope-guard-charging/README.md).
+
 The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
 
 The corrected `decisions/undecided-on-cancel-delivery` seed agrees on Go and TS

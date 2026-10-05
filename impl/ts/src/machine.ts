@@ -938,10 +938,14 @@ export class Run {
   private checkScopeBoundary() {
     const scope = this.scopes.at(-1);
     if (scope) {
-      throw new ScriptError('scope open', [
-        ['capability', text(scope.grantName)],
-        ['scope', text(scope.name)],
-      ]);
+      throw new ScriptError(
+        'scope open',
+        [
+          ['capability', text(scope.grantName)],
+          ['scope', text(scope.name)],
+        ],
+        true,
+      );
     }
   }
 
@@ -2246,6 +2250,10 @@ export class Run {
     try {
       if (!error.uncharged) {
         this.pay(key, { ...this.m, result: undefined });
+      } else if (this.frame.clauseCharge) {
+        // Validation and lifecycle guards skip the instruction's charge,
+        // but dispatch still pays for trying this Handler Clause.
+        this.payAmount(charge('clause').fuel, 0);
       }
     } catch (error_) {
       if (error_ instanceof LimitFaultError) {
@@ -2590,13 +2598,13 @@ export class Run {
     if (scope) {
       const fields: [string, Value][] = [...named, ['scope', text(scopeName!)]];
       if ('opens' in scope && this.join) {
-        throw new ScriptError('scope in join', fields);
+        throw new ScriptError('scope in join', fields, true);
       }
       if ('opens' in scope && slot! >= 0) {
-        throw new ScriptError('scope already open', fields);
+        throw new ScriptError('scope already open', fields, true);
       }
       if ('closes' in scope && slot! < 0) {
-        throw new ScriptError('scope not open', fields);
+        throw new ScriptError('scope not open', fields, true);
       }
     }
     if (
@@ -2605,10 +2613,11 @@ export class Run {
       this.participant &&
       this.participant.grantName !== grantName
     ) {
-      throw new ScriptError('segment participant conflict', [
-        ...named,
-        ['participant', text(this.participant.grantName)],
-      ]);
+      throw new ScriptError(
+        'segment participant conflict',
+        [...named, ['participant', text(this.participant.grantName)]],
+        true,
+      );
     }
     const declared = op.cost.fuel;
     this.pay(key, { declared }, op.cost.alloc ?? 0);

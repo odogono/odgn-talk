@@ -106,6 +106,138 @@ const errorCode = (group: Group) => {
 };
 
 describe('Capability Scopes', () => {
+  test.each([
+    ['ask r to closefile', 'scope not open', 8],
+    ['ask r to openfile\nask r to openfile', 'scope already open', 21],
+    ['ask r to openfile\nwait 0 ms', 'scope open', 22],
+    ['ask r to openfile\nwait for ping', 'scope open', 21],
+    [
+      'ask r to openfile\nwait for\nafter 0 ms then\nend wait',
+      'scope open',
+      22,
+    ],
+    ['ask r to openfile\nsend ping to me and wait', 'scope open', 22],
+    ['ask r to openfile\nask r to later and wait', 'scope open', 21],
+    [
+      'ask r to openfile\nwait for all\nif false then ask r to later and wait\nend wait',
+      'scope open',
+      21,
+    ],
+    [
+      'wait for all\nask r to openfile\nask r to later and wait\nend wait',
+      'scope in join',
+      18,
+    ],
+  ])(
+    '%s rejects without the guarded instruction charge',
+    (body, code, fuel) => {
+      const { group } = start(body);
+      const result = group.pump(now);
+      expect(result.reports).toContainEqual(
+        expect.objectContaining({ error: expect.objectContaining({ code }) }),
+      );
+      // Dispatch and popped-frame unwind still cost 4 each. Acquisition costs
+      // 12 plus its 1-Fuel store into `it`; Join entry costs 10 when it is allowed.
+      expect(result.fuelUsed).toBe(fuel);
+    },
+  );
+  test('a guarded first instruction still pays local Handler dispatch', () => {
+    const host = recordingHost();
+    const group = newGroup({ name: 'g' });
+    const script = group.load({
+      name: 's',
+      grants: { r: host.cap.grant('all', 'x') },
+      source:
+        'on go\nask r to openfile\nhelper and wait\nend go\non helper\nwait for ping\nend helper',
+    });
+    script.deliver({ name: 'go' });
+    const result = group.pump(now);
+    expect(result.reports).toContainEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'scope open' }),
+      }),
+    );
+    // 4 outer dispatch + 12 acquisition + 1 store into `it` + 8 local call
+    // + 4 helper dispatch + 8 for unwinding both frames.
+    expect(result.fuelUsed).toBe(37);
+  });
+  test('a caught guard at the first instruction pays dispatch before preemption', () => {
+    const { group, host } = start(
+      'try\nask r to closefile\ncatch e\nreturn 1\nend try',
+    );
+    const result = group.pump(now, { fuelSlice: 4, fuelCap: 4 });
+    expect(result.state).toBe('sliced');
+    expect(result.fuelUsed).toBe(4);
+    expect(result.reports).toEqual([]);
+    expect(host.calls).toEqual([]);
+    expect(group.pump(now).reports).toContainEqual(
+      expect.objectContaining({ outcome: 'completed', result: dec('1') }),
+    );
+  });
+  test('a scope rejection fits a budget covering only dispatch and unwind', () => {
+    const { group } = start('ask r to closefile', recordingHost(), {
+      limits: { fuelPerRun: 8 },
+    });
+    const result = group.pump(now);
+    expect(result.fuelUsed).toBe(8);
+    expect(result.reports).toContainEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'scope not open' }),
+      }),
+    );
+  });
+  test('dispatch can exhaust Fuel before a first-instruction scope rejection', () => {
+    const { group, host } = start('ask r to closefile', recordingHost(), {
+      limits: { fuelPerRun: 3 },
+    });
+    const result = group.pump(now);
+    expect(result.fuelUsed).toBe(0);
+    expect(result.reports).toContainEqual(
+      expect.objectContaining({ outcome: 'limit fault', limit: 'fuel' }),
+    );
+    expect(host.calls).toEqual([]);
+  });
+  test('a guarded waiting send allocates no message', () => {
+    const { group } = start('ask r to openfile\nsend ping to me and wait');
+    expect(group.pump(now).reports).toContainEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'scope open' }),
+        // Only the successful opener's Nothing result is converted.
+        alloc: 8,
+      }),
+    );
+  });
+  test('a caught first-instruction Grant rejection still pays dispatch', () => {
+    const { group, script, host } = start(
+      'try\nask r to closefile\ncatch e\nreturn 1\nend try',
+    );
+    script.revoke('r');
+    const result = group.pump(now, { fuelSlice: 4, fuelCap: 4 });
+    expect(result.state).toBe('sliced');
+    expect(result.fuelUsed).toBe(4);
+    expect(host.calls).toEqual([]);
+    expect(group.pump(now).reports).toContainEqual(
+      expect.objectContaining({ outcome: 'completed', result: dec('1') }),
+    );
+  });
+  test('local call depth faults before its charge with an open scope', () => {
+    const host = recordingHost();
+    const group = newGroup({ name: 'g' });
+    const script = group.load({
+      name: 's',
+      grants: { r: host.cap.grant('all', 'x') },
+      source:
+        'on go\nask r to openfile\nhelper and wait\nend go\non helper\nwait for ping\nend helper',
+      limits: { callDepth: 1 },
+    });
+    script.deliver({ name: 'go' });
+    const result = group.pump(now);
+    expect(result.fuelUsed).toBe(17);
+    expect(result.reports).toContainEqual(
+      expect.objectContaining({ outcome: 'limit fault', limit: 'depth' }),
+    );
+    expect(host.calls.map(c => c.op)).toEqual(['openfile', 'closefile']);
+  });
   test('explicit close, independent closes and reopening preserve resource ownership', () => {
     const { group, host } = start(
       'ask r to openfile\nask r to openlock\nask r to closefile\nask r to openfile',
