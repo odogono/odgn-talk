@@ -46,3 +46,32 @@ describe('Apply', () => {
     expect(planApply(session, session)).toEqual({ enter: [], removed: [] });
   });
 });
+
+test('Apply identifies each Handler by its full Selector', () => {
+  const original = splitDeclarations(
+    'on move piece\nend move\non move piece to square\nend move\n',
+  );
+  const changed = splitDeclarations(
+    'on move piece\nend move\non move piece to square\n say square\nend move\n',
+  );
+  expect(original.error).toBeUndefined();
+  expect(changed.error).toBeUndefined();
+  if (original.error || changed.error) {
+    throw new Error('expected declarations');
+  }
+  expect(original.declarations.map(d => d.key)).toEqual([
+    'on move',
+    'on move:to:',
+  ]);
+  expect(
+    planApply(changed.declarations, original.declarations).enter.map(
+      d => d.key,
+    ),
+  ).toEqual(['on move:to:']);
+  expect(
+    planApply(
+      changed.declarations.slice(0, 1),
+      original.declarations,
+    ).removed.map(d => d.key),
+  ).toEqual(['on move:to:']);
+});

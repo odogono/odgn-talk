@@ -12,7 +12,7 @@ Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec 
 
 `@odgn/northtalk/session` exports `SessionHost`, chapter 12's Session Host. It does no I/O of its own: its environment supplies the Clock and takes the Trace, and each call returns the lines the session printed.
 
-- **Entries:** a Session recognises a Handler Selector by its first word. `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines.
+- **Entries:** a Session recognises a Handler Selector by its first word. `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines. `incomplete(source)` lets tooling line prompts use the same current Handler recognition, including labelled calls continued inside brackets.
 - **Implicit Script Variables** are the Container roots an Entry puts into, and the names its binding Captures bind. A pattern's names stay the Run's locals, since a pattern may not bind a Script Variable.
 - **Lifecycle failures:** returned `effect failure` reports render their Grant, Segment, phase and status, and `effect-failed` Run outcomes print `! effect failed`. Effect-failed Runs never print an expression success value. Outside-Pump cleanup reports render too; fatal cleanup keeps the previous Session Source and user Library definitions. Session mocks have no scope or Segment-bound declarations.
 - **Following Runs:** the Session Host follows its Runs through a TS-internal hook that gives the Trace's `seg`, `call`, `run` and `unhandled` records as typed values ([ADR 0045](../../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md)). It never calls `inspect()` to decide what to print.
@@ -182,7 +182,9 @@ specifies. `on move p to sq` and `move 1 to 2` name `move:to:`; positional
 `move 1, 2` still names `move`. Selectors identify Clauses, Message Paths,
 wait events and their `it`, and Trace records. Host Deliveries, Requests,
 Broadcasts and Decisions reject malformed colon-containing names or mismatched
-argument counts at the call with `invalid value`.
+argument counts at the call with `invalid value`. The pure `syntaxSelector` and
+`validMessageSelector` helpers expose the same syntax and Host validation rules
+to tooling.
 
 `send (e) with a to r` computes its message name ([ADR 0057](../../docs/adr/0057-a-send-may-compute-its-message-name.md)).
 It lowers to `send-named`, `send-named-wait` or `join-send-named`, which pop

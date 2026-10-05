@@ -3,7 +3,7 @@
 // module only decides which Entries and Session Commands to give it, and maps
 // debugger positions between tabs and loaded code units. It does no I/O.
 import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
-import { parseEntry, type Value } from '@odgn/northtalk';
+import { type Value } from '@odgn/northtalk';
 import type {
   DebugController,
   DebugInstruction,
@@ -175,9 +175,8 @@ export class PlaygroundSession {
   }
 
   /** Whether `source` is an unfinished Entry, so the prompt goes on at `|`. */
-  static incomplete(source: string): boolean {
-    const parsed = parseEntry(source, () => false);
-    return Boolean(parsed.error && parsed.incomplete);
+  incomplete(source: string): boolean {
+    return this.host.incomplete(source);
   }
 
   // ------------------------------------------------------------- input

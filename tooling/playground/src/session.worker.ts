@@ -208,7 +208,7 @@ const line = (text: string) => {
   }
   entry.push(text);
   const source = entry.join('\n');
-  if (PlaygroundSession.incomplete(source)) {
+  if (session.incomplete(source)) {
     return;
   }
   entry = [];

@@ -204,3 +204,26 @@ test('Apply keeps live variables while fresh execution starts from initializers'
   fresh.input('bump');
   expect(fresh.input('count')).toEqual(['1']);
 });
+
+test('labelled Entries run and Apply changes only the selected Selector', () => {
+  const s = new PlaygroundSession(environment().env);
+  const text =
+    'on move piece\n say piece\nend move\non move piece to square\n say piece & square\nend move\n';
+  expect(s.apply(text).kind).toBe('applied');
+  expect(s.input('move "knight" to "e4"')).toEqual(['knighte4']);
+  const applied = s.apply(text.replace('piece & square', 'square & piece'));
+  expect(applied.kind).toBe('applied');
+  expect(s.input('move "knight"')).toEqual(['knight']);
+  expect(s.input('move "knight" to "e4"')).toEqual(['e4knight']);
+  expect(s.input('send to me: move "rook" to "a4" and wait')).toEqual([
+    '[session/r5] a4rook',
+  ]);
+});
+
+test('the prompt completes continued labelled Entries in the current session', () => {
+  const s = new PlaygroundSession(environment().env);
+  s.apply('on move piece to square\n say piece & square\nend move\n');
+  expect(s.incomplete('move (')).toBe(true);
+  expect(s.incomplete('move (\n "knight"\n) to "e4"')).toBe(false);
+  expect(s.input('move (\n "knight"\n) to "e4"')).toEqual(['knighte4']);
+});

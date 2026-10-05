@@ -24,12 +24,12 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
 - **Syntax** follows the current editor text, not loaded code. Select a node to highlight source; selecting source reveals its node. Incomplete source remains inspectable.
 
 - **The Script tab is the session source** ([ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)):
-  - **Apply** (Ctrl/Cmd-S in the tab) enters each new or changed top-level declaration as an Entry. A redefinition causes the Spec's Reload, which prints `! discarded` for each Run it discards.
+  - **Apply** (Ctrl/Cmd-S in the tab) enters each new or changed top-level declaration as an Entry. Handlers are compared by full Selector, so labelled and unlabelled heads with the same first word remain separate. A redefinition causes the Spec's Reload, which prints `! discarded` for each Run it discards.
   - A declaration entered at the prompt updates a clean tab. A tab with unapplied edits keeps them under a banner.
   - When the tab drops a declaration, Apply offers a **Restart**. A Restart makes a fresh session from the Grants, the Clock and limits, the Library tabs and the Script tab, and starts a new Transcript.
 - **Library tabs:** **+ Library** adds one. Saving it (Ctrl/Cmd-S) records `:library add` the first time and `:library replace` after that. Renaming or closing a saved Library needs a Restart to take it out of the session.
 - **The console** is the live Session Transcript.
-  - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete.
+  - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete, including labelled calls whose arguments continue inside brackets.
   - A `console` `read` is answered at the `<` prompt.
   - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
   - The **@ ~** box shows the Clock readings and Capability answers the Transcript records.
@@ -38,7 +38,7 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - The Playground's Host Manifest is built from the session's Grants and given to the language server, so completion and hover know them.
 - **Editing:** the language server runs in a worker with the formatter and the Lints.
   - It gives diagnostics, completion, hover, suspension marks, go to definition (F12), references (Shift-F12), rename (F2) and **Format**.
-  - Highlighting separates fenced delimiters and literal text from hole code, including nested literals and multiline holes. Raw closing fences must match the opening quote run exactly.
+  - Highlighting separates fenced delimiters and literal text from hole code, including nested literals and multiline holes. Raw closing fences must match the opening quote run exactly. Argument Labels have their own style, including after continued argument expressions; argument variables keep their ordinary name style.
   - **Lints** chooses the `beginner` (the default) or `standard` Lint Profile.
 - **Live debugging:** click the gutter to set a breakpoint in the Script tab or a saved Library tab.
   - A breakpoint pauses the whole session during any Run, and the tab shows the paused line. While paused, the prompt waits.

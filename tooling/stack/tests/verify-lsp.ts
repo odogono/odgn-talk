@@ -67,5 +67,53 @@ export const verifyLspFeatures = (): number => {
   if (definition.range.start.line !== 0) {
     throw new Error('Definition failed');
   }
-  return 4;
+  server.configure({
+    manifest: {
+      kind: 'board',
+      version: '1',
+      language: '1.0-rc.2',
+      grants: [],
+      libraries: [],
+      objects: [],
+      messages: [{ name: 'move:to:', args: ['any', 'any'], receivers: [] }],
+    },
+  });
+  server.handle({
+    method: 'textDocument/didChange',
+    params: {
+      textDocument: { uri, version: 2 },
+      contentChanges: [
+        {
+          text: 'on move piece to square\nend move\non demo\n move 1 to 2\nend demo\n',
+        },
+      ],
+    },
+  });
+  server.handle({
+    method: 'textDocument/definition',
+    id: 5,
+    params: {
+      textDocument: { uri },
+      position: { line: 3, character: 2 },
+    },
+  });
+  const labelled = messages.at(-1)!.result as {
+    range: { start: { line: number } };
+  };
+  if (labelled?.range.start.line !== 0) {
+    throw new Error('Selector definition failed');
+  }
+  server.handle({
+    method: 'textDocument/completion',
+    id: 6,
+    params: {
+      textDocument: { uri },
+      position: { line: 0, character: 5 },
+    },
+  });
+  const completions = messages.at(-1)!.result as { label: string }[];
+  if (!completions.some(item => item.label === 'move arg1 to arg2')) {
+    throw new Error('Selector completion failed');
+  }
+  return 6;
 };
