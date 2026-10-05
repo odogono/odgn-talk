@@ -54,11 +54,10 @@ const SIZE_UNITS = new Set<string>(grammar.binary_patterns.size_units);
 const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
-// Spike for #338, on only with `labels`: the Reserved Word that may also be
-// an Argument Label, and the contextual words that may not. `from` is out
-// because `wait for … from` reads it as the event's source.
-const LABEL_RESERVED = new Set(['to']);
-const LABEL_EXCLUDED = new Set(['with', 'from']);
+// The Argument Label words (ADR 0055): any Name but the excluded ones, and the
+// listed Reserved Words.
+const LABEL_RESERVED = new Set<string>(grammar.labels.reserved);
+const LABEL_EXCLUDED = new Set<string>(grammar.labels.excluded);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
 const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
 const endSuffixExpected = (name: string, at: Token) =>
@@ -122,9 +121,6 @@ export class Parser {
   constructor(
     src: string,
     public stats: Stats = newStats(),
-    // Spike for #338: Argument Labels in Handler heads, Command Calls,
-    // target-first `send`, `pass` and `wait for`.
-    public labels = false,
   ) {
     this.lx = new Lexer(src);
   }
@@ -304,12 +300,10 @@ export class Parser {
   isName(t: Token) {
     return t.t === 'word' && !RESERVED.has(t.v) && t.v !== '_';
   }
-  // Spike for #338: a word that may be an Argument Label. Every decision on
-  // it reads one token, in operator position, after a complete parameter or
-  // argument.
+  // A word that may be an Argument Label. It is decided on one token, in
+  // operator position, after a complete parameter or argument.
   isLabel(t: Token) {
     return (
-      this.labels &&
       t.t === 'word' &&
       (this.isName(t) || LABEL_RESERVED.has(t.v)) &&
       !LABEL_EXCLUDED.has(t.v)
@@ -365,8 +359,8 @@ export class Parser {
     }
     return this.name(what);
   }
-  // Spike for #338: `move:to:` for `move` with the label `to`; a message with
-  // no labels keeps its plain name.
+  // The Selector `move:to:` for `move` with the label `to`. A message with no
+  // labels keeps its plain name.
   selector(name: string, labels: string[]): string {
     return labels.length ? `${[name, ...labels].join(':')}:` : name;
   }
@@ -775,7 +769,7 @@ export class Parser {
   }
 
   // A Command Call's arguments: a list, or one argument and then `label arg`
-  // pairs (#338 spike).
+  // pairs.
   commandPhrase(name: string): Node {
     const args = this.startsExpr(this.peek(0)) ? [this.expr()] : [];
     const labels: string[] = [];
@@ -832,9 +826,9 @@ export class Parser {
 
   send(): Node {
     this.next();
-    // Spike for #338: `send to <target>: <command phrase>`. `to` is reserved,
-    // so it can't be a message name, and one token decides.
-    if (this.labels && this.atWord('to')) {
+    // `send to <target>: <command phrase>`. `to` is reserved, so it can't be
+    // a message name, and one token decides.
+    if (this.atWord('to')) {
       this.next();
       const target = this.expr();
       this.expectOp(':');
@@ -1549,7 +1543,7 @@ export class Parser {
         };
         for (let index = 0; index < t.parts!.length - 1; index++) {
           const hole = t.parts![index]!.hole!;
-          const inner = new Parser(this.lx.src, this.stats, this.labels);
+          const inner = new Parser(this.lx.src, this.stats);
           inner.offset = hole.start;
           inner.brackets = ['{'];
           const at = this.lx.lex(hole.start, 'operand');
@@ -2145,9 +2139,8 @@ export class Parser {
 export const parse = (
   src: string,
   stats: Stats = newStats(),
-  labels = false,
 ): { ast: Node[] | null; error: SyntaxError | null; stats: Stats } => {
-  const p = new Parser(src, stats, labels);
+  const p = new Parser(src, stats);
   try {
     return { ast: p.source(), error: null, stats };
   } catch (error) {

@@ -74,7 +74,11 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 
 Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
                    /* a Name after `end`, if present, is the Handler's name */
-HandlerHead    ::= ( Pattern ( ',' Pattern )* )? Guard? ( ',' Suffix )*
+HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
+Label          ::= Name | 'to'
+                   /* an Argument Label: any Name but those grammar.toml's [labels]
+                      excludes, or one of its Reserved Words; never the start of an
+                      operator that can continue the expression before it */
 Suffix         ::= 'queued' | 'dropping' | 'replacing' | 'deciding' | 'during' Name
 Guard          ::= 'where' Expression
 MessageName    ::= Name  /* not `all` */
@@ -97,19 +101,21 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' MessageName ( 'with' ExpressionList )? 'to' Expression AndWait?
+Send           ::= 'send' ( MessageName ( 'with' ExpressionList )? 'to' Expression
+                          | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
 AndWait        ::= 'and' 'wait'
 Return         ::= 'return' Expression?
 Veto           ::= 'veto' Expression?
-Pass           ::= 'pass' MessageName
+Pass           ::= 'pass' MessageName Label*
 Exit           ::= 'exit' 'repeat'
 Next           ::= 'next' 'repeat'
 Throw          ::= 'throw' Expression
 Replace        ::= 'replace' 'first'? ChunkLevel 'in' Container 'with' Expression
 CallStatement  ::= Call AndWait?
-CommandCall    ::= Name ExpressionList? AndWait?
+CommandCall    ::= CommandPhrase AndWait?
+CommandPhrase  ::= Name ( Expression ( ( ',' Expression )* | ( Label Expression )+ ) )?
 ExpressionList ::= Expression ( ',' Expression )*
 
 /* ## blocks */
@@ -128,7 +134,7 @@ Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expres
 Join           ::= 'all' NL Block 'end' 'wait'?
 WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
-Event          ::= MessageName ( Pattern ( ',' Pattern )* )? ( 'from' ChunkLevel )?
+Event          ::= MessageName ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
 
 /* ## expressions */

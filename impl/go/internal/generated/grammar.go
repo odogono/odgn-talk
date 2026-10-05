@@ -6,6 +6,7 @@ type GrammarTable struct {
 	Follow         []string
 	Ordinals       []string
 	Properties     []string
+	Labels         GrammarTableLabels
 	Contextual     []GrammarTableContextualEntry
 	Chunk          []GrammarTableChunkEntry
 	TextPatterns   GrammarTableTextPatterns
@@ -16,6 +17,11 @@ type GrammarTable struct {
 	Advanced       []GrammarTableAdvancedEntry
 	SyntaxError    []GrammarTableSyntaxErrorEntry
 	Units          GrammarTableUnits
+}
+
+type GrammarTableLabels struct {
+	Reserved []string
+	Excluded []string
 }
 
 type GrammarTableContextualEntry struct {
@@ -166,6 +172,15 @@ var Grammar = GrammarTable{
 		"characters",
 		"bytes",
 		"code points",
+	},
+	Labels: GrammarTableLabels{
+		Reserved: []string{
+			"to",
+		},
+		Excluded: []string{
+			"from",
+			"with",
+		},
 	},
 	Contextual: []GrammarTableContextualEntry{
 		GrammarTableContextualEntry{

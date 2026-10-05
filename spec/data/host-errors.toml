@@ -49,7 +49,7 @@ raised_when = "A TS `run` call is settled by adopt after a restore"
 
 [[error]]
 code = "invalid value"
-raised_when = "Input the value model can't hold (ADR 0030), a malformed declaration, or a limit override that loosens"
+raised_when = "Input the value model can't hold (ADR 0030), a malformed declaration, a message name with a `:` that isn't a Selector with one argument per part (ADR 0055), or a limit override that loosens"
 
 [[error]]
 code = "invalid save"

@@ -1,11 +1,11 @@
 # 2. Grammar
 
-_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md).
+_Draws on:_ [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md).
 
 The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), and one set of word lists, in [`grammar.toml`](data/grammar.toml). This chapter shows both and states the rules they can't. What each construct means is in the chapters that follow.
 
 - **Predictive:** a Core parses with a fixed lookahead of two tokens and no backtracking. Every choice between productions is made on the next token, or on the next two where [a decision below](#two-token-decisions) says so.
-- **One grammar:** the grammar is the same on every Host. Neither Hosts nor Scripts can add syntax ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)).
+- **One grammar:** the grammar is the same on every Host. Neither Hosts nor Scripts can add syntax ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Handler's [Argument Labels](#argument-labels) are parsed the same whatever Handlers exist.
 - **What is normative:** for source that parses, the parse, since a different parse lowers differently ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)). For source that doesn't, the first syntax error: its code and position.
 
 ## Notation
@@ -96,6 +96,17 @@ The chunk kinds, the ordinals, the Built-in property names, the Text Pattern key
 
 These are the contextual keywords that may come straight after a complete expression. None of them can start a chunk index, which is how a chunk word is told from a Name ([Operands](#operands)). No Unit's name or plural may be a Reserved Word or in the FOLLOW set, and the generator checks this against [`units.toml`](data/units.toml).
 
+### Argument Label words
+
+Any Name may be an [Argument Label](#argument-labels), except these. Of the Reserved Words, only these may be one.
+
+<!-- generated: grammar.labels -->
+
+- **Reserved Words that may be labels:** `to`.
+- **Names that may not be labels:** `from`, `with`.
+
+<!-- end -->
+
 ## Source and declarations
 
 <!-- generated: ebnf.source -->
@@ -143,7 +154,7 @@ An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-se
 
 - A word that starts a declaration (`on`, `function`, `private`, `use` or `constant`, and `script` before `variable`) starts one.
 - A Reserved Word that starts a statement (`put`, `if`, `wait`, …) starts one, and so does `next` before `repeat`.
-- Any other Name starts a Command Call only if the Session Script has a Handler by that name, or the Name is `say` ([chapter 12](12-sessions-and-tooling.md#the-console)). Anything else, including an Entry that starts with `the`, `not`, `given` or a constant, is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
+- Any other Name starts a Command Call only if the Session Script has a Handler whose Selector starts with that Name, or the Name is `say` ([chapter 12](12-sessions-and-tooling.md#the-console)). Anything else, including an Entry that starts with `the`, `not`, `given` or a constant, is an expression, and its value is echoed. So `n - 1` echoes a value rather than calling a Handler `n` with `-1`.
 
 ## Handlers
 
@@ -152,7 +163,11 @@ An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-se
 ```ebnf
 Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
                    /* a Name after `end`, if present, is the Handler's name */
-HandlerHead    ::= ( Pattern ( ',' Pattern )* )? Guard? ( ',' Suffix )*
+HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
+Label          ::= Name | 'to'
+                   /* an Argument Label: any Name but those grammar.toml's [labels]
+                      excludes, or one of its Reserved Words; never the start of an
+                      operator that can continue the expression before it */
 Suffix         ::= 'queued' | 'dropping' | 'replacing' | 'deciding' | 'during' Name
 Guard          ::= 'where' Expression
 MessageName    ::= Name  /* not `all` */
@@ -160,10 +175,10 @@ MessageName    ::= Name  /* not `all` */
 
 <!-- end -->
 
-- **Handler and message names** are one Name each (`beforeClose`). `all` can't name a Handler, a message or an event, since `wait for all` starts a Join.
-- **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern.
+- **Handler and message names** are one Name each (`beforeClose`), and so is each part of a Selector. `all` can't name a Handler, a message or an event, since `wait for all` starts a Join.
+- **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern. The parameters are a comma-separated list, or one parameter followed by [Argument Labels](#argument-labels), each with its parameter.
 - **Suffixes:** after a comma in a head, `queued`, `dropping`, `replacing` and `deciding` are always suffixes, so none of them can be a parameter name there. `during` followed by a Name is the `during` suffix. Which suffixes may combine is a load rule ([chapter 5](05-handlers-messages-and-scheduling.md)).
-- **The end:** a Name after `end`, if present, must be the Handler's name. If an inner `repeat` is still open, `end handlerName` is a syntax error at `handlerName`; it cannot close through the `repeat`.
+- **The end:** a Name after `end`, if present, must be the Handler's name, which for a labelled Handler is its first word (`end move`). If an inner `repeat` is still open, `end handlerName` is a syntax error at `handlerName`; it cannot close through the `repeat`.
 - **`finally`** may end a Handler's body, as sugar for a `try` around it ([chapter 6](06-errors-and-limits.md)).
 
 > **Example.**
@@ -187,6 +202,31 @@ MessageName    ::= Name  /* not `all` */
 > end error
 > ```
 
+### Argument Labels
+
+An Argument Label names the parameter after it, in a Handler's head and at its call sites ([ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)).
+
+- **The Selector:** the message name and its labels make the message's Selector, written with a colon after each part. `on move piece to square` handles `move:to:`, and `on move piece` handles `move`, a different message. A message with no labels keeps its plain name.
+- **Where labels go:** one leading parameter or argument, then any number of `label parameter` pairs. There is no comma after a label, no label before the first parameter, and no labels after a comma-separated list. The same shape holds in a Handler head, a Command Call, an event of `wait for` and the phrase of a target-first `send`.
+- **Decided on one token:** after a complete parameter or argument, a label word in operator position starts a label. Any reading that continues the expression comes first, so `as`, `mod`, `div`, `contains` and `matches`, and `begins`, `ends`, `can`, `ignoring` and `delimited` when their [two-token decision](#two-token-decisions) gives the operator, are never labels there.
+- **Lines:** a label at the end of a line doesn't continue the line. A long labelled call goes in brackets.
+- **Traps:** the existing reading wins. A chunk word before an open label starts a Chunk Expression (`move word toward x` reads `word toward …`), and a number before a Unit-named label is a Quantity (`scale 3 m 4`). Brackets avoid both: `move (word) toward x`, `scale (3) m 4`.
+- **Errors:** a word in operator position after an argument is now a label, so a mistake such as `log error rest` fails at the end of the line, where `rest` has no argument.
+
+> **Example.** This block isn't checked by the Cores' tests until both Cores parse labels. [`tools/grammar/labels/`](../tools/grammar/labels/sketch.talk) holds the same forms for `grammar:check`.
+>
+> ```text
+> on move piece to square where square is not "e1", queued
+>   put square into the location of piece
+> end move
+>
+> on play
+>   move knight to "e4" and wait
+>   send to board: move knight to "e4"
+>   wait for move p to sq or 30 s
+> end play
+> ```
+
 ## Statements
 
 <!-- generated: ebnf.statements -->
@@ -208,19 +248,21 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' MessageName ( 'with' ExpressionList )? 'to' Expression AndWait?
+Send           ::= 'send' ( MessageName ( 'with' ExpressionList )? 'to' Expression
+                          | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
 AndWait        ::= 'and' 'wait'
 Return         ::= 'return' Expression?
 Veto           ::= 'veto' Expression?
-Pass           ::= 'pass' MessageName
+Pass           ::= 'pass' MessageName Label*
 Exit           ::= 'exit' 'repeat'
 Next           ::= 'next' 'repeat'
 Throw          ::= 'throw' Expression
 Replace        ::= 'replace' 'first'? ChunkLevel 'in' Container 'with' Expression
 CallStatement  ::= Call AndWait?
-CommandCall    ::= Name ExpressionList? AndWait?
+CommandCall    ::= CommandPhrase AndWait?
+CommandPhrase  ::= Name ( Expression ( ( ',' Expression )* | ( Label Expression )+ ) )?
 ExpressionList ::= Expression ( ',' Expression )*
 ```
 
@@ -228,14 +270,15 @@ ExpressionList ::= Expression ( ',' Expression )*
 
 - **Every word that starts a statement is reserved,** except `next`, so a statement that starts with any other Name is a Command Call or a call statement.
 - **`say`:** the grammar reads `say x` as an ordinary Command Call. [Chapter 12](12-sessions-and-tooling.md) makes it short for `tell console to write x`.
-- **Command Calls:** a Name, then its arguments, if the next token can start an expression. So `greet "Ann"` passes one argument, `blink and wait` passes none, and `n - 1` passes `-1` to a Handler `n`.
+- **Command Calls:** a Name, then its arguments, if the next token can start an expression. So `greet "Ann"` passes one argument, `blink and wait` passes none, and `n - 1` passes `-1` to a Handler `n`. The arguments are a comma-separated list, or one argument followed by [Argument Labels](#argument-labels) (`move knight to "e4"`), and the call names the Selector they make.
 - **Call statements:** a Name straight followed by `(`, with no space, is a call (`refresh()`), not a Command Call. With a space, `(` groups an argument, so `say (1 + 2) & "!"` passes one argument.
+- **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels.
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
 - **Operations:** the Word after `ask … to` or `tell … to` is always an Operation name, even a Reserved Word (`ask files to delete path`). `tell` never takes `and wait`.
 - **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name is `not a container`, reported at the Container's first token (`put 1 into 3`, `put "Z" into character 20 of "short"`). What a root Name refers to is a load rule.
 - **`put ...`** splices a list, and so takes only `after` or `before`.
 - **`return` and `veto`** take an expression if one starts next. `return` is never an operand ([chapter 1](01-lexical-structure.md#text-literals)).
-- **`pass`** names the message it passes. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
+- **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
 - **`replace`:** at the start of a statement, `replace <p> in c with e` rewrites the Container `c`. In operand position, the same words give the new text. There, `c` is any expression but a Lambda, and `e` an expression at the level of `&`, so `put replace <"-"> in s with "+" & x into t` replaces with `"+" & x`, and `into` ends the expression, since it isn't an operator. `replace first` replaces only the first match.
 
 ## Blocks
@@ -261,7 +304,7 @@ Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expres
 Join           ::= 'all' NL Block 'end' 'wait'?
 WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
-Event          ::= MessageName ( Pattern ( ',' Pattern )* )? ( 'from' ChunkLevel )?
+Event          ::= MessageName ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
 ```
 
@@ -271,7 +314,7 @@ Timeout        ::= 'or' Expression
 - **Block `if`:** `if … then` at the end of a line opens a block, closed by `end` or `end if`. An `else if … then` or `else` ends its line too.
 - **`repeat`:** `forever` straight after `repeat` always means a loop with no end, and never a count. A count is any expression before `times`.
 - **`match`:** each `when` has one pattern, then an optional Guard. `when contains <…>` searches rather than matching the whole value. At most one `else` comes last. A branch body is an `Inline` statement on the same line, or a block.
-- **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). `from` takes a postfix-level operand, so the `or` there is the timeout. At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
+- **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). An event's patterns take [Argument Labels](#argument-labels) as a head's parameters do (`wait for move p to sq`), and since `from` is never a label, it always starts the source. `from` takes a postfix-level operand, so the `or` there is the timeout. At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
 - **`try`:** `catch` clauses are Destructuring heads with optional Guards, tried top to bottom ([chapter 6](06-errors-and-limits.md)).
 
 > **Example.**

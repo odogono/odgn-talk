@@ -4,8 +4,6 @@
 //   bun tools/grammar/check.ts               parse everything below and fail on any surprise
 //   bun tools/grammar/check.ts --report      also list the two-token decisions, by count
 //   bun tools/grammar/check.ts --tree FILE   print the parse tree of one file
-//   bun tools/grammar/check.ts --labels      the #338 spike: everything with
-//                                            Argument Labels on, plus spike/
 //
 // It parses the syntax sketch in sketch/, every `talk` code block in docs/ and
 // spec/, the stdlib Libraries in spec/stdlib/, and every .talk file in corpus/, all of which must parse. Then it
@@ -24,10 +22,6 @@ const ROOT = resolve(import.meta.dir, '../..');
 const args = process.argv.slice(2);
 const problems: string[] = [];
 const total: Stats = newStats();
-// The #338 spike: parse with Argument Labels on, check spike/ too, and list
-// the broken.talk cases whose first error the labels move, without failing.
-const LABELS = args.includes('--labels');
-const moved: string[] = [];
 
 const files = (dir: string, ext: string): string[] =>
   readdirSync(dir)
@@ -53,7 +47,7 @@ const mustParse = (src: string, where: string, lineOffset = 0) => {
   const stats = newStats();
   let result;
   try {
-    result = parse(src, stats, LABELS);
+    result = parse(src, stats);
   } catch (error) {
     problems.push(`${where}: ${(error as Error).message}`);
     return;
@@ -101,7 +95,6 @@ const codeBlocks = (file: string) => {
 // `-- expect: <code> at <line>:<col>` or `-- expect: parses`. Lines count from
 // the line after the expectation.
 const broken = (file = join(import.meta.dir, 'broken.talk')) => {
-  const spike = file.includes('/spike/');
   const src = readFileSync(file, 'utf8');
   const parts = src.split(/^-- case: /m);
   let line = parts[0]!.split('\n').length;
@@ -120,7 +113,7 @@ const broken = (file = join(import.meta.dir, 'broken.talk')) => {
     const stats = newStats();
     let result;
     try {
-      result = parse(body, stats, LABELS);
+      result = parse(body, stats);
     } catch (error) {
       problems.push(`${where}: ${(error as Error).message}`);
       continue;
@@ -129,11 +122,7 @@ const broken = (file = join(import.meta.dir, 'broken.talk')) => {
     const e = result.error;
     const got = e ? `${e.code} at ${e.tok.line}:${e.tok.col}` : 'parses';
     const want = m[1] ? 'parses' : `${m[2]} at ${m[3]}:${m[4]}`;
-    if (got !== want && LABELS && !spike) {
-      moved.push(
-        `${where}: case "${label}": was ${want}, now ${got}${e ? ` (${e.message})` : ''}`,
-      );
-    } else if (got !== want) {
+    if (got !== want) {
       problems.push(
         `${where}: case "${label}": expected ${want}, got ${got}${e ? ` (${e.message})` : ''}`,
       );
@@ -175,7 +164,7 @@ const tree = (n: any, depth = 0): string => {
 const treeAt = args.indexOf('--tree');
 if (treeAt >= 0) {
   const file = args[treeAt + 1]!;
-  const { ast, error } = parse(readFileSync(file, 'utf8'), newStats(), LABELS);
+  const { ast, error } = parse(readFileSync(file, 'utf8'));
   if (error) {
     console.log(
       `${file}:${error.tok.line}:${error.tok.col}: ${error.code}: ${error.message}`,
@@ -209,7 +198,7 @@ for (const f of files(join(ROOT, 'corpus'), '.talk')) {
     );
   }
   if (expected) {
-    const { error } = parse(readFileSync(f, 'utf8'), newStats(), LABELS);
+    const { error } = parse(readFileSync(f, 'utf8'));
     if (
       !error ||
       error.code !== expected[2] ||
@@ -233,14 +222,13 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-if (LABELS) {
-  const spike = join(import.meta.dir, 'spike');
-  mustParse(
-    readFileSync(join(spike, 'labels.talk'), 'utf8'),
-    'tools/grammar/spike/labels.talk',
-  );
-  broken(join(spike, 'labels-broken.talk'));
-}
+// Argument Labels (ADR 0055), which the Cores' tests don't read until both
+// Cores parse them.
+mustParse(
+  readFileSync(join(import.meta.dir, 'labels/sketch.talk'), 'utf8'),
+  'tools/grammar/labels/sketch.talk',
+);
+broken(join(import.meta.dir, 'labels/broken.talk'));
 
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
@@ -261,14 +249,6 @@ if (args.includes('--report')) {
   console.log(
     `Relexes: ${total.relexes.length}. Lookahead past two tokens: none (it would throw).`,
   );
-}
-if (LABELS) {
-  console.log(
-    `broken.talk cases whose first error the labels move: ${moved.length}`,
-  );
-  for (const m of moved) {
-    console.log(`  ~ ${m}`);
-  }
 }
 if (problems.length) {
   for (const p of problems) {

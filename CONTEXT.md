@@ -267,7 +267,7 @@ One of the small, fixed set of structure words (`on`, `end`, `if`, `put`, `into`
 _Avoid_: keyword (unqualified), reserved keyword
 
 **Command Call**:
-A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`.
+A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`. With Argument Labels, the call names the Handler's Selector, e.g. `move knight to "e4"` calls `move:to:`.
 _Avoid_: procedure call, invocation, message send (a `send` is something else)
 
 **Import**:
@@ -299,6 +299,14 @@ _Avoid_: advanced mode, extension, expert feature
 **Handler**:
 An `on <message> … end` block that runs when its message or event reaches the Script. Its ending may repeat the message name as `end <message>`.
 _Avoid_: callback, listener, function
+
+**Argument Label**:
+A word in a Handler's head, and at its call sites, that names the parameter after it, e.g. `to` in `on move piece to square` and `move knight to "e4"`.
+_Avoid_: keyword (that means a Reserved Word or a contextual keyword), named argument, parameter name
+
+**Selector**:
+A message's name together with its Argument Labels, written `move:to:`. Two Handlers with different Selectors handle different messages, and a message with no labels keeps its plain name.
+_Avoid_: signature, method name
 
 **Handler Clause**:
 One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
