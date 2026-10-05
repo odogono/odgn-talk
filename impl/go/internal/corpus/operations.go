@@ -61,6 +61,12 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		if ms, ok := row["maxPending"].(int64); ok {
 			op.MaxPending = time.Duration(ms) * time.Millisecond
 		}
+		if scope, ok := row["scope"].(Setup); ok {
+			op.Scope = &talk.ScopeDecl{}
+			op.Scope.Opens, _ = scope["opens"].(string)
+			op.Scope.Closes, _ = scope["closes"].(string)
+			op.Scope.Abandon, _ = scope["abandon"].(string)
+		}
 		key := name + "." + op.Name
 		invoke := func(c *talk.Call, args []talk.Value) (talk.Value, error) {
 			return out.invoke(key, op.Mode, c)

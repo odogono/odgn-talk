@@ -231,7 +231,7 @@ adapter stop at a
 untouched and no charge for that instruction. The pending Run remains visible
 and a Request remains unsettled. A Decision remains open if it has not sealed
 before that boundary. Group cancellation and Stop Script are supported as described
-below; scoped lifecycle support remains under
+below; Segment-bound lifecycle support remains under
 [#134](https://github.com/odogono/odgn-talk/issues/134), and save/restore under
 [#136](https://github.com/odogono/odgn-talk/issues/136).
 
@@ -286,19 +286,20 @@ Pumps are traced at the call, ahead of those still-queued inputs.
 
 `Script.Reload` checks and initializes new code against kept, unrevoked Grants
 before discarding old work. A rejected Reload leaves calls and revocation state
-intact. Successful Reload abandons pending calls without Script finally cleanup,
+intact. Successful Reload abandons scopes and pending calls without Script finally cleanup,
 drops queued messages, settles Requests/reply senders as stopped, carries variables
 by name when requested, and preserves counters. Carry uses the active Segment's
 rollback base for preempted Runs; Function Values from the old code become stale.
 A successful Reload restarts Script-addressed execution; a disposed owner
-remains skipped by Object routing. `Extend`, Library replacement and scoped
-lifecycle remain deferred.
+remains skipped by Object routing. `Extend`, Library replacement and
+Segment-bound lifecycle remain deferred.
 
 `Script.Stop` is queued and sticky. It discards running, parked and suspended
 Runs without `finally`, rolls back an active Segment, and drops mailbox messages.
 Waiting callers fail with `send failed`, reason `stopped`; open Decisions become
 undecided with outcome `cancelled`. Stop reports list discarded Runs, dropped
-Deliveries and abandoned calls. Pending Capability contexts are cancelled.
+Deliveries and abandoned calls. Pending Capability contexts are cancelled,
+and open Capability Scopes receive automatic abandonment.
 Owner disposal uses the same termination path with reason `owner disposed`.
 
 Repeated Stops preserve the first reason and emit no additional Stop report
@@ -395,9 +396,47 @@ Operation identity. Timeout, cancellation, Reload and Join abandonment cancel
 pending Call Contexts; revocation leaves in-flight calls alone and blocks later
 starts. Inspection reports `ask-wait` and pending ids. No turn callback is retained
 in machine state.
-Capability Scopes and Segment-bound effects remain part of #134. Definitions that request Scopes or
-Segment-bound behavior are refused. Ordinary calls have no scope, are not
-automatic. Immediate and fire-and-forget calls carry a background Context.
+Ordinary calls have no scope and are not automatic. Immediate and
+fire-and-forget calls carry a background Context. Definitions requesting
+Segment-bound behavior are refused; participant hooks remain under #134.
+
+### Capability Scopes
+
+Immediate Operations may declare `Scope` as `Opens` plus `Abandon`, or `Closes`.
+Definition validates names, matching close targets, argument/result Shapes and
+consistent abandonment targets. Grants containing an opener must include its
+abandonment Operation; `GrantsAsUsed` keeps that dependency. Definitions copy
+the metadata so later Host mutations do not change it.
+
+Each Run owns separate slots by named Grant and scope name, including aliases
+sharing a binding. Successful Host return acknowledges acquisition or closure
+before result validation, conversion or queued interruption. Duplicate opens
+and absent closes raise scope errors without calling the Host. Open scopes
+prevent executed suspension boundaries and Join entry; local calls that never
+suspend remain valid. Opening inside a Join is refused. These checks precede
+instruction charges, while dispatch and ordinary unwind charges still apply.
+Preemption retains the slots.
+
+Completion, error, faults, cancellation, Stop, disposal and successful Reload
+automatically abandon remaining scopes in reverse opening order before exposing
+the outcome. Cancellation cleanup may still use scopes on ordinary Grants until
+it ends. Automatic Calls use the saved implementation/binding even after
+revocation, with `Automatic`, `ScopeName`, ownership ids, the last Pump Clock and
+a fresh non-cancelled Context. They consume no Script Fuel or allocation and
+cannot use `Charge`, `Answer` or `Fail`. Reentrant worker calls are refused.
+
+Failed automatic abandonment reports `EffectFailure`, disables only that
+Script's named Grant and continues remaining cleanup. Later calls raise
+`capability disabled` before revocation checks. `Inspect` lists disabled Grant
+names in sorted order; disabled state survives Reload and has no reset API.
+Explicit close failures leave the scope open and usable.
+
+Eleven existing scope traces pass unchanged. `scope-slots` and
+`scope-suspension-boundaries` await reconciliation of their Fuel expectations
+with the normative precharge guard rule in
+[#323](https://github.com/odogono/odgn-talk/issues/323). Their expectations are
+preserved. Scope cases requiring save/restore remain under #136; Segment-bound
+effects and Library replacement remain separate work.
 
 ### Clock and Timer Standard Capabilities
 
@@ -754,7 +793,7 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 194 cases, including all text-model, load-diagnostic,
+The gate contains 205 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. Tests

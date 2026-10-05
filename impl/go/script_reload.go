@@ -28,8 +28,8 @@ type Stop struct {
 
 func (*Stop) isReport() {}
 
-// Reload validates the replacement before abandoning ordinary pending calls.
-// Scoped lifecycle and Library replacement are not supported by this Core yet.
+// Reload validates the replacement before abandoning scopes and pending calls.
+// Segment participants and Library replacement are not supported yet.
 func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	g := s.group
 	exports, importIDs, states, calls := libraryOptions(g.libraries)
@@ -48,7 +48,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	}
 	declarations := map[string]map[string]check.OperationCheck{}
 	for name, grant := range s.grants {
-		if grant.revoked {
+		if grant.revoked && !grant.disabled {
 			continue
 		}
 		declarations[name] = map[string]check.OperationCheck{}
@@ -105,6 +105,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	s.runs = nil
 	s.active = nil
 	for _, x := range runs {
+		g.abandonScopes(s, x, &reports)
 		stop.DiscardedRuns = append(stop.DiscardedRuns, x.id)
 		// Keep the same call order as the machine, including Script replies.
 		if x.waitCall != "" {
@@ -178,7 +179,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	s.stopReason = ""
 	g.mu.Unlock()
 	for name, grant := range s.grants {
-		if grant.revoked {
+		if grant.revoked && !grant.disabled {
 			delete(s.grants, name)
 		}
 	}

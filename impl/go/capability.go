@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -59,6 +60,7 @@ type Grant struct {
 	operations map[string]bool
 	binding    any
 	revoked    bool
+	disabled   bool
 }
 
 func (d *CapabilityDef) Name() string { return d.name }
@@ -75,8 +77,15 @@ func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, 
 		if op.Cost.Fuel < 0 || op.Cost.Alloc < 0 || op.Cost.Fuel > 9007199254740991 || op.Cost.Alloc > 9007199254740991 {
 			return invalid("invalid Operation cost")
 		}
-		if op.Scope != nil || op.SegmentBound {
-			return invalid("Scoped and Segment-bound Operations are not available")
+		if op.SegmentBound {
+			return invalid("Segment-bound Operations are not available")
+		}
+		if op.Scope != nil {
+			scope := *op.Scope
+			if op.Mode != Immediate || !validScopeDecl(scope) {
+				return invalid("invalid scope declaration")
+			}
+			op.Scope = &scope
 		}
 		if op.MaxPending < 0 || op.MaxPending%time.Millisecond != 0 || op.Mode != Suspending && op.MaxPending != 0 {
 			return invalid("invalid maxPending")
@@ -106,7 +115,37 @@ func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, 
 		}
 		d.ops[op.Name] = op
 	}
+	abandons := map[string]string{}
+	for _, op := range d.ops {
+		if op.Scope == nil || op.Scope.Opens == "" {
+			continue
+		}
+		s := op.Scope
+		target, ok := d.ops[s.Abandon]
+		if !ok || target.Scope == nil || target.Scope.Closes != s.Opens || target.Mode != Immediate || len(target.Args) != 0 || target.Result.inner.Kind != "kind" || target.Result.inner.Name != "nothing" {
+			return nil, &HostError{InvalidValue, "invalid scope abandonment Operation"}
+		}
+		if previous := abandons[s.Opens]; previous != "" && previous != s.Abandon {
+			return nil, &HostError{InvalidValue, "inconsistent scope abandonment Operations"}
+		}
+		abandons[s.Opens] = s.Abandon
+	}
 	return d, nil
+}
+
+func validScopeDecl(s ScopeDecl) bool {
+	word := func(name string) bool {
+		l, err := syntax.NewLexer(name)
+		if err != nil {
+			return false
+		}
+		t, err := l.Next(syntax.Operand)
+		return err == nil && t.Kind == syntax.Word && t.Raw == name
+	}
+	if s.Closes != "" {
+		return s.Opens == "" && s.Abandon == "" && word(s.Closes)
+	}
+	return word(s.Opens) && word(s.Abandon)
 }
 func validShape(s shape.Shape) bool {
 	if s.Kind == "" {
@@ -137,6 +176,11 @@ func (d *CapabilityDef) Grant(ops []string, binding any) (*Grant, error) {
 		}
 		g.operations[name] = true
 	}
+	for name := range g.operations {
+		if scope := d.ops[name].Scope; scope != nil && scope.Opens != "" && !g.operations[scope.Abandon] {
+			return nil, &HostError{InvalidValue, "Grant omits scope abandonment Operation"}
+		}
+	}
 	return g, nil
 }
 func (d *CapabilityDef) GrantAll(binding any) *Grant {
@@ -151,20 +195,24 @@ func (d *CapabilityDef) GrantAll(binding any) *Grant {
 var ErrLimit error = errors.New("the Run cannot cover this charge")
 
 type Call struct {
-	mu         sync.Mutex
-	group      *Group
-	scriptName string
-	runID      RunID
-	grantName  string
-	binding    any
-	id         CallID
-	segmentID  string
-	now        time.Time
-	context    context.Context
-	starting   bool
-	reached    bool
-	charged    int64
-	charge     func(int64) bool // valid only during this Host crossing
+	mu               sync.Mutex
+	group            *Group
+	scriptName       string
+	runID            RunID
+	grantName        string
+	binding          any
+	id               CallID
+	segmentID        string
+	now              time.Time
+	context          context.Context
+	starting         bool
+	reached          bool
+	charged          int64
+	charge           func(int64) bool // valid only during this Host crossing
+	scopeName        string
+	automatic        bool
+	invalidAutomatic bool
+	failureDetail    string // validation diagnostic for automatic EffectFailure
 }
 
 func (c *Call) ID() CallID               { return c.id }
@@ -173,15 +221,22 @@ func (c *Call) Group() *Group            { return c.group }
 func (c *Call) RunID() RunID             { return c.runID }
 func (c *Call) GrantName() string        { return c.grantName }
 func (c *Call) SegmentID() string        { return c.segmentID }
-func (c *Call) ScopeName() string        { return "" }
-func (c *Call) Automatic() bool          { return false }
+func (c *Call) ScopeName() string        { return c.scopeName }
+func (c *Call) Automatic() bool          { return c.automatic }
 func (c *Call) Binding() any             { return c.binding }
 func (c *Call) Now() time.Time           { return c.now }
 func (c *Call) Context() context.Context { return c.context }
 func (c *Call) Charge(fuel int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.starting || fuel < 0 || fuel > 9007199254740991 {
+	if !c.starting {
+		return &HostError{InvalidValue, "Charge must be a nonnegative safe integer while starting"}
+	}
+	if c.automatic {
+		c.invalidAutomatic = true
+		return &HostError{InvalidValue, "Charge is unavailable for automatic abandonment"}
+	}
+	if fuel < 0 || fuel > 9007199254740991 {
 		return &HostError{InvalidValue, "Charge must be a nonnegative safe integer while starting"}
 	}
 	if !c.charge(fuel) {
@@ -226,6 +281,7 @@ func (c *Call) Answer(v Value) { c.AnswerWithCost(v, 0) }
 
 // AnswerWithCost charges late Fuel with result conversion on resumption.
 func (c *Call) AnswerWithCost(v Value, fuel int64) {
+	c.refuseAutomaticSettlement()
 	if fuel < 0 || fuel > 9007199254740991 {
 		panic(&HostError{InvalidValue, "invalid late Fuel"})
 	}
@@ -234,12 +290,23 @@ func (c *Call) AnswerWithCost(v Value, fuel int64) {
 
 // Fail queues a copied ScriptError; nil fails as host error.
 func (c *Call) Fail(e *ScriptError) {
+	c.refuseAutomaticSettlement()
 	var copy *ScriptError
 	if e != nil {
 		clone := *e
 		copy = &clone
 	}
 	c.queueSettlement("fail", Nothing, copy, 0)
+}
+func (c *Call) refuseAutomaticSettlement() {
+	if c.automatic {
+		c.mu.Lock()
+		if c.starting {
+			c.invalidAutomatic = true
+		}
+		c.mu.Unlock()
+		panic(&HostError{InvalidValue, "automatic abandonment cannot settle"})
+	}
 }
 func (c *Call) queueSettlement(kind string, v Value, e *ScriptError, fuel int64) {
 	g := c.group
