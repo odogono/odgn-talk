@@ -39,3 +39,5 @@ To check a PR the way CI does, run:
 ```sh
 PR_TITLE="feat(ts): Add x" BASE_REF=main bun tools/commits/check.ts pr
 ```
+
+`BASE_REF` is the branch name (`main`), without `origin/`; the checker adds the remote prefix.

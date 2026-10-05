@@ -6,25 +6,7 @@ Run commands in this guide from the repository root. Workspace-only scripts sele
 
 ## Task navigation
 
-| Task | Implementation | Rules | Tests and cases |
-| --- | --- | --- | --- |
-| Parsing and name/binding checks | [parser](src/parser.ts), [checker](src/checker.ts) | [grammar](../../spec/02-grammar.md) | [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts) |
-| Lowering and execution | [lowering](src/lowering.ts), [machine](src/machine.ts) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](tests/lowering.test.ts), [disassembly cases](../../corpus/disassembly/) |
-| Scheduling and Capabilities | [Group](src/group.ts), [Capabilities](src/capabilities.ts) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts) |
-| Real file cleanup and publication | [File Example Host](examples/files/) | [file lifecycle examples](../../spec/embedding/scoped-effects.md#file-handle-cleanup) | [Temporary-file integration tests](examples/files/files.test.ts) |
-| Save and restore | [snapshot](src/snapshot.ts), [Group](src/group.ts) | [save and restore](../../spec/10-save-and-restore.md) | [save/restore tests](tests/save-restore.test.ts) |
-| Sessions, Transcripts and CLI | [Session Host](src/session/host.ts), [Transcript codec/replay](src/session/transcript.ts), [CLI](../../tooling/cli/) | [sessions and tooling](../../spec/12-sessions-and-tooling.md) | [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session corpus](../../corpus/sessions/) |
-| Formatting source | [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts) | [formatter](../../spec/12-sessions-and-tooling.md#the-formatter) | [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/) |
-| Lints and CLI advice | [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/) | [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints) | [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts) |
-| Editor language server | [Browser-safe LSP core](../../tooling/stack/src/lsp.ts), [stdio CLI](../../tooling/cli/src/lsp.ts) | [LSP](../../spec/12-sessions-and-tooling.md#the-lsp), [Host Manifest](../../spec/09-embedding.md#the-host-manifest-format) | [Language-feature tests](../../tooling/stack/tests/lsp.test.ts), [stdio fixture workspace](../../tooling/cli/tests/lsp-runtime.test.ts) |
-| Testing user Scripts | [Test runner](../../tooling/cli/src/test.ts) over the public Group API | [Testing Scripts](../../tooling/cli/README.md#testing-scripts), [ADR 0056](../../docs/adr/0056-user-scripts-are-tested-by-a-black-box-test-script.md) | [CLI tests](../../tooling/cli/tests/cli.test.ts) |
-| Live debugging | [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Core hooks](#tooling-debug-hooks) | [Live debugger tests](../../tooling/stack/tests/debug.test.ts), [Trace parity](../../tooling/stack/tests/debug-corpus.test.ts), [CLI tests](../../tooling/cli/tests/debug.test.ts) |
-| Trace replay debugging | [Shared replay driver](src/replay.ts), [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug-replay.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs) | [Navigation tests](../../tooling/stack/tests/replay-debug.test.ts), [Trace and Transcript parity](../../tooling/stack/tests/replay-debug-corpus.test.ts) |
-| The Playground | [Playground session](../../tooling/playground/src/session.ts), [workers](../../tooling/playground/src/session.worker.ts), [page](../../tooling/playground/src/main.ts) | [The Playground](../../spec/12-sessions-and-tooling.md#the-playground), [ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md) | [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser) |
-| Differential fuzzing | [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts) | [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [research](../../docs/research/differential-fuzzing.md) | [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts) |
-| Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Unicode tests](tests/unicode.test.ts) |
-
-The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
+Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 
 ## The Session Host
 
@@ -351,7 +333,7 @@ The generator downloads all ten files pinned by [`unicode.toml`](../../spec/data
 
 The committed `src/generated/unicode.ts` includes the source hashes. Runtime code imports only TS tables and uses no platform normalization, `Intl.Segmenter`, Unicode regular-expression properties or platform case mapping. Hangul normalization is algorithmic. Extended grapheme boundaries follow Unicode 18's UAX #29 revision 49, including its changed GB9c rule. The [Unicode license](src/generated/UNICODE-LICENSE.txt) accompanies the tables and is copied into `dist/` with the browser bundle.
 
-The event-test charging correction agrees with Go for four revised cases and the new `suspension/wait-observation` regression. Four further expectations were corrected with maintainer approval based on TS ordinary and save/restore agreement. The corrected `suspension/wait-for`, `decisions/broadcast-outcomes` and `objects/wait-target` cases now agree on Go after Script sends, Broadcast Decisions and Object Message Paths were implemented. Only [reload/extend-units](../../docs/reviews/event-test-charging/README.md) still needs Go verification, tracked in [#277](https://github.com/odogono/odgn-talk/issues/277); Go's `Extend` facility and save/restore replay remain deferred to [#136](https://github.com/odogono/odgn-talk/issues/136).
+The [event-test charging reconciliation](../../docs/reviews/event-test-charging/README.md) records the paired executions and the limited approval for TS-only expectation corrections. Current Go facilities are described in the [Go save/restore guide](../go/README.md#save-restore-and-code-updates); implementing those facilities and verifying each corrected Trace are separate steps.
 
 ## Verification and corpus selection
 

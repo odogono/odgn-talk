@@ -74,8 +74,8 @@ Segment-bound Operations following #340. The maintainer approved the first
 blessings of seven limit/cancellation regressions and 22 effect cases on
 2026-10-05 for #135 and #326; see the
 [approval record](../docs/reviews/go-step-four-blessings/README.md). Scope cases
-outside that set retain their #222 first-review headers. Four effect cases
-requiring Save or Library replacement remain deferred to #136. See the
+outside that set retain their #222 first-review headers. For current Save and
+Library replacement support, see the [Go lifecycle guide](../impl/go/README.md#save-restore-and-code-updates). See the
 [boundary audit and expectation diff](../docs/reviews/scope-guard-charging/README.md).
 
 The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
@@ -134,7 +134,7 @@ The three `counters/` cases pin lifetime work, mailbox and live state, fault rol
 
 The `event-test-slice-debt` and `event-test-group-cap` cases in `suspension/` pin observation Fuel, atomic waiter checks, dispatch ordering and slice debt. The `event-tests-fault-on-resume` case in `limits/` pins uncapped observation charges and the waiting Run's fault at its next resumed instruction. All three pass full and save/restore replay.
 
-The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation. Go supports registered handles, well-known bindings and queued disposal; the reviewed `builtins/object-kind` and `builtins/kind-of` traces pass unchanged in both Cores and are required by the Go passing gate. The corrected `objects/properties` trace uses a local alias for its runtime read-only write, adding two Fuel and shifting later source/instruction positions. New `load-diagnostics/object-properties` and `objects/guard-keys` cases cover declaration-aware Load refusals and pure dynamic Guard reads, including disposed Objects and Core ids. Both Cores agree on these three traces and all are required by the Go passing gate. Their `Unblessed` headers await human review of the new or corrected expectations. Message Path routing remains deferred in Go.
+The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation. Go supports registered handles, well-known bindings and queued disposal; the reviewed `builtins/object-kind` and `builtins/kind-of` traces pass unchanged in both Cores and are required by the Go passing gate. The corrected `objects/properties` trace uses a local alias for its runtime read-only write, adding two Fuel and shifting later source/instruction positions. New `load-diagnostics/object-properties` and `objects/guard-keys` cases cover declaration-aware Load refusals and pure dynamic Guard reads, including disposed Objects and Core ids. Both Cores agree on these three traces and all are required by the Go passing gate. Their `Unblessed` headers await human review of the new or corrected expectations. Current routing support is described in the [Go Object Message Paths guide](../impl/go/README.md#object-message-paths).
 
 The four `functions/` cases cover Host and foreign calls, cancellation, defaults and previously exported callbacks returned through Capability Stubs and answers.
 
@@ -159,7 +159,7 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
-The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. Go and TS agree byte for byte, including TS save/restore replay; its first blessing awaits human review. Four existing event-test Traces were corrected after paired execution, and four further expectations were corrected with maintainer approval from TS ordinary and save/restore agreement. This limited exception to the blessing rule does not establish Go parity; [#277](https://github.com/odogono/odgn-talk/issues/277) tracks the remaining verification. See the [charging reconciliation](../docs/reviews/event-test-charging/README.md) for the corrections and required Go facilities.
+The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. Go and TS agree byte for byte, including TS save/restore replay; its first blessing awaits human review. Four existing event-test Traces were corrected after paired execution, and four further expectations were corrected with maintainer approval from TS ordinary and save/restore agreement. This limited exception to the blessing rule does not establish Go parity. See the [charging reconciliation](../docs/reviews/event-test-charging/README.md) for the verification evidence and follow-up.
 
 The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. `limits/self-send-persistent` was approved for #135 on 2026-10-05; the two suspension cases still await first human review. The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
 
@@ -194,8 +194,8 @@ Go, TS ordinary execution and TS save/restore. It covers early answers across Jo
 body preemption, conversion/late Fuel under a Pump cap, fail-fast input ordering,
 late-cost faults preserving earlier Segments, Run cancellation and Reload
 abandonment. Its `Unblessed` header remains for first human review. The reviewed
-`reload/reload-carry-and-discard` case also passes unchanged; full Go
-lifecycle/limits and save/restore acceptance remain #135/#136.
+`reload/reload-carry-and-discard` case also passes unchanged; current Go
+lifecycle support is described in the [Go guide](../impl/go/README.md#save-restore-and-code-updates).
 
 The `suspension/join-closing-position` regression pins failed replies and timeouts
 at a Join's closing `end`, including bare `end`, `end wait` and a local Handler.
@@ -224,7 +224,7 @@ recognition and positional/labelled Handlers sharing a first word. Their
 
 ## The Disassembly Cases
 
-The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript retains its `Unblessed` header pending first human review.
+The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript was approved on 2026-10-05; see the [fenced-text approval record](../docs/reviews/fenced-text-blessings/README.md).
 
 The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
 
