@@ -965,7 +965,7 @@ error, Decision, Capability, Library and Standard Library traces. Trace cases re
 public embedding interface, with exact records, costs and final state. Tests
 separately enforce the full 61-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
-18 step-5 save/restore, Extend and replacement cases, and all ten Session
+18 step-5 save/restore, Extend and replacement cases, and all eleven Session
 Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Their
