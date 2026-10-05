@@ -118,7 +118,9 @@ go run ./cmd/corpus sessions/save-restore
 ```
 
 Enter one declaration, statement or expression. Incomplete Entries continue at
-`|`; expressions print their value. `say` calls `console.write`. Foreground
+`|`, including open fences and interpolation holes. Blank literal lines remain
+content; final EOF diagnoses the innermost unfinished construct at its opener.
+Expressions print their value. `say` calls `console.write`. Foreground
 Runs wait for their console input or real-clock deadline; other suspended Runs
 produce background lines when later resumed. Ctrl-C cancels the foreground Run
 or drops an unfinished Entry. Ctrl-D and `:quit` exit; `:help` lists Commands.

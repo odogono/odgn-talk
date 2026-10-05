@@ -25,7 +25,12 @@ Checking bindings or supplying a Host Manifest is unnecessary for formatting.
 There are no layout options. The formatter uses two spaces per block and one
 extra level for continuation lines and `match` / block `wait for` branch heads.
 It normalises spacing within each line, preserves token spelling and comment
-text, and keeps at most one consecutive blank line outside fenced literals. Fenced literal content, including trailing spaces and blank lines, is preserved. It preserves all other
+text, and keeps at most one consecutive blank line outside fenced literals.
+Fenced literal values, including trailing spaces and blank lines, are preserved.
+Margin-stripped literals align their closing margin and content prefixes with
+block indentation; nested literals keep their own margins. Inline-start content
+keeps its whitespace. Code inside interpolation holes uses ordinary formatting.
+It preserves all other
 line breaks, including their LF, CRLF or CR spelling, the BOM, and whether
 the source ends in a newline. Comments are only re-indented; trailing comments
 have one space before them. Spacing that distinguishes syntax, such as
@@ -139,6 +144,11 @@ reported at the importing `use` line. Constants are evaluated by the Core's
 initializer and shown in the display form. Operations show their manifest
 Declaration; Function Values show their Home Script. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
+
+Interpolation holes participate in diagnostics, references, rename and Lints as
+ordinary code. Raw text and escaped placeholders remain literal. Completion
+supplies local names inside unfinished holes and stays silent in literal content,
+including an unfinished fence.
 
 Rename follows resolved bindings, retains explicit ending suffixes, and keeps
 local aliases separate: renaming an alias changes that alias and its uses;

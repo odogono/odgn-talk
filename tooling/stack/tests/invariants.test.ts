@@ -20,12 +20,15 @@ const files = (dir: string): string[] =>
     return entry.isDirectory() ? files(path) : [path];
   });
 
-// Compare tokens, comment bodies and significant/continuation line endings.
-// Blank physical lines alone are allowed to disappear.
+// Compare code spelling, comment bodies and significant/continuation line
+// endings. Fenced literal margins may change; compare their decoded values.
+// Blank physical lines outside literal content alone may disappear.
 const spelling = (source: string) => {
   const parsed = parseSource(source);
   expect(parsed.error).toBeNull();
-  const stack: SyntaxElement[] = [parsed.tree!];
+  const stack: { element: SyntaxElement; literal: boolean }[] = [
+    { element: parsed.tree!, literal: false },
+  ];
   const result: string[] = [];
   let content = false;
   const newline = (raw: string) => {
@@ -35,9 +38,17 @@ const spelling = (source: string) => {
     content = false;
   };
   while (stack.length) {
-    const element = stack.pop()!;
+    const { element, literal } = stack.pop()!;
     if (element.kind === 'node') {
-      stack.push(...[...element.children].reverse());
+      stack.push(
+        ...[...element.children].reverse().map(child => ({
+          element: child,
+          literal:
+            element.rule === 'Interpolated' &&
+            child.kind === 'token' &&
+            child.t === 'str',
+        })),
+      );
       continue;
     }
     for (const trivia of element.leadingTrivia) {
@@ -51,7 +62,14 @@ const spelling = (source: string) => {
     if (element.t === 'nl') {
       newline(element.raw);
     } else if (element.t !== 'eof') {
-      result.push(`${element.t}:${element.mode}:${element.raw}`);
+      const fenced =
+        element.t === 'str' &&
+        (literal ||
+          element.raw.startsWith('`') ||
+          element.raw.startsWith('"""'));
+      result.push(
+        `${element.t}:${element.mode}:${fenced ? element.v : element.raw}`,
+      );
       content = true;
     }
   }

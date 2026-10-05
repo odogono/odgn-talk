@@ -38,6 +38,7 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - The Playground's Host Manifest is built from the session's Grants and given to the language server, so completion and hover know them.
 - **Editing:** the language server runs in a worker with the formatter and the Lints.
   - It gives diagnostics, completion, hover, suspension marks, go to definition (F12), references (Shift-F12), rename (F2) and **Format**.
+  - Highlighting separates fenced delimiters and literal text from hole code, including nested literals and multiline holes. Raw closing fences must match the opening quote run exactly.
   - **Lints** chooses the `beginner` (the default) or `standard` Lint Profile.
 - **Live debugging:** click the gutter to set a breakpoint in the Script tab or a saved Library tab.
   - A breakpoint pauses the whole session during any Run, and the tab shows the paused line. While paused, the prompt waits.
