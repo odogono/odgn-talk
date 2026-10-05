@@ -1,6 +1,6 @@
 # 5. Handlers, messages and scheduling
 
-_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md).
+_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md).
 
 This chapter says how a message reaches a Handler, how Runs of one Script interleave, and how a Pump schedules the Scripts of a Group. The syntax of Handlers and of the statements here is in [chapter 2](02-grammar.md). What happens when something fails is in [chapter 6](06-errors-and-limits.md), and the Host calls that feed the scheduler are in [chapter 9](09-embedding.md).
 
@@ -27,7 +27,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 ## Handlers and dispatch
 
-- **Clauses:** every `on m` Handler in a Script is a Handler Clause for the message `m`, and a message's clauses are tried in source order.
+- **Clauses:** every `on m` Handler in a Script is a Handler Clause for the message `m`, and a message's clauses are tried in source order. A message is named by its Selector: `on move piece to square` is a clause for `move:to:`, never for `move` ([chapter 2](02-grammar.md#argument-labels)).
 - **Dispatch** tries each clause in turn. A clause matches when the message has as many arguments as the clause has parameters, each argument passes its parameter's Destructuring pattern, and then the Guard, if there is one, gives `true`. The first clause that matches runs, with its parameters bound.
 - **No match:** if no clause matches, the Run ends as `unhandled`, and the message goes on along the [Message Path](#the-message-path).
 - **Charged to the Run:** dispatch is the Run's own code, so every clause it tries is charged to it by the Cost Model ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)), even when no clause matches.
@@ -52,7 +52,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 ### Calling a Handler by name
 
-- **Resolution:** a Command Call (`greet "Ann"`) resolves to a Handler of the Script itself, then to an imported one. Only if neither exists is it sent up the Message Path from the parent of `me`'s object, as `send` would send it, and with `and wait` as `send … and wait`. Since a name clash between the two is a load error, the order never breaks a tie.
+- **Resolution:** a Command Call (`greet "Ann"`, `move knight to "e4"`) resolves, by its Selector, to a Handler of the Script itself, then to an imported one. Only if neither exists is it sent up the Message Path from the parent of `me`'s object, as `send` would send it, and with `and wait` as `send … and wait`. Since a name clash between the two is a load error, the order never breaks a tie.
 - **A plain call:** a Command Call to a Handler of the Script, or an imported one, runs in the caller's Run, through the same clause dispatch. If no clause matches, it raises `no match`. Its errors unwind straight into the caller ([ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md)).
 - **The result** of a Command Call, the value its Handler returns, is left in `it`.
 - **Called function-style** (`f(x)` or `the f of x`), a Handler, like a function, may never suspend. Reaching a possible Suspension Point through one is a load error.
@@ -76,7 +76,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 - **`me`** is the object the Script owns, or Nothing if it owns none.
 - **`the target`** is the object the message was delivered to. It stays the same all the way up the path. For a message sent to a Script, `the target` is the receiving Script's owner, or Nothing if it has none.
-- **`pass m`** ends the Run as `completed` and sends the message on up the path, as if no clause had matched. `m` must be the message the Handler handles, or it is a load error.
+- **`pass m`** ends the Run as `completed` and sends the message on up the path, as if no clause had matched. `m` must be the message the Handler handles, or it is a load error. A labelled message is named by its words, without parameters: `pass move to`.
 - **Where they can't go:** `pass` and `the target` are load errors inside a Lambda ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)), and `me`, `the target` and `pass` are load errors in Library code ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 
 > **Example.**
@@ -95,7 +95,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 ## Sending
 
-- **`send m with args to x`** puts the message at the back of the receiver's mailbox and returns at once. It isn't a Suspension Point. The receiver is `me`, another Script of the Group, or a Host Object. Across Groups, the Host routes.
+- **`send m with args to x`**, or `send to x: m args` with the receiver first, puts the message at the back of the receiver's mailbox and returns at once. The target-first form takes [Argument Labels](02-grammar.md#argument-labels), so `send to board: move knight to "e4"` sends `move:to:` with two arguments. It isn't a Suspension Point. The receiver is `me`, another Script of the Group, or a Host Object. Across Groups, the Host routes.
 - **Order:** mailboxes are FIFO, so two messages from one sender to one receiver are dispatched in the order they were sent.
 - **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too. In a Script that owns no object, where `me` is Nothing, `send … to me` sends to the Script itself.
 - **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
@@ -135,7 +135,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **A one-shot subscription:** `wait for m p1, p2` suspends until a message `m` whose arguments pass the patterns reaches the Script. As for a Handler Clause, the message has exactly as many arguments as the event has patterns, so `wait for ready` matches only a `ready` with none. Only a message that is dispatched after the wait began can match. Nothing is buffered, so a missed message stays missed.
 - **It observes:** when a message is dispatched, every pending `wait for` in the Script that it matches resumes, in the order the waits began, and then the message goes to the Handler Clauses as usual. A `wait for` never consumes a message.
 - **`from x`** evaluates `x` once when waiting begins. A Host Object requires the message’s Target to be that same object, including for a message sent to a Script whose owner is the Target. A Name that names a Script requires that Script to be the sender, as a `send`'s receiver names a Script ([Sending](#sending)). Any other value raises `wrong kind`, expected `object`, before the wait starts. Each block branch keeps its own evaluated filter.
-- **`it`:** a `wait for` that matches leaves the message in `it`, as the map `{name, args}`: its name as text and its arguments as a list.
+- **`it`:** a `wait for` that matches leaves the message in `it`, as the map `{name, args}`: its Selector as text (`"move:to:"`, or `"move"` for a message with no labels) and its arguments as a list.
 - **A timeout:** `wait for m or d` stops waiting after the exact duration `d`, with the same deadline rule as `wait`, and leaves Nothing in `it`. A `wait for` with no timeout can wait for ever. `MaxWait` doesn't apply to it.
 - **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after the closing `end` (optionally `end wait`). A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.
 - **Guards** on `when` branches follow the rules for Handler Guards. An error in one means the branch doesn't match.

@@ -13,6 +13,9 @@
 #   follow       the FOLLOW set: the contextual words that may come straight
 #                after a complete expression, so none of them starts a chunk index
 #   ordinals     the words that name a chunk by position after `the`
+#   [labels]     the Argument Label words (ADR 0055): any Name may be a label
+#     reserved   the Reserved Words that may also be labels
+#     excluded   the Names that may not be labels
 #   properties   the Built-in property names, read with `the <name> of x`
 #   [[contextual]]
 #     word       a contextual keyword outside the lists below
@@ -67,6 +70,12 @@ properties = [
   "length", "keys", "values", "items", "lines", "words", "characters", "bytes",
   "code points",
 ]
+
+[labels]
+reserved = ["to"]
+# `from` and an operand in `wait for` is the event's source; `with` follows the
+# message name in `send` and continues a line.
+excluded = ["from", "with"]
 
 [[contextual]]
 word = "a"

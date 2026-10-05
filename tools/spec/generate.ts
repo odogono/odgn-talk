@@ -402,6 +402,16 @@ const crossCheck = (d: Data) => {
       );
     }
   }
+  for (const w of d.grammar.labels?.reserved ?? []) {
+    if (!reserved.has(w)) {
+      fail('grammar.toml', `label word "${w}" isn't a Reserved Word`);
+    }
+  }
+  for (const w of d.grammar.labels?.excluded ?? []) {
+    if (reserved.has(w)) {
+      fail('grammar.toml', `excluded label word "${w}" is a Reserved Word`);
+    }
+  }
   for (const [list, key] of [
     ['decision', 'name'],
     ['syntax_error', 'code'],
@@ -725,6 +735,12 @@ const VIEWS: Record<string, View> = {
     ),
 
   'grammar.follow': d => words(d.grammar.follow),
+
+  'grammar.labels': d =>
+    [
+      `- **Reserved Words that may be labels:** ${words(d.grammar.labels.reserved)}.`,
+      `- **Names that may not be labels:** ${words(d.grammar.labels.excluded)}.`,
+    ].join('\n'),
 
   'grammar.chunks': d =>
     table(

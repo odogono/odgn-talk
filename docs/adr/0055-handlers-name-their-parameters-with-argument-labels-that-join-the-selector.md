@@ -70,12 +70,6 @@ Settled in #338.
   - In `move word toward x`, `word toward …` is a Chunk Expression.
   - In `scale 3 m 4`, `3 m` is a Quantity.
 - **Not affected:** functions, Lambdas, Capability Operations and the old `send` form.
-- **Delivery:** the spec change for this decision has to land in the same change as this ADR (ADR 0032):
-  - chapters 2, 5 and 9;
-  - the label word rule in `grammar.toml`;
-  - a new language prerelease.
-
-  Corpus cases, both Cores, the Manifest tooling and the LSP follow.
-- **Checked by the parser spike** (#338, `tools/grammar/spike/`):
-  - no new two-token decision and no relexes;
-  - the sketch, every `talk` block in `docs/` and `spec/`, the stdlib and the corpus all parse unchanged with labels on.
+- **Delivery:** the spec lands with this ADR (ADR 0032): chapters 2, 5 and 9, and the label words in `grammar.toml`'s `[labels]`. Both Cores, corpus cases, the Manifest tooling and the LSP follow in later changes.
+- **The language stays `1.0-rc.2`.** Every source that parsed before parses the same way, and the language is still a prerelease. A new version would re-bless the whole corpus before either Core has labels.
+- **Checked by `tools/grammar/`** (#338): no new two-token decision and no relexes. The sketch, every `talk` block in `docs/` and `spec/`, the stdlib and the corpus parse unchanged.

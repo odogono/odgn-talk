@@ -1,5 +1,11 @@
--- The #338 spike: broken sources with Argument Labels on. The same format as
--- ../broken.talk; checked by `bun tools/grammar/check.ts --labels`.
+-- Argument Labels (ADR 0055): broken sources in the format of ../broken.talk.
+-- `bun tools/grammar/check.ts` checks them. The Cores' tests don't read this
+-- file yet; its cases move into ../broken.talk once both Cores parse labels.
+-- case: keyword-shaped Command Call arguments read `rest` as an Argument Label
+-- expect: unexpected token at 2:17
+on t
+  log error rest
+end t
 -- case: a label with no argument
 -- expect: unexpected token at 2:17
 on t

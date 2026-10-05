@@ -23,6 +23,30 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "labels": {
+      "description": "The Argument Label words (ADR 0055): any Name may be a label, except the excluded ones, and of the Reserved Words only the listed ones may be.",
+      "type": "object",
+      "properties": {
+        "reserved": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "uniqueItems": true
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": ["reserved", "excluded"],
+      "additionalProperties": false
+    },
     "ordinals": {
       "type": "array",
       "items": {
@@ -329,6 +353,7 @@
   "required": [
     "reserved",
     "follow",
+    "labels",
     "ordinals",
     "properties",
     "contextual",

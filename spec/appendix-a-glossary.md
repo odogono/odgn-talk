@@ -269,7 +269,7 @@ One of the small, fixed set of structure words (`on`, `end`, `if`, `put`, `into`
 _Avoid_: keyword (unqualified), reserved keyword
 
 **Command Call**:
-A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`.
+A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`. With Argument Labels, the call names the Handler's Selector, e.g. `move knight to "e4"` calls `move:to:`.
 _Avoid_: procedure call, invocation, message send (a `send` is something else)
 
 **Import**:

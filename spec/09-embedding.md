@@ -137,6 +137,7 @@ Ordinary immediate effects remain final. A scope guarantees an abandonment attem
 
 ## Deliveries
 
+- **Selectors:** a message name that contains `:` is a Selector: two or more Names, each followed by `:`, whose labels are [Argument Label words](02-grammar.md#argument-label-words) (`move:to:`), with one argument per part. A Delivery, Request, Broadcast or Decision whose name contains `:` but isn't such a Selector, or doesn't have one argument per part, is refused at the call as `invalid value` ([ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)).
 - **`Deliver`** routes a message to an object's Owning Script, or the nearest ancestor that has one, and **`Script.Deliver`** addresses a Script directly ([chapter 5](05-handlers-messages-and-scheduling.md)). Each returns a delivery id, which the Run it starts reports.
 - **`Request`** is a `send … and wait` from outside. Its future settles with the Run's result, or rejects with `send failed` and the reason. Cancelling its context or signal queues `cancel-delivery`.
 - **`Broadcast`** reaches every Script that wants the message when the queue is drained. Each recipient's `run end` carries its own delivery id and the broadcast id.
@@ -270,7 +271,7 @@ Host misuse is refused at the call that made it, as a `HostError` with one of th
 | `library mismatch` | A Library's imports aren't in the Group, or have different identities there |
 | `reserved name` | A Host registers a Library under a stdlib name |
 | `not adoptable` | A TS `run` call is settled by adopt after a restore |
-| `invalid value` | Input the value model can't hold ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), a malformed declaration, or a limit override that loosens |
+| `invalid value` | Input the value model can't hold ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)), a malformed declaration, a message name with a `:` that isn't a Selector with one argument per part ([ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)), or a limit override that loosens |
 | `invalid save` | `Restore` is given bytes this Core can't read: another Core family's save, a save format it no longer reads, or corrupt bytes |
 | `save mismatch` | A save's versions, Libraries or Grants don't match, and the Host's policy is to reject |
 | `unknown call` | `Settle` names a call id that isn't pending or one already settled, or is made once the first Pump has started |
@@ -288,7 +289,7 @@ A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load s
 - **Its fields:** `kind`, `version` and `language`, then these arrays:
   - `grants`: name, Capability, and Operation Declarations
   - `libraries`: name, version, source and `needs`
-  - `messages`: name, argument Shapes and receiving kinds
+  - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds
   - `objectKinds`: name, properties and `parentKinds`
   - `objects`: well-known name and kind
 - **One data model:** Operation Declarations and Shapes use the same data model as the corpus's `case.toml`, written as JSON here and as TOML there. A Constant value inside them uses the Value Encoding.
