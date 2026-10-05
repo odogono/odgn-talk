@@ -248,7 +248,7 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' ( MessageName ( 'with' ExpressionList )? 'to' Expression
+Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' ExpressionList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
@@ -272,7 +272,7 @@ ExpressionList ::= Expression ( ',' Expression )*
 - **`say`:** the grammar reads `say x` as an ordinary Command Call. [Chapter 12](12-sessions-and-tooling.md) makes it short for `tell console to write x`.
 - **Command Calls:** a Name, then its arguments, if the next token can start an expression. So `greet "Ann"` passes one argument, `blink and wait` passes none, and `n - 1` passes `-1` to a Handler `n`. The arguments are a comma-separated list, or one argument followed by [Argument Labels](#argument-labels) (`move knight to "e4"`), and the call names the Selector they make.
 - **Call statements:** a Name straight followed by `(`, with no space, is a call (`refresh()`), not a Command Call. With a space, `(` groups an argument, so `say (1 + 2) & "!"` passes one argument.
-- **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels.
+- **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels. A bracketed expression in place of the message name computes it (`send (next) with order to me`), and `(` can't start a Name, so one token decides that too.
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
 - **Operations:** the Word after `ask … to` or `tell … to` is always an Operation name, even a Reserved Word (`ask files to delete path`). `tell` never takes `and wait`.
 - **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name is `not a container`, reported at the Container's first token (`put 1 into 3`, `put "Z" into character 20 of "short"`). What a root Name refers to is a load rule.

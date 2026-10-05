@@ -80,6 +80,19 @@ var Errors = ErrorsTable{
 			Message: "The mailbox of {to} is full",
 		},
 		ErrorsTableErrorEntry{
+			Code: "bad message name",
+			Fields: []string{
+				"name",
+				"arguments",
+			},
+			RaisedWhen: "A `send` with a computed message name is given text that isn't a Name or a Selector, that is `all` or a Reserved Word, or that is a Selector whose part count isn't `arguments`, the argument count",
+			Sources: []string{
+				"ADR 0057",
+				"#178",
+			},
+			Message: "{name} can't name a message with {arguments} arguments",
+		},
+		ErrorsTableErrorEntry{
 			Code: "capability revoked",
 			Fields: []string{
 				"capability",

@@ -58,3 +58,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0054: Benchmarks live outside the Cores and only advise the Cost Model](0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md)
 - [0055: Handlers name their parameters with Argument Labels that join the Selector](0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)
 - [0056: User Scripts are tested by a black-box Test Script](0056-user-scripts-are-tested-by-a-black-box-test-script.md)
+- [0057: A `send` may compute its message name](0057-a-send-may-compute-its-message-name.md)

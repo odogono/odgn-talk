@@ -229,6 +229,13 @@ mustParse(
   'tools/grammar/labels/sketch.talk',
 );
 broken(join(import.meta.dir, 'labels/broken.talk'));
+// A computed message name in `send` (ADR 0057), which the Cores' tests don't
+// read until both Cores parse it.
+mustParse(
+  readFileSync(join(import.meta.dir, 'computed-send/sketch.talk'), 'utf8'),
+  'tools/grammar/computed-send/sketch.talk',
+);
+broken(join(import.meta.dir, 'computed-send/broken.talk'));
 
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);

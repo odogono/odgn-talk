@@ -842,7 +842,17 @@ export class Parser {
         wait: this.andWait(),
       };
     }
-    const msg = this.messageName('a message name');
+    // `send (<name>) with …`: a computed message name. `(` can't start a
+    // Name, so one token decides (ADR 0057).
+    let msg: string | null = null;
+    let name: Node | null = null;
+    if (this.isOp(this.peek(0), '(')) {
+      this.next();
+      name = this.nested(() => this.expr());
+      this.expectOp(')');
+    } else {
+      msg = this.messageName('a message name');
+    }
     let args: Node[] = [];
     if (this.atWord('with')) {
       this.next();
@@ -850,7 +860,7 @@ export class Parser {
     }
     this.expectWord('to', 'operator');
     const target = this.expr();
-    return { k: 'Send', msg, args, target, wait: this.andWait() };
+    return { k: 'Send', msg, name, args, target, wait: this.andWait() };
   }
 
   askTell(): Node {

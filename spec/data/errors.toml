@@ -52,6 +52,13 @@ sources = ["ADR 0017", "ADR 0026"]
 message = "The mailbox of {to} is full"
 
 [[error]]
+code = "bad message name"
+fields = ["name", "arguments"]
+raised_when = "A `send` with a computed message name is given text that isn't a Name or a Selector, that is `all` or a Reserved Word, or that is a Selector whose part count isn't `arguments`, the argument count"
+sources = ["ADR 0057", "#178"]
+message = "{name} can't name a message with {arguments} arguments"
+
+[[error]]
 code = "capability revoked"
 fields = ["capability", "operation"]
 raised_when = "A call goes through a revoked Grant"
