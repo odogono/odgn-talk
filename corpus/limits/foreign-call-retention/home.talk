@@ -1,10 +1,10 @@
 script variable done = 0
 on begin
- put given
-  wait 1 s
-  add 1 to done
-  return 7
- end given into f
- send go with f to below
- send go with f to exact
+  put given
+    wait 1 s
+    add 1 to done
+    return 7
+  end given into f
+  send go with f to below
+  send go with f to exact
 end begin

@@ -75,3 +75,21 @@ expectation was changed.
   all eight new cases, passes with ordinary and save/restore execution.
 - `bun run check`, TS type checking, focused ESLint, Prettier and
   `git diff --check`: pass.
+
+## PR #365 CI follow-up
+
+The initial PR checks exposed two gaps in the local validation: the Go step-4
+acceptance test still expected 32 cases after this audit added eight, and the
+foreign-call fixture used one-space indentation for a Lambda whose source
+position appears in its name. The formatter changed that name from `3:6` to
+`3:7`, failing the Disassembly invariant.
+
+Update the expected case count to 40 and format `foreign-call-retention/home.talk`
+with the repository formatter. Its regenerated Trace changes only the source
+identity and Function Value names. Before writing it, actual Go and TS ordinary
+and save/restore executions agreed again. The first-human-review marker remains.
+
+Follow-up validation passes: all 1,425 tooling tests, the full Go race suite
+(`go -C impl/go test -race ./...`), Go vet and the corpus passing gate,
+workspace type checking, lint/format/spec checks, and Node build/runtime checks.
+The 30 focused retention tests also pass after regenerating the fixture Trace.
