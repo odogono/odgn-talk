@@ -93,7 +93,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
   - a Host function that fails with anything else, such as a Go panic or a TS exception
   - a result that breaks its Operation's result Shape ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md))
 - **No Host detail:** a `host error` carries nothing from the Host, since a panic's text could leak Host internals. The detail goes only in the `call failed` report. Uncaught, a `host error` ends the Run as `errored`, like any other error.
-- **Standard Capability codes:** the fixed `calendar` Operation Declarations list `unknown zone` and `ambiguous time`, and a Host may `Fail` with them. The Core checks their fields against the catalogue, and a mismatch becomes `host error`. The Core checks a `locale` tag itself before the Host function runs, and raises `bad locale` ([ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md)).
+- **Standard Capability codes:** the fixed `calendar` Operation Declarations list `unknown zone` and `ambiguous time`, and the `store` ones `can't store`, `store full` and `store busy`, with `increment` also listing `wrong kind`, `incompatible units` and `overflow`. A Host may `Fail` with the codes its Operation lists. The Core checks their fields against the catalogue, and a mismatch becomes `host error`. The Core checks a `locale` tag itself before the Host function runs, and raises `bad locale`, and it raises `invalid key` itself for an empty `store` key ([ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 - **Arguments are checked first:** an argument that breaks its Shape raises `wrong kind` before the Host function runs, and nothing is charged. The fields describe the first node that doesn't match, searched depth-first in argument order: `argument` is its 1-based position and `path` locates it inside the argument, when it isn't the argument itself. A `OneOf` expects its kind names joined with `" or "`, and an `Optional` expects its Shape's followed by `" or nothing"`. A Quantity Shape expects its Unit, or its Unit Kind, and a Quantity that breaks it `got` its own Unit. For a missing key, `got` is `"nothing"`, and for an extra key in a closed map, `expected` is `"nothing"`. `capability` is the Grant's name, as the Script writes it. Every Shape but `function` is a data Shape, and a Function Value anywhere a data Shape takes it, `any` included, raises `not encodable`, with `path` from the argument's 1-based position.
 - **Revoked Grants:** a call through a revoked Grant raises `capability revoked` until the next Reload, after which it is a load error.
 - **Charging:** a `Charge` the Run can't cover is a Limit Fault at the call, not an Error.
@@ -170,6 +170,10 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 | `scope in join` | `capability`, `operation`, `scope` | An opening Operation executes inside a Join, including through a local call | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
 | `segment participant conflict` | `capability`, `operation`, `participant` | A Segment-bound Operation tries to enlist a different named Grant from the current participant | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
 | `capability disabled` | `capability`, `operation` | A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
+| `invalid key` | none | A `store` Operation is given empty text as its key; the Core raises it before the Host function runs | [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [#226](https://github.com/odogono/odgn-talk/issues/226) |
+| `can't store` | `kind` | A `store` write's value holds a Host Object, at any depth; `kind` is its Object Kind, and the Host raises it | [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [#226](https://github.com/odogono/odgn-talk/issues/226) |
+| `store full` | `limit` | A `store` write would take the Store past one of its quotas, counting every live Segment's pending growth; `limit` is `size`, `keys` or `value`, and the Host raises it | [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), [#226](https://github.com/odogono/odgn-talk/issues/226) |
+| `store busy` | `key` | A `store` write names a key that another live Segment has reserved with an uncommitted write; the Host raises it before anything changes | [ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), [#226](https://github.com/odogono/odgn-talk/issues/226) |
 
 <!-- end -->
 
@@ -214,6 +218,10 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `scope in join` | The scope {scope} cannot open inside a Join |
 | `segment participant conflict` | The Segment already participates through {participant}, so {capability} cannot join |
 | `capability disabled` | The Grant for {capability} is disabled, so {operation} cannot be called |
+| `invalid key` | A Store key can't be empty text |
+| `can't store` | A {kind} object can't be kept in a Store |
+| `store full` | The Store's {limit} limit would be exceeded |
+| `store busy` | Another Segment is writing {key} |
 
 <!-- end -->
 

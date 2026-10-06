@@ -11,7 +11,7 @@ A Run preempted by its Fuel Slice is still in its Segment, and other Scripts run
 
 ## Consequences
 
-- **What reserves:** an uncommitted `set`, `delete` or `swap` that wrote. A `swap` that gives `false` wrote nothing and reserves nothing. Pending increments reserve a key against `set`, `delete` and `swap` from other Segments, but not against their increments, since deltas commute.
+- **What reserves:** an uncommitted `set`, `delete` or `swap` that wrote. A `swap` that gives `false` wrote nothing and reserves nothing. Pending increments reserve a key against `set`, `delete` and `swap` from other Segments, but not against their increments, since deltas commute. An increment that couldn't be added to the other Segments' pending increments, such as metres to kilograms, fails at its call.
 - **`store busy`** has the field `{key}`, and the Core adds `capability` and `operation`. It is raised before the Operation changes anything.
 - **Reads** are never blocked. Another Segment reading a reserved key, or listing `keys`, sees the last committed state.
 - **Lifetime:** reservations end at the Segment's commit or rollback. A Segment ends at its next Suspension Point, so only preemption lets one outlive a single stretch of execution, and a Session, with no Fuel Slice, never raises `store busy`.

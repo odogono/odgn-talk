@@ -256,3 +256,31 @@ fields = ["capability", "operation"]
 raised_when = "A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation"
 sources = ["#219", "ADR 0047", "ADR 0048"]
 message = "The Grant for {capability} is disabled, so {operation} cannot be called"
+
+[[error]]
+code = "invalid key"
+fields = []
+raised_when = "A `store` Operation is given empty text as its key; the Core raises it before the Host function runs"
+sources = ["ADR 0050", "#226"]
+message = "A Store key can't be empty text"
+
+[[error]]
+code = "can't store"
+fields = ["kind"]
+raised_when = "A `store` write's value holds a Host Object, at any depth; `kind` is its Object Kind, and the Host raises it"
+sources = ["ADR 0050", "#226"]
+message = "A {kind} object can't be kept in a Store"
+
+[[error]]
+code = "store full"
+fields = ["limit"]
+raised_when = "A `store` write would take the Store past one of its quotas, counting every live Segment's pending growth; `limit` is `size`, `keys` or `value`, and the Host raises it"
+sources = ["ADR 0050", "ADR 0062", "#226"]
+message = "The Store's {limit} limit would be exceeded"
+
+[[error]]
+code = "store busy"
+fields = ["key"]
+raised_when = "A `store` write names a key that another live Segment has reserved with an uncommitted write; the Host raises it before anything changes"
+sources = ["ADR 0062", "#226"]
+message = "Another Segment is writing {key}"
