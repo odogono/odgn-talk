@@ -73,7 +73,7 @@ export const northtalkParser: StreamParser<State> = {
       const parsed = parseEntry(`${source}\n`, () => true);
       // Carry unfinished argument expressions and patterns, not whole blocks.
       // An Argument Label at a physical line ending is an error, not continuation.
-      const blockEnd = /^expected `(?:end|else|catch|finally)`/.test(
+      const blockEnd = /^expected `(?:end|else|offer|catch|finally)`/.test(
         parsed.error?.message ?? '',
       );
       state.pending =
@@ -160,7 +160,18 @@ export const northtalkParser: StreamParser<State> = {
       if (state.labels.has(stream.start)) {
         return 'labelName';
       }
-      return KEYWORDS.has(word[0].toLowerCase()) ? 'keyword' : 'variableName';
+      const name = word[0];
+      const before = stream.string.slice(0, stream.start);
+      const after = stream.string.slice(stream.pos);
+      const recoveryWord =
+        (name === 'choose' && /^\s+offer\b/.test(after)) ||
+        (name === 'before' &&
+          /^\s*catch\b/.test(before) &&
+          /^\s+unwind\b/.test(after)) ||
+        (name === 'unwind' && /^\s*catch\b.*\bbefore\s+$/.test(before));
+      return recoveryWord || KEYWORDS.has(name.toLowerCase())
+        ? 'keyword'
+        : 'variableName';
     }
     stream.next();
     return 'operator';

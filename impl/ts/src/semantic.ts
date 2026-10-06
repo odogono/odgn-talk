@@ -54,6 +54,7 @@ export type NameRole =
   | 'binary size'
   | 'command'
   | 'message'
+  | 'offer'
   | 'grant'
   | 'receiver'
   | 'import'

@@ -1,3 +1,4 @@
+import { recoveryBody } from './recovery';
 import type { CheckOptions, DiagnosticCode } from './checker';
 import { grammar } from './generated/syntax';
 import type {
@@ -20,11 +21,14 @@ type Context = {
   loops: number;
   /** The message the enclosing Handler handles; null outside a Handler. */
   message: string | null;
+  /** Loop depth at the Recovery Catch granting lexical choice permission. */
+  recovery: number | null;
 };
 const loopSuffixes = new Set(['queued', 'dropping', 'replacing']);
 const suffixes = new Set([...loopSuffixes, 'deciding', 'during']);
 const outside: Context = {
   finally: null,
+  recovery: null,
   join: null,
   joinTry: false,
   lambda: false,
@@ -310,11 +314,28 @@ export const checkControl = (
         }
         break;
       }
-      case 'Try':
+      case 'ChooseOffer':
+        if (context.recovery === null) {
+          report('not in recovery', firstLeafOf(node));
+        }
+        break;
+      case 'Try': {
+        const seen = new Set<string>();
+        for (const offer of node.children) {
+          if (offer.kind !== 'node' || offer.rule !== 'OfferClause') {
+            continue;
+          }
+          const name = firstLeafOf(offer.children[1]!);
+          if (seen.has(name.text)) {
+            report('duplicate offer', name);
+          }
+          seen.add(name.text);
+        }
         if (context.join !== null) {
           context = { ...context, joinTry: true };
         }
         break;
+      }
       case 'Primary': {
         const [head] = node.children;
         if (unit === 'library' && word(head, 'me')) {
@@ -339,6 +360,17 @@ export const checkControl = (
         break;
       case 'SimpleStatement': {
         const [head, next] = node.children;
+        if (
+          context.recovery !== null &&
+          (word(head, 'return') ||
+            word(head, 'veto') ||
+            word(head, 'pass') ||
+            ((word(head, 'exit') ||
+              (word(head, 'next') && word(next, 'repeat'))) &&
+              context.loops <= context.recovery))
+        ) {
+          report('leaves recovery catch', head as Leaf);
+        }
         if (word(head, 'set') && next?.kind === 'node') {
           const step = objectKey(next);
           if (step?.key !== null && step && step.base.kind === 'node') {
@@ -450,7 +482,11 @@ export const checkControl = (
         const cleanup = word(children[index - 1], 'finally');
         work.push({
           node: child,
-          context: cleanup ? { ...context, finally: context.loops } : context,
+          context: {
+            ...context,
+            ...(cleanup ? { finally: context.loops } : {}),
+            ...(recoveryBody(node, index) ? { recovery: context.loops } : {}),
+          },
         });
       }
     }

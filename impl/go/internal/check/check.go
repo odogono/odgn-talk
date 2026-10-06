@@ -289,6 +289,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 		}
 	}
 	u.checkOperations()
+	u.checkRestrictedSuspension()
 	u.checkHandlerWaits()
 	u.checkDecisions()
 	u.orderDiagnostics()
@@ -299,6 +300,12 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 // Check after suspension propagation so declaration order and indirect calls
 // cannot hide a Suspension Point, including a Join reached through a Handler.
 func (u *Unit) checkHandlerWaits() {
+	restricted := map[syntax.Position]bool{}
+	for _, d := range u.Diagnostics {
+		if d.Code == "can't suspend here" {
+			restricted[d.Pos] = true
+		}
+	}
 	for _, body := range u.Bodies {
 		if u.inheritedBody(body) {
 			continue
@@ -306,6 +313,9 @@ func (u *Unit) checkHandlerWaits() {
 		syntax.Walk(body.Node, func(n *syntax.Node) bool {
 			if n != body.Node && n.Kind == "lambda" {
 				return false
+			}
+			if restricted[n.Pos()] {
+				return true
 			}
 			if n.Kind != "command" && n.Kind != "call" || n.Kind == "command" && syntax.HasFlag(n, "and") {
 				return true
@@ -373,7 +383,7 @@ func Bindings(n *syntax.Node) []*syntax.Node {
 		switch x.Kind {
 		case "name":
 			return
-		case "binding", "collecting-target", "capture":
+		case "binding", "offer-parameter", "collecting-target", "capture":
 			if x.Text != "_" {
 				out = append(out, x)
 			}
@@ -440,7 +450,7 @@ func bindingSites(n *syntax.Node, visit func(*syntax.Node)) {
 			for _, b := range Bindings(x.Children[0]) {
 				visit(b)
 			}
-		case "repeat", "collecting", "when", "catch", "event":
+		case "repeat", "collecting", "when", "catch", "offer", "event":
 			for _, param := range x.Params {
 				for _, b := range Bindings(param) {
 					visit(b)
@@ -474,7 +484,7 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 			return
 		}
 		// A collecting target is an explicit local, even when it shadows a Handler.
-		if _, ok := u.Symbols[x.Text]; ok && x.Kind != "collecting-target" {
+		if symbol, ok := u.Symbols[x.Text]; ok && x.Kind != "collecting-target" && !(x.Kind == "offer-parameter" && symbol.Kind == "handler" && symbol.Import == "") {
 			return
 		}
 		if parent != nil && x.Kind == "name" && parent.Slot(x.Text) >= 0 {
@@ -591,6 +601,9 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 
 type context struct {
 	loop, finally, join, lambda int
+	finallyLoop                 int
+	recovery                    bool
+	recoveryLoop                int
 	guard                       bool
 	body                        *Body
 }
@@ -605,6 +618,7 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 		ctx.loop = 0
 		ctx.finally = 0
 		ctx.join = 0
+		ctx.recovery = false
 	}
 	for _, p := range b.Node.Params {
 		if p.Kind != "name" {
@@ -736,7 +750,10 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.lambda > 0 && (n.Kind == "pass" || n.Kind == "target") {
 		u.add("not in a lambda", n.Pos())
 	}
-	if ctx.finally > 0 && (slices.Contains([]string{"return", "veto", "pass"}, n.Kind) || (n.Kind == "exit" || n.Kind == "next") && ctx.loop == 0) {
+	if ctx.recovery && (slices.Contains([]string{"return", "veto", "pass"}, n.Kind) || (n.Kind == "exit" || n.Kind == "next") && ctx.loop <= ctx.recoveryLoop) {
+		u.add("leaves recovery catch", n.Pos())
+	}
+	if ctx.finally > 0 && (slices.Contains([]string{"return", "veto", "pass"}, n.Kind) || (n.Kind == "exit" || n.Kind == "next") && ctx.loop > 0 && ctx.loop <= ctx.finallyLoop) {
 		u.add("leaves finally", n.Pos())
 	}
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
@@ -746,6 +763,31 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		u.add("not in a library", n.Pos())
 	}
 	switch n.Kind {
+	case "choose-offer":
+		if !ctx.recovery {
+			u.add("not in recovery", n.Pos())
+		}
+	case "try":
+		seen := map[string]bool{}
+		for _, branch := range n.Branches {
+			if branch.Kind == "offer" {
+				if seen[branch.Text] {
+					u.add("duplicate offer", branch.NameToken.Pos)
+				}
+				seen[branch.Text] = true
+			}
+		}
+	case "offer":
+		seen := map[string]bool{}
+		for _, param := range n.Params {
+			if seen[param.Text] {
+				u.add("duplicate name", param.Pos())
+			}
+			seen[param.Text] = true
+			if symbol, ok := u.Symbols[param.Text]; ok && symbol.Kind != "builtin" && !(symbol.Kind == "handler" && symbol.Import == "") {
+				u.clash(param)
+			}
+		}
 	case "name", "pin":
 		if _, ok := u.Resolve(b, n.Text); !ok {
 			u.add("unknown name", n.BindingPos())
@@ -900,13 +942,17 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			guard.guard = true
 			u.validate(n.Guard, b, guard)
 		}
+		if n.Kind == "catch" && syntax.HasFlag(n, "before") {
+			ctx.recovery = true
+			ctx.recoveryLoop = ctx.loop
+		}
 		for _, stmt := range n.Body {
 			u.validate(stmt, b, ctx)
 		}
 		return
 	case "finally":
 		ctx.finally++
-		ctx.loop = 0
+		ctx.finallyLoop = ctx.loop
 	case "join":
 		members := 0
 		syntax.Walk(n, func(x *syntax.Node) bool {
@@ -941,7 +987,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	}
 	if b != nil && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join"}, n.Kind) || ctx.join == 0 && (n.Kind == "send" || n.Kind == "call-statement" || n.Kind == "command") && syntax.HasFlag(n, "and")) {
 		b.MaySuspend = true
-		if b.Kind == "function" || ctx.finally > 0 {
+		if b.Kind == "function" || ctx.finally > 0 || ctx.recovery {
 			u.add("can't suspend here", n.Pos())
 		}
 	}
@@ -984,6 +1030,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		}
 		if syntax.HasFlag(n, "and") && b != nil && ctx.join == 0 {
 			b.MaySuspend = true
+			if b.Kind == "function" || ctx.finally > 0 || ctx.recovery {
+				u.add("can't suspend here", n.Pos())
+			}
 		}
 		return
 	}

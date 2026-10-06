@@ -9,7 +9,7 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 ## Task navigation
 
-**Pending language support:** [Recovery Offers](../../spec/proposals/recovery-offers.md) is an accepted design, but this Core does not yet parse, lower or execute its forms, Built-in, two-phase catch search, dispatch state or Trace records. Current catch behavior and snapshot support remain unchanged.
+**Recovery Offers:** this Core parses and checks `offer`, `catch … before unwind` and `choose offer`, including duplicate names, lexical choice permission, Recovery Catch exits and static/transitive suspension. Offer parameters are ordinary local bindings; availability is dynamic and does not require a visible declaration. These staged forms currently fail lowering with an internal `not yet lowered` error. Execution, `offerAvailable`, two-phase catch search, recovery snapshots and Trace records follow the [accepted proposal](../../spec/proposals/recovery-offers.md).
 
 Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 

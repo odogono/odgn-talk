@@ -1,6 +1,6 @@
 # Recovery Offers
 
-**Status: accepted design; implementation pending.** This is the specification handoff for [#367](https://github.com/odogono/odgn-talk/issues/367) and [ADR 0060](../../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), proposed in [design PR #382](https://github.com/odogono/odgn-talk/pull/382) and revised before implementation. [Implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) tracks the deferred work and required specification base. Neither Core nor the reference tools currently accepts the new forms or the two-phase catch search. The numbered chapters and executable Data Files remain the active specification.
+**Status: accepted design; implementation pending.** This is the specification handoff for [#367](https://github.com/odogono/odgn-talk/issues/367) and [ADR 0060](../../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), proposed in [design PR #382](https://github.com/odogono/odgn-talk/pull/382) and revised before implementation. [Implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) tracks the deferred work and required specification base. Both Cores and the reference parser accept the forms and check their load-time rules; the formatter, LSP diagnostics, highlighting and beginner Lints support the syntax. Chapter 2 and the grammar/diagnostic Data Files now contain those rules. Lowering and execution, including two-phase catch search, remain pending; see the [TS](../../impl/ts/README.md#task-navigation), [Go](../../impl/go/README.md) and [tooling](../../tooling/stack/README.md) support guides. The numbered chapters and executable Data Files remain the active specification.
 
 Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged. On implementation, move these rules into the affected chapters and Data Files, replace their pending-support notices, and retire this staged document in favor of those rules. New-syntax examples use `text` fences because documentation `talk` fences are parsed and lowered by the current checks. Their results are specified behavior, not execution evidence.
 
@@ -189,7 +189,7 @@ The function may live in a Library while the policies live in the calling Script
 
 ## Grammar and load-time rules
 
-The future productions are:
+The productions, now active in chapter 2, are:
 
 ```text
 Try            ::= 'try' NL Block OfferClause* CatchClause* FinallyClause? 'end' 'try'?
@@ -361,7 +361,7 @@ Debug stepping and replay follow the active execution cursor, not the retained f
 
 ## Acceptance and delivery handoff
 
-The implementation must include both Cores and reference/tooling support before activating these rules in the Data Files. No parser, opcode, Built-in, cost, diagnostic, Error, Trace or Advanced catalogue is activated by this design. Deferred source files are `grammar.ebnf`, `grammar.toml`, `diagnostics.toml`, `machine.toml`, `costs.toml`, `errors.toml`, `stdlib.toml` and `corpus.toml` under `spec/data/`, plus their schemas and generated consumers as needed. Reconcile display/Trace grammar where needed. Move examples to checked `talk` blocks only once reference parsing/lowering supports them.
+The implementation must include both Cores and reference/tooling support before activating these rules in the Data Files. The parser, grammar, load diagnostics and Advanced tags are active with syntax support. Opcodes, the Built-in, costs, Errors and Trace catalogues remain deferred until their execution consumers land. The grammar and load diagnostics are integrated into `grammar.ebnf`, `grammar.toml` and `diagnostics.toml`. Deferred source files are `machine.toml`, `costs.toml`, `errors.toml`, `stdlib.toml` and `corpus.toml` under `spec/data/`, plus their schemas and generated consumers as needed. Reconcile display/Trace grammar where needed. Move examples to checked `talk` blocks only once reference parsing/lowering supports them.
 
 Required acceptance cases:
 

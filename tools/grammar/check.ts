@@ -13,6 +13,7 @@
 // wrong mode, so all of those fail the check too.
 
 import grammar from '../../spec/data/grammar.toml';
+import recoveryCases from './recovery-offers.json';
 import { isRejectedSource } from '../machine/rejected-sources';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
@@ -173,6 +174,19 @@ if (treeAt >= 0) {
     console.log((ast as Node[]).map(n => tree(n)).join('\n'));
   }
   process.exit(error ? 1 : 0);
+}
+
+// Staged parser cases are outside the sketches also consumed by lowerers.
+for (const fixture of recoveryCases) {
+  const stats = newStats();
+  const { error } = parse(fixture.source, stats);
+  merge(stats, `Recovery Offers: ${fixture.name}`);
+  const got = error ? [error.code, error.tok.line, error.tok.col] : [];
+  if (JSON.stringify(got) !== JSON.stringify(fixture.syntaxDiagnostic)) {
+    problems.push(
+      `Recovery Offers: ${fixture.name}: expected ${fixture.syntaxDiagnostic}, got ${got}`,
+    );
+  }
 }
 
 for (const f of files(join(import.meta.dir, 'sketch'), '.talk')) {

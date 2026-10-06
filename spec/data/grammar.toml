@@ -44,7 +44,7 @@ reserved = [
   # Block structure. Each of these ends or continues a block at the start of a
   # statement, or ends a condition, so none can be a Handler name.
   "after", "catch", "else", "end", "finally", "for", "function", "given", "if",
-  "match", "on", "repeat", "then", "try", "until", "when", "where", "while",
+  "match", "offer", "on", "repeat", "then", "try", "until", "when", "where", "while",
   # Statement keywords. If one were contextual, `add 1 to x` and a Command Call
   # `add 1` would differ only at `to`, arbitrarily far in.
   "add", "ask", "delete", "divide", "exit", "let", "multiply", "pass", "put",
@@ -95,7 +95,7 @@ positions = ["after an operand (a conversion)", "after a pattern (binding the wh
 
 [[contextual]]
 word = "before"
-positions = ["after the value in `put`"]
+positions = ["after the value in `put`", "after a catch pattern, before `unwind`"]
 
 [[contextual]]
 word = "begins"
@@ -112,6 +112,14 @@ positions = ["operator position, before `be`"]
 [[contextual]]
 word = "case"
 positions = ["after `ignoring`"]
+
+[[contextual]]
+word = "choose"
+positions = ["at the start of a statement, before `offer`"]
+
+[[contextual]]
+word = "unwind"
+positions = ["after `before` in a catch head"]
 
 [[contextual]]
 word = "civil"
@@ -384,6 +392,10 @@ name = "capture"
 rule = "in a Text Pattern, a word followed by `:` is a Capture"
 
 [[decision]]
+name = "choose-offer"
+rule = "at the start of a statement, `choose` followed by `offer` is a choice; otherwise `choose` starts a Command Call"
+
+[[decision]]
 name = "chunk-word"
 rule = "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name"
 
@@ -417,7 +429,7 @@ rule = "`civil` followed by `date` is the kind `civil date`"
 
 [[decision]]
 name = "map-key"
-rule = "in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}`"
+rule = "in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}`"
 
 [[decision]]
 name = "next-repeat"
@@ -480,6 +492,21 @@ beginner = "a narrower element"
 construct = "A computed message name"
 written = "`send (e) with a to r`, e.g. `send (next) with order to me`"
 beginner = "a `match` or `if` that picks between `send`s that name their message"
+
+[[advanced]]
+construct = "A Recovery Offer"
+written = "`offer name` with optional plain parameters and a recovery block"
+beginner = "a local catch that calls an explicitly supplied policy callback"
+
+[[advanced]]
+construct = "A Recovery Catch"
+written = "`catch pattern before unwind` with an optional Guard"
+beginner = "an ordinary local catch with an explicitly supplied policy callback"
+
+[[advanced]]
+construct = "An offer choice"
+written = "`choose offer name` with optional call arguments"
+beginner = "a policy callback that returns a decision to a local catch"
 
 [[syntax_error]]
 code = "bad character"

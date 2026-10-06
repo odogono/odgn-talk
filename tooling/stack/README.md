@@ -7,7 +7,7 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 ## Built-in Capabilities
 
-**Pending language support:** [Recovery Offers](../../spec/proposals/recovery-offers.md#tooling) is an accepted design. The shared formatter, diagnostics, Lints, sessions and debugger do not support its forms or recovery views yet; this also applies to the CLI and Playground that consume this stack.
+**Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Neither Core lowers or executes these staged forms yet. Sessions cannot run them, and recovery debugger views remain part of the [execution/tooling proposal](../../spec/proposals/recovery-offers.md#tooling).
 
 `@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line.
 

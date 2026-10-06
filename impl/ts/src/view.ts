@@ -147,21 +147,30 @@ export type RepeatHead =
   | { cond: Expr; k: 'while' | 'until' }
   | { k: 'forever' }
   | { count: Expr; k: 'times' };
+export type Offer = {
+  body: Stmt[];
+  name: string;
+  params: SemanticName[];
+  pos: Pos;
+};
 export type Catch = {
   body: Stmt[];
   guard: Guard | null;
   pat: Pattern;
   pos: Pos;
+  recovery: boolean;
 };
 export type Try = {
   body: Stmt[];
   catches: Catch[];
   finally: Stmt[] | null;
   k: 'try';
+  offers: Offer[];
   pos: Pos;
 };
 
 export type Stmt =
+  | { args: Expr[]; k: 'choose-offer'; name: string; pos: Pos }
   | {
       k: 'put';
       pos: Pos;
@@ -514,6 +523,32 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       } satisfies Collecting;
     case 'Match':
       return match(node, of);
+    case 'OfferParameter':
+      return of<SemanticName>(first);
+    case 'RecoveryMarker':
+      return true;
+    case 'OfferClause':
+      return {
+        name: of<SemanticName>(children[1]).text,
+        params: children
+          .filter(c => c.kind === 'node' && c.rule === 'OfferParameter')
+          .map(c => of<SemanticName>(c)),
+        body: blockAt(
+          node,
+          children.findIndex(c => c.kind === 'node' && c.rule === 'Block'),
+          of,
+        ),
+        pos: at,
+      } satisfies Offer;
+    case 'ChooseOffer': {
+      const list = nodeAt(0, 'ExpressionList');
+      return {
+        k: 'choose-offer',
+        name: of<SemanticName>(children[2]).text,
+        args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        pos: at,
+      } satisfies Stmt;
+    }
     case 'Try':
       return tryStatement(node, of);
     case 'Replace': {
@@ -1191,13 +1226,19 @@ const tryStatement = (node: SemanticNode, of: Of): Try => {
     if (isToken(child, 'catch')) {
       let j = i + 1;
       const pat = of<Pattern>(children[j++]);
+      const recovery =
+        children[j]?.kind === 'node' &&
+        (children[j] as SemanticNode).rule === 'RecoveryMarker';
+      if (recovery) {
+        j++;
+      }
       let guard: Guard | null = null;
       if (isToken(children[j], 'where')) {
         guard = guardAt(children[j + 1], of);
         j += 2;
       }
       const body = blockAt(node, j, of);
-      catches.push({ pos: pos(child), pat, guard, body });
+      catches.push({ pos: pos(child), pat, guard, body, recovery });
       i = children[j]?.kind === 'node' ? j : j - 1;
     } else if (isToken(child, 'finally')) {
       fin = blockAt(node, i + 1, of);
@@ -1208,6 +1249,9 @@ const tryStatement = (node: SemanticNode, of: Of): Try => {
     pos: pos(node),
     body: blockAt(node, 1, of),
     catches,
+    offers: children
+      .filter(c => c.kind === 'node' && c.rule === 'OfferClause')
+      .map(c => of<Offer>(c)),
     finally: fin,
   };
 };

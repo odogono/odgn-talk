@@ -10,7 +10,7 @@ The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), a
 
 ## Notation
 
-**Pending addition:** [Recovery Offers](proposals/recovery-offers.md#grammar-and-load-time-rules) specifies new offer, choice and Recovery Catch forms and reserves `offer`. Neither Core nor the reference parser supports them yet; they are not part of the productions or word lists shown in this chapter until the implementation activates them.
+The Recovery Offer, choice and Recovery Catch grammar and load-time rules are active below ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)). Both Cores and the reference parser accept these forms. Lowering and execution remain staged; see the [TS](../impl/ts/README.md#task-navigation) and [Go](../impl/go/README.md) support guides and the [remaining machine contract](proposals/recovery-offers.md#abstract-machine-and-lowering).
 
 - **The EBNF** is that of [the W3C XML Recommendation](https://www.w3.org/TR/xml/#sec-notation), as [chapter 0](00-introduction.md#notations) says.
 - **Tokens** come from [chapter 1](01-lexical-structure.md#tokens): `Word`, `Name`, `Number`, `Text`, `Unit` and `NL`, plus `CallOpen` (a `(` straight after a Name), `PatternOpen` and `PatternClose` (the `<` and `>` of a Text Pattern) and `BinaryOpen` (`<<` in operand position).
@@ -24,7 +24,7 @@ The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), a
 
 <!-- generated: grammar.reserved -->
 
-`add`, `after`, `and`, `ask`, `be`, `catch`, `delete`, `divide`, `else`, `end`, `exit`, `false`, `finally`, `for`, `function`, `given`, `if`, `in`, `into`, `is`, `it`, `let`, `match`, `me`, `multiply`, `not`, `nothing`, `of`, `on`, `or`, `pass`, `put`, `repeat`, `replace`, `return`, `send`, `set`, `subtract`, `tell`, `the`, `then`, `throw`, `to`, `true`, `try`, `until`, `veto`, `wait`, `when`, `where`, `while`
+`add`, `after`, `and`, `ask`, `be`, `catch`, `delete`, `divide`, `else`, `end`, `exit`, `false`, `finally`, `for`, `function`, `given`, `if`, `in`, `into`, `is`, `it`, `let`, `match`, `me`, `multiply`, `not`, `nothing`, `of`, `offer`, `on`, `or`, `pass`, `put`, `repeat`, `replace`, `return`, `send`, `set`, `subtract`, `tell`, `the`, `then`, `throw`, `to`, `true`, `try`, `until`, `veto`, `wait`, `when`, `where`, `while`
 
 <!-- end -->
 
@@ -49,11 +49,12 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `all` | straight after `wait for` (a Join) |
 | `an` | as `a` |
 | `as` | after an operand (a conversion); after a pattern (binding the whole value); after the Library name in `use`, before the new name; after a Text Pattern element; after the value of a Binary Pattern build field |
-| `before` | after the value in `put` |
+| `before` | after the value in `put`; after a catch pattern, before `unwind` |
 | `begins` | operator position, before `with` |
 | `by` | after the Container in `multiply` and `divide`; after `delimited` |
 | `can` | operator position, before `be` |
 | `case` | after `ignoring` |
+| `choose` | at the start of a statement, before `offer` |
 | `civil` | before `date` in a kind |
 | `collecting` | after a `repeat` head, before the collected expression |
 | `constant` | at the start of a top-level declaration |
@@ -81,6 +82,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `script` | at the start of a top-level declaration, before `variable` |
 | `target` | after `the`, when `of` doesn't follow |
 | `times` | after the count in `repeat` |
+| `unwind` | after `before` in a catch head |
 | `use` | at the start of a top-level declaration |
 | `variable` | after `script` at the start of a top-level declaration |
 | `with` | after the message name in `send`; after the Container in `replace`; after `begins` or `ends` |
@@ -240,7 +242,7 @@ Statement      ::= If | Repeat | Match | Try | Wait | Simple
 Inline         ::= Simple | 'wait' ( 'for' Event Timeout? | Expression )
 Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
                  | Send | Ask | Tell | Return | Veto | Pass | Exit | Next | Throw
-                 | Replace | CallStatement | CommandCall
+                 | Replace | ChooseOffer | CallStatement | CommandCall
 Put            ::= 'put' ( Expression ( 'into' | 'after' | 'before' )
                          | '...' Expression ( 'after' | 'before' ) ) Container
 Let            ::= 'let' Pattern 'be' Expression
@@ -284,6 +286,18 @@ ExpressionList ::= Expression ( ',' Expression )*
 - **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
 - **`replace`:** at the start of a statement, `replace <p> in c with e` rewrites the Container `c`. In operand position, the same words give the new text. There, `c` is any expression but a Lambda, and `e` an expression at the level of `&`, so `put replace <"-"> in s with "+" & x into t` replaces with `"+" & x`, and `into` ends the expression, since it isn't an operator. `replace first` replaces only the first match.
 
+### Recovery Offers and choices
+
+Offers precede every catch in a try, and finally remains last. A try may offer actions without a local catch. An offer's parameters are plain Names separated by commas, with no defaults, patterns or Argument Labels and fixed exact arity. They follow ordinary local binding rules. Duplicate parameters report `duplicate name` at the second parameter; duplicate offer Names in the same try report `duplicate offer` at the second name. Nested tries may shadow offer Names.
+
+`choose offer skip` and `choose offer skip()` pass no arguments; `choose offer useValue(0)` passes one, and `choose offer useValue([1, 2])` passes one list. Parentheses use the ordinary adjacent Call opener, arguments evaluate left to right, and the formatter prints the bare form for zero arguments. A Recovery Catch places `before unwind` after its pattern and before an optional `where` Guard. Guard restrictions are unchanged.
+
+`offer` is reserved, including as an identifier or bare map key: rename existing identifiers and quote map keys as `"offer"`. `choose` is contextual at a statement's start before `offer`, so Handlers and Command Calls named `choose` still work. `unwind` is contextual after `before` in a catch head; elsewhere it remains a Name.
+
+Choice permission is lexical within a Recovery Catch and its nested blocks. Entering a function or Lambda resets it; its own Recovery Catch can grant permission again. Choices outside permission report `not in recovery` at `choose`. Dynamic availability is not a load requirement: no visible offer is needed.
+
+A Recovery Catch has no possible Suspension Point: direct suspension and statically or transitively suspending calls report `can't suspend here`. Creating a Lambda does not run it; suspension through a dynamic Function Value is checked at runtime once execution support lands. Immediate Operations remain permitted. Return, veto, pass and loop jumps to loops outside the Recovery Catch report `leaves recovery catch` at their first token; internal loop exits retain their normal rules. A choice is the designated recovery transfer. Existing finally restrictions also apply inside nested cleanup. All three forms are Advanced Constructs.
+
 ## Blocks
 
 - **Optional endings:** every block closes with `end`, optionally followed by its matching Name (a Handler or function) or keyword (`if`, `repeat`, `match`, `try`, `wait` or `given`). Each ending closes exactly one innermost open block, regardless of indentation. Bare and explicit endings may be mixed, and a supplied suffix must match that block.
@@ -303,7 +317,12 @@ Collecting     ::= 'collecting' Expression 'into' Name
 Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'?
 When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
 Body           ::= Inline NL | NL Block
-Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'?
+Try            ::= 'try' NL Block OfferClause* CatchClause* FinallyClause? 'end' 'try'?
+OfferClause    ::= 'offer' Name ( Name ( ',' Name )* )? NL Block
+CatchClause    ::= 'catch' Pattern RecoveryMarker? Guard? NL Block
+RecoveryMarker ::= 'before' 'unwind'
+FinallyClause  ::= 'finally' NL Block
+ChooseOffer    ::= 'choose' 'offer' Name ( CallOpen ExpressionList? ')' )?
 Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
 Join           ::= 'all' NL Block 'end' 'wait'?
 WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
@@ -442,7 +461,7 @@ ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
 Map            ::= '{' ( MapKey Expression ( ',' MapKey Expression )* )? '}'
-MapKey         ::= ( Word | Text ) ':'
+MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 ```
 
 <!-- end -->
@@ -613,6 +632,7 @@ These are the only places where the parser reads a second token before it choose
 | `binary-field` | in a Binary Pattern, a word followed by `:` names a field |
 | `can-be` | `can` followed by `be` is the kind test; otherwise the word ends the expression |
 | `capture` | in a Text Pattern, a word followed by `:` is a Capture |
+| `choose-offer` | at the start of a statement, `choose` followed by `offer` is a choice; otherwise `choose` starts a Command Call |
 | `chunk-word` | a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name |
 | `code-point` | `code` followed by `point` or `points` is the chunk kind |
 | `delimited-by` | `delimited` followed by `by` is the modifier |
@@ -621,7 +641,7 @@ These are the only places where the parser reads a second token before it choose
 | `ignoring-case` | `ignoring` followed by `case` is the modifier |
 | `is-a` | after `is` or `is not`, `a` or `an` followed by a word that isn't reserved, or by `function`, starts a kind test; otherwise it is a name |
 | `kind` | `civil` followed by `date` is the kind `civil date` |
-| `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}` |
+| `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |
 | `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
@@ -651,6 +671,9 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | The `code points` property | `the code points of s` | Characters |
 | `lazily` | after a Text Pattern element, e.g. `text lazily` | a narrower element |
 | A computed message name | `send (e) with a to r`, e.g. `send (next) with order to me` | a `match` or `if` that picks between `send`s that name their message |
+| A Recovery Offer | `offer name` with optional plain parameters and a recovery block | a local catch that calls an explicitly supplied policy callback |
+| A Recovery Catch | `catch pattern before unwind` with an optional Guard | an ordinary local catch with an explicitly supplied policy callback |
+| An offer choice | `choose offer name` with optional call arguments | a policy callback that returns a decision to a local catch |
 
 <!-- end -->
 
@@ -690,7 +713,10 @@ Source that parses is then checked, and each rule it breaks is a load error: the
 | `unknown name` | A Name resolves to nothing (chapter 4), including a well-known object the Host didn't bind, or a Binary Pattern size names a name that isn't bound earlier in the pattern | the Name | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not a value` | The bare name of a Handler or a Built-in function is used as a value | the name | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `name clash` | A name has two meanings: a variable named like a function of the unit or an Import, a parameter, pattern binding, Capture or collecting target named like a Script Variable, a Constant or a well-known object, a collecting target named like a name its own `repeat for each` pattern binds, an imported name, after any rename, named like a local Handler, function, Constant, Script Variable or well-known object, two Imports of one name, or a Library Handler that an importer also defines | the later of the two in the source; for an Import, its name in the `use` line | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `duplicate name` | One pattern binds the same Name twice, or a Text Pattern has two Captures with one name | the second | [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `duplicate name` | One pattern binds the same Name twice, a Text Pattern has two Captures with one name, or an offer repeats a parameter Name | the second | [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `duplicate offer` | A try declares two offers with the same Name | the second offer Name | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [#387](https://github.com/odogono/odgn-talk/issues/387) |
+| `not in recovery` | A choice is outside a lexically enclosing Recovery Catch; functions and Lambdas reset permission | `choose` | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [#387](https://github.com/odogono/odgn-talk/issues/387) |
+| `leaves recovery catch` | A Recovery Catch contains return, veto or pass, or a loop jump whose loop is outside it | the statement's first token | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [#387](https://github.com/odogono/odgn-talk/issues/387) |
 | `duplicate key` | A map literal names a key twice | the second key | [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `unknown kind` | A name after `is a`, `as` or `can be` isn't a kind name, `integer` or a Unit, or a Text Pattern's `a` or `an` is followed by a kind other than `number` | the kind name | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `no conversion` | `as` names a kind that has no conversion, or a Text Pattern's `as number` follows an element that can match something other than ASCII digits or `a number` | `as` | [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
@@ -702,7 +728,7 @@ Source that parses is then checked, and each rule it breaks is a load error: the
 | `wrong mode` | A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, or `tell` on one that isn't fire-and-forget | `ask` or `tell` | [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `missing and wait` | A Command Call to a Handler that may suspend has no `and wait` | the Handler's name | [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `needless and wait` | A Command Call with `and wait` names a Handler that can't suspend, or `say` has `and wait` | the Handler's name, or `say` | [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `can't suspend here` | A possible Suspension Point is in a `finally` block, or a named function, or a Handler called function-style, reaches one, directly or through what it calls | the Suspension Point, or the call in the function or Handler through which it reaches one | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `can't suspend here` | A possible Suspension Point is in a `finally` block or a Recovery Catch, or a named function, or a Handler called function-style, reaches one, directly or through what it calls | the Suspension Point, or the call in the function or Handler through which it reaches one | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `unknown import` | A `use` line names a Library the Group doesn't hold, or a name the Library doesn't export | the Library's name, or the name | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `import cycle` | Libraries import each other in a cycle | the `use` line that closes the cycle | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `missing grant` | A Library the Script imports, directly or through another Library, needs an Operation that the Script's Grants don't give | the `use` line | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |

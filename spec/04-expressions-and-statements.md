@@ -491,7 +491,7 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 
 ## Guards
 
-**Pending addition:** [two-phase catch search](proposals/recovery-offers.md#two-phase-catch-search) tests every catch's pattern and Guard before unwinding, so a Guard sees state from before deeper `finally` blocks run. Recovery Catches retain ordinary Guard restrictions and add `offerAvailable` for checking an eligible offer. The search, the new catch, offer and choice forms and the Built-in are not implemented by either Core or tooling yet.
+**Pending addition:** [two-phase catch search](proposals/recovery-offers.md#two-phase-catch-search) tests every catch's pattern and Guard before unwinding, so a Guard sees state from before deeper `finally` blocks run. Recovery Catches retain ordinary Guard restrictions and add `offerAvailable` for checking an eligible offer. Both Cores parse and check the new catch, offer and choice forms, and tooling supports their syntax ([chapter 2](02-grammar.md#recovery-offers-and-choices)). Execution, the two-phase search and the Built-in remain pending.
 
 A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch` clause or a `wait for` branch ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)).
 

@@ -164,6 +164,7 @@ const blockRules = new Set([
   'Repeat',
   'Match',
   'Try',
+  'OfferClause',
   'Wait',
 ]);
 const propertyNames = new Set<string>(properties);
@@ -482,6 +483,15 @@ export const lintSyntax = (
       direct.map(token => token.v).join(' ') === 'code points'
     ) {
       advanced('The `code points` property', first);
+    }
+    if (node.rule === 'OfferClause') {
+      advanced('A Recovery Offer', first);
+    }
+    if (node.rule === 'RecoveryMarker') {
+      advanced('A Recovery Catch', first);
+    }
+    if (node.rule === 'ChooseOffer') {
+      advanced('An offer choice', first);
     }
     if (node.rule === 'Send' && direct[1]?.v === '(') {
       advanced('A computed message name', direct[1]);

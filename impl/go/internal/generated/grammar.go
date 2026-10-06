@@ -90,6 +90,7 @@ var Grammar = GrammarTable{
 		"given",
 		"if",
 		"match",
+		"offer",
 		"on",
 		"repeat",
 		"then",
@@ -218,6 +219,7 @@ var Grammar = GrammarTable{
 			Word: "before",
 			Positions: []string{
 				"after the value in `put`",
+				"after a catch pattern, before `unwind`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -243,6 +245,18 @@ var Grammar = GrammarTable{
 			Word: "case",
 			Positions: []string{
 				"after `ignoring`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "choose",
+			Positions: []string{
+				"at the start of a statement, before `offer`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "unwind",
+			Positions: []string{
+				"after `before` in a catch head",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -676,6 +690,10 @@ var Grammar = GrammarTable{
 			Rule: "in a Text Pattern, a word followed by `:` is a Capture",
 		},
 		GrammarTableDecisionEntry{
+			Name: "choose-offer",
+			Rule: "at the start of a statement, `choose` followed by `offer` is a choice; otherwise `choose` starts a Command Call",
+		},
+		GrammarTableDecisionEntry{
 			Name: "chunk-word",
 			Rule: "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name",
 		},
@@ -709,7 +727,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableDecisionEntry{
 			Name: "map-key",
-			Rule: "in `{…}`, a word or text followed by `:` is a key, Reserved Words included; in a map pattern, a word without `:` is the shorthand `{name}`",
+			Rule: "in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}`",
 		},
 		GrammarTableDecisionEntry{
 			Name: "next-repeat",
@@ -774,6 +792,21 @@ var Grammar = GrammarTable{
 			Construct: "A computed message name",
 			Written:   "`send (e) with a to r`, e.g. `send (next) with order to me`",
 			Beginner:  "a `match` or `if` that picks between `send`s that name their message",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "A Recovery Offer",
+			Written:   "`offer name` with optional plain parameters and a recovery block",
+			Beginner:  "a local catch that calls an explicitly supplied policy callback",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "A Recovery Catch",
+			Written:   "`catch pattern before unwind` with an optional Guard",
+			Beginner:  "an ordinary local catch with an explicitly supplied policy callback",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "An offer choice",
+			Written:   "`choose offer name` with optional call arguments",
+			Beginner:  "a policy callback that returns a decision to a local catch",
 		},
 	},
 	SyntaxError: []GrammarTableSyntaxErrorEntry{

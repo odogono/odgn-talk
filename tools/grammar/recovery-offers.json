@@ -1,0 +1,331 @@
+[
+  {
+    "name": "offers, arguments and guarded recovery",
+    "source": "on t\ntry\n put 1 into x\noffer skip\noffer useValue value, extra\n put value + extra into x\ncatch e before unwind where true\n choose offer skip\n choose offer skip()\n choose offer useValue([1, 2], 3)\ncatch e\n say e\nfinally\n say x\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "offer without catch and nested shadowing",
+    "source": "on t\ntry\noffer skip\n try\n offer skip\n end try\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "dynamic availability and local loops",
+    "source": "on t\ntry\ncatch e before unwind\n repeat 2 times\n  if true then choose offer unknown(1)\n  next repeat\n  exit repeat\n end repeat\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "ordinary names choose and unwind",
+    "source": "on t\nchoose 1\nput unwind into x\nend t\non choose value\nend choose\nconstant unwind = 1",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "quoted offer map key",
+    "source": "on t\nput {\"offer\": 1} into x\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "duplicate offers",
+    "source": "on t\ntry\noffer skip\noffer skip\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["duplicate offer", 4, 7]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "duplicate parameters",
+    "source": "on t\ntry\noffer useValue value, value\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["duplicate name", 3, 23]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "offer parameter binding clash",
+    "source": "on t\ntry\noffer replaceValue x\nend try\nend t\nconstant x = 1",
+    "syntaxError": false,
+    "diagnostics": [["name clash", 6, 10]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "choice outside recovery",
+    "source": "on t\nchoose offer skip\nend t",
+    "syntaxError": false,
+    "diagnostics": [["not in recovery", 2, 1]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "choice in ordinary catch",
+    "source": "on t\ntry\ncatch e\n choose offer skip\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["not in recovery", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "choice permission resets in lambda",
+    "source": "on t\ntry\ncatch e before unwind\n put given\n  choose offer skip\n end given into f\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["not in recovery", 5, 3]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "lambda own recovery grants permission",
+    "source": "on t\ntry\ncatch e before unwind\n put given\n  try\n  catch inner before unwind\n   choose offer skip\n  end try\n end given into f\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "function cannot inherit recovery",
+    "source": "on t\ntry\ncatch e before unwind\n put helper() into x\nend try\nend t\nfunction helper\n choose offer skip\nend helper",
+    "syntaxError": false,
+    "diagnostics": [["not in recovery", 8, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "forbidden return 1",
+    "source": "on t\ntry\ncatch e before unwind\n return 1\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "forbidden pass t",
+    "source": "on t\ntry\ncatch e before unwind\n pass t\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "forbidden veto 1",
+    "source": "on t\ntry\ncatch e before unwind\n veto 1\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 4, 2], ["veto outside a decision", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "outer loop exit repeat",
+    "source": "on t\nrepeat 2 times\n try\n catch e before unwind\n  exit repeat\n end try\nend repeat\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 5, 3]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "outer loop next repeat",
+    "source": "on t\nrepeat 2 times\n try\n catch e before unwind\n  next repeat\n end try\nend repeat\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 5, 3]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "choice permission includes nested finally",
+    "source": "on t\ntry\ncatch e before unwind\n try\n finally\n  choose offer skip\n end try\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspension wait 1 s",
+    "source": "on t\ntry\ncatch e before unwind\n wait 1 s\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspension send ping to me and wait",
+    "source": "on t\ntry\ncatch e before unwind\n send ping to me and wait\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspension ask clock to sleep 1 s and wait",
+    "source": "on t\ntry\ncatch e before unwind\n ask clock to sleep 1 s and wait\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspension external 1 and wait",
+    "source": "on t\ntry\ncatch e before unwind\n external 1 and wait\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspension f() and wait",
+    "source": "on t\nput given: 1 into f\ntry\ncatch e before unwind\n f() and wait\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 5, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "transitive handler suspension",
+    "source": "on t\ntry\ncatch e before unwind\n middle and wait\nend try\nend t\non middle\n sleeper and wait\nend middle\non sleeper\n wait 1 s\nend sleeper",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "transitive function suspension",
+    "source": "on t\ntry\ncatch e before unwind\n put middle() into x\nend try\nend t\nfunction middle\n return sleeper()\nend middle\nfunction sleeper\n wait 1 s\nend sleeper",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 6], ["can't suspend here", 8, 9], ["can't suspend here", 11, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "suspending lambda creation is not suspension",
+    "source": "on t\ntry\ncatch e before unwind\n put given\n  wait 1 s\n end given into f\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "immediate operation permitted",
+    "source": "on t\ntry\ncatch e before unwind\n ask clock to now\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "defaults",
+    "source": "on t\ntry\noffer useValue value = 1\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 3, 22]
+  },
+  {
+    "name": "patterns",
+    "source": "on t\ntry\noffer useValue [value]\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 3, 16]
+  },
+  {
+    "name": "labels",
+    "source": "on t\ntry\noffer useValue value to: other\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 3, 22]
+  },
+  {
+    "name": "offer after catch",
+    "source": "on t\ntry\ncatch e\noffer skip\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 4, 1]
+  },
+  {
+    "name": "offer after finally",
+    "source": "on t\ntry\nfinally\noffer skip\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 4, 1]
+  },
+  {
+    "name": "guard before marker",
+    "source": "on t\ntry\ncatch e where true before unwind\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 3, 20]
+  },
+  {
+    "name": "wrong marker",
+    "source": "on t\ntry\ncatch e before other\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 3, 16]
+  },
+  {
+    "name": "choice argument labels",
+    "source": "on t\ntry\ncatch e before unwind\n choose offer useValue(to: 1)\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 4, 24]
+  },
+  {
+    "name": "reserved identifier",
+    "source": "on t\nput 1 into offer\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 2, 12]
+  },
+  {
+    "name": "reserved map key",
+    "source": "on t\nput {offer: 1} into x\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 2, 6]
+  },
+  {
+    "name": "reserved map pattern key",
+    "source": "on t\nlet {offer: x} be {}\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 2, 6]
+  },
+  {
+    "name": "spaced choice call",
+    "source": "on t\ntry\ncatch e before unwind\n choose offer skip ()\nend try\nend t",
+    "syntaxError": true,
+    "diagnostics": [],
+    "syntaxDiagnostic": ["unexpected token", 4, 20]
+  },
+  {
+    "name": "bare suspending handler in recovery",
+    "source": "on t\ntry\ncatch e before unwind\n sleeper\nend try\nend t\non sleeper\n wait 1 s\nend sleeper",
+    "syntaxError": false,
+    "diagnostics": [["can't suspend here", 4, 2]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "offer parameters shadow local handlers",
+    "source": "on value\nend value\non t\ntry\noffer skip value\n say value\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "offer parameters reuse existing local",
+    "source": "on t\nput 1 into value\ntry\noffer replaceValue value\n say value\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "cleanup has its own recovery and offer",
+    "source": "on t\ntry\nfinally\n try\n offer skip\n catch e before unwind\n  choose offer skip\n end try\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "finally return keeps both exit restrictions",
+    "source": "on t\ntry\ncatch e before unwind\n try\n finally\n  return 1\n end try\nend try\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 6, 3], ["leaves finally", 6, 3]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "external loop exit through nested cleanup",
+    "source": "on t\nrepeat 2 times\n try\n catch e before unwind\n  try\n  finally\n   next repeat\n  end try\n end try\nend repeat\nend t",
+    "syntaxError": false,
+    "diagnostics": [["leaves recovery catch", 7, 4], ["leaves finally", 7, 4]],
+    "syntaxDiagnostic": []
+  },
+  {
+    "name": "recovery Guard keeps ordinary restrictions",
+    "source": "on t\ntry\ncatch e before unwind where middle()\nend try\nend t\nfunction middle\nwait 1 s\nend middle",
+    "syntaxError": false,
+    "diagnostics": [["not in a guard", 3, 29], ["can't suspend here", 7, 1]],
+    "syntaxDiagnostic": []
+  }
+]

@@ -187,6 +187,22 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	if len(checked.Diagnostics) != 0 {
 		return nil, fmt.Errorf("cannot lower rejected unit: %v", checked.Diagnostics)
 	}
+	for _, decl := range checked.Tree.Declarations {
+		var pending *syntax.Node
+		syntax.Walk(decl, func(n *syntax.Node) bool {
+			if pending != nil {
+				return false
+			}
+			if n.Kind == "offer" || n.Kind == "choose-offer" || n.Kind == "catch" && syntax.HasFlag(n, "before") {
+				pending = n
+				return false
+			}
+			return true
+		})
+		if pending != nil {
+			return nil, fmt.Errorf("Recovery Offers are not yet lowered at %d:%d", pending.Pos().Line, pending.Pos().Column)
+		}
+	}
 	u := &Unit{Name: name, codeName: name, Kind: "script", checked: checked, Definitions: checked.Definitions, Variables: checked.Variables, byNode: map[*syntax.Node]*Body{}}
 	if checked.Options.Library {
 		u.Kind = "library"

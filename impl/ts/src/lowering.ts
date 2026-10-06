@@ -615,6 +615,7 @@ class BodyLowering {
             pos: decl.finallyPos!,
             body: decl.body,
             catches: [],
+            offers: [],
             finally: decl.finally,
           },
           decl.finallyPos!,
@@ -733,6 +734,8 @@ class BodyLowering {
         return yield* this.repeat(s);
       case 'match':
         return yield* this.match(s);
+      case 'choose-offer':
+        return this.unsupported(at, 'Recovery Offers are not yet lowered');
       case 'try':
         return yield* this.tryStatement(s, s.pos);
       case 'throw':
@@ -1084,6 +1087,9 @@ class BodyLowering {
 
   // A `try`: its body, its catch handler and its `finally` (chapter 8).
   *tryStatement(s: Try, at: Pos): Task {
+    if (s.offers.length || s.catches.some(c => c.recovery)) {
+      return this.unsupported(at, 'Recovery Offers are not yet lowered');
+    }
     const end = this.label();
     const hasFinally = s.finally !== null;
     const catchSpan: Span | null = s.catches.length
