@@ -16,6 +16,8 @@ bun run bench [--filter <text>] [--only go|ts|peers] [--count <n>] [--smoke] [--
 
 The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pinned CPython on first use. A full wave 1 run takes about 20–30 minutes with the default ten Go samples. It prints a Markdown report and writes it, with the JSON it came from, to `results/<date>-<os>-<arch>-<cpu>.{md,json}`. Each file records the commit, machine, and Bun, Go, language, Cost Model and Peer Language versions.
 
+The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements.
+
 ## Workloads
 
 Wave 1 includes `core`, `numbers`, `text`, `collections`, `host` and `macro`.
