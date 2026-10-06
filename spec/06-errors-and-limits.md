@@ -30,7 +30,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 
 ## Catching
 
-**Pending addition:** [structured Error restarts](proposals/structured-error-restarts.md) lets an explicitly marked Recovery Catch choose a declared action before failed frames are discarded. Neither Core supports it yet. Ordinary `catch` behavior below remains unchanged; the proposal includes a currently supported callback alternative and explains why local work is lost on unwinding rather than Error rollback.
+**Pending addition:** [Recovery Offers](proposals/recovery-offers.md) lets an explicitly marked Recovery Catch choose a declared action before failed frames are discarded, and changes every catch to [two-phase search](proposals/recovery-offers.md#two-phase-catch-search): only a catch that accepts the Error unwinds. Neither Core supports it yet. Ordinary `catch` behavior below remains the active rule until then; the proposal includes a currently supported callback alternative and explains why local work is lost on unwinding rather than Error rollback.
 
 - **`try … end try`** runs its block. An error raised in it, or in anything it calls, is matched against its `catch` clauses.
 - **Clauses are Destructuring heads** with optional Guards, tried top to bottom, like Handler Clauses. The first that matches runs, with its names bound. A bare `catch e` matches every error.

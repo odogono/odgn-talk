@@ -8,7 +8,7 @@ This chapter states what Libraries are and how they are used, then every Built-i
 
 ## Libraries
 
-**Pending addition:** [the restart proposal](proposals/structured-error-restarts.md#a-library-offers-recovery-the-caller-chooses) lets callers select named recovery actions inside Library frames in the same Run. Neither Core supports these forms or `restartAvailable` yet. A local catch and an explicit same-Home, non-suspending policy callback already preserve Library-local accumulation.
+**Pending addition:** [the Recovery Offers proposal](proposals/recovery-offers.md#a-library-offers-recovery-the-caller-chooses) lets callers choose named recovery actions inside Library frames in the same Run. Neither Core supports these forms or `offerAvailable` yet. A local catch and an explicit same-Home, non-suspending policy callback already preserve Library-local accumulation.
 
 ### What a Library holds
 

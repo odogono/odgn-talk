@@ -1,0 +1,21 @@
+# Errors may transfer to named Recovery Offers chosen before unwinding
+
+Code may make named Recovery Offers, and an explicitly marked Recovery Catch may choose one before failed frames are discarded. Every catch is tested before anything unwinds, so only an accepting catch is a barrier. This lets an outer caller set policy across deep Library calls without forwarding a callback through every API, while retaining the Library's local work; recovery remains a structured transfer to code the callee declared, never arbitrary failed-instruction resumption. Settled in [#367](https://github.com/odogono/odgn-talk/issues/367); the complete [staged specification](../../spec/proposals/recovery-offers.md) is accepted, with implementation pending.
+
+## Why this boundary
+
+- A local catch plus a non-suspending callback already preserves accumulated rows. The new value is choosing outer policy without callback plumbing, not undoing Error rollback: caught Errors do not roll back Script Variable writes (ADR 0017).
+- Catch search is two-phase, as in C++ and Common Lisp: patterns and Guards are tested in source order before unwinding, and only an accepting ordinary catch unwinds. Under the previous unwind-first order, any intermediate catch, even one that rejected the Error, discarded the failed frames and their offers, so an unrelated `catch` in a middle Library silently defeated the feature. Guards are already pure (ADR 0021), so testing earlier has no effects; tests see state from before deeper `finally` blocks run. A catch-all remains a barrier.
+- Only `catch … before unwind` runs its body with failed continuations retained. Selection is synchronous and confined to one Run, preserving the actor and Home Script boundaries of ADRs 0004, 0020 and 0025.
+- Named actions declare the recovery destination and fixed parameters. They run after exited cleanup, with the offering try's finally afterward. This rejects general expression resumption, retrying a failed Segment and durable restart handles.
+- The syntax follows existing forms: `offer useValue value` lists parameters as a function does, and `choose offer useValue(0)` passes arguments as a Call does. Only `offer` is reserved, because a Command Call `offer x` would otherwise be indistinguishable from a clause (ADR 0019); `choose` is contextual before it, so Handlers named `choose` keep working. The word `restart` was rejected: reserving it forbids `on restart` and collides with the Playground's Restart.
+- The decision narrows [#339](https://github.com/odogono/odgn-talk/issues/339)'s exclusion of resumable exceptions: arbitrary resumption remains excluded, but named structured transfers are accepted. Library variables do not acquire ambient bindings, and `on error` still cannot resume an ended Run.
+- This resembles Common Lisp's separation of pre-unwind [handlers](https://www.lispworks.com/documentation/HyperSpec/Body/m_handle.htm) and declared [restart cases](https://www.lispworks.com/documentation/HyperSpec/Body/m_rst_ca.htm). NorthTalk deliberately limits selection to lexical choice permission, synchronous policy and current-Run extent.
+
+## Delivery
+
+The design/spec/docs PR lands the full contract as a staged proposal, terms and examples. Executable grammar, catalogues, generated tables, reference tools, both Cores and tooling land through [implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) on one integration branch; declaring opcodes or Advanced tags now would require unsupported coverage (the [change-impact guide](../agents/spec-changes.md)). Two-phase search ships with Recovery Offers, not ahead of them. Proposed examples remain visibly implementation-pending `text` blocks; the supported callback example is checked `talk`.
+
+The language remains `1.0-rc.2` because it is unreleased. Cost Model 0 remains provisional. Two-phase search changes ordinary Error Fuel and Trace order, so implementation re-derives the affected corpus expectations. Recovery state is saved without duplicated owner locals, and both Cores must agree before corpus expectations receive their separate first-blessing review.
+
+**Revised before implementation:** the first version (PR #382) reserved `restart`, used bracketed parameter and argument lists, and kept unwind-first ordinary catches, which made every intermediate catch a barrier.
