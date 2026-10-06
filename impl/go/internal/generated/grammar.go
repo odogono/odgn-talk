@@ -138,6 +138,7 @@ var Grammar = GrammarTable{
 		"begins",
 		"by",
 		"can",
+		"collecting",
 		"contains",
 		"delimited",
 		"div",
@@ -248,6 +249,12 @@ var Grammar = GrammarTable{
 			Word: "civil",
 			Positions: []string{
 				"before `date` in a kind",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "collecting",
+			Positions: []string{
+				"after a `repeat` head, before the collected expression",
 			},
 		},
 		GrammarTableContextualEntry{

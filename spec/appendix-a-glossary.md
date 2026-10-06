@@ -304,6 +304,10 @@ _Avoid_: match object, match data, result (unqualified)
 An `every match of <p> in s` expression, giving the list of every match of a Text Pattern in a text.
 _Avoid_: find all, global match, comprehension
 
+**Collecting Clause**:
+The `collecting e into v` that may end a `repeat` head, gathering one value from each finished pass into a new list in `v`, its target.
+_Avoid_: accumulator, collect clause, comprehension
+
 **Beginner Surface**:
 Every construct of the language that isn't an Advanced Construct. A beginner never needs anything outside it to do something ordinary.
 _Avoid_: beginner mode, subset, level

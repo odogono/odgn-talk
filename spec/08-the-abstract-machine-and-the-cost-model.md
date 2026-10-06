@@ -501,6 +501,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `repeat while c` | L1: ⟦c⟧ `branch-false L2`, the body, `jump L1`, L2: |
 | `repeat until c` | L1: ⟦c⟧ `branch-true L2`, the body, `jump L1`, L2: |
 | `repeat forever` | L1: the body, `jump L1`, L2: |
+| `repeat … collecting e into v` | `list 0` and the `store` of `v`, then the loop above, with the `load` of `v`, ⟦e⟧, `list-append` and the `store` of `v` after the body, before its `jump L1` |
 | `exit repeat`, `next repeat` | any `finally` blocks it leaves, innermost first, then `jump` to the loop's L2, or L1 |
 | `match e` | [below](#match) |
 | `try` | [below](#try) |
@@ -645,7 +646,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Joins:** `join-end` is the closing `end` token, whether bare or written `end wait`. The Join's `join-start` and following `store 0` keep the `wait for all` head's position.
 - **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
-- **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`.
+- **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).
 

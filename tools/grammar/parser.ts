@@ -1055,11 +1055,22 @@ export class Parser {
       this.expectWord('times', 'operator');
       head = { k: 'Times', n };
     }
+    // `collecting e into v` after any head (ADR 0059). `collecting` is in
+    // the FOLLOW set, so the head's expression has already ended before it.
+    let collect: Node | null = null;
+    if (this.atOperatorWord('collecting')) {
+      this.next('operator');
+      const value = this.expr();
+      this.expectWord('into', 'operator');
+      collect = { k: 'Collecting', value, into: this.name('a name') };
+    }
     this.endOfStatement();
     const body = this.block(['end']);
     this.expectWord('end');
     this.endSuffix('repeat', at);
-    return { k: 'Repeat', head, body };
+    return collect
+      ? { k: 'Repeat', head, collect, body }
+      : { k: 'Repeat', head, body };
   }
 
   match(): Node {

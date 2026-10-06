@@ -118,6 +118,7 @@ export const grammar = {
     "begins",
     "by",
     "can",
+    "collecting",
     "contains",
     "delimited",
     "div",
