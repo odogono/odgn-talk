@@ -380,6 +380,14 @@ _Avoid_: idle, paused, stable
 The complete state of one or more Quiescent Scripts, taken at one instant: their Script Variables, mailboxes, suspended and preempted Runs, pending Capability calls, resource counters and the last Clock reading, as plain data plus Host Object ids.
 _Avoid_: checkpoint, image, dump
 
+**Restore**:
+Rebuilding a Script Group from a Script Snapshot, on the same Core family. Its Host Objects come back as new handles, keeping their Object Kind, id, parent and disposal.
+_Avoid_: load, deserialize, rehydrate
+
+**Resolve**:
+The Host's step in a Restore that turns each saved Host Object's Object Kind and id back into the thing the Host owns. One it can't resolve comes back disposed.
+_Avoid_: rebind, name resolution (that's for names in Scripts)
+
 **Segment**:
 The part of a Run between two consecutive Suspension Points, or between one and the Run's start or end. A Segment is all-or-nothing: if it ends in a Limit Fault, its changes to Script Variables are undone.
 _Avoid_: turn, slice, tick

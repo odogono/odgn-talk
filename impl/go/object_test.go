@@ -263,3 +263,74 @@ func TestObjectDisposalNotifiesOnReadyAfterUnlocking(t *testing.T) {
 		t.Fatal("refused disposal notified OnReady")
 	}
 }
+
+func TestObjectByIDFindsHandlesIncludingRestored(t *testing.T) {
+	core := New()
+	g := core.NewGroup(GroupOptions{})
+	var found *Object
+	kind, err := core.DefineObjectKind(ObjectKindDef{Name: "item", Props: []Prop{{Name: "peer", Shape: AnyShape, Get: func(o *Object) (Value, error) {
+		found, _ = o.group.ObjectByID("item", "gone")
+		return found.Value(), nil
+	}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	door := objectKindForTest(t, core, "door")
+	key, _ := g.Object(kind, "key", "native key")
+	gone, _ := g.Object(kind, "gone", nil)
+	sameID, _ := g.Object(door, "key", nil)
+	if got, ok := g.ObjectByID("item", "key"); !ok || got != key {
+		t.Fatal(got, ok)
+	}
+	if got, ok := g.ObjectByID("door", "key"); !ok || got != sameID {
+		t.Fatal(got, ok)
+	}
+	if got, ok := g.ObjectByID("item", "missing"); ok || got != nil {
+		t.Fatal(got, ok)
+	}
+	if got, ok := core.NewGroup(GroupOptions{}).ObjectByID("item", "key"); ok || got != nil {
+		t.Fatal(got, ok)
+	}
+	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable held = nothing\non go\n put the peer of key into held\nend go", Objects: map[string]*Object{"key": key}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Deliver(Message{Name: "go"})
+	if err = g.Dispose(gone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Pump(time.Unix(1, 0), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if found != gone {
+		t.Fatal("ObjectByID inside a property Get", found)
+	}
+	if got, ok := g.ObjectByID("item", "gone"); !ok || got != gone {
+		t.Fatal("disposed Object not found", got, ok)
+	}
+
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, _, err := core.Restore(saved, RestoreOptions{Resolve: func(kind, id string) (any, bool) { return "restored " + id, true }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := restored.ObjectByID("item", "key")
+	if !ok || got == key || got.group != restored || got.Native() != "restored key" {
+		t.Fatal(got, ok)
+	}
+	held, _ := restored.Inspect().Scripts[0].Vars[0].Val.AsObject()
+	if found, ok := restored.ObjectByID("item", "gone"); !ok || found != held || found == gone {
+		t.Fatal("restored disposed Object", found, ok)
+	}
+	encoded, err := EncodeValue(got.Value())
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeValue(encoded, restored.ObjectByID)
+	if err != nil || !decoded.Equal(got.Value()) {
+		t.Fatal(decoded, err)
+	}
+}

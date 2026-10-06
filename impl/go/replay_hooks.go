@@ -26,13 +26,4 @@ func init() {
 		}
 		return out
 	}
-
-	replay.Objects = func(group any) []replay.Object {
-		g := group.(*Group)
-		out := []replay.Object{}
-		for _, o := range g.objects {
-			out = append(out, replay.Object{Kind: o.kind.name, ID: o.id, Handle: o})
-		}
-		return out
-	}
 }
