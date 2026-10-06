@@ -5,3 +5,6 @@ node_modules/
 
 # Differential fuzzer output
 fuzz-findings/
+
+# Python bytecode from the Benchmark Suite's Python runner
+__pycache__/

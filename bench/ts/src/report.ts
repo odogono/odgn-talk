@@ -4,14 +4,17 @@
 /** Timings of one phase over its samples, in nanoseconds. */
 export type Stats = { medianNs: number; minNs: number; samples: number };
 
-/** One Benchmark measured by one runner. Host figures are per Run. */
+/**
+ * One Benchmark measured by one runner. Host figures are per Run. A Peer
+ * Language has no Fuel, and its Load is not timed.
+ */
 export type Measurement = {
   benchmark: string;
-  fuel: number;
+  fuel?: number;
   hostAllocs?: number;
   hostBytes?: number;
-  load: Stats;
-  logicalAlloc: number;
+  load?: Stats;
+  logicalAlloc?: number;
   run: Stats;
   runner: string;
 };
@@ -62,30 +65,60 @@ export const statsOf = (samples: readonly number[]): Stats => ({
   samples: samples.length,
 });
 
-export const nsPerFuel = (m: Measurement) => m.run.medianNs / m.fuel;
+export const nsPerFuel = (m: Measurement) =>
+  m.fuel ? m.run.medianNs / m.fuel : undefined;
 
 // One `go test -bench` result line: name, iterations, then value-unit pairs.
-const goLine = /^Benchmark(Load|Run)\/(\S+?)(?:-\d+)?\s+\d+\s+(.*)$/;
+// A Peer's sub-benchmarks are named `<runner>/<benchmark>`.
+const goLine = /^Benchmark(Load|Run|Peer)\/(\S+?)(?:-\d+)?\s+\d+\s+(.*)$/;
 
 /** Read `go test -bench -benchmem` output, over any `-count`, into measurements. */
 export const parseGoBench = (output: string): Measurement[] => {
-  const phases = new Map<string, Record<string, Record<string, number[]>>>();
+  const measured = new Map<
+    string,
+    {
+      benchmark: string;
+      phases: Record<string, Record<string, number[]>>;
+      runner: string;
+    }
+  >();
   for (const line of output.split('\n')) {
     const match = goLine.exec(line.trim());
     if (!match) {
       continue;
     }
-    const [, phase = '', benchmark = '', rest = ''] = match;
+    const [, phase = '', name = '', rest = ''] = match;
+    const slash = name.indexOf('/');
+    const [runner, benchmark] =
+      phase === 'Peer'
+        ? [name.slice(0, slash), name.slice(slash + 1)]
+        : ['go', name];
     const fields = rest.trim().split(/\s+/);
-    const byPhase = phases.get(benchmark) ?? {};
-    phases.set(benchmark, byPhase);
-    const metrics = (byPhase[phase] ??= {});
+    const key = `${runner} ${benchmark}`;
+    const entry = measured.get(key) ?? { benchmark, phases: {}, runner };
+    measured.set(key, entry);
+    const metrics = (entry.phases[phase] ??= {});
     for (let i = 0; i + 1 < fields.length; i += 2) {
       (metrics[fields[i + 1] ?? ''] ??= []).push(Number(fields[i]));
     }
   }
   const measurements: Measurement[] = [];
-  for (const [benchmark, { Load, Run }] of phases) {
+  for (const {
+    benchmark,
+    phases: { Load, Peer, Run },
+    runner,
+  } of measured.values()) {
+    if (Peer) {
+      const peer = (unit: string) => Peer[unit] ?? [];
+      measurements.push({
+        benchmark,
+        hostAllocs: median(peer('allocs/op')),
+        hostBytes: median(peer('B/op')),
+        run: statsOf(peer('ns/op')),
+        runner,
+      });
+      continue;
+    }
     if (!Load || !Run) {
       continue;
     }
@@ -110,7 +143,7 @@ export const fuelParity = (
 ): ParityFailure[] => {
   const byBenchmark = new Map<string, Record<string, number>>();
   for (const m of measurements) {
-    if (cores.includes(m.runner)) {
+    if (cores.includes(m.runner) && m.fuel !== undefined) {
       byBenchmark.set(m.benchmark, {
         ...byBenchmark.get(m.benchmark),
         [m.runner]: m.fuel,
@@ -132,24 +165,27 @@ export const outliers = (
 ): Outlier[] => {
   const result: Outlier[] = [];
   for (const runner of new Set(measurements.map(m => m.runner))) {
-    const mine = measurements.filter(m => m.runner === runner && m.fuel > 0);
-    const typical = median(mine.map(nsPerFuel));
-    for (const m of mine) {
-      if (nsPerFuel(m) > factor * typical) {
-        result.push({
-          benchmark: m.benchmark,
-          factor: nsPerFuel(m) / typical,
-          nsPerFuel: nsPerFuel(m),
-          runner,
-        });
+    const mine = measurements.flatMap(m => {
+      const ns = nsPerFuel(m);
+      return m.runner === runner && ns !== undefined
+        ? [{ benchmark: m.benchmark, ns }]
+        : [];
+    });
+    const typical = median(mine.map(m => m.ns));
+    for (const { benchmark, ns } of mine) {
+      if (ns > factor * typical) {
+        result.push({ benchmark, factor: ns / typical, nsPerFuel: ns, runner });
       }
     }
   }
   return result;
 };
 
-const ms = (ns: number) => (ns / 1e6).toFixed(3);
-const us = (ns: number) => (ns / 1e3).toFixed(1);
+// Three significant figures for the Peer Languages' sub-millisecond Runs.
+const ms = (ns: number) =>
+  ns >= 1e6 ? (ns / 1e6).toFixed(3) : (ns / 1e6).toPrecision(3);
+const us = (ns: number | undefined) =>
+  ns === undefined ? '' : (ns / 1e3).toFixed(1);
 const bytes = (n: number | undefined) =>
   n === undefined
     ? ''
@@ -160,6 +196,9 @@ const bytes = (n: number | undefined) =>
         : `${Math.round(n)} B`;
 const count = (n: number | undefined) =>
   n === undefined ? '' : String(Math.round(n));
+
+// Each Benchmark's Cores come first in the report, then its Peer Languages.
+const isPeer = (m: Measurement) => (cores.includes(m.runner) ? 0 : 1);
 
 export const markdown = (r: Results): string => {
   const lines = [
@@ -181,11 +220,12 @@ export const markdown = (r: Results): string => {
   const sorted = [...r.measurements].sort(
     (a, b) =>
       a.benchmark.localeCompare(b.benchmark) ||
+      isPeer(a) - isPeer(b) ||
       a.runner.localeCompare(b.runner),
   );
   for (const m of sorted) {
     lines.push(
-      `| ${m.benchmark} | ${m.runner} | ${us(m.load.medianNs)} | ${ms(m.run.medianNs)} | ${ms(m.run.minNs)} | ${m.fuel} | ${nsPerFuel(m).toFixed(1)} | ${bytes(m.logicalAlloc)} | ${bytes(m.hostBytes)} | ${count(m.hostAllocs)} |`,
+      `| ${m.benchmark} | ${m.runner} | ${us(m.load?.medianNs)} | ${ms(m.run.medianNs)} | ${ms(m.run.minNs)} | ${m.fuel ?? ''} | ${nsPerFuel(m)?.toFixed(1) ?? ''} | ${bytes(m.logicalAlloc)} | ${bytes(m.hostBytes)} | ${count(m.hostAllocs)} |`,
     );
   }
   const parity = r.parity.map(

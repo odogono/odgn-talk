@@ -63,6 +63,7 @@ export default [
       'tooling/stack/tools/**/*.ts',
       'tooling/playground/tools/**/*.ts',
       'bench/ts/src/main.ts',
+      'bench/ts/src/measure-peers.ts',
       'bench/ts/src/measure-ts.ts',
     ],
     rules: {
