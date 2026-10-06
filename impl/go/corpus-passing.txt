@@ -87,6 +87,7 @@ computed-sends/bad-names
 computed-sends/forwarding
 computed-sends/names
 computed-sends/unhandled
+counters/faults-and-cleanup
 counters/lifetime
 counters/variables-only
 dates/civil-arithmetic

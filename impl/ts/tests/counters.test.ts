@@ -127,7 +127,9 @@ describe('Script counters', () => {
         'on go\n  try\n    wait 1 s\n  finally\n    repeat forever\n    end repeat\n  end try\nend go',
       limits: { cleanupBudget: 8 },
     });
-    g.cancelDelivery(s.deliver({ name: 'go' }));
+    const controller = new AbortController();
+    s.request({ name: 'go' }, { signal: controller.signal });
+    controller.abort();
     g.pump(0n);
     expect(s.counters().runs).toBe(0);
     s.deliver({ name: 'go' });

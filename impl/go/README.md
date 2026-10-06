@@ -945,11 +945,15 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 277 cases, including all text-model, load-diagnostic,
+The gate contains 278 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
-public embedding interface, with exact records, costs and final state. Tests
-separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
+public embedding interface, with exact records, costs and final state. All three
+Counters cases are protected in ordinary and save/restore replay.
+`counters/faults-and-cleanup` uses a public Request context for queued cancellation;
+it starts no Run and charges no Fuel. Its corrected input retains an `Unblessed`
+header pending human review; see the [Spec derivation](../../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
+Tests separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
 18 step-5 save/restore, Extend and replacement cases, and all eleven Session
 Transcripts, so removing a required case cannot silently
