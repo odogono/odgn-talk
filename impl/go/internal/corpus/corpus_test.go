@@ -61,6 +61,14 @@ func TestTraceFilledKeysAndValues(t *testing.T) {
 	if _, e := ParseTrace("> load s\n"); e != nil {
 		t.Fatal("author may omit filled key", e)
 	}
+	for _, s := range []string{"> save\n", "> deliver to=s message=go\n", "> broadcast message=go\n"} {
+		if records, e := ParseTrace(s); e != nil || len(records[0].IDs) != 0 {
+			t.Error("author may omit an id the Core assigns", s, e)
+		}
+	}
+	if _, e := ParseTrace("> answer value=1\n"); e == nil {
+		t.Error("accepted an answer without its call id")
+	}
 }
 func TestRunnerSelectionSkipsAndDivergence(t *testing.T) {
 	corpusRoot := filepath.Join(root(t), "corpus")

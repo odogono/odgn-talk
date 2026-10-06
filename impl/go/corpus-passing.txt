@@ -115,6 +115,7 @@ errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
 errors/lambda-capture-parity
+errors/queued-error-before-parked-run
 examples/orders-pricing
 functions/capability-callbacks
 functions/foreign-calls
@@ -209,6 +210,7 @@ reload/function-staleness
 reload/reload-carry-and-discard
 reload/replacement-transitive
 save-restore/overdue-waits-fire-in-deadline-order
+save-restore/preempted-join-keeps-pending-members
 save-restore/preempted-run-keeps-segment-base
 save-restore/reissue-charge-slice
 save-restore/reissue-fuel-cutoff

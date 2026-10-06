@@ -885,8 +885,8 @@ func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
 			}
 		})
 	}
-	if count != 18 {
-		t.Fatalf("required step-5 set: %d cases, want 18", count)
+	if count != 19 {
+		t.Fatalf("required step-5 set: %d cases, want 19", count)
 	}
 }
 

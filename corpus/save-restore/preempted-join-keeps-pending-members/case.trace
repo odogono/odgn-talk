@@ -1,0 +1,36 @@
+# Unblessed: new regression; first blessing awaits human review.
+# preempted-join-keeps-pending-members: pins the pending calls of a Run that a
+# Fuel Slice preempts in a Join's body, after it has started both members but
+# before the Join's closing `end` suspends it.
+#
+# - The save keeps the Run's pending calls and its Join's members (chapter 10,
+#   "What a save holds"), so the restore returns both as pending, in call id
+#   order.
+# - Each member is settled on its own. shop/r1.c1 is answered; shop/r1.c2 is
+#   left unsettled, so the first Pump fails it with `call lost` after draining
+#   the settlements.
+# - The Run continues its preempted Segment to the Join's closing `end`, where
+#   the member failure fails the Join fast and is raised, and caught.
+
+> load shop identity=1a21c7a58885ad431d8210c17576202a7e82f965bd243e43ed68ad450c58755c
+
+> deliver d1 to=shop message=gather
+> pump clock=2026-10-06T10:00:00Z fuel-slice=30
+call shop/r1.c1 op=stock.check args=["A1"]
+call shop/r1.c2 op=stock.check args=["B2"]
+preempt shop/r1 start delivery=d1 handler=gather clause=1 by=slice fuel=38 alloc=0
+pumped state=sliced fuel=38
+
+> save s1
+> restore from=s1 fingerprint=31d82f7bb21848764aaf8191cb16445fe442bbb14c565edaad3099637050d08a mode=full pending=[shop/r1.c1, shop/r1.c2]
+
+> settle shop/r1.c1 how=answer value=12
+> pump clock=2026-10-06T10:00:01Z
+seg shop/r1 continue fuel=10 alloc=0 state=240 end=join-end
+raise shop/r1 code="call lost" at=shop:9 pos=12:5
+seg shop/r1 resume fuel=20 alloc=33 state=49 end=return
+run shop/r1 outcome=completed delivery=d1 handler=gather fuel=68 alloc=33
+pumped state=idle fuel=30
+
+> vars
+vars shop results=["call lost"]

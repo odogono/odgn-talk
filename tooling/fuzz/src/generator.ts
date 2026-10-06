@@ -24,8 +24,13 @@ export const random = (seed: string) => {
     return (state >>> 0) % bound;
   };
 };
+// The instant display form has the shortest fraction, unlike toISOString.
 const clock = (milliseconds = 0) =>
-  new Date(Date.UTC(2026, 9, 2) + milliseconds).toISOString();
+  new Date(Date.UTC(2026, 9, 2) + milliseconds)
+    .toISOString()
+    .replace(/\.(\d*?)0*Z$/, (_, digits: string) =>
+      digits ? `.${digits}Z` : 'Z',
+    );
 export const pump = (milliseconds = 0, slice = 0) =>
   `> pump clock=${clock(milliseconds)}${slice ? ` fuel-slice=${slice}` : ''}`;
 const names: Record<Feature, string> = {

@@ -1,10 +1,18 @@
 import { expect, test } from 'bun:test';
-import { generate, witnesses } from '../src/generator';
+import { generate, pump, witnesses } from '../src/generator';
 import { execute } from '../src/runner';
 
 test('a seed produces the same sources, choices and symbolic schedule', () => {
   expect(generate('42')).toEqual(generate('42'));
   expect(generate('43')).not.toEqual(generate('42'));
+});
+
+test('Pump clocks use the instant display form, with the shortest fraction', () => {
+  expect(pump()).toBe('> pump clock=2026-10-02T00:00:00Z');
+  expect(pump(10)).toBe('> pump clock=2026-10-02T00:00:00.01Z');
+  expect(pump(7, 30)).toBe(
+    '> pump clock=2026-10-02T00:00:00.007Z fuel-slice=30',
+  );
 });
 
 test('scheduler witnesses load and reach their promised behavior', () => {

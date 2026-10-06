@@ -1118,7 +1118,7 @@ export class Run {
         ? [s.call]
         : s?.k === 'join'
           ? s.members.flatMap(m => (m.call ? [m.call] : []))
-          : [];
+          : this.openJoinCalls().map(m => m.call!);
     for (const context of contexts) {
       const [grant, operation] = context.opName.split('.');
       context.op = this.host!.grants.get(grant!)!.capability.operations.get(
@@ -1127,15 +1127,32 @@ export class Run {
     }
   }
 
-  callAdoptable(id: string): boolean {
+  /**
+   * The Capability calls an open Join started and hasn't heard from, while a
+   * Fuel Slice has preempted its body: they are pending too (chapter 8).
+   */
+  openJoinCalls(): Member[] {
+    const join = this.join;
+    if (!join || this.suspended || this.resumption) {
+      return [];
+    }
+    return join.members.filter(m => m.call && !m.reply);
+  }
+
+  /** A pending call's context: the one suspended on, or an open Join's. */
+  pendingCall(id: string): Pick<Member, 'abort' | 'call'> | undefined {
     const s = this.suspended;
-    const context =
-      s?.k === 'ask'
-        ? s.call
-        : s?.k === 'join'
-          ? s.members.find(m => m.id === id)?.call
-          : undefined;
-    return context?.adoptable === true;
+    return s?.k === 'ask'
+      ? s.call.id === id
+        ? s
+        : undefined
+      : s?.k === 'join'
+        ? s.members.find(m => m.id === id)
+        : this.openJoinCalls().find(m => m.id === id);
+  }
+
+  callAdoptable(id: string): boolean {
+    return this.pendingCall(id)?.call?.adoptable === true;
   }
 
   /** Reconnect the Host side of a saved suspending Operation. */
@@ -1145,19 +1162,10 @@ export class Run {
     args: Value[],
     reissue: boolean,
   ): { call: Call<unknown>; failure?: Resumption } {
-    const suspension = this.suspended!;
-    const context =
-      suspension.k === 'ask'
-        ? suspension.call
-        : (suspension as Extract<Suspension, { k: 'join' }>).members.find(
-            m => m.id === id,
-          )!.call!;
-    const abort =
-      suspension.k === 'ask'
-        ? suspension.abort
-        : (suspension as Extract<Suspension, { k: 'join' }>).members.find(
-            m => m.id === id,
-          )!.abort!;
+    const suspension = this.suspended;
+    const pending = this.pendingCall(id)!;
+    const context = pending.call!;
+    const abort = pending.abort!;
     const grant = this.host!.grants.get(grantName)!;
     let starting = false;
     let charged = 0;
@@ -1245,9 +1253,12 @@ export class Run {
     }
     if (reached) {
       // The saved suspension committed its Segment. Reissue can't roll it back.
-      this.segmentBase = [...this.script.variables];
+      // A preempted Join body keeps its saved segment base (chapter 10).
+      if (suspension) {
+        this.segmentBase = [...this.script.variables];
+      }
       this.fault('fuelPerRun', this.frame.code.unit.code[this.frame.pc]!);
-      if (suspension.k === 'ask') {
+      if (suspension?.k === 'ask') {
         abort.abort();
         this.faultAbandons.push(id);
       }
