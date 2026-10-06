@@ -27,9 +27,9 @@ pumped state=idle fuel=0 next=2026-10-23T05:31:23.647Z
 raise waiter/r1 code="timeout" at=waiter:3 pos=6:5
 abandon waiter/r1.c1
 call waiter/r1.c2 op=log.write args=["gave up after 2147483647 ms"]
-seg waiter/r1 resume fuel=32 alloc=43 state=0 end=return
-run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=47 alloc=43
-pumped state=idle fuel=32
+seg waiter/r1 resume fuel=33 alloc=43 state=0 end=return
+run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=48 alloc=43
+pumped state=idle fuel=33
 
 # The answer arrives after the call was abandoned.
 > answer waiter/r1.c1 value="late"

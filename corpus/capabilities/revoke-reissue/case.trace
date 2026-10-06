@@ -19,8 +19,8 @@ pumped state=idle fuel=0 next=2026-09-30T10:00:30Z
 > answer s/r1.c1 value=8
 > pump clock=2026-09-30T10:00:03Z
 raise s/r1 code="capability revoked" at=s:10 pos=7:5
-seg s/r1 resume fuel=25 alloc=58 state=74 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
-pumped state=idle fuel=25
+seg s/r1 resume fuel=26 alloc=58 state=74 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
+pumped state=idle fuel=26
 > vars
 vars s answer=8 seen=["capability revoked"]

@@ -1,0 +1,93 @@
+unit recovery script
+constants
+  0 nothing
+  1 "bad"
+  2 true
+  3 "other"
+  4 0
+  5 "inner"
+  6 7
+  7 1
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler go clause 1 () locals 7 0002..0062
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 4:13 const 1 ; "bad"
+  0003 4:7 throw
+  0004 3:5 jump 0008
+  0005 6:11 load 1 ; value
+  0006 6:7 store 2 ; result
+  0007 5:5 jump 0008
+  0008 16:9 const 2 ; true
+  0009 16:5 store 4 ; cleaned
+  0010 2:3 jump 0058
+  0011 9:3 store 5 ; (5)
+  0012 9:9 load 5 ; (5)
+  0013 9:9 test-map 0029
+  0014 9:9 load 5 ; (5)
+  0015 9:9 map-get "code" 0029
+  0016 9:9 store 6 ; (6)
+  0017 9:9 load 6 ; (6)
+  0018 9:9 test-constant 3 0029 ; "other"
+  0019 9:3 catch-accept
+  0020 10:12 const 4 ; 0
+  0021 10:5 store 6 ; (6)
+  0022 16:9 const 2 ; true
+  0023 16:5 store 4 ; cleaned
+  0024 10:5 load 6 ; (6)
+  0025 10:5 return
+  0026 16:9 const 2 ; true
+  0027 16:5 store 4 ; cleaned
+  0028 9:3 jump 0058
+  0029 11:9 load 5 ; (5)
+  0030 11:9 store 6 ; (6)
+  0031 11:46 const 5 ; "inner"
+  0032 11:31 call-builtin offerAvailable 1
+  0033 11:31 branch-false 0037
+  0034 11:3 move 6 3 ; (6), e
+  0035 12:24 const 6 ; 7
+  0036 12:5 choose-offer inner 1
+  0037 13:9 load 5 ; (5)
+  0038 13:9 store 6 ; (6)
+  0039 13:3 catch-accept
+  0040 13:3 move 6 3 ; (6), e
+  0041 14:13 const 7 ; 1
+  0042 14:12 negate
+  0043 14:5 store 6 ; (6)
+  0044 16:9 const 2 ; true
+  0045 16:5 store 4 ; cleaned
+  0046 14:5 load 6 ; (6)
+  0047 14:5 return
+  0048 16:9 const 2 ; true
+  0049 16:5 store 4 ; cleaned
+  0050 13:3 jump 0058
+  0051 13:3 catch-next
+  0052 16:9 const 2 ; true
+  0053 16:5 store 4 ; cleaned
+  0054 8:3 jump 0058
+  0055 16:9 const 2 ; true
+  0056 16:5 store 4 ; cleaned
+  0057 2:3 end-cleanup
+  0058 18:10 load 2 ; result
+  0059 18:3 return
+  0060 19:1 const 0 ; nothing
+  0061 19:1 return
+  0062 19:1 clause-fail
+unwind
+  0002..0003 offer -> entry 0 depth 0
+  0002..0007 catch -> 0011 depth 0
+  0012..0018 guard -> 0029 depth 0
+  0029..0033 guard -> 0037 depth 0
+  0037..0038 guard -> 0051 depth 0
+  0002..0007 offer -> entry 1 depth 0
+  0002..0007 finally -> 0055 depth 0
+  0012..0021 finally -> 0055 depth 0
+  0029..0043 finally -> 0055 depth 0
+  0051..0051 finally -> 0055 depth 0
+offers
+  0 body 1 depth 0 end 0008
+    offer inner -> 0005 binds [1]
+  1 body 1 depth 0 end 0058
+    offer outer -> 0052 binds []

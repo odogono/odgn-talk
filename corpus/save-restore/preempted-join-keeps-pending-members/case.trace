@@ -26,11 +26,11 @@ pumped state=sliced fuel=38
 
 > settle shop/r1.c1 how=answer value=12
 > pump clock=2026-10-06T10:00:01Z
-seg shop/r1 continue fuel=10 alloc=0 state=240 end=join-end
+seg shop/r1 continue fuel=10 alloc=0 state=256 end=join-end
 raise shop/r1 code="call lost" at=shop:9 pos=12:5
-seg shop/r1 resume fuel=20 alloc=33 state=49 end=return
-run shop/r1 outcome=completed delivery=d1 handler=gather fuel=68 alloc=33
-pumped state=idle fuel=30
+seg shop/r1 resume fuel=21 alloc=33 state=49 end=return
+run shop/r1 outcome=completed delivery=d1 handler=gather fuel=69 alloc=33
+pumped state=idle fuel=31
 
 > vars
 vars shop results=["call lost"]

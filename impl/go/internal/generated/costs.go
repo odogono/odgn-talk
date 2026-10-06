@@ -68,7 +68,7 @@ var Costs = CostsTable{
 		Scanned:    "what the instruction examines, as its rate's `input` says",
 		Steps:      "the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)",
 		Program:    "the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling)",
-		Frames:     "the number of frames an unwinding pops",
+		Frames:     "the number of frames a catch search leaves or an offer lookup examines",
 		Clauses:    "the number of Handler Clauses a dispatch tries",
 		Count:      "the instruction's `count` operand, or 0 if it has none",
 		Declared:   "the Operation Declaration's per-call cost, which the Host sets",
@@ -163,6 +163,14 @@ var Costs = CostsTable{
 		CostsTableSizeEntry{
 			Of:   "pending call",
 			Size: "48",
+		},
+		CostsTableSizeEntry{
+			Of:   "dispatch context",
+			Size: "96 + 8 * items(v) + contents(v)",
+		},
+		CostsTableSizeEntry{
+			Of:   "dispatch activation",
+			Size: "48 + contents(v)",
 		},
 	},
 	Rate: []CostsTableRateEntry{
@@ -596,6 +604,26 @@ var Costs = CostsTable{
 			Fuel:  "10",
 			Alloc: "size(result)",
 		},
+		CostsTableRateEntry{
+			Key:  "catch-accept",
+			Fuel: "1",
+		},
+		CostsTableRateEntry{
+			Key:  "catch-next",
+			Fuel: "1",
+		},
+		CostsTableRateEntry{
+			Key:  "choose-offer",
+			Fuel: "8 + count",
+		},
+		CostsTableRateEntry{
+			Key:  "builtin.offerAvailable",
+			Fuel: "3 + utf8(x1) / 16",
+		},
+		CostsTableRateEntry{
+			Key:  "offer-lookup",
+			Fuel: "4 * frames",
+		},
 	},
 	Change: []CostsTableChangeEntry{
 		CostsTableChangeEntry{
@@ -613,6 +641,10 @@ var Costs = CostsTable{
 		CostsTableChangeEntry{
 			Issue:  "#126",
 			Change: "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#388",
+			Change: "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
 		},
 	},
 }

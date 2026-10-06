@@ -1,0 +1,21 @@
+# Unblessed: #388 first expectation approval remains pending.
+# The foreign Function starts a new Home Run: caller offers are unavailable there.
+> load home identity=64b53f38d3491f01ca912e224ba1f12b0dbe76d86a8f88c852342914ab73b81f
+> load caller identity=1977c40cde75d5edfc1aed6e44d013a9e62ea84bdf9ffc7c3e3aa352c21ce173
+> deliver d1 to=home message=begin
+> pump clock=2026-09-30T09:00:00Z
+send home/r1 to=caller message=execute args=[<function home:probe>]
+seg home/r1 start delivery=d1 handler=begin clause=1 fuel=34 alloc=96 state=8 end=return
+run home/r1 outcome=completed delivery=d1 handler=begin fuel=34 alloc=96
+send caller/r1.c1 to=home fn=<function home:probe> wait=yes
+seg caller/r1 start from=home/r1 handler=execute clause=1 fuel=13 alloc=0 state=336 end=call-value-wait
+raise home/r2 code="remote" at=home:6 pos=4:3
+seg home/r2 start from=caller/r1.c1 fn=<function home:probe> fuel=22 alloc=48 state=8 end=error
+run home/r2 outcome=errored fn=<function home:probe> error={code: "remote", at: {unit: "home", handler: "probe", line: 4, column: 3}} fuel=22 alloc=48
+raise caller/r1 code="send failed" at=caller:3 pos=4:5
+seg caller/r1 resume fuel=34 alloc=67 state=67 end=return
+run caller/r1 outcome=completed handler=execute fuel=47 alloc=67
+pumped state=idle fuel=103
+> vars
+vars home observed=false
+vars caller result=["send failed", true]

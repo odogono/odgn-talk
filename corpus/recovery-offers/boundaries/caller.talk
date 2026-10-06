@@ -1,0 +1,12 @@
+script variable result
+on execute callback
+  try
+    callback() and wait
+  offer recover
+    put "unexpected" into result
+  catch e before unwind
+    put offerAvailable("recover") into local
+  catch e
+    put [the code of e, local] into result
+  end try
+end execute

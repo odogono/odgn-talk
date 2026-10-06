@@ -71,6 +71,11 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.match(n)
 	case "try":
 		u.tryStatement(n)
+	case "choose-offer":
+		for _, arg := range n.Children {
+			u.expression(arg)
+		}
+		u.emit(n.Pos(), "choose-offer", text(n.Text), number(len(n.Children)))
 	case "throw":
 		u.expression(n.Children[0])
 		u.emit(pos, "throw")

@@ -23,11 +23,11 @@ raise a/r1 code="send failed" at=a:26 pos=9:2
 preempt a/r1 resume by=cap fuel=4 alloc=0
 pumped state=sliced fuel=4
 > counters a
-counters a fuel=42 alloc=32 runs=1 faults=0 state=994 mailbox=0
+counters a fuel=42 alloc=32 runs=1 faults=0 state=1988 mailbox=0
 > pump clock=2026-10-04T12:00:00Z
-seg a/r1 continue fuel=15 alloc=0 state=0 end=return
-run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=57 alloc=32
-pumped state=idle fuel=15
+seg a/r1 continue fuel=16 alloc=0 state=0 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=58 alloc=32
+pumped state=idle fuel=16
 > vars
 vars a
 vars b

@@ -1177,7 +1177,7 @@ export class Parser {
   }
 
   offerClause(): Node {
-    this.expectWord('offer');
+    const at = this.expectWord('offer');
     const name = this.name();
     const params: string[] = [];
     if (!['nl', 'eof'].includes(this.peek(0).t)) {
@@ -1190,6 +1190,8 @@ export class Parser {
     this.endOfStatement();
     return {
       k: 'Offer',
+      line: at.line,
+      col: at.col,
       name,
       params,
       body: this.block(['offer', 'catch', 'finally', 'end']),

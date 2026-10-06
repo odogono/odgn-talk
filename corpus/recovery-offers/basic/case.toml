@@ -1,0 +1,15 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[libraries]]
+name = "rows"
+version = "1"
+source = "rows.talk"
+[[libraries]]
+name = "wrapper"
+version = "1"
+source = "wrapper.talk"
+[[scripts]]
+name = "reader"
+source = "reader.talk"

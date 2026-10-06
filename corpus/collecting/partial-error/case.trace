@@ -3,8 +3,8 @@
 > request d1 to=s message=go
 > pump clock=2026-10-06T12:00:00Z
 raise s/r1 code="division by zero" at=s:14 pos=3:47
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=73 alloc=392 state=0 end=return
-run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=73 alloc=392
-pumped state=idle fuel=73
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=74 alloc=392 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=74 alloc=392
+pumped state=idle fuel=74
 > vars
 vars s

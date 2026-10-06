@@ -61,6 +61,10 @@ type handlerDispatch struct {
 	Args   []value.Value
 }
 type Frame struct {
+	ID            int
+	OwnerID       int
+	Recovery      bool
+	Transfer      *RecoveryContext
 	Code          *State
 	Dispatch      *handlerDispatch
 	ReceiverNames map[int]string // operand-stack tokens, not Script Values
@@ -103,6 +107,10 @@ type Run struct {
 	During        value.Value
 	State         *State
 	Frames        []Frame
+	Recoveries    []*RecoveryContext
+	FrameCounter  int
+	OfferAttempt  int
+	OfferRecords  []OfferRecord
 	Base          []value.Value
 	Limits        Limits
 	Status        Status
@@ -204,7 +212,8 @@ func (r *Run) nextClause() {
 func (r *Run) pushFrame(body int, args []value.Value) { r.pushCodeFrame(r.State, body, args) }
 func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
 	b := code.Unit.Bodies[body]
-	f := Frame{Code: code, Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
+	r.FrameCounter++
+	f := Frame{ID: r.FrameCounter, Code: code, Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
 	copy(f.Locals[1:], args)
 	if b.Checked.During != "" {
 		f.Locals[b.Checked.Slot(b.Checked.During)] = r.During
@@ -225,6 +234,7 @@ func (r *Run) SetDuring(v value.Value) {
 	}
 }
 func (r *Run) fault(limit string) {
+	r.Recoveries = nil
 	before := len(r.Abandons)
 	r.AbandonJoin()
 	r.FaultAbandons = append(r.FaultAbandons, r.Abandons[before:]...)
@@ -419,7 +429,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		trial.Locals = slices.Clone(f.Locals)
 		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
-		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !r.foreignWaitCall(f, i) && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
+		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !r.foreignWaitCall(f, i) && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
 			r.fault("depth")
 			break
 		}
@@ -483,6 +493,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		}
 
 		if err != nil {
+			if i.Name == "throw" {
+				f.Stack = trial.Stack
+			}
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
 				r.Status = Preempted
@@ -490,6 +503,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			continue
 		}
 		trial.PC++
+		copy(f.Locals, trial.Locals)
+		trial.Locals = f.Locals
 		*f = trial
 		if effect != nil {
 			effect()
@@ -593,7 +608,7 @@ search:
 			place--
 		}
 		for _, u := range f.Code.Unit.Bodies[f.Body].UnwindEntries() {
-			if place >= u.First && place <= u.Last {
+			if place >= u.First && place <= u.Last && u.Kind != "offer" {
 				raised.Guard = u.Kind == "guard"
 				if raised.Guard && frame == len(r.Frames)-1 && (r.At.Name == "branch-false" || r.At.Name == "branch-true") && code == "wrong kind" {
 					v := f.Stack[len(f.Stack)-1]
@@ -635,7 +650,7 @@ func (r *Run) positionedError(err value.Value) value.Value {
 	}
 	return err
 }
-func (r *Run) unwind(err value.Value) {
+func (r *Run) unwindLegacy(err value.Value) {
 	for frame := len(r.Frames) - 1; frame >= 0; frame-- {
 		f := &r.Frames[frame]
 		place := f.PC
@@ -643,7 +658,7 @@ func (r *Run) unwind(err value.Value) {
 			place--
 		}
 		for _, u := range f.Code.Unit.Bodies[f.Body].UnwindEntries() {
-			if place < u.First || place > u.Last || r.Cancelling && u.Kind != "finally" {
+			if place < u.First || place > u.Last || u.Kind == "offer" || r.Cancelling && u.Kind != "finally" {
 				continue
 			}
 			r.leaveJoin(frame, u.Target)
@@ -768,16 +783,50 @@ func (r *Run) RetainedSize() int64 {
 			size = saturatingAdd(size, Size(v))
 		}
 	}
+	frames := map[int]Frame{}
+	for _, c := range r.Recoveries {
+		for _, f := range c.Retained {
+			frames[f.ID] = f
+			// Cleanup reuses the real frame's identity and locals, but its
+			// operand stack does not replace the retained failure's operands.
+			for _, active := range r.Frames {
+				if active.ID == f.ID && active.Transfer == c {
+					for j, v := range f.Stack {
+						if f.ReceiverNames[j] == "" {
+							size = saturatingAdd(size, Size(v))
+						}
+					}
+					break
+				}
+			}
+		}
+		if c.Activation != nil {
+			frames[c.Activation.ID] = *c.Activation
+		}
+		n := saturatingAdd(96, Size(c.Error))
+		if c.Pending != nil && c.Pending.Kind == "offer" {
+			n = saturatingAdd(n, int64(8*len(c.Pending.Args)))
+			for _, v := range c.Pending.Args {
+				n = saturatingAdd(n, Size(v))
+			}
+		}
+		size = saturatingAdd(size, n)
+	}
 	for _, f := range r.Frames {
-		n := int64(64 + 8*len(f.Locals))
-		for _, v := range f.Locals {
-			n = saturatingAdd(n, Size(v))
+		frames[f.ID] = f
+	}
+	for _, f := range frames {
+		n := int64(48)
+		if !f.Recovery {
+			n = int64(64 + 8*len(f.Locals))
+			for _, v := range f.Locals {
+				n = saturatingAdd(n, Size(v))
+			}
 		}
 		for j, v := range f.Stack {
-			if f.ReceiverNames[j] != "" {
-				continue
+			if f.ReceiverNames[j] == "" {
+				n = saturatingAdd(n, Size(v))
 			}
-			n = saturatingAdd(n, Size(v))
 		}
 		size = saturatingAdd(size, n)
 	}

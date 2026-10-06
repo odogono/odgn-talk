@@ -36,17 +36,15 @@ for (const fixture of cases) {
   });
 }
 
-test('Recovery Offers lowering refuses staged forms explicitly', () => {
+test('Recovery Offers lower in both the Core and reference compiler', () => {
   for (const source of [
     'on t\ntry\noffer skip\nend try\nend t',
     'on t\ntry\ncatch e before unwind\nend try\nend t',
     'on t\ntry\ncatch e before unwind\nchoose offer skip\nend try\nend t',
   ]) {
-    expect(() => compileReference('test', 'script', source)).toThrow(
-      'not yet lowered',
-    );
-    expect(() => compileSource(source, { name: 'test' })).toThrow(
-      'not yet lowered',
-    );
+    const core = compileSource(source, { name: 'test' }).unit!;
+    const reference = compileReference('test', 'script', source);
+    expect(reference.offers).toEqual(core.offers);
+    expect(reference.code.map(i => i.op)).toEqual(core.code.map(i => i.op));
   }
 });

@@ -1,0 +1,19 @@
+on go
+  try
+    try
+      throw "bad"
+    offer inner value
+      put value into result
+    end try
+  offer outer
+  catch "other"
+    return 0
+  catch e before unwind where offerAvailable("inner")
+    choose offer inner(7)
+  catch e
+    return -1
+  finally
+    put true into cleaned
+  end try
+  return result
+end go

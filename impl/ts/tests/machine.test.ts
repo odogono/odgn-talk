@@ -161,7 +161,7 @@ describe('Cost Model 0', () => {
     });
   });
 
-  test('unwinding charges 4 per frame it pops', () => {
+  test('catch search charges 4 per frame it leaves and acceptance costs 1', () => {
     const base =
       'on go\n  try\n    put f() into x\n  catch e\n  end try\nend go\nfunction f\n  return g()\nend f\nfunction g\n  ';
     const thrown = run(`${base}throw "x"\nend g`).run.fuel;
@@ -169,9 +169,9 @@ describe('Cost Model 0', () => {
     expect(thrown).toBeGreaterThan(caught);
     expect(thrown - caught).toBe(
       // const 1, throw 10, the unwind of two frames 8, then the catch
-      // handler's store 1, the clause's load, store and move 3 and its jump 1;
+      // handler's store 1, catch-accept 1, the clause's load, store and move 3 and its jump 1;
       // against const 1, two returns 4, the store 1 and the try's jump 1.
-      1 + 10 + 8 + 1 + 3 + 1 - (1 + 4 + 1 + 1),
+      1 + 10 + 8 + 1 + 1 + 3 + 1 - (1 + 4 + 1 + 1),
     );
   });
 });

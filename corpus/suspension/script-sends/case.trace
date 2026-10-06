@@ -14,20 +14,20 @@ send a/r1 to=b message=note args=[1]
 send a/r1 to=b message=note args=[2]
 raise a/r1 code="mailbox full" at=a:14 pos=5:4
 send a/r1 to=a message=self
-seg a/r1 start delivery=d1 handler=fire clause=1 fuel=151 alloc=289 state=185 end=return
-run a/r1 outcome=completed delivery=d1 handler=fire fuel=151 alloc=289
+seg a/r1 start delivery=d1 handler=fire clause=1 fuel=152 alloc=289 state=185 end=return
+run a/r1 outcome=completed delivery=d1 handler=fire fuel=152 alloc=289
 seg b/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
 run b/r1 outcome=completed handler=note fuel=16 alloc=24
 raise a/r2 code="object gone" at=a:53 pos=17:16
 send a/r2 to=b message=note args=[7]
-seg a/r2 start delivery=d2 handler=missing clause=1 fuel=54 alloc=78 state=183 end=return
-run a/r2 outcome=completed delivery=d2 handler=missing fuel=54 alloc=78
+seg a/r2 start delivery=d2 handler=missing clause=1 fuel=55 alloc=78 state=183 end=return
+run a/r2 outcome=completed delivery=d2 handler=missing fuel=55 alloc=78
 seg b/r2 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=112 end=return
 run b/r2 outcome=completed handler=note fuel=16 alloc=24
 raise a/r3 code="wrong kind" at=a:84 pos=25:3
 send a/r3 to=b message=note args=[8]
-seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=84 alloc=196 state=213 end=return
-run a/r3 outcome=completed delivery=d3 handler=wrong fuel=84 alloc=196
+seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=85 alloc=196 state=213 end=return
+run a/r3 outcome=completed delivery=d3 handler=wrong fuel=85 alloc=196
 seg b/r3 start from=a/r2 handler=note clause=1 fuel=16 alloc=24 state=136 end=return
 run b/r3 outcome=completed handler=note fuel=16 alloc=24
 send a/r4 to=b message=note args=[9]
@@ -45,7 +45,7 @@ seg a/r6 start from=a/r4 handler=error clause=1 fuel=38 alloc=48 state=177 end=r
 run a/r6 outcome=completed handler=error fuel=38 alloc=48
 seg b/r6 start from=a/r6 handler=note clause=1 fuel=16 alloc=24 state=160 end=return
 run b/r6 outcome=completed handler=note fuel=16 alloc=24
-pumped state=idle fuel=482
+pumped state=idle fuel=485
 > vars
 vars a seen=["b", "absent", ["object", 42], "self"]
 vars b got=[1, 2, 7, 8, 9, 0]

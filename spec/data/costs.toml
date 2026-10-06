@@ -21,7 +21,7 @@
 #             Script's Persistent State
 #     of      the kind, or the part
 #     size    its formula, over `v`
-#   [[rate]]  one per Cost Model key named in machine.toml, and one per Built-in
+#   [[rate]] one per Cost Model key named in machine.toml, and one per Built-in
 #     key     the Cost Model key, or `builtin.<name>`
 #     fuel    its Fuel formula
 #     alloc   optional: its allocation formula, 0 if absent
@@ -48,7 +48,7 @@ digits = "the number of digits in the coefficient, 1 for a zero, for a number or
 scanned = "what the instruction examines, as its rate's `input` says"
 steps = "the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running)"
 program = "the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling)"
-frames = "the number of frames an unwinding pops"
+frames = "the number of frames a catch search leaves or an offer lookup examines"
 clauses = "the number of Handler Clauses a dispatch tries"
 count = "the instruction's `count` operand, or 0 if it has none"
 declared = "the Operation Declaration's per-call cost, which the Host sets"
@@ -150,6 +150,14 @@ size = "48"
 # ---------------------------------------------------------------------------
 # Rates
 # ---------------------------------------------------------------------------
+
+[[size]]
+of = "dispatch context"
+size = "96 + 8 * items(v) + contents(v)"
+
+[[size]]
+of = "dispatch activation"
+size = "48 + contents(v)"
 
 [[rate]]
 key = "const"
@@ -585,6 +593,27 @@ key = "builtin.toInstant"
 fuel = "10"
 alloc = "size(result)"
 
+[[rate]]
+key = "catch-accept"
+fuel = "1"
+
+[[rate]]
+key = "catch-next"
+fuel = "1"
+
+[[rate]]
+key = "choose-offer"
+fuel = "8 + count"
+
+[[rate]]
+key = "builtin.offerAvailable"
+fuel = "3 + utf8(x1) / 16"
+
+[[rate]]
+key = "offer-lookup"
+fuel = "4 * frames"
+
+
 # ---------------------------------------------------------------------------
 # Changes to Cost Model 0
 # ---------------------------------------------------------------------------
@@ -604,3 +633,8 @@ change = "An instruction checks its own limit (call depth, Text Pattern size or 
 [[change]]
 issue = "#126"
 change = "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit"
+
+
+[[change]]
+issue = "#388"
+change = "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes"

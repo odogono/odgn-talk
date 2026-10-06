@@ -17,9 +17,9 @@ seg hoarder/r1 start delivery=d4 handler=grow clause=1 fuel=18 alloc=0 state=16 
 run hoarder/r1 outcome=limit-fault delivery=d4 handler=grow limit=persistent fuel=18 alloc=0
 seg napper/r2 start delivery=d2 handler=each clause=1 fuel=27 alloc=88 state=664 end=wait until=2026-09-30T09:00:01Z
 raise napper/r3 code="wrong kind" at=napper:65 pos=31:5
-seg napper/r3 start delivery=d3 handler=month clause=1 fuel=32 alloc=547 state=1179 end=return
-run napper/r3 outcome=completed delivery=d3 handler=month fuel=32 alloc=547
-pumped state=idle fuel=110 next=2026-09-30T09:00:01Z
+seg napper/r3 start delivery=d3 handler=month clause=1 fuel=33 alloc=547 state=1179 end=return
+run napper/r3 outcome=completed delivery=d3 handler=month fuel=33 alloc=547
+pumped state=idle fuel=111 next=2026-09-30T09:00:01Z
 > pump clock=2026-09-30T09:00:01Z
 seg napper/r1 resume fuel=65 alloc=112 state=915 end=return
 run napper/r1 outcome=completed delivery=d1 handler=go fuel=98 alloc=136

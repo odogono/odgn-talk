@@ -8,7 +8,7 @@ This chapter states what Libraries are and how they are used, then every Built-i
 
 ## Libraries
 
-**Pending addition:** [the Recovery Offers proposal](proposals/recovery-offers.md#a-library-offers-recovery-the-caller-chooses) lets callers choose named recovery actions inside Library frames in the same Run. Both Cores parse and check these forms, but neither lowers or executes them or supplies `offerAvailable` yet. A local catch and an explicit same-Home, non-suspending policy callback already preserve Library-local accumulation.
+Recovery Offers let a caller choose an action declared inside retained Library frames in the same Run, preserving Library accumulators and earlier work. `offerAvailable(textName)` works in policy, Guards, synchronous helpers and pending transfer cleanup. It validates text ordinarily, returning false outside recovery or for malformed/unknown Names. It ignores arity; choice validates exact arity without falling back to an outer name. Malformed Names (including reserved words and `_`) pay only the base/text rate. Foreign callbacks and fresh `on error` Runs cannot see another Run's offers.
 
 ### What a Library holds
 
@@ -163,6 +163,7 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 | `kindOf(x)` | The name of the kind of `x`, as text, such as `"number"` or `"civil date"` |  |
 | `functionArity(f)` | The range of argument counts the Function Value `f` accepts, from its required parameters to all of them |  |
 | `functionName(f)` | The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda |  |
+| `offerAvailable(textName)` | Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name |  |
 
 <!-- end -->
 

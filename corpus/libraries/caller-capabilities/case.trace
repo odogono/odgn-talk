@@ -51,8 +51,8 @@ pumped state=idle fuel=0
 > deliver d4 to=s message=revoked
 > pump clock=2026-10-04T12:00:06Z
 raise s/r4 code="capability revoked" at=helper:7 pos=6:3
-seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=51 alloc=42 state=154 end=return
-run s/r4 outcome=completed delivery=d4 handler=revoked fuel=51 alloc=42
-pumped state=idle fuel=51
+seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=52 alloc=42 state=154 end=return
+run s/r4 outcome=completed delivery=d4 handler=revoked fuel=52 alloc=42
+pumped state=idle fuel=52
 > vars
 vars s log=[7, [11, 22], "capability revoked"]

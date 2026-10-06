@@ -24,6 +24,7 @@
 #     does      one sentence: what it does
 
 [operand]
+name = "a case-sensitive plain Name"
 constant = "an index into the code unit's constant pool, shown with the constant"
 local = "a local slot of the current body, shown with its name"
 variable = "a Script Variable's slot, shown with its name"
@@ -1268,14 +1269,35 @@ errors = ["bad throw"]
 does = "`throw e`: raises the popped map or text"
 
 [[instruction]]
-name = "rethrow"
+name = "catch-accept"
 group = "errors"
 operands = []
-pops = 1
+pops = 0
 pushes = 0
 suspends = false
-cost = "throw"
-does = "Raises the popped error again, from a `catch` block no clause matched"
+cost = "catch-accept"
+does = "Accepts an ordinary catch, runs exited cleanup scopes and continues in its real owner frame"
+
+[[instruction]]
+name = "catch-next"
+group = "errors"
+operands = []
+pops = 0
+pushes = 0
+suspends = false
+cost = "catch-next"
+does = "Disposes this catch dispatch activation and continues the search outward"
+
+[[instruction]]
+name = "choose-offer"
+group = "errors"
+operands = ["name", "count"]
+pops = "count"
+pushes = 0
+suspends = false
+cost = "choose-offer"
+errors = ["offer unavailable", "wrong arity"]
+does = "Looks up the nearest eligible offer, validates exact arity and transfers after exited cleanup scopes"
 
 [[instruction]]
 name = "raise"
@@ -1295,7 +1317,7 @@ pops = 0
 pushes = 0
 suspends = false
 cost = "return"
-does = "Ends a `finally` block reached by an error or a cancellation, which then goes on"
+does = "Ends a `finally` block reached by an Error, cancellation or pending catch/offer transfer, which then goes on"
 
 # ---------------------------------------------------------------------------
 # Effects and suspension

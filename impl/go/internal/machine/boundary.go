@@ -53,7 +53,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case "test-map", "test-list", "test-list-at-least", "list-item", "list-rest", "map-get", "test-constant", "test-equal":
 		return true
-	case "throw", "rethrow", "raise", "end-cleanup", "clause-fail":
+	case "throw", "catch-accept", "catch-next", "choose-offer", "raise", "end-cleanup", "clause-fail":
 		return true
 	case "me", "target", "make-function", "make-closure", "call-value", "match-whole", "match-search", "replace-start", "replace-next", "replace-put", "replace-end":
 		return true
@@ -63,7 +63,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case "call-builtin":
 		switch i.Operands()[0].Text {
-		case "upper", "lower", "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32", "year", "month", "day", "hour", "minute", "second", "nanosecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant", "fromCodePoint", "codePoint", "offset", "kindOf", "objectKind", "isDisposed", "rangeStart", "rangeEnd", "abs", "min", "max", "functionArity", "functionName":
+		case "offerAvailable", "upper", "lower", "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32", "year", "month", "day", "hour", "minute", "second", "nanosecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant", "fromCodePoint", "codePoint", "offset", "kindOf", "objectKind", "isDisposed", "rangeStart", "rangeEnd", "abs", "min", "max", "functionArity", "functionName":
 			return true
 		}
 	}

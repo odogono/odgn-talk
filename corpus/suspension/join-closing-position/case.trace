@@ -17,17 +17,17 @@ raise b/r2 code="bad" at=b:7 pos=2:16
 seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=24 alloc=48 state=96 end=error
 run b/r2 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
 raise a/r1 code="send failed" at=a:11 pos=7:3
-seg a/r1 resume fuel=17 alloc=824 state=1288 end=return
-run a/r1 outcome=completed delivery=d1 handler=direct fuel=89 alloc=920
+seg a/r1 resume fuel=18 alloc=824 state=1288 end=return
+run a/r1 outcome=completed delivery=d1 handler=direct fuel=90 alloc=920
 seg b/r3 start from=a/r2.c1 handler=ping clause=1 fuel=17 alloc=0 state=371 end=return
 run b/r3 outcome=completed handler=ping value=1 fuel=17 alloc=0
 raise b/r4 code="bad" at=b:7 pos=2:16
 seg b/r4 start from=a/r2.c2 handler=ping clause=1 fuel=24 alloc=48 state=323 end=error
 run b/r4 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
 raise a/r2 code="send failed" at=a:57 pos=23:2
-seg a/r2 resume fuel=21 alloc=823 state=1663 end=return
-run a/r2 outcome=completed delivery=d2 handler=local fuel=106 alloc=919
-pumped state=idle fuel=277
+seg a/r2 resume fuel=22 alloc=823 state=1663 end=return
+run a/r2 outcome=completed delivery=d2 handler=local fuel=107 alloc=919
+pumped state=idle fuel=279
 > deliver d3 to=a message=direct args=[3]
 > deliver d4 to=a message=local args=[3]
 > pump clock=2026-10-04T12:00:00Z
@@ -47,13 +47,13 @@ pumped state=idle fuel=241 next=2026-10-04T12:00:01Z
 > pump clock=2026-10-04T12:00:01Z
 raise a/r3 code="timeout" at=a:11 pos=7:3
 abandon a/r3.c2
-seg a/r3 resume fuel=17 alloc=479 state=2494 end=return
-run a/r3 outcome=completed delivery=d3 handler=direct fuel=89 alloc=575
+seg a/r3 resume fuel=18 alloc=479 state=2494 end=return
+run a/r3 outcome=completed delivery=d3 handler=direct fuel=90 alloc=575
 raise a/r4 code="timeout" at=a:57 pos=23:2
 abandon a/r4.c2
-seg a/r4 resume fuel=21 alloc=478 state=2620 end=return
-run a/r4 outcome=completed delivery=d4 handler=local fuel=106 alloc=574
-pumped state=idle fuel=38 next=2026-10-04T12:00:02Z
+seg a/r4 resume fuel=22 alloc=478 state=2620 end=return
+run a/r4 outcome=completed delivery=d4 handler=local fuel=107 alloc=574
+pumped state=idle fuel=40 next=2026-10-04T12:00:02Z
 > pump clock=2026-10-04T12:00:02Z
 seg b/r6 resume fuel=3 alloc=0 state=200 end=return
 run b/r6 outcome=completed handler=ping value=3 fuel=28 alloc=0
@@ -61,7 +61,7 @@ seg b/r8 resume fuel=3 alloc=0 state=0 end=return
 run b/r8 outcome=completed handler=ping value=3 fuel=28 alloc=0
 pumped state=idle fuel=6
 > counters a
-counters a fuel=390 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
+counters a fuel=394 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
 > counters b
 counters b fuel=172 alloc=96 runs=8 faults=0 state=0 mailbox=0
 > vars

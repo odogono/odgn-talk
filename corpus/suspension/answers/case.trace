@@ -11,41 +11,41 @@
 > deliver d5 to=fetcher message=fetch args=["e"]
 > pump clock=2026-09-30T09:00:00Z
 call fetcher/r1.c1 op=feed.fetch args=["a"]
-seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=509 end=ask-wait
+seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=525 end=ask-wait
 call fetcher/r2.c1 op=feed.fetch args=["b"]
-seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=757 end=ask-wait
+seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=789 end=ask-wait
 call fetcher/r3.c1 op=feed.fetch args=["c"]
-seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1005 end=ask-wait
+seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1053 end=ask-wait
 call fetcher/r4.c1 op=feed.fetch args=["d"]
-seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1253 end=ask-wait
+seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1317 end=ask-wait
 call fetcher/r5.c1 op=feed.fetch args=["e"]
-seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1501 end=ask-wait
+seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1581 end=ask-wait
 pumped state=idle fuel=275 next=2026-09-30T09:00:03Z
 > answer fetcher/r1.c1 value=12 fuel=7
 > fail fetcher/r2.c1 error={code: "no feed", feed: "b"}
 > fail fetcher/r3.c1 error={}
 > answer fetcher/r4.c1 value="lots"
 > pump clock=2026-09-30T09:00:01Z
-seg fetcher/r1 resume fuel=22 alloc=40 state=1165 end=return
+seg fetcher/r1 resume fuel=22 alloc=40 state=1229 end=return
 run fetcher/r1 outcome=completed delivery=d1 handler=fetch fuel=77 alloc=40
 raise fetcher/r2 code="no feed" at=fetcher:5 pos=7:5
-seg fetcher/r2 resume fuel=19 alloc=524 state=1318 end=return
-run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=74 alloc=524
+seg fetcher/r2 resume fuel=20 alloc=524 state=1366 end=return
+run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=75 alloc=524
 call-failed fetcher/r3.c1 op=feed.fetch
 raise fetcher/r3 code="host error" at=fetcher:5 pos=7:5
-seg fetcher/r3 resume fuel=17 alloc=501 state=1570 end=return
-run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=72 alloc=501
+seg fetcher/r3 resume fuel=18 alloc=501 state=1602 end=return
+run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=73 alloc=501
 call-failed fetcher/r4.c1 op=feed.fetch
 raise fetcher/r4 code="host error" at=fetcher:5 pos=7:5
-seg fetcher/r4 resume fuel=17 alloc=501 state=1802 end=return
-run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=72 alloc=501
-pumped state=idle fuel=75 next=2026-09-30T09:00:03Z
+seg fetcher/r4 resume fuel=18 alloc=501 state=1818 end=return
+run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=73 alloc=501
+pumped state=idle fuel=78 next=2026-09-30T09:00:03Z
 > pump clock=2026-09-30T09:00:03Z
 raise fetcher/r5 code="timeout" at=fetcher:5 pos=7:5
 abandon fetcher/r5.c1
-seg fetcher/r5 resume fuel=17 alloc=547 state=2052 end=return
-run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=72 alloc=547
-pumped state=idle fuel=17
+seg fetcher/r5 resume fuel=18 alloc=547 state=2052 end=return
+run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=73 alloc=547
+pumped state=idle fuel=18
 > answer fetcher/r5.c1 value=1
 > pump clock=2026-09-30T09:00:04Z
 note fetcher/r5.c1 kind=late-answer

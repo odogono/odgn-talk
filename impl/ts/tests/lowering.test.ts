@@ -78,7 +78,8 @@ const leaves = new Set([
   'return',
   'clause-fail',
   'throw',
-  'rethrow',
+  'catch-next',
+  'choose-offer',
   'raise',
   'end-cleanup',
   'veto',
@@ -161,6 +162,12 @@ const verify = (unit: CodeUnit): string[] => {
         problems.push(
           `${body.name}: the ${next.kind} entry at ${next.start} has depth ${next.depth}, the stack ${depth.get(next.start)}`,
         );
+      }
+      if (next.kind === 'offer') {
+        for (const offer of unit.offers![next.target]!.offers) {
+          reach(offer.target, next.depth, next.start);
+        }
+        continue;
       }
       reach(
         next.target,
