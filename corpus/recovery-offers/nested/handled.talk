@@ -1,0 +1,31 @@
+script variable visible = false
+script variable order = ""
+function fail
+ try
+  throw "original"
+ finally
+  try
+   throw "cleanup"
+  catch "cleanup"
+   put offerAvailable("recover") into visible
+   put "handled;" after order
+  end try
+ end try
+end fail
+function work
+ try
+  put fail() into ignored
+ offer recover
+  put "action;" after order
+ finally
+  put "owner;" after order
+ end try
+end work
+on go
+ try
+  put work() into ignored
+ catch "original" before unwind
+  choose offer recover
+ end try
+ return [visible, order]
+end go

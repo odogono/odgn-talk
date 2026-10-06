@@ -1,0 +1,11 @@
+on go
+ try
+  try
+   throw "original"
+  catch "original" before unwind
+   throw "policy"
+  end try
+ catch "policy"
+  return 1
+ end try
+end go

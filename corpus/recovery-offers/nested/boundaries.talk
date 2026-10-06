@@ -1,0 +1,33 @@
+script variable order = ""
+function work
+ try
+  throw "original"
+ finally
+  put "work;" after order
+ end try
+end work
+on go
+ try
+  try
+   put work() into ignored
+  catch "original" before unwind
+   try
+    try
+     throw "middle"
+    catch "middle" before unwind
+     try
+      throw "deep"
+     finally
+      put "inner policy;" after order
+     end try
+    end try
+   finally
+    put "outer policy;" after order
+   end try
+  catch "deep"
+   return "sibling"
+  end try
+ catch e
+  return [the code of e, the code of the during of e, order]
+ end try
+end go

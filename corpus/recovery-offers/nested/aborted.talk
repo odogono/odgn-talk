@@ -1,0 +1,27 @@
+script variable entered = false
+script variable order = ""
+function fail
+ try
+  throw "original"
+ finally
+  throw "cleanup"
+ end try
+end fail
+function work
+ try
+  put fail() into ignored
+ offer recover
+  put true into entered
+ finally
+  put "owner;" after order
+ end try
+end work
+on go
+ try
+  put work() into ignored
+ catch "original" before unwind
+  choose offer recover
+ catch e
+  return [the code of e, the code of the during of e, entered, order]
+ end try
+end go

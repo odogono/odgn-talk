@@ -30,14 +30,16 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 
 ## Catching
 
-Every catch is tested before failed frames unwind. An ordinary accepting catch then runs exited cleanup scopes and continues its real owner. A `catch … before unwind` runs policy while the failure chain remains retained; `choose offer name(args)` selects the nearest active named action, and fallthrough declines to the next catch. See [the machine contract](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table). Nested recovery/cancellation remains the [next implementation slice](https://github.com/odogono/odgn-talk/issues/389).
+Every catch is tested before failed frames unwind. An ordinary accepting catch then runs exited cleanup scopes and continues its real owner. A `catch … before unwind` runs policy while the failure chain remains retained; `choose offer name(args)` selects the nearest active named action, and fallthrough declines to the next catch. See [the machine contract](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table).
 
 - **`try … end try`** runs its block. An error raised in it, or in anything it calls, is matched against its `catch` clauses.
 - **Clauses are Destructuring heads** with optional Guards, tried top to bottom, like Handler Clauses. The first that matches runs, with its names bound. A bare `catch e` matches every error.
 - **Shorthand:** `catch "out of stock"` is short for `catch {code: "out of stock"}`, and a `where` Guard may follow it. Only a text literal is shorthand, so a name in a head still binds.
 - **No match:** continue searching outward without cleanup. Rejecting catches are transparent to caller recovery; an accepting ordinary catch discards deeper offers. If none accepts, unwind all frames and finally scopes.
 - **Guards** on `catch` clauses follow the rules for Handler Guards. An error in one skips the clause and is invisible, except in the Trace.
-- **An error in a `catch` body** unwinds from there, through the `try`'s `finally`.
+- **An error in an ordinary `catch` body** unwinds from there, through the `try`'s `finally`.
+- **An error in recovery policy** starts a nested two-phase search bounded by that selection control. It sees its own failure chain's offers, never those of the original failure. Local handling resumes policy. Escape aborts that recovery, adds its original Error as `during` only when absent, runs exited policy and retained cleanup, and searches outward from the catching try, bypassing its sibling catches.
+- **An error in transfer cleanup** leaves a chosen action pending when caught locally. Escape cancels the choice and searches anew from the cleanup site, attaching the original Error as `during` only when absent. Offers remain eligible until action entry. Action failures search outside their sibling offers and catches; an action may suspend wherever its surrounding body permits.
 - **Nothing rolls back:** a caught error undoes no write to a Script Variable. Rollback is only for Limit Faults and cancellation, where the Script can't react ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
 - **What `catch` never sees:** a Limit Fault, a cancellation or Stop Script. So a `catch e` in a loop can't soak up any of them.
 

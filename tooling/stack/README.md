@@ -7,7 +7,7 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 ## Built-in Capabilities
 
-**Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Neither Core lowers or executes these staged forms yet. Sessions cannot run them, and recovery debugger views remain part of the [execution/tooling proposal](../../spec/proposals/recovery-offers.md#tooling).
+**Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Both Cores lower and execute these forms, including nested recovery and cancellation; see the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) support guides. Recovery-aware debugger views and dedicated Session coverage remain tracked by [#391](https://github.com/odogono/odgn-talk/issues/391) and the [tooling contract](../../spec/proposals/recovery-offers.md#tooling).
 
 `@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line.
 

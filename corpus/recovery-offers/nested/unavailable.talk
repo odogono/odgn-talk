@@ -1,0 +1,19 @@
+on go
+ try
+  throw "original"
+ offer recover value
+  return value
+ catch "original" before unwind
+  try
+   throw "inner"
+  catch "inner" before unwind
+   try
+    choose offer recover(99)
+   catch "offer unavailable"
+    put 7 into replacement
+   end try
+  catch "inner"
+  end try
+  choose offer recover(replacement)
+ end try
+end go

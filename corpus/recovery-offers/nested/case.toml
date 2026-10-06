@@ -1,0 +1,58 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "isolated"
+source = "isolated.talk"
+[[scripts]]
+name = "unavailable"
+source = "unavailable.talk"
+[[scripts]]
+name = "helper"
+source = "helper.talk"
+[[scripts]]
+name = "local"
+source = "local.talk"
+[[scripts]]
+name = "escape"
+source = "escape.talk"
+[[scripts]]
+name = "prior"
+source = "prior.talk"
+[[scripts]]
+name = "order"
+source = "order.talk"
+[[scripts]]
+name = "handled"
+source = "handled.talk"
+[[scripts]]
+name = "aborted"
+source = "aborted.talk"
+[[scripts]]
+name = "offering"
+source = "offering.talk"
+[[scripts]]
+name = "siblings"
+source = "siblings.talk"
+[[scripts]]
+name = "boundaries"
+source = "boundaries.talk"
+[[scripts]]
+name = "unwind"
+source = "unwind.talk"
+[[scripts]]
+name = "rejected_cleanup"
+source = "rejected-cleanup.talk"
+[[scripts]]
+name = "helper_unwind"
+source = "helper-unwind.talk"
+[[scripts]]
+name = "choice_cleanup"
+source = "choice-cleanup.talk"
+[[scripts]]
+name = "expired"
+source = "expired.talk"
+[[scripts]]
+name = "outer_offer"
+source = "outer_offer.talk"

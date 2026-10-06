@@ -1,0 +1,18 @@
+script variable order = []
+on go
+  try
+    throw "original"
+  offer recover
+    say "action"
+    put "action" after order
+    wait 1 s
+    put "resumed" after order
+  catch "original" before unwind
+    say "policy"
+    choose offer recover
+  finally
+    say "finally"
+    put "finally" after order
+  end try
+  return order
+end go

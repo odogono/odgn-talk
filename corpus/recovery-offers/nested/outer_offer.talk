@@ -1,0 +1,17 @@
+on go
+ try
+  try
+   throw "original"
+  offer recover
+  catch "original" before unwind
+   throw "policy"
+  end try
+ offer outer
+  return ["outer", visible]
+ catch "policy" before unwind
+  put [offerAvailable("recover"), offerAvailable("outer")] into visible
+  choose offer outer
+ catch "policy"
+  return visible
+ end try
+end go

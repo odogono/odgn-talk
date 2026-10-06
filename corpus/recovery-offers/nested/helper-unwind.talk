@@ -1,0 +1,14 @@
+function fail
+ throw "original"
+end fail
+on go
+ try
+  try
+   put fail() into ignored
+  catch "original" before unwind
+   throw "policy"
+  end try
+ catch "policy"
+  return 1
+ end try
+end go

@@ -1,0 +1,36 @@
+script variable order = []
+script variable mark = 0
+function fail
+ try
+  throw "bad"
+ finally
+  put 1 after order
+ end try
+end fail
+function work
+ try
+  try
+   put [7, fail()] into ignored
+  finally
+   put 2 after order
+  end try
+ offer recover
+  put 99 after order
+ finally
+  put 3 after order
+ end try
+end work
+on go
+ try
+  put work() into ignored
+ catch e before unwind
+  try
+   put 9 into mark
+   choose offer recover
+  finally
+   put 5 after order
+  end try
+ finally
+  put 4 after order
+ end try
+end go

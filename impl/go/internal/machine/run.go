@@ -62,6 +62,7 @@ type handlerDispatch struct {
 }
 type Frame struct {
 	ID            int
+	ControlID     int // continuation whose active scope identities are inherited
 	OwnerID       int
 	Recovery      bool
 	Transfer      *RecoveryContext
@@ -94,6 +95,8 @@ type Run struct {
 	Passed         bool
 	VetoReason     value.Value
 
+	CancellationOwners         []Frame
+	Cancellation               []RecoveryCleanup
 	Cancelling                 bool
 	CleanupBudget, CleanupFuel int64
 	CancelCode, CancelLimit    string
@@ -235,6 +238,8 @@ func (r *Run) SetDuring(v value.Value) {
 }
 func (r *Run) fault(limit string) {
 	r.Recoveries = nil
+	r.Cancellation = nil
+	r.CancellationOwners = nil
 	before := len(r.Abandons)
 	r.AbandonJoin()
 	r.FaultAbandons = append(r.FaultAbandons, r.Abandons[before:]...)
@@ -622,6 +627,8 @@ search:
 	r.Raises = append(r.Raises, raised)
 	if r.Cancelling {
 		r.CancelCode = code
+		r.Cancellation = nil
+		r.CancellationOwners = nil
 		r.Frames = nil
 		r.Status = Cancelled
 		return
@@ -746,10 +753,46 @@ func (r *Run) Cancel(budget int64) {
 	r.AbandonJoin()
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
+	r.Cancellation = r.cancellationScopes()
+	owners := map[int]Frame{}
+	for _, c := range r.Recoveries {
+		for _, f := range c.Retained {
+			if !f.Recovery {
+				owners[f.ID] = f
+			}
+		}
+	}
+	for _, f := range r.Frames {
+		if !f.Recovery {
+			owners[f.ID] = f
+		}
+	}
+	needed := map[int]bool{}
+	for _, scope := range r.Cancellation {
+		id := scope.Frame.ID
+		if scope.Frame.OwnerID != 0 {
+			id = scope.Frame.OwnerID
+		}
+		needed[id] = true
+	}
+	for _, scope := range r.Cancellation {
+		id := scope.Frame.ID
+		if scope.Frame.OwnerID != 0 {
+			id = scope.Frame.OwnerID
+		}
+		if needed[id] {
+			owner := owners[id]
+			owner.Stack = nil
+			r.CancellationOwners = append(r.CancellationOwners, owner)
+			delete(needed, id)
+		}
+	}
+	r.Recoveries = nil
+	r.Cleanup = nil
 	r.Cancelling = true
 	r.CleanupBudget = budget
 	r.Status = Running
-	r.unwind(value.Value{})
+	r.nextCancellationCleanup()
 }
 func (r *Run) RetainedSize() int64 {
 	size := int64(96)
@@ -784,6 +827,14 @@ func (r *Run) RetainedSize() int64 {
 		}
 	}
 	frames := map[int]Frame{}
+	for _, f := range r.CancellationOwners {
+		frames[f.ID] = f
+	}
+	for _, scope := range r.Cancellation {
+		if previous, ok := frames[scope.Frame.ID]; !ok || len(previous.Stack) < len(scope.Frame.Stack) {
+			frames[scope.Frame.ID] = scope.Frame
+		}
+	}
 	for _, c := range r.Recoveries {
 		for _, f := range c.Retained {
 			frames[f.ID] = f

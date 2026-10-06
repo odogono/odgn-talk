@@ -18,7 +18,16 @@ const cases = JSON.parse(
   result: string;
   source: string;
 }[];
-for (const c of cases) {
+const nestedCases = JSON.parse(
+  readFileSync(
+    new URL(
+      '../../../tools/machine/recovery-nested-cases.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+) as typeof cases;
+for (const c of [...cases, ...nestedCases]) {
   test(c.name, () => {
     const compiled = compileSource(c.source, { name: 'test' });
     expect(compiled.diagnostics).toEqual([]);
@@ -104,7 +113,15 @@ test('ordinary acceptance retains its dispatch activation through cleanup', () =
   expect(run.finish().kind).toBe('completed');
 });
 
-for (const name of ['basic', 'boundaries', 'costs', 'cleanup-restore']) {
+for (const name of [
+  'basic',
+  'boundaries',
+  'costs',
+  'cleanup-restore',
+  'nested',
+  'cancellation',
+  'action-suspend',
+]) {
   test(`unblessed Recovery Offers Trace: ${name}`, () => {
     const dir = resolve(
       import.meta.dir,

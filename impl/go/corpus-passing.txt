@@ -221,10 +221,13 @@ objects/wait-target
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+recovery-offers/action-suspend
 recovery-offers/basic
 recovery-offers/boundaries
+recovery-offers/cancellation
 recovery-offers/cleanup-restore
 recovery-offers/costs
+recovery-offers/nested
 reload/extend-units
 reload/extension-state-cap
 reload/function-staleness

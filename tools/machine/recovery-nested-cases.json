@@ -1,0 +1,84 @@
+[
+  {
+    "name": "nested recovery: nested policy catch cannot see original offers",
+    "source": "on go\n try\n  throw \"original\"\n offer recover value\n  return value\n catch \"original\" before unwind\n  try\n   throw \"inner\"\n  catch \"inner\" before unwind\n   put offerAvailable(\"recover\") into visible\n  catch \"inner\"\n  end try\n  choose offer recover(visible)\n end try\nend go\n",
+    "result": "false"
+  },
+  {
+    "name": "nested recovery: nested policy cannot choose an original offer",
+    "source": "on go\n try\n  throw \"original\"\n offer recover value\n  return value\n catch \"original\" before unwind\n  try\n   throw \"inner\"\n  catch \"inner\" before unwind\n   try\n    choose offer recover(99)\n   catch \"offer unavailable\"\n    put 7 into replacement\n   end try\n  catch \"inner\"\n  end try\n  choose offer recover(replacement)\n end try\nend go\n",
+    "result": "7"
+  },
+  {
+    "name": "nested recovery: helper failure exposes its own offers and resumes outer policy",
+    "source": "script variable seen\nfunction helper\n try\n  throw \"inner\"\n offer inner value\n  return value\n end try\nend helper\nfunction work\n try\n  throw \"original\"\n offer recover value\n  return [value, seen]\n end try\nend work\non go\n try\n  return work()\n catch \"original\" before unwind\n  try\n   put helper() into replacement\n  catch \"inner\" before unwind\n   put [offerAvailable(\"inner\"), offerAvailable(\"recover\")] into seen\n   choose offer inner(9)\n  end try\n  choose offer recover(replacement)\n end try\nend go\n",
+    "result": "[9, [true, false]]"
+  },
+  {
+    "name": "nested recovery: locally handled policy error preserves writes and resumes selection",
+    "source": "on go\n try\n  throw \"original\"\n offer recover value\n  return value\n catch \"original\" before unwind\n  put 4 into replacement\n  try\n   throw \"policy\"\n  catch \"policy\"\n   add 3 to replacement\n  end try\n  choose offer recover(replacement)\n end try\nend go\n",
+    "result": "7"
+  },
+  {
+    "name": "nested recovery: escaping policy skips siblings and cleans policy before retained scopes",
+    "source": "script variable order = \"\"\nfunction work\n try\n  throw \"original\"\n offer recover\n  return \"unexpected action\"\n finally\n  put \"work;\" after order\n end try\nend work\non go\n try\n  try\n   put work() into ignored\n  catch \"original\" before unwind\n   try\n    throw \"policy\"\n   finally\n    put \"policy;\" after order\n   end try\n  catch \"policy\"\n   return \"sibling catch\"\n  finally\n   put \"catching;\" after order\n  end try\n catch e\n  return [the code of e, the code of the during of e, order]\n end try\nend go\n",
+    "result": "[\"policy\", \"original\", \"policy;work;catching;\"]"
+  },
+  {
+    "name": "nested recovery: escaping policy preserves existing during",
+    "source": "function work\n try\n  throw \"original\"\n offer recover\n  return \"unexpected action\"\n end try\nend work\non go\n try\n  try\n   put work() into ignored\n  catch \"original\" before unwind\n   throw {code: \"policy\", during: {code: \"prior\"}}\n  end try\n catch e\n  return [the code of e, the code of the during of e]\n end try\nend go\n",
+    "result": "[\"policy\", \"prior\"]"
+  },
+  {
+    "name": "nested recovery: policy and original finally scopes run once in transfer order",
+    "source": "script variable order = \"\"\nfunction fail\n try\n  try\n   throw \"original\"\n  finally\n   put \"deep inner;\" after order\n  end try\n finally\n  put \"deep outer;\" after order\n end try\nend fail\nfunction work\n try\n  put fail() into ignored\n offer recover\n  put \"action;\" after order\n finally\n  put \"owner;\" after order\n end try\nend work\non go\n try\n  put work() into ignored\n catch \"original\" before unwind\n  try\n   try\n    choose offer recover\n   finally\n    put \"policy inner;\" after order\n   end try\n  finally\n   put \"policy outer;\" after order\n  end try\n end try\n return order\nend go\n",
+    "result": "\"policy inner;policy outer;deep inner;deep outer;action;owner;\""
+  },
+  {
+    "name": "nested recovery: locally handled transfer cleanup preserves pending choice and availability",
+    "source": "script variable visible = false\nscript variable order = \"\"\nfunction fail\n try\n  throw \"original\"\n finally\n  try\n   throw \"cleanup\"\n  catch \"cleanup\"\n   put offerAvailable(\"recover\") into visible\n   put \"handled;\" after order\n  end try\n end try\nend fail\nfunction work\n try\n  put fail() into ignored\n offer recover\n  put \"action;\" after order\n finally\n  put \"owner;\" after order\n end try\nend work\non go\n try\n  put work() into ignored\n catch \"original\" before unwind\n  choose offer recover\n end try\n return [visible, order]\nend go\n",
+    "result": "[true, \"handled;action;owner;\"]"
+  },
+  {
+    "name": "nested recovery: escaping transfer cleanup cancels action and attaches original",
+    "source": "script variable entered = false\nscript variable order = \"\"\nfunction fail\n try\n  throw \"original\"\n finally\n  throw \"cleanup\"\n end try\nend fail\nfunction work\n try\n  put fail() into ignored\n offer recover\n  put true into entered\n finally\n  put \"owner;\" after order\n end try\nend work\non go\n try\n  put work() into ignored\n catch \"original\" before unwind\n  choose offer recover\n catch e\n  return [the code of e, the code of the during of e, entered, order]\n end try\nend go\n",
+    "result": "[\"cleanup\", \"original\", false, \"owner;\"]"
+  },
+  {
+    "name": "nested recovery: transfer cleanup error can reach offering try catch",
+    "source": "script variable entered = false\nfunction work\n try\n  try\n   throw \"original\"\n  finally\n   throw \"cleanup\"\n  end try\n offer recover\n  put true into entered\n catch {code: \"cleanup\"} as e\n  return [the code of the during of e, entered]\n end try\nend work\non go\n try\n  return work()\n catch \"original\" before unwind\n  choose offer recover\n end try\nend go\n",
+    "result": "[\"original\", false]"
+  },
+  {
+    "name": "nested recovery: action error cannot reach sibling catch or sibling offer",
+    "source": "function work\n try\n  throw \"original\"\n offer recover\n  throw \"action\"\n offer sibling\n  return \"unexpected sibling\"\n catch \"action\"\n  return \"own catch\"\n end try\nend work\non go\n try\n  return work()\n catch \"original\" before unwind\n  choose offer recover\n catch \"action\" before unwind\n  put offerAvailable(\"sibling\") into visible\n catch \"action\"\n  return visible\n end try\nend go\n",
+    "result": "false"
+  },
+  {
+    "name": "nested recovery: escaping failures cross consecutive selection boundaries",
+    "source": "script variable order = \"\"\nfunction work\n try\n  throw \"original\"\n finally\n  put \"work;\" after order\n end try\nend work\non go\n try\n  try\n   put work() into ignored\n  catch \"original\" before unwind\n   try\n    try\n     throw \"middle\"\n    catch \"middle\" before unwind\n     try\n      throw \"deep\"\n     finally\n      put \"inner policy;\" after order\n     end try\n    end try\n   finally\n    put \"outer policy;\" after order\n   end try\n  catch \"deep\"\n   return \"sibling\"\n  end try\n catch e\n  return [the code of e, the code of the during of e, order]\n end try\nend go\n",
+    "result": "[\"deep\", \"middle\", \"inner policy;outer policy;work;\"]"
+  },
+  {
+    "name": "nested recovery: escaping policy charges no synthetic frame unwind",
+    "source": "on go\n try\n  try\n   throw \"original\"\n  catch \"original\" before unwind\n   throw \"policy\"\n  end try\n catch \"policy\"\n  return 1\n end try\nend go\n",
+    "result": "1",
+    "fuel": 46
+  },
+  {
+    "name": "nested recovery: escaped original helpers are cleanup-only and not charged twice",
+    "source": "function fail\n throw \"original\"\nend fail\non go\n try\n  try\n   put fail() into ignored\n  catch \"original\" before unwind\n   throw \"policy\"\n  end try\n catch \"policy\"\n  return 1\n end try\nend go\n",
+    "result": "1",
+    "fuel": 58
+  },
+  {
+    "name": "nested recovery: replacement cleanup bypasses rejected local catch and inherited activation catches",
+    "source": "on go\n try\n  try\n   throw \"original\"\n  catch \"original\" before unwind\n   try\n    throw \"policy\"\n   finally\n    try\n     throw \"cleanup\"\n    catch \"no\"\n    end try\n   end try\n  catch \"cleanup\"\n   return \"sibling\"\n  end try\n catch e\n  return [the code of e, the code of the during of e, the code of the during of the during of e]\n end try\nend go\n",
+    "result": "[\"cleanup\", \"policy\", \"original\"]"
+  },
+  {
+    "name": "nested recovery: escaping choice policy cleanup skips sibling catch without entry",
+    "source": "on go\n try\n  try\n   throw \"original\"\n  offer recover\n   return \"entered\"\n  catch \"original\" before unwind\n   try\n    choose offer recover\n   finally\n    try\n     throw \"cleanup\"\n    catch \"no\"\n    end try\n   end try\n  catch \"cleanup\"\n   return \"sibling\"\n  end try\n catch e\n  return [the code of e, the code of the during of e]\n end try\nend go\n",
+    "result": "[\"cleanup\", \"original\"]"
+  }
+]
