@@ -491,6 +491,8 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 
 ## Guards
 
+**Pending addition:** [Recovery Catch selection](proposals/structured-error-restarts.md#selection-and-transfer) retains ordinary Guard restrictions and adds `restartAvailable` for checking an eligible recovery action. The new catch, declaration and invocation forms and Built-in are not implemented by either Core or tooling yet.
+
 A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch` clause or a `wait for` branch ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)).
 
 - **When:** it is evaluated after its pattern matches, with the pattern's names bound.

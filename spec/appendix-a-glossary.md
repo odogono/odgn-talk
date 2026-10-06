@@ -454,6 +454,14 @@ _Avoid_: exception, fault (a Limit Fault is something else), failure (unqualifie
 The lowercase text in words that names what went wrong, e.g. `"capability revoked"`. Codes the Core raises are listed, with their fields, in the error-code catalogue, and parity covers them exactly; the `message` wording is not covered.
 _Avoid_: error type, error class, errno
 
+**Error Restart**:
+A named recovery block offered by active code, which a caller may choose before failed frames are discarded. It preserves work in the owning frame and enters declared recovery code after exited cleanup; it never resumes an arbitrary failed expression. This is an [accepted design awaiting implementation](proposals/structured-error-restarts.md).
+_Avoid_: retry, continuation, resumable exception
+
+**Recovery Catch**:
+A catch explicitly marked `before unwind` that chooses an active Error Restart within the current Run, while failed continuations remain retained. It cannot suspend, and falling through declines to the next catch. This is an [accepted design awaiting implementation](proposals/structured-error-restarts.md).
+_Avoid_: error backstop, ordinary catch, handler (unqualified)
+
 **Host Error**:
 A Host's misuse of the embedding interface, refused at the Host call that made it with a code from the Host error catalogue, e.g. `clock backwards` or `reentrant call`. It never reaches a Script, unlike an Error or a Capability's `host error`.
 _Avoid_: host exception, API error, `host error` (that's a Script-visible Error Code)

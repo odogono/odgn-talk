@@ -30,6 +30,8 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 
 ## Catching
 
+**Pending addition:** [structured Error restarts](proposals/structured-error-restarts.md) lets an explicitly marked Recovery Catch choose a declared action before failed frames are discarded. Neither Core supports it yet. Ordinary `catch` behavior below remains unchanged; the proposal includes a currently supported callback alternative and explains why local work is lost on unwinding rather than Error rollback.
+
 - **`try … end try`** runs its block. An error raised in it, or in anything it calls, is matched against its `catch` clauses.
 - **Clauses are Destructuring heads** with optional Guards, tried top to bottom, like Handler Clauses. The first that matches runs, with its names bound. A bare `catch e` matches every error.
 - **Shorthand:** `catch "out of stock"` is short for `catch {code: "out of stock"}`, and a `where` Guard may follow it. Only a text literal is shorthand, so a name in a head still binds.

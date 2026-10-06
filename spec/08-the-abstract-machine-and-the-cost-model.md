@@ -6,6 +6,8 @@ Every Script and Library compiles to a code unit for one Abstract Machine: a sta
 
 ## The machine's state
 
+**Pending addition:** [the restart machine contract](proposals/structured-error-restarts.md#abstract-machine-and-lowering) specifies recovery metadata, selector control, instructions and accounting. None of its catalogue additions or execution state is active in either Core yet; the machine and Cost Model tables in this chapter remain unchanged.
+
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
 
 - **A Group** holds its Scripts, in the order they were loaded, and the code units of its Libraries, with the Clock reading, the input queue and the counters for ids ([chapter 5](05-handlers-messages-and-scheduling.md), [chapter 9](09-embedding.md)).

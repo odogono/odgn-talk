@@ -10,6 +10,8 @@ The grammar is one set of productions, in [`grammar.ebnf`](data/grammar.ebnf), a
 
 ## Notation
 
+**Pending addition:** [structured Error restarts](proposals/structured-error-restarts.md#grammar-and-load-time-rules) specifies new restart and Recovery Catch forms. Neither Core nor the reference parser supports them yet; they are not part of the productions or word lists shown in this chapter until the implementation activates them.
+
 - **The EBNF** is that of [the W3C XML Recommendation](https://www.w3.org/TR/xml/#sec-notation), as [chapter 0](00-introduction.md#notations) says.
 - **Tokens** come from [chapter 1](01-lexical-structure.md#tokens): `Word`, `Name`, `Number`, `Text`, `Unit` and `NL`, plus `CallOpen` (a `(` straight after a Name), `PatternOpen` and `PatternClose` (the `<` and `>` of a Text Pattern) and `BinaryOpen` (`<<` in operand position).
 - **A quoted word** such as `'put'` matches a Word with that spelling. If it is a Reserved Word, it is only ever that Reserved Word. Otherwise it is a contextual keyword, which has its meaning only where a production quotes it, and is an ordinary Name everywhere else.

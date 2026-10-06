@@ -6,6 +6,8 @@ Run commands in this guide from the repository root. Workspace-only scripts sele
 
 ## Task navigation
 
+**Pending language support:** [structured Error restarts](../../spec/proposals/structured-error-restarts.md) is an accepted design, but this Core does not yet parse, lower or execute its forms, Built-in, recovery state or Trace records. Current catch behavior and snapshot support remain unchanged.
+
 Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 
 ## The Session Host
