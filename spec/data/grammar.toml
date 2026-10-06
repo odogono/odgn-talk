@@ -57,8 +57,8 @@ reserved = [
 ]
 
 follow = [
-  "as", "before", "begins", "by", "can", "contains", "delimited", "div", "ends",
-  "from", "ignoring", "matches", "mod", "times", "with",
+  "as", "before", "begins", "by", "can", "collecting", "contains", "delimited",
+  "div", "ends", "from", "ignoring", "matches", "mod", "times", "with",
 ]
 
 ordinals = [
@@ -116,6 +116,10 @@ positions = ["after `ignoring`"]
 [[contextual]]
 word = "civil"
 positions = ["before `date` in a kind"]
+
+[[contextual]]
+word = "collecting"
+positions = ["after a `repeat` head, before the collected expression"]
 
 [[contextual]]
 word = "constant"

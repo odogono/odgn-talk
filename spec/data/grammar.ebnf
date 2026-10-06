@@ -125,7 +125,8 @@ If             ::= 'if' Expression 'then'
                    | NL Block ( 'else' 'if' Expression 'then' NL Block )* ( 'else' NL Block )? 'end' 'if'? )
 Repeat         ::= 'repeat' ( 'for' 'each' Pattern 'in' Expression | 'while' Expression
                             | 'until' Expression | 'forever' | Expression 'times' )
-                   NL Block 'end' 'repeat'?
+                   Collecting? NL Block 'end' 'repeat'?
+Collecting     ::= 'collecting' Expression 'into' Name
 Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'?
 When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
 Body           ::= Inline NL | NL Block

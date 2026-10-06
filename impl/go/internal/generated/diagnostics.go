@@ -35,10 +35,11 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "name clash",
-			RaisedWhen: "A name has two meanings: a variable named like a function of the unit or an Import, a parameter, pattern binding or Capture named like a Script Variable, a Constant or a well-known object, an imported name, after any rename, named like a local Handler, function, Constant, Script Variable or well-known object, two Imports of one name, or a Library Handler that an importer also defines",
+			RaisedWhen: "A name has two meanings: a variable named like a function of the unit or an Import, a parameter, pattern binding, Capture or collecting target named like a Script Variable, a Constant or a well-known object, a collecting target named like a name its own `repeat for each` pattern binds, an imported name, after any rename, named like a local Handler, function, Constant, Script Variable or well-known object, two Imports of one name, or a Library Handler that an importer also defines",
 			At:         "the later of the two in the source; for an Import, its name in the `use` line",
 			Sources: []string{
 				"ADR 0020",
+				"ADR 0059",
 				"#115",
 			},
 		},
@@ -300,11 +301,12 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "can't write",
-			RaisedWhen: "A Container is rooted in a Constant, a Lambda puts into a captured local, or `set` writes a read-only property of a Host Object whose kind and key are known at load",
-			At:         "the Container's root, or `set`",
+			RaisedWhen: "A Container is rooted in a Constant, a Lambda puts into a captured local, the body of a `repeat` that collects writes its collecting target, through a Container rooted in it, a pattern that binds it or an inner loop that collects into it, or `set` writes a read-only property of a Host Object whose kind and key are known at load",
+			At:         "the Container's root, the binding, the inner loop's collecting target, or `set`",
 			Sources: []string{
 				"ADR 0016",
 				"ADR 0025",
+				"ADR 0059",
 				"#115",
 			},
 		},

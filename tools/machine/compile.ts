@@ -1690,6 +1690,9 @@ export class BodyCompiler {
   }
 
   repeat(s: Node) {
+    if (s.collect) {
+      this.fail(s, '`collecting` is not lowered here yet (ADR 0059)');
+    }
     const h = s.head;
     const loop: Loop = {
       top: this.label(),
