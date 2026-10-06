@@ -1,0 +1,9 @@
+-- Find all three maximal digit runs, compiling the Pattern during Load.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    put every match of <digits> in "a12 b345 c6" into hits
+    add the length of hits to total
+  end repeat
+  return total
+end run

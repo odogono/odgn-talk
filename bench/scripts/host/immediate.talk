@@ -1,0 +1,9 @@
+-- Immediate identity Operations; argument and result conversion are timed.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    ask host to echo i
+    add it to total
+  end repeat
+  return total
+end run

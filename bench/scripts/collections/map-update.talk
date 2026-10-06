@@ -1,0 +1,9 @@
+-- Update a shared Map; the retained original must stay unchanged.
+on run n
+  put {a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8} into values
+  put values into original
+  repeat for each i in 1..n
+    put i into values's a
+  end repeat
+  return original's a + values's a
+end run

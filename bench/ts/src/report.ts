@@ -61,7 +61,7 @@ export const median = (xs: readonly number[]): number => {
 
 export const statsOf = (samples: readonly number[]): Stats => ({
   medianNs: median(samples),
-  minNs: Math.min(...samples),
+  minNs: samples.reduce((min, sample) => Math.min(min, sample), Infinity),
   samples: samples.length,
 });
 

@@ -42,6 +42,32 @@ func TestEveryBenchmarkProducesItsExpectedOutput(t *testing.T) {
 	}
 }
 
+func TestEveryBenchmarkCanRepeatOnTheSameLoadedScript(t *testing.T) {
+	for _, bench := range manifest(t, "go") {
+		t.Run(bench.Name, func(t *testing.T) {
+			source, err := bench.Source()
+			if err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := Load(northtalk.New(), bench.Name, source, bench.Host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, err := loaded.Run(bench.Smoke.N)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := loaded.Run(bench.Smoke.N)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first.Outcome != northtalk.Completed || second.Outcome != northtalk.Completed || first.Result.String() != bench.Smoke.Expect || second.Result.String() != bench.Smoke.Expect || first.Fuel != second.Fuel || first.Alloc != second.Alloc {
+				t.Fatalf("repeated Run differs: first=%+v second=%+v", first, second)
+			}
+		})
+	}
+}
+
 func TestAWrongExpectedOutputFailsTheCheck(t *testing.T) {
 	b := manifest(t, "go")[0]
 	b.Smoke.Expect += "0"
@@ -65,7 +91,7 @@ func BenchmarkLoad(b *testing.B) {
 			i := 0
 			for b.Loop() {
 				i++
-				if _, e := Load(core, fmt.Sprintf("load%d", i), source); e != nil {
+				if _, e := Load(core, fmt.Sprintf("load%d", i), source, bench.Host); e != nil {
 					b.Fatal(e)
 				}
 			}
@@ -73,8 +99,8 @@ func BenchmarkLoad(b *testing.B) {
 	}
 }
 
-// BenchmarkRun times one Run of an already loaded Script, in one unlimited
-// Fuel Slice, and reports its Fuel and logical allocation per Run.
+// BenchmarkRun times one Delivery and all Pumps through RunEnd on an already
+// loaded Script, with unlimited Fuel per Pump, and reports Fuel and allocation.
 func BenchmarkRun(b *testing.B) {
 	for _, bench := range manifest(b, "go") {
 		b.Run(bench.Name, func(b *testing.B) {
@@ -83,7 +109,7 @@ func BenchmarkRun(b *testing.B) {
 				b.Fatal(e)
 			}
 			source, _ := bench.Source()
-			l, e := Load(northtalk.New(), bench.Name, source)
+			l, e := Load(northtalk.New(), bench.Name, source, bench.Host)
 			if e != nil {
 				b.Fatal(e)
 			}

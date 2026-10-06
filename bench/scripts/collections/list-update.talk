@@ -1,0 +1,9 @@
+-- Update a shared List; the retained original must stay unchanged.
+on run n
+  put [1, 2, 3, 4, 5, 6, 7, 8] into values
+  put values into original
+  repeat for each i in 1..n
+    put i into item 1 of values
+  end repeat
+  return item 1 of original + item 1 of values
+end run

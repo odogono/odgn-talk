@@ -1,0 +1,19 @@
+-- Iterate a 32-item List and a 32-entry Map repeatedly.
+on run n
+  repeat for each i in 1..32 collecting i into values
+  end repeat
+  put {} into lookup
+  repeat for each i in 1..32
+    put i into the (i as text) of lookup
+  end repeat
+  put 0 into total
+  repeat n times
+    repeat for each v in values
+      add v to total
+    end repeat
+    repeat for each v in the values of lookup
+      add v to total
+    end repeat
+  end repeat
+  return total
+end run

@@ -4,25 +4,257 @@
       "name": "core/loop",
       "n": 2000,
       "expect": "2001000",
-      "smoke": { "n": 100, "expect": "5050" }
+      "smoke": {
+        "n": 100,
+        "expect": "5050"
+      }
     },
     {
       "name": "core/fib",
       "n": 15,
       "expect": "610",
-      "smoke": { "n": 10, "expect": "55" }
+      "smoke": {
+        "n": 10,
+        "expect": "55"
+      }
     },
     {
       "name": "core/calls",
       "n": 2000,
       "expect": "2001000",
-      "smoke": { "n": 100, "expect": "5050" }
+      "smoke": {
+        "n": 100,
+        "expect": "5050"
+      }
     },
     {
       "name": "core/lambdas",
       "n": 2000,
       "expect": "6003000",
-      "smoke": { "n": 100, "expect": "15150" }
+      "smoke": {
+        "n": 100,
+        "expect": "15150"
+      }
+    },
+    {
+      "name": "numbers/add",
+      "n": 2000,
+      "expect": "2000",
+      "smoke": {
+        "n": 16,
+        "expect": "16"
+      }
+    },
+    {
+      "name": "numbers/multiply",
+      "n": 1000,
+      "expect": "5005000",
+      "smoke": {
+        "n": 16,
+        "expect": "1360"
+      }
+    },
+    {
+      "name": "numbers/divide",
+      "n": 1000,
+      "expect": "500500",
+      "smoke": {
+        "n": 16,
+        "expect": "136"
+      }
+    },
+    {
+      "name": "numbers/quantity",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 16,
+        "expect": "136"
+      }
+    },
+    {
+      "name": "text/build",
+      "n": 500,
+      "expect": "1500",
+      "smoke": {
+        "n": 16,
+        "expect": "48"
+      }
+    },
+    {
+      "name": "text/iterate",
+      "n": 100,
+      "expect": "1600",
+      "smoke": {
+        "n": 4,
+        "expect": "64"
+      }
+    },
+    {
+      "name": "text/index",
+      "n": 1000,
+      "expect": "125",
+      "smoke": {
+        "n": 16,
+        "expect": "2"
+      }
+    },
+    {
+      "name": "text/patterns",
+      "n": 300,
+      "expect": "900",
+      "smoke": {
+        "n": 4,
+        "expect": "12"
+      }
+    },
+    {
+      "name": "text/graphemes",
+      "n": 500,
+      "expect": "2000",
+      "smoke": {
+        "n": 4,
+        "expect": "16"
+      },
+      "skip": {
+        "peers": "Unicode grapheme segmentation has no shared API across the pinned peers; text/iterate and text/index compare ASCII."
+      }
+    },
+    {
+      "name": "collections/list-build",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 8,
+        "expect": "36"
+      }
+    },
+    {
+      "name": "collections/map-build",
+      "n": 300,
+      "expect": "45150",
+      "smoke": {
+        "n": 8,
+        "expect": "36"
+      }
+    },
+    {
+      "name": "collections/list-update",
+      "n": 1500,
+      "expect": "1501",
+      "smoke": {
+        "n": 8,
+        "expect": "9"
+      }
+    },
+    {
+      "name": "collections/map-update",
+      "n": 500,
+      "expect": "501",
+      "smoke": {
+        "n": 8,
+        "expect": "9"
+      }
+    },
+    {
+      "name": "collections/iterate",
+      "n": 100,
+      "expect": "105600",
+      "smoke": {
+        "n": 2,
+        "expect": "2112"
+      }
+    },
+    {
+      "name": "host/immediate",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "immediate",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "host/suspending",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "suspending",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "host/properties",
+      "n": 500,
+      "expect": "500",
+      "smoke": {
+        "n": 4,
+        "expect": "4"
+      },
+      "host": "properties",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "host/conversion",
+      "n": 500,
+      "expect": "500",
+      "smoke": {
+        "n": 4,
+        "expect": "4"
+      },
+      "host": "conversion",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "host/pump",
+      "n": 1,
+      "expect": "nothing",
+      "smoke": {
+        "n": 1,
+        "expect": "nothing"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "macro/transform",
+      "n": 300,
+      "expect": "90300",
+      "smoke": {
+        "n": 8,
+        "expect": "72"
+      }
+    },
+    {
+      "name": "macro/report",
+      "n": 200,
+      "expect": "2639",
+      "smoke": {
+        "n": 8,
+        "expect": "84"
+      }
+    },
+    {
+      "name": "macro/game-tick",
+      "n": 1000,
+      "expect": "3000",
+      "smoke": {
+        "n": 8,
+        "expect": "24"
+      }
     }
   ]
 }

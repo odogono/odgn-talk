@@ -25,6 +25,7 @@ type Size struct {
 // Handler `run` takes N and returns a value whose display form is Expect.
 type Benchmark struct {
 	Name string `json:"name"`
+	Host string `json:"host,omitempty"`
 	Size
 	Smoke Size `json:"smoke"`
 	// Skip names the runners that can't run it yet, each with the reason.
@@ -72,9 +73,13 @@ type Loaded struct {
 }
 
 // Load loads source under name into a new Group.
-func Load(core *northtalk.Core, name, source string) (*Loaded, error) {
+func Load(core *northtalk.Core, name, source, host string) (*Loaded, error) {
 	g := core.NewGroup(northtalk.GroupOptions{Name: "bench"})
-	s, e := g.Load(northtalk.LoadOptions{Name: name, Source: source, Limits: limits})
+	options := northtalk.LoadOptions{Name: name, Source: source, Limits: limits}
+	if e := bindHost(core, g, &options, host); e != nil {
+		return nil, e
+	}
+	s, e := g.Load(options)
 	if e != nil {
 		return nil, e
 	}
@@ -86,13 +91,17 @@ func (l *Loaded) Run(n int64) (*northtalk.RunEnd, error) {
 	if _, e := l.script.Deliver(northtalk.Message{Name: "run", Args: []northtalk.Value{northtalk.Int(n)}}); e != nil {
 		return nil, e
 	}
-	result, e := l.group.Pump(clock, northtalk.PumpOptions{})
-	if e != nil {
-		return nil, e
-	}
-	for _, r := range result.Reports {
-		if end, ok := r.(*northtalk.RunEnd); ok {
-			return end, nil
+	// An answer queued by Start is consumed by the next Pump. Bound the loop
+	// so an unanswerable workload fails instead of hanging.
+	for pumps := int64(0); pumps <= n+1; pumps++ {
+		result, e := l.group.Pump(clock, northtalk.PumpOptions{})
+		if e != nil {
+			return nil, e
+		}
+		for _, r := range result.Reports {
+			if end, ok := r.(*northtalk.RunEnd); ok {
+				return end, nil
+			}
 		}
 	}
 	return nil, fmt.Errorf("the Pump ended no Run")
@@ -105,7 +114,7 @@ func Check(b Benchmark, smoke bool) (*northtalk.RunEnd, error) {
 	if e != nil {
 		return nil, e
 	}
-	l, e := Load(northtalk.New(), b.Name, source)
+	l, e := Load(northtalk.New(), b.Name, source, b.Host)
 	if e != nil {
 		return nil, e
 	}
