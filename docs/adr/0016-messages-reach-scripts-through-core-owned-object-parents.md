@@ -10,6 +10,7 @@ A Host Object has at most one Owning Script (set when that Script is loaded), an
 - **Hosts pass the target object as an argument by convention:** Handlers higher up the path then depend on every Host remembering to.
 - **Broadcast into every mailbox:** every Script pays dispatch Fuel for messages it doesn't want, which is too costly at 10k Scripts.
 - **Registering interest through a Capability:** it duplicates state the Core already has (Handlers and pending `wait for`s).
+  Narrowed by [ADR 0061](0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md) for Notifications from a granted source: source-specific registration adds the resource boundary and prefix filter that Handler and wait interest cannot express.
 - **One queueing policy per message** (ADR 0004 as written): the webhook and pickup Scripts wanted different policies on clauses of one message, and splitting message names pushes routing back into the Host.
 - **A queued message waiting at the head of the mailbox:** one busy clause would stall the whole Script.
 - **A Script-level `exclusive` mode for Damocles's one-script-at-a-time rule:** it revives ADR 0004's rejected strict serial Script. The Host already knows when a Run ends.

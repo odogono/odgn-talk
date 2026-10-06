@@ -34,4 +34,4 @@ A Script that keeps a high score or a setting beyond one load needs somewhere ou
 - **Snapshots** never include the Store, so restoring an older snapshot can leave Script Variables and the Store disagreeing. Resetting Play State (ADR 0041) leaves the Store alone.
 - **Sessions:** the Session Host's Store is in memory and starts empty, with `:store` Session Commands to load, save and clear it.
 - **Tooling:** a `store-race` Lint in the `standard` Profile flags a `get`, a value computed from it and a `set` of the same key in one Handler, and points to `increment` or `swap`.
-- **Left for later:** change notifications as Host Deliveries after commit.
+- **Follow-up design:** change notifications as Host Deliveries after commit are developed in [ADR 0061](0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md) ([#227](https://github.com/odogono/odgn-talk/issues/227)); specification and implementation remain pending.
