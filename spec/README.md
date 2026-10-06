@@ -32,7 +32,7 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 
 ## Staged specifications
 
-[Structured Error restarts](proposals/structured-error-restarts.md) is an accepted design awaiting implementation ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-restarts-chosen-before-unwinding.md)). It contains the complete future grammar, machine, cost, save and Trace contract and worked examples. Neither Core nor the reference tools supports it yet; the numbered chapters and Data Files below remain the active specification. Implementation will integrate the staged rules into those chapters and activate the deferred Data Files together with their consumers.
+[Recovery Offers](proposals/recovery-offers.md) is an accepted design awaiting implementation ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)). It contains the complete future grammar, two-phase catch search, machine, cost, save and Trace contract and worked examples. Neither Core nor the reference tools supports it yet; the numbered chapters and Data Files below remain the active specification. Implementation will integrate the staged rules into those chapters and activate the deferred Data Files together with their consumers.
 
 ## Data Files
 

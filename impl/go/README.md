@@ -11,7 +11,7 @@ the authority; the TS Core is not a reference
 
 ## Task navigation
 
-**Pending language support:** [structured Error restarts](../../spec/proposals/structured-error-restarts.md) is an accepted design, but this Core does not yet parse, lower or execute its forms, Built-in, recovery state or Trace records. Current catch behavior and snapshot support remain unchanged.
+**Pending language support:** [Recovery Offers](../../spec/proposals/recovery-offers.md) is an accepted design, but this Core does not yet parse, lower or execute its forms, Built-in, two-phase catch search, dispatch state or Trace records. Current catch behavior and snapshot support remain unchanged.
 
 Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 

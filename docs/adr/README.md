@@ -61,4 +61,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0057: A `send` may compute its message name](0057-a-send-may-compute-its-message-name.md)
 - [0058: A restored Group's Host Objects are found by kind and id](0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md)
 - [0059: A `repeat` may collect its results](0059-a-repeat-may-collect-its-results.md)
-- [0060: Errors may transfer to named restarts chosen before unwinding](0060-errors-may-transfer-to-named-restarts-chosen-before-unwinding.md)
+- [0060: Errors may transfer to named Recovery Offers chosen before unwinding](0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)

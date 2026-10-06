@@ -6,7 +6,7 @@ Every Script and Library compiles to a code unit for one Abstract Machine: a sta
 
 ## The machine's state
 
-**Pending addition:** [the restart machine contract](proposals/structured-error-restarts.md#abstract-machine-and-lowering) specifies recovery metadata, selector control, instructions and accounting. None of its catalogue additions or execution state is active in either Core yet; the machine and Cost Model tables in this chapter remain unchanged.
+**Pending addition:** [the Recovery Offers machine contract](proposals/recovery-offers.md#abstract-machine-and-lowering) specifies two-phase catch dispatch for every `try`, offer metadata, dispatch activations, instructions (retiring `rethrow`) and accounting, including charging `unwind` per frame the search leaves. None of its catalogue changes or execution state is active in either Core yet; the lowering, Unwind Table and Cost Model tables in this chapter remain unchanged.
 
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
 
