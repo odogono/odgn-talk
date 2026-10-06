@@ -38,6 +38,47 @@ outside this slice.
 17 records pin cancellation cleanup for a suspended Host Function Value call.
 Both cases enter the Go passing gate, raising it from 205 to 207 cases.
 
-Plain `Deliver` has no context or signal in the public interface. The existing
-`counters/faults-and-cleanup` fixture cancels such a Delivery and remains deferred
-by the Go runner; it is outside step 3's acceptance directories.
+## Queued Request cancellation correction (#364)
+
+At the step-3 review above, `counters/faults-and-cleanup` remained deferred:
+it cancelled a plain `Deliver`, which has no context or signal in the public
+interface. That stimulus was outside step 3's acceptance directories. The
+2026-10-06 correction uses `request d2 to=s message=clean`, followed by
+`cancel-delivery d2`, through the public context/signal in both Cores.
+Chapter 9 now explicitly states that a plain Delivery's id cannot queue this
+cancellation. This clarifies the existing interface; no cancellation API is added.
+
+### Spec derivation
+
+- [Chapter 9's input queue rules](../../../spec/09-embedding.md#threads-and-the-input-queue)
+  drain the Request and its cancellation in order before dispatch. The
+  cancellation removes `d2` from the mailbox and reports `cancelled` without a
+  Run or Handler. [Chapter 11's Run ids](../../../spec/11-the-trace-and-conformance.md#ids)
+  therefore leave the next actual Run as `s/r2`.
+- With no dispatch or executed instruction, Cost Model 0 charges no Fuel or
+  allocation. The cancellation's `run` retains `fuel=0 alloc=0`, and its Pump
+  retains `fuel=0`. A Request's future settles at the end of the Pump; chapter
+  11 adds no separate Trace output for that Host future.
+- [The Script counter rules](../../../spec/09-embedding.md#script-counters)
+  count no new Run or fault and retain the previous fault's spent work. The
+  following snapshot remains `fuel=30 alloc=0 runs=1 faults=1 state=16 mailbox=0`:
+  the original `n=0` binding survives rollback, with no mailbox message or Run
+  left to retain. The later `clean` Run and its failed cleanup are unchanged,
+  so the final snapshot remains `fuel=53 alloc=0 runs=2 faults=1 state=16 mailbox=0`.
+
+Only `> deliver d2` changes to `> request d2`; all 33 other non-comment records
+are unchanged. Go and TS reproduce the complete 34-record Trace in ordinary
+and save/restore replay before TS `--bless` records it. The save/restore replay
+preserves any original cancellation handle needed by a later input, under
+[chapter 11's futures rule](../../../spec/11-the-trace-and-conformance.md#save-and-restore-replays).
+
+TS replay now rejects `cancel-delivery` without a Request, Decision or Host
+Function Value call cancellation handle, including unknown ids, rather than
+falling back to the internal Delivery hook. Native TS counter coverage uses
+an AbortSignal too. A Go required-case test protects all three Counters cases,
+including their passing-gate membership and support classification. Current
+runner support is described in the [Go guide](../../../impl/go/README.md#corpus-runner)
+and the [TS guide](../../../impl/ts/README.md#verification-and-corpus-selection).
+
+The corrected case retains `Unblessed` pending human review of this change.
+Cross-Core execution agreement and running `--bless` do not provide that approval.

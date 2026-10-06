@@ -1360,7 +1360,7 @@ export class Group {
     }
   }
 
-  /** Replay hook for the Host Input produced by aborting a Request or Decision. */
+  /** Queue the Host Input produced by aborting a Request, Decision or Host call. */
   cancelDelivery(id: string): void {
     this.queueInput({
       line: recordLine('cancel-delivery', [id], [], true),

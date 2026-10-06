@@ -274,6 +274,38 @@ func TestDecisionAcceptance(t *testing.T) {
 	}
 }
 
+// Counters must agree across full ordinary and save/restore Traces, including
+// queued Request cancellation, which starts no Run and spends no Fuel.
+func TestCountersAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"counters/faults-and-cleanup", "counters/lifetime", "counters/variables-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 3 {
+		t.Fatalf("expected 3 Counters cases, got %d", len(cases))
+	}
+	b, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := "\n" + string(b)
+	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains(listed, "\n"+c.Name+"\n") {
+				t.Errorf("Counters case missing from passing gate: %s", c.Name)
+			}
+			if reason := (executionBackend{}).Support(c); reason != "" {
+				t.Fatalf("Counters case deferred: %s", reason)
+			}
+			if _, err := r.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 // An abort after sealing is a Host action, but it queues no Trace input.
 // Inject it separately because a canonical case.trace cannot retain that action.
 func TestDecisionReplayIgnoresCancellationAfterSeal(t *testing.T) {

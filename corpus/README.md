@@ -130,7 +130,7 @@ The seed cases were written before any Core existed. Until a case is blessed, it
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
 
-The three `counters/` cases pin lifetime work, mailbox and live state, fault rollback, failed cleanup, Reload/Extend and full or variables-only restore.
+The three `counters/` cases pin lifetime work, mailbox and live state, fault rollback, failed cleanup, Reload/Extend and full or variables-only restore. All three agree on Go and TS ordinary/save-restore replay and are protected by the Go passing gate. The corrected `faults-and-cleanup` case cancels a Request through its public context/signal, keeping every output and counter unchanged. Its `Unblessed` header awaits human review of this correction; see the [Spec derivation](../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 
 The `event-test-slice-debt` and `event-test-group-cap` cases in `suspension/` pin observation Fuel, atomic waiter checks, dispatch ordering and slice debt. The `event-tests-fault-on-resume` case in `limits/` pins uncapped observation charges and the waiting Run's fault at its next resumed instruction. All three pass full and save/restore replay.
 

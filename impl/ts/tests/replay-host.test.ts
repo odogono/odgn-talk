@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createReplayHost, replayTrace, type Setup } from '../src/replay';
+import { replayLines } from '../tools/case-checks';
 
 const clock = '2026-10-02T00:00:00Z';
 const setup: Setup = {
@@ -21,6 +22,54 @@ const setup: Setup = {
     },
   ],
 };
+
+for (const restoreBetweenPumps of [false, true]) {
+  test(`replay rejects cancellation without a Request, Decision or Host call (restore=${restoreBetweenPumps})`, () => {
+    for (const delivery of ['d1', 'd2']) {
+      expect(() =>
+        replayLines(
+          () => '',
+          setup,
+          [
+            '> load s',
+            '> deliver d1 to=s message=go',
+            `> cancel-delivery ${delivery}`,
+          ],
+          { restoreBetweenPumps },
+        ),
+      ).toThrow(
+        'Delivery cancellation requires a Request, Decision or Host call context',
+      );
+    }
+  });
+
+  test(`replay cancels a queued Request without starting a Run (restore=${restoreBetweenPumps})`, () => {
+    const actual = replayLines(
+      () => '',
+      setup,
+      [
+        '> load s',
+        '> request d1 to=s message=go',
+        '> cancel-delivery d1',
+        `> pump clock=${clock}`,
+        '> counters s',
+        '> vars',
+      ],
+      { restoreBetweenPumps },
+    );
+    expect(actual.slice(1)).toEqual([
+      '> request d1 to=s message=go',
+      '> cancel-delivery d1',
+      `> pump clock=${clock}`,
+      'run outcome=cancelled delivery=d1 fuel=0 alloc=0',
+      'pumped state=idle fuel=0',
+      '> counters s',
+      'counters s fuel=0 alloc=0 runs=0 faults=0 state=16 mailbox=0',
+      '> vars',
+      'vars s x=0',
+    ]);
+  });
+}
 
 test('incremental Host resolves calls discovered by a previous Pump and matches concrete replay', () => {
   const host = createReplayHost(() => {

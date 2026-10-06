@@ -1183,13 +1183,16 @@ const driveReplay = function* (
         case 'broadcast':
           group.broadcast(messageOf(r));
           break;
-        case 'cancel-delivery':
-          if (cancellations.has(r.ids[0]!)) {
-            cancellations.get(r.ids[0]!)!.abort();
-          } else {
-            group.cancelDelivery(r.ids[0]!);
+        case 'cancel-delivery': {
+          const controller = cancellations.get(r.ids[0]!);
+          if (!controller) {
+            throw new Error(
+              'Delivery cancellation requires a Request, Decision or Host call context',
+            );
           }
+          controller.abort();
           break;
+        }
         case 'cancel-run':
           group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
           break;

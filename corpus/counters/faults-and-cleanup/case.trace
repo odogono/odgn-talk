@@ -1,4 +1,5 @@
 # Rollback keeps spent Fuel; queued cancellation starts no Run; failed cleanup is cancellation.
+# Unblessed: the Request cancellation correction awaits human review for #364.
 > load s identity=a1524e7afe2e7c1592893f89d1fa49e604abd422e4e049ca587cf4480a0f0634
 > counters s
 counters s fuel=0 alloc=0 runs=0 faults=0 state=16 mailbox=0
@@ -10,7 +11,7 @@ run s/r1 outcome=limit-fault delivery=d1 handler=spin limit=fuel fuel=30 alloc=0
 pumped state=idle fuel=30
 > counters s
 counters s fuel=30 alloc=0 runs=1 faults=1 state=16 mailbox=0
-> deliver d2 to=s message=clean
+> request d2 to=s message=clean
 > cancel-delivery d2
 > pump clock=2026-10-02T09:00:00Z
 run outcome=cancelled delivery=d2 fuel=0 alloc=0
