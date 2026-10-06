@@ -1,0 +1,3 @@
+on go
+ wait for ping from door or 1 s
+end go

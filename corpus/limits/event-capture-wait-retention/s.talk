@@ -1,0 +1,4 @@
+on go
+ put 7 into n
+ wait for ping ^n or 1 s
+end go

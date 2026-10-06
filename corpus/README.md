@@ -244,3 +244,13 @@ execution and TS save/restore. It pins private/transitive needs, nested Library
 frame suspension and charges, cancellation cleanup, late answers and revocation.
 Its `Unblessed` header remains for first human review. Standard Capability
 factories, Host Objects and full lifecycle remain separate Go work.
+
+## Non-Script suspension retention audit
+
+The eight #281 cases named in the [review record](../docs/reviews/suspension-retention/README.md)
+agree on actual Go and TS execution, including both save/restore replays. They
+pin the one-byte-below and exact Persistent State boundaries for suspending
+Operations, foreign Function Value calls, one-line and block event captures
+and object filters, pending Join members and early answers. Their first human
+review remains outstanding; each new Trace retains its `Unblessed` header.
+Current behavior is described in the [TS verification guide](../impl/ts/README.md#verification-and-corpus-selection).

@@ -1,0 +1,12 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "below"
+source = "s.talk"
+limits = { persistentState = 231 }
+[[scripts]]
+name = "exact"
+source = "s.talk"
+limits = { persistentState = 232 }

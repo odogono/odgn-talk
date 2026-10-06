@@ -1,0 +1,6 @@
+script variable stage = 0
+on go
+ put 1 into stage
+ ask api to fetch 7 and wait
+ return it
+end go

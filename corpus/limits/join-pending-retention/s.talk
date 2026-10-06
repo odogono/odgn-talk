@@ -1,0 +1,7 @@
+on go
+ wait for all
+  ask api to fetch and wait
+  ask api to fetch and wait
+ end wait
+ return it
+end go

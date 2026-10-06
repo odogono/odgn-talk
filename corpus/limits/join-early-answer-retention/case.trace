@@ -1,0 +1,44 @@
+# Unblessed: first human review required for #281.
+> load below identity=e0d9744684a1e262d8a5621eb7baffa6cd132cf13bf9febc99351b9b52190d5f
+> load exact identity=b7381c159eda8b232bd0750d90f2f29bf5861f6567ffcdede617d0ff24a7ea02
+> deliver d1 to=below message=go
+> pump clock=2026-10-06T12:00:00Z fuel-cap=26
+call below/r1.c1 op=api.fetch args=[]
+call below/r1.c2 op=api.fetch args=[]
+preempt below/r1 start delivery=d1 handler=go clause=1 by=cap fuel=34 alloc=0
+pumped state=sliced fuel=34
+> answer below/r1.c1 value="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+> pump clock=2026-10-06T12:00:00Z
+fault below/r1 limit=persistent at=below:5 pos=5:2
+abandon below/r1.c2
+seg below/r1 continue fuel=10 alloc=0 state=0 end=fault
+run below/r1 outcome=limit-fault delivery=d1 handler=go limit=persistent fuel=44 alloc=0
+pumped state=idle fuel=10
+> counters below
+counters below fuel=44 alloc=0 runs=1 faults=1 state=0 mailbox=0
+> answer below/r1.c2 value="late"
+> pump clock=2026-10-06T12:00:00Z
+note below/r1.c2 kind=late-answer
+pumped state=idle fuel=0
+> deliver d2 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z fuel-cap=26
+call exact/r1.c1 op=api.fetch args=[]
+call exact/r1.c2 op=api.fetch args=[]
+preempt exact/r1 start delivery=d2 handler=go clause=1 by=cap fuel=34 alloc=0
+pumped state=sliced fuel=34
+> answer exact/r1.c1 value="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+> pump clock=2026-10-06T12:00:00Z
+seg exact/r1 continue fuel=10 alloc=0 state=320 end=join-end
+pumped state=idle fuel=10 next=2026-10-06T12:00:01Z
+> counters exact
+counters exact fuel=44 alloc=0 runs=1 faults=0 state=320 mailbox=0
+> answer exact/r1.c2 value="ok"
+> pump clock=2026-10-06T12:00:00Z
+seg exact/r1 resume fuel=8 alloc=260 state=0 end=return
+run exact/r1 outcome=completed delivery=d2 handler=go value=["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "ok"] fuel=52 alloc=260
+pumped state=idle fuel=8
+> counters exact
+counters exact fuel=52 alloc=260 runs=1 faults=0 state=0 mailbox=0
+> vars
+vars below
+vars exact

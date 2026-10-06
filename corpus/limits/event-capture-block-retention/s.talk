@@ -1,0 +1,7 @@
+on go
+ put 7 into n
+ wait for
+ when ping ^n then return
+ after 1 s then return
+ end wait
+end go

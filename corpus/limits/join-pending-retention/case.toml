@@ -1,0 +1,22 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "fetch"
+mode = "suspending"
+result = "text"
+cost = { fuel = 0 }
+maxPending = 1000
+errors = [{ code = "gone" }]
+[[scripts]]
+name = "below"
+source = "s.talk"
+limits = { persistentState = 271 }
+grants = { api = { ops = "all" } }
+[[scripts]]
+name = "exact"
+source = "s.talk"
+limits = { persistentState = 272 }
+grants = { api = { ops = "all" } }

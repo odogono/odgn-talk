@@ -1,0 +1,70 @@
+# Unblessed: first human review required for #281.
+> load below identity=4be738531c8e3f595dec405ba4255196e87c8d33a61a3b3eacd5bb16c75a8133
+> load exact identity=d9b3abd8dcef3c5a3502dcda02b5a0f2731cf709c55df2adc315bca67413cef9
+> deliver d1 to=below message=go
+> deliver d2 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z
+call below/r1.c1 op=api.fetch args=[7]
+fault below/r1 limit=persistent at=below:7 pos=4:2 rollback=[stage]
+abandon below/r1.c1
+seg below/r1 start delivery=d1 handler=go clause=1 fuel=18 alloc=0 state=16 end=fault
+run below/r1 outcome=limit-fault delivery=d1 handler=go limit=persistent fuel=18 alloc=0
+call exact/r1.c1 op=api.fetch args=[7]
+seg exact/r1 start delivery=d2 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=36 next=2026-10-06T12:00:01Z
+> counters below
+counters below fuel=18 alloc=0 runs=1 faults=1 state=16 mailbox=0
+> counters exact
+counters exact fuel=18 alloc=0 runs=1 faults=0 state=240 mailbox=0
+> vars
+vars below stage=0
+vars exact stage=1
+> answer below/r1.c1 value="late"
+> answer exact/r1.c1 value="ok"
+> pump clock=2026-10-06T12:00:00Z
+note below/r1.c1 kind=late-answer
+seg exact/r1 resume fuel=5 alloc=18 state=16 end=return
+run exact/r1 outcome=completed delivery=d2 handler=go value="ok" fuel=23 alloc=18
+pumped state=idle fuel=5
+> deliver d3 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z
+call exact/r2.c1 op=api.fetch args=[7]
+seg exact/r2 start delivery=d3 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=18 next=2026-10-06T12:00:01Z
+> cancel-run exact/r2
+> answer exact/r2.c1 value="late"
+> pump clock=2026-10-06T12:00:00Z
+note exact/r2.c1 kind=late-answer
+seg exact/r2 resume fuel=0 alloc=0 state=16 end=cancel
+abandon exact/r2.c1
+run exact/r2 outcome=cancelled delivery=d3 handler=go fuel=18 alloc=0
+pumped state=idle fuel=0
+> deliver d4 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z
+call exact/r3.c1 op=api.fetch args=[7]
+seg exact/r3 start delivery=d4 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=18 next=2026-10-06T12:00:01Z
+> fail exact/r3.c1 error={code: "gone"}
+> pump clock=2026-10-06T12:00:00Z
+raise exact/r3 code="gone" at=exact:7 pos=4:2
+seg exact/r3 resume fuel=5 alloc=16 state=16 end=error
+run exact/r3 outcome=errored delivery=d4 handler=go error={code: "gone", capability: "api", operation: "fetch", at: {unit: "exact", handler: "go", line: 4, column: 2}} fuel=23 alloc=16
+pumped state=idle fuel=5
+> deliver d5 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z
+call exact/r4.c1 op=api.fetch args=[7]
+seg exact/r4 start delivery=d5 handler=go clause=1 fuel=18 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=18 next=2026-10-06T12:00:01Z
+> pump clock=2026-10-06T12:00:01Z
+raise exact/r4 code="timeout" at=exact:7 pos=4:2
+abandon exact/r4.c1
+seg exact/r4 resume fuel=4 alloc=0 state=16 end=error
+run exact/r4 outcome=errored delivery=d5 handler=go error={code: "timeout", after: 1000 ms, capability: "api", operation: "fetch", at: {unit: "exact", handler: "go", line: 4, column: 2}} fuel=22 alloc=0
+pumped state=idle fuel=4
+> answer exact/r4.c1 value="late"
+> pump clock=2026-10-06T12:00:01Z
+note exact/r4.c1 kind=late-answer
+pumped state=idle fuel=0
+> vars
+vars below stage=0
+vars exact stage=1
