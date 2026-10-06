@@ -12,6 +12,6 @@ Code may offer named Restart blocks, and an explicitly marked Recovery Catch may
 
 ## Delivery
 
-The design/spec/docs PR lands the full contract as a staged proposal, terms and examples. Executable grammar, catalogues, generated tables, reference tools, both Cores and tooling land through the linked implementation issue; declaring opcodes or Advanced tags now would require unsupported coverage (the [change-impact guide](../agents/spec-changes.md)). Proposed examples remain visibly implementation-pending `text` blocks; the supported callback example is checked `talk`.
+The design/spec/docs PR lands the full contract as a staged proposal, terms and examples. Executable grammar, catalogues, generated tables, reference tools, both Cores and tooling land through [implementation issue #383](https://github.com/odogono/odgn-talk/issues/383); declaring opcodes or Advanced tags now would require unsupported coverage (the [change-impact guide](../agents/spec-changes.md)). Proposed examples remain visibly implementation-pending `text` blocks; the supported callback example is checked `talk`.
 
 The language remains `1.0-rc.2` because it is unreleased. Cost Model 0 remains provisional. Implementation must preserve ordinary-only lowering and Error Fuel, save recovery state without duplicated owner locals, and agree across both Cores before corpus expectations receive their separate first-blessing review.

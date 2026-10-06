@@ -1,6 +1,6 @@
 # Structured Error restarts
 
-**Status: accepted design; implementation pending.** This is the specification handoff for [#367](https://github.com/odogono/odgn-talk/issues/367) and [ADR 0060](../../docs/adr/0060-errors-may-transfer-to-named-restarts-chosen-before-unwinding.md). Neither Core nor the reference tools currently accepts the new forms. The numbered chapters and executable Data Files remain the active specification. The implementation follow-up will be linked here after creation.
+**Status: accepted design; implementation pending.** This is the specification handoff for [#367](https://github.com/odogono/odgn-talk/issues/367) and [ADR 0060](../../docs/adr/0060-errors-may-transfer-to-named-restarts-chosen-before-unwinding.md), proposed in [design PR #382](https://github.com/odogono/odgn-talk/pull/382). [Implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) tracks the deferred work and required specification base. Neither Core nor the reference tools currently accepts the new forms. The numbered chapters and executable Data Files remain the active specification.
 
 Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged. On implementation, move these rules into the affected chapters and Data Files, replace their pending-support notices, and retire this staged document in favor of those rules. New-syntax examples use `text` fences because documentation `talk` fences are parsed and lowered by the current checks. Their results are specified behavior, not execution evidence.
 
