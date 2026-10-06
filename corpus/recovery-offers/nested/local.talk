@@ -1,0 +1,15 @@
+on go
+ try
+  throw "original"
+ offer recover value
+  return value
+ catch "original" before unwind
+  put 4 into replacement
+  try
+   throw "policy"
+  catch "policy"
+   add 3 to replacement
+  end try
+  choose offer recover(replacement)
+ end try
+end go

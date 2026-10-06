@@ -14,7 +14,7 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 ## Task navigation
 
-**Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested dispatch/cancellation, full snapshot validation and debugger/session integration remain separate slices [#389](https://github.com/odogono/odgn-talk/issues/389), [#390](https://github.com/odogono/odgn-talk/issues/390) and [#391](https://github.com/odogono/odgn-talk/issues/391); see the [handoff](../../spec/proposals/recovery-offers.md).
+**Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested policy searches stay within their selection boundary; escaping policy Errors carry `during` outward, transfer cleanup preserves or cancels choices as appropriate, and cancellation enumerates dispatch-local and retained scopes once. Full snapshot validation and debugger/session integration remain separate slices [#390](https://github.com/odogono/odgn-talk/issues/390) and [#391](https://github.com/odogono/odgn-talk/issues/391); see the [handoff](../../spec/proposals/recovery-offers.md).
 
 Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 

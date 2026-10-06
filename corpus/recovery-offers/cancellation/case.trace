@@ -1,0 +1,139 @@
+# Unblessed: #389 first expectation approval remains pending #392.
+# Pump caps stop at catch tests, immediately before choice, and just after choice.
+# Transfer is stopped at entry to the policy cleanup copy: ordinary cancellation abandons
+# the current cleanup rather than restarting it, so its 5 is absent in transfer cleanup.
+# Cancellation rolls back policy writes, then runs retained and active policy finally scopes once.
+> load tests identity=774fe5ac7d90dd42911c5401e8653f044d63ce797355047ce31922c9733100b2
+> deliver d1 to=tests message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=39
+raise tests/r1 code="bad" at=tests:7 pos=5:3
+preempt tests/r1 start delivery=d1 handler=go clause=1 by=cap fuel=39 alloc=48
+pumped state=sliced fuel=39
+> counters tests
+counters tests fuel=39 alloc=48 runs=1 faults=0 state=1230 mailbox=0
+> cancel-run tests/r1
+> pump clock=2026-10-06T09:00:00Z
+seg tests/r1 continue fuel=44 alloc=96 state=128 end=cancel
+run tests/r1 outcome=cancelled delivery=d1 handler=go fuel=83 alloc=144
+pumped state=idle fuel=44
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+> load policy identity=1228abf6c29af48d5eba33f1d3b62e2061ee219d9aeda7a306c2e60871261466
+> deliver d2 to=policy message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=46
+raise policy/r1 code="bad" at=policy:7 pos=5:3
+preempt policy/r1 start delivery=d2 handler=go clause=1 by=cap fuel=46 alloc=48
+pumped state=sliced fuel=46
+> counters policy
+counters policy fuel=46 alloc=48 runs=1 faults=0 state=1800 mailbox=0
+> cancel-run policy/r1
+> pump clock=2026-10-06T09:00:00Z
+seg policy/r1 continue fuel=55 alloc=120 state=152 end=cancel
+run policy/r1 outcome=cancelled delivery=d2 handler=go fuel=101 alloc=168
+pumped state=idle fuel=55
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+> load transfer identity=9fd2a412116d23fdaba7f0bdcd7d3435717b7d90effbed6fabc11448088e503a
+> deliver d3 to=transfer message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=62
+raise transfer/r1 code="bad" at=transfer:7 pos=5:3
+offer-chosen transfer/r1 attempt=1 name="recover" at=transfer:84 target=transfer:47
+preempt transfer/r1 start delivery=d3 handler=go clause=1 by=cap fuel=62 alloc=48
+pumped state=sliced fuel=62
+> counters transfer
+counters transfer fuel=62 alloc=48 runs=1 faults=0 state=1808 mailbox=0
+> cancel-run transfer/r1
+> pump clock=2026-10-06T09:00:00Z
+seg transfer/r1 continue fuel=44 alloc=96 state=128 end=cancel
+run transfer/r1 outcome=cancelled delivery=d3 handler=go fuel=106 alloc=144
+pumped state=idle fuel=44
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+vars transfer order=[1, 2, 3, 4] mark=0
+> load stopped identity=806d33ad0ba2cf93ef53e21ebd6c8a70600b2142a71f3990ab9e8c79a76a716d
+> deliver d4 to=stopped message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=62
+raise stopped/r1 code="bad" at=stopped:7 pos=5:3
+offer-chosen stopped/r1 attempt=1 name="recover" at=stopped:84 target=stopped:47
+preempt stopped/r1 start delivery=d4 handler=go clause=1 by=cap fuel=62 alloc=48
+pumped state=sliced fuel=62
+> counters stopped
+counters stopped fuel=62 alloc=48 runs=1 faults=0 state=1804 mailbox=0
+> stop stopped reason="host stop"
+> pump clock=2026-10-06T09:00:00Z
+stopped stopped reason="host stop" discarded=[stopped/r1]
+pumped state=idle fuel=0
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+vars transfer order=[1, 2, 3, 4] mark=0
+vars stopped order=[] mark=0
+> load faulted identity=868d94457dd7b0bbbbe8c2023c73822cbff822310efd794d747b00b5284bf868
+> deliver d5 to=faulted message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=62
+raise faulted/r1 code="bad" at=faulted:7 pos=5:3
+offer-chosen faulted/r1 attempt=1 name="recover" at=faulted:84 target=faulted:47
+preempt faulted/r1 start delivery=d5 handler=go clause=1 by=cap fuel=62 alloc=48
+pumped state=sliced fuel=62
+> counters faulted
+counters faulted fuel=62 alloc=48 runs=1 faults=0 state=1804 mailbox=0
+> pump clock=2026-10-06T09:00:00Z
+fault faulted/r1 limit=fuel at=faulted:92 pos=31:8 rollback=[mark]
+seg faulted/r1 continue fuel=0 alloc=0 state=32 end=fault
+run faulted/r1 outcome=limit-fault delivery=d5 handler=go limit=fuel fuel=62 alloc=48
+pumped state=idle fuel=0
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+vars transfer order=[1, 2, 3, 4] mark=0
+vars stopped order=[] mark=0
+vars faulted order=[] mark=0
+# A sliced policy cleanup and queued owner cleanup share locals after Restore.
+> load locals identity=9711798560e312677cef9c0cb86a6e9d0d5a8a160f6e484d74e4f28bd1fd33ff
+> deliver d6 to=locals message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=21
+raise locals/r1 code="bad" at=locals:7 pos=6:4
+preempt locals/r1 start delivery=d6 handler=go clause=1 by=cap fuel=21 alloc=48
+pumped state=sliced fuel=21
+> cancel-run locals/r1
+> pump clock=2026-10-06T09:00:00Z fuel-cap=1
+preempt locals/r1 continue by=cap fuel=1 alloc=0
+pumped state=sliced fuel=1
+> pump clock=2026-10-06T09:00:00Z
+seg locals/r1 continue fuel=15 alloc=16 state=16 end=cancel
+run locals/r1 outcome=cancelled delivery=d6 handler=go fuel=37 alloc=64
+pumped state=idle fuel=15
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+vars transfer order=[1, 2, 3, 4] mark=0
+vars stopped order=[] mark=0
+vars faulted order=[] mark=0
+vars locals result=1
+# Cancellation discards interrupted expression operands before queued cleanups.
+> load stack identity=18c96c57773bd2814cdfcdbb22b60e763c364b995e4e0e492fc1a3284fc3ab90
+> deliver d7 to=stack message=go
+> pump clock=2026-10-06T09:00:00Z fuel-cap=47
+raise stack/r1 code="bad" at=stack:7 pos=5:3
+preempt stack/r1 start delivery=d7 handler=go clause=1 by=cap fuel=47 alloc=48
+pumped state=sliced fuel=47
+> cancel-run stack/r1
+> pump clock=2026-10-06T09:00:00Z fuel-cap=1
+preempt stack/r1 continue by=cap fuel=1 alloc=0
+pumped state=sliced fuel=1
+> counters stack
+counters stack fuel=48 alloc=48 runs=1 faults=0 state=1421 mailbox=0
+> pump clock=2026-10-06T09:00:00Z
+seg stack/r1 continue fuel=54 alloc=120 state=152 end=cancel
+run stack/r1 outcome=cancelled delivery=d7 handler=go fuel=102 alloc=168
+pumped state=idle fuel=54
+> vars
+vars tests order=[1, 2, 3, 4] mark=0
+vars policy order=[5, 1, 2, 3, 4] mark=0
+vars transfer order=[1, 2, 3, 4] mark=0
+vars stopped order=[] mark=0
+vars faulted order=[] mark=0
+vars locals result=1
+vars stack order=[5, 1, 2, 3, 4] mark=0

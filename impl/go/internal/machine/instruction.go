@@ -921,6 +921,10 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		m.Count = int64(idx(1))
 		effect = func() { r.Frames[len(r.Frames)-1].PC--; r.chooseOffer(name(0), args) }
 	case "end-cleanup":
+		if r.Cancelling {
+			effect = func() { r.nextCancellationCleanup() }
+			break
+		}
 		if len(r.Recoveries) > 0 && f.Transfer == r.Recoveries[len(r.Recoveries)-1] {
 			c := f.Transfer
 			effect = func() {

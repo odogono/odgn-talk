@@ -1,0 +1,21 @@
+# Unblessed: #389 first expectation approval remains pending #392.
+# A Handler offer action may suspend; its offering finally protects the resumed action.
+> load s identity=551aadada1dffecd0ef13a0bb057a55444da2501945f0f987b8a3f828fec0a5b
+> request d1 to=s message=go
+> pump clock=2026-10-06T09:00:00Z
+raise s/r1 code="original" at=s:5 pos=4:5
+call s/r1.c1 op=console.write args=["policy"]
+offer-chosen s/r1 attempt=1 name="recover" at=s:25 target=s:27
+offer-entered s/r1 attempt=1 target=s:27
+call s/r1.c2 op=console.write args=["action"]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=77 alloc=78 state=586 end=wait until=2026-10-06T09:00:01Z
+pumped state=idle fuel=77 next=2026-10-06T09:00:01Z
+> vars
+vars s order=["action"]
+> pump clock=2026-10-06T09:00:01Z
+call s/r1.c3 op=console.write args=["finally"]
+seg s/r1 resume fuel=33 alloc=62 state=108 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=["action", "resumed", "finally"] fuel=110 alloc=140
+pumped state=idle fuel=33
+> vars
+vars s order=["action", "resumed", "finally"]

@@ -986,7 +986,7 @@ func TestArgumentLabelsAcceptance(t *testing.T) {
 
 func TestRecoveryOffersAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	cases, err := Discover(root, []string{"recovery-offers/basic", "recovery-offers/boundaries", "recovery-offers/costs", "recovery-offers/cleanup-restore"})
+	cases, err := Discover(root, []string{"recovery-offers/basic", "recovery-offers/boundaries", "recovery-offers/costs", "recovery-offers/cleanup-restore", "recovery-offers/nested", "recovery-offers/cancellation", "recovery-offers/action-suspend"})
 	if err != nil {
 		t.Fatal(err)
 	}

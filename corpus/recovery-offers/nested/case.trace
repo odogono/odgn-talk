@@ -1,0 +1,211 @@
+# Unblessed: #389 first expectation approval remains pending #392.
+# Nested failure chains are isolated; escaping policy skips siblings and preserves during.
+# nested recovery: nested policy catch cannot see original offers; expected result false.
+> load isolated identity=4ca89397bca95a4712fe6b75a7f65e5937e0c86d77e6b76219358d753145b294
+> request d1 to=isolated message=go
+> pump clock=2026-10-06T09:00:00Z
+raise isolated/r1 code="original" at=isolated:3 pos=3:3
+raise isolated/r1 code="inner" at=isolated:14 pos=8:4
+offer-chosen isolated/r1 attempt=1 name="recover" at=isolated:38 target=isolated:40 args=[false]
+offer-entered isolated/r1 attempt=1 target=isolated:40
+seg isolated/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=96 state=0 end=return
+run isolated/r1 outcome=completed delivery=d1 handler=go value=false fuel=78 alloc=96
+pumped state=idle fuel=78
+# nested recovery: nested policy cannot choose an original offer; expected result 7.
+> load unavailable identity=eac3e3230cb2aa5b5df8c0fae2e8ec987d415ec5e203716fd858b45dbca68a0a
+> request d2 to=unavailable message=go
+> pump clock=2026-10-06T09:00:00Z
+raise unavailable/r1 code="original" at=unavailable:3 pos=3:3
+raise unavailable/r1 code="inner" at=unavailable:14 pos=8:4
+raise unavailable/r1 code="offer unavailable" at=unavailable:25 pos=11:5
+offer-chosen unavailable/r1 attempt=1 name="recover" at=unavailable:51 target=unavailable:53 args=[7]
+offer-entered unavailable/r1 attempt=1 target=unavailable:53
+seg unavailable/r1 start delivery=d2 handler=go clause=1 fuel=94 alloc=96 state=0 end=return
+run unavailable/r1 outcome=completed delivery=d2 handler=go value=7 fuel=94 alloc=96
+pumped state=idle fuel=94
+# nested recovery: helper failure exposes its own offers and resumes outer policy; expected result [9, [true, false]].
+> load helper identity=de963930ae4ddf0a6c28e12f24cc3882e7b19c9151d1793cce922630a4c4f89e
+> request d3 to=helper message=go
+# Restore with both outer and nested dispatch active, just before inner choice.
+> pump clock=2026-10-06T09:00:00Z fuel-cap=96
+raise helper/r1 code="original" at=helper:11 pos=11:3
+raise helper/r1 code="inner" at=helper:3 pos=4:3
+preempt helper/r1 start delivery=d3 handler=go clause=1 by=cap fuel=96 alloc=144
+pumped state=sliced fuel=96
+> pump clock=2026-10-06T09:00:00Z
+offer-chosen helper/r1 attempt=1 name="inner" at=helper:49 target=helper:5 args=[9]
+offer-entered helper/r1 attempt=1 target=helper:5
+offer-chosen helper/r1 attempt=2 name="recover" at=helper:52 target=helper:13 args=[9]
+offer-entered helper/r1 attempt=2 target=helper:13
+seg helper/r1 continue fuel=43 alloc=96 state=48 end=return
+run helper/r1 outcome=completed delivery=d3 handler=go value=[9, [true, false]] fuel=139 alloc=240
+pumped state=idle fuel=43
+# nested recovery: locally handled policy error preserves writes and resumes selection; expected result 7.
+> load local identity=3300681e6bc28f00173598d2dee475045958e5c7d59dcaea71ea09ed1ccc5c59
+> request d4 to=local message=go
+> pump clock=2026-10-06T09:00:00Z
+raise local/r1 code="original" at=local:3 pos=3:3
+raise local/r1 code="policy" at=local:16 pos=9:4
+offer-chosen local/r1 attempt=1 name="recover" at=local:36 target=local:38 args=[7]
+offer-entered local/r1 attempt=1 target=local:38
+seg local/r1 start delivery=d4 handler=go clause=1 fuel=72 alloc=112 state=0 end=return
+run local/r1 outcome=completed delivery=d4 handler=go value=7 fuel=72 alloc=112
+pumped state=idle fuel=72
+# nested recovery: escaping policy skips siblings and cleans policy before retained scopes; expected result ["policy", "original", "policy;work;catching;"].
+> load escape identity=388a5bda60abd9883758de1d10d5a0f1c9fbe2cdff452070db966ffe17e63638
+> request d5 to=escape message=go
+> pump clock=2026-10-06T09:00:00Z
+raise escape/r1 code="original" at=escape:5 pos=4:3
+raise escape/r1 code="policy" at=escape:57 pos=17:5
+seg escape/r1 start delivery=d5 handler=go clause=1 fuel=108 alloc=312 state=37 end=return
+run escape/r1 outcome=completed delivery=d5 handler=go value=["policy", "original", "policy;work;catching;"] fuel=108 alloc=312
+pumped state=idle fuel=108
+# nested recovery: escaping policy preserves existing during; expected result ["policy", "prior"].
+> load prior identity=3939a009090f2208b24627eb4b50486d98ed43bf139f9d895952b1c08ec9048b
+> request d6 to=prior message=go
+> pump clock=2026-10-06T09:00:00Z
+raise prior/r1 code="original" at=prior:3 pos=3:3
+raise prior/r1 code="policy" at=prior:25 pos=13:4
+seg prior/r1 start delivery=d6 handler=go clause=1 fuel=80 alloc=397 state=0 end=return
+run prior/r1 outcome=completed delivery=d6 handler=go value=["policy", "prior"] fuel=80 alloc=397
+pumped state=idle fuel=80
+# nested recovery: policy and original finally scopes run once in transfer order; expected result "policy inner;policy outer;deep inner;deep outer;action;owner;".
+> load order identity=d5efbaa70a51aa825aeb92bb93219cb3f1241f55f9c1ea3f4b48bdce5ee36fb3
+> request d7 to=order message=go
+> pump clock=2026-10-06T09:00:00Z
+raise order/r1 code="original" at=order:5 pos=5:4
+offer-chosen order/r1 attempt=1 name="recover" at=order:78 target=order:45
+offer-entered order/r1 attempt=1 target=order:45
+seg order/r1 start delivery=d7 handler=go clause=1 fuel=151 alloc=253 state=77 end=return
+run order/r1 outcome=completed delivery=d7 handler=go value="policy inner;policy outer;deep inner;deep outer;action;owner;" fuel=151 alloc=253
+pumped state=idle fuel=151
+# nested recovery: locally handled transfer cleanup preserves pending choice and availability; expected result [true, "handled;action;owner;"].
+> load handled identity=eb8b162caade58f553df5088a22a5a9e5531c1acf2a0a18c2e0bf5471066957f
+> request d8 to=handled message=go
+> pump clock=2026-10-06T09:00:00Z
+raise handled/r1 code="original" at=handled:7 pos=5:3
+offer-chosen handled/r1 attempt=1 name="recover" at=handled:100 target=handled:67
+raise handled/r1 code="cleanup" at=handled:33 pos=8:4
+offer-entered handled/r1 attempt=1 target=handled:67
+seg handled/r1 start delivery=d8 handler=go clause=1 fuel=147 alloc=266 state=45 end=return
+run handled/r1 outcome=completed delivery=d8 handler=go value=[true, "handled;action;owner;"] fuel=147 alloc=266
+pumped state=idle fuel=147
+# nested recovery: escaping transfer cleanup cancels action and attaches original; expected result ["cleanup", "original", false, "owner;"].
+> load aborted identity=b11437a5ce2d72982aca2ab8bf154a0b461d154907dbffbd5c8beea35b1da430
+> request d9 to=aborted message=go
+> pump clock=2026-10-06T09:00:00Z
+raise aborted/r1 code="original" at=aborted:7 pos=5:3
+offer-chosen aborted/r1 attempt=1 name="recover" at=aborted:54 target=aborted:25
+raise aborted/r1 code="cleanup" at=aborted:12 pos=7:3
+seg aborted/r1 start delivery=d9 handler=go clause=1 fuel=128 alloc=251 state=30 end=return
+run aborted/r1 outcome=completed delivery=d9 handler=go value=["cleanup", "original", false, "owner;"] fuel=128 alloc=251
+pumped state=idle fuel=128
+# nested recovery: transfer cleanup error can reach offering try catch; expected result ["original", false].
+> load offering identity=2dc63cf6e542776e8a6aa42d8411c3a1f34764e621a42518d7270e51c0ad9921
+> request d10 to=offering message=go
+> pump clock=2026-10-06T09:00:00Z
+raise offering/r1 code="original" at=offering:5 pos=5:4
+offer-chosen offering/r1 attempt=1 name="recover" at=offering:49 target=offering:33
+raise offering/r1 code="cleanup" at=offering:10 pos=7:4
+seg offering/r1 start delivery=d10 handler=go clause=1 fuel=96 alloc=160 state=8 end=return
+run offering/r1 outcome=completed delivery=d10 handler=go value=["original", false] fuel=96 alloc=160
+pumped state=idle fuel=96
+# nested recovery: action error cannot reach sibling catch or sibling offer; expected result false.
+> load siblings identity=eabf72722e66eb1e7770c7cbc9706ec2e626f655aef50a24ebe6255193fa299b
+> request d11 to=siblings message=go
+> pump clock=2026-10-06T09:00:00Z
+raise siblings/r1 code="original" at=siblings:3 pos=3:3
+offer-chosen siblings/r1 attempt=1 name="recover" at=siblings:37 target=siblings:18
+offer-entered siblings/r1 attempt=1 target=siblings:18
+raise siblings/r1 code="action" at=siblings:19 pos=5:3
+seg siblings/r1 start delivery=d11 handler=go clause=1 fuel=111 alloc=96 state=0 end=return
+run siblings/r1 outcome=completed delivery=d11 handler=go value=false fuel=111 alloc=96
+pumped state=idle fuel=111
+# nested recovery: escaping failures cross consecutive selection boundaries; expected result ["deep", "middle", "inner policy;outer policy;work;"].
+> load boundaries identity=3f9d623f79bf07d9f18c096228d9c6060f4c56897c716bc6e2bfe927ba6623f1
+> request d12 to=boundaries message=go
+> pump clock=2026-10-06T09:00:00Z
+raise boundaries/r1 code="original" at=boundaries:5 pos=4:3
+raise boundaries/r1 code="middle" at=boundaries:34 pos=16:6
+raise boundaries/r1 code="deep" at=boundaries:45 pos=19:7
+seg boundaries/r1 start delivery=d12 handler=go clause=1 fuel=128 alloc=376 state=47 end=return
+run boundaries/r1 outcome=completed delivery=d12 handler=go value=["deep", "middle", "inner policy;outer policy;work;"] fuel=128 alloc=376
+pumped state=idle fuel=128
+# nested recovery: escaping policy charges no synthetic frame unwind; expected result 1.
+> load unwind identity=a24fddb2116176ee741b2ae5a42b6ca39bfc491c1ed84ee75585bc838fb36709
+> request d13 to=unwind message=go
+> pump clock=2026-10-06T09:00:00Z
+raise unwind/r1 code="original" at=unwind:3 pos=4:4
+raise unwind/r1 code="policy" at=unwind:14 pos=6:4
+seg unwind/r1 start delivery=d13 handler=go clause=1 fuel=46 alloc=96 state=0 end=return
+run unwind/r1 outcome=completed delivery=d13 handler=go value=1 fuel=46 alloc=96
+pumped state=idle fuel=46
+# A rejecting catch in policy cleanup must preserve propagation to the outer catch.
+# Expected result is ["cleanup", "policy", "original"].
+> load rejected_cleanup identity=a4ba7d38b320d555d65f86935eff7535c48e71de70024c46910c9435cf5ecdf7
+> request d14 to=rejected_cleanup message=go
+> pump clock=2026-10-06T09:00:00Z
+raise rejected_cleanup/r1 code="original" at=rejected_cleanup:3 pos=4:4
+raise rejected_cleanup/r1 code="policy" at=rejected_cleanup:14 pos=7:5
+raise rejected_cleanup/r1 code="cleanup" at=rejected_cleanup:31 pos=10:6
+seg rejected_cleanup/r1 start delivery=d14 handler=go clause=1 fuel=92 alloc=253 state=0 end=return
+run rejected_cleanup/r1 outcome=completed delivery=d14 handler=go value=["cleanup", "policy", "original"] fuel=92 alloc=253
+pumped state=idle fuel=92
+# Already searched original helpers are cleanup-only; total Fuel is 58.
+> load helper_unwind identity=99baf3b3059d59d396cb0c094ded301b0422a28e10f5523393430182d3b4eb76
+> request d15 to=helper_unwind message=go
+> pump clock=2026-10-06T09:00:00Z
+raise helper_unwind/r1 code="original" at=helper_unwind:3 pos=2:2
+raise helper_unwind/r1 code="policy" at=helper_unwind:18 pos=9:4
+seg helper_unwind/r1 start delivery=d15 handler=go clause=1 fuel=58 alloc=96 state=0 end=return
+run helper_unwind/r1 outcome=completed delivery=d15 handler=go value=1 fuel=58 alloc=96
+pumped state=idle fuel=58
+# A policy cleanup Error cancels the chosen action; expected ["cleanup", "original"].
+> load choice_cleanup identity=43562beb7315900e581d756d0c5631ee629be4175dbef6b7e305db92f6c635df
+> request d16 to=choice_cleanup message=go
+> pump clock=2026-10-06T09:00:00Z
+raise choice_cleanup/r1 code="original" at=choice_cleanup:3 pos=4:4
+offer-chosen choice_cleanup/r1 attempt=1 name="recover" at=choice_cleanup:13 target=choice_cleanup:56
+raise choice_cleanup/r1 code="cleanup" at=choice_cleanup:30 pos=12:6
+seg choice_cleanup/r1 start delivery=d16 handler=go clause=1 fuel=78 alloc=175 state=0 end=return
+run choice_cleanup/r1 outcome=completed delivery=d16 handler=go value=["cleanup", "original"] fuel=78 alloc=175
+pumped state=idle fuel=78
+# Escaping policy leaves its catching try; the original same-scope offer is unavailable.
+> load expired identity=43bfa0e611c816aadd92c1017f81ad5383b11f372b9cb5793906799c429ca2bc
+> request d17 to=expired message=go
+> pump clock=2026-10-06T09:00:00Z
+raise expired/r1 code="original" at=expired:3 pos=4:4
+raise expired/r1 code="policy" at=expired:14 pos=7:4
+seg expired/r1 start delivery=d17 handler=go clause=1 fuel=63 alloc=96 state=0 end=return
+run expired/r1 outcome=completed delivery=d17 handler=go value=false fuel=63 alloc=96
+pumped state=idle fuel=63
+# Scope filtering preserves an enclosing offer: expected ["outer", [false, true]].
+> load outer_offer identity=0c3aff4c275894221c42c0499ab985e8908d37c483796e31eb27198b83946767
+> request d18 to=outer_offer message=go
+> pump clock=2026-10-06T09:00:00Z
+raise outer_offer/r1 code="original" at=outer_offer:3 pos=4:4
+raise outer_offer/r1 code="policy" at=outer_offer:14 pos=7:4
+offer-chosen outer_offer/r1 attempt=1 name="outer" at=outer_offer:32 target=outer_offer:45
+offer-entered outer_offer/r1 attempt=1 target=outer_offer:45
+seg outer_offer/r1 start delivery=d18 handler=go clause=1 fuel=87 alloc=245 state=0 end=return
+run outer_offer/r1 outcome=completed delivery=d18 handler=go value=["outer", [false, true]] fuel=87 alloc=245
+pumped state=idle fuel=87
+> vars
+vars isolated
+vars unavailable
+vars helper seen=[true, false]
+vars local
+vars escape order="policy;work;catching;"
+vars prior
+vars order order="policy inner;policy outer;deep inner;deep outer;action;owner;"
+vars handled visible=true order="handled;action;owner;"
+vars aborted entered=false order="owner;"
+vars offering entered=false
+vars siblings
+vars boundaries order="inner policy;outer policy;work;"
+vars unwind
+vars rejected_cleanup
+vars helper_unwind
+vars choice_cleanup
+vars expired
+vars outer_offer

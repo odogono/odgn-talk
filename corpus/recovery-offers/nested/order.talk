@@ -1,0 +1,37 @@
+script variable order = ""
+function fail
+ try
+  try
+   throw "original"
+  finally
+   put "deep inner;" after order
+  end try
+ finally
+  put "deep outer;" after order
+ end try
+end fail
+function work
+ try
+  put fail() into ignored
+ offer recover
+  put "action;" after order
+ finally
+  put "owner;" after order
+ end try
+end work
+on go
+ try
+  put work() into ignored
+ catch "original" before unwind
+  try
+   try
+    choose offer recover
+   finally
+    put "policy inner;" after order
+   end try
+  finally
+   put "policy outer;" after order
+  end try
+ end try
+ return order
+end go

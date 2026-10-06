@@ -1,0 +1,26 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "tests"
+source = "s.talk"
+[[scripts]]
+name = "policy"
+source = "s.talk"
+[[scripts]]
+name = "transfer"
+source = "s.talk"
+[[scripts]]
+name = "stopped"
+source = "s.talk"
+[[scripts]]
+name = "faulted"
+source = "s.talk"
+limits = { fuelPerRun = 62 }
+[[scripts]]
+name = "locals"
+source = "locals.talk"
+[[scripts]]
+name = "stack"
+source = "stack.talk"

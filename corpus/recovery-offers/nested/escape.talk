@@ -1,0 +1,29 @@
+script variable order = ""
+function work
+ try
+  throw "original"
+ offer recover
+  return "unexpected action"
+ finally
+  put "work;" after order
+ end try
+end work
+on go
+ try
+  try
+   put work() into ignored
+  catch "original" before unwind
+   try
+    throw "policy"
+   finally
+    put "policy;" after order
+   end try
+  catch "policy"
+   return "sibling catch"
+  finally
+   put "catching;" after order
+  end try
+ catch e
+  return [the code of e, the code of the during of e, order]
+ end try
+end go

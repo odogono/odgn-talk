@@ -1,0 +1,18 @@
+script variable result = 0
+on go
+ put 0 into kept
+ try
+  try
+   throw "bad"
+  offer recover
+  catch e before unwind
+   try
+    choose offer recover
+   finally
+    add 1 to kept
+   end try
+  end try
+ finally
+  put kept into result
+ end try
+end go

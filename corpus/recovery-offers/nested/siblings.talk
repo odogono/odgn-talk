@@ -1,0 +1,22 @@
+function work
+ try
+  throw "original"
+ offer recover
+  throw "action"
+ offer sibling
+  return "unexpected sibling"
+ catch "action"
+  return "own catch"
+ end try
+end work
+on go
+ try
+  return work()
+ catch "original" before unwind
+  choose offer recover
+ catch "action" before unwind
+  put offerAvailable("sibling") into visible
+ catch "action"
+  return visible
+ end try
+end go

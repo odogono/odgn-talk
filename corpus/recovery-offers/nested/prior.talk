@@ -1,0 +1,18 @@
+function work
+ try
+  throw "original"
+ offer recover
+  return "unexpected action"
+ end try
+end work
+on go
+ try
+  try
+   put work() into ignored
+  catch "original" before unwind
+   throw {code: "policy", during: {code: "prior"}}
+  end try
+ catch e
+  return [the code of e, the code of the during of e]
+ end try
+end go

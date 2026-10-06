@@ -18,6 +18,18 @@ func TestRecoveryExecution(t *testing.T) {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		t.Fatal(err)
 	}
+	nestedData, err := os.ReadFile("../../../../tools/machine/recovery-nested-cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nestedCases []struct {
+		Name, Source, Result string
+		Fuel, Alloc          *int64
+	}
+	if err := json.Unmarshal(nestedData, &nestedCases); err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases, nestedCases...)
 	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
 			unit := compile(t, c.Source)
