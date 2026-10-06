@@ -59,3 +59,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0055: Handlers name their parameters with Argument Labels that join the Selector](0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md)
 - [0056: User Scripts are tested by a black-box Test Script](0056-user-scripts-are-tested-by-a-black-box-test-script.md)
 - [0057: A `send` may compute its message name](0057-a-send-may-compute-its-message-name.md)
+- [0058: A restored Group's Host Objects are found by kind and id](0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md)

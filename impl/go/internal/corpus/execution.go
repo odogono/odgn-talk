@@ -563,7 +563,7 @@ func (x *executionReplay) apply(i int) error {
 			crossings.visibleSave, _ = strconv.Atoi(strings.TrimPrefix(fields["from"].Raw, "s"))
 		}
 		// Reconstruct stable Object handles after restore.
-		x.objects = restoredObjects(x.g)
+		x.objects = restoredObjects(x.g, x.objects)
 		values.objects = x.objects
 
 	case "settle":
@@ -859,7 +859,7 @@ func (x *executionReplay) apply(i int) error {
 				}
 
 				x.g = next
-				x.objects = restoredObjects(x.g)
+				x.objects = restoredObjects(x.g, x.objects)
 				values.objects = x.objects
 				for _, p := range result.Pending {
 					call, err := x.g.Settle(p.ID, talk.Settlement{Adopt: true})

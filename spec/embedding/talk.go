@@ -676,6 +676,11 @@ const (
 // Any goroutine.
 func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
 
+// ObjectByID returns the handle with this Object Kind name and id, disposed
+// or not, and false if the Group never made one. It is how a Host reaches the
+// handles Restore made, and it fits DecodeValue's resolve. Any goroutine.
+func (g *Group) ObjectByID(kind, id string) (*Object, bool)
+
 // SetParent and Dispose are any-goroutine calls, queued as Host Inputs.
 // Their errors ("parent cycle", setParent on a disposed object) are reported
 // as HostErrors when they are known at the call, and otherwise go into the

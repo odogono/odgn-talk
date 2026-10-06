@@ -73,6 +73,16 @@ func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error)
 	return o, nil
 }
 
+// ObjectByID returns the handle with this Object Kind name and id in this
+// Group, disposed or not. It is how a Host reaches the handles Restore made.
+// It may be called from any goroutine, including a Host callback.
+func (g *Group) ObjectByID(kind, id string) (*Object, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	o := g.objects[objectKey{kind, id}]
+	return o, o != nil
+}
+
 type objectKey struct{ kind, id string }
 
 // Dispose queues an idempotent lifecycle change for the next Pump. A disposed

@@ -3157,7 +3157,7 @@ export class Group {
     return state.handle as HostObject<N>;
   }
 
-  /** TS helper for reaching a handle that was reconstructed by Restore. */
+  /** The handle with this Object Kind name and id, disposed or not, such as one Restore made. */
   objectById(kind: string, id: string): HostObject | undefined {
     return this.objects.get(`${kind}\u0000${id}`)?.handle;
   }

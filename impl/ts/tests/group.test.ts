@@ -2,12 +2,15 @@ import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
   codeIdentity,
+  decodeValue,
   defineObjectKind,
+  encodeValue,
   HostError,
   LoadError,
   MailboxFull,
   newGroup,
   parseInstant,
+  restore,
   ScriptError,
   text,
   type Value,
@@ -400,6 +403,48 @@ describe('Host errors and refusals', () => {
     );
     expect(g.object(item, 'd1', null).id).toBe('d1');
     expect(newGroup({ name: 'other' }).object(door, 'd1', null).id).toBe('d1');
+  });
+
+  test('objectById finds a handle by kind and id, disposed or restored', () => {
+    const { g } = group();
+    const item = defineObjectKind<string | null>({ name: 'item', props: {} });
+    const door = defineObjectKind({ name: 'door', props: {} });
+    const key = g.object(item, 'key', 'native key');
+    const gone = g.object(item, 'gone', null);
+    const sameId = g.object(door, 'key', null);
+    expect(g.objectById('item', 'key')).toBe(key);
+    expect(g.objectById('door', 'key')).toBe(sameId);
+    expect(g.objectById('item', 'missing')).toBeUndefined();
+    expect(
+      newGroup({ name: 'other' }).objectById('item', 'key'),
+    ).toBeUndefined();
+    g.load({
+      name: 's',
+      source:
+        'script variable held = nothing\non go\n  put key into held\nend go',
+      objects: { key },
+    }).deliver({ name: 'go' });
+    g.dispose(gone);
+    g.pump(clock);
+    expect(g.objectById('item', 'gone')).toBe(gone);
+
+    const { group: restored } = restore(g.save(), {
+      name: 'restored',
+      libraries: [],
+      onMismatch: 'reject',
+      grants: () => undefined,
+      resolve: (_kind, id) => ({ native: `restored ${id}` }),
+    });
+    const found = restored.objectById('item', 'key')!;
+    expect(found).not.toBe(key);
+    expect(found.native).toBe('restored key');
+    expect(restored.inspect().scripts[0]!.vars[0]![1]).toBe(found.value);
+    expect(restored.objectById('item', 'gone')).not.toBe(gone);
+    expect(restored.objectById('item', 'gone')!.id).toBe('gone');
+    const decoded = decodeValue(encodeValue(found.value), (kind, id) =>
+      restored.objectById(kind, id),
+    );
+    expect(decoded).toBe(found.value);
   });
 
   test('Inspect reads Script Variables in declaration order, with no other effect', () => {
