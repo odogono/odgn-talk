@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "@odgn/northtalk": "workspace:*",
-    "mitata": "^1.0.34"
+    "mitata": "^1.0.34",
+    "quickjs-emscripten": "0.32.0",
+    "wasmoon": "1.16.0"
   }
 }

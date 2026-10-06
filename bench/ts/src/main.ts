@@ -1,6 +1,7 @@
-// `bun run bench`: runs the Benchmark Suite on each Core, checks Fuel parity,
-// and writes one merged report. See bench/README.md.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// `bun run bench`: runs the Benchmark Suite on each Core and its ports in each
+// Peer Language, checks Fuel parity, and writes one merged report. See
+// bench/README.md.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, cpus, platform, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -13,6 +14,7 @@ import {
   parseGoBench,
   type Results,
 } from './report';
+import { peersDir } from './peers';
 import { manifest, scriptsDir, selected, skipped } from './suite';
 
 const { values: flags } = parseArgs({
@@ -25,12 +27,14 @@ const { values: flags } = parseArgs({
     smoke: { default: false, type: 'boolean' },
   },
 });
-const runners = flags.only ? [flags.only] : ['go', 'ts'];
+// The Cores, and `peers` for every Peer Language runner.
+const runners = flags.only ? [flags.only] : ['go', 'ts', 'peers'];
 for (const runner of runners) {
-  if (runner !== 'go' && runner !== 'ts') {
-    throw new Error(`--only takes go or ts, not ${runner}`);
+  if (runner !== 'go' && runner !== 'ts' && runner !== 'peers') {
+    throw new Error(`--only takes go, ts or peers, not ${runner}`);
   }
 }
+const peers = runners.includes('peers');
 const benchDir = join(scriptsDir, '..');
 const filter = flags.filter ?? '';
 
@@ -68,15 +72,72 @@ if (runners.includes('ts')) {
     ) as Measurement[]),
   );
 }
-if (runners.includes('go')) {
-  console.error('Measuring the Go Core…');
+if (peers) {
+  console.error('Measuring the Peer Languages on Bun…');
+  measurements.push(
+    ...(JSON.parse(
+      run(
+        [
+          'bun',
+          join(import.meta.dir, 'measure-peers.ts'),
+          filter,
+          flags.smoke ? 'smoke' : '',
+        ],
+        benchDir,
+      ),
+    ) as Measurement[]),
+  );
+  console.error('Measuring CPython…');
+  measurements.push(
+    ...(JSON.parse(
+      run(
+        [
+          'uv',
+          'run',
+          '--no-project',
+          '--managed-python',
+          'python',
+          'measure.py',
+          '--filter',
+          filter,
+          '--count',
+          flags.count,
+          ...(flags.smoke ? ['--smoke'] : []),
+        ],
+        join(peersDir, 'python'),
+      ),
+    ) as Measurement[]),
+  );
+}
+if (runners.includes('go') || peers) {
+  console.error(
+    runners.includes('go')
+      ? 'Measuring the Go Core…'
+      : 'Measuring the Peer Languages on Go…',
+  );
   const goArgs = flags.smoke
     ? ['-count', '1', '-benchtime', '1x']
     : ['-count', flags.count];
+  // BenchmarkLoad and BenchmarkRun measure the Go Core, BenchmarkPeer the
+  // Peer Languages on Go.
+  const goBenchmarks = runners.includes('go')
+    ? peers
+      ? '.'
+      : '^Benchmark(Load|Run)$'
+    : '^BenchmarkPeer$';
   measurements.push(
     ...parseGoBench(
       run(
-        ['go', 'test', '-run', '^$', '-bench', '.', '-benchmem', ...goArgs],
+        [
+          'go',
+          'test',
+          '-run',
+          '^$',
+          '-bench',
+          goBenchmarks,
+          '-benchmem',
+          ...goArgs,
+        ],
         join(benchDir, 'go'),
         {
           NORTHTALK_BENCH_FILTER: filter,
@@ -86,6 +147,42 @@ if (runners.includes('go')) {
     ),
   );
 }
+
+// The Peer Language versions: the Go module versions, the exact npm versions
+// bench/ts pins, and the CPython .python-version pins.
+const peerVersions = (): Record<string, string> => {
+  const npm = (
+    JSON.parse(
+      readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'),
+    ) as { dependencies: Record<string, string> }
+  ).dependencies;
+  const goModules = Object.fromEntries(
+    run(
+      [
+        'go',
+        'list',
+        '-m',
+        '-f',
+        '{{.Path}} {{.Version}}',
+        'github.com/yuin/gopher-lua',
+        'go.starlark.net',
+      ],
+      join(benchDir, 'go'),
+    )
+      .split('\n')
+      .map(line => line.split(' ')),
+  ) as Record<string, string>;
+  return {
+    cpython: readFileSync(
+      join(peersDir, 'python', '.python-version'),
+      'utf8',
+    ).trim(),
+    'gopher-lua': goModules['github.com/yuin/gopher-lua'] ?? '',
+    'quickjs-emscripten': npm['quickjs-emscripten'] ?? '',
+    'starlark-go': goModules['go.starlark.net'] ?? '',
+    wasmoon: npm.wasmoon ?? '',
+  };
+};
 
 const outlierFactor = Number(flags['outlier-factor']);
 const versions = coreVersions;
@@ -117,8 +214,12 @@ const results: Results = {
   versions: {
     bun: Bun.version,
     'cost model': versions.costModel,
-    go: runners.includes('go') ? run(['go', 'env', 'GOVERSION'], benchDir) : '',
+    go:
+      runners.includes('go') || peers
+        ? run(['go', 'env', 'GOVERSION'], benchDir)
+        : '',
     language: versions.language,
+    ...(peers ? peerVersions() : {}),
   },
 };
 
