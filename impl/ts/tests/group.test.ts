@@ -415,10 +415,13 @@ describe('Host errors and refusals', () => {
     expect(g.objectById('item', 'key')).toBe(key);
     expect(g.objectById('door', 'key')).toBe(sameId);
     expect(g.objectById('item', 'missing')).toBeUndefined();
-    expect(newGroup({ name: 'other' }).objectById('item', 'key')).toBeUndefined();
+    expect(
+      newGroup({ name: 'other' }).objectById('item', 'key'),
+    ).toBeUndefined();
     g.load({
       name: 's',
-      source: 'script variable held = nothing\non go\n  put key into held\nend go',
+      source:
+        'script variable held = nothing\non go\n  put key into held\nend go',
       objects: { key },
     }).deliver({ name: 'go' });
     g.dispose(gone);
