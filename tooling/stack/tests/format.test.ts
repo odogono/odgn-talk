@@ -151,3 +151,24 @@ test('treats punctuation inside text as text', () => {
     ).toBe(`on go\n  put "${punctuation}" into x\nend go\n`);
   }
 });
+
+test('formats offers and guarded recovery, with bare zero-argument choices', () => {
+  const source =
+    'on demo\ntry\nput 1 into x\noffer skip\noffer useValue value,extra\nput value+extra into x\ncatch e before unwind where true\nchoose offer skip() -- zero\nchoose offer useValue( 1,2 )\nfinally\nsay x\nend try\nend demo';
+  const expected =
+    'on demo\n  try\n    put 1 into x\n  offer skip\n  offer useValue value, extra\n    put value + extra into x\n  catch e before unwind where true\n    choose offer skip -- zero\n    choose offer useValue(1, 2)\n  finally\n    say x\n  end try\nend demo';
+  const result = formatSource(source);
+  expect(result.error).toBeNull();
+  expect(result.source).toBe(expected);
+  expect(formatSource(result.source).source).toBe(expected);
+});
+
+test('keeps comments from empty offer argument lists when printing the bare form', () => {
+  const source =
+    'on demo\ntry\ncatch e before unwind\nchoose offer skip( -- keep\n)\nend try\nend demo';
+  const result = formatSource(source);
+  expect(result.error).toBeNull();
+  expect(result.source).toContain('choose offer skip -- keep');
+  expect(result.source).not.toContain('skip(');
+  expect(formatSource(result.source)).toEqual(result);
+});

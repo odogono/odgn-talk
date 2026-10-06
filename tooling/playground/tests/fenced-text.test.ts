@@ -110,3 +110,25 @@ test('continued arguments retain their command context for label highlighting', 
     'labelName',
   ]);
 });
+
+test('highlights recovery words only in their contextual positions', () => {
+  expect(tokens('offer useValue value', state())).toContainEqual([
+    'offer',
+    'keyword',
+  ]);
+  expect(tokens('choose offer useValue(1)', state())).toContainEqual([
+    'choose',
+    'keyword',
+  ]);
+  const head = tokens('catch e before unwind where true', state());
+  expect(head).toContainEqual(['before', 'keyword']);
+  expect(head).toContainEqual(['unwind', 'keyword']);
+  expect(tokens('on choose unwind', state())).toContainEqual([
+    'choose',
+    'variableName',
+  ]);
+  expect(tokens('put unwind into x', state())).toContainEqual([
+    'unwind',
+    'variableName',
+  ]);
+});

@@ -90,7 +90,7 @@ Statement      ::= If | Repeat | Match | Try | Wait | Simple
 Inline         ::= Simple | 'wait' ( 'for' Event Timeout? | Expression )
 Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
                  | Send | Ask | Tell | Return | Veto | Pass | Exit | Next | Throw
-                 | Replace | CallStatement | CommandCall
+                 | Replace | ChooseOffer | CallStatement | CommandCall
 Put            ::= 'put' ( Expression ( 'into' | 'after' | 'before' )
                          | '...' Expression ( 'after' | 'before' ) ) Container
 Let            ::= 'let' Pattern 'be' Expression
@@ -130,7 +130,12 @@ Collecting     ::= 'collecting' Expression 'into' Name
 Match          ::= 'match' Expression IgnoringCase? NL ( NL | When )* ( 'else' Body NL* )? 'end' 'match'?
 When           ::= 'when' 'contains'? Pattern Guard? 'then' Body
 Body           ::= Inline NL | NL Block
-Try            ::= 'try' NL Block ( 'catch' Pattern Guard? NL Block )* ( 'finally' NL Block )? 'end' 'try'?
+Try            ::= 'try' NL Block OfferClause* CatchClause* FinallyClause? 'end' 'try'?
+OfferClause    ::= 'offer' Name ( Name ( ',' Name )* )? NL Block
+CatchClause    ::= 'catch' Pattern RecoveryMarker? Guard? NL Block
+RecoveryMarker ::= 'before' 'unwind'
+FinallyClause  ::= 'finally' NL Block
+ChooseOffer    ::= 'choose' 'offer' Name ( CallOpen ExpressionList? ')' )?
 Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
 Join           ::= 'all' NL Block 'end' 'wait'?
 WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
@@ -183,7 +188,7 @@ ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
 Map            ::= '{' ( MapKey Expression ( ',' MapKey Expression )* )? '}'
-MapKey         ::= ( Word | Text ) ':'
+MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 
 /* ## patterns */
 

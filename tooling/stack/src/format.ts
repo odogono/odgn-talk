@@ -155,6 +155,26 @@ const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
       stack.push(...children.reverse());
       continue;
     }
+    // Empty choice arguments have one canonical spelling. Keep all trivia
+    // while omitting their parentheses, including comments on continued lines.
+    if (
+      element.rule === 'ChooseOffer' &&
+      !element.children.some(
+        c => c.kind === 'node' && c.rule === 'ExpressionList',
+      )
+    ) {
+      stack.push(
+        ...[...element.children].reverse().map(child => ({
+          element:
+            child.kind === 'token' && (child.v === '(' || child.v === ')')
+              ? { ...child, t: 'eof' as const, raw: '' }
+              : child,
+          depth,
+          attachRight: false,
+        })),
+      );
+      continue;
+    }
     // Branch heads in match and block wait sit inside their block; their
     // Block productions add the second level for multiline branch bodies.
     const branchBlock =

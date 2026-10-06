@@ -832,6 +832,8 @@ export class BodyCompiler {
             b.body.forEach(walk);
           }
           return;
+        case 'ChooseOffer':
+          throw new Error('Recovery Offers are not yet lowered');
         case 'Try':
           s.body.forEach(walk);
           for (const c of s.catches) {
@@ -1218,6 +1220,8 @@ export class BodyCompiler {
         return this.repeat(s);
       case 'Match':
         return this.match(s);
+      case 'ChooseOffer':
+        throw new Error('Recovery Offers are not yet lowered');
       case 'Try':
         return this.tryBlock(s);
       case 'Throw':
@@ -1920,6 +1924,9 @@ export class BodyCompiler {
   // catch entry covers the body, and the finally entry the body and the
   // catch handler, each without the inlined copies of the `finally`.
   tryBlock(s: Node) {
+    if (s.offers?.length || s.catches?.some((c: Node) => c.recovery)) {
+      throw new Error('Recovery Offers are not yet lowered');
+    }
     const end = this.label();
     const hasFinally = !!s.finally;
     const catchRec: Rec | null = s.catches.length
@@ -2145,7 +2152,7 @@ export class BodyCompiler {
     bc.finish();
     return {
       body: b.index,
-      binds: names.map(n => this.names.get(n) ?? this.declare(n)),
+      binds: names.map((n: string) => this.names.get(n) ?? this.declare(n)),
       captures: b.captures,
     };
   }

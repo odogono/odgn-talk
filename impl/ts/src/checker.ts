@@ -216,6 +216,9 @@ export const checkSyntax = (
         group ??= parameter ? parent! : element;
         pattern = true;
       }
+      if (element.rule === 'OfferParameter') {
+        group = parent!;
+      }
       if (element.rule === 'Parameter') {
         group = parent!;
         parameter = true;
@@ -485,13 +488,16 @@ export const checkSyntax = (
         }
         const parent = parents.get(element)!;
         const prefix = tokens(parent)[0];
-        if (parent.rule === 'MessageName') {
+        if (parent.rule === 'OfferClause' || parent.rule === 'ChooseOffer') {
+          mark(head, 'offer');
+        } else if (parent.rule === 'MessageName') {
           mark(head, 'message').name.text = syntaxSelector(
             parents.get(parent)!,
             head.v,
           );
         } else if (
           parent.rule === 'Parameter' ||
+          parent.rule === 'OfferParameter' ||
           parent.rule === 'Collecting'
         ) {
           mark(head, 'binding', true);

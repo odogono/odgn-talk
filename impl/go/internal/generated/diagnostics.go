@@ -45,11 +45,38 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "duplicate name",
-			RaisedWhen: "One pattern binds the same Name twice, or a Text Pattern has two Captures with one name",
+			RaisedWhen: "One pattern binds the same Name twice, a Text Pattern has two Captures with one name, or an offer repeats a parameter Name",
 			At:         "the second",
 			Sources: []string{
 				"ADR 0010",
 				"#115",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
+			Code:       "duplicate offer",
+			RaisedWhen: "A try declares two offers with the same Name",
+			At:         "the second offer Name",
+			Sources: []string{
+				"ADR 0060",
+				"#387",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
+			Code:       "not in recovery",
+			RaisedWhen: "A choice is outside a lexically enclosing Recovery Catch; functions and Lambdas reset permission",
+			At:         "`choose`",
+			Sources: []string{
+				"ADR 0060",
+				"#387",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
+			Code:       "leaves recovery catch",
+			RaisedWhen: "A Recovery Catch contains return, veto or pass, or a loop jump whose loop is outside it",
+			At:         "the statement's first token",
+			Sources: []string{
+				"ADR 0060",
+				"#387",
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
@@ -157,7 +184,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "can't suspend here",
-			RaisedWhen: "A possible Suspension Point is in a `finally` block, or a named function, or a Handler called function-style, reaches one, directly or through what it calls",
+			RaisedWhen: "A possible Suspension Point is in a `finally` block or a Recovery Catch, or a named function, or a Handler called function-style, reaches one, directly or through what it calls",
 			At:         "the Suspension Point, or the call in the function or Handler through which it reaches one",
 			Sources: []string{
 				"ADR 0017",

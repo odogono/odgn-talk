@@ -32,7 +32,7 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 
 ## Staged specifications
 
-[Recovery Offers](proposals/recovery-offers.md) is an accepted design awaiting implementation ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)). It contains the complete future grammar, two-phase catch search, machine, cost, save and Trace contract and worked examples. Neither Core nor the reference tools supports it yet; the numbered chapters and Data Files below remain the active specification. Implementation will integrate the staged rules into those chapters and activate the deferred Data Files together with their consumers.
+[Recovery Offers](proposals/recovery-offers.md) is an accepted design awaiting implementation ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)). It contains the complete future grammar, two-phase catch search, machine, cost, save and Trace contract and worked examples. Both Cores and the reference parser now accept and check its grammar; chapter 2 and the grammar/diagnostic Data Files contain those rules. The numbered chapters and Data Files below remain the active specification. Lowering, execution, costs, save/restore and Trace support remain staged in the proposal.
 
 ## Data Files
 
