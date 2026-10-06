@@ -424,5 +424,9 @@ export const builtins = [
   {
     "name": "quote",
     "kind": "constant"
+  },
+  {
+    "name": "offerAvailable",
+    "kind": "function"
   }
 ] as const;

@@ -11,8 +11,8 @@
 > pump clock=2026-09-30T09:00:00Z
 raise meter/r1 code="division by zero" at=checks:4 pos=4:12
 raise meter/r1 code="division by zero" at=checks:4 pos=4:12
-seg meter/r1 start delivery=d1 handler=go clause=1 fuel=76 alloc=0 state=469 end=return
-run meter/r1 outcome=completed delivery=d1 handler=go fuel=76 alloc=0
+seg meter/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=0 state=469 end=return
+run meter/r1 outcome=completed delivery=d1 handler=go fuel=78 alloc=0
 raise meter/r2 code="division by zero" at=checks:4 pos=4:12
 raise meter/r2 code="division by zero" at=checks:41 pos=16:3
 seg meter/r2 start delivery=d2 handler=leak clause=1 fuel=45 alloc=0 state=437 end=error
@@ -20,7 +20,7 @@ run meter/r2 outcome=errored delivery=d2 handler=leak error={code: "division by 
 fault meter/r3 limit=fuel at=checks:46 pos=24:3 rollback=[count]
 seg meter/r3 start delivery=d3 handler=burn clause=1 fuel=500 alloc=40 state=810 end=fault
 run meter/r3 outcome=limit-fault delivery=d3 handler=burn limit=fuel fuel=500 alloc=40
-pumped state=idle fuel=621
+pumped state=idle fuel=623
 
 > vars
 vars meter caught={code: "division by zero", at: {unit: "checks", handler: "ratio", line: 4, column: 12}} guard=0 count=0

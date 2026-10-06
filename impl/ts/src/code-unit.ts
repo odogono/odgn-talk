@@ -48,9 +48,15 @@ export type UnwindEntry = {
   depth: number;
   /** One past the range's last instruction. */
   end: number;
-  kind: 'catch' | 'finally' | 'guard';
+  kind: 'catch' | 'finally' | 'guard' | 'offer';
   start: number;
   target: number;
+};
+export type OfferEntry = {
+  body: number;
+  depth: number;
+  end: number;
+  offers: { binds: number[]; name: string; target: number }[];
 };
 export type EventBranch =
   | {
@@ -73,6 +79,7 @@ export type CodeUnit = {
   kind: 'script' | 'library';
   name: string;
   objects: string[];
+  offers?: OfferEntry[];
   /**
    * The elements of each Text Pattern constant, by its pool index, for the
    * machine that runs the unit; a template's splices stay in place.
@@ -188,10 +195,23 @@ export const disassemble = (unit: CodeUnit): string => {
     'unwind',
     unit.unwind.map(
       entry =>
-        `${pad(entry.start)}..${pad(entry.end - 1)} ${entry.kind} -> ${pad(entry.target)} depth ${entry.depth}`,
+        `${pad(entry.start)}..${pad(entry.end - 1)} ${entry.kind} -> ${entry.kind === 'offer' ? `entry ${entry.target}` : pad(entry.target)} depth ${entry.depth}`,
     ),
     false,
   );
+  if (unit.offers?.length) {
+    out.push('offers');
+    unit.offers.forEach((entry, i) => {
+      out.push(
+        `  ${i} body ${entry.body} depth ${entry.depth} end ${pad(entry.end)}`,
+      );
+      for (const offer of entry.offers) {
+        out.push(
+          `    offer ${offer.name} -> ${pad(offer.target)} binds [${offer.binds.join(', ')}]`,
+        );
+      }
+    });
+  }
   section(
     'events',
     unit.events.map(entry =>

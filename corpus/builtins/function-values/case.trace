@@ -9,9 +9,9 @@
 > pump clock=2026-10-02T09:00:00Z
 raise probe/r1 code="wrong kind" at=probe:59 pos=24:9
 raise probe/r1 code="wrong kind" at=probe:76 pos=29:9
-seg probe/r1 start delivery=d1 handler=go clause=1 fuel=270 alloc=3436 state=1818 end=return
-run probe/r1 outcome=completed delivery=d1 handler=go fuel=270 alloc=3436
-pumped state=idle fuel=270
+seg probe/r1 start delivery=d1 handler=go clause=1 fuel=272 alloc=3436 state=1818 end=return
+run probe/r1 outcome=completed delivery=d1 handler=go fuel=272 alloc=3436
+pumped state=idle fuel=272
 > reload probe carry=yes source="script variable log = []" & newline & "script variable kept = nothing" & newline & "on inspect" & newline & "  put [functionArity(kept), functionName(kept)] after log" & newline & "end inspect" & newline identity=ed47940edd5ac61630207ba7572db3aef3906ac32909cc72ffe4322393a889c4
 stopped probe reason="reload"
 > deliver d2 to=probe message=inspect

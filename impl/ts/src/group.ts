@@ -4106,6 +4106,31 @@ export class Group {
         );
         continue;
       }
+      if (rec.kind === 'offer-chosen' || rec.kind === 'offer-entered') {
+        this.trace(
+          recordLine(
+            rec.kind,
+            [running.id],
+            [
+              ['attempt', String(rec.attempt)],
+              ...(rec.kind === 'offer-chosen'
+                ? ([
+                    ['name', traceValue(text(rec.name))],
+                    ['at', `${rec.at.unit}:${rec.at.pc}`],
+                  ] as [string, string][])
+                : []),
+              ['target', `${rec.target.unit}:${rec.target.pc}`],
+              ...(rec.kind === 'offer-chosen' && rec.args.length
+                ? ([['args', traceValue(listValues(rec.args))]] as [
+                    string,
+                    string,
+                  ][])
+                : []),
+            ],
+          ),
+        );
+        continue;
+      }
       const at = `${rec.unit}:${rec.pc}`;
       const pos = `${rec.line}:${rec.col}`;
       this.trace(

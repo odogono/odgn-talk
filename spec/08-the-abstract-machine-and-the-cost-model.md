@@ -6,7 +6,7 @@ Every Script and Library compiles to a code unit for one Abstract Machine: a sta
 
 ## The machine's state
 
-**Pending addition:** [the Recovery Offers machine contract](proposals/recovery-offers.md#abstract-machine-and-lowering) specifies two-phase catch dispatch for every `try`, offer metadata, dispatch activations, instructions (retiring `rethrow`) and accounting, including charging `unwind` per frame the search leaves. None of its catalogue changes or execution state is active in either Core yet; the lowering, Unwind Table and Cost Model tables in this chapter remain unchanged.
+Every catch uses two-phase search: dispatch tests run before failed frames or cleanup are discarded. Both Cores lower and execute basic Recovery Offers; nested recovery/cancellation and complete snapshot/debugger support remain tracked by [#389](https://github.com/odogono/odgn-talk/issues/389), [#390](https://github.com/odogono/odgn-talk/issues/390) and [#391](https://github.com/odogono/odgn-talk/issues/391). The [handoff](proposals/recovery-offers.md) retains those deferred contracts.
 
 The state is defined abstractly. A Core may represent it any way it likes, as long as it behaves as stated here.
 
@@ -80,6 +80,7 @@ The operand kinds:
 
 | Operand kind | Is |
 | --- | --- |
+| `name` | a case-sensitive plain Name |
 | `constant` | an index into the code unit's constant pool, shown with the constant |
 | `local` | a local slot of the current body, shown with its name |
 | `variable` | a Script Variable's slot, shown with its name |
@@ -300,9 +301,11 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
 | `throw` |  | 1 | 0 | `throw e`: raises the popped map or text | `bad throw` |
-| `rethrow` |  | 1 | 0 | Raises the popped error again, from a `catch` block no clause matched |  |
+| `catch-accept` |  | 0 | 0 | Accepts an ordinary catch, runs exited cleanup scopes and continues in its real owner frame |  |
+| `catch-next` |  | 0 | 0 | Disposes this catch dispatch activation and continues the search outward |  |
+| `choose-offer` | `name`, `count` | count | 0 | Looks up the nearest eligible offer, validates exact arity and transfers after exited cleanup scopes | `offer unavailable`, `wrong arity` |
 | `raise` | `code` | 0 | 0 | Raises a catalogue error that has no fields, such as `no match` |  |
-| `end-cleanup` |  | 0 | 0 | Ends a `finally` block reached by an error or a cancellation, which then goes on |  |
+| `end-cleanup` |  | 0 | 0 | Ends a `finally` block reached by an Error, cancellation or pending catch/offer transfer, which then goes on |  |
 
 <!-- end -->
 
@@ -542,9 +545,10 @@ Then the `else` body, if any, and L:. `ignoring case` on the subject adds `fold`
 `try` with a body, catch clauses and a `finally` block lowers to:
 
 1. The body, then a copy of the `finally` block, then `jump L`.
-2. With catch clauses, the catch handler: `store t` of the error, then for each clause, with F its own label: a guard region of its pattern's test of `t` with temp bindings, and its Guard, then the `move`s, its body, a copy of the `finally` block and `jump L`, then F:. After the last clause, `load t` `rethrow`. A text literal head is the pattern `{code: "…"}`.
-3. With a `finally` block, its cleanup copy: the `finally` block and `end-cleanup`.
-4. L:.
+2. With catch clauses, the catch handler: `store t` of the Error, then each clause's pattern tests and Guard in a guard region targeting its own F. An ordinary catch emits `catch-accept`, binding `move`s, its body, an inlined `finally` and `jump L`. A Recovery Catch emits binding `move`s and its body, falling through to F on decline. After the last clause, `catch-next` continues the search. A text literal head is `{code: "…"}`. Dispatch scratch slots are allocated after every temporary used in the protected body, so they cannot overwrite retained caller work; source locals remain shared.
+3. Offer actions, in declaration order, followed by their ordinary finally-copy exits and `jump L`. The normal path jumps past them. They are outside their own catch/offer ranges and inside the offering try's finally protection.
+4. With a `finally` block, its cleanup copy: the `finally` block and `end-cleanup`.
+5. L:.
 
 A Handler ending in `finally` is this with no catch clauses around its body.
 
@@ -576,13 +580,15 @@ A Guard lowers to ⟦g⟧ `branch-false F`. In a Handler Clause, a `match` branc
 
 Each code unit has one Unwind Table, whose entries are part of its disassembly ([ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md)).
 
-- **An entry** gives a range of instructions, a kind (`catch`, `finally` or `guard`), a target and a depth: the number of loop iterators on the operand stack there, one for each `repeat for each` or `repeat … times` around it in the body. That is the stack's depth wherever the range starts, reachable or not.
-- **Order:** entries are grouped by body, in body order. Within a body, they are listed in the order the lowering makes them: a `catch` entry as its catch handler begins, a `guard` entry as its region ends, and a `finally` entry after its catch handler. So an inner construct's entries come before the outer one's.
-- **Lookup:** an error raised at an instruction goes to the first entry whose range holds it, in the frame that raised it. The operand stack is cut to the entry's depth, and the frame continues at the target:
-  - **`catch`:** with the error pushed.
-  - **`finally`:** with the error on the Run's cleanup stack. The `end-cleanup` at the copy's end raises it again, and an error raised in the copy replaces it, with the old one as `during` ([chapter 6](06-errors-and-limits.md)).
-  - **`guard`:** with nothing, so the clause or branch fails.
-- **No entry:** the frame is popped, and unwinding goes on at the caller's call instruction. Unwinding is charged per frame popped.
+- **An entry** gives a range, kind (`catch`, `finally`, `guard` or `offer`), target and outer loop iterator depth. An `offer` target is an offer-record index; other targets are PCs.
+- **Order:** entries are grouped by body. Nested entries precede enclosing entries; source order is preserved within a scope. Offer records are ordered by body, nested records before enclosing records and siblings in source order.
+- **Guard lookup:** an Error at a guard-region instruction cuts the stack to its depth and continues at the failure target, emitting only `guard-skip`.
+- **Catch search:** find the innermost untested catch entry covering the retained failing PC, then search callers outward. Passing a finally does not execute it. Tests run in a dispatch activation with its own PC and operand stack (the owner's outer iterator prefix plus the Error), sharing the owner's actual locals. Original PCs and operand stacks remain retained. Each search step atomically charges `unwind` for frames it leaves before running the next test; popping those frames later is free.
+- **Acceptance:** `catch-accept` runs exited finally scopes innermost first, then discards failed frames and the dispatch activation and resumes the real owner at the binding moves. The activation remains retained through that cleanup. A Recovery Catch executes its moves and policy in dispatch control; falling through preserves writes and tries the next clause. `catch-next` disposes dispatch control and continues outward. With no accepting catch, finally scopes run before the Run ends errored.
+- **Offer lookup:** scan active offer scopes in retained frames innermost first, declarations in source order. The nearest name wins without arity fallback. Local calls, Library code and same-Run callbacks participate; foreign Functions and fresh `on error` Runs do not share this chain.
+- **Transfer:** `choose-offer` evaluates arguments left to right, charges complete lookup and checks exact arity. A valid choice runs exited dispatch-local finally scopes, then exited original scopes. The offering finally remains to protect the action. After cleanup, bind all parameter slots atomically, preserve owner locals and outer iterator prefix, and enter the action. No failed instruction resumes. An escaping cleanup Error cancels acceptance/transfer and attaches the original as `during` if absent; a rejecting cleanup-local catch does not prevent this replacement.
+- **Pending cleanup:** `end-cleanup` continues an acceptance or offer transfer at its existing 2 Fuel, without raising the original Error. Error-mode cleanup retains its ordinary raise record.
+- **Control accounting:** a context retains its original Error, continuation references, search cursor, activation and pending arguments/cleanup. Real frames and owner locals count once; helpers are real call-depth frames, dispatch activations are not. Completed, faulted and stopped contexts are discarded.
 - **Cancellation** runs each `finally` entry's cleanup copy whose range holds a frame's pc, innermost first, with the cancellation on the cleanup stack ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)). It isn't unwinding: it charges no `unwind`, and a frame with no `finally` entry left to run is dropped, not popped by an error.
 - **Entering a `try`** costs nothing, since it has no instruction.
 
@@ -614,6 +620,10 @@ code
   <pc> <line>:<column> <instruction> <operands> [; <note>]
 unwind
   <first>..<last> <kind> -> <target> depth <n>
+  <first>..<last> offer -> entry <index> depth <n>
+offers
+  <index> body <body> depth <n> end <pc>
+    offer <Name> -> <pc> binds [<slots>]
 events
   <index> <branch>; <branch>…[; or]
 ```
@@ -622,6 +632,7 @@ events
 - **Numbers:** an instruction index is four digits or more, padded with zeros. A parameter with a default is `name = <definition index>`, and a pattern parameter is `…`.
 - **Operands** are shown as their operand kind says. A `constant`, `local`, `variable` or `body` operand is its number, and a `label` an instruction index. A `key` is text in the display form, as in `get-key "unit price"`. Every other operand is its name, as written: `load-definition rate`, `load-object door`, `call-import list:sortBy 2`, `is-kind civil date`, `raise no match`.
 - **Notes** after `;` name what each `constant`, `local`, `variable` and `body` operand refers to, in operand order, separated by `, `: the constant in the display form, the local's or Script Variable's name, or the body's name, as in `move 13 3 ; (13), a`. They are part of the canonical text, and a line with no such operand has none. A temp's name is its slot in parentheses, `(12)`, and so is the argument slot of a pattern parameter.
+- **Offers:** descriptors use four-space indentation, plain Names, zero-padded PCs and comma-separated slot numbers; empty parameters print `binds []`. Each record and its Unwind entries share the outer iterator depth.
 - **Events:** a `when` branch is `when <message>`, then `from`, `body <index>`, `captures <n>` and `binds <slot>, <slot>…`, each only where it applies, and an `after` branch is `after`. A `wait for … or d` ends with `; or`.
 - **Line ends** are LF, and the text ends with one.
 
@@ -641,7 +652,7 @@ Each instruction has a source position, the second column of its disassembly lin
 Some rules emit instructions for constructs the list doesn't place. Their positions are:
 
 - **Declarations:** a Script Variable's `store-var` and a Constant's `store-definition` are the declaration's first token, and a parameter default's `store-definition` its parameter's name.
-- **`try`:** the `try`'s own instructions (the `jump` after its body, the catch handler's `store t`, its `load t` and `rethrow`, and `end-cleanup`) are its `try`, or its `finally` for a Handler that ends in one. A `catch` clause's `move`s and `jump` are its `catch`.
+- **`try`:** its normal-path jump and `end-cleanup` map to `try`, or `finally` for a Handler ending in one. Catch bookkeeping maps to the catch head; a choice maps to `choose`. Generated action exits map to the offer declaration; argument and action expressions retain their own positions. An empty action's entry PC is its generated exit bookkeeping.
 - **Patterns:** a list or map pattern's `load s`, `list-item`, `list-rest` and `map-get` are that pattern's. A sub-pattern's own `store` or `pop`, the `store` of a name or `_` included, is the sub-pattern's.
 - **Chunks:** a `delimited by`'s `store t` is the outermost level's chunk word, and an ordinal's `const` its level's chunk word.
 - **Lambdas:** a `given …: e`'s `return`, and a Lambda's `raise no match`, are its `given`.
@@ -756,7 +767,7 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 - **A foreign Function Value call** uses `call-value-wait`'s `call` key (8 Fuel, no allocation), not the `send` key. Its receiver starts a Run with one frame and no Handler Clause, so dispatch charges no `clause`. The mailbox message's contents include the Function Value (including its captures) and supplied arguments. The caller's depth does not grow; subsequent calls in the receiver count toward its own call depth limit.
 - **A Built-in** is charged by its own rate, `builtin.<name>`, in place of `call-builtin`'s key.
 - **Dispatch** charges the `clause` rate for each Handler Clause it tries, at the clause body's first instruction, added to that instruction's own charge. So a Run that can't pay for a clause faults at that instruction, with its position, and the clause is never tried. This holds for a Delivery's dispatch and for `call-handler` and `call-handler-wait` ([chapter 5](05-handlers-messages-and-scheduling.md)).
-- **Unwinding** charges the `unwind` rate at the instruction that raised, for the frames it pops, before any of them is popped ([chapter 6](06-errors-and-limits.md)). A cancellation unwinds nothing, so it charges no `unwind` ([below](#the-unwind-table)).
+- **Search and lookup** are indivisible. `unwind` charges `4 * frames` for frames the current search step leaves, at its driving raise or `catch-next`; subsequent popping is free. `offer-lookup` charges `4 * frames` atomically for the complete scan, including unknown names and wrong arity. Neither metadata nor entering a try costs Fuel. Search and lookup can incur Fuel Slice debt and preempt at the next instruction boundary. Cancellation charges no `unwind`.
 - **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
 - **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited: only its terms over `result`, since the rest was charged at the call, plus any cost that came with the answer. So a reply to `send … and wait` and the end of a `wait` charge nothing more.
 - **Lifecycle:** scope checks and suspension guards precede the guarded instruction's charge, after operand/Grant validation and any instruction-specific limit check. They add no separate rate; raised errors use normal error/unwind charges. Segment hooks and automatic abandonment consume no Script Fuel or allocation. Finalization follows the boundary's existing checks and charges ([lifecycle contract](embedding/scoped-effects.md)).
@@ -784,7 +795,7 @@ A formula is a sum of terms: a whole number, or a measure, optionally multiplied
 | `scanned` | what the instruction examines, as its rate's `input` says |
 | `steps` | the Text Pattern matcher's steps: the threads in its list at each position, summed over the positions its runs reach (chapter 8, Running) |
 | `program` | the number of instructions in a Text Pattern's compiled program (chapter 8, Compiling) |
-| `frames` | the number of frames an unwinding pops |
+| `frames` | the number of frames a catch search leaves or an offer lookup examines |
 | `clauses` | the number of Handler Clauses a dispatch tries |
 | `count` | the instruction's `count` operand, or 0 if it has none |
 | `declared` | the Operation Declaration's per-call cost, which the Host sets |
@@ -831,6 +842,8 @@ The Allocation Budget and Persistent State count values by their logical size, a
 | run | `96 + contents(v)` |
 | message | `32 + contents(v)` |
 | pending call | `48` |
+| dispatch context | `96 + 8 * items(v) + contents(v)` |
+| dispatch activation | `48 + contents(v)` |
 
 <!-- end -->
 
@@ -887,6 +900,10 @@ Cost Model **0**.
 | `send` | `20 + size(input) / 32` | `size(input)` | the message, whose size counts toward the receiver's mailbox |
 | `wait` | `10` | 0 |  |
 | `join` | `10` | `size(result)` |  |
+| `catch-accept` | `1` | 0 |  |
+| `catch-next` | `1` | 0 |  |
+| `choose-offer` | `8 + count` | 0 |  |
+| `offer-lookup` | `4 * frames` | 0 |  |
 
 <!-- end -->
 
@@ -947,8 +964,12 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `hasTime` | `2` | 0 |  |
 | `toCivil` | `10` | `size(result)` |  |
 | `toInstant` | `10` | `size(result)` |  |
+| `offerAvailable` | `3 + utf8(x1) / 16` | 0 |  |
 
 <!-- end -->
+
+
+Dispatch context size includes `96 + 8 * argumentCount + contents(original Error and pending arguments)`; activation size is `48 + contents(operand stack)`. Owner-local storage and retained real frames count once. Separate holdings of the same Value count separately under the existing no-sharing rule. The Run's 96-byte base includes its offer-attempt counter.
 
 ### Changes to Cost Model 0
 
@@ -962,6 +983,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |
 | [#126](https://github.com/odogono/odgn-talk/issues/126) | The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit |
+| [#388](https://github.com/odogono/odgn-talk/issues/388) | Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes |
 
 <!-- end -->
 

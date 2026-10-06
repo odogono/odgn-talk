@@ -25,17 +25,17 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 - **`throw t`**, for a text `t`, raises `{code: t}`, decided at run time by the value's kind.
 - **Anything else** given to `throw` raises `bad throw`.
 - **Built-ins, operators and statements** raise catalogue codes, such as `can't convert` for `"lots" as number`.
-- **Unwinding** walks the Run's frames, including calls to the Script's own Handlers and to Library code, each through its own Unwind Table ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)). It is charged per frame popped. A Run that can't pay for its unwinding has a Limit Fault at the `throw`.
+- **Catch search** walks retained frames, including local and Library calls, before cleanup runs. It charges per frame the search leaves; later popping is free. A Run unable to pay faults at the instruction driving that search step ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table)).
 - **The Trace** records every raise, caught or not, as its code and instruction ([chapter 11](11-the-trace-and-conformance.md)).
 
 ## Catching
 
-**Pending addition:** [Recovery Offers](proposals/recovery-offers.md) lets an explicitly marked Recovery Catch choose a declared action before failed frames are discarded, and changes every catch to [two-phase search](proposals/recovery-offers.md#two-phase-catch-search): only a catch that accepts the Error unwinds. Neither Core supports it yet. Ordinary `catch` behavior below remains the active rule until then; the proposal includes a currently supported callback alternative and explains why local work is lost on unwinding rather than Error rollback.
+Every catch is tested before failed frames unwind. An ordinary accepting catch then runs exited cleanup scopes and continues its real owner. A `catch … before unwind` runs policy while the failure chain remains retained; `choose offer name(args)` selects the nearest active named action, and fallthrough declines to the next catch. See [the machine contract](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table). Nested recovery/cancellation remains the [next implementation slice](https://github.com/odogono/odgn-talk/issues/389).
 
 - **`try … end try`** runs its block. An error raised in it, or in anything it calls, is matched against its `catch` clauses.
 - **Clauses are Destructuring heads** with optional Guards, tried top to bottom, like Handler Clauses. The first that matches runs, with its names bound. A bare `catch e` matches every error.
 - **Shorthand:** `catch "out of stock"` is short for `catch {code: "out of stock"}`, and a `where` Guard may follow it. Only a text literal is shorthand, so a name in a head still binds.
-- **No match:** if no clause matches, the error keeps unwinding, after the `try`'s `finally` runs.
+- **No match:** continue searching outward without cleanup. Rejecting catches are transparent to caller recovery; an accepting ordinary catch discards deeper offers. If none accepts, unwind all frames and finally scopes.
 - **Guards** on `catch` clauses follow the rules for Handler Guards. An error in one skips the clause and is invisible, except in the Trace.
 - **An error in a `catch` body** unwinds from there, through the `try`'s `finally`.
 - **Nothing rolls back:** a caught error undoes no write to a Script Variable. Rollback is only for Limit Faults and cancellation, where the Script can't react ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
@@ -153,7 +153,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 | `timeout` | `after`; optional: `capability`, `operation` | A suspending Operation call runs past its `maxPending` or the Script's `MaxWait`, or a `send … and wait` or a call to a Function Value in another Script runs past `MaxWait`, and is abandoned; `after` is the limit that ran out, in `ms`, and a Capability call adds `capability` and `operation` | [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md) |
 | `would suspend` | none | A Function Value that may suspend is called without `and wait`, or handed to a Library function such as `map` | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md) |
 | `function gone` | none | A stale Function Value is called, after a variables-only restore or a Library replace | [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md) |
-| `wrong arity` | none | A Function Value is called with too few or too many arguments: a Lambda's count, or outside a named function's range from its required parameters to all of them | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md) |
+| `wrong arity` | none | A Function Value is called outside its accepted argument range, or an offer choice does not match the nearest offer's exact parameter count | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md) |
 | `not encodable` | `kind`, `path` | JSON encoding, or a data-Shaped Capability argument, meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md) |
 | `out of domain` | `function`, `value` | An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, or a Standard Capability option word that isn't listed; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name | [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md) |
 | `out of range` | `field`, `value` | A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, or a Binary Pattern build value too large for its segment | [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [#89](https://github.com/odogono/odgn-talk/issues/89) |
@@ -170,6 +170,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 | `scope in join` | `capability`, `operation`, `scope` | An opening Operation executes inside a Join, including through a local call | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
 | `segment participant conflict` | `capability`, `operation`, `participant` | A Segment-bound Operation tries to enlist a different named Grant from the current participant | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
 | `capability disabled` | `capability`, `operation` | A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
+| `offer unavailable` | `name` | A choice names no eligible Recovery Offer in the retained failure chain | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md) |
 
 <!-- end -->
 
@@ -197,7 +198,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `timeout` | No answer came within {after} |
 | `would suspend` | This function may wait, so call it with `and wait` |
 | `function gone` | The function no longer exists |
-| `wrong arity` | The function was called with the wrong number of arguments |
+| `wrong arity` | The function or offer was called with the wrong number of arguments |
 | `not encodable` | A {kind} can't be encoded as plain data |
 | `out of domain` | {value} is outside the domain of {function} |
 | `out of range` | {value} is out of range for {field} |
@@ -214,6 +215,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `scope in join` | The scope {scope} cannot open inside a Join |
 | `segment participant conflict` | The Segment already participates through {participant}, so {capability} cannot join |
 | `capability disabled` | The Grant for {capability} is disabled, so {operation} cannot be called |
+| `offer unavailable` | The recovery offer {name} is unavailable |
 
 <!-- end -->
 

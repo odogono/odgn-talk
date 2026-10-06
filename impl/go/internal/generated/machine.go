@@ -7,6 +7,7 @@ type MachineTable struct {
 }
 
 type MachineTableOperand struct {
+	Name       string
 	Constant   string
 	Local      string
 	Variable   string
@@ -47,6 +48,7 @@ type MachineTableInstructionEntry struct {
 
 var Machine = MachineTable{
 	Operand: MachineTableOperand{
+		Name:       "a case-sensitive plain Name",
 		Constant:   "an index into the code unit's constant pool, shown with the constant",
 		Local:      "a local slot of the current body, shown with its name",
 		Variable:   "a Script Variable's slot, shown with its name",
@@ -1607,14 +1609,41 @@ var Machine = MachineTable{
 			},
 		},
 		MachineTableInstructionEntry{
-			Name:     "rethrow",
+			Name:     "catch-accept",
 			Group:    "errors",
 			Operands: []string{},
-			Pops:     1,
+			Pops:     0,
 			Pushes:   0,
 			Suspends: false,
-			Cost:     "throw",
-			Does:     "Raises the popped error again, from a `catch` block no clause matched",
+			Cost:     "catch-accept",
+			Does:     "Accepts an ordinary catch, runs exited cleanup scopes and continues in its real owner frame",
+		},
+		MachineTableInstructionEntry{
+			Name:     "catch-next",
+			Group:    "errors",
+			Operands: []string{},
+			Pops:     0,
+			Pushes:   0,
+			Suspends: false,
+			Cost:     "catch-next",
+			Does:     "Disposes this catch dispatch activation and continues the search outward",
+		},
+		MachineTableInstructionEntry{
+			Name:  "choose-offer",
+			Group: "errors",
+			Operands: []string{
+				"name",
+				"count",
+			},
+			Pops:     "count",
+			Pushes:   0,
+			Suspends: false,
+			Cost:     "choose-offer",
+			Does:     "Looks up the nearest eligible offer, validates exact arity and transfers after exited cleanup scopes",
+			Errors: []string{
+				"offer unavailable",
+				"wrong arity",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "raise",
@@ -1636,7 +1665,7 @@ var Machine = MachineTable{
 			Pushes:   0,
 			Suspends: false,
 			Cost:     "return",
-			Does:     "Ends a `finally` block reached by an error or a cancellation, which then goes on",
+			Does:     "Ends a `finally` block reached by an Error, cancellation or pending catch/offer transfer, which then goes on",
 		},
 		MachineTableInstructionEntry{
 			Name:  "ask",

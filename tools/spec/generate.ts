@@ -1123,7 +1123,7 @@ const keyTable = (d: Data, input: boolean): string => {
 // costs.toml (ADRs 0006 and 0010): every formula parses and uses only the
 // measures and subjects it lists, where they apply; every Cost Model key in
 // machine.toml, and every Built-in, has one rate; and every kind has a size.
-const COST_ONLY_KEYS = new Set(['clause', 'unwind']);
+const COST_ONLY_KEYS = new Set(['clause', 'unwind', 'offer-lookup']);
 const KINDS = [
   'nothing',
   'boolean',
@@ -1230,8 +1230,12 @@ const costsCheck = (d: Data, fail: (file: string, msg: string) => void) => {
       if (measure === 'declared' && r.key !== 'capability') {
         return '`declared` is only for Capability calls';
       }
-      if (measure === 'frames' && r.key !== 'unwind') {
-        return '`frames` is only for unwinding';
+      if (
+        measure === 'frames' &&
+        r.key !== 'unwind' &&
+        r.key !== 'offer-lookup'
+      ) {
+        return '`frames` is only for catch search and offer lookup';
       }
       if (measure === 'clauses' && r.key !== 'clause') {
         return '`clauses` is only for dispatch';

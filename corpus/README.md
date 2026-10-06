@@ -255,3 +255,13 @@ Operations, foreign Function Value calls, one-line and block event captures
 and object filters, pending Join members and early answers. Their first human
 review remains outstanding; each new Trace retains its `Unblessed` header.
 Current behavior is described in the [TS verification guide](../impl/ts/README.md#verification-and-corpus-selection).
+
+The #388 Recovery Offers slice adds unblessed `recovery-offers/basic`,
+`recovery-offers/boundaries`, `recovery-offers/costs`,
+`recovery-offers/cleanup-restore` and
+`disassembly/recovery-offers` cases. They pin retained Library work, choice/entry
+ordering and attempts, foreign-Run boundaries, exact dispatch sizes and atomic
+lookup debt. The [expectation review](../docs/reviews/recovery-offers-runtime/README.md)
+lists every changed existing expectation and keeps approval separate from
+cross-Core execution agreement. Nested dispatch/cancellation and full saved/debug
+recovery integration remain later slices of #383.

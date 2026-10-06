@@ -17,9 +17,9 @@ raise writes/r1 code="out of range" at=writes:48 pos=21:18
 raise writes/r1 code="out of range" at=writes:83 pos=26:18
 raise writes/r1 code="out of range" at=writes:119 pos=31:18
 raise writes/r1 code="out of range" at=writes:156 pos=36:18
-seg writes/r1 start delivery=d1 handler=go clause=1 fuel=215 alloc=732 state=602 end=return
-run writes/r1 outcome=completed delivery=d1 handler=go fuel=215 alloc=732
-pumped state=idle fuel=215
+seg writes/r1 start delivery=d1 handler=go clause=1 fuel=220 alloc=732 state=602 end=return
+run writes/r1 outcome=completed delivery=d1 handler=go fuel=220 alloc=732
+pumped state=idle fuel=220
 
 > vars
 vars writes s="abc" pastEnd=["out of range", "character", 4] wordPastEnd=["out of range", "word", 2] itemZero=["out of range", "item", 0] beforeStart=["out of range", "character", -4] reversed=["out of range", "character", [3, 2]]

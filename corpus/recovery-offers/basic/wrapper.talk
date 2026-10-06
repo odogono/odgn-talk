@@ -1,0 +1,8 @@
+use parseRows from rows
+function loadRows lines, convert
+  try
+    return parseRows(lines, convert)
+  catch "timeout"
+    return []
+  end try
+end loadRows

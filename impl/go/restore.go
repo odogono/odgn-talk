@@ -334,7 +334,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 				g.deferDiscardedDecision(d, row.ID)
 				continue
 			}
-			x := &execution{run: row.Run, delivery: d, id: row.ID, handler: row.Handler, clause: row.Clause, how: row.How, deadline: row.Deadline, timerOrder: row.TimerOrder, parked: row.Parked, deciding: row.Deciding, segment: row.Segment, calls: row.Calls, raisesWritten: row.RaisesWritten, waitCall: row.WaitCall, abandonCall: row.AbandonCall}
+			x := &execution{run: row.Run, delivery: d, id: row.ID, handler: row.Handler, clause: row.Clause, how: row.How, deadline: row.Deadline, timerOrder: row.TimerOrder, parked: row.Parked, deciding: row.Deciding, segment: row.Segment, calls: row.Calls, raisesWritten: row.RaisesWritten, offersWritten: row.OffersWritten, waitCall: row.WaitCall, abandonCall: row.AbandonCall}
 			if x.run == nil || x.run.State != s.state || len(x.run.Base) != len(s.state.Variables) {
 				return nil, result, invalid("invalid Run Home or rollback base")
 			}
@@ -362,6 +362,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 					}
 				}
 			}
+			x.run.RestoreRecoveryLocals()
 			for _, t := range row.Timers {
 				x.memberTimers = append(x.memberTimers, memberTimer{t.ID, t.Deadline, t.Order, t.MS})
 			}

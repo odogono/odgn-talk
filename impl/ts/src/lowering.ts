@@ -19,6 +19,7 @@ import type {
   EventEntry,
   Instruction,
   Operand,
+  OfferEntry,
   UnwindEntry,
 } from './code-unit';
 import { instructionSpec } from './code-unit';
@@ -79,6 +80,10 @@ type Pending = {
   line: number;
   op: string;
   operands: (Operand | Label)[];
+};
+type PendingOffer = Omit<OfferEntry, 'end' | 'offers'> & {
+  end: Label;
+  offers: { binds: number[]; name: string; target: Label }[];
 };
 type PendingUnwind = Omit<UnwindEntry, 'target'> & { target: Label | number };
 type Loop = { exit: Label; finallies: number; top: Label };
@@ -153,6 +158,7 @@ class UnitLowering {
   bodies: Body[] = [];
   code = new Map<number, Pending[]>();
   unwind = new Map<number, PendingUnwind[]>();
+  offers = new Map<number, PendingOffer[]>();
   constants: string[] = [];
   definitions: string[] = [];
   events: EventEntry[] = [];
@@ -301,6 +307,7 @@ class UnitLowering {
   finish(): CodeUnit {
     const code: Instruction[] = [];
     const unwind: UnwindEntry[] = [];
+    const offers: OfferEntry[] = [];
     for (const body of this.bodies) {
       body.start = code.length;
       if (body.acceptedAt !== undefined) {
@@ -329,6 +336,17 @@ class UnitLowering {
         }
       }
       body.end = code.length;
+      const offerBase = offers.length;
+      for (const entry of this.offers.get(body.index) ?? []) {
+        offers.push({
+          ...entry,
+          end: body.start + entry.end.pc!,
+          offers: entry.offers.map(o => ({
+            ...o,
+            target: body.start + o.target.pc!,
+          })),
+        });
+      }
       for (const entry of this.unwind.get(body.index) ?? []) {
         const target =
           typeof entry.target === 'number' ? entry.target : entry.target.pc!;
@@ -336,7 +354,8 @@ class UnitLowering {
           ...entry,
           start: body.start + entry.start,
           end: body.start + entry.end,
-          target: body.start + target,
+          target:
+            entry.kind === 'offer' ? offerBase + target : body.start + target,
         });
       }
     }
@@ -350,6 +369,7 @@ class UnitLowering {
       bodies: this.bodies,
       code,
       unwind,
+      ...(offers.length ? { offers } : {}),
       events: this.events,
       patterns: this.patterns,
     };
@@ -359,6 +379,7 @@ class UnitLowering {
 class BodyLowering {
   code: Pending[] = [];
   unwind: PendingUnwind[] = [];
+  offers: PendingOffer[] = [];
   slots = new Map<Binding, number>();
   // Pattern temps a Guard or a later Binary Pattern size reads by name.
   overrides = new Map<Binding, number>();
@@ -372,6 +393,7 @@ class BodyLowering {
     catch: Span | null;
     finally: number | null;
     finallySpan: Span | null;
+    offer: Span | null;
   }[] = [];
   join = 0;
   iterators = 0;
@@ -410,6 +432,7 @@ class BodyLowering {
     this.body.locals = this.locals;
     this.u.code.set(this.body.index, this.code);
     this.u.unwind.set(this.body.index, this.unwind);
+    this.u.offers.set(this.body.index, this.offers);
   }
 
   unsupported(at: Pos, what: string): never {
@@ -735,7 +758,10 @@ class BodyLowering {
       case 'match':
         return yield* this.match(s);
       case 'choose-offer':
-        return this.unsupported(at, 'Recovery Offers are not yet lowered');
+        for (const arg of s.args) {
+          yield this.expr(arg);
+        }
+        return void this.emit(at, 'choose-offer', s.name, s.args.length);
       case 'try':
         return yield* this.tryStatement(s, s.pos);
       case 'throw':
@@ -997,7 +1023,7 @@ class BodyLowering {
     const from = this.tries.findIndex(t => t.finally === depth);
     const paused = this.tries
       .slice(from)
-      .flatMap(t => [t.catch, t.finallySpan])
+      .flatMap(t => [t.catch, t.offer, t.finallySpan])
       .filter((span): span is Span => !!span && span.open !== null);
     for (const span of paused) {
       this.close(span);
@@ -1021,7 +1047,7 @@ class BodyLowering {
     span.open = null;
   }
 
-  entries(span: Span, kind: 'catch' | 'finally', target: number) {
+  entries(span: Span, kind: 'catch' | 'finally' | 'offer', target: number) {
     for (const [start, end] of span.spans) {
       this.unwind.push({ start, end, kind, target, depth: this.iterators });
     }
@@ -1087,11 +1113,11 @@ class BodyLowering {
 
   // A `try`: its body, its catch handler and its `finally` (chapter 8).
   *tryStatement(s: Try, at: Pos): Task {
-    if (s.offers.length || s.catches.some(c => c.recovery)) {
-      return this.unsupported(at, 'Recovery Offers are not yet lowered');
-    }
     const end = this.label();
     const hasFinally = s.finally !== null;
+    const offerSpan: Span | null = s.offers.length
+      ? { spans: [], open: this.code.length }
+      : null;
     const catchSpan: Span | null = s.catches.length
       ? { spans: [], open: this.code.length }
       : null;
@@ -1104,6 +1130,7 @@ class BodyLowering {
     const me = {
       finally: hasFinally ? this.finallies.length - 1 : null,
       catch: catchSpan,
+      offer: offerSpan,
       finallySpan,
     };
     this.tries.push(me);
@@ -1111,18 +1138,24 @@ class BodyLowering {
     if (catchSpan) {
       this.close(catchSpan);
     }
+    if (offerSpan) {
+      this.close(offerSpan);
+    }
     yield this.leave(hasFinally ? me.finally! : this.finallies.length, () =>
       this.emit(at, 'jump', end),
     );
     if (catchSpan) {
       this.entries(catchSpan, 'catch', this.code.length);
+      // Dispatch must not reuse scratch slots still live in retained continuations.
+      const retainedFree = this.free;
+      this.free = [];
       const error = this.temp();
       // The error is on the stack until it is stored, so the finally spans
       // start after the store.
       if (finallySpan) {
         this.close(finallySpan);
       }
-      this.emit(at, 'store', error);
+      this.emit(s.catches[0]!.pos, 'store', error);
       if (finallySpan) {
         finallySpan.open = this.code.length;
       }
@@ -1141,16 +1174,46 @@ class BodyLowering {
             }
           })(),
         );
+        if (!clause.recovery) {
+          this.emit(clause.pos, 'catch-accept');
+        }
         this.commit(clause.pos, binds);
         yield this.block(clause.body);
-        yield this.leave(hasFinally ? me.finally! : this.finallies.length, () =>
-          this.emit(clause.pos, 'jump', end),
-        );
+        if (!clause.recovery) {
+          yield this.leave(
+            hasFinally ? me.finally! : this.finallies.length,
+            () => this.emit(clause.pos, 'jump', end),
+          );
+        }
         this.place(next);
       }
-      this.emit(at, 'load', error);
-      this.emit(at, 'rethrow');
+      this.emit(s.catches.at(-1)!.pos, 'catch-next');
       this.release(error);
+      this.free = [...retainedFree, ...this.free];
+    }
+    if (offerSpan) {
+      const record: PendingOffer = {
+        body: this.body.index,
+        depth: this.iterators,
+        end,
+        offers: [],
+      };
+      for (const offer of s.offers) {
+        const target = this.label();
+        this.place(target);
+        record.offers.push({
+          name: offer.name,
+          binds: offer.params.map(p => this.slots.get(p.binding!)!),
+          target,
+        });
+        yield this.block(offer.body);
+        yield this.leave(hasFinally ? me.finally! : this.finallies.length, () =>
+          this.emit(offer.pos, 'jump', end),
+        );
+      }
+      const index = this.offers.length;
+      this.offers.push(record);
+      this.entries(offerSpan, 'offer', index);
     }
     this.tries.pop();
     if (finallySpan) {

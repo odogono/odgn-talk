@@ -53,10 +53,12 @@ func (u *Unit) tryStatement(n *syntax.Node) {
 	bodyRegion := &region{scope: scope, start: u.pc(), active: true}
 	u.state.regions = append(u.state.regions, bodyRegion)
 	var final *syntax.Node
-	var catches []*syntax.Node
+	var catches, offers []*syntax.Node
 	for _, branch := range n.Branches {
 		if branch.Kind == "finally" {
 			final = branch
+		} else if branch.Kind == "offer" {
+			offers = append(offers, branch)
 		} else {
 			catches = append(catches, branch)
 		}
@@ -82,8 +84,13 @@ func (u *Unit) tryStatement(n *syntax.Node) {
 		for _, span := range bodyRegion.spans {
 			u.state.body.Unwind = append(u.state.body.Unwind, unwind{span[0], span[1], "catch", catch, depth})
 		}
+		// Dispatch scratch cannot overwrite a retained protected-body continuation.
+		retainedTemps := append([]bool(nil), u.state.temps...)
+		for i := range u.state.temps {
+			u.state.temps[i] = true
+		}
 		slot := u.temp()
-		u.store(pos, slot)
+		u.store(catches[0].Pos(), slot)
 		if finalRegion != nil {
 			finalRegion.start = u.pc()
 			finalRegion.active = true
@@ -102,22 +109,56 @@ func (u *Unit) tryStatement(n *syntax.Node) {
 			if stop := u.pc(); stop > start {
 				u.state.body.Unwind = append(u.state.body.Unwind, unwind{start, stop - 1, "guard", fail, depth})
 			}
+			if !syntax.HasFlag(branch, "before") {
+				u.emit(branch.Pos(), "catch-accept")
+			}
 			u.commitBindings(branch.Pos())
 			restore()
+			u.statements(branch.Body)
+			var paused []*region
+			if final != nil && !syntax.HasFlag(branch, "before") {
+				paused = u.inlineFinally(len(u.state.finally) - 1)
+			}
+			if !syntax.HasFlag(branch, "before") {
+				u.emit(branch.Pos(), "jump", target(end))
+			}
+			u.mark(fail)
+			if final != nil {
+				u.resumeRegions(paused)
+				if !finalRegion.active {
+					finalRegion.start = u.pc()
+					finalRegion.active = true
+				}
+			}
+		}
+		u.emit(catches[len(catches)-1].Pos(), "catch-next")
+		u.release(slot)
+		copy(u.state.temps, retainedTemps)
+	}
+	if len(offers) > 0 {
+		record := &OfferEntry{Body: u.state.body.Index, Depth: depth, end: end, index: &label{}}
+		for _, branch := range offers {
+			if finalRegion != nil && !finalRegion.active {
+				finalRegion.start = u.pc()
+				finalRegion.active = true
+			}
+			descriptor := OfferDescriptor{Name: branch.Text, Target: u.pc()}
+			for _, param := range branch.Params {
+				descriptor.Binds = append(descriptor.Binds, u.state.body.Checked.Slot(param.Text))
+			}
+			record.Offers = append(record.Offers, descriptor)
 			u.statements(branch.Body)
 			var paused []*region
 			if final != nil {
 				paused = u.inlineFinally(len(u.state.finally) - 1)
 			}
 			u.emit(branch.Pos(), "jump", target(end))
-			u.mark(fail)
-			if final != nil {
-				u.resumeRegions(paused)
-			}
+			u.resumeRegions(paused)
 		}
-		u.load(pos, slot)
-		u.emit(pos, "rethrow")
-		u.release(slot)
+		u.state.body.Offers = append(u.state.body.Offers, record)
+		for _, span := range bodyRegion.spans {
+			u.state.body.Unwind = append(u.state.body.Unwind, unwind{span[0], span[1], "offer", record.index, depth})
+		}
 	}
 	if finalRegion != nil {
 		u.closeRegion(finalRegion)

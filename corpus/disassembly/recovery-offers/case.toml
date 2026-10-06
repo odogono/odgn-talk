@@ -1,0 +1,14 @@
+# Unblessed: Recovery Offers metadata and opcodes await human review for #388.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "recovery"
+source = "recovery.talk"
+
+[[disassembly]]
+unit = "recovery"
+expected = "recovery.dis"

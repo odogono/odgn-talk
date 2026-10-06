@@ -1,0 +1,8 @@
+script variable observed
+function probe
+  put offerAvailable("recover") into observed
+  throw "remote"
+end probe
+on begin
+  send execute with probe to caller
+end begin

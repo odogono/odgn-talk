@@ -1,0 +1,10 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[scripts]]
+name = "home"
+source = "home.talk"
+[[scripts]]
+name = "caller"
+source = "caller.talk"

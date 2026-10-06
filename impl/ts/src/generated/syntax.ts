@@ -1091,6 +1091,14 @@ export const builtins = [
   {
     "name": "quote",
     "kind": "constant"
+  },
+  {
+    "name": "offerAvailable",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   }
 ] as const;
 export const libraryExports = [

@@ -16,10 +16,10 @@ import {
   type Reader,
 } from './binary';
 import { charge, partSize, sizeOf, type Measured } from './costs';
-import type { Body, CodeUnit, Instruction } from './code-unit';
+import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf, instructionSpec } from './code-unit';
 import { errorMessages, limitDefaults } from './generated/machine';
-import { builtins } from './generated/syntax';
+import { builtins, grammar } from './generated/syntax';
 import {
   appendTo,
   arithmetic,
@@ -457,6 +457,7 @@ const homeConstant = (root: Value, home: Script): Value => {
 type FunctionCode = { body: Body; code: Code; home: Script };
 type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
 type Frame = {
+  activation?: boolean;
   body: Body;
   /** A clause's `clause` charge, added to its first instruction's. */
   clauseCharge: boolean;
@@ -465,8 +466,34 @@ type Frame = {
   dispatch: Dispatch | null;
   handler: string;
   locals: Value[];
+  owner?: Frame;
   pc: number;
   stack: Item[];
+};
+type RecoveryDispatch = {
+  activation?: Frame;
+  at: CodePosition;
+  cleanup?: Frame;
+  cleanupEntry?: UnwindEntry;
+  cursor: number;
+  entry?: UnwindEntry;
+  error: Value;
+  owner?: Frame;
+  pending?:
+    | { kind: 'error' }
+    | { frame: Frame; kind: 'catch'; pc: number; stack: Item[] }
+    | {
+        args: Value[];
+        attempt: number;
+        binds: number[];
+        frame: Frame;
+        kind: 'offer';
+        pc: number;
+        stack: Item[];
+      };
+  queue: { entry: UnwindEntry; frame: Frame; index: number }[];
+  retained: Frame[];
+  seen: Map<Frame, Set<number>>;
 };
 // A `finally` block running because of an error: its frame, the error, and
 // where its cleanup copy starts.
@@ -478,6 +505,19 @@ type Cleanup = { error: Value; frame: Frame; start: number };
  * the value its Guard gave that wasn't a boolean.
  */
 export type RunRecord =
+  | {
+      args: Value[];
+      at: { pc: number; unit: string };
+      attempt: number;
+      kind: 'offer-chosen';
+      name: string;
+      target: { pc: number; unit: string };
+    }
+  | {
+      attempt: number;
+      kind: 'offer-entered';
+      target: { pc: number; unit: string };
+    }
   | {
       code?: string;
       col: number;
@@ -1100,6 +1140,8 @@ export class Run {
   /** The Script Variables when the Segment began, for rollback (ADR 0006). */
   segmentBase: Value[];
   private cleanups: Cleanup[] = [];
+  private recoveries: RecoveryDispatch[] = [];
+  private offerAttempt = 0;
   private outcome: Outcome | null = null;
   private entryError: 'wrong arity' | null = null;
   private m: Measured = {};
@@ -1341,6 +1383,7 @@ export class Run {
     this.resumption = null;
     this.waitedOn = null;
     this.frames = [];
+    this.recoveries = [];
     this.cleanups = [];
     this.cancellation = null;
     return ids;
@@ -2153,14 +2196,37 @@ export class Run {
     let frames = 0;
     const retained = new Set([
       ...this.frames,
+      ...this.recoveries.flatMap(c => [
+        ...c.retained,
+        ...(c.activation ? [c.activation] : []),
+      ]),
       ...(this.cancellation ?? []).map(c => c.frame),
     ]);
+    const cleanupOwners = new Set(
+      this.recoveries.flatMap(c => (c.cleanup ? [c.cleanup.owner!] : [])),
+    );
     for (const f of retained) {
-      let contents = f.locals.reduce((t, v) => t + sizeOf(v), 0);
-      for (const item of f.stack) {
-        contents += itemSize(item);
+      const stack = f.stack.reduce((total, item) => total + itemSize(item), 0);
+      if (cleanupOwners.has(f)) {
+        // Cleanup shares owner locals, but the failed operand stack is retained.
+        frames += stack;
+        continue;
       }
-      frames += partSize('frame', f.locals.length, contents);
+      frames += f.activation
+        ? 48 + stack
+        : partSize(
+            'frame',
+            f.locals.length,
+            stack + f.locals.reduce((t, v) => t + sizeOf(v), 0),
+          );
+    }
+    for (const c of this.recoveries) {
+      const args = c.pending?.kind === 'offer' ? c.pending.args : [];
+      frames +=
+        96 +
+        8 * args.length +
+        sizeOf(c.error) +
+        args.reduce((t, v) => t + sizeOf(v), 0);
     }
     // Each pending call, and a Join's early answers.
     let calls = 0;
@@ -2240,6 +2306,7 @@ export class Run {
   }
 
   private faultNow(limit: LimitName, ins: Instruction) {
+    this.recoveries = [];
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
     this.faultAbandons.push(...this.abandonJoin());
     const code = this.frame.code;
@@ -2353,17 +2420,22 @@ export class Run {
   /**
    * Unwind an error from the current instruction (chapter 8, The Unwind
    * Table): find the first entry that holds a frame's place, charge `unwind`
-   * for the frames popped, then continue there.
+   * for the frames search leaves, then dispatch there.
    */
   private unwind(error: Value, ins: Instruction) {
-    if (
-      deferFault(this, { reason: 'error', error }, () =>
-        this.unwindNow(error, ins),
-      )
-    ) {
-      return;
+    const search = () => {
+      try {
+        this.unwindNow(error, ins);
+      } catch (error_) {
+        if (!(error_ instanceof LimitFaultError)) {
+          throw error_;
+        }
+        this.fault(error_.limit, ins);
+      }
+    };
+    if (!deferFault(this, { reason: 'error', error }, search)) {
+      search();
     }
-    this.unwindNow(error, ins);
   }
 
   private unwindNow(error: Value, ins: Instruction) {
@@ -2384,72 +2456,312 @@ export class Run {
       };
       return;
     }
-    let popped = 0;
-    let found: CodeUnit['unwind'][number] | undefined;
-    // Each frame unwinds through its own code unit's Unwind Table.
-    for (let i = this.frames.length - 1; i >= 0; i--) {
-      const { code, pc } = this.frames[i]!;
-      found = code.unit.unwind.find(e => pc >= e.start && pc < e.end);
-      if (found) {
-        break;
-      }
-      popped++;
-    }
-    const at = this.record(error, ins, found?.kind === 'guard');
-    this.leaveJoin(found ? this.frames.length - 1 - popped : -1, found?.target);
-    if (popped) {
-      try {
-        this.pay('unwind', { frames: popped });
-      } catch (error_) {
-        if (error_ instanceof LimitFaultError) {
-          return this.fault(error_.limit, ins);
-        }
-        throw error_;
-      }
-    }
-    // An error raised in a `finally` copy replaces the one in flight, which
-    // becomes its `during` (chapter 6).
-    const handler = found ? this.frames.length - 1 - popped : -1;
-    const inside = (c: Cleanup) =>
-      found !== undefined &&
-      this.frames.indexOf(c.frame) === handler &&
-      found.start >= c.start &&
-      found.end <= cleanupEnd(c.frame.code.unit, c);
-    while (this.cleanups.length) {
-      const c = this.cleanups.at(-1)!;
-      if (this.frames.indexOf(c.frame) < handler || inside(c)) {
-        break;
-      }
-      this.cleanups.pop();
-      if (!hasKey(error, 'during')) {
-        const core = coreRaised.has(error);
-        error = map([...error.entries(), ['during', c.error]]);
-        if (core) {
-          coreRaised.add(error);
-        }
-      }
-    }
-    if (!found) {
-      try {
-        this.checkState();
-      } catch (error_) {
-        if (error_ instanceof LimitFaultError) {
-          return this.fault(error_.limit, ins);
-        }
-        throw error_;
-      }
-      this.frames = [];
-      this.outcome = { kind: 'errored', error, at };
+    const guard = this.activeEntries(this.frame).find(e => e.kind !== 'offer');
+    const at = this.record(error, ins, guard?.kind === 'guard');
+    if (guard?.kind === 'guard') {
+      this.frame.stack.length = guard.depth;
+      this.frame.pc = guard.target;
       return;
     }
-    this.frames.length = handler + 1;
-    const frame = this.frame;
-    frame.stack.length = found.depth;
-    frame.pc = found.target;
-    if (found.kind === 'catch') {
-      frame.stack.push(error);
-    } else if (found.kind === 'finally') {
-      this.cleanups.push({ frame, error, start: found.target });
+    const outer = this.recoveries.at(-1);
+    if (outer?.cleanup && this.frames.includes(outer.cleanup)) {
+      // A local cleanup catch may finish; an escaping Error cancels acceptance.
+      const local = this.frames
+        .slice(this.frames.indexOf(outer.cleanup))
+        .some(f =>
+          this.activeEntries(f).some(
+            e =>
+              e.kind === 'catch' &&
+              (f !== outer.cleanup ||
+                (e.start >= outer.cleanupEntry!.target &&
+                  e.end <=
+                    cleanupEnd(f.code.unit, outer.cleanupEntry!.target))),
+          ),
+        );
+      if (!local) {
+        if (!hasKey(error, 'during')) {
+          error = this.withDuring(error, outer.error);
+        }
+        this.recoveries.pop();
+      }
+    }
+    const context: RecoveryDispatch = {
+      error,
+      at,
+      retained: [...this.frames],
+      cursor: this.frames.length - 1,
+      seen: new Map(),
+      queue: [],
+    };
+    this.recoveries.push(context);
+    this.searchCatch(context);
+  }
+
+  // Catch tests run on a separate cursor while the failed continuations stay intact.
+  private activeEntries(frame: Frame) {
+    return frame.code.unit.unwind.filter(
+      e => frame.pc >= e.start && frame.pc < e.end,
+    );
+  }
+
+  private realDepth() {
+    return new Set(
+      [...this.frames, ...this.recoveries.flatMap(c => c.retained)].map(f => {
+        while (f.owner) {
+          f = f.owner;
+        }
+        return f;
+      }),
+    ).size;
+  }
+
+  private searchCatch(context: RecoveryDispatch) {
+    let left = 0;
+    for (let i = context.cursor; i >= 0; i--) {
+      const owner = context.retained[i]!;
+      const entry = this.activeEntries(owner).find(
+        e => e.kind === 'catch' && !context.seen.get(owner)?.has(e.target),
+      );
+      this.leaveCleanupSearch(context, owner, entry);
+      if (entry) {
+        this.pay('unwind', { frames: left });
+        context.cursor = i;
+        const seen = context.seen.get(owner) ?? new Set<number>();
+        seen.add(entry.target);
+        context.seen.set(owner, seen);
+        context.owner = owner;
+        context.entry = entry;
+        const activation: Frame = {
+          ...owner,
+          owner,
+          activation: true,
+          pc: entry.target,
+          stack: [...owner.stack.slice(0, entry.depth), context.error],
+          clauseCharge: false,
+        };
+        context.activation = activation;
+        this.frames = [...context.retained, activation];
+        return;
+      }
+      left++;
+    }
+    this.leaveJoin(-1, undefined);
+    this.pay('unwind', { frames: left });
+    context.pending = { kind: 'error' };
+    context.queue = this.exitedCleanups(context, -1);
+    this.advanceTransfer(context);
+  }
+
+  private withDuring(error: Value, original: Value) {
+    const replacement = map([...error.entries(), ['during', original]]);
+    if (coreRaised.has(error)) {
+      coreRaised.add(replacement);
+    }
+    return replacement;
+  }
+
+  // A rejecting local catch has not accepted the cleanup Error. Attach the
+  // original failure only when its search leaves the pending cleanup.
+  private leaveCleanupSearch(
+    context: RecoveryDispatch,
+    owner: Frame,
+    entry?: UnwindEntry,
+  ) {
+    const outer = this.recoveries.at(-2);
+    if (!outer?.cleanup || !context.retained.includes(outer.cleanup)) {
+      return;
+    }
+    const cleanupIndex = context.retained.indexOf(outer.cleanup);
+    const index = context.retained.indexOf(owner);
+    if (index > cleanupIndex) {
+      return;
+    }
+    if (
+      index === cleanupIndex &&
+      entry &&
+      entry.start >= outer.cleanupEntry!.target &&
+      entry.end <= cleanupEnd(owner.code.unit, outer.cleanupEntry!.target)
+    ) {
+      return;
+    }
+    if (!hasKey(context.error, 'during')) {
+      context.error = this.withDuring(context.error, outer.error);
+    }
+    this.recoveries.splice(this.recoveries.length - 2, 1);
+  }
+
+  private exitedCleanups(
+    context: RecoveryDispatch,
+    ownerIndex: number,
+    stop?: UnwindEntry,
+  ) {
+    const queue: { entry: UnwindEntry; frame: Frame; index: number }[] = [];
+    for (
+      let i = context.retained.length - 1;
+      i >= Math.max(0, ownerIndex);
+      i--
+    ) {
+      const frame = context.retained[i]!;
+      for (const entry of this.activeEntries(frame)) {
+        if (
+          i === ownerIndex &&
+          entry.kind === stop?.kind &&
+          entry.target === stop.target &&
+          entry.start === stop.start &&
+          entry.end === stop.end
+        ) {
+          break;
+        }
+        if (entry.kind === 'finally') {
+          queue.push({ frame, index: i, entry });
+        }
+      }
+    }
+    return queue;
+  }
+
+  private acceptCatch() {
+    const context = this.recoveries.at(-1)!;
+    const activation = context.activation!;
+    context.pending = {
+      kind: 'catch',
+      frame: context.owner!,
+      pc: activation.pc + 1,
+      stack: [...activation.stack],
+    };
+    context.queue = this.exitedCleanups(context, context.cursor, context.entry);
+    this.advanceTransfer(context);
+  }
+
+  private nextCatch() {
+    const context = this.recoveries.at(-1)!;
+    context.activation = undefined;
+    this.frames = context.retained;
+    this.searchCatch(context);
+  }
+
+  private lookupOffer(name: string) {
+    const context = this.recoveries.at(-1);
+    if (!context) {
+      return { frames: 0 };
+    }
+    let frames = 0;
+    for (let i = context.retained.length - 1; i >= 0; i--) {
+      frames++;
+      const frame = context.retained[i]!;
+      for (const entry of this.activeEntries(frame)) {
+        if (entry.kind !== 'offer') {
+          continue;
+        }
+        const offer = frame.code.unit.offers![entry.target]!.offers.find(
+          o => o.name === name,
+        );
+        if (offer) {
+          return { frames, offer, frame, index: i, entry };
+        }
+      }
+    }
+    return { frames };
+  }
+
+  private chooseOffer(name: string, count: number, ins: Instruction) {
+    const found = this.lookupOffer(name);
+    this.m.count = count;
+    this.pay('choose-offer');
+    this.pay('offer-lookup', { frames: found.frames });
+    if (!found.offer) {
+      throw new ThrownError(
+        this.errorMap('offer unavailable', [['name', text(name)]], ins),
+      );
+    }
+    if (count !== found.offer.binds.length) {
+      throw new ThrownError(this.errorMap('wrong arity', [], ins));
+    }
+    const args = this.frame.stack.slice(
+      this.frame.stack.length - count,
+    ) as Value[];
+    const context = this.recoveries.at(-1)!;
+    this.frame.stack.length -= count;
+    const attempt = ++this.offerAttempt;
+    this.records.push({
+      kind: 'offer-chosen',
+      attempt,
+      name,
+      at: { unit: this.frame.code.name, pc: this.frame.pc },
+      target: { unit: found.frame!.code.name, pc: found.offer.target },
+      args,
+    });
+    context.pending = {
+      kind: 'offer',
+      frame: found.frame!,
+      pc: found.offer.target,
+      stack: found.frame!.stack.slice(0, found.entry!.depth),
+      binds: found.offer.binds,
+      args,
+      attempt,
+    };
+    context.queue = this.exitedCleanups(context, found.index!, found.entry);
+    // A policy's own nested finally scopes precede the retained failure's cleanup.
+    const activation = context.activation!;
+    const inherited = new Set(
+      this.activeEntries(context.owner!)
+        .filter(e => e.kind === 'finally')
+        .map(e => e.target),
+    );
+    const policy = this.activeEntries(activation).filter(
+      e => e.kind === 'finally' && !inherited.has(e.target),
+    );
+    context.queue.unshift(
+      ...policy.map(entry => ({
+        frame: activation,
+        index: context.retained.length,
+        entry,
+      })),
+    );
+    this.advanceTransfer(context);
+  }
+
+  private advanceTransfer(context: RecoveryDispatch) {
+    const next = context.queue.shift();
+    if (next) {
+      const frame = {
+        ...next.frame,
+        owner: next.frame.owner ?? next.frame,
+        pc: next.entry.target,
+        stack: next.frame.stack.slice(0, next.entry.depth),
+        clauseCharge: false,
+      };
+      context.cleanup = frame;
+      context.cleanupEntry = next.entry;
+      if (context.pending!.kind === 'offer') {
+        context.activation = next.frame.activation ? frame : undefined;
+      }
+      this.frames = [...context.retained.slice(0, next.index), frame];
+      return;
+    }
+    const pending = context.pending!;
+    this.recoveries.pop();
+    if (pending.kind === 'error') {
+      this.leaveJoin(-1, undefined);
+      this.checkState();
+      this.frames = [];
+      this.outcome = { kind: 'errored', error: context.error, at: context.at };
+      return;
+    }
+    const index = context.retained.indexOf(pending.frame);
+    this.leaveJoin(index, pending.pc);
+    this.frames = context.retained.slice(0, index + 1);
+    pending.frame.pc = pending.pc;
+    pending.frame.stack = pending.stack;
+    if (pending.kind === 'offer') {
+      pending.binds.forEach((slot, i) => {
+        pending.frame.locals[slot] = pending.args[i]!;
+      });
+      this.records.push({
+        kind: 'offer-entered',
+        attempt: pending.attempt,
+        target: { unit: pending.frame.code.name, pc: pending.pc },
+      });
     }
   }
 
@@ -2471,7 +2783,7 @@ export class Run {
   }
 
   private callBody(code: Code, body: Body, args: Value[]) {
-    if (this.frames.length + 1 > this.limits.callDepth) {
+    if (this.realDepth() + 1 > this.limits.callDepth) {
       throw new LimitFaultError('callDepth', this.frame.pc);
     }
     this.pay('call');
@@ -3752,7 +4064,7 @@ export class Run {
         if (!clauses.some(body => body.params.length === n)) {
           throw new ScriptError('no match');
         }
-        if (this.frames.length + 1 > this.limits.callDepth) {
+        if (this.realDepth() + 1 > this.limits.callDepth) {
           throw new LimitFaultError('callDepth', frame.pc);
         }
         this.pay('call');
@@ -3771,6 +4083,26 @@ export class Run {
           (builtinContracts.get(a as string)?.total ?? n) - defaults.length;
         const args = [...given, ...defaults.slice(given.length - required)];
         m.x = args;
+        if (a === 'offerAvailable') {
+          const name = args[0]!;
+          if (name.kind !== 'text') {
+            throw wrongKind('text', name);
+          }
+          this.pay(key);
+          const found =
+            /^[A-Z_a-z]\w*$/.test(name.asText()!) &&
+            name.asText() !== '_' &&
+            !grammar.reserved.includes(
+              name.asText()! as (typeof grammar.reserved)[number],
+            )
+              ? this.lookupOffer(name.asText()!)
+              : { frames: 0 };
+          this.pay('offer-lookup', { frames: found.frames });
+          frame.stack.length -= n;
+          frame.stack.push(bool(!!('offer' in found && found.offer)));
+          frame.pc++;
+          return;
+        }
         const out = builtin(a as string, args);
         m.result = out.result;
         m.scanned = out.scanned;
@@ -4026,12 +4358,14 @@ export class Run {
         this.pop();
         throw new ThrownError(error);
       }
-      case 'rethrow': {
-        const error = this.peek();
+      case 'catch-accept':
         this.pay(key);
-        this.pop();
-        throw new ThrownError(error);
-      }
+        return this.acceptCatch();
+      case 'catch-next':
+        this.pay(key);
+        return this.nextCatch();
+      case 'choose-offer':
+        return this.chooseOffer(a as string, b as number, ins);
       case 'raise': {
         this.pay(key);
         throw new ThrownError(this.errorMap(a as string, [], ins));
@@ -4041,6 +4375,13 @@ export class Run {
         if (this.cancelling) {
           this.checkState();
           return this.nextCancellationCleanup();
+        }
+        const recovery = this.recoveries.at(-1);
+        if (recovery?.pending && recovery.cleanup === this.frame) {
+          if (recovery.pending.kind === 'error') {
+            recovery.at = this.record(recovery.error, ins, false);
+          }
+          return this.advanceTransfer(recovery);
         }
         const cleanup = this.cleanups.pop()!;
         throw new ThrownError(cleanup.error);
@@ -4092,22 +4433,20 @@ const resumptionSize = (r: Resumption): number => {
   }
 };
 
-// An error a `throw`, `rethrow`, `raise` or `end-cleanup` raises, already a map.
+// An Error already constructed as a Script map.
 class ThrownError extends Error {
   constructor(readonly error: Value) {
     super('thrown');
   }
 }
 
-// A cleanup copy runs from its `finally` entry's target to its `end-cleanup`,
-// past the cleanup copies of any `try` inside it.
-const cleanupEnd = (unit: CodeUnit, c: Cleanup): number => {
+const cleanupEnd = (unit: CodeUnit, start: number): number => {
   const starts = new Set(
     unit.unwind.filter(e => e.kind === 'finally').map(e => e.target),
   );
   let depth = 0;
-  for (let pc = c.start; pc < unit.code.length; pc++) {
-    if (pc !== c.start && starts.has(pc)) {
+  for (let pc = start; pc < unit.code.length; pc++) {
+    if (pc !== start && starts.has(pc)) {
       depth++;
     }
     if (unit.code[pc]!.op === 'end-cleanup') {

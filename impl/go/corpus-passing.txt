@@ -119,6 +119,7 @@ disassembly/errors-and-loops
 disassembly/expressions
 disassembly/fenced-text
 disassembly/messages-and-waiting
+disassembly/recovery-offers
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
@@ -220,6 +221,10 @@ objects/wait-target
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+recovery-offers/basic
+recovery-offers/boundaries
+recovery-offers/cleanup-restore
+recovery-offers/costs
 reload/extend-units
 reload/extension-state-cap
 reload/function-staleness

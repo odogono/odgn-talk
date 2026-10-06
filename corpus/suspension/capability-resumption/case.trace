@@ -33,9 +33,9 @@ pumped state=idle fuel=65 next=2026-09-30T09:00:03Z
 note s/r2.c1 kind=late-answer
 raise s/r2 code="gone" at=s:15 pos=10:5
 abandon s/r2.c1
-seg s/r2 resume fuel=8 alloc=16 state=32 end=return
-run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=73 alloc=16
-pumped state=idle fuel=8
+seg s/r2 resume fuel=9 alloc=16 state=32 end=return
+run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=74 alloc=16
+pumped state=idle fuel=9
 > deliver d3 to=s message=fault
 > pump clock=2026-09-30T09:00:01Z
 call s/r3.c1 op=api.fetch args=[3]

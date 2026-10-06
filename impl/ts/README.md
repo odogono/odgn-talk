@@ -9,7 +9,7 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 ## Task navigation
 
-**Recovery Offers:** this Core parses and checks `offer`, `catch … before unwind` and `choose offer`, including duplicate names, lexical choice permission, Recovery Catch exits and static/transitive suspension. Offer parameters are ordinary local bindings; availability is dynamic and does not require a visible declaration. These staged forms currently fail lowering with an internal `not yet lowered` error. Execution, `offerAvailable`, two-phase catch search, recovery snapshots and Trace records follow the [accepted proposal](../../spec/proposals/recovery-offers.md).
+**Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested dispatch/cancellation, full snapshot validation and debugger/session integration remain separate slices [#389](https://github.com/odogono/odgn-talk/issues/389), [#390](https://github.com/odogono/odgn-talk/issues/390) and [#391](https://github.com/odogono/odgn-talk/issues/391); see the [handoff](../../spec/proposals/recovery-offers.md).
 
 Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 

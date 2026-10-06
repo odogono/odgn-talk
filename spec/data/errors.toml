@@ -141,9 +141,9 @@ message = "The function no longer exists"
 [[error]]
 code = "wrong arity"
 fields = []
-raised_when = "A Function Value is called with too few or too many arguments: a Lambda's count, or outside a named function's range from its required parameters to all of them"
+raised_when = "A Function Value is called outside its accepted argument range, or an offer choice does not match the nearest offer's exact parameter count"
 sources = ["ADR 0017", "ADR 0025", "ADR 0035"]
-message = "The function was called with the wrong number of arguments"
+message = "The function or offer was called with the wrong number of arguments"
 
 [[error]]
 code = "not encodable"
@@ -256,3 +256,10 @@ fields = ["capability", "operation"]
 raised_when = "A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation"
 sources = ["#219", "ADR 0047", "ADR 0048"]
 message = "The Grant for {capability} is disabled, so {operation} cannot be called"
+
+[[error]]
+code = "offer unavailable"
+fields = ["name"]
+raised_when = "A choice names no eligible Recovery Offer in the retained failure chain"
+sources = ["ADR 0060"]
+message = "The recovery offer {name} is unavailable"

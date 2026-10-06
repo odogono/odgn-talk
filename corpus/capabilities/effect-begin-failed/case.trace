@@ -9,8 +9,8 @@
 effect s/r1.s1 grant=r phase=begin status=failed
 effect-failure s/r1 grant=r segment=s/r1.s1 phase=begin status=failed
 raise s/r1 code="host error" at=s:4 pos=4:1
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=0 state=26 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=0
-pumped state=idle fuel=29
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=30 alloc=0 state=26 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=30 alloc=0
+pumped state=idle fuel=30
 > vars
 vars s count="host error"

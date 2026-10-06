@@ -1,0 +1,120 @@
+[
+  {
+    "name": "row policy skip",
+    "source": "function parseRows lines\n put [] into rows\n repeat for each line in lines\n  try\n   put line as number after rows\n  offer skip\n   next repeat\n  offer useValue value\n   put value after rows\n  end try\n end repeat\n return rows\nend parseRows\non go\n try\n  return parseRows([\"5\", \"bad\", \"7\"])\n catch {code: \"can't convert\"} before unwind\n  choose offer skip\n end try\nend go\n",
+    "result": "[5, 7]"
+  },
+  {
+    "name": "row policy useValue(0)",
+    "source": "function parseRows lines\n put [] into rows\n repeat for each line in lines\n  try\n   put line as number after rows\n  offer skip\n   next repeat\n  offer useValue value\n   put value after rows\n  end try\n end repeat\n return rows\nend parseRows\non go\n try\n  return parseRows([\"5\", \"bad\", \"7\"])\n catch {code: \"can't convert\"} before unwind\n  choose offer useValue(0)\n end try\nend go\n",
+    "result": "[5, 0, 7]"
+  },
+  {
+    "name": "catch tests see state before cleanup",
+    "source": "script variable mark = 0\nfunction fail\n try\n  throw \"bad\"\n finally\n  put 1 into mark\n end try\nend fail\non go\n try\n  put fail() into ignored\n catch \"bad\" where mark = 0\n  return mark\n end try\n return 99\nend go\n",
+    "result": "1"
+  },
+  {
+    "name": "decline preserves owner writes",
+    "source": "on go\n put 0 into result\n try\n  throw \"bad\"\n catch \"bad\" before unwind\n  put 7 into result\n catch \"bad\"\n  return result\n end try\nend go\n",
+    "result": "7"
+  },
+  {
+    "name": "availability outside recovery",
+    "source": "on go\n try\n  return offerAvailable(\"skip\")\n offer skip\n  return true\n end try\nend go\n",
+    "result": "false"
+  },
+  {
+    "name": "deeper cleanup precedes action and owner cleanup follows",
+    "source": "script variable order = \"\"\nfunction fail\n try\n  throw \"bad\"\n finally\n  put \"deep\" after order\n end try\nend fail\nfunction work\n try\n  put fail() into ignored\n offer recover\n  put \":action\" after order\n finally\n  put \":owner\" after order\n end try\nend work\non go\n try\n  put work() into ignored\n catch \"bad\" before unwind\n  choose offer recover\n end try\n return order\nend go\n",
+    "result": "\"deep:action:owner\""
+  },
+  {
+    "name": "rejecting intermediate catches preserve offers",
+    "source": "function parseRows lines\n put [] into rows\n repeat for each line in lines\n  try\n   put line as number after rows\n  offer skip\n   next repeat\n  offer useValue value\n   put value after rows\n  end try\n end repeat\n return rows\nend parseRows\nfunction wrapper lines\n try\n  return parseRows(lines)\n catch \"timeout\"\n  return []\n end try\nend wrapper\non go\n try\n  return wrapper([\"5\", \"bad\", \"7\"])\n catch \"can't convert\" before unwind\n  choose offer skip\n end try\nend go\n",
+    "result": "[5, 7]"
+  },
+  {
+    "name": "catch-all is an offer barrier",
+    "source": "function parseRows lines\n put [] into rows\n repeat for each line in lines\n  try\n   put line as number after rows\n  offer skip\n   next repeat\n  offer useValue value\n   put value after rows\n  end try\n end repeat\n return rows\nend parseRows\nfunction wrapper lines\n try\n  return parseRows(lines)\n catch e\n  throw e\n end try\nend wrapper\non go\n try\n  return wrapper([\"bad\"])\n catch e before unwind\n  put offerAvailable(\"skip\") into available\n catch e\n  return available\n end try\nend go\n",
+    "result": "false"
+  },
+  {
+    "name": "availability in Guard and synchronous helper",
+    "source": "function parseRows lines\n put [] into rows\n repeat for each line in lines\n  try\n   put line as number after rows\n  offer skip\n   next repeat\n  offer useValue value\n   put value after rows\n  end try\n end repeat\n return rows\nend parseRows\nfunction available\n return offerAvailable(\"skip\")\nend available\non go\n try\n  return parseRows([\"5\", \"bad\", \"7\"])\n catch e before unwind where offerAvailable(\"skip\")\n  if available() then choose offer skip\n catch e\n  return []\n end try\nend go\n",
+    "result": "[5, 7]"
+  },
+  {
+    "name": "nearest offer wrong arity does not fall back",
+    "source": "function work\n try\n  try\n   throw \"bad\"\n  offer recover value\n   return value\n  end try\n offer recover\n  return 99\n end try\nend work\non go\n try\n  return work()\n catch e before unwind\n  try\n   choose offer recover\n  catch \"wrong arity\"\n   put 8 into replacement\n  end try\n  choose offer recover(replacement)\n end try\nend go\n",
+    "result": "8"
+  },
+  {
+    "name": "availability malformed unknown and wrong-kind queries",
+    "source": "on go\n try\n  throw \"bad\"\n offer recover value\n  return value\n catch e before unwind\n  put [offerAvailable(\"recover\"), offerAvailable(\"missing\"), offerAvailable(\"bad name\"), offerAvailable(\"\")] into result\n  try\n   put offerAvailable(1) after result\n  catch \"wrong kind\"\n   put \"wrong kind\" after result\n  end try\n  choose offer recover(result)\n end try\nend go\n",
+    "result": "[true, false, false, false, \"wrong kind\"]"
+  },
+  {
+    "name": "arguments evaluate left to right and bind atomically",
+    "source": "script variable count = 0\nfunction increment\n add 1 to count\n return count\nend increment\non go\n try\n  throw \"bad\"\n offer pair first, second\n  return first * 10 + second\n catch e before unwind\n  choose offer pair(increment(), increment())\n end try\nend go\n",
+    "result": "12"
+  },
+  {
+    "name": "ordinary acceptance cleanup error replaces original",
+    "source": "function fail\n try\n  throw \"bad\"\n finally\n  throw \"cleanup\"\n end try\nend fail\non go\n try\n  try\n   put fail() into ignored\n  catch \"bad\"\n   return \"accepted\"\n  end try\n catch e\n  return the code of e & \":\" & the code of the during of e\n end try\nend go\n",
+    "result": "\"cleanup:bad\""
+  },
+  {
+    "name": "action failure is outside sibling offers and catches",
+    "source": "function work\n try\n  throw \"bad\"\n offer recover\n  throw \"action\"\n catch \"action\"\n  return \"own catch\"\n end try\nend work\non go\n try\n  return work()\n catch \"bad\" before unwind\n  choose offer recover\n catch \"action\"\n  return \"outer catch\"\n end try\nend go\n",
+    "result": "\"outer catch\""
+  },
+  {
+    "name": "recursion chooses nearest offer",
+    "source": "function down n\n try\n  if n > 0 then return down(n - 1)\n  throw \"bad\"\n offer recover\n  return n\n end try\nend down\non go\n try\n  return down(3)\n catch \"bad\" before unwind\n  choose offer recover\n end try\nend go\n",
+    "result": "0"
+  },
+  {
+    "name": "action failure runs offering finally",
+    "source": "script variable mark = 0\nfunction work\n try\n  throw \"bad\"\n offer recover\n  throw \"action\"\n finally\n  put 1 into mark\n end try\nend work\non go\n try\n  put work() into ignored\n catch \"bad\" before unwind\n  choose offer recover\n catch \"action\"\n  return mark\n end try\nend go\n",
+    "result": "1"
+  },
+  {
+    "name": "same-frame acceptance cleanup replacement",
+    "source": "on go\n try\n  try\n   try\n    throw \"bad\"\n   finally\n    throw \"cleanup\"\n   end try\n  catch \"bad\"\n   return \"accepted\"\n  end try\n catch e\n  return the code of e & \":\" & the code of the during of e\n end try\nend go\n",
+    "result": "\"cleanup:bad\""
+  },
+  {
+    "name": "cleanup helper counts retained depth",
+    "source": "function deep\n throw \"bad\"\nend deep\nfunction helper\n return 1\nend helper\nfunction work\n try\n  return deep()\n finally\n  put helper() into ignored\n end try\nend work\non go\n try\n  return work()\n catch e\n  return 7\n end try\nend go\n",
+    "result": "7"
+  },
+  {
+    "name": "malformed reserved names perform no lookup",
+    "source": "on go\n try\n  throw \"bad\"\n catch e before unwind\n  put offerAvailable(\"if\") into result\n catch e\n  return result\n end try\nend go\n",
+    "result": "false",
+    "fuel": 32
+  },
+  {
+    "name": "helper cleanup failure attaches original",
+    "source": "function helper\n throw \"cleanup\"\nend helper\nfunction fail\n try\n  throw \"bad\"\n finally\n  put helper() into ignored\n end try\nend fail\non go\n try\n  try\n   put fail() into ignored\n  catch \"bad\"\n   return \"accepted\"\n  end try\n catch e\n  return the code of e & \":\" & the code of the during of e\n end try\nend go\n",
+    "result": "\"cleanup:bad\""
+  },
+  {
+    "name": "dispatch scratch preserves retained assignment value",
+    "source": "function key\n try\n  throw \"bad\"\n offer recover\n  return 1\n end try\nend key\non go\n put [0] into xs\n try\n  put 7 into item key() of xs\n catch \"bad\" before unwind\n  choose offer recover\n end try\n return xs\nend go\n",
+    "result": "[7]"
+  },
+  {
+    "name": "rejecting cleanup catch attaches original on escape",
+    "source": "function fail\n try\n  throw \"bad\"\n finally\n  try\n   throw \"cleanup\"\n  catch \"other\"\n  end try\n end try\nend fail\non go\n try\n  try\n   put fail() into ignored\n  catch \"bad\"\n   return \"accepted\"\n  end try\n catch e\n  return the code of e & \":\" & the code of the during of e\n end try\nend go\n",
+    "result": "\"cleanup:bad\""
+  },
+  {
+    "name": "single choice exact accounting",
+    "source": "on go\n try\n  throw \"bad\"\n offer recover value\n  return value\n catch e before unwind\n  choose offer recover(7)\n end try\nend go\n",
+    "result": "7",
+    "fuel": 36,
+    "alloc": 48
+  }
+]

@@ -20,10 +20,10 @@
 > deliver d3 to=shop message=nap
 > pump clock=2026-09-30T10:00:00Z
 call shop/r1.c1 op=stock.check args=["A1"]
-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=396 end=ask-wait
+seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=412 end=ask-wait
 call shop/r2.c1 op=stock.check args=["B2"]
-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
-seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=804 end=wait until=2026-09-30T10:00:05Z
+seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=676 end=ask-wait
+seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=836 end=wait until=2026-09-30T10:00:05Z
 pumped state=idle fuel=245 next=2026-09-30T10:00:05Z
 
 > save s1
@@ -32,14 +32,14 @@ pumped state=idle fuel=245 next=2026-09-30T10:00:05Z
 # Only shop/r1.c1 is settled. Every deadline has passed by 10:00:20.
 > settle shop/r1.c1 how=answer value=12
 > pump clock=2026-09-30T10:00:20Z
-seg shop/r1 resume fuel=21 alloc=156 state=532 end=return
+seg shop/r1 resume fuel=21 alloc=156 state=548 end=return
 run shop/r1 outcome=completed delivery=d1 handler=check fuel=136 alloc=156
 raise shop/r2 code="call lost" at=shop:5 pos=9:5
-seg shop/r2 resume fuel=26 alloc=158 state=365 end=return
-run shop/r2 outcome=completed delivery=d2 handler=check fuel=141 alloc=158
+seg shop/r2 resume fuel=27 alloc=158 state=365 end=return
+run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=158
 seg shop/r3 resume fuel=18 alloc=150 state=252 end=return
 run shop/r3 outcome=completed delivery=d3 handler=nap fuel=33 alloc=150
-pumped state=idle fuel=65
+pumped state=idle fuel=66
 
 > vars
 vars shop results=[["A1", 12], ["B2", "call lost"], ["nap", "woke"]]
