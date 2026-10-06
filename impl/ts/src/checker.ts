@@ -490,7 +490,10 @@ export const checkSyntax = (
             parents.get(parent)!,
             head.v,
           );
-        } else if (parent.rule === 'Parameter') {
+        } else if (
+          parent.rule === 'Parameter' ||
+          parent.rule === 'Collecting'
+        ) {
           mark(head, 'binding', true);
         } else if (
           parent.rule === 'Pattern' ||
@@ -793,6 +796,51 @@ export const checkSyntax = (
       binding.span = span(site.token);
     }
     site.name.binding = binding;
+  }
+  // Collection owns writes to its target within its body. Compare resolved
+  // bindings so a Lambda's own local with the same spelling may shadow it.
+  const collectingBodies = new Map<SyntaxNode, Site>();
+  const collectingPatterns = new Map<SyntaxNode, Site>();
+  for (const element of ordered) {
+    if (element.kind !== 'node' || element.rule !== 'Repeat') {
+      continue;
+    }
+    const clause = nodes(element).find(node => node.rule === 'Collecting');
+    const targetNode =
+      clause && nodes(clause).find(node => node.rule === 'Name');
+    const target = targetNode && sites.get(first.get(targetNode)!);
+    if (!target) {
+      continue;
+    }
+    const body = nodes(element).find(node => node.rule === 'Block');
+    const pattern = nodes(element).find(node => node.rule === 'Pattern');
+    if (body) {
+      collectingBodies.set(body, target);
+    }
+    if (pattern) {
+      collectingPatterns.set(pattern, target);
+    }
+  }
+  if (collectingBodies.size || collectingPatterns.size) {
+    for (const site of bindingSites) {
+      if (!site.binds) {
+        continue;
+      }
+      for (
+        let parent = parents.get(site.token);
+        parent;
+        parent = parents.get(parent)
+      ) {
+        const patternTarget = collectingPatterns.get(parent);
+        const bodyTarget = collectingBodies.get(parent);
+        if (patternTarget && site.name.text === patternTarget.name.text) {
+          report('name clash', patternTarget.token);
+        }
+        if (bodyTarget && site.name.binding === bodyTarget.name.binding) {
+          report("can't write", site.token);
+        }
+      }
+    }
   }
   const lookup = (site: Site): Binding | undefined => {
     for (let scope: Scope | null = site.scope; scope; scope = scope.parent) {

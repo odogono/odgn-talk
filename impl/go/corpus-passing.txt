@@ -83,6 +83,12 @@ capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
 capabilities/standard-timer
+collecting/condition-target
+collecting/exit
+collecting/next-filter
+collecting/partial-error
+collecting/waiting-body
+collecting/zero-passes
 computed-sends/bad-names
 computed-sends/forwarding
 computed-sends/names
@@ -106,6 +112,7 @@ decisions/undecided-when-dropped
 decisions/verdict-behind-a-fuel-slice
 decisions/veto-ends-the-decision
 disassembly/calls-and-lambdas
+disassembly/collecting
 disassembly/containers
 disassembly/destructuring
 disassembly/errors-and-loops

@@ -1,0 +1,19 @@
+# Unblessed: Collecting Clause regression (#380); first blessing awaits human review.
+> load s identity=0a2428e7ae307ffe991a2c2e00dd06eb79f66592306525ec1a699623a1e33e02
+> request d1 to=s message=go
+> pump clock=2026-10-06T12:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=39 alloc=128 state=392 end=wait until=2026-10-06T12:00:00.001Z
+pumped state=idle fuel=39 next=2026-10-06T12:00:00.001Z
+> vars
+vars s seen=[[]]
+> pump clock=2026-10-06T12:00:00.001Z
+seg s/r1 resume fuel=37 alloc=104 state=496 end=wait until=2026-10-06T12:00:00.002Z
+pumped state=idle fuel=37 next=2026-10-06T12:00:00.002Z
+> vars
+vars s seen=[[], [2]]
+> pump clock=2026-10-06T12:00:00.002Z
+seg s/r1 resume fuel=20 alloc=80 state=88 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=[2, 4] fuel=96 alloc=312
+pumped state=idle fuel=20
+> vars
+vars s seen=[[], [2]]

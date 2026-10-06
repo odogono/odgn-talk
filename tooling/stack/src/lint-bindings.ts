@@ -659,6 +659,75 @@ const lintTry = (body: SemanticNode, emit: Emit) => {
   }
 };
 
+// The hint recognizes the adjacent initialization idiom; it never rewrites
+// the body. Binding identity avoids advice for a Lambda's shadowing local.
+const lintCollecting = (block: SemanticNode, emit: Emit) => {
+  const statements = nodes(block).filter(n => n.rule === 'Statement');
+  for (let i = 1; i < statements.length; i++) {
+    const loop = child(statements[i]!, 'Repeat');
+    const init = child(statements[i - 1]!, 'SimpleStatement');
+    if (
+      !loop ||
+      child(loop, 'Collecting') ||
+      !init ||
+      leaves(init)
+        .map(t => t.text)
+        .join(' ') !== 'put into'
+    ) {
+      continue;
+    }
+    const expression = child(init, 'Expression');
+    const value = expression && unwrap(expression);
+    const container = child(init, 'Container');
+    const target = container && unwrap(container);
+    if (
+      value?.kind !== 'node' ||
+      value.rule !== 'List' ||
+      nodes(value).length ||
+      target?.kind !== 'name' ||
+      !target.binding ||
+      !['local', 'parameter'].includes(target.binding.kind)
+    ) {
+      continue;
+    }
+    const pattern = child(loop, 'Pattern');
+    if (
+      pattern &&
+      elements(pattern).some(
+        e =>
+          e.kind === 'name' &&
+          e.role === 'binding' &&
+          e.binding?.id === target.binding!.id,
+      )
+    ) {
+      continue;
+    }
+    const body = child(loop, 'Block');
+    if (
+      body &&
+      elements(body).some(e => {
+        if (
+          e.kind !== 'node' ||
+          e.rule !== 'SimpleStatement' ||
+          leaves(e)
+            .map(t => t.text)
+            .join(' ') !== 'put after'
+        ) {
+          return false;
+        }
+        const container = child(e, 'Container');
+        const appended = container && unwrap(container);
+        return (
+          appended?.kind === 'name' &&
+          appended.binding?.id === target.binding!.id
+        );
+      })
+    ) {
+      emit('suggest-collecting', first(loop)!.span, { name: target.text });
+    }
+  }
+};
+
 export const lintBindings = (
   tree: SemanticTree,
   manifest: HostManifest | null | undefined,
@@ -768,6 +837,9 @@ export const lintBindings = (
     }
     if (e.kind !== 'node') {
       continue;
+    }
+    if (e.rule === 'Block') {
+      lintCollecting(e, emit);
     }
     if (e.rule === 'Try' && leaves(e).some(t => t.text === 'catch')) {
       const body = child(e, 'Block');

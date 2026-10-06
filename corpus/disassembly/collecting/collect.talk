@@ -1,0 +1,15 @@
+on go
+ repeat 0 times collecting 1 into times
+ end repeat
+ repeat for each [a, b] in [[1, 2]] collecting a * b into products
+  if a = 0 then next repeat
+ end repeat
+ repeat while the length of xs < 2 collecting 3 into xs
+ end repeat
+ repeat until the length of ys = 1 collecting 4 into ys
+ end repeat
+ repeat forever collecting 5 into zs
+  if the length of zs = 2 then exit repeat
+ end repeat
+ return [times, products, xs, ys, zs]
+end go

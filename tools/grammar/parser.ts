@@ -1059,10 +1059,14 @@ export class Parser {
     // the FOLLOW set, so the head's expression has already ended before it.
     let collect: Node | null = null;
     if (this.atOperatorWord('collecting')) {
-      this.next('operator');
+      const at = this.next('operator');
       const value = this.expr();
       this.expectWord('into', 'operator');
-      collect = { k: 'Collecting', value, into: this.name('a name') };
+      collect = this.at(at, {
+        k: 'Collecting',
+        value,
+        into: this.name('a name'),
+      });
     }
     this.endOfStatement();
     const body = this.block(['end']);

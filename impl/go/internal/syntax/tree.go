@@ -3,7 +3,7 @@ package syntax
 import "strings"
 
 // Node is the Core's syntax form, independent of any tooling tree. Children
-// hold operands, entries or fields; Params, Body, Branches and Guard preserve
+// hold operands, entries or fields; Params, Body, Branches, Guard and Collect preserve
 // the grammar's distinct regions. Token and End retain their source positions.
 type Node struct {
 	NameToken                        Token
@@ -11,7 +11,7 @@ type Node struct {
 	Text                             string
 	Token, End                       Token
 	Children, Params, Body, Branches []*Node
-	Guard                            *Node
+	Guard, Collect                   *Node
 	Flags                            []Token
 	HasElse                          bool
 	Private                          bool

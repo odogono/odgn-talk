@@ -1,7 +1,4 @@
--- A `repeat` that collects its results (ADR 0059). `bun tools/grammar/check.ts`
--- parses this file. The Cores' tests don't read it yet; it moves into
--- ../sketch and ../../machine/lowering.talk once both Cores parse and lower
--- the clause.
+-- A repeat that collects its results (ADR 0059).
 
 on adults rows
   repeat for each r in rows collecting the name of r into names

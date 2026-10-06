@@ -36,3 +36,56 @@ on routing next, order
     send (next) with order to me and wait
   end wait
 end routing
+
+-- A repeat that collects its results (ADR 0059).
+
+on collectingAdults rows
+  repeat for each r in rows collecting the name of r into names
+    if the age of r < 18 then next repeat
+  end repeat
+  return names
+end collectingAdults
+
+-- `collecting` is in the FOLLOW set, so `item` here is a variable, not a chunk.
+on collectingLetters item
+  repeat for each c in item collecting c & "!" into shouted
+  end repeat
+  return shouted
+end collectingLetters
+
+on collectingSquares
+  repeat for each [k, v] in [[1, 2], [3, 4]] collecting k * v into products
+  end repeat
+  repeat for each n in 1..10 collecting n * n into squares
+  end repeat
+  return [products, squares]
+end collectingSquares
+
+-- Every head takes the clause. A condition may read the list so far.
+on collectingRolls
+  repeat 3 times collecting random(6) into dice
+  end repeat
+  repeat while the length of picks < 3 collecting random(6) into picks
+  end repeat
+  repeat until the length of found = 2 collecting 5 kg into found
+  end repeat
+  repeat forever collecting the length of dice into lengths  -- a comment
+    if the length of lengths > 4 then exit repeat
+  end repeat
+  return [dice, picks, found, lengths]
+end collectingRolls
+
+-- The loop that only a `repeat` can write: its body waits for each element.
+on collectingForecasts cities
+  repeat for each city in cities collecting it into reports
+    ask weather to forecast city and wait
+  end repeat
+  return reports
+end collectingForecasts
+
+-- A Lambda's body ends at `into`, since it isn't an operator.
+on collectingScalers
+  repeat for each n in [1, 2, 3] collecting given x: x * n into fs
+  end
+  return fs
+end collectingScalers

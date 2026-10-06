@@ -573,6 +573,13 @@ func (p *parser) repeatStatement() *Node {
 		n.Children = []*Node{p.expression()}
 		p.expect("times")
 	}
+	if p.at("collecting") {
+		clause := node("collecting", p.take(Operator))
+		clause.Children = []*Node{p.expression()}
+		p.expect("into")
+		clause.Params = []*Node{node("collecting-target", p.name())}
+		n.Collect = clause
+	}
 	p.nl()
 	n.Body = p.block("end")
 	n.End = p.closing("repeat")
@@ -1449,6 +1456,9 @@ func SourceChildren(n *Node) []*Node {
 	}
 	if n.Guard != nil {
 		children = append(children, n.Guard)
+	}
+	if n.Collect != nil {
+		children = append(children, n.Collect)
 	}
 	sort.SliceStable(children, func(i, j int) bool {
 		a, b := children[i].FirstPos(), children[j].FirstPos()

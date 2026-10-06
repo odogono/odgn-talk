@@ -1,0 +1,10 @@
+on go
+ repeat while the length of xs < 3 collecting [the length of xs] into xs
+ end repeat
+ put xs into whiles
+ repeat until the length of ys = 2 collecting the length of ys into ys
+ end repeat
+ repeat the length of xs times collecting 9 into xs
+ end repeat
+ return [whiles, ys, xs]
+end go

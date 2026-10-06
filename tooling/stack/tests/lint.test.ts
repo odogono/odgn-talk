@@ -24,10 +24,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships eighteen implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(18);
+test('ships nineteen implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(19);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(18);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(19);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -484,4 +484,34 @@ test('key presence guards outside loops expire on a mutating back edge', () => {
       'is-empty-on-missing-key',
     ),
   ).toEqual([]);
+});
+
+test('collecting advice respects profiles, suppression, splices and shadowing', () => {
+  const source =
+    'on demo\nput [] into acc\nrepeat 2 times\nput 1 after acc\nend repeat\nend demo';
+  expect(lint(source).lints.filter(l => l.id === 'suggest-collecting')).toEqual(
+    [],
+  );
+  expect(
+    lint(source, { profile: 'beginner' }).lints.filter(
+      l => l.id === 'suggest-collecting',
+    ),
+  ).toMatchObject([{ level: 'hint', span: { line: 3, col: 1 } }]);
+  for (const negative of [
+    source.replace('repeat 2', '-- lint: ignore suggest-collecting\nrepeat 2'),
+    source.replace('put 1 after', 'put ...[1] after'),
+    source.replace(
+      'put 1 after acc',
+      'put given acc\nput 1 after acc\nend given into f',
+    ),
+    source.replace('repeat 2 times', 'repeat for each acc in [1]'),
+    source.replace('put [] into acc', 'put [] into item 1 of acc'),
+    'script variable acc = []\n' + source,
+  ]) {
+    expect(
+      lint(negative, { profile: 'beginner' }).lints.filter(
+        l => l.id === 'suggest-collecting',
+      ),
+    ).toEqual([]);
+  }
 });

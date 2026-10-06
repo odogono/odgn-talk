@@ -56,8 +56,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 62 {
-		t.Fatalf("required set: %d cases, want 62", count)
+	if count != 63 {
+		t.Fatalf("required set: %d cases, want 63", count)
 	}
 }
 

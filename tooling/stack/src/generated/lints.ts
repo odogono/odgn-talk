@@ -143,6 +143,14 @@ export const lintCatalogue = [
     "standard": "warning",
     "message": "This literal text cannot convert to {kind}. Check its date, time and zone.",
     "status": "implemented"
+  },
+  {
+    "id": "suggest-collecting",
+    "flags": "a loop immediately after `put [] into acc` whose body appends to acc",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "Consider collecting each value into {name} in the repeat head.",
+    "status": "implemented"
   }
 ] as const;
 export const longJoinBodyLines = 20;

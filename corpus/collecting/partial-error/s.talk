@@ -1,0 +1,8 @@
+on go
+ try
+  repeat for each n in [2, 1, 0] collecting 6 / n into xs
+  end repeat
+ catch e
+  return [xs, the code of e]
+ end try
+end go

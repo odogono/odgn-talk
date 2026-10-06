@@ -884,7 +884,11 @@ class BodyLowering {
 
   *repeat(s: Stmt & { k: 'repeat' }): Task {
     const at = s.pos;
-    const { head } = s;
+    const { head, collect } = s;
+    if (collect) {
+      this.emit(collect.pos, 'list', 0);
+      this.store(collect.target, collect.pos);
+    }
     const loop: Loop = {
       top: this.label(),
       exit: this.label(),
@@ -917,6 +921,7 @@ class BodyLowering {
       }
       this.loops.push(loop);
       yield this.block(s.body);
+      yield this.appendCollected(s);
       this.loops.pop();
       this.emit(at, 'jump', loop.top);
       this.place(loop.exit);
@@ -935,9 +940,20 @@ class BodyLowering {
     }
     this.loops.push(loop);
     yield this.block(s.body);
+    yield this.appendCollected(s);
     this.loops.pop();
     this.emit(at, 'jump', loop.top);
     this.place(loop.exit);
+  }
+
+  *appendCollected(s: Stmt & { k: 'repeat' }): Task {
+    const { collect } = s;
+    if (collect) {
+      this.load(collect.target, collect.pos);
+      yield this.expr(collect.value);
+      this.emit(collect.pos, 'list-append');
+      this.store(collect.target, collect.pos);
+    }
   }
 
   // `return`, `veto` and `pass` run the open `finally` blocks first.

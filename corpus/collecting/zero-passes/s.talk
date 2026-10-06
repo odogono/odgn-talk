@@ -1,0 +1,11 @@
+on go
+ repeat 0 times collecting 1 into times
+ end repeat
+ repeat for each x in [] collecting x into each
+ end repeat
+ repeat while false collecting 2 into whiles
+ end repeat
+ repeat until true collecting 3 into untils
+ end repeat
+ return [times, each, whiles, untils]
+end go

@@ -1,0 +1,15 @@
+# Collecting initialization and append positions, for every head and destructuring.
+# Unblessed: first expectation review pending for #380.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "collect"
+source = "collect.talk"
+
+[[disassembly]]
+unit = "collect"
+expected = "collect.dis"
