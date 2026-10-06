@@ -1,7 +1,7 @@
 // Measures the selected Benchmarks on the TS Core with mitata and prints
 // their measurements as JSON. `main.ts` runs it in its own process.
 import { memoryUsage } from 'bun:jsc';
-import { measure } from 'mitata';
+import { measure } from './measurement';
 import { type Measurement, statsOf } from './report';
 import { check, Loaded, manifest, selected, sizeOf, sourceOf } from './suite';
 

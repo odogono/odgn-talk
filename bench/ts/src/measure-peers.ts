@@ -2,7 +2,7 @@
 // mitata and prints their measurements as JSON. `main.ts` runs it in its own
 // process.
 import { memoryUsage } from 'bun:jsc';
-import { measure } from 'mitata';
+import { measure } from './measurement';
 import { loadPeer, peers } from './peers';
 import { type Measurement, statsOf } from './report';
 import { manifest, selected, sizeOf } from './suite';
