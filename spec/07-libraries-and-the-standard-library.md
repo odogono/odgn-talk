@@ -8,6 +8,8 @@ This chapter states what Libraries are and how they are used, then every Built-i
 
 ## Libraries
 
+**Pending addition:** [the restart proposal](proposals/structured-error-restarts.md#a-library-offers-recovery-the-caller-chooses) lets callers select named recovery actions inside Library frames in the same Run. Neither Core supports these forms or `restartAvailable` yet. A local catch and an explicit same-Home, non-suspending policy callback already preserve Library-local accumulation.
+
 ### What a Library holds
 
 - **A Library** is a unit of source code that the Host registers on a Script Group. It holds Handlers, functions and Constants, and nothing else ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).

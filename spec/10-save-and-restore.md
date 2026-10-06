@@ -6,6 +6,8 @@ A Host can save a whole Group between Pumps and restore it later on the same Cor
 
 ## The rule
 
+**Pending addition:** [restart save/restore state](proposals/structured-error-restarts.md#save-and-restore) includes retained continuations, selector ownership, pending arguments and attempt counters. Neither Core supports saving this future state yet. Existing save-format compatibility and live-effect refusal still apply.
+
 **Save then restore is unobservable** ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)). A restored Group, given the same later Host Inputs, Clock readings and Fuel Slices, gives the same results and reports, and the same Trace apart from the save and restore records, as the Group that was never saved. It uses the same Fuel and faults at the same instruction. Resetting any counter would let a Script launder Fuel through a save.
 
 - **Same Core family only:** a save from the TS Core never restores on the Go Core, and the other way round. The format is each Core's own, and there is no stable cross-Core format ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md)).

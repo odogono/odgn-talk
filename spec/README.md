@@ -30,6 +30,10 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 - [B. Implementation order](appendix-b-implementation-order.md)
 - [C. Handed off open](appendix-c-handed-off-open.md)
 
+## Staged specifications
+
+[Structured Error restarts](proposals/structured-error-restarts.md) is an accepted design awaiting implementation ([ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-restarts-chosen-before-unwinding.md)). It contains the complete future grammar, machine, cost, save and Trace contract and worked examples. Neither Core nor the reference tools supports it yet; the numbered chapters and Data Files below remain the active specification. Implementation will integrate the staged rules into those chapters and activate the deferred Data Files together with their consumers.
+
 ## Data Files
 
 Before editing grammar, instructions or catalogues, use the [change-impact guide](../docs/agents/spec-changes.md) to identify generators, Core/tooling coverage requirements and delivery boundaries.
