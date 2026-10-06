@@ -187,6 +187,10 @@ func (u *Unit) statement(n *syntax.Node) {
 }
 func (u *Unit) repeat(n *syntax.Node) {
 	pos := n.Pos()
+	if n.Collect != nil {
+		u.emit(n.Collect.Pos(), "list", number(0))
+		u.named(n.Collect.Params[0], true, n.Collect.Pos())
+	}
 	start, end := &label{}, &label{}
 	iterator := n.Text == "each" || n.Text == "times"
 	if iterator {
@@ -231,6 +235,13 @@ func (u *Unit) repeat(n *syntax.Node) {
 		u.emit(pos, op, target(end))
 	}
 	u.statements(n.Body)
+	if n.Collect != nil {
+		clause := n.Collect
+		u.named(clause.Params[0], false, clause.Pos())
+		u.expression(clause.Children[0])
+		u.emit(clause.Pos(), "list-append")
+		u.named(clause.Params[0], true, clause.Pos())
+	}
 	u.emit(pos, "jump", target(start))
 	u.mark(end)
 	if iterator {

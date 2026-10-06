@@ -816,6 +816,9 @@ export class BodyCompiler {
           (s.else ?? []).forEach(walk);
           return;
         case 'Repeat':
+          if (s.collect) {
+            site(s.collect.into, s.collect);
+          }
           if (s.head.k === 'ForEach') {
             patSites(s.head.pat);
           }
@@ -1691,8 +1694,21 @@ export class BodyCompiler {
 
   repeat(s: Node) {
     if (s.collect) {
-      this.fail(s, '`collecting` is not lowered here yet (ADR 0059)');
+      this.at(s.collect);
+      this.emit('list', [0]);
+      this.store(s.collect.into, s.collect);
     }
+    const append = () => {
+      if (s.collect) {
+        this.at(s.collect);
+        this.load(s.collect.into, s.collect);
+        this.expr(s.collect.value);
+        this.at(s.collect);
+        this.emit('list-append');
+        this.store(s.collect.into, s.collect);
+        this.at(s);
+      }
+    };
     const h = s.head;
     const loop: Loop = {
       top: this.label(),
@@ -1734,6 +1750,7 @@ export class BodyCompiler {
       }
       this.loops.push(loop);
       this.block(s.body);
+      append();
       this.loops.pop();
       this.emit('jump', [loop.top]);
       this.place(loop.exit);
@@ -1750,6 +1767,7 @@ export class BodyCompiler {
     }
     this.loops.push(loop);
     this.block(s.body);
+    append();
     this.loops.pop();
     this.emit('jump', [loop.top]);
     this.place(loop.exit);

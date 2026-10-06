@@ -222,14 +222,6 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// A `repeat` that collects its results (ADR 0059), which the Cores' tests
-// don't read until both Cores parse it.
-mustParse(
-  readFileSync(join(import.meta.dir, 'collecting/sketch.talk'), 'utf8'),
-  'tools/grammar/collecting/sketch.talk',
-);
-broken(join(import.meta.dir, 'collecting/broken.talk'));
-
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

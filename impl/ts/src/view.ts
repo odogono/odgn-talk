@@ -141,6 +141,7 @@ export type Event = {
 export type WaitBranch =
   | { body: Stmt[]; event: Event; guard: Guard | null; k: 'when'; pos: Pos }
   | { body: Stmt[]; duration: Expr; k: 'after'; pos: Pos };
+export type Collecting = { pos: Pos; target: SemanticName; value: Expr };
 export type RepeatHead =
   | { k: 'each'; pat: Pattern; src: Expr }
   | { cond: Expr; k: 'while' | 'until' }
@@ -213,7 +214,13 @@ export type Stmt =
       k: 'if';
       pos: Pos;
     }
-  | { body: Stmt[]; head: RepeatHead; k: 'repeat'; pos: Pos }
+  | {
+      body: Stmt[];
+      collect: Collecting | null;
+      head: RepeatHead;
+      k: 'repeat';
+      pos: Pos;
+    }
   | {
       branches: {
         body: Stmt[];
@@ -499,6 +506,12 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       return ifStatement(node, of);
     case 'Repeat':
       return repeat(node, of);
+    case 'Collecting':
+      return {
+        pos: at,
+        value: of<Expr>(children[1]),
+        target: of<SemanticName>(children[3]),
+      } satisfies Collecting;
     case 'Match':
       return match(node, of);
     case 'Try':
@@ -1121,7 +1134,18 @@ const repeat = (node: SemanticNode, of: Of): Stmt => {
     head = { k: 'times', count: of<Expr>(word) };
     next = 3;
   }
-  return { k: 'repeat', pos: pos(node), head, body: blockAt(node, next, of) };
+  const clause = children[next];
+  const collect =
+    clause?.kind === 'node' && clause.rule === 'Collecting'
+      ? of<Collecting>(clause)
+      : null;
+  return {
+    k: 'repeat',
+    pos: pos(node),
+    head,
+    collect,
+    body: blockAt(node, next + (collect ? 1 : 0), of),
+  };
 };
 
 const match = (node: SemanticNode, of: Of): Stmt => {

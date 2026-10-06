@@ -44,6 +44,7 @@ export type SyntaxRule =
   | 'Event'
   | 'If'
   | 'Repeat'
+  | 'Collecting'
   | 'Match'
   | 'Try'
   | 'Replace'

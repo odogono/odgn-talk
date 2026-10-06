@@ -147,3 +147,11 @@ beginner = "warning"
 standard = "warning"
 message = "This literal text cannot convert to {kind}. Check its date, time and zone."
 status = "implemented"
+
+[[lint]]
+id = "suggest-collecting"
+flags = "a loop immediately after `put [] into acc` whose body appends to acc"
+beginner = "hint"
+standard = "off"
+message = "Consider collecting each value into {name} in the repeat head."
+status = "implemented"

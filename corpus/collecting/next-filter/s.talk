@@ -1,0 +1,7 @@
+on go
+ repeat for each n in 1..5 collecting doubled into xs
+  if n mod 2 = 0 then next repeat
+  put n * 2 into doubled
+ end repeat
+ return xs
+end go

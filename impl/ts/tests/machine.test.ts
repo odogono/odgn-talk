@@ -468,3 +468,51 @@ describe('loading', () => {
     ).toBe('42');
   });
 });
+
+describe('collecting clauses', () => {
+  test('initializes every head before evaluating it and nests collected lists', () => {
+    expect(
+      value(`repeat 0 times collecting 1 into zero
+end repeat
+repeat for each n in [] collecting n into empty
+end repeat
+repeat while the length of xs < 2 collecting [1, 2] into xs
+end repeat
+repeat until the length of ys = 2 collecting 3 into ys
+end repeat
+repeat forever collecting 4 into zs
+ if the length of zs = 2 then exit repeat
+end repeat
+return [zero, empty, xs, ys, zs]`),
+    ).toBe('[[], [], [[1, 2], [1, 2]], [3, 3], [4, 4]]');
+  });
+  test('collects after the body and skips next and exit', () => {
+    expect(
+      value(`repeat for each n in 1..6 collecting doubled into xs
+ if n = 2 then next repeat
+ if n = 5 then exit repeat
+ put n * 2 into doubled
+end repeat
+return xs`),
+    ).toBe('[2, 6, 8]');
+  });
+  test('retains the partial list when the expression raises', () => {
+    expect(
+      value(`try
+ repeat for each n in [2, 1, 0] collecting 6 / n into xs
+ end repeat
+catch e
+ return xs
+end try`),
+    ).toBe('[3, 6]');
+  });
+  test('captures each iteration binding in the collected Lambda', () => {
+    expect(
+      value(`repeat for each n in [1, 2] collecting given x: x * n into fs
+end repeat
+put item 1 of fs into f
+put item 2 of fs into g
+return [f(3), g(3)]`),
+    ).toBe('[3, 6]');
+  });
+});

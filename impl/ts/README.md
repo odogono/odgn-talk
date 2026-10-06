@@ -4,6 +4,9 @@ The TS Core constructs and encodes values, parses and checks source, lowers it t
 
 Run commands in this guide from the repository root. Workspace-only scripts select their package explicitly with `--cwd`.
 
+Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
+
+
 ## Task navigation
 
 **Pending language support:** [structured Error restarts](../../spec/proposals/structured-error-restarts.md) is an accepted design, but this Core does not yet parse, lower or execute its forms, Built-in, recovery state or Trace records. Current catch behavior and snapshot support remain unchanged.

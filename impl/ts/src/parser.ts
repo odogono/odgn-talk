@@ -1456,10 +1456,26 @@ class Parser {
         this.expectWord('times', 'operator');
         head = { k: 'Times', n };
       }
+      let collect: Node | null = null;
+      if (this.atOperatorWord('collecting')) {
+        const clause = this.enter('Collecting');
+        try {
+          const at = this.next('operator');
+          const value = (yield this.expr()) as Node;
+          this.expectWord('into', 'operator');
+          collect = this.at(at, {
+            k: 'Collecting',
+            value,
+            into: (yield this.name('a name')) as string,
+          });
+        } finally {
+          this.leave(clause);
+        }
+      }
       this.endOfStatement();
       const body = (yield this.block(['end'])) as Node[];
       this.endBlock('repeat', at);
-      return { k: 'Repeat', head, body };
+      return { k: 'Repeat', head, collect, body };
     } finally {
       this.leave(frame);
     }

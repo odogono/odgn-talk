@@ -1,0 +1,9 @@
+script variable seen = []
+on go
+ repeat for each n in [1, 2] collecting doubled into xs
+  put xs after seen
+  wait 1 ms
+  put n * 2 into doubled
+ end repeat
+ return xs
+end go

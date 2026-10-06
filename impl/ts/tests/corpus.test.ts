@@ -466,3 +466,18 @@ for (const name of [
     expect(result.divergence).toBeUndefined();
   });
 }
+
+test('collecting clauses replay exactly with and without save/restore', () => {
+  const root = resolve(import.meta.dir, '../../../corpus/collecting');
+  const cases = readdirSync(root).filter(name =>
+    statSync(resolve(root, name)).isDirectory(),
+  );
+  expect(cases).toHaveLength(6);
+  for (const name of cases) {
+    const dir = resolve(root, name);
+    const setup = Bun.TOML.parse(
+      readFileSync(resolve(dir, 'case.toml'), 'utf8'),
+    );
+    expect(runTraceCase(dir, setup as never).divergence).toBeUndefined();
+  }
+});

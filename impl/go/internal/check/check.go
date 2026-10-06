@@ -373,11 +373,11 @@ func Bindings(n *syntax.Node) []*syntax.Node {
 		switch x.Kind {
 		case "name":
 			return
-		case "binding", "capture":
+		case "binding", "collecting-target", "capture":
 			if x.Text != "_" {
 				out = append(out, x)
 			}
-			if x.Kind == "binding" {
+			if x.Kind != "capture" {
 				return
 			}
 		case "rest":
@@ -440,7 +440,7 @@ func bindingSites(n *syntax.Node, visit func(*syntax.Node)) {
 			for _, b := range Bindings(x.Children[0]) {
 				visit(b)
 			}
-		case "repeat", "when", "catch", "event":
+		case "repeat", "collecting", "when", "catch", "event":
 			for _, param := range x.Params {
 				for _, b := range Bindings(param) {
 					visit(b)
@@ -473,7 +473,8 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 		if x.Text == "it" {
 			return
 		}
-		if _, ok := u.Symbols[x.Text]; ok {
+		// A collecting target is an explicit local, even when it shadows a Handler.
+		if _, ok := u.Symbols[x.Text]; ok && x.Kind != "collecting-target" {
 			return
 		}
 		if parent != nil && x.Kind == "name" && parent.Slot(x.Text) >= 0 {
@@ -842,6 +843,39 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		u.validate(n.Children[1], b, ctx)
 		return
 	case "repeat":
+		if n.Collect != nil {
+			target := n.Collect.Params[0]
+			if symbol, ok := u.Symbols[target.Text]; ok && (symbol.Kind != "handler" || symbol.Import != "") {
+				u.clash(target)
+			}
+			for _, param := range n.Params {
+				for _, binding := range Bindings(param) {
+					if binding.Text == target.Text {
+						u.add("name clash", target.Pos())
+					}
+				}
+			}
+			for _, stmt := range n.Body {
+				bindingSites(stmt, func(site *syntax.Node) {
+					if site != nil && site.Text == target.Text {
+						u.add("can't write", site.BindingPos())
+					}
+				})
+				syntax.Walk(stmt, func(x *syntax.Node) bool {
+					if x.Kind == "lambda" {
+						return false
+					}
+					if x.Kind == "set" {
+						root := Root(x.Children[0])
+						if root.Text == target.Text {
+							u.add("can't write", root.Pos())
+						}
+					}
+					return true
+				})
+			}
+			u.validate(n.Collect.Children[0], b, ctx)
+		}
 		if len(n.Params) > 0 {
 			u.pattern(n.Params[0], b, ctx)
 		}

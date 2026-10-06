@@ -1,0 +1,9 @@
+on go
+ repeat for each n in 1..5 collecting n into xs
+  if n = 3 then exit repeat
+ end repeat
+ repeat forever collecting 4 into foreverValues
+  if the length of foreverValues = 2 then exit repeat
+ end repeat
+ return [xs, foreverValues]
+end go

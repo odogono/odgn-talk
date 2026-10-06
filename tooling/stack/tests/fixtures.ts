@@ -16,6 +16,15 @@ export const fixtures: readonly {
   positive: string;
 }[] = [
   {
+    id: 'suggest-collecting',
+    positive: script(
+      'put [] into acc\nrepeat for each n in [1, 2]\nput n * 2 after acc\nend repeat',
+    ),
+    negative: script(
+      'put [] into acc\nsay 1\nrepeat for each n in [1, 2]\nput n * 2 after acc\nend repeat',
+    ),
+  },
+  {
     id: 'unreachable-clause',
     positive: 'on demo x\nend demo\non demo 1\nend demo',
     negative: 'on demo x where x > 1\nend demo\non demo 1\nend demo',

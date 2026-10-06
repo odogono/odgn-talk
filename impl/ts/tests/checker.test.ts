@@ -1042,3 +1042,88 @@ describe('Core construct and Guard checks', () => {
     ).toEqual({ start: key, end: key + 1, line: 2, col: 19 });
   });
 });
+
+describe('collecting targets', () => {
+  test('are whole-body locals readable before, during and after the loop', () => {
+    expect(
+      checkSource(
+        'on t\n say acc\n repeat while the length of acc < 2 collecting 1 into acc\n say acc\n end repeat\n return acc\nend t',
+      ).ok,
+    ).toBe(true);
+  });
+  test('clash with globals and their own iteration binding', () => {
+    expect(
+      diagnostics(
+        'script variable acc\non t\n repeat 0 times collecting 1 into acc\n end repeat\nend t',
+      ),
+    ).toEqual([['name clash', 3, 35]]);
+    expect(
+      diagnostics(
+        'on t\n repeat for each acc in [] collecting acc into acc\n end repeat\nend t',
+      ),
+    ).toEqual([['name clash', 2, 48]]);
+  });
+  test('reject body writes, pattern bindings and nested collecting targets', () => {
+    for (const [body, col] of [
+      ['put 1 into acc', 13],
+      ['put 1 into item 1 of acc', 23],
+      ['let [acc] be []', 7],
+      ['repeat 0 times collecting 1 into acc\n end repeat', 35],
+    ] as const) {
+      expect(
+        diagnostics(
+          `on t\n repeat 1 times collecting 1 into acc\n ${body}\n end repeat\nend t`,
+        ),
+      ).toEqual([["can't write", 3, col]]);
+    }
+  });
+  test('clashes with Constants and well-known objects at the later name', () => {
+    expect(
+      diagnostics(
+        'constant acc = 1\non t\n repeat 0 times collecting 1 into acc\n end repeat\nend t',
+      ),
+    ).toEqual([['name clash', 3, 35]]);
+    expect(
+      diagnostics(
+        'on t\n repeat 0 times collecting 1 into acc\n end repeat\nend t\nconstant acc = 1',
+      ),
+    ).toEqual([['name clash', 5, 10]]);
+    const checked = checkSource(
+      'on t\n repeat 0 times collecting 1 into acc\n end repeat\nend t',
+      { objects: ['acc'] },
+    );
+    expect(checked.error).toBeNull();
+    expect(
+      checked.diagnostics.map(d => [d.code, d.span.line, d.span.col]),
+    ).toEqual([['name clash', 2, 35]]);
+  });
+  test('protects iteration, catch and capture bindings as well as arithmetic writes', () => {
+    for (const [body, line, col] of [
+      ['repeat for each acc in []\n end repeat', 3, 18],
+      ['try\n catch acc\n end try', 4, 8],
+      ['add 1 to acc', 3, 11],
+      ['put given\n put [] into acc\n end given into f', 4, 14],
+      ['let <acc: digit> be "1"', 3, 7],
+    ] as const) {
+      expect(
+        diagnostics(
+          `on t\n repeat 1 times collecting 1 into acc\n ${body}\n end repeat\nend t`,
+        ),
+      ).toEqual([["can't write", line, col]]);
+    }
+  });
+  test('may shadow a local Handler name', () => {
+    expect(
+      checkSource(
+        'on t\n repeat 1 times collecting 1 into t\n end repeat\n return t\nend t',
+      ).ok,
+    ).toBe(true);
+  });
+  test('allows writes after the loop and Lambda locals that shadow the target', () => {
+    expect(
+      checkSource(
+        'on t\n repeat 1 times collecting 1 into acc\n put given acc: acc into f\n end repeat\n put [] into acc\nend t',
+      ).ok,
+    ).toBe(true);
+  });
+});
