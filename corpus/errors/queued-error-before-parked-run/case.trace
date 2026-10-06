@@ -1,0 +1,30 @@
+# Unblessed: new regression; first blessing awaits human review.
+# queued-error-before-parked-run: pins the order of the two things a `, queued`
+# clause's errored Run leaves behind (#363).
+#
+# - s/r1 errors while s/r2 waits parked in the clause's queue. The error
+#   message goes into the work queue before s/r2 becomes ready (chapter 6,
+#   "Uncaught errors"; chapter 5, "Queueing Policies"), so `on error` runs as
+#   s/r3 before s/r2 resumes.
+
+> load s identity=ba70755a96996e3e9598337587cf558e06265848f32b38e93468d2925249e8be
+> deliver d1 to=s message=work args=[1]
+> deliver d2 to=s message=work args=[2]
+> pump clock=2026-10-06T10:00:00Z
+seg s/r1 start delivery=d1 handler=work clause=1 fuel=15 alloc=0 state=280 end=wait until=2026-10-06T10:00:00Z
+seg s/r2 start delivery=d2 handler=work clause=1 fuel=4 alloc=0 state=448 end=park
+pumped state=idle fuel=19 next=2026-10-06T10:00:00Z
+> pump clock=2026-10-06T10:00:01Z
+raise s/r1 code="first failed" at=s:12 pos=8:5
+seg s/r1 resume fuel=24 alloc=120 state=232 end=error
+run s/r1 outcome=errored delivery=d1 handler=work error={code: "first failed", at: {unit: "s", handler: "work", line: 8, column: 5}} fuel=39 alloc=120
+seg s/r3 start from=s/r1 handler=error clause=1 fuel=21 alloc=36 state=268 end=return
+run s/r3 outcome=completed handler=error fuel=21 alloc=36
+seg s/r2 resume fuel=11 alloc=0 state=268 end=wait until=2026-10-06T10:00:01Z
+pumped state=idle fuel=56 next=2026-10-06T10:00:01Z
+> pump clock=2026-10-06T10:00:02Z
+seg s/r2 resume fuel=17 alloc=24 state=76 end=return
+run s/r2 outcome=completed delivery=d2 handler=work fuel=32 alloc=24
+pumped state=idle fuel=17
+> vars
+vars s seen=["first failed", 2]

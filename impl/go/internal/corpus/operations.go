@@ -14,6 +14,10 @@ type operationReplay struct {
 	stubs        map[string][]map[string]Field
 	effectStubs  map[string][]map[string]Field
 	declarations talk.GrantDecls
+	// strict makes a missing lifecycle Stub a malformed case, as in the TS
+	// replay Host, rather than an unknown outcome.
+	strict    bool
+	malformed error
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
@@ -195,6 +199,9 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 					key := ctx.ScriptName + "." + ctx.GrantName + "." + phase
 					queue := out.effectStubs[key]
 					if len(queue) == 0 {
+						if out.strict && out.malformed == nil {
+							out.malformed = fmt.Errorf("No lifecycle Stub for %s.%s phase=%s", ctx.ScriptName, ctx.GrantName, phase)
+						}
 						return talk.EffectResult{Status: talk.EffectUnknown, Detail: "missing lifecycle Stub: " + key}
 					}
 					out.effectStubs[key] = queue[1:]

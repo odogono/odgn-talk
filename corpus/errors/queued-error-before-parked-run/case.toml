@@ -1,0 +1,10 @@
+# An errored Run's error message goes ahead of its clause's next parked Run.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

@@ -220,9 +220,50 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	return ordinary, nil
 }
 func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
-	var lines traceLines
-	crossings := &crossingReplay{lines: &lines, controls: map[string][][]Record{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
-	inside := map[int]bool{}
+	x, err := newExecutionReplay(c.Setup, records, roundTrip, func(row Setup) (string, error) {
+		b, err := os.ReadFile(filepath.Join(c.Dir, row["source"].(string)))
+		return string(b), err
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer x.close()
+	for _, i := range replayInputOrder(records) {
+		if records[i].Input && !x.inside[i] {
+			if err := x.apply(i); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return x.lines, nil
+}
+
+// executionReplay replays Host Inputs on one Group through the public
+// embedding API. Its records may grow as a driver appends inputs.
+type executionReplay struct {
+	records    []Record
+	roundTrip  bool
+	readSource func(Setup) (string, error)
+	inside     map[int]bool
+	lines      traceLines
+	crossings  *crossingReplay
+	core       *talk.Core
+	operations *operationReplay
+	libraries  map[string]*talk.Library
+	ready      chan struct{}
+	g          *talk.Group
+	deliveries map[string]*replayDelivery
+	objects    objectReplay
+	saves      map[string][]byte
+	saveIDs    []string
+	values     *replayValues
+	setups     map[string]Setup
+	cancels    []context.CancelFunc
+}
+
+func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSource func(Setup) (string, error)) (*executionReplay, error) {
+	x := &executionReplay{records: records, roundTrip: roundTrip, readSource: readSource, inside: map[int]bool{}, deliveries: map[string]*replayDelivery{}, saves: map[string][]byte{}}
+	crossings := &crossingReplay{lines: &x.lines, controls: map[string][][]Record{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
 	inPump, crossing := false, ""
 	for i, r := range records {
 		if r.Input && r.Name == "pump" {
@@ -242,11 +283,11 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 			}
 			queue := crossings.controls[crossing]
 			queue[len(queue)-1] = append(queue[len(queue)-1], r)
-			inside[i] = true
+			x.inside[i] = true
 		}
 	}
 	core := talk.New()
-	operations, e := setupOperations(core, c.Setup)
+	operations, e := setupOperations(core, setup)
 	if e != nil {
 		return nil, e
 	}
@@ -254,7 +295,7 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 	for name, ops := range operations.declarations {
 		declarations[name] = ops
 	}
-	for _, raw := range c.Setup["scripts"].([]any) {
+	for _, raw := range setup["scripts"].([]any) {
 		script := raw.(Setup)
 		grants, _ := script["grants"].(Setup)
 		for name, rawGrant := range grants {
@@ -264,7 +305,7 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 			}
 		}
 	}
-	libraries, e := setupLibraries(core, c, declarations)
+	libraries, e := setupLibraries(core, setup, declarations, readSource)
 	if e != nil {
 		return nil, e
 	}
@@ -275,564 +316,580 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 		default:
 		}
 	}})
-	deliveries := map[string]*replayDelivery{}
-	control := func(r Record) error {
-		name := r.IDs[0]
-		if r.Name == "cancel-run" {
-			name, _, _ = strings.Cut(name, "/r")
-		}
-		s := g.Script(name)
-		if s == nil {
-			return fmt.Errorf("unknown Script %s", name)
-		}
-		if r.Name == "cancel-run" {
-			s.CancelRun(talk.RunID(r.IDs[0]))
-		} else {
-			for _, f := range r.Fields {
-				if f.Key == "reason" {
-					s.Stop(f.Value.Text)
-					return nil
-				}
-			}
-			return fmt.Errorf("Stop has no reason")
-		}
-		return nil
-	}
-	crossings.apply = control
-	objects, e := setupObjects(core, g, c.Setup, operations.values)
+	crossings.apply = x.control
+	objects, e := setupObjects(core, g, setup, operations.values)
 	if e != nil {
 		return nil, e
 	}
-	saves := map[string][]byte{}
 	values := operations.values
 	setups := map[string]Setup{}
-	for _, x := range c.Setup["scripts"].([]any) {
-		s := x.(Setup)
+	for _, raw := range setup["scripts"].([]any) {
+		s := raw.(Setup)
 		setups[s["name"].(string)] = s
 	}
-	for _, i := range replayInputOrder(records) {
-		r := records[i]
-		if !r.Input || inside[i] {
-			continue
-		}
-		fields := map[string]Field{}
-		for _, f := range r.Fields {
-			fields[f.Key] = f
-		}
-		switch r.Name {
-		case "cancel-delivery":
-			d := deliveries[r.IDs[0]]
-			if d == nil {
-				return nil, fmt.Errorf("unknown cancellable Delivery %s", r.IDs[0])
-			}
-			if err := d.cancelAndWait(ready); err != nil {
-				return nil, err
-			}
-		case "set-parent":
-			ref := fields["object"].Value.Object
-			if ref == nil {
-				return nil, fmt.Errorf("set-parent requires Object")
-			}
-			var parent *talk.Object
-			if p := fields["parent"].Value.Object; p != nil {
-				parent = objects[objectRef{p.Kind, p.ID}]
-			}
-			if err := g.SetParent(objects[objectRef{ref.Kind, ref.ID}], parent); err != nil {
-				if _, ok := err.(*talk.HostError); !ok {
-					return nil, err
-				}
-			}
-		case "call-value":
-			ref := fields["fn"].Value.Function
-			if ref == nil {
-				return nil, fmt.Errorf("call-value requires Function")
-			}
-			fn, err := values.construct(fields["fn"].Value)
-			if err != nil {
-				return nil, err
-			}
-			var args []talk.Value
-			for _, v := range fields["args"].Value.Items {
-				x, err := values.construct(v)
-				if err != nil {
-					return nil, err
-				}
-				args = append(args, x)
-			}
-			var limits *talk.LimitOverride
-			if f, ok := fields["limits"]; ok {
-				o := setupOverride(f)
-				limits = &o
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			id, pending, err := g.Call(ctx, fn, args, limits)
-			if err == nil {
-				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
-			} else {
-				if _, ok := err.(*talk.HostError); !ok && err != talk.ErrMailboxFull {
-					return nil, err
-				}
-			}
-		case "dispose":
-			ref := fields["object"].Value.Object
-			if ref == nil {
-				return nil, fmt.Errorf("dispose requires Object")
-			}
-			if err := g.Dispose(objects[objectRef{ref.Kind, ref.ID}]); err != nil {
-				return nil, err
-			}
-		case "add-library":
-			if e := g.AddLibrary(libraries[r.IDs[0]]); e != nil {
-				if _, ok := e.(*talk.HostError); !ok {
-					return nil, e
-				}
-			}
-		case "answer", "fail":
-			call := operations.calls[talk.CallID(r.IDs[0])]
-			if call == nil {
-				return nil, fmt.Errorf("unknown call %s", r.IDs[0])
-			}
-			if r.Name == "answer" {
-				v, e := values.construct(fields["value"].Value)
-				if e != nil {
-					return nil, e
-				}
-				fuel, _ := strconv.ParseInt(fields["fuel"].Raw, 10, 64)
-				call.AnswerWithCost(v, fuel)
-			} else {
-				v := fields["error"].Value
-				if v.Get("code").Text == "" {
-					call.Fail(nil)
-				} else {
-					var data []talk.Pair
-					for _, p := range v.Entries {
-						if p.Key != "code" && p.Key != "message" {
-							value, e := values.construct(p.Val)
-							if e != nil {
-								return nil, e
-							}
-							data = append(data, talk.KV(p.Key, value))
-						}
-					}
-					m, _ := talk.Map(data...)
-					call.Fail(&talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m})
-				}
-			}
-		case "stub":
-			lines = append(lines, r.Raw)
-			operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
-		case "stub-effect":
-			lines = append(lines, r.Raw)
-			key := r.IDs[0] + "." + fields["phase"].Raw
-			operations.effectStubs[key] = append(operations.effectStubs[key], fields)
-		case "stop", "cancel-run":
-			if err := control(r); err != nil {
-				return nil, err
-			}
-		case "revoke":
-			s := g.Script(r.IDs[0])
-			if s == nil {
-				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
-			}
-			s.Revoke(fields["grant"].Raw)
-		case "save":
-			saved, err := g.Save()
-			if err != nil {
-				if host, ok := err.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
-					return nil, err
-				}
-			} else {
-				saves[r.IDs[0]] = saved
-			}
-		case "restore":
-			selected := []*talk.Library{}
-			withheld := map[string]bool{}
-			for _, name := range fieldIDs(fields["withheld"]) {
-				withheld[name] = true
-			}
-			for name, l := range libraries {
-				if !withheld[name] {
-					selected = append(selected, l)
-				}
-			}
-			unbound := map[string]bool{}
-			for _, name := range fieldIDs(fields["unbound"]) {
-				unbound[name] = true
-			}
-			unresolved := map[objectRef]bool{}
-			for _, v := range fields["disposed"].Value.Items {
-				if v.Object != nil {
-					unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
-				}
-			}
-			for _, v := range fields["unresolved"].Value.Items {
-				if v.Object != nil {
-					unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
-				}
-			}
-			policy := talk.RejectMismatch
-			if fields["mismatch"].Raw == "variables-only" {
-				policy = talk.VariablesOnly
-			}
-			next, _, err := core.Restore(saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, Grants: func(script, name string) *talk.Grant {
-				if unbound[script+"."+name] {
-					return nil
-				}
-				grants, _ := operations.grants(setups[script])
-				return grants[name]
-			}, Resolve: func(kind, id string) (any, bool) {
-				key := objectRef{kind, id}
-				if unresolved[key] {
-					return nil, false
-				}
-				if obj := objects[key]; obj != nil {
-					return obj.Native(), true
-				}
-				return nil, false
-			}})
-			if err != nil {
-				if _, ok := err.(*talk.HostError); !ok {
-					return nil, err
-				}
-				continue
-			}
-			g = next
-			for name := range withheld {
-				delete(libraries, name)
-			}
-			if roundTrip {
-				crossings.visibleSave, _ = strconv.Atoi(strings.TrimPrefix(fields["from"].Raw, "s"))
-			}
-			// Reconstruct stable Object handles after restore.
-			objects = restoredObjects(g)
-			values.objects = objects
+	x.crossings, x.core, x.operations, x.libraries, x.ready, x.g, x.objects, x.values, x.setups = crossings, core, operations, libraries, ready, g, objects, values, setups
+	return x, nil
+}
 
-		case "settle":
-			var settlement talk.Settlement
-			switch fields["how"].Raw {
-			case "answer":
-				v, err := values.construct(fields["value"].Value)
-				if err != nil {
-					return nil, err
-				}
-				settlement.Answer = &v
-			case "fail":
-				v := fields["error"].Value
-				data := []talk.Pair{}
+func (x *executionReplay) close() {
+	for _, cancel := range x.cancels {
+		cancel()
+	}
+}
+
+func (x *executionReplay) control(r Record) error {
+	name := r.IDs[0]
+	if r.Name == "cancel-run" {
+		name, _, _ = strings.Cut(name, "/r")
+	}
+	s := x.g.Script(name)
+	if s == nil {
+		return fmt.Errorf("unknown Script %s", name)
+	}
+	if r.Name == "cancel-run" {
+		s.CancelRun(talk.RunID(r.IDs[0]))
+		return nil
+	}
+	for _, f := range r.Fields {
+		if f.Key == "reason" {
+			s.Stop(f.Value.Text)
+			return nil
+		}
+	}
+	return fmt.Errorf("Stop has no reason")
+}
+
+func (x *executionReplay) apply(i int) error {
+	records, roundTrip, r := x.records, x.roundTrip, x.records[i]
+	core, operations, libraries, values := x.core, x.operations, x.libraries, x.values
+	setups, deliveries, crossings, ready := x.setups, x.deliveries, x.crossings, x.ready
+	fields := map[string]Field{}
+	for _, f := range r.Fields {
+		fields[f.Key] = f
+	}
+	switch r.Name {
+	case "cancel-delivery":
+		d := deliveries[r.IDs[0]]
+		if d == nil {
+			return fmt.Errorf("unknown cancellable Delivery %s", r.IDs[0])
+		}
+		if err := d.cancelAndWait(ready); err != nil {
+			return err
+		}
+	case "set-parent":
+		ref := fields["object"].Value.Object
+		if ref == nil {
+			return fmt.Errorf("set-parent requires Object")
+		}
+		var parent *talk.Object
+		if p := fields["parent"].Value.Object; p != nil {
+			parent = x.objects[objectRef{p.Kind, p.ID}]
+		}
+		if err := x.g.SetParent(x.objects[objectRef{ref.Kind, ref.ID}], parent); err != nil {
+			if _, ok := err.(*talk.HostError); !ok {
+				return err
+			}
+		}
+	case "call-value":
+		ref := fields["fn"].Value.Function
+		if ref == nil {
+			return fmt.Errorf("call-value requires Function")
+		}
+		fn, err := values.construct(fields["fn"].Value)
+		if err != nil {
+			return err
+		}
+		var args []talk.Value
+		for _, v := range fields["args"].Value.Items {
+			x, err := values.construct(v)
+			if err != nil {
+				return err
+			}
+			args = append(args, x)
+		}
+		var limits *talk.LimitOverride
+		if f, ok := fields["limits"]; ok {
+			o := setupOverride(f)
+			limits = &o
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		x.cancels = append(x.cancels, cancel)
+		id, pending, err := x.g.Call(ctx, fn, args, limits)
+		if err == nil {
+			deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
+		} else {
+			if _, ok := err.(*talk.HostError); !ok && err != talk.ErrMailboxFull {
+				return err
+			}
+		}
+	case "dispose":
+		ref := fields["object"].Value.Object
+		if ref == nil {
+			return fmt.Errorf("dispose requires Object")
+		}
+		if err := x.g.Dispose(x.objects[objectRef{ref.Kind, ref.ID}]); err != nil {
+			return err
+		}
+	case "add-library":
+		if e := x.g.AddLibrary(libraries[r.IDs[0]]); e != nil {
+			if _, ok := e.(*talk.HostError); !ok {
+				return e
+			}
+		}
+	case "answer", "fail":
+		call := operations.calls[talk.CallID(r.IDs[0])]
+		if call == nil {
+			return fmt.Errorf("unknown call %s", r.IDs[0])
+		}
+		if r.Name == "answer" {
+			v, e := values.construct(fields["value"].Value)
+			if e != nil {
+				return e
+			}
+			fuel, _ := strconv.ParseInt(fields["fuel"].Raw, 10, 64)
+			call.AnswerWithCost(v, fuel)
+		} else {
+			v := fields["error"].Value
+			if v.Get("code").Text == "" {
+				call.Fail(nil)
+			} else {
+				var data []talk.Pair
 				for _, p := range v.Entries {
 					if p.Key != "code" && p.Key != "message" {
-						x, err := values.construct(p.Val)
-						if err != nil {
-							return nil, err
+						value, e := values.construct(p.Val)
+						if e != nil {
+							return e
 						}
-						data = append(data, talk.KV(p.Key, x))
+						data = append(data, talk.KV(p.Key, value))
 					}
 				}
 				m, _ := talk.Map(data...)
-				settlement.Fail = &talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m}
-			case "adopt":
-				settlement.Adopt = true
-			case "reissue":
-				settlement.Reissue = true
+				call.Fail(&talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m})
 			}
-			call, err := g.Settle(talk.CallID(r.IDs[0]), settlement)
-			if err != nil {
-				if _, ok := err.(*talk.HostError); !ok {
-					return nil, err
-				}
-			} else if call != nil {
-				operations.calls[call.ID()] = call
-			}
-		case "replace-library":
-			imports := []*talk.Library{}
-			for name, l := range libraries {
-				if name != r.IDs[0] {
-					imports = append(imports, l)
-				}
-			}
-			l, err := core.CompileLibrary(talk.LibrarySource{Name: r.IDs[0], Source: fields["source"].Value.Text}, imports, operations.declarations)
-			if err != nil {
-				return nil, err
-			}
-			carry := talk.ResetVariables
-			if fields["carry"].Raw == "yes" {
-				carry = talk.CarryVariables
-			}
-			_, err = g.ReplaceLibrary(l, carry)
-			if err != nil {
-				if _, ok := err.(*talk.HostError); !ok {
-					if _, ok := err.(*talk.LoadError); !ok {
-						return nil, err
-					}
-				}
-			} else {
-				for _, raw := range replay.Libraries(g) {
-					lib := raw.(*talk.Library)
-					libraries[lib.Name()] = lib
-				}
-			}
-		case "extend":
-			if e := g.Script(r.IDs[0]).Extend(fields["source"].Value.Text); e != nil {
-				if _, ok := e.(*talk.HostError); !ok {
-					if _, ok := e.(*talk.LoadError); !ok {
-						return nil, e
-					}
-				}
-			}
-		case "reload":
-			s := g.Script(r.IDs[0])
-			if s == nil {
-				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
-			}
-			carry := talk.ResetVariables
-			if fields["carry"].Raw == "yes" {
-				carry = talk.CarryVariables
-			}
-			_, e := s.Reload(fields["source"].Value.Text, carry)
-			if e != nil {
-				if _, ok := e.(*talk.LoadError); !ok {
-					if _, ok := e.(*talk.HostError); !ok {
-						return nil, e
-					}
-				}
-			}
-		case "load":
-			name := r.IDs[0]
-			setup := setups[name]
-			b, e := os.ReadFile(filepath.Join(c.Dir, setup["source"].(string)))
-			if e != nil {
-				return nil, e
-			}
-			grants, err := operations.grants(setup)
-			if err != nil {
-				return nil, err
-			}
-			asUsed, _ := setup["grantsAsUsed"].(bool)
-			bindings, err := objects.bindings(setup)
-			if err != nil {
-				return nil, err
-			}
-			var owner *talk.Object
-			if ref, ok := setup["owner"].(Setup); ok {
-				owner = objects[objectRef{ref["kind"].(string), ref["id"].(string)}]
-				if owner == nil {
-					return nil, fmt.Errorf("unknown owner %v", ref)
-				}
-			}
-			_, e = g.Load(talk.LoadOptions{Owner: owner, Name: name, Source: string(b), Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
-			if e != nil {
-				if _, ok := e.(*talk.LoadError); !ok {
-					return nil, e
-				}
-			}
-		case "deliver", "request", "decide", "broadcast", "decide-broadcast":
-			s := g.Script(fields["to"].Raw)
-			var target *talk.Object
-			if ref := fields["to"].Value.Object; ref != nil {
-				target = objects[objectRef{ref.Kind, ref.ID}]
-			}
-			if s == nil && target == nil && r.Name != "broadcast" && r.Name != "decide-broadcast" {
-				return nil, fmt.Errorf("unknown recipient %s", fields["to"].Raw)
-			}
-			m := talk.Message{Name: fields["message"].Raw}
-			if raw, ok := fields["limits"]; ok {
-				o := setupOverride(raw)
-				m.Limits = &o
-			}
-			for _, v := range fields["args"].Value.Items {
-				x, e := values.construct(v)
-				if e != nil {
-					return nil, e
-				}
-				m.Args = append(m.Args, x)
-			}
-			var e error
-			var id talk.DeliveryID
-			var pending *talk.Pending
-			var decision *talk.Deciding
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if r.Name == "broadcast" {
-				_, e = g.Broadcast(m)
-			} else if r.Name == "decide-broadcast" {
-				var bid talk.BroadcastID
-				bid, decision, e = g.DecideBroadcast(ctx, m)
-				id = talk.DeliveryID(bid)
-			} else if target != nil {
-				if r.Name == "request" {
-					id, pending, e = g.Request(ctx, target, m)
-				} else if r.Name == "decide" {
-					id, decision, e = g.Decide(ctx, target, m)
-				} else {
-					_, e = g.Deliver(target, m)
-				}
-			} else if r.Name == "request" {
-				id, pending, e = s.Request(ctx, m)
-			} else if r.Name == "decide" {
-				id, decision, e = s.Decide(ctx, m)
-			} else {
-				_, e = s.Deliver(m)
-			}
-			if pending != nil {
-				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
-			} else if decision != nil {
-				deliveries[string(id)] = &replayDelivery{cancel: cancel, done: decision.Done()}
-			}
-			if e != nil && e != talk.ErrMailboxFull {
-				if _, ok := e.(*talk.HostError); !ok {
-					return nil, e
-				}
-			}
-		case "pump":
-			clock := fields["clock"].Value
-			now := time.Unix(clock.Seconds, int64(clock.Nanos))
-			opts := talk.PumpOptions{}
-			opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
-			opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)
-			result, e := g.Pump(now, opts)
-			if crossings.err != nil {
-				return nil, crossings.err
-			}
-			for _, report := range result.Reports {
-				switch report := report.(type) {
-				case *talk.RunEnd:
-					values.receive(report.Result)
-					if report.Error != nil {
-						values.receive(report.Error.Data)
-					}
-				case *talk.Unhandled:
-					for _, arg := range report.Message.Args {
-						values.receive(arg)
-					}
-				}
-			}
-			if e != nil {
-				if _, ok := e.(*talk.HostError); !ok {
-					return nil, e
-				}
-			}
-			if roundTrip {
-				nextPump := -1
-				explicit := false
-				for j := i + 1; j < len(records); j++ {
-					if records[j].Input && records[j].Name == "pump" {
-						nextPump = j
-						break
-					}
-					if records[j].Input && (records[j].Name == "save" || records[j].Name == "restore") {
-						explicit = true
-					}
-				}
-				if nextPump >= 0 && !explicit {
-					// Chapter 11 excludes boundaries needing old Host handles.
-					crossesOldHandle := false
-					pendingIDs := map[string]bool{}
-					for _, id := range replay.Pending(g) {
-						pendingIDs[id] = true
-					}
-					for _, future := range records[i+1:] {
-						if !future.Input {
-							continue
-						}
-
-						if future.Name == "cancel-delivery" && deliveries[future.IDs[0]] != nil {
-							crossesOldHandle = true
-						}
-						for _, field := range future.Fields {
-							if values.hasReceivedFunction(field.Value) {
-								crossesOldHandle = true
-							}
-						}
-						if (future.Name == "answer" || future.Name == "fail") && operations.calls[talk.CallID(future.IDs[0])] != nil && !pendingIDs[future.IDs[0]] {
-							crossesOldHandle = true
-						}
-
-					}
-					if crossesOldHandle {
-						continue
-					}
-					// Save must still be attempted at a live-effect boundary.
-					crossings.hidden = true
-					before := g.Inspect()
-					counters := map[string]talk.Counters{}
-					for _, view := range before.Scripts {
-						counters[view.Name] = g.Script(view.Name).Counters()
-					}
-					crossings.hiddenLines = nil
-					saved, saveErr := g.Save()
-					if saveErr != nil {
-						saveLines := append([]string(nil), crossings.hiddenLines...)
-						after := g.Inspect()
-						for _, view := range after.Scripts {
-							if counters[view.Name] != g.Script(view.Name).Counters() {
-								return nil, fmt.Errorf("refused hidden Save changed counters")
-							}
-						}
-						crossings.hidden = false
-						if host, ok := saveErr.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
-							return nil, saveErr
-						}
-						if len(saveLines) != 2 || !strings.HasPrefix(saveLines[0], "> save ") || saveLines[1] != `refused code="effects pending"` {
-							return nil, fmt.Errorf("refused hidden Save emitted execution records: %v", saveLines)
-						}
-						if !reflect.DeepEqual(before, after) {
-							return nil, fmt.Errorf("refused hidden Save changed execution state")
-						}
-						continue
-					}
-					selected := []*talk.Library{}
-					for _, l := range libraries {
-						selected = append(selected, l)
-					}
-					next, result, restoreErr := core.Restore(saved, talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Grants: func(script, name string) *talk.Grant {
-						grants, _ := operations.grants(setups[script])
-						return grants[name]
-					}, Resolve: func(kind, id string) (any, bool) {
-						o := objects[objectRef{kind, id}]
-						if o == nil {
-							return nil, false
-						}
-						return o.Native(), true
-					}})
-					crossings.hidden = false
-					if restoreErr != nil {
-						return nil, restoreErr
-					}
-
-					g = next
-					objects = restoredObjects(g)
-					values.objects = objects
-					for _, p := range result.Pending {
-						call, err := g.Settle(p.ID, talk.Settlement{Adopt: true})
-						if err != nil {
-							return nil, err
-						}
-						operations.calls[p.ID] = call
-						crossings.adopted[string(p.ID)] = true
-					}
-				}
-			}
-		case "vars":
-			for _, script := range g.Inspect().Scripts {
-				for _, entry := range script.Vars {
-					values.receive(entry.Val)
-				}
-				for _, message := range script.Mailbox {
-					for _, arg := range message.Message.Args {
-						values.receive(arg)
-					}
-				}
-			}
-		case "counters":
-			s := g.Script(r.IDs[0])
-			if s == nil {
-				return nil, fmt.Errorf("unknown Script %s", r.IDs[0])
-			}
-			s.Counters()
 		}
+	case "stub":
+		x.lines = append(x.lines, r.Raw)
+		operations.stubs[r.IDs[0]] = append(operations.stubs[r.IDs[0]], fields)
+	case "stub-effect":
+		x.lines = append(x.lines, r.Raw)
+		key := r.IDs[0] + "." + fields["phase"].Raw
+		operations.effectStubs[key] = append(operations.effectStubs[key], fields)
+	case "stop", "cancel-run":
+		if err := x.control(r); err != nil {
+			return err
+		}
+	case "revoke":
+		s := x.g.Script(r.IDs[0])
+		if s == nil {
+			return fmt.Errorf("unknown Script %s", r.IDs[0])
+		}
+		s.Revoke(fields["grant"].Raw)
+	case "save":
+		saved, err := x.g.Save()
+		if err != nil {
+			if host, ok := err.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
+				return err
+			}
+		} else {
+			// An appended input leaves the Save id to the Core's record.
+			id := ""
+			if len(r.IDs) > 0 {
+				id = r.IDs[0]
+			} else if last, err := parseRecord(x.lines[len(x.lines)-1]); err == nil && last.Name == "save" && len(last.IDs) > 0 {
+				id = last.IDs[0]
+			}
+			if _, seen := x.saves[id]; !seen {
+				x.saveIDs = append(x.saveIDs, id)
+			}
+			x.saves[id] = saved
+		}
+	case "restore":
+		selected := []*talk.Library{}
+		withheld := map[string]bool{}
+		for _, name := range fieldIDs(fields["withheld"]) {
+			withheld[name] = true
+		}
+		for name, l := range libraries {
+			if !withheld[name] {
+				selected = append(selected, l)
+			}
+		}
+		unbound := map[string]bool{}
+		for _, name := range fieldIDs(fields["unbound"]) {
+			unbound[name] = true
+		}
+		unresolved := map[objectRef]bool{}
+		for _, v := range fields["disposed"].Value.Items {
+			if v.Object != nil {
+				unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+			}
+		}
+		for _, v := range fields["unresolved"].Value.Items {
+			if v.Object != nil {
+				unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+			}
+		}
+		policy := talk.RejectMismatch
+		if fields["mismatch"].Raw == "variables-only" {
+			policy = talk.VariablesOnly
+		}
+		next, _, err := core.Restore(x.saves[fields["from"].Raw], talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Mismatch: policy, Grants: func(script, name string) *talk.Grant {
+			if unbound[script+"."+name] {
+				return nil
+			}
+			grants, _ := operations.grants(setups[script])
+			return grants[name]
+		}, Resolve: func(kind, id string) (any, bool) {
+			key := objectRef{kind, id}
+			if unresolved[key] {
+				return nil, false
+			}
+			if obj := x.objects[key]; obj != nil {
+				return obj.Native(), true
+			}
+			return nil, false
+		}})
+		if err != nil {
+			if _, ok := err.(*talk.HostError); !ok {
+				return err
+			}
+			return nil
+		}
+		x.g = next
+		for name := range withheld {
+			delete(libraries, name)
+		}
+		if roundTrip {
+			crossings.visibleSave, _ = strconv.Atoi(strings.TrimPrefix(fields["from"].Raw, "s"))
+		}
+		// Reconstruct stable Object handles after restore.
+		x.objects = restoredObjects(x.g)
+		values.objects = x.objects
+
+	case "settle":
+		var settlement talk.Settlement
+		switch fields["how"].Raw {
+		case "answer":
+			v, err := values.construct(fields["value"].Value)
+			if err != nil {
+				return err
+			}
+			settlement.Answer = &v
+		case "fail":
+			v := fields["error"].Value
+			data := []talk.Pair{}
+			for _, p := range v.Entries {
+				if p.Key != "code" && p.Key != "message" {
+					x, err := values.construct(p.Val)
+					if err != nil {
+						return err
+					}
+					data = append(data, talk.KV(p.Key, x))
+				}
+			}
+			m, _ := talk.Map(data...)
+			settlement.Fail = &talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m}
+		case "adopt":
+			settlement.Adopt = true
+		case "reissue":
+			settlement.Reissue = true
+		}
+		call, err := x.g.Settle(talk.CallID(r.IDs[0]), settlement)
+		if err != nil {
+			if _, ok := err.(*talk.HostError); !ok {
+				return err
+			}
+		} else if call != nil {
+			operations.calls[call.ID()] = call
+		}
+	case "replace-library":
+		imports := []*talk.Library{}
+		for name, l := range libraries {
+			if name != r.IDs[0] {
+				imports = append(imports, l)
+			}
+		}
+		l, err := core.CompileLibrary(talk.LibrarySource{Name: r.IDs[0], Source: fields["source"].Value.Text}, imports, operations.declarations)
+		if err != nil {
+			return err
+		}
+		carry := talk.ResetVariables
+		if fields["carry"].Raw == "yes" {
+			carry = talk.CarryVariables
+		}
+		_, err = x.g.ReplaceLibrary(l, carry)
+		if err != nil {
+			if _, ok := err.(*talk.HostError); !ok {
+				if _, ok := err.(*talk.LoadError); !ok {
+					return err
+				}
+			}
+		} else {
+			for _, raw := range replay.Libraries(x.g) {
+				lib := raw.(*talk.Library)
+				libraries[lib.Name()] = lib
+			}
+		}
+	case "extend":
+		if e := x.g.Script(r.IDs[0]).Extend(fields["source"].Value.Text); e != nil {
+			if _, ok := e.(*talk.HostError); !ok {
+				if _, ok := e.(*talk.LoadError); !ok {
+					return e
+				}
+			}
+		}
+	case "reload":
+		s := x.g.Script(r.IDs[0])
+		if s == nil {
+			return fmt.Errorf("unknown Script %s", r.IDs[0])
+		}
+		carry := talk.ResetVariables
+		if fields["carry"].Raw == "yes" {
+			carry = talk.CarryVariables
+		}
+		_, e := s.Reload(fields["source"].Value.Text, carry)
+		if e != nil {
+			if _, ok := e.(*talk.LoadError); !ok {
+				if _, ok := e.(*talk.HostError); !ok {
+					return e
+				}
+			}
+		}
+	case "load":
+		name := r.IDs[0]
+		setup := setups[name]
+		source, e := x.readSource(setup)
+		if e != nil {
+			return e
+		}
+		grants, err := operations.grants(setup)
+		if err != nil {
+			return err
+		}
+		asUsed, _ := setup["grantsAsUsed"].(bool)
+		bindings, err := x.objects.bindings(setup)
+		if err != nil {
+			return err
+		}
+		var owner *talk.Object
+		if ref, ok := setup["owner"].(Setup); ok {
+			owner = x.objects[objectRef{ref["kind"].(string), ref["id"].(string)}]
+			if owner == nil {
+				return fmt.Errorf("unknown owner %v", ref)
+			}
+		}
+		_, e = x.g.Load(talk.LoadOptions{Owner: owner, Name: name, Source: source, Limits: setupLimits(setup["limits"]), Grants: grants, GrantsAsUsed: asUsed, Objects: bindings})
+		if e != nil {
+			if _, ok := e.(*talk.LoadError); !ok {
+				return e
+			}
+		}
+	case "deliver", "request", "decide", "broadcast", "decide-broadcast":
+		s := x.g.Script(fields["to"].Raw)
+		var target *talk.Object
+		if ref := fields["to"].Value.Object; ref != nil {
+			target = x.objects[objectRef{ref.Kind, ref.ID}]
+		}
+		if s == nil && target == nil && r.Name != "broadcast" && r.Name != "decide-broadcast" {
+			return fmt.Errorf("unknown recipient %s", fields["to"].Raw)
+		}
+		m := talk.Message{Name: fields["message"].Raw}
+		if raw, ok := fields["limits"]; ok {
+			o := setupOverride(raw)
+			m.Limits = &o
+		}
+		for _, v := range fields["args"].Value.Items {
+			x, e := values.construct(v)
+			if e != nil {
+				return e
+			}
+			m.Args = append(m.Args, x)
+		}
+		var e error
+		var id talk.DeliveryID
+		var pending *talk.Pending
+		var decision *talk.Deciding
+		ctx, cancel := context.WithCancel(context.Background())
+		x.cancels = append(x.cancels, cancel)
+		if r.Name == "broadcast" {
+			_, e = x.g.Broadcast(m)
+		} else if r.Name == "decide-broadcast" {
+			var bid talk.BroadcastID
+			bid, decision, e = x.g.DecideBroadcast(ctx, m)
+			id = talk.DeliveryID(bid)
+		} else if target != nil {
+			if r.Name == "request" {
+				id, pending, e = x.g.Request(ctx, target, m)
+			} else if r.Name == "decide" {
+				id, decision, e = x.g.Decide(ctx, target, m)
+			} else {
+				_, e = x.g.Deliver(target, m)
+			}
+		} else if r.Name == "request" {
+			id, pending, e = s.Request(ctx, m)
+		} else if r.Name == "decide" {
+			id, decision, e = s.Decide(ctx, m)
+		} else {
+			_, e = s.Deliver(m)
+		}
+		if pending != nil {
+			deliveries[string(id)] = &replayDelivery{cancel: cancel, done: pending.Done()}
+		} else if decision != nil {
+			deliveries[string(id)] = &replayDelivery{cancel: cancel, done: decision.Done()}
+		}
+		if e != nil && e != talk.ErrMailboxFull {
+			if _, ok := e.(*talk.HostError); !ok {
+				return e
+			}
+		}
+	case "pump":
+		clock := fields["clock"].Value
+		now := time.Unix(clock.Seconds, int64(clock.Nanos))
+		opts := talk.PumpOptions{}
+		opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
+		opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)
+		result, e := x.g.Pump(now, opts)
+		if crossings.err != nil {
+			return crossings.err
+		}
+		for _, report := range result.Reports {
+			switch report := report.(type) {
+			case *talk.RunEnd:
+				values.receive(report.Result)
+				if report.Error != nil {
+					values.receive(report.Error.Data)
+				}
+			case *talk.Unhandled:
+				for _, arg := range report.Message.Args {
+					values.receive(arg)
+				}
+			}
+		}
+		if e != nil {
+			if _, ok := e.(*talk.HostError); !ok {
+				return e
+			}
+		}
+		if roundTrip {
+			nextPump := -1
+			explicit := false
+			for j := i + 1; j < len(records); j++ {
+				if records[j].Input && records[j].Name == "pump" {
+					nextPump = j
+					break
+				}
+				if records[j].Input && (records[j].Name == "save" || records[j].Name == "restore") {
+					explicit = true
+				}
+			}
+			if nextPump >= 0 && !explicit {
+				// Chapter 11 excludes boundaries needing old Host handles.
+				crossesOldHandle := false
+				pendingIDs := map[string]bool{}
+				for _, id := range replay.Pending(x.g) {
+					pendingIDs[id] = true
+				}
+				for _, future := range records[i+1:] {
+					if !future.Input {
+						continue
+					}
+
+					if future.Name == "cancel-delivery" && deliveries[future.IDs[0]] != nil {
+						crossesOldHandle = true
+					}
+					for _, field := range future.Fields {
+						if values.hasReceivedFunction(field.Value) {
+							crossesOldHandle = true
+						}
+					}
+					if (future.Name == "answer" || future.Name == "fail") && operations.calls[talk.CallID(future.IDs[0])] != nil && !pendingIDs[future.IDs[0]] {
+						crossesOldHandle = true
+					}
+
+				}
+				if crossesOldHandle {
+					return nil
+				}
+				// Save must still be attempted at a live-effect boundary.
+				crossings.hidden = true
+				before := x.g.Inspect()
+				counters := map[string]talk.Counters{}
+				for _, view := range before.Scripts {
+					counters[view.Name] = x.g.Script(view.Name).Counters()
+				}
+				crossings.hiddenLines = nil
+				saved, saveErr := x.g.Save()
+				if saveErr != nil {
+					saveLines := append([]string(nil), crossings.hiddenLines...)
+					after := x.g.Inspect()
+					for _, view := range after.Scripts {
+						if counters[view.Name] != x.g.Script(view.Name).Counters() {
+							return fmt.Errorf("refused hidden Save changed counters")
+						}
+					}
+					crossings.hidden = false
+					if host, ok := saveErr.(*talk.HostError); !ok || host.Code != talk.EffectsPending {
+						return saveErr
+					}
+					if len(saveLines) != 2 || !strings.HasPrefix(saveLines[0], "> save ") || saveLines[1] != `refused code="effects pending"` {
+						return fmt.Errorf("refused hidden Save emitted execution records: %v", saveLines)
+					}
+					if !reflect.DeepEqual(before, after) {
+						return fmt.Errorf("refused hidden Save changed execution state")
+					}
+					return nil
+				}
+				selected := []*talk.Library{}
+				for _, l := range libraries {
+					selected = append(selected, l)
+				}
+				next, result, restoreErr := core.Restore(saved, talk.RestoreOptions{Trace: crossings, OnReady: gReady(ready), Libraries: selected, Grants: func(script, name string) *talk.Grant {
+					grants, _ := operations.grants(setups[script])
+					return grants[name]
+				}, Resolve: func(kind, id string) (any, bool) {
+					o := x.objects[objectRef{kind, id}]
+					if o == nil {
+						return nil, false
+					}
+					return o.Native(), true
+				}})
+				crossings.hidden = false
+				if restoreErr != nil {
+					return restoreErr
+				}
+
+				x.g = next
+				x.objects = restoredObjects(x.g)
+				values.objects = x.objects
+				for _, p := range result.Pending {
+					call, err := x.g.Settle(p.ID, talk.Settlement{Adopt: true})
+					if err != nil {
+						return err
+					}
+					operations.calls[p.ID] = call
+					crossings.adopted[string(p.ID)] = true
+				}
+			}
+		}
+	case "vars":
+		for _, script := range x.g.Inspect().Scripts {
+			for _, entry := range script.Vars {
+				values.receive(entry.Val)
+			}
+			for _, message := range script.Mailbox {
+				for _, arg := range message.Message.Args {
+					values.receive(arg)
+				}
+			}
+		}
+	case "counters":
+		s := x.g.Script(r.IDs[0])
+		if s == nil {
+			return fmt.Errorf("unknown Script %s", r.IDs[0])
+		}
+		s.Counters()
 	}
-	return lines, nil
+	return nil
 }
 
 // Refused admissions are traced immediately; accepted inputs are traced only

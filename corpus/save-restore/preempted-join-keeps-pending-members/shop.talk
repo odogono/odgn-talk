@@ -1,0 +1,17 @@
+-- shop.talk: part of the preempted-join-keeps-pending-members case.
+-- Grants come from case.toml: stock: check (suspending, with a maxPending
+-- of 10 s, and started as Join Members before the Group is saved)
+
+script variable results = []
+
+on gather
+  try
+    wait for all
+      ask stock to check "A1" and wait
+      ask stock to check "B2" and wait
+    end wait
+    put it after results
+  catch {code: c}
+    put c after results
+  end try
+end gather

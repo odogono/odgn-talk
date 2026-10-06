@@ -22,15 +22,20 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - name: Fuzz the TS Core
+      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
+      - name: Fuzz both Cores
         env:
           SEED: ${{ inputs.seed || github.run_id }}
           BUDGET_MINUTES: ${{ inputs.budget-minutes || '30' }}
-        run: bun run fuzz campaign --seed "$SEED" --budget-ms "$((BUDGET_MINUTES * 60000))" --output fuzz-findings
+        run: bun run fuzz campaign --seed "$SEED" --budget-ms "$((BUDGET_MINUTES * 60000))" --output fuzz-findings --go-runner .cache/fuzzworker
       # Each finding keeps its raw case, Traces and minimized case; see tooling/fuzz/README.md to reproduce one.
       - if: always()
         uses: actions/upload-artifact@v4

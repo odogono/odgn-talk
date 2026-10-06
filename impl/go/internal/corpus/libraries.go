@@ -2,16 +2,14 @@ package corpus
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 )
 
-func setupLibraries(core *talk.Core, c Case, declarations talk.GrantDecls) (map[string]*talk.Library, error) {
+func setupLibraries(core *talk.Core, setup Setup, declarations talk.GrantDecls, readSource func(Setup) (string, error)) (map[string]*talk.Library, error) {
 	setups := map[string]Setup{}
-	rows, _ := c.Setup["libraries"].([]any)
+	rows, _ := setup["libraries"].([]any)
 	for _, raw := range rows {
 		row := raw.(Setup)
 		setups[row["name"].(string)] = row
@@ -28,11 +26,11 @@ func setupLibraries(core *talk.Core, c Case, declarations talk.GrantDecls) (map[
 		}
 		row := setups[name]
 		compiling[name] = true
-		source, err := os.ReadFile(filepath.Join(c.Dir, row["source"].(string)))
+		source, err := readSource(row)
 		if err != nil {
 			return nil, err
 		}
-		tree, err := syntax.Parse(string(source))
+		tree, err := syntax.Parse(source)
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +45,7 @@ func setupLibraries(core *talk.Core, c Case, declarations talk.GrantDecls) (map[
 			}
 		}
 		version, _ := row["version"].(string)
-		l, err := core.CompileLibrary(talk.LibrarySource{Name: name, Version: version, Source: string(source)}, imports, declarations)
+		l, err := core.CompileLibrary(talk.LibrarySource{Name: name, Version: version, Source: source}, imports, declarations)
 		if err != nil {
 			return nil, err
 		}

@@ -66,7 +66,7 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 ## Uncaught errors
 
 - **The Run ends `errored`.** Its `run end` report carries the error map as a Host value.
-- **The `error` message:** the Core then puts an ordinary `error` message, with the error map as its one argument, at the back of the Script's own mailbox. An `on error` Handler picks it up as a new Run, so it never runs inside the failed Run and can't resume it.
+- **The `error` message:** the Core then puts an ordinary `error` message, with the error map as its one argument, at the back of the Script's own mailbox. It goes in before a parked Run of the same clause becomes ready ([chapter 5](05-handlers-messages-and-scheduling.md#queueing-policies)), so it is dispatched first. An `on error` Handler picks it up as a new Run, so it never runs inside the failed Run and can't resume it.
 - **Clauses:** `on error` can have Handler Clauses, as any Handler can, such as `on error {code: "timeout"}`. `on error "timeout"` is short for that, as in `catch`.
 - **`, during name`** binds `name` to the message the failed Run was handling, as the map `{name, args}`, or `{fn, args}` for a Run started by a Function Value call. The suffix is allowed only on `on error`.
 - **Only for `errored`:** there is no `error` message for a Limit Fault, `cancelled`, `unhandled` or `dropped`.

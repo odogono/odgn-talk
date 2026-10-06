@@ -1,0 +1,15 @@
+-- s.talk: part of the queued-error-before-parked-run case.
+
+script variable seen = []
+
+on work n, queued
+  wait 0 ms
+  if n = 1 then
+    throw {code: "first failed"}
+  end if
+  put n after seen
+end work
+
+on error {code: c}
+  put c after seen
+end error

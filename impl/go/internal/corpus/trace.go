@@ -76,8 +76,10 @@ func parseRecord(line string) (Record, error) {
 	}
 	for _, id := range schema.Ids {
 		at := r.At
+		// An author may leave out the ids the Core assigns (chapter 11).
+		omittable := strings.HasSuffix(id, "?") || record.Input && (id == "delivery" || id == "broadcast" || id == "save")
 		if !r.Take(" ") {
-			if strings.HasSuffix(id, "?") {
+			if omittable {
 				continue
 			}
 			return record, fmt.Errorf("missing id %s", id)
@@ -85,7 +87,7 @@ func parseRecord(line string) (Record, error) {
 		s := token()
 		if strings.Contains(s, "=") {
 			r.At = at
-			if strings.HasSuffix(id, "?") || record.Input && (id == "delivery" || id == "broadcast") {
+			if omittable {
 				continue
 			}
 			return record, fmt.Errorf("missing id %s", id)

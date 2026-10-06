@@ -1240,7 +1240,7 @@ export class Group {
       ],
       true,
     );
-    const pending = this.pending.get(id);
+    const pending = this.pendingCall(id);
     if (!this.restored || !this.unsettled.has(id) || !pending) {
       this.trace(line);
       this.trace(recordLine('refused', [], [['code', '"unknown call"']]));
@@ -1284,7 +1284,7 @@ export class Group {
     if ('adopt' in settlement) {
       return;
     }
-    const pending = this.pending.get(id);
+    const pending = this.pendingCall(id);
     if (!pending) {
       return;
     }
@@ -1310,17 +1310,29 @@ export class Group {
     }
   }
 
+  // A pending call's Run: suspended on it, or preempted in the open Join
+  // that started it, which a save keeps too (chapter 10, What a save holds).
+  private pendingCall(
+    id: string,
+  ): { running: Running; s: ScriptState } | undefined {
+    return this.pending.get(id) ?? this.openJoinCalls().get(id);
+  }
+
+  private openJoinCalls(): Map<string, { running: Running; s: ScriptState }> {
+    return new Map(
+      this.scripts.flatMap(s =>
+        this.runsOf(s).flatMap(running =>
+          running.run.openJoinCalls().map(m => [m.id, { running, s }] as const),
+        ),
+      ),
+    );
+  }
+
   private pendingOperations(): PendingCall[] {
-    return [...this.pending]
+    return [...this.pending, ...this.openJoinCalls()]
       .sort(([a], [b]) => compareCallIds(a, b))
       .flatMap(([id, pending]) => {
-        const suspension = pending.running.run.suspended;
-        const context =
-          suspension?.k === 'ask'
-            ? suspension.call
-            : suspension?.k === 'join'
-              ? suspension.members.find(m => m.id === id)?.call
-              : null;
+        const context = pending.running.run.pendingCall(id)?.call;
         if (!context) {
           return [];
         }
@@ -4229,7 +4241,6 @@ export class Group {
       fuel: run.fuel,
       alloc: run.alloc,
     });
-    this.releaseParked(s, running);
     if (
       outcome.kind === 'errored' ||
       outcome.kind === 'limit fault' ||
@@ -4269,6 +4280,8 @@ export class Group {
         });
       }
     }
+    // The `error` message goes ahead of the clause's next parked Run (chapter 6).
+    this.releaseParked(s, running);
     if (
       delivery.during &&
       (outcome.kind === 'unhandled' ||

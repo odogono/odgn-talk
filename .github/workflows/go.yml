@@ -54,3 +54,12 @@ jobs:
       - name: Enforce the Go corpus passing list
         run: go run ./cmd/corpus --check-passing
         working-directory: impl/go
+      # The TS workflow's deterministic dual-Core smoke, for changes to the Go Core.
+      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
+      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --go-runner .cache/fuzzworker
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-smoke-findings
+          path: fuzz-findings
+          if-no-files-found: ignore

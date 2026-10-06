@@ -50,6 +50,10 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C.
 - `internal/corpus/` reads setups and runs encoding, disassembly, Trace and
   Session Transcript backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
+- `internal/fuzz/` runs differential fuzz cases through the corpus runner's
+  incremental replay Host, resolving symbolic Host Inputs as the fuzzer's TS
+  runner does. `cmd/fuzzworker/` serves it over the
+  [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).

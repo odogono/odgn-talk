@@ -3,14 +3,15 @@
 Generates Scripts and Host Input sequences, runs them on the Core, and checks the Traces against conformance oracles. [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md) makes fuzzing required practice, outside the normative Spec. [The historical research](../../docs/research/differential-fuzzing.md#historical-proposal) records the original proposal and its superseded assumptions. The [oracle contract](#oracle-contract) below describes this harness ([#138](https://github.com/odogono/odgn-talk/issues/138)).
 
 ```sh
-bun run fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>]
-bun run fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>]
-bun run fuzz reproduce <case.json>
-bun run fuzz minimize <case.json> [--output <file>] [--budget-ms <n>]
+bun run fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>] [--go-runner <path>]
+bun run fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>] [--go-runner <path>]
+bun run fuzz reproduce <case.json> [--go-runner <path>]
+bun run fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--go-runner <path>]
 ```
 
-- **`smoke`** runs 64 cases within two minutes and stops at the first finding. CI runs it on every PR with `--seed 1`, so it is a deterministic gate.
-- **`campaign`** searches for 20 minutes, then minimizes up to two retained findings, within 30 minutes in all. The [nightly workflow](../../.github/workflows/fuzz.yml) runs one from a fresh seed and uploads the findings directory. Start it by hand from the Actions tab with a chosen seed and budget.
+- **`smoke`** runs 64 cases within two minutes and stops at the first finding. CI runs it on every PR with `--seed 1` in [dual-Core mode](#dual-core-mode), so it is a deterministic gate.
+- **`campaign`** searches for 20 minutes, then minimizes up to two retained findings, within 30 minutes in all. The [nightly workflow](../../.github/workflows/fuzz.yml) runs one in dual-Core mode from a fresh seed and uploads the findings directory. Start it by hand from the Actions tab with a chosen seed and budget.
+- **`--go-runner`** also runs each case on the Go Core and compares the complete Traces ([below](#dual-core-mode)).
 - **`reproduce`** reruns a saved case and prints its findings.
 - **`minimize`** reduces a saved case while its first finding keeps the same signature, and writes the smaller case.
 - **Seeds** are unsigned decimal integers. Case *n* of a run uses seed + *n*, so any case can be regenerated from the summary's seed alone. With no `--seed`, the clock picks one.
@@ -26,15 +27,18 @@ The output directory, `fuzz-findings/` by default, holds `summary.json`: the see
 | `case.json` | The case as generated. Pass it to `reproduce` or `minimize`. |
 | `result.json` | Every finding, with the first differing Trace line. |
 | `actual.trace` | The Trace the case produced. |
+| `peer.trace` | The Go Core's Trace, in dual-Core mode. |
 | `minimized.json`, `reduction.json` | The reduced case, and how the reduction went. Only for the first two findings, within budget. |
 
-To work on a nightly finding, download the run's artifact, then:
+To work on a nightly finding, download the run's artifact, [build the Go worker](#dual-core-mode), then:
 
 ```sh
-bun run fuzz reproduce fuzz-findings/<signature>/case.json
-bun run fuzz minimize fuzz-findings/<signature>/case.json --output minimized.json
-bun run fuzz reproduce minimized.json
+bun run fuzz reproduce fuzz-findings/<signature>/case.json --go-runner .cache/fuzzworker
+bun run fuzz minimize fuzz-findings/<signature>/case.json --output minimized.json --go-runner .cache/fuzzworker
+bun run fuzz reproduce minimized.json --go-runner .cache/fuzzworker
 ```
+
+Leave out `--go-runner` for a finding from the TS oracles alone.
 
 A fixed divergence becomes a corpus case under [`corpus/`](../../corpus/), blessed by the corpus procedure.
 
@@ -46,7 +50,22 @@ A fixed divergence becomes a corpus case under [`corpus/`](../../corpus/), bless
 - **Workers** ([`controller.ts`](src/controller.ts), [`worker.ts`](src/worker.ts)) run cases in a child process with a watchdog, so a hang or crash is a finding rather than a stalled campaign. A crash is rerun in a fresh process before it counts.
 - **Minimization** ([`minimize.ts`](src/minimize.ts)) first deletes and shrinks choices, then reduces concrete Host Inputs and Script syntax.
 
-The dual-Core mode compares complete Traces from a second runner, passed in with `--go-runner <path>`. It speaks the [worker](src/worker.ts) protocol of one JSON request and response per line, and stays unused until the Go Core has a fuzz runner.
+## Dual-Core mode
+
+With `--go-runner <path>`, every case also runs on the Go Core's fuzz worker, and the first differing line of the two complete Traces is a `differential` finding. The TS oracles still run on the TS Core alone. Build the worker from the repository root:
+
+```sh
+go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
+bun run fuzz smoke --seed 1 --go-runner .cache/fuzzworker
+```
+
+The worker ([`cmd/fuzzworker`](../../impl/go/cmd/fuzzworker/), [`internal/fuzz`](../../impl/go/internal/fuzz/)) speaks the [worker](src/worker.ts) protocol of one JSON request and response per line on stdin and stdout, and does no filesystem or network I/O:
+
+- **`capabilities`** answers with the protocol `version`, the `features` it supports, and the Core's `languageVersion` and `costModel`. The run stops with an error if these versions differ from the TS worker's, or if a case's profile has a feature the worker doesn't list.
+- **`run`** replays a case's Host Inputs through the Go corpus runner's replay Host, resolving each symbolic reference against the Go Core's own Trace exactly as [`runner.ts`](src/runner.ts) does. It answers with the `execution` that `evaluate` compares: the Trace, the action and record counts, and Group Fingerprints around each input. A case the harness can't run, such as one with no lifecycle Stub for a Segment, is a `generator` finding; any other failure is a `worker-exception` finding.
+- **Anything else** gets `{"error": …}`.
+
+The Go worker runs no oracles, so a divergence it finds in replay, rollback or metamorphic behaviour shows up only as a Trace difference against TS.
 
 ## Oracle contract
 
