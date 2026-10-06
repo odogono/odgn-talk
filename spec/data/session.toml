@@ -16,7 +16,7 @@
 [[command]]
 name = ":grant"
 usage = ":grant <name> <capability> [<binding>]"
-does = "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone or a `locale` Grant's default tag as `<binding>`"
+does = "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`"
 before = true
 
 [[command]]
@@ -84,6 +84,11 @@ does = "Restores the session saved under `<name>`, or `default`"
 name = ":library"
 usage = ":library add <name> <path> | :library replace <name> <path>"
 does = "Adds a user Library from a file, or replaces one, carrying Script Variables over"
+
+[[command]]
+name = ":store"
+usage = ":store [<store>] | :store load <path> [<store>] | :store save <path> [<store>] | :store clear [<store>]"
+does = "Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store"
 
 [[command]]
 name = ":export"

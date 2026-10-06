@@ -491,5 +491,52 @@ var Errors = ErrorsTable{
 			},
 			Message: "The Grant for {capability} is disabled, so {operation} cannot be called",
 		},
+		ErrorsTableErrorEntry{
+			Code:       "invalid key",
+			Fields:     []string{},
+			RaisedWhen: "A `store` Operation is given empty text as its key; the Core raises it before the Host function runs",
+			Sources: []string{
+				"ADR 0050",
+				"#226",
+			},
+			Message: "A Store key can't be empty text",
+		},
+		ErrorsTableErrorEntry{
+			Code: "can't store",
+			Fields: []string{
+				"kind",
+			},
+			RaisedWhen: "A `store` write's value holds a Host Object, at any depth; `kind` is its Object Kind, and the Host raises it",
+			Sources: []string{
+				"ADR 0050",
+				"#226",
+			},
+			Message: "A {kind} object can't be kept in a Store",
+		},
+		ErrorsTableErrorEntry{
+			Code: "store full",
+			Fields: []string{
+				"limit",
+			},
+			RaisedWhen: "A `store` write would take the Store past one of its quotas, counting every live Segment's pending growth; `limit` is `size`, `keys` or `value`, and the Host raises it",
+			Sources: []string{
+				"ADR 0050",
+				"ADR 0062",
+				"#226",
+			},
+			Message: "The Store's {limit} limit would be exceeded",
+		},
+		ErrorsTableErrorEntry{
+			Code: "store busy",
+			Fields: []string{
+				"key",
+			},
+			RaisedWhen: "A `store` write names a key that another live Segment has reserved with an uncommitted write; the Host raises it before anything changes",
+			Sources: []string{
+				"ADR 0062",
+				"#226",
+			},
+			Message: "Another Segment is writing {key}",
+		},
 	},
 }
