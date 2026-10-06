@@ -1,0 +1,10 @@
+-- Iterate ASCII Characters; the peer character APIs agree on this input.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    repeat for each ch in the characters of "NorthTalk rocks!"
+      add the length of ch to total
+    end repeat
+  end repeat
+  return total
+end run

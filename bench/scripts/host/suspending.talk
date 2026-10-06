@@ -1,0 +1,9 @@
+-- One suspended Operation and a second Pump for every iteration.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    ask host to later i and wait
+    add it to total
+  end repeat
+  return total
+end run

@@ -1,0 +1,10 @@
+-- Build a List with collecting, then iterate it for a checksum.
+on run n
+  repeat for each i in 1..n collecting i into values
+  end repeat
+  put 0 into total
+  repeat for each v in values
+    add v to total
+  end repeat
+  return total
+end run
