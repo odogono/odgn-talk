@@ -1769,14 +1769,16 @@ export class Run {
   // Suspend at the current instruction, a Segment's end: Persistent State,
   // this Run's frames included, is measured first (chapter 6, Limits).
   private suspend(s: Suspension) {
-    // A paid Script send is already in the receiver's mailbox. Its reply wait
-    // counts at this boundary, before `suspended` is installed for the scheduler.
-    const reply = s.k === 'send' ? partSize('pending call', 0, 0) : 0;
+    // Measure the prospective suspension without installing it: a fault must
+    // still roll back this Segment, while preserving already-started crossings.
     if (
       this.charging &&
-      this.persistentState() + this.size() + reply > this.limits.persistentState
+      this.persistentState() + this.size(s) > this.limits.persistentState
     ) {
-      if (s.k === 'send') {
+      if (s.k === 'ask') {
+        s.abort.abort();
+        this.faultAbandons.push(s.call.id);
+      } else if (s.k === 'send' || s.k === 'call-value') {
         this.faultAbandons.push(s.id);
       }
       throw new LimitFaultError('persistentState', this.frame.pc);
@@ -2136,7 +2138,7 @@ export class Run {
   }
 
   /** Its logical size, as Persistent State counts a suspended Run (chapter 8). */
-  size(): number {
+  size(s: Suspension | null = this.suspended ?? this.waitedOn): number {
     let frames = 0;
     const retained = new Set([
       ...this.frames,
@@ -2151,7 +2153,6 @@ export class Run {
     }
     // Each pending call, and a Join's early answers.
     let calls = 0;
-    const s = this.suspended ?? this.waitedOn;
     if (this.resumption) {
       calls = resumptionSize(this.resumption);
     } else if (s?.k === 'ask' || s?.k === 'send' || s?.k === 'call-value') {
@@ -2773,6 +2774,9 @@ export class Run {
       if (member) {
         this.join!.members.push({ id, call: ctx, abort, ms });
       } else {
+        // The Host has consumed the operands. Retain the call, not another
+        // copy of its arguments on the frame's operand stack.
+        this.frame.stack.length -= args.length;
         this.suspend({ k: 'ask', call: ctx, abort, ms });
       }
       return nothing;
@@ -3476,7 +3480,6 @@ export class Run {
         const n = c as number;
         const args = this.popArgs(n);
         this.capability(a as string, b as string, args, key);
-        frame.stack.length -= n;
         return;
       }
       case 'wait-for':

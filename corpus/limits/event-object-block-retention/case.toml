@@ -1,0 +1,23 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[objectKinds]]
+name = "door"
+[[objects]]
+kind = "door"
+id = "d"
+[[objects]]
+kind = "door"
+id = "root"
+[[scripts]]
+name = "below"
+source = "s.talk"
+limits = { persistentState = 207 }
+objects = { door = { kind = "door", id = "d" } }
+[[scripts]]
+name = "exact"
+source = "s.talk"
+limits = { persistentState = 208 }
+objects = { door = { kind = "door", id = "d" } }
+owner = { kind = "door", id = "root" }

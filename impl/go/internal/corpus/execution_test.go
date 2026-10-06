@@ -478,6 +478,38 @@ func TestSuspendingOperationAcceptance(t *testing.T) {
 	}
 }
 
+func TestSuspensionRetentionAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	names := []string{
+		"limits/ask-wait-retention", "limits/foreign-call-retention",
+		"limits/event-capture-wait-retention", "limits/event-capture-block-retention",
+		"limits/event-object-wait-retention", "limits/event-object-block-retention",
+		"limits/join-pending-retention", "limits/join-early-answer-retention",
+	}
+	cases, err := Discover(root, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if reason := runner.support(c); reason != "" {
+				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Errorf("required suspension retention case missing from gate: %s", c.Name)
+			}
+		})
+	}
+}
+
 // Library and normative Standard Library calls protect the shared code context.
 func TestLibraryExecutionAcceptance(t *testing.T) {
 	const root = "../../../../corpus"

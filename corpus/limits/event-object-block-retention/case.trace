@@ -1,0 +1,60 @@
+# Unblessed: first human review required for #281.
+> load below identity=1ec84f4db575f46330f7a56021abc33f9f2ee733ed79a9d418a5283eb2365b2e
+> load exact identity=53195198b15a9c7ef97fa576c4780044b89d5e6edc3488a0620abe1991761917
+> set-parent object=<object door "d"> parent=<object door "root">
+> deliver d1 to=below message=go
+> deliver d2 to=exact message=go
+> pump clock=2026-10-06T12:00:00Z
+fault below/r1 limit=persistent at=below:4 pos=2:2
+seg below/r1 start delivery=d1 handler=go clause=1 fuel=16 alloc=0 state=0 end=fault
+run below/r1 outcome=limit-fault delivery=d1 handler=go limit=persistent fuel=16 alloc=0
+seg exact/r1 start delivery=d2 handler=go clause=1 fuel=16 alloc=0 state=208 end=wait-for-any until=2026-10-06T12:00:01Z
+pumped state=idle fuel=32 next=2026-10-06T12:00:01Z
+> counters below
+counters below fuel=16 alloc=0 runs=1 faults=1 state=0 mailbox=0
+> counters exact
+counters exact fuel=16 alloc=0 runs=1 faults=0 state=208 mailbox=0
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r1 resume fuel=15 alloc=0 state=0 end=return
+run exact/r1 outcome=completed delivery=d2 handler=go fuel=31 alloc=0
+pumped state=idle fuel=15
+> deliver d3 to=exact message=go
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r2 start delivery=d3 handler=go clause=1 fuel=16 alloc=0 state=208 end=wait-for-any until=2026-10-06T12:00:02Z
+pumped state=idle fuel=16 next=2026-10-06T12:00:02Z
+> cancel-run exact/r2
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r2 resume fuel=0 alloc=0 state=0 end=cancel
+run exact/r2 outcome=cancelled delivery=d3 handler=go fuel=16 alloc=0
+pumped state=idle fuel=0
+> deliver d4 to=exact message=ping
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r3 start delivery=d4 fuel=0 alloc=0 state=0 end=unhandled
+run exact/r3 outcome=unhandled delivery=d4 fuel=0 alloc=0
+unhandled d4 message=ping target=<object door "root">
+pumped state=idle fuel=0
+> counters exact
+counters exact fuel=47 alloc=0 runs=3 faults=0 state=0 mailbox=0
+> deliver d5 to=exact message=go
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r4 start delivery=d5 handler=go clause=1 fuel=16 alloc=0 state=208 end=wait-for-any until=2026-10-06T12:00:02Z
+pumped state=idle fuel=16 next=2026-10-06T12:00:02Z
+> deliver d6 to=exact message=ping
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r5 start delivery=d6 fuel=0 alloc=0 state=208 end=unhandled
+run exact/r5 outcome=unhandled delivery=d6 fuel=0 alloc=0
+unhandled d6 message=ping target=<object door "root">
+pumped state=idle fuel=0 next=2026-10-06T12:00:02Z
+> deliver d7 to=<object door "d"> message=ping
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r6 start delivery=d7 fuel=0 alloc=0 state=300 end=unhandled
+run exact/r6 outcome=unhandled delivery=d7 fuel=0 alloc=0
+unhandled d7 message=ping target=<object door "d">
+seg exact/r4 resume fuel=10 alloc=0 state=0 end=return
+run exact/r4 outcome=completed delivery=d5 handler=go fuel=26 alloc=0
+pumped state=idle fuel=10
+> counters exact
+counters exact fuel=73 alloc=0 runs=6 faults=0 state=0 mailbox=0
+> vars
+vars below
+vars exact

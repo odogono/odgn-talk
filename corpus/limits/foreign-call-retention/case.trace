@@ -1,0 +1,72 @@
+# Unblessed: first human review required for #281.
+> load below identity=c14aca95f2a0716d0ab0d18949f72157cffd3d6e23da0bb4ca3f50168c89e139
+> load exact identity=81c80b87fada8d89c3311a31da2097f0fe0112adef842c64b4b9a07b3ab0d063
+> load home identity=25f2a6d9baaf3284e0c15aa2f4c09cd21569adaa7ac7dac9fc2d79bcff0e396b
+> deliver d1 to=home message=begin
+> pump clock=2026-10-06T12:00:00Z
+send home/r1 to=below message=go args=[<function home:3:6>]
+send home/r1 to=exact message=go args=[<function home:3:6>]
+seg home/r1 start delivery=d1 handler=begin clause=1 fuel=60 alloc=160 state=16 end=return
+run home/r1 outcome=completed delivery=d1 handler=begin fuel=60 alloc=160
+send below/r1.c1 to=home fn=<function home:3:6> wait=yes
+fault below/r1 limit=persistent at=below:7 pos=4:2 rollback=[stage]
+abandon below/r1.c1
+seg below/r1 start from=home/r1 handler=go clause=1 fuel=16 alloc=0 state=16 end=fault
+run below/r1 outcome=limit-fault handler=go limit=persistent fuel=16 alloc=0
+send exact/r1.c1 to=home fn=<function home:3:6> wait=yes
+seg exact/r1 start from=home/r1 handler=go clause=1 fuel=16 alloc=0 state=280 end=call-value-wait
+seg home/r2 start from=below/r1.c1 fn=<function home:3:6> fuel=11 alloc=0 state=272 end=wait until=2026-10-06T12:00:01Z
+seg home/r3 start from=exact/r1.c1 fn=<function home:3:6> fuel=11 alloc=0 state=400 end=wait until=2026-10-06T12:00:01Z
+pumped state=idle fuel=114 next=2026-10-06T12:00:01Z
+> counters below
+counters below fuel=16 alloc=0 runs=1 faults=1 state=16 mailbox=0
+> counters exact
+counters exact fuel=16 alloc=0 runs=1 faults=0 state=280 mailbox=0
+> vars
+vars below stage=0
+vars exact stage=1
+vars home done=0
+> pump clock=2026-10-06T12:00:01Z
+seg home/r2 resume fuel=13 alloc=16 state=208 end=return
+run home/r2 outcome=completed fn=<function home:3:6> value=7 fuel=24 alloc=16
+seg home/r3 resume fuel=13 alloc=16 state=16 end=return
+run home/r3 outcome=completed fn=<function home:3:6> value=7 fuel=24 alloc=16
+seg exact/r1 resume fuel=4 alloc=0 state=16 end=return
+run exact/r1 outcome=completed handler=go value=7 fuel=20 alloc=0
+pumped state=idle fuel=30
+> vars
+vars below stage=0
+vars exact stage=1
+vars home done=2
+> deliver d2 to=home message=begin
+> pump clock=2026-10-06T12:00:01Z
+send home/r4 to=below message=go args=[<function home:3:6>]
+send home/r4 to=exact message=go args=[<function home:3:6>]
+seg home/r4 start delivery=d2 handler=begin clause=1 fuel=60 alloc=160 state=16 end=return
+run home/r4 outcome=completed delivery=d2 handler=begin fuel=60 alloc=160
+send below/r2.c1 to=home fn=<function home:3:6> wait=yes
+fault below/r2 limit=persistent at=below:7 pos=4:2 rollback=[stage]
+abandon below/r2.c1
+seg below/r2 start from=home/r4 handler=go clause=1 fuel=16 alloc=0 state=16 end=fault
+run below/r2 outcome=limit-fault handler=go limit=persistent fuel=16 alloc=0
+send exact/r2.c1 to=home fn=<function home:3:6> wait=yes
+seg exact/r2 start from=home/r4 handler=go clause=1 fuel=16 alloc=0 state=280 end=call-value-wait
+seg home/r5 start from=below/r2.c1 fn=<function home:3:6> fuel=11 alloc=0 state=272 end=wait until=2026-10-06T12:00:02Z
+seg home/r6 start from=exact/r2.c1 fn=<function home:3:6> fuel=11 alloc=0 state=400 end=wait until=2026-10-06T12:00:02Z
+pumped state=idle fuel=114 next=2026-10-06T12:00:02Z
+> cancel-run exact/r2
+> pump clock=2026-10-06T12:00:01Z
+seg exact/r2 resume fuel=0 alloc=0 state=16 end=cancel
+abandon exact/r2.c1
+run exact/r2 outcome=cancelled handler=go fuel=16 alloc=0
+pumped state=idle fuel=0 next=2026-10-06T12:00:02Z
+> pump clock=2026-10-06T12:00:02Z
+seg home/r5 resume fuel=13 alloc=16 state=208 end=return
+run home/r5 outcome=completed fn=<function home:3:6> value=7 fuel=24 alloc=16
+seg home/r6 resume fuel=13 alloc=16 state=16 end=return
+run home/r6 outcome=completed fn=<function home:3:6> value=7 fuel=24 alloc=16
+pumped state=idle fuel=26
+> vars
+vars below stage=0
+vars exact stage=1
+vars home done=4

@@ -1,0 +1,6 @@
+on go
+ wait for
+ when ping from door then return
+ after 1 s then return
+ end wait
+end go

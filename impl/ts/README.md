@@ -350,7 +350,15 @@ replies are applied in arrival order at `join-end`; their answers and receiver
 error maps count toward Persistent State. Ordinary Capability calls and mixed Joins now agree with Go on the reviewed answer
 and Join cases and the new `suspension/capability-resumption` regression. The new
 case also agrees on TS save/restore, retaining its `Unblessed` header for first
-human review. Other suspension forms remain under audit in
+human review. Suspending Operations and foreign Function Value calls also
+count their new 48-byte pending calls at the charged boundary, after consuming
+their operands. Event waits count each branch's evaluated object filter and
+captured Values at that boundary, including repeated captures; a named Script
+adds no Value size. A retention fault rolls back Script Variables and abandons
+pending calls after the fault record, while preserving already-started Host
+work and receiver messages. The [suspension retention audit](../../docs/reviews/suspension-retention/README.md)
+records the tight-limit regressions, their Go/TS ordinary and save/restore
+agreement, and the expectations awaiting first human review for
 [#281](https://github.com/odogono/odgn-talk/issues/281).
 Join failures, timeouts and faults at `join-end` use the closing `end` token's
 source position, for bare `end` and `end wait`, including Joins in local Handlers
