@@ -1,0 +1,67 @@
+# What commit and rollback do with a Segment's writes.
+quotas = { size = 1048576, keys = 1000, value = 65536 }
+
+[[sequence]]
+name = "rollback discards every write"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", 1]' },
+  { in = "a", do = "increment", args = '["n"]', gives = '1' },
+  { in = "a", do = "rollback" },
+  { in = "b", do = "get", args = '["k"]', gives = 'nothing' },
+  { in = "b", do = "keys", gives = '[]' },
+]
+
+[[sequence]]
+name = "commit applies writes to one key in call order"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", 1]' },
+  { in = "a", do = "increment", args = '["k", 2]', gives = '3' },
+  { in = "a", do = "set", args = '["k", 10]' },
+  { in = "a", do = "increment", args = '["k"]', gives = '11' },
+  { in = "a", do = "delete", args = '["j"]' },
+  { in = "a", do = "increment", args = '["j", 5]', gives = '5' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", args = '["k"]', gives = '11' },
+  { in = "b", do = "get", args = '["j"]', gives = '5' },
+]
+
+[[sequence]]
+name = "a commit with no writes changes nothing"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "commit" },
+  { in = "b", do = "keys", gives = '[]' },
+]
+
+[[sequence]]
+name = "commit adds increments to the value committed then, so none is lost"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["n", 10]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "increment", args = '["n", 1]', gives = '11' },
+  { in = "c", do = "begin" },
+  { in = "c", do = "increment", args = '["n", 2]', gives = '12' },
+  { in = "d", do = "get", args = '["n"]', gives = '10' },
+  { in = "c", do = "commit" },
+  { in = "d", do = "get", args = '["n"]', gives = '12' },
+  { in = "b", do = "get", args = '["n"]', gives = '13' },
+  { in = "b", do = "commit" },
+  { in = "d", do = "get", args = '["n"]', gives = '13' },
+]
+
+[[sequence]]
+name = "increments of a missing key from two Segments both count"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "increment", args = '["d", 2 m]', gives = '2 m' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "increment", args = '["d", 50 cm]', gives = '50 cm' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", args = '["d"]', gives = '2.50 m' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "get", args = '["d"]', gives = '2.50 m' },
+]

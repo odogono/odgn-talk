@@ -114,7 +114,10 @@ const fits = (l: Literal, s: Shape): boolean => {
     case 'optional':
       return (l.k === 'kind' && l.kind === 'nothing') || fits(l, s.of);
     case 'kind':
-      return l.k === 'kind' && l.kind === s.kind;
+      return (
+        (l.k === 'kind' && l.kind === s.kind) ||
+        (l.k === 'quantity' && s.kind === 'quantity')
+      );
     case 'object':
       // Host Objects have no Script literal form.
       return false;

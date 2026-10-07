@@ -9,7 +9,7 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 **Pending language support:** [Recovery Offers](../../spec/proposals/recovery-offers.md#tooling) is an accepted design. The shared formatter, diagnostics, Lints, sessions and debugger do not support its forms or recovery views yet; this also applies to the CLI and Playground that consume this stack.
 
-`@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line.
+`@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
 
 ## Formatter
 

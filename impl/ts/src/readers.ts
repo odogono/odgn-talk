@@ -658,3 +658,26 @@ export const decodeValue = (
   reader.done();
   return fromJson(value, resolve);
 };
+
+/**
+ * The members of one JSON object, each value in the Value Encoding, as a
+ * Store's contents are written to a file (chapter 12, `:store`).
+ */
+export const decodeValueMembers = (
+  source: string,
+  resolve?: ObjectResolver,
+): [string, Value][] => {
+  const reader = new JsonReader(source);
+  const value = reader.value();
+  reader.whitespace();
+  reader.done();
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value.kind !== 'object'
+  ) {
+    return invalidValue('Expected one JSON object');
+  }
+  return value.pairs.map(([key, member]) => [key, fromJson(member, resolve)]);
+};

@@ -1,0 +1,80 @@
+# Quotas, counted by logical size, with every live Segment's pending growth
+# (chapter 8, Logical sizes; ADR 0062). A one-letter key with a number is
+# 17 + 16 = 33.
+quotas = { size = 120, keys = 10, value = 40 }
+
+[[sequence]]
+name = "a value past the value limit, where text is 16 + its UTF-8 bytes"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", "twenty-five characters..."]', error = '{code: "store full", limit: "value"}' },
+  { in = "a", do = "set", args = '["k", "twenty-four characters.."]' },
+  { in = "a", do = "swap", args = '["j", nothing, [1, 2]]', error = '{code: "store full", limit: "value"}' },
+  { in = "a", do = "get", args = '["j"]', gives = 'nothing' },
+]
+
+[[sequence]]
+name = "the key limit"
+quotas = { size = 1000, keys = 3, value = 40 }
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["a", 1]' },
+  { in = "a", do = "set", args = '["b", 1]' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["c", 1]' },
+  { in = "b", do = "set", args = '["d", 1]', error = '{code: "store full", limit: "keys"}' },
+  { in = "b", do = "increment", args = '["e"]', error = '{code: "store full", limit: "keys"}' },
+  { in = "b", do = "set", args = '["c", 2]' },
+  { in = "a", do = "rollback" },
+  { in = "b", do = "set", args = '["d", 1]' },
+]
+
+[[sequence]]
+name = "the size limit counts other Segments' pending growth"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["a", 1]' },
+  { in = "a", do = "set", args = '["b", 1]' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["c", 1]' },
+  { in = "b", do = "set", args = '["d", 1]', error = '{code: "store full", limit: "size"}' },
+  { in = "b", do = "increment", args = '["d"]', error = '{code: "store full", limit: "size"}' },
+  { in = "b", do = "increment", args = '["c"]', gives = '2' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "commit" },
+  { in = "c", do = "keys", gives = '["a", "b", "c"]' },
+]
+
+[[sequence]]
+name = "a Segment's own deletes make room, but another Segment's pending deletes don't"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["a", 1]' },
+  { in = "a", do = "set", args = '["b", 1]' },
+  { in = "a", do = "set", args = '["c", 1]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "delete", args = '["a"]' },
+  { in = "c", do = "begin" },
+  { in = "c", do = "set", args = '["d", 1]', error = '{code: "store full", limit: "size"}' },
+  { in = "b", do = "set", args = '["d", 1]' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "set", args = '["e", 1]', error = '{code: "store full", limit: "size"}' },
+  { in = "c", do = "set", args = '["b", nothing]' },
+  { in = "c", do = "set", args = '["e", 1]' },
+  { in = "c", do = "commit" },
+  { in = "d", do = "keys", gives = '["c", "d", "e"]' },
+]
+
+[[sequence]]
+name = "a value that grows counts its new size"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["a", 1]' },
+  { in = "a", do = "set", args = '["b", 1]' },
+  { in = "a", do = "set", args = '["c", 1]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["a", "twenty-two characters!"]', error = '{code: "store full", limit: "size"}' },
+  { in = "b", do = "set", args = '["a", true]' },
+]

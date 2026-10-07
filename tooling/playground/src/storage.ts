@@ -49,3 +49,33 @@ export const save = (saved: Saved) => {
     // Storage may be full or disabled; autosave is best effort.
   }
 };
+
+// `:store load` and `:store save` name slots the page keeps, since the
+// session worker has no file system (chapter 12, `:store`).
+const SLOT = 'northtalk-playground-store:';
+
+/** Every Store slot the page keeps, by name. */
+export const loadStoreSlots = (): Record<string, string> => {
+  const slots: Record<string, string> = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(SLOT)) {
+        slots[key.slice(SLOT.length)] = localStorage.getItem(key) ?? '';
+      }
+    }
+  } catch {
+    // Storage may be disabled; there are no slots then.
+  }
+  return slots;
+};
+
+/** Keeps a Store slot that `:store save` wrote. */
+export const saveStoreSlot = (slot: string, text: string): boolean => {
+  try {
+    localStorage.setItem(SLOT + slot, text);
+    return true;
+  } catch {
+    return false;
+  }
+};

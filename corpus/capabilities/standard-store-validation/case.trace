@@ -1,0 +1,63 @@
+# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# The Core's checks: an empty key is `invalid key`, before the call is charged
+# or the Host runs; arguments break their Shapes; result kinds are checked.
+> load s identity=140028952c8b9c49037de054a9e23692afa6c7afe5629e425ab177a12792e7f7
+> deliver d1 to=s message=go args=["", 1]
+> pump clock=2026-10-07T12:00:00Z
+raise s/r1 code="invalid key" at=s:6 pos=3:3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=10 alloc=0 state=8 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "invalid key", at: {unit: "s", handler: "go", line: 3, column: 3}} fuel=10 alloc=0
+pumped state=idle fuel=10
+> deliver d2 to=s message=go args=[1, 1]
+> pump clock=2026-10-07T12:00:00Z
+raise s/r2 code="wrong kind" at=s:6 pos=3:3
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=10 alloc=0 state=8 end=error
+run s/r2 outcome=errored delivery=d2 handler=go error={code: "wrong kind", expected: "text", got: "number", value: 1, capability: "st", operation: "set", argument: 1, at: {unit: "s", handler: "go", line: 3, column: 3}} fuel=10 alloc=0
+pumped state=idle fuel=10
+> deliver d3 to=s message=bump args=["1"]
+> pump clock=2026-10-07T12:00:00Z
+raise s/r3 code="wrong kind" at=s:13 pos=6:3
+seg s/r3 start delivery=d3 handler=bump clause=1 fuel=10 alloc=0 state=8 end=error
+run s/r3 outcome=errored delivery=d3 handler=bump error={code: "wrong kind", expected: "number or quantity or nothing", got: "text", value: "1", capability: "st", operation: "increment", argument: 2, at: {unit: "s", handler: "bump", line: 6, column: 3}} fuel=10 alloc=0
+pumped state=idle fuel=10
+> deliver d4 to=s message=keep
+> pump clock=2026-10-07T12:00:00Z
+raise s/r4 code="not encodable" at=s:36 pos=17:3
+seg s/r4 start delivery=d4 handler=keep clause=1 fuel=17 alloc=88 state=8 end=error
+run s/r4 outcome=errored delivery=d4 handler=keep error={code: "not encodable", kind: "function", path: [2, 1], at: {unit: "s", handler: "keep", line: 17, column: 3}} fuel=17 alloc=88
+pumped state=idle fuel=17
+> stub-effect s.st phase=begin status=ok
+> stub store.increment value="one"
+> stub-effect s.st phase=commit status=ok
+> deliver d5 to=s message=bump args=[1]
+> pump clock=2026-10-07T12:00:00Z
+effect s/r5.s1 grant=st phase=begin status=ok
+call s/r5.c1 op=st.increment args=["n", 1] error={}
+call-failed s/r5.c1 op=st.increment
+raise s/r5 code="host error" at=s:13 pos=6:3
+effect s/r5.s1 grant=st phase=commit status=ok
+seg s/r5 start delivery=d5 handler=bump clause=1 fuel=24 alloc=0 state=8 end=error
+run s/r5 outcome=errored delivery=d5 handler=bump error={code: "host error", capability: "st", operation: "increment", at: {unit: "s", handler: "bump", line: 6, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.keys value=["a", 1]
+> deliver d6 to=s message=list
+> pump clock=2026-10-07T12:00:00Z
+call s/r6.c1 op=st.keys args=[] error={}
+call-failed s/r6.c1 op=st.keys
+raise s/r6 code="host error" at=s:20 pos=10:3
+seg s/r6 start delivery=d6 handler=list clause=1 fuel=20 alloc=0 state=8 end=error
+run s/r6 outcome=errored delivery=d6 handler=list error={code: "host error", capability: "st", operation: "keys", at: {unit: "s", handler: "list", line: 10, column: 3}} fuel=20 alloc=0
+pumped state=idle fuel=20
+> stub-effect s.st phase=begin status=ok
+> stub store.increment value=3 m
+> stub-effect s.st phase=commit status=ok
+> deliver d7 to=s message=bump args=[2 m]
+> pump clock=2026-10-07T12:00:00Z
+effect s/r7.s1 grant=st phase=begin status=ok
+call s/r7.c1 op=st.increment args=["n", 2 m] result=3 m
+effect s/r7.s1 grant=st phase=commit status=ok
+seg s/r7 start delivery=d7 handler=bump clause=1 fuel=28 alloc=24 state=24 end=return
+run s/r7 outcome=completed delivery=d7 handler=bump fuel=28 alloc=24
+pumped state=idle fuel=28
+> vars
+vars s seen=3 m

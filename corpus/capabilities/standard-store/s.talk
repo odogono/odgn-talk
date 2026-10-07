@@ -1,0 +1,15 @@
+script variable seen = nothing
+on save name, points
+  ask st to get "best", 0
+  if points > it then ask st to set "best", points
+  ask st to increment "plays"
+  ask st to increment "distance", 2.5 km
+  ask st to swap "first", nothing, name
+  put it into seen
+end save
+on look
+  ask st to get "best"
+  ask st to keys "b"
+  put it into seen
+  ask st to delete "best"
+end look

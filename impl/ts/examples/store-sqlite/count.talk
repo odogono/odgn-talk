@@ -1,0 +1,9 @@
+script variable runs = 0
+
+on start
+  ask visits to increment "runs"
+  put it into runs
+  ask visits to swap "first", nothing, "the first run"
+  ask visits to get "first"
+  say "Run " & runs & ", since " & it
+end start
