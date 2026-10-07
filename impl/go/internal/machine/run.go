@@ -499,7 +499,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 
 		if err != nil {
 			if i.Name == "throw" {
-				f.Stack = trial.Stack
+				// Raising retains this frame while policy uses the trial buffer.
+				f.Stack = slices.Clone(trial.Stack)
 			}
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {

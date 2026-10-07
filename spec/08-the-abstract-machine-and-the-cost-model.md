@@ -71,7 +71,7 @@ Each body numbers its locals from 0, in this order:
 2. **The arguments,** from slot 1: for a function, its parameters. For a Handler Clause, a Lambda or an event test, one slot per parameter: a parameter that is a plain name is that name's slot, and any other pattern's argument has a slot of its own.
 3. **The names a parameter pattern binds**, left to right.
 4. **The captures** of a Lambda or an event test, in the order its code first names them ([Lambdas](#calls-lambdas-and-function-values)).
-5. **The body's other locals**, in the order their first binding sites appear in the source ([chapter 4](04-expressions-and-statements.md#bodies-and-locals)). A binding site is a name in a pattern, a Capture written in a Text Pattern that binds, or a Container's root, and one inside a nested Lambda doesn't count.
+5. **The body's other locals**, in the order their first binding sites appear in the source ([chapter 4](04-expressions-and-statements.md#bodies-and-locals)). A binding site is a name in a pattern, a Capture written in a Text Pattern that binds, a Container's root or an offer parameter Name, and one inside a nested Lambda doesn't count. An offer parameter that binds an existing local uses that local's existing slot.
 6. **Temps:** a lowering that needs a slot of its own takes the lowest-numbered temp that isn't in use, or else a new slot after all the others. It releases the temp when the construct that took it has been lowered, as each rule below says.
 
 ## The instruction set

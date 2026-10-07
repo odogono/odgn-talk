@@ -144,16 +144,21 @@ allocation improvements. Generated conflicts are resolved by the generators.
 Go's reusable active operand buffer could also be referenced by a retained
 activation; overwriting it changed saved control in ordinary versus restored
 execution at step 62 of the row-policy test. Recovery now detaches that buffer
-while preserving actual shared owner locals. Ordinary control keeps its reuse.
+while preserving actual shared owner locals. Ordinary control keeps its reuse. The throw path also detaches consumed operands
+before raising; otherwise selection overwrites a retained counted-loop iterator.
+The shared `throw retains counted-loop iterator during dispatch` case returns 2
+on both Cores and joins every-boundary save/restore testing.
 The original failing snapshot suite passes with this correction, including all
-39 scenarios at Slice 1 and at Slice 7 / cap 3, Library callbacks and cancellation.
+40 scenarios at Slice 1 and at Slice 7 / cap 3, Library callbacks and cancellation.
 
 ## Validation
 
 - Spec checks, generated Go checks and all documentation fences: pass.
 - Full workspace tests, typecheck, lint and formatting: pass.
-- Go race/vet, full corpus gates, Node tooling/CLI, builds and seed-1 dual-Core
-  fuzz: results are recorded in the final slice PR once complete.
+- Go race/vet, full corpus gates, Node tooling/CLI and builds: pass.
+- Seed-1 dual-Core fuzz: 64 cases, zero findings.
+- All 50 approval cases are checked explicitly on TS, and the complete 307-case
+  Go gate passes, including ordinary and transparent Save/Restore replay.
 - All eight Recovery Offers cases are explicitly checked while unblessed on
   both Cores, including ordinary and transparent Save/Restore replay. Their
   eventual default/gate status cannot silently substitute for explicit approval.

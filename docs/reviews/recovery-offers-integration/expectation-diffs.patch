@@ -1,445 +1,287 @@
 --- corpus/builtins/function-values/case.trace (cdee6bf)
 +++ corpus/builtins/function-values/case.trace (candidate)
-@@ -9,9 +9,9 @@
- > pump clock=2026-10-02T09:00:00Z
- raise probe/r1 code="wrong kind" at=probe:59 pos=24:9
- raise probe/r1 code="wrong kind" at=probe:76 pos=29:9
+@@ -12,3 +12,3 @@
 -seg probe/r1 start delivery=d1 handler=go clause=1 fuel=270 alloc=3436 state=1818 end=return
 -run probe/r1 outcome=completed delivery=d1 handler=go fuel=270 alloc=3436
 -pumped state=idle fuel=270
 +seg probe/r1 start delivery=d1 handler=go clause=1 fuel=272 alloc=3436 state=1818 end=return
 +run probe/r1 outcome=completed delivery=d1 handler=go fuel=272 alloc=3436
 +pumped state=idle fuel=272
- > reload probe carry=yes source="script variable log = []" & newline & "script variable kept = nothing" & newline & "on inspect" & newline & "  put [functionArity(kept), functionName(kept)] after log" & newline & "end inspect" & newline identity=ed47940edd5ac61630207ba7572db3aef3906ac32909cc72ffe4322393a889c4
- stopped probe reason="reload"
- > deliver d2 to=probe message=inspect
 --- corpus/builtins/object-kind/case.trace (cdee6bf)
 +++ corpus/builtins/object-kind/case.trace (candidate)
-@@ -6,9 +6,9 @@
- > deliver d1 to=router message=go
- > pump clock=2026-10-02T09:00:00Z
- raise router/r1 code="wrong kind" at=router:59 pos=11:9
+@@ -9,3 +9,3 @@
 -seg router/r1 start delivery=d1 handler=go clause=1 fuel=183 alloc=1755 state=1031 end=return
 -run router/r1 outcome=completed delivery=d1 handler=go fuel=183 alloc=1755
 -pumped state=idle fuel=183
 +seg router/r1 start delivery=d1 handler=go clause=1 fuel=184 alloc=1755 state=1031 end=return
 +run router/r1 outcome=completed delivery=d1 handler=go fuel=184 alloc=1755
 +pumped state=idle fuel=184
- > dispose object=<object item "x1">
- > deliver d2 to=router message=later
- > pump clock=2026-10-02T09:00:01Z
 --- corpus/capabilities/argument-shapes/case.trace (cdee6bf)
 +++ corpus/capabilities/argument-shapes/case.trace (candidate)
-@@ -17,24 +17,24 @@
- seg form/r1 start delivery=d1 handler=submit clause=1 fuel=24 alloc=0 state=752 end=return
- run form/r1 outcome=completed delivery=d1 handler=submit fuel=24 alloc=0
- raise form/r2 code="wrong kind" at=form:5 pos=7:5
+@@ -20,2 +20,2 @@
 -seg form/r2 start delivery=d2 handler=submit clause=1 fuel=22 alloc=792 state=1358 end=return
 -run form/r2 outcome=completed delivery=d2 handler=submit fuel=22 alloc=792
 +seg form/r2 start delivery=d2 handler=submit clause=1 fuel=23 alloc=792 state=1358 end=return
 +run form/r2 outcome=completed delivery=d2 handler=submit fuel=23 alloc=792
- raise form/r3 code="wrong kind" at=form:5 pos=7:5
+@@ -23,2 +23,2 @@
 -seg form/r3 start delivery=d3 handler=submit clause=1 fuel=22 alloc=768 state=2034 end=return
 -run form/r3 outcome=completed delivery=d3 handler=submit fuel=22 alloc=768
 +seg form/r3 start delivery=d3 handler=submit clause=1 fuel=23 alloc=768 state=2034 end=return
 +run form/r3 outcome=completed delivery=d3 handler=submit fuel=23 alloc=768
- raise form/r4 code="wrong kind" at=form:5 pos=7:5
+@@ -26,2 +26,2 @@
 -seg form/r4 start delivery=d4 handler=submit clause=1 fuel=22 alloc=779 state=2627 end=return
 -run form/r4 outcome=completed delivery=d4 handler=submit fuel=22 alloc=779
 +seg form/r4 start delivery=d4 handler=submit clause=1 fuel=23 alloc=779 state=2627 end=return
 +run form/r4 outcome=completed delivery=d4 handler=submit fuel=23 alloc=779
- raise form/r5 code="wrong kind" at=form:5 pos=7:5
+@@ -29,2 +29,2 @@
 -seg form/r5 start delivery=d5 handler=submit clause=1 fuel=22 alloc=788 state=3224 end=return
 -run form/r5 outcome=completed delivery=d5 handler=submit fuel=22 alloc=788
 +seg form/r5 start delivery=d5 handler=submit clause=1 fuel=23 alloc=788 state=3224 end=return
 +run form/r5 outcome=completed delivery=d5 handler=submit fuel=23 alloc=788
- raise form/r6 code="wrong kind" at=form:5 pos=7:5
+@@ -32,2 +32,2 @@
 -seg form/r6 start delivery=d6 handler=submit clause=1 fuel=22 alloc=693 state=3868 end=return
 -run form/r6 outcome=completed delivery=d6 handler=submit fuel=22 alloc=693
 +seg form/r6 start delivery=d6 handler=submit clause=1 fuel=23 alloc=693 state=3868 end=return
 +run form/r6 outcome=completed delivery=d6 handler=submit fuel=23 alloc=693
- raise form/r7 code="not encodable" at=form:5 pos=7:5
+@@ -35,3 +35,3 @@
 -seg form/r7 start delivery=d7 handler=wrapped clause=1 fuel=63 alloc=1099 state=4438 end=return
 -run form/r7 outcome=completed delivery=d7 handler=wrapped fuel=63 alloc=1099
 -pumped state=idle fuel=197
 +seg form/r7 start delivery=d7 handler=wrapped clause=1 fuel=64 alloc=1099 state=4438 end=return
 +run form/r7 outcome=completed delivery=d7 handler=wrapped fuel=64 alloc=1099
 +pumped state=idle fuel=203
- 
- > vars
- vars form seen=[{code: "wrong kind", expected: "text", got: "number", value: 3, capability: "forms", operation: "save", argument: 1, path: ["tags", 2], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "text", got: "nothing", value: nothing, capability: "forms", operation: "save", argument: 1, path: ["name"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "nothing", got: "text", value: "red", capability: "forms", operation: "save", argument: 1, path: ["colour"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "kg or nothing", got: "g", value: 2 g, capability: "forms", operation: "save", argument: 1, path: ["weight"], at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "wrong kind", expected: "map", got: "text", value: "a", capability: "forms", operation: "save", argument: 1, at: {unit: "form", handler: "submit", line: 7, column: 5}}, {code: "not encodable", kind: "function", path: [1, "extra", 2, "f"], at: {unit: "form", handler: "submit", line: 7, column: 5}}]
 --- corpus/capabilities/effect-begin-failed/case.trace (cdee6bf)
 +++ corpus/capabilities/effect-begin-failed/case.trace (candidate)
-@@ -9,8 +9,8 @@
- effect s/r1.s1 grant=r phase=begin status=failed
- effect-failure s/r1 grant=r segment=s/r1.s1 phase=begin status=failed
- raise s/r1 code="host error" at=s:4 pos=4:1
+@@ -12,3 +12,3 @@
 -seg s/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=0 state=26 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=0
 -pumped state=idle fuel=29
 +seg s/r1 start delivery=d1 handler=go clause=1 fuel=30 alloc=0 state=26 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=30 alloc=0
 +pumped state=idle fuel=30
- > vars
- vars s count="host error"
 --- corpus/capabilities/effect-operation-error/case.trace (cdee6bf)
 +++ corpus/capabilities/effect-operation-error/case.trace (candidate)
-@@ -13,8 +13,8 @@
- call-failed s/r1.c1 op=r.write
- raise s/r1 code="host error" at=s:4 pos=4:1
- effect s/r1.s1 grant=r phase=commit status=ok
+@@ -16,3 +16,3 @@
 -seg s/r1 start delivery=d1 handler=go clause=1 fuel=26 alloc=0 state=16 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=26 alloc=0
 -pumped state=idle fuel=26
 +seg s/r1 start delivery=d1 handler=go clause=1 fuel=27 alloc=0 state=16 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=27 alloc=0
 +pumped state=idle fuel=27
- > vars
- vars s count=2
 --- corpus/capabilities/host-failures/case.trace (cdee6bf)
 +++ corpus/capabilities/host-failures/case.trace (candidate)
-@@ -18,43 +18,43 @@
- > pump clock=2026-09-30T09:00:00Z
- call shop/r1.c1 op=stock.level args=["a"] error={code: "out of stock", message: "none left", due: "Friday"}
- raise shop/r1 code="out of stock" at=shop:5 pos=7:5
+@@ -21,2 +21,2 @@
 -seg shop/r1 start delivery=d1 handler=check clause=1 fuel=55 alloc=591 state=787 end=return
 -run shop/r1 outcome=completed delivery=d1 handler=check fuel=55 alloc=591
 +seg shop/r1 start delivery=d1 handler=check clause=1 fuel=56 alloc=591 state=787 end=return
 +run shop/r1 outcome=completed delivery=d1 handler=check fuel=56 alloc=591
- call shop/r2.c1 op=stock.level args=["b"] error={code: "timeout"}
- call-failed shop/r2.c1 op=stock.level
- raise shop/r2 code="host error" at=shop:5 pos=7:5
+@@ -26,2 +26,2 @@
 -seg shop/r2 start delivery=d2 handler=check clause=1 fuel=52 alloc=500 state=1238 end=return
 -run shop/r2 outcome=completed delivery=d2 handler=check fuel=52 alloc=500
 +seg shop/r2 start delivery=d2 handler=check clause=1 fuel=53 alloc=500 state=1238 end=return
 +run shop/r2 outcome=completed delivery=d2 handler=check fuel=53 alloc=500
- call shop/r3.c1 op=stock.level args=["c"] error={code: "x", at: 1}
- call-failed shop/r3.c1 op=stock.level
- raise shop/r3 code="host error" at=shop:5 pos=7:5
+@@ -31,2 +31,2 @@
 -seg shop/r3 start delivery=d3 handler=check clause=1 fuel=52 alloc=500 state=1689 end=return
 -run shop/r3 outcome=completed delivery=d3 handler=check fuel=52 alloc=500
 +seg shop/r3 start delivery=d3 handler=check clause=1 fuel=53 alloc=500 state=1689 end=return
 +run shop/r3 outcome=completed delivery=d3 handler=check fuel=53 alloc=500
- call shop/r4.c1 op=stock.level args=["d"] error={code: "lost"}
- call-failed shop/r4.c1 op=stock.level
- raise shop/r4 code="host error" at=shop:5 pos=7:5
+@@ -36,2 +36,2 @@
 -seg shop/r4 start delivery=d4 handler=check clause=1 fuel=52 alloc=500 state=2140 end=return
 -run shop/r4 outcome=completed delivery=d4 handler=check fuel=52 alloc=500
 +seg shop/r4 start delivery=d4 handler=check clause=1 fuel=53 alloc=500 state=2140 end=return
 +run shop/r4 outcome=completed delivery=d4 handler=check fuel=53 alloc=500
- call shop/r5.c1 op=stock.level args=["e"] error={}
- call-failed shop/r5.c1 op=stock.level
- raise shop/r5 code="host error" at=shop:5 pos=7:5
+@@ -41,2 +41,2 @@
 -seg shop/r5 start delivery=d5 handler=check clause=1 fuel=52 alloc=500 state=2591 end=return
 -run shop/r5 outcome=completed delivery=d5 handler=check fuel=52 alloc=500
 +seg shop/r5 start delivery=d5 handler=check clause=1 fuel=53 alloc=500 state=2591 end=return
 +run shop/r5 outcome=completed delivery=d5 handler=check fuel=53 alloc=500
- call shop/r6.c1 op=stock.level args=["f"] error={}
- call-failed shop/r6.c1 op=stock.level
- raise shop/r6 code="host error" at=shop:5 pos=7:5
+@@ -46,3 +46,3 @@
 -seg shop/r6 start delivery=d6 handler=check clause=1 fuel=52 alloc=500 state=3042 end=return
 -run shop/r6 outcome=completed delivery=d6 handler=check fuel=52 alloc=500
 -pumped state=idle fuel=315
 +seg shop/r6 start delivery=d6 handler=check clause=1 fuel=53 alloc=500 state=3042 end=return
 +run shop/r6 outcome=completed delivery=d6 handler=check fuel=53 alloc=500
 +pumped state=idle fuel=321
- > stub stock.level value="many"
- > deliver d7 to=shop message=check args=["g"]
- > pump clock=2026-09-30T09:00:01Z
- call shop/r7.c1 op=stock.level args=["g"] error={}
- call-failed shop/r7.c1 op=stock.level
- raise shop/r7 code="host error" at=shop:5 pos=7:5
+@@ -55,3 +55,3 @@
 -seg shop/r7 start delivery=d7 handler=check clause=1 fuel=52 alloc=500 state=3542 end=return
 -run shop/r7 outcome=completed delivery=d7 handler=check fuel=52 alloc=500
 -pumped state=idle fuel=52
 +seg shop/r7 start delivery=d7 handler=check clause=1 fuel=53 alloc=500 state=3542 end=return
 +run shop/r7 outcome=completed delivery=d7 handler=check fuel=53 alloc=500
 +pumped state=idle fuel=53
- 
- > vars
- vars shop errors=[{code: "out of stock", message: "none left", due: "Friday", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}, {code: "host error", capability: "stock", operation: "level", at: {unit: "shop", handler: "check", line: 7, column: 5}}]
 --- corpus/capabilities/ordinary-grants/case.trace (cdee6bf)
 +++ corpus/capabilities/ordinary-grants/case.trace (candidate)
-@@ -17,27 +17,27 @@
- > pump clock=2026-10-04T12:00:01Z
- call s/r2.c1 op=a.read args=["x"] error={code: "unavailable", message: "Try later", reason: 7}
- raise s/r2 code="unavailable" at=s:32 pos=14:3
+@@ -20,2 +20,2 @@
 -seg s/r2 start delivery=d2 handler=read clause=1 fuel=41 alloc=577 state=641 end=return
 -run s/r2 outcome=completed delivery=d2 handler=read fuel=41 alloc=577
 +seg s/r2 start delivery=d2 handler=read clause=1 fuel=42 alloc=577 state=641 end=return
 +run s/r2 outcome=completed delivery=d2 handler=read fuel=42 alloc=577
- raise s/r3 code="wrong kind" at=s:32 pos=14:3
+@@ -23,3 +23,3 @@
 -seg s/r3 start delivery=d3 handler=read clause=1 fuel=22 alloc=709 state=1302 end=return
 -run s/r3 outcome=completed delivery=d3 handler=read fuel=22 alloc=709
 -pumped state=idle fuel=63
 +seg s/r3 start delivery=d3 handler=read clause=1 fuel=23 alloc=709 state=1302 end=return
 +run s/r3 outcome=completed delivery=d3 handler=read fuel=23 alloc=709
 +pumped state=idle fuel=65
- > revoke s grant=a
- > deliver d4 to=s message=read args=["x"]
- > pump clock=2026-10-04T12:00:02Z
- raise s/r4 code="capability revoked" at=s:32 pos=14:3
+@@ -30,3 +30,3 @@
 -seg s/r4 start delivery=d4 handler=read clause=1 fuel=22 alloc=520 state=1822 end=return
 -run s/r4 outcome=completed delivery=d4 handler=read fuel=22 alloc=520
 -pumped state=idle fuel=22
 +seg s/r4 start delivery=d4 handler=read clause=1 fuel=23 alloc=520 state=1822 end=return
 +run s/r4 outcome=completed delivery=d4 handler=read fuel=23 alloc=520
 +pumped state=idle fuel=23
- > stub api.read value=9
- > deliver d5 to=s message=caught
- > pump clock=2026-10-04T12:00:03Z
- raise s/r5 code="caught" at=s:62 pos=25:3
- call s/r5.c1 op=b.read args=[] result=9
- call s/r5.c2 op=b.note args=[]
+@@ -39,3 +39,3 @@
 -seg s/r5 start delivery=d5 handler=caught clause=1 fuel=54 alloc=69 state=1822 end=return
 -run s/r5 outcome=completed delivery=d5 handler=caught fuel=54 alloc=69
 -pumped state=idle fuel=54
 +seg s/r5 start delivery=d5 handler=caught clause=1 fuel=55 alloc=69 state=1822 end=return
 +run s/r5 outcome=completed delivery=d5 handler=caught fuel=55 alloc=69
 +pumped state=idle fuel=55
- > vars
- vars s replies=[7, 8] errors=[{code: "unavailable", message: "Try later", reason: 7, capability: "a", operation: "read", at: {unit: "s", handler: "read", line: 14, column: 3}}, {code: "wrong kind", expected: "text or nothing", got: "number", value: 3, capability: "a", operation: "read", argument: 1, at: {unit: "s", handler: "read", line: 14, column: 3}}, {code: "capability revoked", capability: "a", operation: "read", at: {unit: "s", handler: "read", line: 14, column: 3}}]
 --- corpus/capabilities/revoke-in-flight/case.trace (cdee6bf)
 +++ corpus/capabilities/revoke-in-flight/case.trace (candidate)
-@@ -12,9 +12,9 @@
- > answer s/r1.c1 value=8
- > pump clock=2026-09-30T10:00:01Z
- raise s/r1 code="capability revoked" at=s:10 pos=7:5
+@@ -15,3 +15,3 @@
 -seg s/r1 resume fuel=25 alloc=58 state=74 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
 -pumped state=idle fuel=25
 +seg s/r1 resume fuel=26 alloc=58 state=74 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
 +pumped state=idle fuel=26
- > reload s carry=yes source="on go" & newline & "  ask io to pause and wait" & newline & "end go" identity=14e45a50a925b720f7074bed98d5af3fe061deca142ee69756d2e78cb0a0dc51
- diag s code="unknown operation" pos=2:7
- > reload s carry=yes source="script variable answer = 0" & newline & "script variable seen = []" & newline & "on go" & newline & "  return answer" & newline & "end go" identity=c79a9d0a1270daf7f62482f1f44ab956fa101f06269e11ae851e1d3929748770
 --- corpus/capabilities/revoke-reissue/case.trace (cdee6bf)
 +++ corpus/capabilities/revoke-reissue/case.trace (candidate)
-@@ -19,8 +19,8 @@
- > answer s/r1.c1 value=8
- > pump clock=2026-09-30T10:00:03Z
- raise s/r1 code="capability revoked" at=s:10 pos=7:5
+@@ -22,3 +22,3 @@
 -seg s/r1 resume fuel=25 alloc=58 state=74 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
 -pumped state=idle fuel=25
 +seg s/r1 resume fuel=26 alloc=58 state=74 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
 +pumped state=idle fuel=26
- > vars
- vars s answer=8 seen=["capability revoked"]
 --- corpus/capabilities/scope-failed-close/case.trace (cdee6bf)
 +++ corpus/capabilities/scope-failed-close/case.trace (candidate)
-@@ -14,8 +14,8 @@
- raise s/r1 code="host error" at=s:6 pos=5:1
- call s/r1.c3 op=r.close args=[] result=nothing automatic=yes
- scope s/r1.c3 grant=r name=file action=abandoned
+@@ -17,3 +17,3 @@
 -seg s/r1 start delivery=d1 handler=go clause=1 fuel=42 alloc=8 state=26 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=42 alloc=8
 -pumped state=idle fuel=42
 +seg s/r1 start delivery=d1 handler=go clause=1 fuel=43 alloc=8 state=26 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=43 alloc=8
 +pumped state=idle fuel=43
- > vars
- vars s count="host error"
 --- corpus/capabilities/scope-slots/case.trace (cdee6bf)
 +++ corpus/capabilities/scope-slots/case.trace (candidate)
-@@ -24,8 +24,8 @@
- call s/r1.c6 op=r.close args=[] result=nothing
- scope s/r1.c6 grant=r name=file action=closed
- raise s/r1 code="scope not open" at=s:29 pos=15:1
+@@ -27,3 +27,3 @@
 -seg s/r1 start delivery=d1 handler=go clause=1 fuel=107 alloc=48 state=30 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=107 alloc=48
 -pumped state=idle fuel=107
 +seg s/r1 start delivery=d1 handler=go clause=1 fuel=109 alloc=48 state=30 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=48
 +pumped state=idle fuel=109
- > vars
- vars s count="scope not open"
 --- corpus/capabilities/scope-suspension-boundaries/case.trace (cdee6bf)
 +++ corpus/capabilities/scope-suspension-boundaries/case.trace (candidate)
-@@ -11,9 +11,9 @@
- raise s/r1 code="scope open" at=s:21 pos=12:1
- call s/r1.c2 op=r.close args=[] result=nothing
- scope s/r1.c2 grant=r name=file action=closed
+@@ -14,3 +14,3 @@
 -seg s/r1 start delivery=d1 handler=b0 clause=1 fuel=54 alloc=98 state=32 end=return
 -run s/r1 outcome=completed delivery=d1 handler=b0 fuel=54 alloc=98
 -pumped state=idle fuel=54
 +seg s/r1 start delivery=d1 handler=b0 clause=1 fuel=55 alloc=98 state=32 end=return
 +run s/r1 outcome=completed delivery=d1 handler=b0 fuel=55 alloc=98
 +pumped state=idle fuel=55
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d2 to=s message=b1
-@@ -23,9 +23,9 @@
- raise s/r2 code="scope open" at=s:43 pos=21:1
- call s/r2.c2 op=r.close args=[] result=nothing
- scope s/r2.c2 grant=r name=file action=closed
+@@ -26,3 +26,3 @@
 -seg s/r2 start delivery=d2 handler=b1 clause=1 fuel=54 alloc=112 state=46 end=return
 -run s/r2 outcome=completed delivery=d2 handler=b1 fuel=54 alloc=112
 -pumped state=idle fuel=54
 +seg s/r2 start delivery=d2 handler=b1 clause=1 fuel=55 alloc=112 state=46 end=return
 +run s/r2 outcome=completed delivery=d2 handler=b1 fuel=55 alloc=112
 +pumped state=idle fuel=55
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d3 to=s message=b2
-@@ -35,9 +35,9 @@
- raise s/r3 code="scope open" at=s:66 pos=30:1
- call s/r3.c2 op=r.close args=[] result=nothing
- scope s/r3.c2 grant=r name=file action=closed
+@@ -38,3 +38,3 @@
 -seg s/r3 start delivery=d3 handler=b2 clause=1 fuel=55 alloc=126 state=60 end=return
 -run s/r3 outcome=completed delivery=d3 handler=b2 fuel=55 alloc=126
 -pumped state=idle fuel=55
 +seg s/r3 start delivery=d3 handler=b2 clause=1 fuel=56 alloc=126 state=60 end=return
 +run s/r3 outcome=completed delivery=d3 handler=b2 fuel=56 alloc=126
 +pumped state=idle fuel=56
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d4 to=s message=b3
-@@ -47,9 +47,9 @@
- raise s/r4 code="scope open" at=s:90 pos=39:1
- call s/r4.c2 op=r.close args=[] result=nothing
- scope s/r4.c2 grant=r name=file action=closed
+@@ -50,3 +50,3 @@
 -seg s/r4 start delivery=d4 handler=b3 clause=1 fuel=57 alloc=140 state=74 end=return
 -run s/r4 outcome=completed delivery=d4 handler=b3 fuel=57 alloc=140
 -pumped state=idle fuel=57
 +seg s/r4 start delivery=d4 handler=b3 clause=1 fuel=58 alloc=140 state=74 end=return
 +run s/r4 outcome=completed delivery=d4 handler=b3 fuel=58 alloc=140
 +pumped state=idle fuel=58
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d5 to=s message=b4
-@@ -59,9 +59,9 @@
- raise s/r5 code="scope open" at=s:113 pos=48:1
- call s/r5.c2 op=r.close args=[] result=nothing
- scope s/r5.c2 grant=r name=file action=closed
+@@ -62,3 +62,3 @@
 -seg s/r5 start delivery=d5 handler=b4 clause=1 fuel=57 alloc=154 state=88 end=return
 -run s/r5 outcome=completed delivery=d5 handler=b4 fuel=57 alloc=154
 -pumped state=idle fuel=57
 +seg s/r5 start delivery=d5 handler=b4 clause=1 fuel=58 alloc=154 state=88 end=return
 +run s/r5 outcome=completed delivery=d5 handler=b4 fuel=58 alloc=154
 +pumped state=idle fuel=58
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d6 to=s message=b5
-@@ -71,9 +71,9 @@
- raise s/r6 code="scope open" at=s:140 pos=59:1
- call s/r6.c2 op=r.close args=[] result=nothing
- scope s/r6.c2 grant=r name=file action=closed
+@@ -74,3 +74,3 @@
 -seg s/r6 start delivery=d6 handler=b5 clause=1 fuel=58 alloc=168 state=102 end=return
 -run s/r6 outcome=completed delivery=d6 handler=b5 fuel=58 alloc=168
 -pumped state=idle fuel=58
 +seg s/r6 start delivery=d6 handler=b5 clause=1 fuel=59 alloc=168 state=102 end=return
 +run s/r6 outcome=completed delivery=d6 handler=b5 fuel=59 alloc=168
 +pumped state=idle fuel=59
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d7 to=s message=b6
-@@ -83,9 +83,9 @@
- raise s/r7 code="scope open" at=s:5 pos=3:1
- call s/r7.c2 op=r.close args=[] result=nothing
- scope s/r7.c2 grant=r name=file action=closed
+@@ -86,3 +86,3 @@
 -seg s/r7 start delivery=d7 handler=b6 clause=1 fuel=76 alloc=182 state=116 end=return
 -run s/r7 outcome=completed delivery=d7 handler=b6 fuel=76 alloc=182
 -pumped state=idle fuel=76
 +seg s/r7 start delivery=d7 handler=b6 clause=1 fuel=77 alloc=182 state=116 end=return
 +run s/r7 outcome=completed delivery=d7 handler=b6 fuel=77 alloc=182
 +pumped state=idle fuel=77
- > stub resource.open value=nothing
- > stub resource.close value=nothing
- > deliver d8 to=s message=go
 --- corpus/capabilities/standard-console-timeout/case.trace (cdee6bf)
 +++ corpus/capabilities/standard-console-timeout/case.trace (candidate)
-@@ -10,8 +10,8 @@
- > pump clock=2026-10-27T08:31:23.647Z
- raise s/r1 code="timeout" at=s:4 pos=4:5
- abandon s/r1.c1
+@@ -13,3 +13,3 @@
 -seg s/r1 resume fuel=14 alloc=0 state=23 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go fuel=28 alloc=0
 -pumped state=idle fuel=14
 +seg s/r1 resume fuel=15 alloc=0 state=23 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=0
 +pumped state=idle fuel=15
- > vars
- vars s outcome="timeout"
 --- corpus/collecting/partial-error/case.trace (cdee6bf)
 +++ corpus/collecting/partial-error/case.trace (candidate)
-@@ -3,8 +3,8 @@
- > request d1 to=s message=go
- > pump clock=2026-10-06T12:00:00Z
- raise s/r1 code="division by zero" at=s:14 pos=3:47
+@@ -6,3 +6,3 @@
 -seg s/r1 start delivery=d1 handler=go clause=1 fuel=73 alloc=392 state=0 end=return
 -run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=73 alloc=392
 -pumped state=idle fuel=73
 +seg s/r1 start delivery=d1 handler=go clause=1 fuel=74 alloc=392 state=0 end=return
 +run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=74 alloc=392
 +pumped state=idle fuel=74
- > vars
- vars s
 --- corpus/computed-sends/bad-names/case.trace (cdee6bf)
 +++ corpus/computed-sends/bad-names/case.trace (candidate)
-@@ -29,11 +29,11 @@
- raise a/r1 code="mailbox full" at=a:114 pos=40:7
- raise a/r1 code="bad message name" at=a:66 pos=24:5
- raise a/r1 code="wrong kind" at=a:87 pos=30:7
+@@ -32,2 +32,2 @@
 -seg a/r1 start delivery=d1 handler=go clause=1 fuel=938 alloc=8120 state=7995 end=return
 -run a/r1 outcome=completed delivery=d1 handler=go fuel=938 alloc=8120
 +seg a/r1 start delivery=d1 handler=go clause=1 fuel=954 alloc=8120 state=7995 end=return
 +run a/r1 outcome=completed delivery=d1 handler=go fuel=954 alloc=8120
- seg sink/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=40 end=return
- run sink/r1 outcome=completed handler=note fuel=16 alloc=24
+@@ -36 +36 @@
 -pumped state=idle fuel=954
 +pumped state=idle fuel=970
- > vars
- vars a seen=[{code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSeven", line: 59, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "send", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "not a name", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:to:", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "move:in:", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "bad message name", name: "move:to", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "mailbox full", to: "sink", at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "go", line: 24, column: 5}}, {code: "wrong kind", expected: "text", got: "list", value: ["note"], at: {unit: "a", handler: "go", line: 30, column: 7}}]
- vars sink got=[1]
 --- corpus/computed-sends/unhandled/case.trace (cdee6bf)
 +++ corpus/computed-sends/unhandled/case.trace (candidate)
-@@ -19,9 +19,9 @@
- run b/r3 outcome=unhandled fuel=0 alloc=0
- unhandled message=missing args=[2]
- raise a/r1 code="send failed" at=a:16 pos=9:5
+@@ -22,3 +22,3 @@
 -seg a/r1 resume fuel=30 alloc=176 state=108 end=return
 -run a/r1 outcome=completed delivery=d1 handler=go fuel=111 alloc=344
 -pumped state=idle fuel=111
 +seg a/r1 resume fuel=31 alloc=176 state=108 end=return
 +run a/r1 outcome=completed delivery=d1 handler=go fuel=112 alloc=344
 +pumped state=idle fuel=112
- > vars
- vars a seen=[["send failed", "unhandled"]]
- vars b
 --- corpus/disassembly/errors-and-loops/flow.dis (cdee6bf)
 +++ corpus/disassembly/errors-and-loops/flow.dis (candidate)
-@@ -27,9 +27,9 @@
-   0 init initialiser () locals 1 0000..0003
-   1 handler branches clause 1 (x) locals 3 0004..0042
-   2 handler loops clause 1 (n) locals 6 0043..0114
+@@ -30,3 +30,3 @@
 -  3 handler guarded clause 1 (x) locals 9 0115..0192
 -  4 handler leaving clause 1 (xs) locals 6 0193..0310
 -  5 handler cleanup clause 1 (x) locals 3 0311..0333
 +  3 handler guarded clause 1 (x) locals 11 0115..0193
 +  4 handler leaving clause 1 (xs) locals 8 0194..0311
 +  5 handler cleanup clause 1 (x) locals 3 0312..0334
- code
-   0000 4:23 list 0
-   0001 4:1 store-var 0 ; log
-@@ -150,239 +150,240 @@
-   0116 44:13 const 13 ; 0
-   0117 44:11 divide
-   0118 44:5 store 2 ; y
+@@ -153,2 +153,2 @@
 -  0119 43:3 jump 0150
 -  0120 43:3 store 6 ; (6)
 +  0119 43:3 jump 0151
 +  0120 45:3 store 6 ; (6)
-   0121 45:9 load 6 ; (6)
+@@ -156 +156 @@
 -  0122 45:9 test-map 0131
 +  0122 45:9 test-map 0132
-   0123 45:9 load 6 ; (6)
+@@ -158 +158 @@
 -  0124 45:9 map-get "code" 0131
 +  0124 45:9 map-get "code" 0132
-   0125 45:9 store 7 ; (7)
-   0126 45:9 load 7 ; (7)
+@@ -161,207 +161,208 @@
 -  0127 45:9 test-constant 14 0131 ; "division by zero"
 -  0128 46:9 const 13 ; 0
 -  0129 46:5 store 2 ; y
@@ -855,8 +697,7 @@
 +  0332 87:1 const 0 ; nothing
 +  0333 87:1 return
 +  0334 87:1 clause-fail
- unwind
-   0115..0118 catch -> 0120 depth 0
+@@ -370,19 +371,19 @@
 -  0121..0127 guard -> 0131 depth 0
 -  0131..0142 guard -> 0148 depth 0
 -  0150..0153 catch -> 0161 depth 0
@@ -897,692 +738,415 @@
 +  0312..0317 finally -> 0325 depth 0
 --- corpus/errors/lambda-capture-parity/case.trace (cdee6bf)
 +++ corpus/errors/lambda-capture-parity/case.trace (candidate)
-@@ -19,20 +19,20 @@
- seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=19 alloc=48 state=371 end=error
- run b/r2 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}} fuel=19 alloc=48
- raise a/r3 code="division by zero" at=a:92 pos=31:22
+@@ -22,2 +22,2 @@
 -seg a/r3 start delivery=d3 handler=nested clause=1 fuel=58 alloc=96 state=1155 end=return
 -run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=58 alloc=96
 +seg a/r3 start delivery=d3 handler=nested clause=1 fuel=59 alloc=96 state=1155 end=return
 +run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=59 alloc=96
- raise a/r1 code="send failed" at=a:69 pos=7:7
- abandon a/r1.c2
+@@ -26,2 +26,2 @@
 -seg a/r1 resume fuel=11 alloc=0 state=456 end=return
 -run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=104 alloc=160
 +seg a/r1 resume fuel=12 alloc=0 state=456 end=return
 +run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=105 alloc=160
- seg b/r3 start from=a/r2.c1 handler=slow clause=1 fuel=15 alloc=0 state=523 end=wait until=1970-01-01T00:00:01Z
+@@ -29 +29 @@
 -pumped state=idle fuel=279 next=1970-01-01T00:00:00.01Z
 +pumped state=idle fuel=281 next=1970-01-01T00:00:00.01Z
- > pump clock=1970-01-01T00:00:00.01Z
- raise a/r2 code="timeout" at=a:77 pos=20:7
- abandon a/r2.c1
+@@ -33,3 +33,3 @@
 -seg a/r2 resume fuel=11 alloc=0 state=0 end=return
 -run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=75 alloc=96
 -pumped state=idle fuel=11 next=1970-01-01T00:00:01Z
 +seg a/r2 resume fuel=12 alloc=0 state=0 end=return
 +run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=76 alloc=96
 +pumped state=idle fuel=12 next=1970-01-01T00:00:01Z
- > pump clock=1970-01-01T00:00:01Z
- seg b/r3 resume fuel=3 alloc=0 state=0 end=return
- run b/r3 outcome=completed handler=slow value=3 fuel=18 alloc=0
 --- corpus/libraries/caller-capabilities/case.trace (cdee6bf)
 +++ corpus/libraries/caller-capabilities/case.trace (candidate)
-@@ -51,8 +51,8 @@
- > deliver d4 to=s message=revoked
- > pump clock=2026-10-04T12:00:06Z
- raise s/r4 code="capability revoked" at=helper:7 pos=6:3
+@@ -54,3 +54,3 @@
 -seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=51 alloc=42 state=154 end=return
 -run s/r4 outcome=completed delivery=d4 handler=revoked fuel=51 alloc=42
 -pumped state=idle fuel=51
 +seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=52 alloc=42 state=154 end=return
 +run s/r4 outcome=completed delivery=d4 handler=revoked fuel=52 alloc=42
 +pumped state=idle fuel=52
- > vars
- vars s log=[7, [11, 22], "capability revoked"]
 --- corpus/libraries/errors/case.trace (cdee6bf)
 +++ corpus/libraries/errors/case.trace (candidate)
-@@ -11,8 +11,8 @@
- > pump clock=2026-09-30T09:00:00Z
- raise meter/r1 code="division by zero" at=checks:4 pos=4:12
- raise meter/r1 code="division by zero" at=checks:4 pos=4:12
+@@ -14,2 +14,2 @@
 -seg meter/r1 start delivery=d1 handler=go clause=1 fuel=76 alloc=0 state=469 end=return
 -run meter/r1 outcome=completed delivery=d1 handler=go fuel=76 alloc=0
 +seg meter/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=0 state=469 end=return
 +run meter/r1 outcome=completed delivery=d1 handler=go fuel=78 alloc=0
- raise meter/r2 code="division by zero" at=checks:4 pos=4:12
- raise meter/r2 code="division by zero" at=checks:41 pos=16:3
- seg meter/r2 start delivery=d2 handler=leak clause=1 fuel=45 alloc=0 state=437 end=error
-@@ -20,7 +20,7 @@
- fault meter/r3 limit=fuel at=checks:46 pos=24:3 rollback=[count]
- seg meter/r3 start delivery=d3 handler=burn clause=1 fuel=500 alloc=40 state=810 end=fault
- run meter/r3 outcome=limit-fault delivery=d3 handler=burn limit=fuel fuel=500 alloc=40
+@@ -23 +23 @@
 -pumped state=idle fuel=621
 +pumped state=idle fuel=623
- 
- > vars
- vars meter caught={code: "division by zero", at: {unit: "checks", handler: "ratio", line: 4, column: 12}} guard=0 count=0
 --- corpus/limits/mailbox-depth/case.trace (cdee6bf)
 +++ corpus/limits/mailbox-depth/case.trace (candidate)
-@@ -23,13 +23,13 @@
- send sender/r1 to=sink message=note args=[2]
- raise sender/r1 code="mailbox full" at=sender:10 pos=11:7
- call sender/r1.c1 op=log.write args=["full at 3"]
+@@ -26,2 +26,2 @@
 -seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=134 alloc=241 state=20 end=return
 -run sender/r1 outcome=completed delivery=d1 handler=flood fuel=134 alloc=241
 +seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=135 alloc=241 state=20 end=return
 +run sender/r1 outcome=completed delivery=d1 handler=flood fuel=135 alloc=241
- seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
- run sink/r1 outcome=completed handler=note fuel=16 alloc=24
- seg sink/r2 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=64 end=return
- run sink/r2 outcome=completed handler=note fuel=16 alloc=24
+@@ -32 +32 @@
 -pumped state=idle fuel=166
 +pumped state=idle fuel=167
- 
- > vars
- vars sender fullTo="sink"
 --- corpus/limits/max-wait-minimum/case.trace (cdee6bf)
 +++ corpus/limits/max-wait-minimum/case.trace (candidate)
-@@ -27,9 +27,9 @@
- raise waiter/r1 code="timeout" at=waiter:3 pos=6:5
- abandon waiter/r1.c1
- call waiter/r1.c2 op=log.write args=["gave up after 2147483647 ms"]
+@@ -30,3 +30,3 @@
 -seg waiter/r1 resume fuel=32 alloc=43 state=0 end=return
 -run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=47 alloc=43
 -pumped state=idle fuel=32
 +seg waiter/r1 resume fuel=33 alloc=43 state=0 end=return
 +run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=48 alloc=43
 +pumped state=idle fuel=33
- 
- # The answer arrives after the call was abandoned.
- > answer waiter/r1.c1 value="late"
 --- corpus/objects/properties/case.trace (cdee6bf)
 +++ corpus/objects/properties/case.trace (candidate)
-@@ -12,16 +12,16 @@
- prop lamp/r1 object=<object light "bulb-1"> name=state op=get value="on"
- raise lamp/r1 code="read only" at=lamp:32 pos=11:5
- raise lamp/r1 code="wrong kind" at=lamp:49 pos=16:5
+@@ -15,3 +15,3 @@
 -seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=130 alloc=1244 state=1094 end=return
 -run lamp/r1 outcome=completed delivery=d1 handler=go fuel=130 alloc=1244
 -pumped state=idle fuel=130
 +seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=132 alloc=1244 state=1094 end=return
 +run lamp/r1 outcome=completed delivery=d1 handler=go fuel=132 alloc=1244
 +pumped state=idle fuel=132
- > dispose object=<object light "bulb-1">
- > deliver d2 to=lamp message=later
- > pump clock=2026-09-30T09:00:01Z
- raise lamp/r2 code="object gone" at=lamp:85 pos=26:9
+@@ -22,3 +22,3 @@
 -seg lamp/r2 start delivery=d2 handler=later clause=1 fuel=45 alloc=577 state=1609 end=return
 -run lamp/r2 outcome=completed delivery=d2 handler=later fuel=45 alloc=577
 -pumped state=idle fuel=45
 +seg lamp/r2 start delivery=d2 handler=later clause=1 fuel=46 alloc=577 state=1609 end=return
 +run lamp/r2 outcome=completed delivery=d2 handler=later fuel=46 alloc=577
 +pumped state=idle fuel=46
- 
- > vars
- vars lamp log=[["bulb-1", "off", 60, nothing], "on", {code: "read only", at: {unit: "lamp", handler: "go", line: 11, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, at: {unit: "lamp", handler: "go", line: 16, column: 5}}, false, [true, "bulb-1"], {code: "object gone", object: <object light "bulb-1">, at: {unit: "lamp", handler: "later", line: 26, column: 9}}]
 --- corpus/save-restore/preempted-join-keeps-pending-members/case.trace (cdee6bf)
 +++ corpus/save-restore/preempted-join-keeps-pending-members/case.trace (candidate)
-@@ -26,11 +26,11 @@
- 
- > settle shop/r1.c1 how=answer value=12
- > pump clock=2026-10-06T10:00:01Z
+@@ -29 +29 @@
 -seg shop/r1 continue fuel=10 alloc=0 state=240 end=join-end
 +seg shop/r1 continue fuel=10 alloc=0 state=256 end=join-end
- raise shop/r1 code="call lost" at=shop:9 pos=12:5
+@@ -31,3 +31,3 @@
 -seg shop/r1 resume fuel=20 alloc=33 state=49 end=return
 -run shop/r1 outcome=completed delivery=d1 handler=gather fuel=68 alloc=33
 -pumped state=idle fuel=30
 +seg shop/r1 resume fuel=21 alloc=33 state=49 end=return
 +run shop/r1 outcome=completed delivery=d1 handler=gather fuel=69 alloc=33
 +pumped state=idle fuel=31
- 
- > vars
- vars shop results=["call lost"]
 --- corpus/save-restore/settle-answer-and-fail/case.trace (cdee6bf)
 +++ corpus/save-restore/settle-answer-and-fail/case.trace (candidate)
-@@ -16,9 +16,9 @@
- > deliver d2 to=shop message=check args=["B2"]
- > pump clock=2026-09-30T10:00:00Z
- call shop/r1.c1 op=stock.check args=["A1"]
+@@ -19 +19 @@
 -seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
 +seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=380 end=ask-wait
- call shop/r2.c1 op=stock.check args=["B2"]
+@@ -21 +21 @@
 -seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
 +seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
- pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
- 
- > save s1
-@@ -28,12 +28,12 @@
- > settle shop/r1.c1 how=answer value=12
- > settle shop/r2.c1 how=fail error={code: "out of stock"}
- > pump clock=2026-09-30T10:00:05Z
+@@ -31 +31 @@
 -seg shop/r1 resume fuel=21 alloc=156 state=356 end=return
 +seg shop/r1 resume fuel=21 alloc=156 state=372 end=return
- run shop/r1 outcome=completed delivery=d1 handler=check fuel=136 alloc=156
- raise shop/r2 code="out of stock" at=shop:5 pos=9:5
+@@ -34,3 +34,3 @@
 -seg shop/r2 resume fuel=27 alloc=180 state=176 end=return
 -run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=180
 -pumped state=idle fuel=48
 +seg shop/r2 resume fuel=28 alloc=180 state=176 end=return
 +run shop/r2 outcome=completed delivery=d2 handler=check fuel=143 alloc=180
 +pumped state=idle fuel=49
- 
- # The first Pump has run, so a settlement now is Host misuse, and changes
- # nothing.
 --- corpus/save-restore/settle-reissue-and-adopt/case.trace (cdee6bf)
 +++ corpus/save-restore/settle-reissue-and-adopt/case.trace (candidate)
-@@ -17,9 +17,9 @@
- > deliver d2 to=shop message=check args=["B2"]
- > pump clock=2026-09-30T10:00:00Z
- call shop/r1.c1 op=stock.check args=["A1"]
+@@ -20 +20 @@
 -seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
 +seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=380 end=ask-wait
- call shop/r2.c1 op=stock.check args=["B2"]
+@@ -22 +22 @@
 -seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
 +seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
- pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
- 
- > save s1
-@@ -40,13 +40,13 @@
- # raises `timeout` at the `ask … and wait` and its call is abandoned.
- > answer shop/r2.c1 value=7
- > pump clock=2026-09-30T10:00:31Z
+@@ -43 +43 @@
 -seg shop/r2 resume fuel=21 alloc=156 state=340 end=return
 +seg shop/r2 resume fuel=21 alloc=156 state=356 end=return
- run shop/r2 outcome=completed delivery=d2 handler=check fuel=136 alloc=156
- raise shop/r1 code="timeout" at=shop:5 pos=9:5
- abandon shop/r1.c1
+@@ -47,3 +47,3 @@
 -seg shop/r1 resume fuel=26 alloc=154 state=171 end=return
 -run shop/r1 outcome=completed delivery=d1 handler=check fuel=141 alloc=154
 -pumped state=idle fuel=47
 +seg shop/r1 resume fuel=27 alloc=154 state=171 end=return
 +run shop/r1 outcome=completed delivery=d1 handler=check fuel=142 alloc=154
 +pumped state=idle fuel=48
- 
- > vars
- vars shop results=[["B2", 7], ["A1", "timeout"]]
 --- corpus/save-restore/unbound-grant-and-unresolved-object/case.trace (cdee6bf)
 +++ corpus/save-restore/unbound-grant-and-unresolved-object/case.trace (candidate)
-@@ -31,9 +31,9 @@
- > pump clock=2026-09-30T10:00:01Z
- raise lamp/r2 code="capability revoked" at=lamp:5 pos=9:5
- raise lamp/r2 code="object gone" at=lamp:30 pos=15:9
+@@ -34,3 +34,3 @@
 -seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=46 alloc=77 state=149 end=return
 -run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=46 alloc=77
 -pumped state=idle fuel=46
 +seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=48 alloc=77 state=149 end=return
 +run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=48 alloc=77
 +pumped state=idle fuel=48
- 
- > vars
- vars lamp seen=["wrote", "off", "capability revoked", "object gone"]
 --- corpus/save-restore/unsettled-call-is-lost/case.trace (cdee6bf)
 +++ corpus/save-restore/unsettled-call-is-lost/case.trace (candidate)
-@@ -20,10 +20,10 @@
- > deliver d3 to=shop message=nap
- > pump clock=2026-09-30T10:00:00Z
- call shop/r1.c1 op=stock.check args=["A1"]
+@@ -23 +23 @@
 -seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=396 end=ask-wait
 +seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=412 end=ask-wait
- call shop/r2.c1 op=stock.check args=["B2"]
+@@ -25,2 +25,2 @@
 -seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
 -seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=804 end=wait until=2026-09-30T10:00:05Z
 +seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=676 end=ask-wait
 +seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=836 end=wait until=2026-09-30T10:00:05Z
- pumped state=idle fuel=245 next=2026-09-30T10:00:05Z
- 
- > save s1
-@@ -32,14 +32,14 @@
- # Only shop/r1.c1 is settled. Every deadline has passed by 10:00:20.
- > settle shop/r1.c1 how=answer value=12
- > pump clock=2026-09-30T10:00:20Z
+@@ -35 +35 @@
 -seg shop/r1 resume fuel=21 alloc=156 state=532 end=return
 +seg shop/r1 resume fuel=21 alloc=156 state=548 end=return
- run shop/r1 outcome=completed delivery=d1 handler=check fuel=136 alloc=156
- raise shop/r2 code="call lost" at=shop:5 pos=9:5
+@@ -38,2 +38,2 @@
 -seg shop/r2 resume fuel=26 alloc=158 state=365 end=return
 -run shop/r2 outcome=completed delivery=d2 handler=check fuel=141 alloc=158
 +seg shop/r2 resume fuel=27 alloc=158 state=365 end=return
 +run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=158
- seg shop/r3 resume fuel=18 alloc=150 state=252 end=return
- run shop/r3 outcome=completed delivery=d3 handler=nap fuel=33 alloc=150
+@@ -42 +42 @@
 -pumped state=idle fuel=65
 +pumped state=idle fuel=66
- 
- > vars
- vars shop results=[["A1", 12], ["B2", "call lost"], ["nap", "woke"]]
 --- corpus/stdlib/errors-name-the-call/case.trace (cdee6bf)
 +++ corpus/stdlib/errors-name-the-call/case.trace (candidate)
-@@ -9,15 +9,15 @@
- > deliver d3 to=checks message=invert
- > pump clock=2026-09-30T09:00:00Z
- raise checks/r1 code="out of domain" at=text:1313 pos=335:3
+@@ -12,2 +12,2 @@
 -seg checks/r1 start delivery=d1 handler=go clause=1 fuel=134 alloc=297 state=544 end=return
 -run checks/r1 outcome=completed delivery=d1 handler=go fuel=134 alloc=297
 +seg checks/r1 start delivery=d1 handler=go clause=1 fuel=135 alloc=297 state=544 end=return
 +run checks/r1 outcome=completed delivery=d1 handler=go fuel=135 alloc=297
- raise checks/r2 code="can't decode" at=json:1296 pos=236:3
- seg checks/r2 start delivery=d2 handler=parse clause=1 fuel=1004 alloc=1933 state=512 end=error
- run checks/r2 outcome=errored delivery=d2 handler=parse error={code: "can't decode", format: "json", offset: 4, at: {unit: "checks", handler: "parse", line: 18, column: 10}} fuel=1004 alloc=1933
- raise checks/r3 code="division by zero" at=checks:37 pos=22:33
- seg checks/r3 start delivery=d3 handler=invert clause=1 fuel=126 alloc=208 state=990 end=error
- run checks/r3 outcome=errored delivery=d3 handler=invert error={code: "division by zero", at: {unit: "checks", handler: "invert", line: 22, column: 33}} fuel=126 alloc=208
+@@ -20 +20 @@
 -pumped state=idle fuel=1264
 +pumped state=idle fuel=1265
- 
- > vars
- vars checks caught={code: "out of domain", function: "pad", value: -1, at: {unit: "checks", handler: "go", line: 11, column: 9}}
 --- corpus/stdlib/template-migration/case.trace (cdee6bf)
 +++ corpus/stdlib/template-migration/case.trace (candidate)
-@@ -13,8 +13,8 @@
- raise templates/r2 code="out of domain" at=date:1345 pos=313:3
- raise templates/r2 code="out of domain" at=date:1345 pos=313:3
- raise templates/r2 code="can't convert" at=date:1141 pos=254:3
+@@ -16,3 +16,3 @@
 -seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=6968 alloc=17592 state=3148 end=return
 -run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=6968 alloc=17592
 -pumped state=idle fuel=46978
 +seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=6973 alloc=17592 state=3148 end=return
 +run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=6973 alloc=17592
 +pumped state=idle fuel=46983
- > vars
- vars templates texts=["Ann owes 2.50 GBP; ${literal} {old} $", "7/${missing} $$", "$Ann", "{name}", "é"] dates=["${year} {old} $ 2026-09-27", 2026-09-27, "2026-09-27 14:05:09.123", 2026-09-27T14:05:09.123] caught=[{code: "out of domain", function: "format", value: "${name", at: {unit: "templates", handler: "invalid", line: 20, column: 9}}, {code: "out of domain", function: "format", value: "missing", at: {unit: "templates", handler: "invalid", line: 25, column: 9}}, {code: "out of domain", function: "formatDate", value: "{year}-{month}-{day}", at: {unit: "templates", handler: "invalid", line: 30, column: 9}}, {code: "out of domain", function: "formatDate", value: "${year}-${month:0}-${day}", at: {unit: "templates", handler: "invalid", line: 35, column: 9}}, {code: "can't convert", value: "2026/09/27", to: "civil date", format: "${year}-${month}-${day}", offset: 5, at: {unit: "templates", handler: "invalid", line: 40, column: 9}}]
 --- corpus/suspension/answers/case.trace (cdee6bf)
 +++ corpus/suspension/answers/case.trace (candidate)
-@@ -11,41 +11,41 @@
- > deliver d5 to=fetcher message=fetch args=["e"]
- > pump clock=2026-09-30T09:00:00Z
- call fetcher/r1.c1 op=feed.fetch args=["a"]
+@@ -14 +14 @@
 -seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=509 end=ask-wait
 +seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=525 end=ask-wait
- call fetcher/r2.c1 op=feed.fetch args=["b"]
+@@ -16 +16 @@
 -seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=757 end=ask-wait
 +seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=789 end=ask-wait
- call fetcher/r3.c1 op=feed.fetch args=["c"]
+@@ -18 +18 @@
 -seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1005 end=ask-wait
 +seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1053 end=ask-wait
- call fetcher/r4.c1 op=feed.fetch args=["d"]
+@@ -20 +20 @@
 -seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1253 end=ask-wait
 +seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1317 end=ask-wait
- call fetcher/r5.c1 op=feed.fetch args=["e"]
+@@ -22 +22 @@
 -seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1501 end=ask-wait
 +seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1581 end=ask-wait
- pumped state=idle fuel=275 next=2026-09-30T09:00:03Z
- > answer fetcher/r1.c1 value=12 fuel=7
- > fail fetcher/r2.c1 error={code: "no feed", feed: "b"}
- > fail fetcher/r3.c1 error={}
- > answer fetcher/r4.c1 value="lots"
- > pump clock=2026-09-30T09:00:01Z
+@@ -29 +29 @@
 -seg fetcher/r1 resume fuel=22 alloc=40 state=1165 end=return
 +seg fetcher/r1 resume fuel=22 alloc=40 state=1229 end=return
- run fetcher/r1 outcome=completed delivery=d1 handler=fetch fuel=77 alloc=40
- raise fetcher/r2 code="no feed" at=fetcher:5 pos=7:5
+@@ -32,2 +32,2 @@
 -seg fetcher/r2 resume fuel=19 alloc=524 state=1318 end=return
 -run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=74 alloc=524
 +seg fetcher/r2 resume fuel=20 alloc=524 state=1366 end=return
 +run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=75 alloc=524
- call-failed fetcher/r3.c1 op=feed.fetch
- raise fetcher/r3 code="host error" at=fetcher:5 pos=7:5
+@@ -36,2 +36,2 @@
 -seg fetcher/r3 resume fuel=17 alloc=501 state=1570 end=return
 -run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=72 alloc=501
 +seg fetcher/r3 resume fuel=18 alloc=501 state=1602 end=return
 +run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=73 alloc=501
- call-failed fetcher/r4.c1 op=feed.fetch
- raise fetcher/r4 code="host error" at=fetcher:5 pos=7:5
+@@ -40,3 +40,3 @@
 -seg fetcher/r4 resume fuel=17 alloc=501 state=1802 end=return
 -run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=72 alloc=501
 -pumped state=idle fuel=75 next=2026-09-30T09:00:03Z
 +seg fetcher/r4 resume fuel=18 alloc=501 state=1818 end=return
 +run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=73 alloc=501
 +pumped state=idle fuel=78 next=2026-09-30T09:00:03Z
- > pump clock=2026-09-30T09:00:03Z
- raise fetcher/r5 code="timeout" at=fetcher:5 pos=7:5
- abandon fetcher/r5.c1
+@@ -46,3 +46,3 @@
 -seg fetcher/r5 resume fuel=17 alloc=547 state=2052 end=return
 -run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=72 alloc=547
 -pumped state=idle fuel=17
 +seg fetcher/r5 resume fuel=18 alloc=547 state=2052 end=return
 +run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=73 alloc=547
 +pumped state=idle fuel=18
- > answer fetcher/r5.c1 value=1
- > pump clock=2026-09-30T09:00:04Z
- note fetcher/r5.c1 kind=late-answer
 --- corpus/suspension/capability-resumption/case.trace (cdee6bf)
 +++ corpus/suspension/capability-resumption/case.trace (candidate)
-@@ -33,9 +33,9 @@
- note s/r2.c1 kind=late-answer
- raise s/r2 code="gone" at=s:15 pos=10:5
- abandon s/r2.c1
+@@ -36,3 +36,3 @@
 -seg s/r2 resume fuel=8 alloc=16 state=32 end=return
 -run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=73 alloc=16
 -pumped state=idle fuel=8
 +seg s/r2 resume fuel=9 alloc=16 state=32 end=return
 +run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=74 alloc=16
 +pumped state=idle fuel=9
- > deliver d3 to=s message=fault
- > pump clock=2026-09-30T09:00:01Z
- call s/r3.c1 op=api.fetch args=[3]
 --- corpus/suspension/join-closing-position/case.trace (cdee6bf)
 +++ corpus/suspension/join-closing-position/case.trace (candidate)
-@@ -17,17 +17,17 @@
- seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=24 alloc=48 state=96 end=error
- run b/r2 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
- raise a/r1 code="send failed" at=a:11 pos=7:3
+@@ -20,2 +20,2 @@
 -seg a/r1 resume fuel=17 alloc=824 state=1288 end=return
 -run a/r1 outcome=completed delivery=d1 handler=direct fuel=89 alloc=920
 +seg a/r1 resume fuel=18 alloc=824 state=1288 end=return
 +run a/r1 outcome=completed delivery=d1 handler=direct fuel=90 alloc=920
- seg b/r3 start from=a/r2.c1 handler=ping clause=1 fuel=17 alloc=0 state=371 end=return
- run b/r3 outcome=completed handler=ping value=1 fuel=17 alloc=0
- raise b/r4 code="bad" at=b:7 pos=2:16
- seg b/r4 start from=a/r2.c2 handler=ping clause=1 fuel=24 alloc=48 state=323 end=error
- run b/r4 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 16}} fuel=24 alloc=48
- raise a/r2 code="send failed" at=a:57 pos=23:2
+@@ -28,3 +28,3 @@
 -seg a/r2 resume fuel=21 alloc=823 state=1663 end=return
 -run a/r2 outcome=completed delivery=d2 handler=local fuel=106 alloc=919
 -pumped state=idle fuel=277
 +seg a/r2 resume fuel=22 alloc=823 state=1663 end=return
 +run a/r2 outcome=completed delivery=d2 handler=local fuel=107 alloc=919
 +pumped state=idle fuel=279
- > deliver d3 to=a message=direct args=[3]
- > deliver d4 to=a message=local args=[3]
- > pump clock=2026-10-04T12:00:00Z
-@@ -47,13 +47,13 @@
- > pump clock=2026-10-04T12:00:01Z
- raise a/r3 code="timeout" at=a:11 pos=7:3
- abandon a/r3.c2
+@@ -50,2 +50,2 @@
 -seg a/r3 resume fuel=17 alloc=479 state=2494 end=return
 -run a/r3 outcome=completed delivery=d3 handler=direct fuel=89 alloc=575
 +seg a/r3 resume fuel=18 alloc=479 state=2494 end=return
 +run a/r3 outcome=completed delivery=d3 handler=direct fuel=90 alloc=575
- raise a/r4 code="timeout" at=a:57 pos=23:2
- abandon a/r4.c2
+@@ -54,3 +54,3 @@
 -seg a/r4 resume fuel=21 alloc=478 state=2620 end=return
 -run a/r4 outcome=completed delivery=d4 handler=local fuel=106 alloc=574
 -pumped state=idle fuel=38 next=2026-10-04T12:00:02Z
 +seg a/r4 resume fuel=22 alloc=478 state=2620 end=return
 +run a/r4 outcome=completed delivery=d4 handler=local fuel=107 alloc=574
 +pumped state=idle fuel=40 next=2026-10-04T12:00:02Z
- > pump clock=2026-10-04T12:00:02Z
- seg b/r6 resume fuel=3 alloc=0 state=200 end=return
- run b/r6 outcome=completed handler=ping value=3 fuel=28 alloc=0
-@@ -61,7 +61,7 @@
- run b/r8 outcome=completed handler=ping value=3 fuel=28 alloc=0
- pumped state=idle fuel=6
- > counters a
+@@ -64 +64 @@
 -counters a fuel=390 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
 +counters a fuel=394 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
- > counters b
- counters b fuel=172 alloc=96 runs=8 faults=0 state=0 mailbox=0
- > vars
 --- corpus/suspension/joins/case.trace (cdee6bf)
 +++ corpus/suspension/joins/case.trace (candidate)
-@@ -18,10 +18,10 @@
- send board/r1.c2 to=shop message=price args=["a"] wait=join
- call board/r1.c3 op=feed.fetch args=["b"]
- send board/r1.c4 to=shop message=price args=["b"] wait=join
+@@ -21 +21 @@
 -seg board/r1 start delivery=d1 handler=gather clause=1 fuel=148 alloc=122 state=782 end=join-end
 +seg board/r1 start delivery=d1 handler=gather clause=1 fuel=148 alloc=122 state=798 end=join-end
- seg shop/r1 start from=board/r1.c2 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
- run shop/r1 outcome=completed handler=price value="a!" fuel=12 alloc=18
+@@ -24 +24 @@
 -seg board/r2 start delivery=d2 handler=gather clause=1 fuel=44 alloc=64 state=728 end=return
 +seg board/r2 start delivery=d2 handler=gather clause=1 fuel=44 alloc=64 state=744 end=return
- run board/r2 outcome=completed delivery=d2 handler=gather fuel=44 alloc=64
- seg shop/r2 start from=board/r1.c4 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
- run shop/r2 outcome=completed handler=price value="b!" fuel=12 alloc=18
-@@ -29,41 +29,41 @@
- send board/r3.c2 to=shop message=price args=["c"] wait=join
- call board/r3.c3 op=feed.fetch args=["d"]
- send board/r3.c4 to=shop message=price args=["d"] wait=join
+@@ -32 +32 @@
 -seg board/r3 start delivery=d3 handler=gather clause=1 fuel=148 alloc=122 state=1115 end=join-end
 +seg board/r3 start delivery=d3 handler=gather clause=1 fuel=148 alloc=122 state=1147 end=join-end
- seg shop/r3 start from=board/r3.c2 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
- run shop/r3 outcome=completed handler=price value="c!" fuel=12 alloc=18
- call board/r4.c1 op=feed.fetch args=["e"]
- send board/r4.c2 to=shop message=price args=["e"] wait=join
+@@ -37 +37 @@
 -seg board/r4 start delivery=d4 handler=gather clause=1 fuel=89 alloc=73 state=1406 end=join-end
 +seg board/r4 start delivery=d4 handler=gather clause=1 fuel=89 alloc=73 state=1454 end=join-end
- seg shop/r4 start from=board/r3.c4 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
- run shop/r4 outcome=completed handler=price value="d!" fuel=12 alloc=18
- call board/r5.c1 op=feed.fetch args=["x"]
- raise board/r5 code="stop" at=board:46 pos=23:7
- abandon board/r5.c1
+@@ -43,2 +43,2 @@
 -seg board/r5 start delivery=d5 handler=early clause=1 fuel=80 alloc=140 state=1372 end=return
 -run board/r5 outcome=completed delivery=d5 handler=early fuel=80 alloc=140
 +seg board/r5 start delivery=d5 handler=early clause=1 fuel=81 alloc=140 state=1420 end=return
 +run board/r5 outcome=completed delivery=d5 handler=early fuel=81 alloc=140
- seg shop/r5 start from=board/r4.c2 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
- run shop/r5 outcome=completed handler=price value="e!" fuel=12 alloc=18
+@@ -47 +47 @@
 -pumped state=idle fuel=569 next=2026-09-30T09:00:05Z
 +pumped state=idle fuel=570 next=2026-09-30T09:00:05Z
- > answer board/r1.c3 value=2
- > answer board/r1.c1 value=1
- > fail board/r3.c3 error={code: "no feed"}
- > pump clock=2026-09-30T09:00:01Z
+@@ -52 +52 @@
 -seg board/r1 resume fuel=16 alloc=272 state=895 end=return
 +seg board/r1 resume fuel=16 alloc=272 state=927 end=return
- run board/r1 outcome=completed delivery=d1 handler=gather fuel=164 alloc=394
- raise board/r3 code="no feed" at=board:16 pos=12:5
- abandon board/r3.c1
+@@ -56,3 +56,3 @@
 -seg board/r3 resume fuel=18 alloc=478 state=1018 end=return
 -run board/r3 outcome=completed delivery=d3 handler=gather fuel=166 alloc=600
 -pumped state=idle fuel=34 next=2026-09-30T09:00:05Z
 +seg board/r3 resume fuel=19 alloc=478 state=1034 end=return
 +run board/r3 outcome=completed delivery=d3 handler=gather fuel=167 alloc=600
 +pumped state=idle fuel=35 next=2026-09-30T09:00:05Z
- > answer board/r3.c1 value=3
- > pump clock=2026-09-30T09:00:05Z
- note board/r3.c1 kind=late-answer
- raise board/r4 code="timeout" at=board:16 pos=12:5
- abandon board/r4.c1
+@@ -64,3 +64,3 @@
 -seg board/r4 resume fuel=17 alloc=591 state=1245 end=return
 -run board/r4 outcome=completed delivery=d4 handler=gather fuel=106 alloc=664
 -pumped state=idle fuel=17
 +seg board/r4 resume fuel=18 alloc=591 state=1245 end=return
 +run board/r4 outcome=completed delivery=d4 handler=gather fuel=107 alloc=664
 +pumped state=idle fuel=18
- 
- > vars
- vars board results=[[], "stop", [1, "a!", 2, "b!"], {code: "no feed", capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 12, column: 5}, index: 3}, {code: "timeout", after: 5000 ms, capability: "feed", operation: "fetch", at: {unit: "board", handler: "gather", line: 12, column: 5}, index: 1}]
 --- corpus/suspension/nested-waits/case.trace (cdee6bf)
 +++ corpus/suspension/nested-waits/case.trace (candidate)
-@@ -17,9 +17,9 @@
- run hoarder/r1 outcome=limit-fault delivery=d4 handler=grow limit=persistent fuel=18 alloc=0
- seg napper/r2 start delivery=d2 handler=each clause=1 fuel=27 alloc=88 state=664 end=wait until=2026-09-30T09:00:01Z
- raise napper/r3 code="wrong kind" at=napper:65 pos=31:5
+@@ -20,3 +20,3 @@
 -seg napper/r3 start delivery=d3 handler=month clause=1 fuel=32 alloc=547 state=1179 end=return
 -run napper/r3 outcome=completed delivery=d3 handler=month fuel=32 alloc=547
 -pumped state=idle fuel=110 next=2026-09-30T09:00:01Z
 +seg napper/r3 start delivery=d3 handler=month clause=1 fuel=33 alloc=547 state=1179 end=return
 +run napper/r3 outcome=completed delivery=d3 handler=month fuel=33 alloc=547
 +pumped state=idle fuel=111 next=2026-09-30T09:00:01Z
- > pump clock=2026-09-30T09:00:01Z
- seg napper/r1 resume fuel=65 alloc=112 state=915 end=return
- run napper/r1 outcome=completed delivery=d1 handler=go fuel=98 alloc=136
 --- corpus/suspension/script-joins/case.trace (cdee6bf)
 +++ corpus/suspension/script-joins/case.trace (candidate)
-@@ -7,9 +7,9 @@
- > pump clock=2026-10-04T12:00:00Z
- send a/r1.c1 to=b message=ping args=[1] wait=join
- send a/r1.c2 to=b message=ping args=[3] wait=join
+@@ -10 +10 @@
 -seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=488 end=join-end
 +seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=504 end=join-end
- seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=20 alloc=0 state=280 end=wait until=2026-10-04T12:00:01Z
+@@ -12 +12 @@
 -seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=464 end=return
 +seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=480 end=return
- run a/r2 outcome=completed delivery=d2 handler=gather fuel=60 alloc=64
- seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=20 alloc=0 state=448 end=wait until=2026-10-04T12:00:01Z
- pumped state=idle fuel=202 next=2026-10-04T12:00:01Z
-@@ -26,7 +26,7 @@
- send a/r3.c1 to=b message=ping args=[1] wait=join
- send a/r3.c2 to=b message=ping args=[2] wait=join
- send a/r3.c3 to=b message=ping args=[3] wait=join
+@@ -29 +29 @@
 -seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=608 end=join-end
 +seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=624 end=join-end
- seg b/r3 start from=a/r3.c1 handler=ping clause=1 fuel=20 alloc=0 state=376 end=wait until=2026-10-04T12:00:02Z
- raise b/r4 code="bad" at=b:10 pos=4:3
- seg b/r4 start from=a/r3.c2 handler=ping clause=1 fuel=28 alloc=111 state=328 end=error
-@@ -34,10 +34,10 @@
- raise a/r3 code="send failed" at=a:16 pos=9:3
- abandon a/r3.c1
- abandon a/r3.c3
+@@ -37,2 +37,2 @@
 -seg a/r3 resume fuel=17 alloc=824 state=936 end=return
 -run a/r3 outcome=completed delivery=d3 handler=gather fuel=147 alloc=992
 +seg a/r3 resume fuel=18 alloc=824 state=936 end=return
 +run a/r3 outcome=completed delivery=d3 handler=gather fuel=148 alloc=992
- seg b/r5 start from=a/r3.c3 handler=ping clause=1 fuel=20 alloc=0 state=819 end=wait until=2026-10-04T12:00:02Z
+@@ -40 +40 @@
 -pumped state=idle fuel=215 next=2026-10-04T12:00:02Z
 +pumped state=idle fuel=216 next=2026-10-04T12:00:02Z
- > pump clock=2026-10-04T12:00:02Z
- seg b/r3 resume fuel=12 alloc=24 state=304 end=return
- run b/r3 outcome=completed handler=ping value=1 fuel=32 alloc=24
-@@ -67,7 +67,7 @@
- vars a results=[[], [1, 3], {code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 4, column: 3}}, at: {unit: "a", handler: "gather", line: 9, column: 3}, index: 2}, [7, 9]]
- vars b done=[1, 3, 1, 3]
- > counters a
+@@ -70 +70 @@
 -counters a fuel=444 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
 +counters a fuel=445 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
- > counters b
- counters b fuel=156 alloc=207 runs=5 faults=0 state=112 mailbox=0
- 
 --- corpus/suspension/script-sends/case.trace (cdee6bf)
 +++ corpus/suspension/script-sends/case.trace (candidate)
-@@ -14,20 +14,20 @@
- send a/r1 to=b message=note args=[2]
- raise a/r1 code="mailbox full" at=a:14 pos=5:4
- send a/r1 to=a message=self
+@@ -17,2 +17,2 @@
 -seg a/r1 start delivery=d1 handler=fire clause=1 fuel=151 alloc=289 state=185 end=return
 -run a/r1 outcome=completed delivery=d1 handler=fire fuel=151 alloc=289
 +seg a/r1 start delivery=d1 handler=fire clause=1 fuel=152 alloc=289 state=185 end=return
 +run a/r1 outcome=completed delivery=d1 handler=fire fuel=152 alloc=289
- seg b/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
- run b/r1 outcome=completed handler=note fuel=16 alloc=24
- raise a/r2 code="object gone" at=a:53 pos=17:16
- send a/r2 to=b message=note args=[7]
+@@ -23,2 +23,2 @@
 -seg a/r2 start delivery=d2 handler=missing clause=1 fuel=54 alloc=78 state=183 end=return
 -run a/r2 outcome=completed delivery=d2 handler=missing fuel=54 alloc=78
 +seg a/r2 start delivery=d2 handler=missing clause=1 fuel=55 alloc=78 state=183 end=return
 +run a/r2 outcome=completed delivery=d2 handler=missing fuel=55 alloc=78
- seg b/r2 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=112 end=return
- run b/r2 outcome=completed handler=note fuel=16 alloc=24
- raise a/r3 code="wrong kind" at=a:84 pos=25:3
- send a/r3 to=b message=note args=[8]
+@@ -29,2 +29,2 @@
 -seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=84 alloc=196 state=213 end=return
 -run a/r3 outcome=completed delivery=d3 handler=wrong fuel=84 alloc=196
 +seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=85 alloc=196 state=213 end=return
 +run a/r3 outcome=completed delivery=d3 handler=wrong fuel=85 alloc=196
- seg b/r3 start from=a/r2 handler=note clause=1 fuel=16 alloc=24 state=136 end=return
- run b/r3 outcome=completed handler=note fuel=16 alloc=24
- send a/r4 to=b message=note args=[9]
-@@ -45,7 +45,7 @@
- run a/r6 outcome=completed handler=error fuel=38 alloc=48
- seg b/r6 start from=a/r6 handler=note clause=1 fuel=16 alloc=24 state=160 end=return
- run b/r6 outcome=completed handler=note fuel=16 alloc=24
+@@ -48 +48 @@
 -pumped state=idle fuel=482
 +pumped state=idle fuel=485
- > vars
- vars a seen=["b", "absent", ["object", 42], "self"]
- vars b got=[1, 2, 7, 8, 9, 0]
 --- corpus/suspension/send-and-wait/case.trace (cdee6bf)
 +++ corpus/suspension/send-and-wait/case.trace (candidate)
-@@ -11,37 +11,37 @@
- > deliver d4 to=front message=query args=["slow"]
- > pump clock=2026-09-30T09:00:00Z
- send front/r1.c1 to=back message=quote args=["ok"] wait=yes
+@@ -14 +14 @@
 -seg front/r1 start delivery=d1 handler=query clause=1 fuel=28 alloc=50 state=470 end=send-wait
 +seg front/r1 start delivery=d1 handler=query clause=1 fuel=28 alloc=50 state=486 end=send-wait
- seg back/r1 start from=front/r1.c1 handler=quote clause=1 fuel=9 alloc=0 state=0 end=return
- run back/r1 outcome=completed handler=quote value="fine" fuel=9 alloc=0
- send front/r2.c1 to=back message=quote args=["bad"] wait=yes
+@@ -18 +18 @@
 -seg front/r2 start delivery=d2 handler=query clause=1 fuel=28 alloc=51 state=690 end=send-wait
 +seg front/r2 start delivery=d2 handler=query clause=1 fuel=28 alloc=51 state=722 end=send-wait
- raise back/r2 code="no price" at=back:22 pos=13:3
- seg back/r2 start from=front/r2.c1 handler=quote clause=3 fuel=41 alloc=116 state=0 end=error
- run back/r2 outcome=errored handler=quote error={code: "no price", at: {unit: "back", handler: "quote", line: 13, column: 3}} fuel=41 alloc=116
- send front/r3.c1 to=back message=quote args=["other"] wait=yes
+@@ -23 +23 @@
 -seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=1190 end=send-wait
 +seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=1238 end=send-wait
- send front/r4.c1 to=back message=quote args=["slow"] wait=yes
+@@ -25 +25 @@
 -seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=1438 end=send-wait
 +seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=1502 end=send-wait
- seg back/r3 start from=front/r3.c1 handler=quote fuel=24 alloc=0 state=52 end=unhandled
- run back/r3 outcome=unhandled handler=quote fuel=24 alloc=0
- unhandled message=quote args=["other"]
+@@ -29 +29 @@
 -seg front/r1 resume fuel=14 alloc=28 state=1148 end=return
 +seg front/r1 resume fuel=14 alloc=28 state=1196 end=return
- run front/r1 outcome=completed delivery=d1 handler=query fuel=42 alloc=78
- seg back/r4 start from=front/r4.c1 handler=quote clause=2 fuel=25 alloc=0 state=204 end=wait until=2026-09-30T09:00:05Z
- raise front/r2 code="send failed" at=front:6 pos=7:5
+@@ -33,2 +33,2 @@
 -seg front/r2 resume fuel=17 alloc=791 state=1388 end=return
 -run front/r2 outcome=completed delivery=d2 handler=query fuel=45 alloc=842
 +seg front/r2 resume fuel=18 alloc=791 state=1420 end=return
 +run front/r2 outcome=completed delivery=d2 handler=query fuel=46 alloc=842
- raise front/r3 code="send failed" at=front:6 pos=7:5
+@@ -36,3 +36,3 @@
 -seg front/r3 resume fuel=17 alloc=466 state=1601 end=return
 -run front/r3 outcome=completed delivery=d3 handler=query fuel=45 alloc=519
 -pumped state=idle fuel=259 next=2026-09-30T09:00:02Z
 +seg front/r3 resume fuel=18 alloc=466 state=1617 end=return
 +run front/r3 outcome=completed delivery=d3 handler=query fuel=46 alloc=519
 +pumped state=idle fuel=261 next=2026-09-30T09:00:02Z
- > pump clock=2026-09-30T09:00:02Z
- raise front/r4 code="timeout" at=front:6 pos=7:5
- abandon front/r4.c1
+@@ -42,3 +42,3 @@
 -seg front/r4 resume fuel=17 alloc=437 state=1738 end=return
 -run front/r4 outcome=completed delivery=d4 handler=query fuel=45 alloc=489
 -pumped state=idle fuel=17 next=2026-09-30T09:00:05Z
 +seg front/r4 resume fuel=18 alloc=437 state=1738 end=return
 +run front/r4 outcome=completed delivery=d4 handler=query fuel=46 alloc=489
 +pumped state=idle fuel=18 next=2026-09-30T09:00:05Z
- > pump clock=2026-09-30T09:00:05Z
- seg back/r4 resume fuel=3 alloc=0 state=0 end=return
- run back/r4 outcome=completed handler=quote value="late" fuel=28 alloc=0
 --- corpus/suspension/send-reply-preemption/case.trace (cdee6bf)
 +++ corpus/suspension/send-reply-preemption/case.trace (candidate)
-@@ -23,11 +23,11 @@
- preempt a/r1 resume by=cap fuel=4 alloc=0
- pumped state=sliced fuel=4
- > counters a
+@@ -26 +26 @@
 -counters a fuel=42 alloc=32 runs=1 faults=0 state=994 mailbox=0
 +counters a fuel=42 alloc=32 runs=1 faults=0 state=1988 mailbox=0
- > pump clock=2026-10-04T12:00:00Z
+@@ -28,3 +28,3 @@
 -seg a/r1 continue fuel=15 alloc=0 state=0 end=return
 -run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=57 alloc=32
 -pumped state=idle fuel=15
 +seg a/r1 continue fuel=16 alloc=0 state=0 end=return
 +run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=58 alloc=32
 +pumped state=idle fuel=16
- > vars
- vars a
- vars b
 --- corpus/text-model/chunk-write-out-of-range/case.trace (cdee6bf)
 +++ corpus/text-model/chunk-write-out-of-range/case.trace (candidate)
-@@ -17,9 +17,9 @@
- raise writes/r1 code="out of range" at=writes:83 pos=26:18
- raise writes/r1 code="out of range" at=writes:119 pos=31:18
- raise writes/r1 code="out of range" at=writes:156 pos=36:18
+@@ -20,3 +20,3 @@
 -seg writes/r1 start delivery=d1 handler=go clause=1 fuel=215 alloc=732 state=602 end=return
 -run writes/r1 outcome=completed delivery=d1 handler=go fuel=215 alloc=732
 -pumped state=idle fuel=215
 +seg writes/r1 start delivery=d1 handler=go clause=1 fuel=220 alloc=732 state=602 end=return
 +run writes/r1 outcome=completed delivery=d1 handler=go fuel=220 alloc=732
 +pumped state=idle fuel=220
- 
- > vars
- vars writes s="abc" pastEnd=["out of range", "character", 4] wordPastEnd=["out of range", "word", 2] itemZero=["out of range", "item", 0] beforeStart=["out of range", "character", -4] reversed=["out of range", "character", [3, 2]]
 --- corpus/text-patterns/splice-wrong-kind/case.trace (cdee6bf)
 +++ corpus/text-patterns/splice-wrong-kind/case.trace (candidate)
-@@ -7,8 +7,8 @@
- > deliver d1 to=splice message=go
- > pump clock=2026-09-30T09:00:00Z
- raise splice/r1 code="wrong kind" at=splice:3 pos=6:9
+@@ -10,3 +10,3 @@
 -seg splice/r1 start delivery=d1 handler=go clause=1 fuel=51 alloc=0 state=39 end=return
 -run splice/r1 outcome=completed delivery=d1 handler=go fuel=51 alloc=0
 -pumped state=idle fuel=51
 +seg splice/r1 start delivery=d1 handler=go clause=1 fuel=52 alloc=0 state=39 end=return
 +run splice/r1 outcome=completed delivery=d1 handler=go fuel=52 alloc=0
 +pumped state=idle fuel=52
- > vars
- vars splice expected="pattern" offending=42
 --- corpus/recovery-offers/action-suspend/case.trace ((new))
 +++ corpus/recovery-offers/action-suspend/case.trace (candidate)
 @@ -0,0 +1,21 @@
@@ -2188,17 +1752,12 @@
 +    offer inner -> 0005 binds [1]
 +  1 body 1 depth 0 end 0058
 +    offer outer -> 0052 binds []
---- corpus/capabilities/standard-store-errors/case.trace (origin/main)
+--- corpus/capabilities/standard-store-errors/case.trace (c73d919)
 +++ corpus/capabilities/standard-store-errors/case.trace (candidate)
-@@ -88,8 +88,8 @@
- raise s/r7 code="store busy" at=s:12 pos=6:5
- call s/r7.c2 op=st.increment args=["retries"] result=1
- effect s/r7.s1 grant=st phase=commit status=ok
+@@ -91,3 +91,3 @@
 -seg s/r7 start delivery=d7 handler=careful clause=1 fuel=57 alloc=79 state=0 end=return
 -run s/r7 outcome=completed delivery=d7 handler=careful fuel=57 alloc=79
 -pumped state=idle fuel=57
 +seg s/r7 start delivery=d7 handler=careful clause=1 fuel=58 alloc=79 state=0 end=return
 +run s/r7 outcome=completed delivery=d7 handler=careful fuel=58 alloc=79
 +pumped state=idle fuel=58
- > vars
- vars s

@@ -111,6 +111,11 @@
     "result": "\"cleanup:bad\""
   },
   {
+    "name": "throw retains counted-loop iterator during dispatch",
+    "source": "function worker\n  put 0 into total\n  repeat 2 times\n    try\n      throw \"bad\"\n    offer recover\n      add 1 to total\n    end try\n  end repeat\n  return total\nend worker\non go\n  try\n    return worker()\n  catch e before unwind\n    choose offer recover\n  end try\nend go\n",
+    "result": "2"
+  },
+  {
     "name": "single choice exact accounting",
     "source": "on go\n try\n  throw \"bad\"\n offer recover value\n  return value\n catch e before unwind\n  choose offer recover(7)\n end try\nend go\n",
     "result": "7",

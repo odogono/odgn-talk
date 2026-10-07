@@ -48,4 +48,4 @@ new	(new)	corpus/recovery-offers/cleanup-restore/case.trace	d8514bb76bb7241fda2c
 new	(new)	corpus/recovery-offers/costs/case.trace	7b5241c3cf18ad5665f5aa288a6d0c6254c9a6786c112c1a2fad37e08e17daa2
 new	(new)	corpus/recovery-offers/nested/case.trace	8b8bd733843583d10a57347ebe62fe5af812d219c99962656bbe7c6dc0ce2a8c
 new	(new)	corpus/disassembly/recovery-offers/recovery.dis	3b525d369e6f36bc5b73a5b27cf0ca75049835b9d04e7af0d2086bdc92c01ade
-correction	origin/main	corpus/capabilities/standard-store-errors/case.trace	55d8e6ea9beae15154cabdccd1446f983b4cce3c85395db65f7d0aca2d9a3d59
+correction	c73d919	corpus/capabilities/standard-store-errors/case.trace	55d8e6ea9beae15154cabdccd1446f983b4cce3c85395db65f7d0aca2d9a3d59
