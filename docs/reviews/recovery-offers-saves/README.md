@@ -2,8 +2,10 @@
 
 This slice starts at `548afc41` (PR #400 merged into `feat/recovery-offers`).
 Language remains 1.0-rc.2 and provisional Cost Model 0. No Data File or Corpus
-expectation changes are made. Existing first-blessing approval remains pending
-in #392; execution agreement does not grant that approval.
+expectation changes were made by this slice. The maintainer subsequently
+approved the expectations on 2026-10-07 in the
+[final review](../recovery-offers-integration/README.md); execution agreement
+does not grant that approval.
 
 Both Cores save retained continuations, dispatch activations and their shared
 owner locals, selection boundaries, pending catch/offer/error transfers, chosen

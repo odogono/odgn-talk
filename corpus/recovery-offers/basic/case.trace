@@ -1,4 +1,3 @@
-# Unblessed: #388 first expectation approval remains pending.
 # Same-Run callback and two nested Libraries retain rows and offer scopes.
 # Guard skips precede cleanup, choice precedes cleanup, entry follows cleanup.
 > add-library rows identity=c20c9abf0cc63e37fbfdfe08765717a940e02c6e2f9914f29d9fa922b58c0cb7

@@ -1,7 +1,9 @@
 # Recovery Offers runtime expectation review (#388)
 
-Approval status: **pending human review**. These are concrete candidate updates,
-not a record of blessing approval. Language remains 1.0-rc.2 and Cost Model 0.
+Approval status: **approved in the final review on 2026-10-07**; see the
+[human decision and exact scope](../recovery-offers-integration/README.md).
+This record preserves slice-2 derivation evidence. Language remains 1.0-rc.2
+and Cost Model 0.
 The integration base is `cdee6bf` (slice 1, #387 / PR #394).
 
 Every ordinary catch now searches before cleanup. `catch-accept` adds 1 Fuel;
@@ -19,7 +21,7 @@ canonical disassembly and full ordinary/restored Traces with these files. The
 checks are execution evidence; approval is a separate step required by issue
 #388 and [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).
 
-## New cases (unblessed)
+## New cases (unblessed when this slice was reviewed)
 
 | Case | Coverage |
 | --- | --- |
@@ -90,12 +92,12 @@ do not approve this new runtime-derived change.
 
 ## Delivery boundary
 
-This is slice 2 against `feat/recovery-offers`, not the final merge to `main`.
-Nested recovery and cancellation scope enumeration belong to #389; complete
-snapshot phase/reference validation belongs to #390; debugger/session/Playground
-integration belongs to #391. Existing ordinary Save/Restore regressions remain
-passing, including shared owner locals reconstructed by the Go private codec.
-The final conformance/blessing audit remains #392.
+This record describes slice 2 at PR #396 on `feat/recovery-offers`. Later merged
+slices delivered nested recovery/cancellation (#400), snapshot validation (#401)
+and debugger/session/Playground integration (#405). Current support belongs in
+the Core/tooling guides. The [final approval package](../recovery-offers-integration/README.md)
+consolidates the exact changed expectations and independent boundary arithmetic;
+first-blessing approval is still separate from execution agreement.
 
 ## Verification (2026-10-06)
 

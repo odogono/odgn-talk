@@ -1,6 +1,6 @@
 # 7. Libraries and the Standard Library
 
-_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md).
+_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
 
 Scripts share code through Libraries: stateless units of source that the Host registers on a Script Group, and whose code runs in the caller's Run. The Standard Library is two tiers. The Built-ins are a small set of functions and Constants that the Cores implement natively and that are always available. The seven stdlib Libraries are written in the language and imported like any other Library. The Standard Capabilities are Capabilities whose Operation Declarations this chapter fixes, and whose answers each Host supplies.
 
@@ -8,7 +8,7 @@ This chapter states what Libraries are and how they are used, then every Built-i
 
 ## Libraries
 
-Recovery Offers let a caller choose an action declared inside retained Library frames in the same Run, preserving Library accumulators and earlier work. `offerAvailable(textName)` works in policy, Guards, synchronous helpers and pending transfer cleanup. It validates text ordinarily, returning false outside recovery or for malformed/unknown Names. It ignores arity; choice validates exact arity without falling back to an outer name. Malformed Names (including reserved words and `_`) pay only the base/text rate. Foreign callbacks and fresh `on error` Runs cannot see another Run's offers.
+Recovery Offers let a caller choose an action declared inside retained Library frames in the same Run, preserving Library accumulators and earlier work ([chapter 4](04-expressions-and-statements.md#recovery-offers)). An unrelated rejecting catch in an intermediate Library preserves those offers. A catch-all accepts, discards deeper failed frames and their offers, and remains a barrier even when its body logs and throws the Error again.
 
 ### What a Library holds
 
@@ -76,6 +76,54 @@ This chapter writes every optional argument of a stdlib function or Built-in as 
 - **Linked, not inlined:** a call to a Library is resolved at load and lowered as a call to it by name. Its body is never copied into the importer.
 - **Suspension:** a Command Call to an imported Handler that may suspend is written `name args and wait`, as for a local one, and a function never suspends ([chapter 5](05-handlers-messages-and-scheduling.md#suspension-points)).
 - **Function Values:** a Library function's bare name is a Function Value whose Home Script is the Script that made it, and it runs in that Script's Runs ([chapter 5](05-handlers-messages-and-scheduling.md#function-values-in-another-script)). A Lambda written in a Library can't name a Script Variable, since a Library has none.
+
+### Recovery across Library calls
+
+The Host may register the `parseRows` function from [chapter 4's example](04-expressions-and-statements.md#recovery-offers) as Library `rows`. Its caller chooses policy without passing that policy through the Library API:
+
+```talk
+use parseRows from rows
+
+on parseInput
+  try
+    put parseRows(["5", "bad", "7"]) into parsed
+  catch {code: "can't convert"} before unwind where offerAvailable("skip")
+    choose offer skip
+  end try
+  -- parsed is [5, 7], retaining the Library's rows local.
+end parseInput
+```
+
+Deeper cleanup precedes the action; the offering try's finally follows it:
+
+```talk
+function parseOne text
+  try
+    return text as number
+  finally
+    -- Deeper cleanup: runs before a selected action.
+  end try
+end parseOne
+
+function parseRows lines
+  put [] into rows
+  repeat for each line in lines
+    try
+      put parseOne(line) after rows
+    offer skip
+      -- Action: the deeper cleanup has finished.
+      next repeat
+    offer useValue value
+      put value after rows
+    finally
+      -- Owning cleanup: runs after the action, including next repeat.
+    end try
+  end repeat
+  return rows
+end parseRows
+```
+
+For a failed conversion with `skip` chosen, the order is selection, `parseOne`'s finally, `skip`, the offering try's finally, then the next iteration. An Error escaping deeper cleanup cancels the chosen action; an Error caught locally inside that cleanup does not. Offers remain eligible until action entry, including during cleanup.
 
 ### Grants and `needs`
 
@@ -179,6 +227,10 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 - **`functionArity(f)`** gives the range of argument counts `f` accepts, the range `wrong arity` checks: from a named function's required parameters to all of them ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)), or `n..n` for a Lambda with `n` parameters. So a function with no parameters gives `0..0`, and `2 is in functionArity(f)` tests a call before it is made.
 - **`functionName(f)`** gives the name of the named function `f` was made from, as the code unit that defines it writes it, or Nothing for a Lambda, a Library's included. An Import renamed with `use … as` keeps its Library name, so after `use pad from text as padLeft`, `functionName(padLeft)` is `"pad"`.
 - **`functionArity` and `functionName`** take a Function Value, and anything else raises `wrong kind`. They read data the value holds, so a stale Function Value still answers both, and only calling it raises `function gone` ([chapter 3](03-values.md#function-values)).
+
+### Offer availability
+
+`offerAvailable(textName)` validates text using ordinary Built-in argument rules. Wrong kind raises `wrong kind`; outside recovery, a malformed Name or an unknown Name returns false. Names are case-sensitive and obey the ordinary Name rules; reserved words and `_` are malformed. A valid query searches the current recovery's eligible offers, including from a Guard, synchronous helper or pending transfer cleanup before action entry. It ignores arity; choice checks exact arity without falling back to an outer same-name offer. A nested recovery queries only its own bounded failure chain ([chapter 6](06-errors-and-limits.md#catching)). Malformed Names and calls outside recovery pay the base/text rate with no lookup charge ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#rates)).
 
 ### Numbers
 

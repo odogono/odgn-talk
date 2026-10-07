@@ -1,4 +1,3 @@
-# Unblessed: #388 first expectation approval remains pending.
 # Before choice: Fuel 20 and exact retained dispatch state; lookup is atomic.
 # The 13-Fuel choice exceeds a 5-Fuel slice, enters once, and leaves 8 debt.
 > load s identity=8601d7825855a6b542adc7198c25524257d4d8bad8ce0c7e2df51cb44718af5f
