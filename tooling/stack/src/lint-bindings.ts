@@ -728,6 +728,150 @@ const lintCollecting = (block: SemanticNode, emit: Emit) => {
   }
 };
 
+// A `get` and a later `set` of the same Store key through the same Grant,
+// with the value flowing from one to the other, loses an update another
+// Script makes in between (ADR 0050). Within one Handler, in source order and
+// not into nested Lambdas: the read taints `it`, a `put` of a tainted
+// expression taints its target, and a later `ask` replaces `it`. A key is the
+// same literal text, or the same binding with no write in between.
+type StoreKey = { binding?: number; text: string };
+const storeCall = (node: SemanticNode) => {
+  const words = leaves(node);
+  const target = child(node, 'Expression');
+  const grant = target && unwrap(target);
+  const args = nodes(child(node, 'ExpressionList') ?? node).filter(
+    n => n.rule === 'Expression',
+  );
+  const key = args[0] && unwrap(args[0]);
+  if (
+    words[0]?.text !== 'ask' ||
+    child(node, 'AndWait')?.children.length ||
+    grant?.kind !== 'name' ||
+    grant.role !== 'grant' ||
+    !key
+  ) {
+    return undefined;
+  }
+  const storeKey: StoreKey | undefined =
+    key.kind === 'token' && key.type === 'str'
+      ? { text: JSON.stringify(key.text) }
+      : key.kind === 'name' && key.binding
+        ? { binding: key.binding.id, text: key.text }
+        : undefined;
+  return (
+    storeKey && {
+      grant: grant.text,
+      operation: words[2]?.text,
+      key: storeKey,
+      value: args[1],
+    }
+  );
+};
+const lintStoreRace = (handler: SemanticNode, emit: Emit) => {
+  const body = child(handler, 'Block');
+  const it = body && itOf(body);
+  if (!body || it === undefined) {
+    return;
+  }
+  const order = elements(body).filter(
+    (e): e is SemanticNode | SemanticName =>
+      e.kind === 'node' || e.kind === 'name',
+  );
+  type Read = {
+    at: number;
+    grant: string;
+    key: StoreKey;
+    tainted: Set<number>;
+  };
+  const reads: Read[] = [];
+  const references = (root: SemanticNode, tainted: Set<number>) =>
+    elements(root).some(
+      e => e.kind === 'name' && e.binding !== null && tainted.has(e.binding.id),
+    );
+  for (const e of order) {
+    if (e.kind === 'name') {
+      continue;
+    }
+    if (
+      e.rule === 'SimpleStatement' &&
+      first(e)?.text === 'put' &&
+      leaves(e).some(t => t.text === 'into')
+    ) {
+      const value = child(e, 'Expression');
+      const container = child(e, 'Container');
+      const target = container && unwrap(container);
+      for (const read of reads) {
+        if (value && references(value, read.tainted)) {
+          for (const write of elements(container!)) {
+            if (
+              write.kind === 'name' &&
+              write.role === 'write' &&
+              write.binding
+            ) {
+              read.tainted.add(write.binding.id);
+            }
+          }
+        } else if (target?.kind === 'name' && target.binding) {
+          read.tainted.delete(target.binding.id);
+        }
+      }
+      continue;
+    }
+    if (
+      e.rule !== 'AskTell' &&
+      !(e.rule === 'Send' && child(e, 'AndWait')?.children.length)
+    ) {
+      continue;
+    }
+    const call = e.rule === 'AskTell' ? storeCall(e) : undefined;
+    if (call?.operation === 'set' && call.value) {
+      for (const read of reads) {
+        const sameKey =
+          read.key.binding === undefined
+            ? call.key.binding === undefined && read.key.text === call.key.text
+            : read.key.binding === call.key.binding &&
+              !elements(body).some(
+                w =>
+                  w.kind === 'name' &&
+                  (w.role === 'write' || w.role === 'binding') &&
+                  w.binding?.id === read.key.binding &&
+                  w.span.start > read.at &&
+                  w.span.start < e.span.start,
+              );
+        if (
+          read.grant === call.grant &&
+          sameKey &&
+          references(call.value, read.tainted)
+        ) {
+          emit('store-race', leaves(e)[2]!.span, { key: call.key.text });
+          break;
+        }
+      }
+    }
+    // An `ask` or a waiting `send` replaces `it`.
+    for (const read of reads) {
+      read.tainted.delete(it);
+    }
+    if (call?.operation === 'get') {
+      reads.push({
+        at: e.span.start,
+        grant: call.grant,
+        key: call.key,
+        tainted: new Set([it]),
+      });
+    }
+  }
+};
+// The binding `it` has in a Handler body, from any use of it there.
+const itOf = (body: SemanticNode): number | undefined => {
+  for (const e of elements(body)) {
+    if (e.kind === 'name' && e.text === 'it' && e.binding) {
+      return e.binding.id;
+    }
+  }
+  return undefined;
+};
+
 export const lintBindings = (
   tree: SemanticTree,
   manifest: HostManifest | null | undefined,
@@ -840,6 +984,9 @@ export const lintBindings = (
     }
     if (e.rule === 'Block') {
       lintCollecting(e, emit);
+    }
+    if (e.rule === 'Handler') {
+      lintStoreRace(e, emit);
     }
     if (e.rule === 'Try' && leaves(e).some(t => t.text === 'catch')) {
       const body = child(e, 'Block');
