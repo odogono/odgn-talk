@@ -1064,11 +1064,8 @@ export class Group {
         ]),
       );
     }
-    const state = restoreGraph(
-      saved.graph,
-      group.snapshotReferences(),
-      mismatch,
-    ) as SavedState;
+    const refs = group.snapshotReferences();
+    const state = restoreGraph(saved.graph, refs, mismatch) as SavedState;
     const result: RestoreResult = {
       variablesOnly: mismatch,
       pending: [],
@@ -1137,6 +1134,7 @@ export class Group {
           );
         });
         for (const running of group.runsOf(script)) {
+          running.run.validateSnapshot(new Set(refs.byObject.keys()));
           running.run.host = group.hostFor(script, running.run);
           running.run.rebindCalls();
           running.run.persistentState = () => group.persistentState(script, 1);

@@ -754,6 +754,9 @@ func (r *Run) Cancel(budget int64) {
 	r.State.Variables = slices.Clone(r.Base)
 	r.Base = slices.Clone(r.Base)
 	r.Cancellation = r.cancellationScopes()
+	for j := range r.Cancellation {
+		r.Cancellation[j].Frame.Transfer = nil
+	}
 	owners := map[int]Frame{}
 	for _, c := range r.Recoveries {
 		for _, f := range c.Retained {
@@ -783,6 +786,7 @@ func (r *Run) Cancel(budget int64) {
 		if needed[id] {
 			owner := owners[id]
 			owner.Stack = nil
+			owner.Transfer = nil
 			r.CancellationOwners = append(r.CancellationOwners, owner)
 			delete(needed, id)
 		}

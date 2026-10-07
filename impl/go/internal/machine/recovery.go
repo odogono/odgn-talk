@@ -276,12 +276,7 @@ func (r *Run) escapePolicy(c *RecoveryContext) {
 			c.Excluded[id][key] = true
 		}
 	}
-	for j, context := range r.Recoveries {
-		if context == outer {
-			r.Recoveries = slices.Delete(r.Recoveries, j, j+1)
-			break
-		}
-	}
+	r.discardRecovery(outer)
 	c.Boundary = outer.Boundary
 }
 
@@ -340,10 +335,38 @@ func (r *Run) escapeCleanup(c, outer *RecoveryContext) {
 		c.CleanupOnly[id] = true
 	}
 	c.Boundary = outer.Boundary
+	r.discardRecovery(outer)
+}
+
+// An aborted transfer must not remain reachable through a retained cleanup
+// cursor. The cursor still owns its locals/scopes, but no longer its transfer.
+func (r *Run) discardRecovery(outer *RecoveryContext) {
+	clear := func(f *Frame) {
+		if f.Transfer == outer {
+			f.Transfer = nil
+		}
+	}
 	for j, context := range r.Recoveries {
 		if context == outer {
 			r.Recoveries = slices.Delete(r.Recoveries, j, j+1)
 			break
+		}
+	}
+	for j := range r.Frames {
+		clear(&r.Frames[j])
+	}
+	for _, c := range r.Recoveries {
+		for j := range c.Retained {
+			clear(&c.Retained[j])
+		}
+		if c.Activation != nil {
+			clear(c.Activation)
+		}
+		for j := range c.Queue {
+			clear(&c.Queue[j].Frame)
+		}
+		for j := range c.Exited {
+			clear(&c.Exited[j].Frame)
 		}
 	}
 }
@@ -540,7 +563,7 @@ func cleanupEnd(f Frame, start int) int {
 }
 
 // RestoreRecoveryLocals rebuilds shared owner storage after the private codec
-// has decoded frame values. Complete dispatch snapshot validation is slice 4.
+// has decoded and validated all control references.
 func (r *Run) RestoreRecoveryLocals() {
 	contexts := map[int]*RecoveryContext{}
 	for _, c := range r.Recoveries {
@@ -595,6 +618,9 @@ func (r *Run) RestoreRecoveryLocals() {
 		}
 		for i := range c.Queue {
 			link(&c.Queue[i].Frame)
+		}
+		for i := range c.Exited {
+			link(&c.Exited[i].Frame)
 		}
 	}
 	for i := range r.Frames {
