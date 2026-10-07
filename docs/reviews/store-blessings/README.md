@@ -18,10 +18,13 @@ selection.
 
 ## Evidence and boundaries
 
-The TS Core produced each Trace, and the TS runner also checks it in
-Save/Restore replay. The Go Core doesn't implement `store` yet, so its runner
-defers these cases and they are outside its passing gate. Go agreement is the
-Go follow-up's to show. This approval covers the Core's side of `store` only;
+At this approval on 2026-10-07, the TS Core from PR #402 produced each Trace,
+and the TS runner checked it in Save/Restore replay. The Go Core did not
+implement `store`, so its runner deferred these cases and they were outside
+its passing gate. Current support and limitations are described in the
+[TS Group and Trace Cases guide](../../../impl/ts/README.md#the-group-and-trace-cases)
+and the [Go Store guide](../../../impl/go/README.md#store-standard-capability).
+This approval covers the Core's side of `store` only;
 the Store semantics behind each Stub are held to the
 [store test kit](../../../corpus/store-kit/) instead.
 

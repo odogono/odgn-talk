@@ -690,6 +690,13 @@ separators/signs, ten nonempty digit texts and positive integer grouping fields.
 Invalid results and every Host failure become `host error`. All eight costs are
 required and copied; the implementation must be non-nil.
 
+### Store Standard Capability
+
+The Go Core does not implement the `store` Standard Capability. Its corpus
+runner defers the four `capabilities/standard-store*` Trace Cases, which remain
+outside `corpus-passing.txt`. The [TS Core guide](../ts/README.md#the-group-and-trace-cases)
+describes the implemented Store factory and backends.
+
 ### Host Object handles, properties and disposal
 
 `Core.DefineObjectKind(ObjectKindDef)` validates and copies a reusable declaration,
