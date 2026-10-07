@@ -1,0 +1,40 @@
+# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# All six Operations through Stubs, with the first write enlisting the Grant.
+# The Store's answers belong to the Host and are replayed as Stubs.
+> load s identity=f277e6fd4c38d602ece04fed15e4b6044d3c845aebf2eb24d9fab3ef150a7505
+> stub store.get value=7
+> stub-effect s.st phase=begin status=ok
+> stub store.set value=nothing
+> stub store.increment value=1
+> stub store.increment value=2.5 km
+> stub store.swap value=true
+> stub-effect s.st phase=commit status=ok
+> deliver d1 to=s message=save args=["ann", 9]
+> pump clock=2026-10-07T12:00:00Z
+call s/r1.c1 op=st.get args=["best", 0] result=7
+effect s/r1.s1 grant=st phase=begin status=ok
+call s/r1.c2 op=st.set args=["best", 9] result=nothing
+call s/r1.c3 op=st.increment args=["plays"] result=1
+call s/r1.c4 op=st.increment args=["distance", 2.5 km] result=2.5 km
+call s/r1.c5 op=st.swap args=["first", nothing, "ann"] result=true
+effect s/r1.s1 grant=st phase=commit status=ok
+seg s/r1 start delivery=d1 handler=save clause=1 fuel=103 alloc=75 state=8 end=return
+run s/r1 outcome=completed delivery=d1 handler=save fuel=103 alloc=75
+pumped state=idle fuel=103
+> stub store.get value={score: 9, by: ["ann"]}
+> stub store.keys value=["best"]
+> stub-effect s.st phase=begin status=ok
+> stub store.delete value=nothing
+> stub-effect s.st phase=commit status=ok
+> deliver d2 to=s message=look
+> pump clock=2026-10-07T12:00:01Z
+call s/r2.c1 op=st.get args=["best"] result={score: 9, by: ["ann"]}
+call s/r2.c2 op=st.keys args=["b"] result=["best"]
+effect s/r2.s1 grant=st phase=begin status=ok
+call s/r2.c3 op=st.delete args=["best"] result=nothing
+effect s/r2.s1 grant=st phase=commit status=ok
+seg s/r2 start delivery=d2 handler=look clause=1 fuel=62 alloc=182 state=44 end=return
+run s/r2 outcome=completed delivery=d2 handler=look fuel=62 alloc=182
+pumped state=idle fuel=62
+> vars
+vars s seen=["best"]

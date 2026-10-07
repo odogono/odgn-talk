@@ -1,0 +1,149 @@
+# Each Operation on its own, in one Segment and across a commit.
+quotas = { size = 1048576, keys = 1000, value = 65536 }
+
+[[sequence]]
+name = "get gives Nothing for a missing key, or its default"
+steps = [
+  { in = "a", do = "get", args = '["k"]', gives = 'nothing' },
+  { in = "a", do = "get", args = '["k", 5]', gives = '5' },
+  { in = "a", do = "get", args = '["k", nothing]', gives = 'nothing' },
+]
+
+[[sequence]]
+name = "a set is seen by its own Segment, and by others once committed"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", {score: 3}]' },
+  { in = "a", do = "get", args = '["k"]', gives = '{score: 3}' },
+  { in = "b", do = "get", args = '["k"]', gives = 'nothing' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", args = '["k", 0]', gives = '{score: 3}' },
+]
+
+[[sequence]]
+name = "setting Nothing deletes the key"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", 1]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["k", nothing]' },
+  { in = "b", do = "get", args = '["k", 7]', gives = '7' },
+  { in = "b", do = "keys", gives = '[]' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "get", args = '["k", 7]', gives = '7' },
+  { in = "c", do = "keys", gives = '[]' },
+]
+
+[[sequence]]
+name = "delete removes a key, and deleting a missing key changes nothing"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", "v"]' },
+  { in = "a", do = "delete", args = '["missing"]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "keys", gives = '["k"]' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "delete", args = '["k"]' },
+  { in = "b", do = "get", args = '["k"]', gives = 'nothing' },
+  { in = "c", do = "get", args = '["k"]', gives = '"v"' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "get", args = '["k"]', gives = 'nothing' },
+]
+
+[[sequence]]
+name = "keys are in Unicode code-point order, filtered by prefix"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["😀", 1]' },
+  { in = "a", do = "set", args = '["b", 1]' },
+  { in = "a", do = "set", args = '["ﬀ", 1]' },
+  { in = "a", do = "set", args = '["ab", 1]' },
+  { in = "a", do = "set", args = '["a", 1]' },
+  { in = "a", do = "keys", gives = '["a", "ab", "b", "ﬀ", "😀"]' },
+  { in = "a", do = "keys", args = '["a"]', gives = '["a", "ab"]' },
+  { in = "a", do = "keys", args = '[""]', gives = '["a", "ab", "b", "ﬀ", "😀"]' },
+  { in = "a", do = "keys", args = '[nothing]', gives = '["a", "ab", "b", "ﬀ", "😀"]' },
+  { in = "a", do = "keys", args = '["c"]', gives = '[]' },
+  { in = "b", do = "keys", gives = '[]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "keys", args = '["😀"]', gives = '["😀"]' },
+]
+
+[[sequence]]
+name = "keys sees the Segment's own deletes, and its pending increments of missing keys"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["x", 1]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "delete", args = '["x"]' },
+  { in = "b", do = "increment", args = '["n"]', gives = '1' },
+  { in = "b", do = "keys", gives = '["n"]' },
+  { in = "c", do = "keys", gives = '["x"]' },
+  { in = "b", do = "rollback" },
+  { in = "c", do = "keys", gives = '["x"]' },
+]
+
+[[sequence]]
+name = "increment adds 1 by default, and a missing key gives by itself"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "increment", args = '["n"]', gives = '1' },
+  { in = "a", do = "increment", args = '["n", 5]', gives = '6' },
+  { in = "a", do = "increment", args = '["n", nothing]', gives = '7' },
+  { in = "a", do = "increment", args = '["n", -0.5]', gives = '6.5' },
+  { in = "a", do = "increment", args = '["d", 5 m]', gives = '5 m' },
+  { in = "a", do = "increment", args = '["d", 20 cm]', gives = '5.20 m' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", args = '["n"]', gives = '6.5' },
+  { in = "b", do = "get", args = '["d"]', gives = '5.20 m' },
+]
+
+[[sequence]]
+name = "increment fails as + would, and changes nothing"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["t", "x"]' },
+  { in = "a", do = "set", args = '["day", 2026-10-07]' },
+  { in = "a", do = "set", args = '["n", 1]' },
+  { in = "a", do = "set", args = '["big", 9999999999999999999999999999999999]' },
+  { in = "a", do = "set", args = '["d", 1 m]' },
+  { in = "a", do = "increment", args = '["t"]', error = '{code: "wrong kind", expected: "number", got: "text", value: "x"}' },
+  { in = "a", do = "increment", args = '["day", 1 day]', error = '{code: "wrong kind", expected: "number", got: "civil date", value: 2026-10-07}' },
+  { in = "a", do = "increment", args = '["n", 2 m]', error = '{code: "wrong kind", expected: "number", got: "quantity", value: 2 m}' },
+  { in = "a", do = "increment", args = '["d", 1 kg]', error = '{code: "incompatible units", left: "m", right: "kg"}' },
+  { in = "a", do = "increment", args = '["big"]', error = '{code: "overflow", operator: "+"}' },
+  { in = "a", do = "get", args = '["n"]', gives = '1' },
+  { in = "a", do = "get", args = '["d"]', gives = '1 m' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", args = '["big"]', gives = '9999999999999999999999999999999999' },
+]
+
+[[sequence]]
+name = "swap writes only when the Segment sees the expected value"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "swap", args = '["w", nothing, "ann"]', gives = 'true' },
+  { in = "a", do = "swap", args = '["w", nothing, "bob"]', gives = 'false' },
+  { in = "a", do = "get", args = '["w"]', gives = '"ann"' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "swap", args = '["w", "bob", "cy"]', gives = 'false' },
+  { in = "b", do = "swap", args = '["w", "ann", [1, 2]]', gives = 'true' },
+  { in = "b", do = "swap", args = '["w", [1, 2], nothing]', gives = 'true' },
+  { in = "b", do = "get", args = '["w"]', gives = 'nothing' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "keys", gives = '[]' },
+]
+
+[[sequence]]
+name = "Stores with different names are separate"
+steps = [
+  { in = "a", do = "begin", store = "one" },
+  { in = "a", do = "set", store = "one", args = '["k", 1]' },
+  { in = "a", do = "get", store = "two", args = '["k"]', gives = 'nothing' },
+  { in = "a", do = "commit", store = "one" },
+  { in = "b", do = "get", store = "one", args = '["k"]', gives = '1' },
+  { in = "b", do = "keys", store = "two", gives = '[]' },
+]

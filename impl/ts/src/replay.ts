@@ -14,6 +14,7 @@ import {
   consoleCapability,
   calendarCapability,
   localeCapability,
+  storeCapability,
   timerCapability,
   defineObjectKind,
   type HostObject,
@@ -594,6 +595,49 @@ const capabilitiesOf = (
           },
           costs,
         ),
+      );
+    } else if (capability === 'store') {
+      // The runner keeps no Store: each call takes its Stub, and each hook
+      // its `stub-effect` line, as any Segment-bound Grant's do.
+      const answer = (operation: string, call: Call<string>): Value => {
+        try {
+          return stubs.take(
+            `store.${operation}`,
+            call,
+            true,
+            recordedCall(call),
+          );
+        } finally {
+          crossing(call.id);
+        }
+      };
+      const nothingStub = (operation: string, call: Call<string>) => {
+        if (answer(operation, call).kind !== 'nothing') {
+          throw new Error(`A store.${operation} Stub must give nothing`);
+        }
+      };
+      out.set(
+        capability,
+        storeCapability(
+          {
+            begin: context => lifecycle(context, 'begin'),
+            commit: context => lifecycle(context, 'commit'),
+            rollback: context => lifecycle(context, 'rollback'),
+            get: call => answer('get', call),
+            set: call => nothingStub('set', call),
+            delete: call => nothingStub('delete', call),
+            keys: call => answer('keys', call),
+            increment: call => answer('increment', call),
+            swap: call => {
+              const given = answer('swap', call).asBool();
+              if (given === undefined) {
+                throw new Error('A store.swap Stub must give a boolean');
+              }
+              return given;
+            },
+          },
+          costs,
+        ) as CapabilityDef<unknown>,
       );
     } else {
       throw new DeferredCaseError(`the Standard Capability ${capability}`);

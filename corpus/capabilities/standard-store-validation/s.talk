@@ -1,0 +1,18 @@
+script variable seen = nothing
+on go key, value
+  ask st to set key, value
+end go
+on bump by
+  ask st to increment "n", by
+  put it into seen
+end bump
+on list
+  ask st to keys
+  put it into seen
+end list
+function twice n
+  return n * 2
+end twice
+on keep
+  ask st to set "f", [twice]
+end keep

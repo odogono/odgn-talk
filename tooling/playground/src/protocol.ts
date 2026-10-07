@@ -59,7 +59,12 @@ export type SessionState = {
 };
 
 export type SessionRequest =
-  | { shared?: Shared; t: 'open' }
+  | {
+      shared?: Shared;
+      /** The Store slots the page keeps, for `:store load`. */
+      slots?: Record<string, string>;
+      t: 'open';
+    }
   | { t: 'line'; text: string }
   | { t: 'cancel' }
   | { t: 'canvasExample' }
@@ -103,6 +108,8 @@ export type SessionResponse =
   | { t: 'transcript'; text: string }
   | { replay: ReplayView; t: 'replay' }
   | { file: string; t: 'needSource' }
+  /** `:store save` wrote a slot, for the page to keep. */
+  | { slot: string; t: 'storeSlot'; text: string }
   | { message: string; t: 'error' };
 
 /** A message to the page: a reply to request `id`, or an unprompted state. */

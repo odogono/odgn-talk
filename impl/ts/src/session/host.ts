@@ -43,6 +43,14 @@ import {
   consoleCapability,
   type CalendarImpl,
 } from '../standard-capabilities';
+import { storeCapability } from '../store-capability';
+import {
+  decodeContents,
+  encodeContents,
+  memoryStores,
+  sessionQuotas,
+  StoreContentsError,
+} from '../store/index';
 import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
@@ -63,6 +71,8 @@ export type SessionEnvironment = {
   now(): bigint;
   /** A user Library's source, for `:library` given a path. */
   readFile?(path: string): string;
+  /** A Store's contents, from the file `:store load` names. */
+  readStoreFile?(path: string): string;
   /**
    * Receives the session as its Session Transcript records it, item by item:
    * each Entry and Session Command in its recorded form, each real Clock
@@ -73,6 +83,8 @@ export type SessionEnvironment = {
   trace?(line: string): void;
   /** Writes a file of `:export`, given a directory. */
   writeFile?(directory: string, file: string, text: string): void;
+  /** Writes a Store's contents to the file `:store save` names. */
+  writeStoreFile?(path: string, text: string): void;
 };
 
 /** What the Session Host waits for before it returns the prompt. */
@@ -115,10 +127,20 @@ export type Mock = {
 const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
 // The Standard Capabilities a Session Host may build in, for `:grant`, and
 // the binding each takes when `:grant` gives none.
-const BUILT_IN = new Set(['clock', 'calendar', 'locale']);
+const BUILT_IN = new Set(['clock', 'calendar', 'locale', 'store']);
 const DEFAULT_BINDING: Record<string, string> = {
   calendar: 'UTC',
   locale: 'und',
+  store: 'default',
+};
+// What the Session Store's Operations cost (chapter 12, Sessions).
+const STORE_COSTS = {
+  get: { fuel: 2 },
+  keys: { fuel: 2 },
+  set: { fuel: 4 },
+  delete: { fuel: 4 },
+  increment: { fuel: 4 },
+  swap: { fuel: 4 },
 };
 // The Operations of each Standard Capability the Host answers.
 const OPERATIONS: Record<string, readonly string[]> = {
@@ -247,6 +269,9 @@ export class SessionHost {
     { added: string; library: Library }
   >();
   private readonly saves = new Map<string, Saved>();
+  // Every Session Store, by name: in memory, starting empty, and outside
+  // every save (chapter 12, The Session Store).
+  private readonly stores = memoryStores(sessionQuotas);
 
   private readonly extensions: ReadonlyMap<string, CapabilityDef<unknown>>;
   constructor(private readonly env: SessionEnvironment) {
@@ -511,6 +536,12 @@ export class SessionHost {
         ) as CapabilityDef<unknown>,
       );
     }
+    if (granted.has('store')) {
+      capabilities.set(
+        'store',
+        storeCapability(this.stores, STORE_COSTS) as CapabilityDef<unknown>,
+      );
+    }
     for (const name of granted) {
       const extension = this.extensions.get(name);
       if (extension) {
@@ -676,6 +707,8 @@ export class SessionHost {
       case 'export':
         this.start();
         return this.export(words(rest, rest.trim() ? 1 : 0)[0]);
+      case 'store':
+        return this.store(rest);
       case 'runs':
       case 'mailbox':
       case 'vars':
@@ -717,12 +750,13 @@ export class SessionHost {
     return [];
   }
 
-  // `clock` is always built in, and `calendar` and `locale` when the
-  // environment supplies their Host functions.
+  // `clock` and `store` are always built in, and `calendar` and `locale`
+  // when the environment supplies their Host functions.
   private builtIn(capability: string): boolean {
     return (
       this.extensions.has(capability) ||
       capability === 'clock' ||
+      capability === 'store' ||
       (capability === 'calendar' && Boolean(this.env.builtIns?.calendar)) ||
       (capability === 'locale' && Boolean(this.env.builtIns?.locale))
     );
@@ -1156,6 +1190,72 @@ export class SessionHost {
     }
     this.libraries.set(name!, { added: held?.added ?? source, library });
     return this.discarded(reports);
+  }
+
+  // ------------------------------------------------------------- stores
+
+  // `:store`'s four forms, each naming a Session Store, `default` if none.
+  // `:store load <path>` reads the file, and a Transcript records its
+  // contents on the lines after `:store load`, as for `:library`.
+  private store(rest: string): string[] {
+    const newline = rest.indexOf('\n');
+    const head = newline < 0 ? rest : rest.slice(0, newline);
+    const w = head.trim().split(/\s+/u).filter(Boolean);
+    const [form] = w;
+    if (form === 'load') {
+      const inline = newline >= 0;
+      if (w.length > (inline ? 2 : 3) || (!inline && w.length < 2)) {
+        refuse('bad arguments');
+      }
+      const name = (inline ? w[1] : w[2]) ?? 'default';
+      let contents: string;
+      if (inline) {
+        contents = rest.slice(newline + 1);
+      } else {
+        try {
+          contents = this.env.readStoreFile!(w[1]!);
+        } catch {
+          return refuse('bad arguments');
+        }
+        this.recording = `:store load${w[2] ? ` ${w[2]}` : ''}\n${contents.replace(/\n$/u, '')}`;
+      }
+      try {
+        this.stores.replace(name, decodeContents(contents));
+        return [`loaded ${this.stores.entries(name).length} keys`];
+      } catch (error) {
+        if (error instanceof HostError || error instanceof StoreContentsError) {
+          return refuse('bad arguments');
+        }
+        throw error;
+      }
+    }
+    if (newline >= 0) {
+      refuse('bad arguments');
+    }
+    if (form === 'save') {
+      if (w.length < 2 || w.length > 3 || !this.env.writeStoreFile) {
+        refuse('bad arguments');
+      }
+      this.env.writeStoreFile!(
+        w[1]!,
+        encodeContents(this.stores.entries(w[2] ?? 'default')),
+      );
+      return [`wrote ${w[1]}`];
+    }
+    if (form === 'clear') {
+      if (w.length > 2) {
+        refuse('bad arguments');
+      }
+      const name = w[1] ?? 'default';
+      this.stores.clear(name);
+      return [`cleared ${name}`];
+    }
+    if (w.length > 1) {
+      refuse('bad arguments');
+    }
+    return this.stores
+      .entries(form ?? 'default')
+      .map(([key, value]) => `${text(key).toString()} = ${value.toString()}`);
   }
 
   /** Each user Library as `:library add` gave it, in the order added. */

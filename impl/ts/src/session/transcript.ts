@@ -235,6 +235,7 @@ export const replayTranscript = (
     ...(options.trace ? { trace: options.trace } : {}),
     // Replaying never writes a file: `:export` writes to a scratch directory.
     writeFile: () => {},
+    writeStoreFile: () => {},
   });
   // The first `@` after a line is the reading of the Pump that line causes.
   // One the line didn't use is a Pump the Session Host made at a deadline.

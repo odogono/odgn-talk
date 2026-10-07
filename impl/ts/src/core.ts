@@ -11,6 +11,7 @@ import {
   consoleCapability,
   timerCapability,
 } from './standard-capabilities';
+import { storeCapability } from './store-capability';
 
 export type Core = {
   calendarCapability: typeof calendarCapability;
@@ -22,6 +23,7 @@ export type Core = {
   localeCapability: typeof localeCapability;
   newGroup: typeof newGroup;
   restore: typeof restore;
+  storeCapability: typeof storeCapability;
   timerCapability: typeof timerCapability;
 };
 
@@ -33,6 +35,7 @@ const core: Core = Object.freeze({
   localeCapability,
   timerCapability,
   consoleCapability,
+  storeCapability,
   compileLibrary,
   newGroup,
   restore,
