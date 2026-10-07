@@ -4,6 +4,8 @@ The TS Core constructs and encodes values, parses and checks source, lowers it t
 
 Run commands in this guide from the repository root. Workspace-only scripts select their package explicitly with `--cwd`.
 
+A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). The parser reads `end` as the block's close and any other first word as an Operation name. Each line is an `ask` until the checker resolves it against the unit's Grants: a fire-and-forget Operation's line without `and wait` becomes a `tell`, once, so an importing Script's recheck tests the Library's lines as compiled. Lines then lower, check suspension and join as the one-line calls they stand for, at their Operation names. A Grant the unit doesn't hold is one `unknown operation` at the block's receiver. With no Grants, as in Disassembly Cases, every line lowers as an `ask`. `DefineCapability` refuses `end` as an Operation name.
+
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
 
 

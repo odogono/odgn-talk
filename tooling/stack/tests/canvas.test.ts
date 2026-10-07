@@ -31,6 +31,32 @@ test('typed drawing replays headlessly with identical commands and trace', () =>
   ]);
 });
 
+test('a tell block draws as its one-line calls do', () => {
+  const draw = (...entries: string[]) => {
+    const trace: string[] = [];
+    const host = new SessionHost({
+      now: () => 0n,
+      capabilities: canvasCapabilities,
+      trace: line => trace.push(line),
+    });
+    host.input(':grant canvas canvas');
+    for (const entry of entries) {
+      expect(host.input(entry)).toEqual([]);
+    }
+    return canvasCommands(trace, ['canvas']);
+  };
+  const block = draw(
+    'tell canvas\n  fill "#123456"\n  rectangle 1, 2, 30, 40\nend tell',
+  );
+  expect(block.map(c => c.op)).toEqual(['fill', 'rectangle']);
+  expect(block).toEqual(
+    draw(
+      'ask canvas to fill "#123456"',
+      'ask canvas to rectangle 1, 2, 30, 40',
+    ),
+  );
+});
+
 test('invalid drawing is rejected and omitted from rendered commands', () => {
   const trace: string[] = [];
   const host = new SessionHost({

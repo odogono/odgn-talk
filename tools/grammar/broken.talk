@@ -676,3 +676,64 @@ on t
   repeat collecting x into xs times
   end repeat
 end t
+-- case: a `tell` block that never ends
+-- expect: unexpected token at 4:1
+on t
+  tell canvas
+    fill "#fff"
+-- case: the wrong keyword after a `tell` block's `end`
+-- expect: unexpected token at 4:7
+on t
+  tell canvas
+    fill "#fff"
+  end repeat
+end t
+-- case: a one-line `if` can't hold a `tell` block
+-- expect: unexpected token at 2:28
+on t
+  if ready then tell canvas
+    fill "#fff"
+  end tell
+end t
+-- case: `to` left out of the one-line `tell`
+-- expect: unexpected token at 2:15
+on t
+  tell canvas fill "#fff"
+end t
+-- case: `tell … to` with no Operation after it
+-- expect: unexpected token at 2:17
+on t
+  tell canvas to
+    fill "#fff"
+  end tell
+end t
+-- case: a `tell` block line that doesn't start with an Operation name
+-- expect: unexpected token at 3:5
+on t
+  tell canvas
+    "fill"
+  end tell
+end t
+-- case: a Lambda closed with `end tell`
+-- expect: unexpected token at 5:9
+on t
+  tell canvas
+    onClick given e
+      say e
+    end tell
+  end tell
+end t
+-- case: any word starts a `tell` block line, so `if` is an Operation name and `then` can't follow its argument
+-- expect: unexpected token at 3:14
+on t
+  tell canvas
+    if ready then fill "#fff"
+  end tell
+end t
+-- case: a nested `tell` is an Operation named `tell`, so `to` can't follow its argument
+-- expect: unexpected token at 3:14
+on t
+  tell canvas
+    tell log to write "x"
+  end tell
+end t

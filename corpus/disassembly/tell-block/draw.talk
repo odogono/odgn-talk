@@ -1,0 +1,24 @@
+-- draw.talk: the tell-block case's Script.
+
+on oneline x
+  ask canvas to fill x
+  ask canvas to rectangle 1, 2, it
+  ask canvas to load x and wait
+end oneline
+
+on block x
+  tell canvas
+    fill x
+    rectangle 1, 2, it
+    load x and wait
+  end tell
+end block
+
+on both a, b
+  wait for all
+    tell canvas
+      load a and wait
+      load b and wait
+    end tell
+  end wait
+end both

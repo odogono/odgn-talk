@@ -1,0 +1,13 @@
+-- board.talk: the join case's Script.
+
+script variable results = []
+
+on gather
+  wait for all
+    tell feed
+      fetch "a" and wait
+      fetch "b" and wait
+    end tell
+  end wait
+  put it into results
+end gather

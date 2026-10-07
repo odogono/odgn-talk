@@ -1,0 +1,18 @@
+# Unblessed: tell block (#337); first blessing awaits human review.
+# library: s records twice through the Library; quiet doesn't load.
+
+> add-library audit identity=9144fa8962dc9281787ddced9e30bc57c062d7077272e78eecfdfec0ad47d59f
+> load s identity=e25538ae6946e0f1fe3259114839f5bd586c93c4e4bfa783237d844874b7ab82
+> load quiet identity=207ce95c7916cc0b992ea5dc848ac920cd82aed6de3f4545e48196989a1b5d18
+diag quiet code="wrong mode" pos=3:1
+diag quiet code="wrong mode" pos=3:1
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=log.write args=["start x"]
+call s/r1.c2 op=log.write args=["done x"]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=66 alloc=45 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=66 alloc=45
+pumped state=idle fuel=66
+
+> vars
+vars s

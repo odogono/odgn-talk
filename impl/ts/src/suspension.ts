@@ -79,6 +79,7 @@ const factsOf = (
         break;
       case 'Send':
       case 'AskTell':
+      case 'OperationLine':
         if (waits) {
           point(firstLeaf(node));
         }

@@ -52,8 +52,22 @@ func (u *Unit) checkOperations() {
 	if u.Options.Grants == nil {
 		return
 	}
+	ResolveLines(u.Tree, u.Options.Grants)
+	reported := map[syntax.Position]bool{}
 	for _, site := range OperationUses(u.Tree, "") {
-		checkOperation(site.Call, u.Options.Grants, u.add)
+		n := site.Call
+		report := u.add
+		if syntax.HasFlag(n, "line") {
+			// A Grant the Script doesn't hold is reported once, at the
+			// block's receiver.
+			report = func(code string, pos syntax.Position) {
+				if !reported[pos] {
+					reported[pos] = true
+					u.add(code, pos)
+				}
+			}
+		}
+		checkOperation(n, u.Options.Grants, report)
 	}
 	if u.Options.Library {
 		return
@@ -79,6 +93,22 @@ func (u *Unit) checkOperations() {
 			} else {
 				checkOperation(site.Call, u.Options.Grants, report)
 			}
+		}
+	}
+}
+
+// ResolveLines makes each `tell` block line whose Operation is
+// fire-and-forget, and which has no `and wait`, a `tell` (ADR 0063). Every
+// other line stays an `ask`. It runs once, against the Grants the unit is
+// compiled with, so an importer's recheck never changes a Library's lines.
+func ResolveLines(tree *syntax.Tree, grants map[string]map[string]OperationCheck) {
+	for _, site := range OperationUses(tree, "") {
+		n := site.Call
+		if !syntax.HasFlag(n, "line") || syntax.HasFlag(n, "and") {
+			continue
+		}
+		if d, ok := grants[n.Params[0].Text][n.Text]; ok && d.Mode == "fire-and-forget" {
+			n.Kind = "tell"
 		}
 	}
 }

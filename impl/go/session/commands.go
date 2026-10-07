@@ -104,7 +104,7 @@ func (h *Host) command(source string) []string {
 		case "fire-and-forget":
 			mode = talk.FireAndForget
 		}
-		if slices.Contains([]string{"ask", "tell", "send", "wait"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" {
+		if slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" {
 			return refusal("bad arguments")
 		}
 		m := mock{cap, op, mode}

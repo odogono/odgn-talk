@@ -166,6 +166,7 @@ const blockRules = new Set([
   'Try',
   'OfferClause',
   'Wait',
+  'TellBlock',
 ]);
 const propertyNames = new Set<string>(properties);
 const catalogue = new Map(lintCatalogue.map(entry => [entry.id, entry]));
@@ -300,6 +301,7 @@ export const lintSyntax = (
         'Match',
         'Try',
         'Wait',
+        'TellBlock',
       ].includes(node.rule) &&
       (!direct[endIndex + 1] || direct[endIndex + 1]!.line !== ending.line)
     ) {
@@ -328,9 +330,10 @@ export const lintSyntax = (
         emit('conditional-join-member', first);
       }
     }
+    // A `tell` block's waiting line is a Join Member as `ask … and wait` is.
     if (
-      node.rule === 'AskTell' &&
-      first.v === 'ask' &&
+      ((node.rule === 'AskTell' && first.v === 'ask') ||
+        node.rule === 'OperationLine') &&
       context.join &&
       context.conditional &&
       children.some(

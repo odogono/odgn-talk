@@ -699,15 +699,17 @@ $('canvas-example').onclick = async () => {
       from: 0,
       to: view.state.doc.length,
       insert: `on draw
-  ask canvas to background "#f5f0e8"
-  ask canvas to noStroke
-  ask canvas to fill "#235f75"
-  ask canvas to rectangle 70, 70, 180, 180
-  ask canvas to fill "#e0a458"
-  ask canvas to ellipse 250, 250, 160, 160
-  ask canvas to fill "#23313b"
-  ask canvas to textSize 20
-  ask canvas to text "Hello, NorthTalk", 70, 350
+  tell canvas
+    background "#f5f0e8"
+    noStroke
+    fill "#235f75"
+    rectangle 70, 70, 180, 180
+    fill "#e0a458"
+    ellipse 250, 250, 160, 160
+    fill "#23313b"
+    textSize 20
+    text "Hello, NorthTalk", 70, 350
+  end tell
 end draw
 `,
     },

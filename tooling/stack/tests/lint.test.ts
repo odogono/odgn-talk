@@ -183,6 +183,23 @@ test('every grammar Advanced tag is exercised and supplies its beginner wording'
   }
 });
 
+test("a tell block's bare ending is advised, and its waiting line in a conditional Join", () => {
+  const block = 'on demo\ntell canvas\nfill "red"\nend\nend demo';
+  expect(lint(block, { profile: 'beginner' }).lints).toMatchObject([
+    { id: 'prefer-explicit-end', span: { line: 4, col: 1 } },
+  ]);
+  expect(
+    lint(block.replace('\nend\nend demo', '\nend tell\nend demo'), {
+      profile: 'beginner',
+    }).lints,
+  ).toEqual([]);
+  expect(
+    lint(
+      'on demo\nwait for all\nif ready then\ntell feed\nfetch "a" and wait\nend tell\nend if\nend wait\nend demo',
+    ).lints.map(item => [item.id, item.span.line]),
+  ).toContainEqual(['conditional-join-member', 5]);
+});
+
 test('recovering nodes retain bare endings and advice in later blocks', () => {
   const source =
     'on demo\nif true then\nput + into x\nend\nput {length: 3} into x\nend';

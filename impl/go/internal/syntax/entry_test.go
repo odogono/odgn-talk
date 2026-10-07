@@ -9,6 +9,8 @@ func TestEntryParsingAndContinuation(t *testing.T) {
 	}{
 		{"put 1 into n", "statement", false}, {"n + 1", "expression", false}, {"on go\nreturn 1\nend go", "declaration", false},
 		{"on go", "", true}, {"[1,", "", true}, {"`first\nsecond", "", true}, {"put 1 + into n", "", false},
+		// A `tell` block reads lines until its `end` (ADR 0063).
+		{"tell canvas", "", true}, {"tell canvas\nfill 1", "", true}, {"tell canvas\nfill 1\nend tell", "statement", false},
 	} {
 		kind, _, err := ParseEntry(tc.source, nil)
 		if err == nil {

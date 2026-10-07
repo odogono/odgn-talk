@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import {
   checkSource,
   checkSyntax,
+  compileSource,
   parseSource,
   syntaxText,
   type SemanticElement,
@@ -1125,5 +1126,69 @@ describe('collecting targets', () => {
         'on t\n repeat 1 times collecting 1 into acc\n put given acc: acc into f\n end repeat\n put [] into acc\nend t',
       ).ok,
     ).toBe(true);
+  });
+});
+
+// A `tell` block's lines are checked as the one-line calls they stand for
+// (ADR 0063).
+const tellBlockDiagnostics = (source: string, options = {}) =>
+  checkSource(source, options).diagnostics.map(d => [
+    d.code,
+    d.span.line,
+    d.span.col,
+  ]);
+
+describe('tell blocks', () => {
+  test('apply suspension rules to a waiting line at its Operation name', () => {
+    expect(
+      tellBlockDiagnostics(
+        'function f\n tell feed\n  fetch 1 and wait\n end tell\nend f',
+      ),
+    ).toEqual([["can't suspend here", 3, 3]]);
+    expect(
+      tellBlockDiagnostics(
+        'on fetchIt\n tell feed\n  fetch 1 and wait\n end tell\nend fetchIt\non go\n fetchIt\nend go',
+      ),
+    ).toEqual([['missing and wait', 7, 2]]);
+    expect(
+      tellBlockDiagnostics(
+        'on t\n wait for all\n  try\n   tell feed\n    fetch 1 and wait\n   end tell\n  catch e\n  end try\n end wait\nend t',
+      ),
+    ).toEqual([['not in a join', 5, 5]]);
+    expect(
+      tellBlockDiagnostics(
+        'on t\n wait for all\n  tell feed\n   fetch 1 and wait\n  end tell\n end wait\nend t',
+      ),
+    ).toEqual([]);
+    expect(tellBlockDiagnostics('on t\n tell feed\n end tell\nend t')).toEqual(
+      [],
+    );
+  });
+
+  test('call each line as its Operation mode allows, and report a missing Grant once', () => {
+    const source =
+      'on t\n tell till\n  price\n  note\n  fetch and wait\n end tell\n tell drawer\n  open\n  close\n end tell\nend t';
+    const grants = {
+      till: {
+        price: { mode: 'immediate' as const, args: [] },
+        note: { mode: 'fire-and-forget' as const, args: [] },
+        fetch: { mode: 'suspending' as const, args: [] },
+      },
+    };
+    expect(tellBlockDiagnostics(source, { grants })).toEqual([
+      ['unknown operation', 7, 7],
+    ]);
+    const unit = compileSource(
+      source.replace(/ tell drawer[^]*end tell\n/, ''),
+      {
+        name: 't',
+        grants,
+      },
+    ).unit!;
+    expect(
+      unit.code
+        .map(({ op }) => op)
+        .filter(op => ['ask', 'tell', 'ask-wait'].includes(op)),
+    ).toEqual(['ask', 'tell', 'ask-wait']);
   });
 });

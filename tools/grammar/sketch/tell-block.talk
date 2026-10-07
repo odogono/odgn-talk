@@ -1,5 +1,4 @@
--- `tell` blocks (ADR 0063): several Operations of one Grant. The Cores' tests
--- don't read this file until both Cores parse it.
+-- `tell` blocks (ADR 0063): several Operations of one Grant.
 
 on draw
   tell canvas

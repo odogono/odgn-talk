@@ -1,0 +1,19 @@
+# Unblessed: tell block (#337); first blessing awaits human review.
+# join: d1's two members are answered out of order.
+
+> load board identity=43ed473714664ec4b9db295798a4ff64733e9f9782181b3e5931f12f848fb569
+> deliver d1 to=board message=gather
+> pump clock=2026-09-30T09:00:00Z
+call board/r1.c1 op=feed.fetch args=["a"]
+call board/r1.c2 op=feed.fetch args=["b"]
+seg board/r1 start delivery=d1 handler=gather clause=1 fuel=86 alloc=0 state=288 end=join-end
+pumped state=idle fuel=86 next=2026-09-30T09:00:05Z
+> answer board/r1.c2 value=2
+> answer board/r1.c1 value=1
+> pump clock=2026-09-30T09:00:01Z
+seg board/r1 resume fuel=9 alloc=96 state=64 end=return
+run board/r1 outcome=completed delivery=d1 handler=gather fuel=95 alloc=96
+pumped state=idle fuel=9
+
+> vars
+vars board results=[1, 2]

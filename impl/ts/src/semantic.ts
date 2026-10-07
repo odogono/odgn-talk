@@ -82,6 +82,11 @@ export type SemanticNode = {
   span: SourceSpan;
 };
 export type SemanticElement = SemanticNode | SemanticName | SemanticToken;
+/**
+ * The `tell` block lines the checker called as `tell`, because their
+ * Operation is fire-and-forget (ADR 0063). Every other line is an `ask`.
+ */
+export const toldLines = new WeakSet<SemanticNode>();
 export type SemanticTree = {
   /** The unit's Handlers that may suspend (chapter 5, Suspension Points). */
   maySuspend?: readonly string[];

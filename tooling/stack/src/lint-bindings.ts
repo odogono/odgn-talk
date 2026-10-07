@@ -334,7 +334,9 @@ const unchangedSince = (
         e.binding?.id === base.binding!.id) ||
         (base.binding!.kind === 'script variable' &&
           ((e.kind === 'node' &&
-            ['Call', 'AskTell', 'Send', 'Wait'].includes(e.rule)) ||
+            ['Call', 'AskTell', 'OperationLine', 'Send', 'Wait'].includes(
+              e.rule,
+            )) ||
             (e.kind === 'name' && e.role === 'command')))),
   );
 };
@@ -416,6 +418,7 @@ const mayFail = (root: SemanticNode): boolean =>
         'ReplaceExpression',
         'Send',
         'AskTell',
+        'OperationLine',
         'Wait',
         'BinaryBuild',
       ].includes(e.rule) ||
@@ -817,8 +820,10 @@ const lintStoreRace = (handler: SemanticNode, emit: Emit) => {
       }
       continue;
     }
+    // A `tell` block's line may be an `ask`, so it may replace `it` too.
     if (
       e.rule !== 'AskTell' &&
+      e.rule !== 'OperationLine' &&
       !(e.rule === 'Send' && child(e, 'AndWait')?.children.length)
     ) {
       continue;
@@ -1091,7 +1096,9 @@ export const lintBindings = (
               content.some(
                 c =>
                   c.kind === 'node' &&
-                  ['Call', 'Send', 'AskTell', 'Wait'].includes(c.rule),
+                  ['Call', 'Send', 'AskTell', 'OperationLine', 'Wait'].includes(
+                    c.rule,
+                  ),
               ) ||
               content.some(c => c.kind === 'name' && c.role === 'command')
             ) {

@@ -61,7 +61,12 @@ const hasMember = (join: SemanticNode): boolean => {
     if (e.kind !== 'node' || e.rule === 'Lambda') {
       continue;
     }
-    if ((e.rule === 'AskTell' || e.rule === 'Send') && waits(e)) {
+    if (
+      (e.rule === 'AskTell' ||
+        e.rule === 'OperationLine' ||
+        e.rule === 'Send') &&
+      waits(e)
+    ) {
       return true;
     }
     work.push(...e.children);
@@ -293,6 +298,7 @@ export const checkControl = (
         }
         break;
       case 'AskTell':
+      case 'OperationLine':
         if (context.joinTry && waits(node)) {
           report('not in a join', node.children[0] as Leaf);
         }

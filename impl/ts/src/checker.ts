@@ -606,7 +606,8 @@ export const checkSyntax = (
         }
         break;
       }
-      case 'AskTell': {
+      case 'AskTell':
+      case 'TellBlock': {
         // A bare Grant name is checked against Grants by the later effect pass.
         const target = ns.find(node => node.rule === 'Expression');
         if (target) {

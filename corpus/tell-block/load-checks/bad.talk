@@ -1,0 +1,15 @@
+-- bad.talk: the load-checks case's Script.
+
+on go
+  tell till
+    price "tea" and wait
+    fetch "tea"
+    note "x" and wait
+    refund "tea"
+    price "tea"
+  end tell
+  tell drawer
+    open
+    close
+  end tell
+end go

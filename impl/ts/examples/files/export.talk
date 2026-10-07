@@ -1,7 +1,9 @@
 on export content
-  ask output to open "report.txt"
-  ask output to write content
-  ask output to close
+  tell output
+    open "report.txt"
+    write content
+    close
+  end tell
   repeat 50 times
   end repeat
 end export

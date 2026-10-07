@@ -33,6 +33,14 @@ const explicitSources: readonly (readonly [string, string])[] = [
   ],
   ['Join', 'on h\n  wait for all\n    put 1 into x\n  end wait\nend h'],
   [
+    'tell block',
+    'on h\n  tell canvas\n    fill "red"\n    rectangle 1, 2\n  end tell\nend h',
+  ],
+  [
+    'tell block in a Join',
+    'on h\n  wait for all\n    tell feed\n      fetch "a" and wait\n    end tell\n  end wait\nend h',
+  ],
+  [
     'waiting branches',
     'on h\n  wait for\n    when done x then\n      put x into y\n    after 1 s then\n      put 0 into y\n  end wait\nend h',
   ],
@@ -121,6 +129,7 @@ describe('optional block endings', () => {
     ['wrong function name', 'function f\nend other', 2, 5],
     ['closing through an inner block', 'on h\nrepeat 3 times\nend h', 3, 5],
     ['wrong block keyword', 'on h\nif true then\nend repeat\nend', 3, 5],
+    ['wrong tell block keyword', 'on h\ntell canvas\nend repeat\nend', 3, 5],
     [
       'wrong Lambda keyword',
       'on h\nput given x\nreturn x\nend repeat into f\nend',
@@ -167,6 +176,16 @@ describe('optional block endings', () => {
       'wrong Lambda keyword',
       'on h\nput given x\nreturn x\nend if into f\nend',
       'expected end of line or `given` after `end` (closing line 2), found `if`',
+    ],
+    [
+      'wrong tell block keyword',
+      'on h\ntell canvas\nend if\nend',
+      'expected end of line or `tell` after `end` (closing line 2), found `if`',
+    ],
+    [
+      'Lambda closed with end tell',
+      'on h\nput given x\nreturn x\nend tell into f\nend',
+      'expected end of line or `given` after `end` (closing line 2), found `tell`',
     ],
   ] as const) {
     test(`names the open block for ${label}`, () => {

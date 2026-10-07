@@ -1,0 +1,43 @@
+# tell-block: pins chapter 8's lowering of a `tell` block (ADR 0063). The
+# block emits nothing of its own: each line is the one-line call it stands
+# for, so `block` emits `oneline`'s instructions, with each line's at its
+# Operation name rather than at `ask`. In a Join, a line with `and wait` is
+# `join-ask`. A Disassembly Case links declarations only, without the
+# Script's Grants, so a line that doesn't wait is lowered as an `ask` here;
+# the Operations below are all immediate or suspending, for which that is
+# what loading chooses too.
+# Unblessed: first expectation review pending for #337.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "canvas"
+name = "fill"
+mode = "immediate"
+args = ["text"]
+
+[[operations]]
+capability = "canvas"
+name = "rectangle"
+mode = "immediate"
+args = ["number", "number", "any"]
+
+[[operations]]
+capability = "canvas"
+name = "load"
+mode = "suspending"
+args = ["text"]
+result = "text"
+
+[[scripts]]
+name = "draw"
+source = "draw.talk"
+grants = { canvas = { ops = "all" } }
+
+[[disassembly]]
+unit = "draw"
+expected = "draw.dis"

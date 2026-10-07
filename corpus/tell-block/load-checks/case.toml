@@ -1,0 +1,39 @@
+# load-checks: a `tell` block's lines are checked as the one-line calls
+# they stand for, at their Operation names (ADR 0063; spec chapter 2,
+# Load-time diagnostics). `and wait` must be written exactly on a
+# suspending Operation's line, so `price … and wait`, a bare `fetch` and
+# `note … and wait` are each `wrong mode`. An Operation the Grant doesn't
+# declare is `unknown operation` at its name, and a Grant the Script doesn't
+# hold is one `unknown operation` at the block's receiver, however many
+# lines the block has.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+
+[[operations]]
+capability = "till"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+grants = { till = { ops = "all" } }

@@ -180,6 +180,27 @@ describe('language server', () => {
       'suspending',
     );
   });
+  test("completes, hovers and marks a tell block's lines as their receiver's Operations", () => {
+    const { request } = setup(
+      'on demo\n tell http\n   fetch "url" and wait\n   \n end tell\nend demo\n',
+    );
+    expect(
+      request('textDocument/completion', at(3, 3)).map(c => c.label),
+    ).toContain('fetch');
+    expect(request('textDocument/hover', at(2, 4)).contents.value).toContain(
+      'suspending',
+    );
+    const hints = request('textDocument/inlayHint', {
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 6, character: 0 },
+      },
+    });
+    expect(hints.map(hint => hint.position)).toContainEqual({
+      line: 2,
+      character: 3,
+    });
+  });
   test('navigates and renames through imports while preserving aliases and lexical scopes', () => {
     const { request } = setup(
       'use twice from maths as double\non demo x\n put double(x) into y\nend demo\n',

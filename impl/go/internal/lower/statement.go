@@ -130,6 +130,9 @@ func (u *Unit) statement(n *syntax.Node) {
 	case "call-statement":
 		u.call(n.Children[0], syntax.HasFlag(n, "and"))
 		u.store(pos, 0)
+	case "tell-block":
+		// Each line is the one-line call the checker chose for it (ADR 0063).
+		u.statements(n.Body)
 	case "ask", "tell":
 		for _, arg := range n.Children {
 			u.expression(arg)
