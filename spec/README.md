@@ -34,6 +34,10 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 
 Recovery Offers and two-phase catch search are specified in [chapter 4](04-expressions-and-statements.md#recovery-offers), with the machine and costs in [chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table), saved dispatch state in [chapter 10](10-save-and-restore.md#saving) and choice/entry records in [chapter 11](11-the-trace-and-conformance.md#recovery-choice-and-entry). [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md) records the decision.
 
+## Staged specifications
+
+[Store Notifications](proposals/store-notifications.md) is the specified contract for Store `watch` and `unwatch` ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227)): Operation Declarations, routing, the Grant release hook, checkpoints, limits, the Session Host's rules and conformance cases. No Core, router or Session Host supports it yet, and its Data File entries are deferred to implementation.
+
 ## Data Files
 
 Before editing grammar, instructions or catalogues, use the [change-impact guide](../docs/agents/spec-changes.md) to identify generators, Core/tooling coverage requirements and delivery boundaries.

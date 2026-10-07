@@ -95,6 +95,8 @@ The Host function receives only the arguments supplied, in order. The Core inser
 
 ## Capabilities
 
+**Pending addition:** [Store Notifications](proposals/store-notifications.md#embedding) adds a Grant release hook, which the Core calls when a Script's named Grant stops being effective, `store` watch Operations, a notification router helper and a `release` message-layer request. Neither Core supports them yet.
+
 - **Defining one:** `DefineCapability` takes a name and its Operations, once per process. Each Operation is a declaration (name, argument and result Shapes, cost, mode, `maxPending`, declared error codes and optional `scope` and `segmentBound` metadata) paired with the Host function that implements it. Declarations are ordered by name, whatever order the Host gives. `ask`, `tell`, `send` and `wait` are refused as Operation names.
 - **Modes:**
   - **Immediate:** `Do` runs at the call, inside the Run, and returns the result.
