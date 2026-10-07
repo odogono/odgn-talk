@@ -175,7 +175,7 @@ argument per part raises `bad message name`. A receiver Name for a Script the
 Group doesn't hold raises `object gone` at the send, after that check.
 
 A Fallback Handler, `on any message m`, takes the messages no Handler Clause
-matches ([ADR 0063](../../docs/adr/0063-a-fallback-handler-receives-messages-no-clause-matches.md)).
+matches ([ADR 0064](../../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
 Its clauses are `fallback` bodies named `any message`, and `pass any message`
 lowers to `pass`. `machine.StartDelivery` appends them, from every code unit,
 after the Selector's clauses, with the uncharged message map `{name, args}` as

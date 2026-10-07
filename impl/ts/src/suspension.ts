@@ -177,7 +177,7 @@ export const checkSuspension = (
         );
         bodies.push({
           kind: node.rule === 'Handler' ? 'handler' : 'function',
-          // A Fallback Handler has no MessageName (ADR 0063).
+          // A Fallback Handler has no MessageName (ADR 0064).
           name: named
             ? firstLeaf(named).text
             : node.rule === 'Handler'

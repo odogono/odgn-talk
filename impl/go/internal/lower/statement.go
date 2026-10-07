@@ -199,7 +199,7 @@ func (u *Unit) statement(n *syntax.Node) {
 // spreadSend lowers a `send` whose `with` list spreads a list: the name as
 // text, the arguments as one list built as a list literal's, the receiver,
 // then `send-spread`, `send-spread-wait` or `join-send-spread`. The send's
-// own instructions keep its position (chapter 8, Sends; ADR 0063).
+// own instructions keep its position (chapter 8, Sends; ADR 0064).
 func (u *Unit) spreadSend(n *syntax.Node) {
 	pos := n.Pos()
 	if len(n.Params) > 1 {

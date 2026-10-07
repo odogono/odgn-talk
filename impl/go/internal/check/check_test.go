@@ -293,7 +293,7 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 	}
 }
 
-// The Fallback Handler's load rules (ADR 0063).
+// The Fallback Handler's load rules (ADR 0064).
 func TestFallbackHandlerDiagnostics(t *testing.T) {
 	for _, tc := range []struct {
 		source, code string

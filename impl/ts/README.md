@@ -211,7 +211,7 @@ non-text raises `wrong kind`, and text that isn't a Name or a Selector with one
 argument per part raises `bad message name`. A receiver Name for a Script the
 Group doesn't hold raises `object gone` at the send, after that check.
 
-`on any message m` declares a Fallback Handler ([ADR 0063](../../docs/adr/0063-a-fallback-handler-receives-messages-no-clause-matches.md)).
+`on any message m` declares a Fallback Handler ([ADR 0064](../../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
 Its clauses lower to `fallback` bodies named `any message`, which `Code`
 keeps apart from the Selector-keyed clauses, so Broadcast "want" and local
 Command Calls never see them. A Delivery that isn't a Broadcast, a Decision or

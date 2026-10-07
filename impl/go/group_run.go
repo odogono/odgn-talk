@@ -41,7 +41,7 @@ func (s *Script) start(d delivery) {
 		r = machine.StartFunction(s.state, *d.function, args, limits)
 	} else {
 		// Broadcasts, Decisions and `error` messages never reach a Fallback
-		// Handler, anywhere on their path (ADR 0063).
+		// Handler, anywhere on their path (ADR 0064).
 		fallback := d.broadcast == "" && d.decision == nil && d.during == nil
 		r = machine.StartDelivery(s.state, d.message.Name, args, limits, fallback)
 	}
@@ -782,7 +782,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 
 // fallback reports whether a Fallback Handler clause started this Run: the
 // clause it selected, or, while it dispatches, the clause it is trying, so
-// that `fallback` agrees with the start record's `clause` (ADR 0063).
+// that `fallback` agrees with the start record's `clause` (ADR 0064).
 func (x *execution) fallback(s *Script) bool {
 	if x.clause >= 0 {
 		return machine.Fallback(s.state.Unit.Bodies[x.clause])
@@ -796,7 +796,7 @@ func (x *execution) fallback(s *Script) bool {
 }
 
 // hasHandler counts only named Handler Clauses: a Fallback never makes a
-// Script want a Broadcast (ADR 0063).
+// Script want a Broadcast (ADR 0064).
 func (s *Script) hasHandler(name string) bool {
 	for _, b := range s.state.Unit.Bodies {
 		if b.Checked.Kind == "handler" && b.Checked.Name == name {
@@ -1064,7 +1064,7 @@ func (g *Group) selectClause(s *Script, x *execution, reports *[]Report, allow f
 	x.clause = body.Index
 	x.deciding = machine.DecidingClause(body)
 	if machine.Fallback(body) {
-		// A Fallback Run's Handler is its message's Selector (ADR 0063).
+		// A Fallback Run's Handler is its message's Selector (ADR 0064).
 		x.handler = x.delivery.message.Name
 	}
 	switch {

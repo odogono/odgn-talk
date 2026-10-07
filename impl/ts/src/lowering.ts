@@ -272,7 +272,7 @@ class UnitLowering {
         owners.push([decl, body]);
       } else if (decl.k === 'handler') {
         // A Fallback Handler's clauses are `fallback` bodies, named
-        // `any message`, which no Handler's name can be (ADR 0063).
+        // `any message`, which no Handler's name can be (ADR 0064).
         const clause = (clauses.get(decl.name) ?? 0) + 1;
         clauses.set(decl.name, clause);
         const body = this.newBody(
@@ -817,7 +817,7 @@ class BodyLowering {
           // A spread builds the arguments as one list, below the receiver,
           // under the name as text. The name's `const`, the list's building
           // and the send are the `send`'s; each item keeps its own position
-          // (ADR 0063).
+          // (ADR 0064).
           if (typeof message === 'string') {
             this.constant(at, textDisplay(message));
           } else {

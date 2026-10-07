@@ -189,7 +189,7 @@ const tmLanguage = {
       },
     },
     // `any message` after `on`, `end` or `pass` names the Fallback Handler
-    // (ADR 0063); `on any x` is still a Handler named `any`.
+    // (ADR 0064); `on any x` is still a Handler named `any`.
     fallback: {
       match: String.raw`(?<![A-Za-z0-9_])(?:(on)|(end)|(pass))[ \t]+(any)[ \t]+(message)(?![A-Za-z0-9_])`,
       captures: {

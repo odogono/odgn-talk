@@ -309,7 +309,7 @@ export const lintSyntax = (
           child => child.rule === 'MessageName' || child.rule === 'Name',
         );
         suffix = name ? summaries.get(name)!.first!.v : suffix;
-        // A Fallback Handler closes with `end any message` (ADR 0063).
+        // A Fallback Handler closes with `end any message` (ADR 0064).
         if (!name && direct[1]?.v === 'any' && direct[2]?.v === 'message') {
           suffix = 'any message';
         }

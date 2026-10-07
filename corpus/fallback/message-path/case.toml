@@ -1,7 +1,7 @@
 # message-path: a Fallback runs in each Script on a message's path, before
 # the climb. `pass keypress` in a named clause skips the knight's own
 # Fallback; `pass any message` climbs with the message unchanged (chapter 5,
-# The Fallback Handler; ADR 0063).
+# The Fallback Handler; ADR 0064).
 
 kind = "trace"
 

@@ -19,6 +19,10 @@ The JSON read includes comments; `--comments` is an alternative display mode and
 
 Run commands from this clone so `gh` infers `odogono/odgn-talk`.
 
+## Cross-Core findings
+
+When work on one Core finds that the other Core diverges from the Spec, open an issue for that Core's behaviour change, even if the fix ships in the same PR. Link it from the PR, and from the reconciled acceptance of the step whose behaviour it changes, so the change can be found and reviewed from that Core's side ([#325](https://github.com/odogono/odgn-talk/issues/325)).
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** Set this to `yes` if external PRs should enter the triage queue.

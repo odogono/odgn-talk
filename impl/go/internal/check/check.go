@@ -162,7 +162,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 		case "function", "handler":
 			// A Fallback Handler's clauses share the name `any message`, which
 			// no Selector can spell. Imported Handlers are never entry points,
-			// so a Library can't hold one (ADR 0063).
+			// so a Library can't hold one (ADR 0064).
 			if n.IsFallback() && options.Library {
 				u.add("not in a library", n.Pos())
 			}

@@ -65,7 +65,7 @@ const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
 const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
-// The Fallback Handler's name, in its body table and its `pass` (ADR 0063).
+// The Fallback Handler's name, in its body table and its `pass` (ADR 0064).
 const FALLBACK = 'any message';
 const endSuffixExpected = (name: string, at: Token) =>
   `end of line or \`${name}\` after \`end\` (closing line ${at.line})`;
@@ -615,7 +615,7 @@ class Parser {
   }
 
   // `any message` after `on`, `pass` or a Handler's `end` names the Fallback
-  // Handler; otherwise `any` is a Name (ADR 0063).
+  // Handler; otherwise `any` is a Name (ADR 0064).
   atAnyMessage(): boolean {
     return (
       this.atWord('any') && this.isWord(this.la2('any-message'), 'message')
@@ -777,7 +777,7 @@ class Parser {
       const on = this.next();
       // `on any message m`: the Fallback Handler, whose head is exactly one
       // pattern. `any` and `message` are leaves of the Handler, which has no
-      // MessageName (ADR 0063).
+      // MessageName (ADR 0064).
       const fallback = this.atAnyMessage();
       if (fallback) {
         this.next();
@@ -1099,7 +1099,7 @@ class Parser {
       }
       case 'pass': {
         this.next();
-        // A Fallback Handler's pass (ADR 0063).
+        // A Fallback Handler's pass (ADR 0064).
         if (this.atAnyMessage()) {
           this.next();
           this.next();
@@ -1197,7 +1197,7 @@ class Parser {
   }
 
   // A receiver-last `send`'s `with` list, whose items may spread a list as a
-  // list literal's do: a `...` leaf before the item's Expression (ADR 0063).
+  // list literal's do: a `...` leaf before the item's Expression (ADR 0064).
   *sendList(): ParseTask<Node[]> {
     const frame = this.enter('ExpressionList');
     try {

@@ -24,7 +24,7 @@ type Context = {
   /** Loop depth at the Recovery Catch granting lexical choice permission. */
   recovery: number | null;
 };
-// A Fallback Handler's message, as its `pass` names it (ADR 0063).
+// A Fallback Handler's message, as its `pass` names it (ADR 0064).
 const FALLBACK = 'any message';
 const loopSuffixes = new Set(['queued', 'dropping', 'replacing']);
 const suffixes = new Set([...loopSuffixes, 'deciding', 'during']);
@@ -348,7 +348,7 @@ export const checkControl = (
       }
       case 'Handler': {
         // `on any message m`: the Fallback Handler, which a Library can't
-        // hold, since imported Handlers are never entry points (ADR 0063).
+        // hold, since imported Handlers are never entry points (ADR 0064).
         const fallback = word(node.children[1], 'any');
         if (fallback && unit === 'library') {
           report('not in a library', node.children[0] as Leaf);

@@ -89,7 +89,7 @@ MessageName    ::= Name  /* not `all` */
 /* ## statements */
 
 Block          ::= ( Statement? NL )*
-Statement      ::= If | Repeat | Match | Try | Wait | Simple
+Statement      ::= If | Repeat | Match | Try | Wait | TellBlock | Simple
 Inline         ::= Simple | 'wait' ( 'for' Event Timeout? | Expression )
 Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
                  | Send | Ask | Tell | Return | Veto | Pass | Exit | Next | Throw
@@ -146,6 +146,8 @@ WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
 Event          ::= MessageName ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? ( 'from' ChunkLevel )?
 Timeout        ::= 'or' Expression
+TellBlock      ::= 'tell' Expression NL ( OperationLine? NL )* 'end' 'tell'?
+OperationLine  ::= Word ExpressionList? AndWait?
 
 /* ## expressions */
 

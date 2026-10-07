@@ -420,7 +420,7 @@ export class UnitCompiler {
         );
         this.functions.set(d.name, b.index);
       } else if (d.k === 'Handler') {
-        // A Fallback Handler's clauses are `fallback` bodies (ADR 0063).
+        // A Fallback Handler's clauses are `fallback` bodies (ADR 0064).
         const list = this.handlers.get(d.name) ?? [];
         const b = this.newBody(
           d.fallback ? 'fallback' : 'handler',
@@ -2187,7 +2187,7 @@ export class BodyCompiler {
 
   send(s: Node) {
     // A spread in `with` builds the arguments as one list, below the
-    // receiver, under the name as text (ADR 0063).
+    // receiver, under the name as text (ADR 0064).
     if (s.args.some((a: Node) => a.k === 'Spread')) {
       if (s.name) {
         this.expr(s.name);

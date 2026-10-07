@@ -1,5 +1,5 @@
 # policies: a Fallback clause's Queueing Policy applies as any clause's does
-# (chapter 5, Queueing Policies; ADR 0063).
+# (chapter 5, Queueing Policies; ADR 0064).
 
 kind = "trace"
 

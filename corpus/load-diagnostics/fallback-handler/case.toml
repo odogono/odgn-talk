@@ -1,5 +1,5 @@
 # fallback-handler: the load rules and syntax of the Fallback Handler
-# (chapter 2; chapter 5, The Fallback Handler; ADR 0063).
+# (chapter 2; chapter 5, The Fallback Handler; ADR 0064).
 
 kind = "trace"
 

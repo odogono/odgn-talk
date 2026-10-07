@@ -1,6 +1,6 @@
 # 8. The Abstract Machine and the Cost Model
 
-_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
+_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md).
 
 Every Script and Library compiles to a code unit for one Abstract Machine: a stack machine with numbered local slots. The instruction set, and the exact instructions each construct lowers to, are normative, including which local slot each name gets and the order of the constant pool ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). Each instruction is one language-level operation, and is charged Fuel by the Cost Model. So both Cores charge the same Fuel, fault at the same instruction and report the same positions, and a Disassembly Case can pin a Script's lowering exactly ([chapter 11](11-the-trace-and-conformance.md)).
 
@@ -525,6 +525,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | a call statement `f(a)` | the call, `call-value-wait` in place of `call-value` with `and wait`, then `store 0` |
 | `ask g to op a, …` | ⟦a⟧ … `ask`, or `ask-wait` with `and wait`, then `store 0`, or `join-ask` in a Join |
 | `tell g to op a, …` | ⟦a⟧ … `tell` |
+| a `tell g` block | each line as the one-line call its Operation's mode allows: `tell g to op a, …`, `ask g to op a, …`, or `ask g to op a, … and wait`, in order. The block itself emits nothing |
 | `say e` | ⟦e⟧ `tell console write 1` |
 | `send m with a, … to r` | ⟦a⟧ … ⟦r⟧ `send`, or `send-wait` `store 0`, or `join-send` in a Join |
 | `send (e) with a, … to r` | ⟦e⟧ ⟦a⟧ … ⟦r⟧ `send-named`, or `send-named-wait` `store 0`, or `join-send-named` in a Join |
@@ -537,7 +538,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 - **`if`** jumps to L2 after every arm, except the last one when there is no `else`.
 - **An iterator** stays on the stack below the loop's body, which leaves the stack as it found it, and L2 pops it.
 - **`repeat for each`'s temp** is released after the `move`s, before the body.
-- **Grants:** the name after `ask` or `tell` is a Grant, and the Operation's mode picks `ask`, `ask-wait` or `tell`, checked at load ([chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Grants:** the name after `ask` or `tell` is a Grant, and the Operation's mode picks `ask`, `ask-wait` or `tell`, checked at load ([chapter 5](05-handlers-messages-and-scheduling.md)). In a `tell` block, the mode alone picks it ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)).
 
 #### `match`
 
@@ -671,6 +672,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Sends:** a spreading `send`'s `const` of its static name, `list 0`, `list-append`s and `list-extend`s are the `send`'s, while each item's own expression keeps its position.
+- **`tell` blocks:** a line's `ask`, `ask-wait`, `join-ask` or `tell`, and the `store 0` after an `ask`, are its Operation name, since the line has no `ask` or `tell` of its own.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).

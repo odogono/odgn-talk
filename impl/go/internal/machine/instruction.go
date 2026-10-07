@@ -170,7 +170,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if spreadSend(i.Name) {
 			// The name, the argument list and the receiver: the name is
 			// checked against the list's length, before the receiver
-			// (chapter 5, A spread; ADR 0063).
+			// (chapter 5, A spread; ADR 0064).
 			list, v := f.Stack[len(f.Stack)-2], f.Stack[len(f.Stack)-3]
 			n = len(list.Items)
 			if v.Kind != value.Text {

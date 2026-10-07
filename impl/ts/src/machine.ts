@@ -156,7 +156,7 @@ export class Code {
   readonly clauses = new Map<string, Body[]>();
   /**
    * Its Fallback Handler's clauses, in source order. They are kept apart
-   * from `clauses`, so no Selector finds them (ADR 0063).
+   * from `clauses`, so no Selector finds them (ADR 0064).
    */
   fallback: Body[] = [];
   /** The Libraries it imports, by name. */
@@ -276,7 +276,7 @@ export class Script extends Code {
       this.clauses.set(name, clauses);
     }
     // A Fallback Handler in an extension replaces the older one, as a
-    // Handler's clauses do (ADR 0063).
+    // Handler's clauses do (ADR 0064).
     if (extension.fallback.length) {
       this.fallback = extension.fallback;
     }
@@ -473,7 +473,7 @@ type Dispatch = {
   code: Code;
   /**
    * A Delivery that may reach a Fallback Handler: its clauses, tried after
-   * `clauses` with the message map, and the message's Selector (ADR 0063).
+   * `clauses` with the message map, and the message's Selector (ADR 0064).
    */
   fallback?: { clauses: Body[]; selector: string };
   next: number;
@@ -781,7 +781,7 @@ const keyValue = (k: string | number): Value =>
 // The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
 // The sends that pop a computed message name (ADR 0057).
 // A spreading send pops its name, as text, and its arguments as one list
-// (ADR 0063).
+// (ADR 0064).
 const spreadSends = new Set([
   'send-spread',
   'send-spread-wait',
@@ -1187,7 +1187,7 @@ export class Run {
   private entryError: 'wrong arity' | null = null;
   private m: Measured = {};
   private clause = 0;
-  /** Its entry dispatch reached the Fallback Handler's clauses (ADR 0063). */
+  /** Its entry dispatch reached the Fallback Handler's clauses (ADR 0064). */
   private viaFallback = false;
   private during: Value = nothing;
   private cancellation:
@@ -1869,7 +1869,7 @@ export class Run {
     }
   }
 
-  /** Whether a Fallback Handler clause runs, or is being tried (ADR 0063). */
+  /** Whether a Fallback Handler clause runs, or is being tried (ADR 0064). */
   get fallback(): boolean {
     return this.viaFallback;
   }
@@ -4525,7 +4525,7 @@ export class Run {
         }
         const up = ins.op === 'send-up' || ins.op === 'send-up-wait';
         const named = namedSends.has(ins.op);
-        // A spread's arguments are one list, below the receiver (ADR 0063).
+        // A spread's arguments are one list, below the receiver (ADR 0064).
         const spread = spreadSends.has(ins.op)
           ? listItems(frame.stack.at(-2) as Value)
           : null;
@@ -5084,7 +5084,7 @@ const cleanupEnd = (unit: CodeUnit, start: number): number => {
 
 /**
  * Start a Run by dispatching a message to a Handler's clauses, and then, for
- * a message that may reach one, to the Script's Fallback Handler's (ADR 0063).
+ * a message that may reach one, to the Script's Fallback Handler's (ADR 0064).
  */
 export const deliver = (
   script: Script,

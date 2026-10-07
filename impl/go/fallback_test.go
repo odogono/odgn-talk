@@ -20,7 +20,7 @@ func runEnds(r PumpResult) []*RunEnd {
 
 // A Session Script may be extended with a Fallback, which then takes the
 // messages no clause in any code unit matches. A second Fallback in a later
-// unit reuses the name `any message`, as a second Handler would (ADR 0063).
+// unit reuses the name `any message`, as a second Handler would (ADR 0064).
 func TestExtendWithFallbackHandler(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on greet who where who is \"Ann\"\n return \"hello\"\nend greet"})

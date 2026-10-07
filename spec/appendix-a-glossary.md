@@ -78,6 +78,10 @@ _Avoid_: protocol, wire format, RPC
 A Capability made available to one Script at load, limited to a set of its Operations and carrying the Host's own binding data. The loader checks every Capability call against the Script's Grants.
 _Avoid_: permission, token, entitlement
 
+**Tell Block**:
+A `tell g` … `end tell` block whose lines each call an Operation of the Grant `g`, as the one-line `tell` or `ask` that the Operation's declared mode allows.
+_Avoid_: cascade, with block, receiver block
+
 **Host Object**:
 An opaque handle to something the Host owns, with identity: copying the handle never copies the thing. The only kind of value through which a Script can observe sharing.
 _Avoid_: reference, native object, proxy

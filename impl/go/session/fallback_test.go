@@ -6,7 +6,7 @@ import (
 )
 
 // A Session Script may be extended with a Fallback Handler, and entering
-// another one redefines it, as for a Handler named `any message` (ADR 0063).
+// another one redefines it, as for a Handler named `any message` (ADR 0064).
 func TestFallbackHandlerEntries(t *testing.T) {
 	h := New(Environment{})
 	for _, entry := range []struct {

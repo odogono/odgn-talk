@@ -250,7 +250,7 @@ func (p *parser) declaration() *Node {
 		}
 		// `on any message m`: the Fallback Handler, whose head is exactly one
 		// pattern. `any` before `message` is decided on two tokens, so `on any
-		// x` still declares a Handler named `any` (ADR 0063).
+		// x` still declares a Handler named `any` (ADR 0064).
 		fallback := n.Kind == "handler" && p.atAnyMessage()
 		var name Token
 		if fallback {
@@ -332,7 +332,7 @@ func (p *parser) declaration() *Node {
 }
 
 // FallbackName names the Fallback Handler's bodies and its `pass`. It holds a
-// space, so it is never a Selector (ADR 0063).
+// space, so it is never a Selector (ADR 0064).
 const FallbackName = "any message"
 
 // IsFallback reports whether a declaration is a Fallback Handler clause.
@@ -375,7 +375,7 @@ func (p *parser) expressionList() []*Node {
 }
 
 // sendList reads a receiver-last `send`'s `with` list, whose items may
-// spread a list as a list literal's do (ADR 0063).
+// spread a list as a list literal's do (ADR 0064).
 func (p *parser) sendList() []*Node {
 	item := func() *Node {
 		if p.acceptOperand("...") {
@@ -532,7 +532,7 @@ func (p *parser) statement(inline bool) *Node {
 		n.Children = []*Node{p.expression()}
 	case "pass":
 		if p.atAnyMessage() {
-			// `pass any message`: the Fallback Handler's pass (ADR 0063).
+			// `pass any message`: the Fallback Handler's pass (ADR 0064).
 			n.NameToken = p.take(Operand)
 			p.take(Operand)
 			n.Text = FallbackName

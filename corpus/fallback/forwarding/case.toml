@@ -1,6 +1,6 @@
 # forwarding: a Fallback forwards a message whose Selector and argument count
 # it doesn't know, with a computed name and a spread in `with` (chapter 5,
-# The Fallback Handler, Sending; ADR 0063).
+# The Fallback Handler, Sending; ADR 0064).
 
 kind = "trace"
 

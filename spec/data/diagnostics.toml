@@ -102,15 +102,15 @@ sources = ["ADR 0030", "#115"]
 
 [[diagnostic]]
 code = "unknown operation"
-raised_when = "`ask` or `tell` names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare"
+raised_when = "`ask`, `tell` or a `tell` block names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare"
 at = "the Grant's name, or the Operation's"
-sources = ["ADR 0012", "ADR 0015", "#115"]
+sources = ["ADR 0012", "ADR 0015", "ADR 0063", "#115"]
 
 [[diagnostic]]
 code = "wrong mode"
-raised_when = "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, or `tell` on one that isn't fire-and-forget"
-at = "`ask` or `tell`"
-sources = ["ADR 0012", "#115"]
+raised_when = "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, `tell … to` on one that isn't fire-and-forget, or a `tell` block line whose `and wait` is there on an Operation that isn't suspending, or missing on one that is"
+at = "`ask` or `tell`, or a `tell` block line's Operation name"
+sources = ["ADR 0012", "ADR 0063", "#115"]
 
 [[diagnostic]]
 code = "missing and wait"
@@ -152,7 +152,7 @@ sources = ["ADR 0020", "#115"]
 code = "not in a library"
 raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler"
 at = "its first token"
-sources = ["ADR 0016", "ADR 0020", "ADR 0063", "#115"]
+sources = ["ADR 0016", "ADR 0020", "ADR 0064", "#115"]
 
 [[diagnostic]]
 code = "not in a script"
@@ -212,13 +212,13 @@ sources = ["ADR 0031", "#115"]
 code = "wrong message"
 raised_when = "`pass m` names a message other than the one its Handler handles, `pass any message` is outside a Fallback Handler, or a Fallback Handler's `pass` names a message"
 at = "the message's name, or `any`"
-sources = ["ADR 0063", "#115"]
+sources = ["ADR 0064", "#115"]
 
 [[diagnostic]]
 code = "bad suffixes"
 raised_when = "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler"
 at = "the first suffix that breaks the rule"
-sources = ["ADR 0031", "ADR 0063", "#115"]
+sources = ["ADR 0031", "ADR 0064", "#115"]
 
 [[diagnostic]]
 code = "can't write"

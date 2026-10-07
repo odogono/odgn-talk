@@ -947,7 +947,7 @@ export const lintBindings = (
     }
   }
   // A Fallback clause that routes on a Selector the Script has named clauses
-  // for runs only when those clauses fail (ADR 0063).
+  // for runs only when those clauses fail (ADR 0064).
   const known = (t: SemanticElement | undefined) =>
     t?.kind === 'token' && t.type === 'str' && handlers.has(t.text)
       ? t

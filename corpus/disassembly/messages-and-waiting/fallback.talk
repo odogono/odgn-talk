@@ -1,5 +1,5 @@
 -- fallback.talk: a Fallback Handler and a spread in `send … with` (ADR
--- 0063). Part of the messages-and-waiting case. Each Fallback clause is a
+-- 0064). Part of the messages-and-waiting case. Each Fallback clause is a
 -- `fallback` body named `any message`, with the message map as its one
 -- parameter. A spreading `send` builds its arguments as one list, under the
 -- name as text, and ends in `send-spread`, `send-spread-wait` or

@@ -227,7 +227,7 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	for _, n := range checked.Tree.Declarations {
 		if b := checked.Bodies[n]; b != nil {
 			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies)}
-			// A Fallback's clauses are numbered as `any message`'s (ADR 0063).
+			// A Fallback's clauses are numbered as `any message`'s (ADR 0064).
 			if b.Kind == "handler" || b.Kind == "fallback" {
 				clauses[b.Name]++
 				lowered.Clause = clauses[b.Name]

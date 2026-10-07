@@ -386,7 +386,7 @@ type Running = {
   selected?: boolean;
 };
 // Whether two Runs took the same clause, for its Queueing Policy. A Fallback
-// Handler clause is one clause whatever the message (ADR 0063).
+// Handler clause is one clause whatever the message (ADR 0064).
 const sameClause = (a: Running, b: Running): boolean =>
   a.run.fallback === b.run.fallback &&
   (a.run.fallback || a.delivery.message === b.delivery.message) &&
@@ -3585,7 +3585,7 @@ export class Group {
             delivery.args,
             limits,
             // A Broadcast, a Decision and an `error` message never reach a
-            // Fallback Handler, anywhere on their path (ADR 0063).
+            // Fallback Handler, anywhere on their path (ADR 0064).
             !delivery.broadcast && !delivery.ballot && !delivery.during,
           );
       // At this Run's end, the rest of the queue is what the Script keeps.
@@ -3787,7 +3787,7 @@ export class Group {
     outcome = run.ended;
     this.active = null;
     // A Run a Fallback Handler clause took names the message's Selector as
-    // its Handler; one that ended unhandled took no clause (ADR 0063).
+    // its Handler; one that ended unhandled took no clause (ADR 0064).
     const fallback = run.fallback && outcome?.kind !== 'unhandled';
     const handler =
       !running.delivery.fn &&

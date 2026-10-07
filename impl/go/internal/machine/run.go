@@ -192,7 +192,7 @@ func Start(s *State, body int, args []value.Value, limits Limits) *Run {
 // StartDelivery retains dispatch state across preemption and clause failure.
 // A Delivery that may reach a Fallback Handler tries the Script's Fallback
 // clauses, in every code unit, after the Selector's own, with the message map
-// {name, args} as their one argument, built without charge (ADR 0063).
+// {name, args} as their one argument, built without charge (ADR 0064).
 func StartDelivery(s *State, name string, args []value.Value, limits Limits, fallback bool) *Run {
 	r := &Run{State: s, Limits: limits, Base: slices.Clone(s.Variables), Arguments: slices.Clone(args), PolicyDispatch: true}
 	for _, b := range s.Unit.Bodies {
@@ -229,7 +229,7 @@ func (r *Run) nextClause() {
 	r.pushFrame(body, args)
 }
 
-// Fallback reports whether a body is a Fallback Handler clause (ADR 0063).
+// Fallback reports whether a body is a Fallback Handler clause (ADR 0064).
 func Fallback(b *lower.Body) bool { return b.Checked.Kind == "fallback" }
 
 func (r *Run) pushFrame(body int, args []value.Value) { r.pushCodeFrame(r.State, body, args) }
@@ -997,7 +997,7 @@ func namedSend(name string) bool {
 }
 
 // spreadSend reports whether a send pops its name, its arguments as one list
-// and its receiver (ADR 0063).
+// and its receiver (ADR 0064).
 func spreadSend(name string) bool {
 	return name == "send-spread" || name == "send-spread-wait" || name == "join-send-spread"
 }
