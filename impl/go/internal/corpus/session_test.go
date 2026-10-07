@@ -64,3 +64,22 @@ func TestSessionFireAndForgetSaveTraceReplaysIndependently(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSessionStoreTraceReplaysIndependently(t *testing.T) {
+	var items []session.Item
+	var trace []string
+	h := session.New(session.Environment{Record: func(i session.Item) { items = append(items, i) }, Trace: func(s string) { trace = append(trace, s) }})
+	for _, source := range []string{":grant st store", ":grant alias store default", ":clock virtual 2026-10-07T10:00:00Z", ":store load\n{\"best\":9}", "ask st to increment \"plays\", 3", "on peek\nask alias to get \"best\"\nsay it\nend peek", "peek", ":save", "ask st to set \"best\", 10", ":restore", "peek"} {
+		h.Input(source)
+	}
+	h.Inspect()
+	dir := t.TempDir()
+	for file, source := range map[string]string{"session.transcript": driver.WriteTranscript(items), "case.trace": strings.Join(trace, "\n") + "\n"} {
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := (sessionBackend{}).Run(Case{Name: "native-store-save", Dir: dir}, nil); err != nil {
+		t.Fatal(err)
+	}
+}

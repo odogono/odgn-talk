@@ -148,7 +148,8 @@ func ReplayTranscript(recorded []session.Item, trace func(string)) (host *sessio
 			return at
 		},
 		Record: func(i session.Item) { items = append(items, i) }, Trace: trace,
-		WriteFile: func(string, string, string) error { return nil },
+		WriteFile:      func(string, string, string) error { return nil },
+		WriteStoreFile: func(string, string) error { return nil },
 	})
 	for n := 0; n < len(recorded); n++ {
 		item := recorded[n]

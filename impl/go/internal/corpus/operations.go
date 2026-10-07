@@ -121,6 +121,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"write", "read"}
 		case "calendar":
 			names = []string{"today", "now", "toCivil", "toInstant", "offset", "zone"}
+		case "store":
+			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
 		case "locale":
 			names = []string{"compare", "rank", "upper", "lower", "numberSymbols", "monthNames", "dayNames", "tag"}
 		}
@@ -156,6 +158,18 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"toInstant": {Mode: talk.Immediate, Args: []talk.Shape{talk.CivilDateShape, optionalText, optionalText}},
 				"offset":    {Mode: talk.Immediate, Args: []talk.Shape{talk.InstantShape, optionalText}},
 				"zone":      {Mode: talk.Immediate, Args: []talk.Shape{optionalText}},
+			}
+		case "store":
+			def, err = core.StoreCapability(replayStore{out}, costs)
+			// A Script Load rechecks imported calls against the factory's exact
+			// number-or-Quantity Shape; there is no public any-Quantity Shape.
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"get":       {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.Optional(talk.AnyShape)}},
+				"set":       {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.AnyShape}},
+				"delete":    {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}},
+				"keys":      {Mode: talk.Immediate, Args: []talk.Shape{talk.Optional(talk.TextShape)}},
+				"increment": {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.Optional(talk.AnyShape)}},
+				"swap":      {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.AnyShape, talk.AnyShape}},
 			}
 		case "locale":
 			def, err = core.LocaleCapability(replayLocale{out}, costs)
@@ -194,21 +208,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			bound = bound || op.SegmentBound
 		}
 		if bound {
-			hook := func(phase string) func(talk.SegmentContext) talk.EffectResult {
-				return func(ctx talk.SegmentContext) talk.EffectResult {
-					key := ctx.ScriptName + "." + ctx.GrantName + "." + phase
-					queue := out.effectStubs[key]
-					if len(queue) == 0 {
-						if out.strict && out.malformed == nil {
-							out.malformed = fmt.Errorf("No lifecycle Stub for %s.%s phase=%s", ctx.ScriptName, ctx.GrantName, phase)
-						}
-						return talk.EffectResult{Status: talk.EffectUnknown, Detail: "missing lifecycle Stub: " + key}
-					}
-					out.effectStubs[key] = queue[1:]
-					return talk.EffectResult{Status: talk.EffectStatus(queue[0]["status"].Raw)}
-				}
-			}
-			d, e = core.DefineSegmentCapability(name, talk.SegmentLifecycle{Begin: hook("begin"), Commit: hook("commit"), Rollback: hook("rollback")}, ops...)
+			d, e = core.DefineSegmentCapability(name, talk.SegmentLifecycle{Begin: out.effect("begin"), Commit: out.effect("commit"), Rollback: out.effect("rollback")}, ops...)
 		} else {
 			d, e = core.DefineCapability(name, ops...)
 		}
@@ -450,4 +450,65 @@ func (h replayLocale) DayNames(c *talk.Call, opts talk.Value, tag string) (talk.
 }
 func (h replayLocale) Tag(c *talk.Call, tag string) (talk.Value, error) {
 	return h.replay.invoke("locale.tag", talk.Immediate, c)
+}
+
+// effect consumes lifecycle Stubs by Script and Grant, for both custom and
+// Standard Segment participants.
+func (o *operationReplay) effect(phase string) func(talk.SegmentContext) talk.EffectResult {
+	return func(ctx talk.SegmentContext) talk.EffectResult {
+		key := ctx.ScriptName + "." + ctx.GrantName + "." + phase
+		queue := o.effectStubs[key]
+		if len(queue) == 0 {
+			if o.strict && o.malformed == nil {
+				o.malformed = fmt.Errorf("No lifecycle Stub for %s.%s phase=%s", ctx.ScriptName, ctx.GrantName, phase)
+			}
+			return talk.EffectResult{Status: talk.EffectUnknown, Detail: "missing lifecycle Stub: " + key}
+		}
+		o.effectStubs[key] = queue[1:]
+		return talk.EffectResult{Status: talk.EffectStatus(queue[0]["status"].Raw)}
+	}
+}
+
+type replayStore struct{ replay *operationReplay }
+
+func (h replayStore) Begin(c talk.SegmentContext) talk.EffectResult {
+	return h.replay.effect("begin")(c)
+}
+func (h replayStore) Commit(c talk.SegmentContext) talk.EffectResult {
+	return h.replay.effect("commit")(c)
+}
+func (h replayStore) Rollback(c talk.SegmentContext) talk.EffectResult {
+	return h.replay.effect("rollback")(c)
+}
+func (h replayStore) Get(c *talk.Call, key string, fallback talk.Value) (talk.Value, error) {
+	h.replay.values.receive(fallback)
+	return h.replay.invoke("store.get", talk.Immediate, c)
+}
+func (h replayStore) Set(c *talk.Call, key string, v talk.Value) error {
+	h.replay.values.receive(v)
+	_, e := h.replay.invoke("store.set", talk.Immediate, c)
+	return e
+}
+func (h replayStore) Delete(c *talk.Call, key string) error {
+	_, e := h.replay.invoke("store.delete", talk.Immediate, c)
+	return e
+}
+func (h replayStore) Keys(c *talk.Call, prefix string) (talk.Value, error) {
+	return h.replay.invoke("store.keys", talk.Immediate, c)
+}
+func (h replayStore) Increment(c *talk.Call, key string, by talk.Value) (talk.Value, error) {
+	return h.replay.invoke("store.increment", talk.Immediate, c)
+}
+func (h replayStore) Swap(c *talk.Call, key string, expected, replacement talk.Value) (bool, error) {
+	h.replay.values.receive(expected)
+	h.replay.values.receive(replacement)
+	v, e := h.replay.invoke("store.swap", talk.Immediate, c)
+	if e != nil {
+		return false, e
+	}
+	b, ok := v.AsBool()
+	if !ok {
+		return false, fmt.Errorf("store.swap Stub is not boolean")
+	}
+	return b, nil
 }

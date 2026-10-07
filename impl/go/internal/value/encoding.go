@@ -170,6 +170,8 @@ type jsonReader struct {
 	text    string
 	at      int
 	tagged  bool
+	members bool
+	depth   int
 	resolve func(string, string) (Value, error)
 }
 
@@ -188,6 +190,25 @@ func Decode(b []byte, tagged bool, resolve func(string, string) (Value, error)) 
 	}
 	return v, nil
 }
+
+// DecodeMembers decodes one Store contents object. Only its outer keys are
+// literal; nested members still use the Value Encoding's tags.
+func DecodeMembers(b []byte) ([]Pair, error) {
+	if !utf8.Valid(b) {
+		return nil, fmt.Errorf("invalid UTF-8 JSON")
+	}
+	r := jsonReader{text: string(b), tagged: true, members: true}
+	v, err := r.value()
+	if err != nil {
+		return nil, err
+	}
+	r.space()
+	if r.at != len(r.text) || v.Kind != Map {
+		return nil, fmt.Errorf("Expected one JSON object")
+	}
+	return v.Entries, nil
+}
+
 func (r *jsonReader) error() error { return fmt.Errorf("invalid JSON at byte %d", r.at) }
 func (r *jsonReader) space() {
 	for r.at < len(r.text) && strings.ContainsRune(" \t\r\n", rune(r.text[r.at])) {
@@ -202,6 +223,8 @@ func (r *jsonReader) take(s string) bool {
 	return false
 }
 func (r *jsonReader) value() (Value, error) {
+	r.depth++
+	defer func() { r.depth-- }()
 	r.space()
 	if r.at >= len(r.text) {
 		return Value{}, r.error()
@@ -268,7 +291,7 @@ func (r *jsonReader) value() (Value, error) {
 		if e != nil {
 			return Value{}, e
 		}
-		if !r.tagged {
+		if !r.tagged || r.members && r.depth == 1 {
 			return v, nil
 		}
 		hasTag := false

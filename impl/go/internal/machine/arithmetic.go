@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// Add applies the machine's addition rules without charging a Run.
+func Add(a, b value.Value) (value.Value, *value.Value) {
+	return arithmetic("+", a, b)
+}
+
 func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 	bad := func(e value.Value) (value.Value, *value.Value) { return value.Value{}, &e }
 	numericError := func(e error) (value.Value, *value.Value) {
