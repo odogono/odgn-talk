@@ -264,8 +264,8 @@ The Recovery Offers cases `basic`, `boundaries`, `costs`, `cleanup-restore`,
 cover retained Library work, choice/entry ordering, foreign-Run boundaries,
 exact dispatch sizes, atomic lookup debt, nested policy, cancellation and action
 suspension. Both Cores execute ordinary and restored replay, and the Go passing
-gate protects them. Their first-blessing approval and the corrections to
-existing catch expectations remain in the
+gate protects them. The maintainer approved their first blessings and the
+corrections to existing catch expectations on 2026-10-07 at `0c3c33f`; see the
 [final review package](../docs/reviews/recovery-offers-integration/README.md).
 Current language rules are in [chapter 4](../spec/04-expressions-and-statements.md#recovery-offers);
 Core/tooling guides describe support, while the slice review notes record

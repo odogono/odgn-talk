@@ -1,4 +1,3 @@
-# Unblessed: #388 first expectation approval remains pending.
 # A catch-body Error reaches cleanup, then cleanup's Error replaces it.
 # Transparent Restore reconnects pending cleanup to the retained original Error.
 # A fresh on-error Run has no offers from the failed Run.

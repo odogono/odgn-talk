@@ -1,4 +1,3 @@
-# Unblessed: #389 first expectation approval remains pending #392.
 # A Handler offer action may suspend; its offering finally protects the resumed action.
 > load s identity=551aadada1dffecd0ef13a0bb057a55444da2501945f0f987b8a3f828fec0a5b
 > request d1 to=s message=go

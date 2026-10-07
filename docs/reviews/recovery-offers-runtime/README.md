@@ -1,7 +1,9 @@
 # Recovery Offers runtime expectation review (#388)
 
-Approval status: **pending human review**. These are concrete candidate updates,
-not a record of blessing approval. Language remains 1.0-rc.2 and Cost Model 0.
+Approval status: **approved in the final review on 2026-10-07**; see the
+[human decision and exact scope](../recovery-offers-integration/README.md).
+This record preserves slice-2 derivation evidence. Language remains 1.0-rc.2
+and Cost Model 0.
 The integration base is `cdee6bf` (slice 1, #387 / PR #394).
 
 Every ordinary catch now searches before cleanup. `catch-accept` adds 1 Fuel;
@@ -19,7 +21,7 @@ canonical disassembly and full ordinary/restored Traces with these files. The
 checks are execution evidence; approval is a separate step required by issue
 #388 and [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).
 
-## New cases (unblessed)
+## New cases (unblessed when this slice was reviewed)
 
 | Case | Coverage |
 | --- | --- |

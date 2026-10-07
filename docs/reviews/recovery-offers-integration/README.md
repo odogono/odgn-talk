@@ -1,9 +1,13 @@
 # Recovery Offers final integration and expectation review (#392)
 
-Approval status: **pending human first-blessing review**. No expectation in this
-package has been approved by this record. Cross-Core execution agreement is a
-separate requirement. Language stays **1.0-rc.2**, provisional Cost Model **0**.
-Unrelated pending blessings remain untouched.
+Approval status: **approved by the maintainer on 2026-10-07**. In the T3 Code
+conversation `6f682c1b-86fe-462e-a86d-fe2ededc90d6`, the maintainer explicitly
+approved the 50 expectation files and exact diffs at
+[`0c3c33f`](https://github.com/odogono/odgn-talk/blob/0c3c33f661e2b41cb4ce332d49941f15f6c7ec8b/docs/reviews/recovery-offers-integration/README.md),
+and merging #410 then #411 after CI passes: **“Approve blessings and merges.”**
+This human decision is separate from Cross-Core execution agreement. Language
+stays **1.0-rc.2**, provisional Cost Model **0**. Unrelated pending blessings
+remain untouched.
 
 ## Exact approval scope
 
@@ -21,7 +25,7 @@ Later approvals of unrelated headers on `main` are not part of this review;
 comparison ignores comments and blank lines. No `--bless` command generated this
 package. Changing any execution record after approval requires another review.
 
-After approval, remove only the seven Recovery Offers Trace `Unblessed` markers
+The approval removes only the seven Recovery Offers Trace `Unblessed` markers
 and the marker in `corpus/disassembly/recovery-offers/case.toml`. That metadata
 file is included in the approval scope; it is not an additional expected output.
 Existing cases that await approval for unrelated work retain their markers.
@@ -42,9 +46,14 @@ shrink the gate; approval does not re-add duplicate entries.
 - Debugger/session/Playground evidence: [PR #405](https://github.com/odogono/odgn-talk/pull/405),
   [evidence](../recovery-offers-tooling/README.md).
 - Final first-blessing decision: [issue #392](https://github.com/odogono/odgn-talk/issues/392).
-  **Pending; implementation PR reviews do not supply this approval.** The final
-  slice PR links this package for that decision. Record the maintainer's explicit
-  response and reviewed commit here before removing markers.
+  The maintainer's explicit response and reviewed revision are recorded above
+  and in that issue. Implementation PR reviews did not supply this approval.
+
+The manifest and patch remain frozen to the reviewed candidates at `0c3c33f`.
+Removing approval markers changes seven raw file hashes; all 50 expectation
+payloads still match the reviewed revision exactly, ignoring comments and blank
+lines. No execution record is regenerated or changed by this blessing. The Go
+passing gate records the approval and retains all eight protected entries.
 
 ## Independent Fuel and state derivation
 
@@ -122,8 +131,8 @@ no normal-path offer-registration Fuel.
 
 ## Acceptance mapping
 
-All implementation criteria in parent #383 have merged evidence. First-blessing
-approval and the final integration merge remain separate delivery steps.
+All implementation criteria in parent #383 have merged evidence. Human
+first-blessing approval is recorded above; final integration awaits passing CI.
 
 | Parent criterion | Merged evidence |
 | --- | --- |
@@ -155,12 +164,16 @@ The original failing snapshot suite passes with this correction, including all
 
 ## Validation
 
+- After marker removal: all 50 frozen candidate hashes are verified against
+  `0c3c33f`, all expectation payloads match, spec checks and the TS default
+  Corpus run pass, and `TestRecoveryOffersAcceptance` passes with `-race`.
 - Spec checks, generated Go checks and all documentation fences: pass.
 - Full workspace tests, typecheck, lint and formatting: pass.
 - Go race/vet, full corpus gates, Node tooling/CLI and builds: pass.
 - Seed-1 dual-Core fuzz: 64 cases, zero findings.
 - All 50 approval cases are checked explicitly on TS, and the complete 307-case
   Go gate passes, including ordinary and transparent Save/Restore replay.
-- All eight Recovery Offers cases are explicitly checked while unblessed on
-  both Cores, including ordinary and transparent Save/Restore replay. Their
-  eventual default/gate status cannot silently substitute for explicit approval.
+- All eight Recovery Offers cases were explicitly checked before approval on
+  both Cores, including ordinary and transparent Save/Restore replay. After
+  approval, the TS default selection and Go acceptance gate include them;
+  execution agreement remains separate from the recorded human decision.

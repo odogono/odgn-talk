@@ -1,9 +1,10 @@
 # Nested Recovery Offers expectation review (#389)
 
-Approval status: **pending first-blessing review**. Language remains 1.0-rc.2
-and provisional Cost Model 0. This slice starts at `49a35dde` (PR #396 merged
-into `feat/recovery-offers`). Runtime agreement does not bless expectations;
-new cases keep their Unblessed markers through the final audit in #392.
+Approval status: **approved in the final review on 2026-10-07**; see the
+[human decision and exact scope](../recovery-offers-integration/README.md).
+Language remains 1.0-rc.2 and provisional Cost Model 0. This slice started at
+`49a35dde` (PR #396 merged into `feat/recovery-offers`); its candidates remained
+unblessed until the separate human decision in #392.
 
 Both Cores now bound nested policy failures to their selection continuation,
 exclude the original failure's offers, and resume locally handled policy.

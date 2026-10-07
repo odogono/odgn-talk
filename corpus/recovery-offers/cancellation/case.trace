@@ -1,4 +1,3 @@
-# Unblessed: #389 first expectation approval remains pending #392.
 # Pump caps stop at catch tests, immediately before choice, and just after choice.
 # Transfer is stopped at entry to the policy cleanup copy: ordinary cancellation abandons
 # the current cleanup rather than restarting it, so its 5 is absent in transfer cleanup.
