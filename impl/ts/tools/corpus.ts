@@ -19,7 +19,7 @@ import {
   type CodeUnit,
   type LibraryExport,
 } from '../src/index';
-import { DeferredCaseError, runTraceCase, unblessed } from './trace-case';
+import { DeferredCaseError, runTraceCase } from './trace-case';
 import { runTranscriptCase } from './transcript-case';
 
 const root = resolve(import.meta.dir, '../../..');
@@ -283,18 +283,12 @@ export const runCorpus = (args: string[]): number => {
         }
         return casesUnder(path);
       })
-    : // A Trace Case runs by default once blessed; until then, only when named.
-      casesUnder(corpusRoot).filter(dir => {
-        const { kind } = readSetup(dir);
-        return (
-          supported.has(kind) &&
-          !((kind === 'trace' || kind === 'transcript') && unblessed(dir))
-        );
-      });
+    : // The whole Corpus, blessed or awaiting first review (Appendix B).
+      casesUnder(corpusRoot);
   if (!selected.length) {
     throw new Error('Selection contains no cases');
   }
-  let failures = 0;
+  const failed = new Set<string>();
   for (const dir of new Set(selected)) {
     const name = relative(corpusRoot, dir);
     try {
@@ -309,7 +303,7 @@ export const runCorpus = (args: string[]): number => {
           console.error(
             `FAIL ${name} (TS lowering 1.0-rc.2 / Cost Model 0)\n  ${d.file}:${d.line}, first differing UTF-8 byte ${d.byte}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
           );
-          failures++;
+          failed.add(name);
         } else {
           console.log(
             `${bless ? 'BLESSED' : 'PASS'} ${name} (${result.count} disassembl${result.count === 1 ? 'y' : 'ies'})`,
@@ -332,7 +326,7 @@ export const runCorpus = (args: string[]): number => {
               `  actual:   ${d.actual}`,
             ].join('\n'),
           );
-          failures++;
+          failed.add(name);
         } else {
           console.log(
             `${bless ? 'BLESSED' : 'PASS'} ${name} (${result.lines} lines)`,
@@ -354,7 +348,7 @@ export const runCorpus = (args: string[]): number => {
               `  actual:   ${d.actual}`,
             ].join('\n'),
           );
-          failures++;
+          failed.add(name);
         } else {
           console.log(
             `${bless ? 'BLESSED' : 'PASS'} ${name} (${result.lines} lines)`,
@@ -373,7 +367,7 @@ export const runCorpus = (args: string[]): number => {
         console.error(
           `FAIL ${name} (TS values 1.0-rc.2 / Cost Model 0)\n  case.encoding:${d.line}, first differing UTF-8 byte ${d.byte}\n  value: ${d.source}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
         );
-        failures++;
+        failed.add(name);
       } else {
         console.log(`PASS ${name} (${result.count} encodings)`);
       }
@@ -383,10 +377,13 @@ export const runCorpus = (args: string[]): number => {
           ? `FAIL ${name}: deferred, since it uses ${error.message}`
           : `FAIL ${name}: ${error instanceof Error ? error.message : error}`,
       );
-      failures++;
+      failed.add(name);
     }
   }
-  return failures ? 1 : 0;
+  if (failed.size) {
+    console.error(`reproduce: bun run corpus:run ${[...failed].join(' ')}`);
+  }
+  return failed.size ? 1 : 0;
 };
 
 if (import.meta.main) {

@@ -154,6 +154,12 @@ func TestTraceBackendAndPassingGate(t *testing.T) {
 	if e := r.CheckPassing(list); e != nil || !strings.Contains(out.String(), "NEW PASS fixture") {
 		t.Fatal(e, out.String())
 	}
+	r.Backends["trace"] = traceFixture{[]string{"> pump clock=2026-09-27T13:30:00Z", "pumped state=idle fuel=1"}}
+	out.Reset()
+	if e := r.CheckPassing(list); e == nil || !strings.Contains(out.String(), "reproduce: go -C impl/go run ./cmd/corpus fixture") {
+		t.Fatal("an unlisted failing case must fail the complete gate", e, out.String())
+	}
+	r.Backends["trace"] = traceFixture{}
 	if e := os.WriteFile(list, []byte("missing\n"), 0600); e != nil {
 		t.Fatal(e)
 	}

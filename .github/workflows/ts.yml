@@ -46,7 +46,9 @@ jobs:
       - run: bun run unicode:check
       - run: bun test tests
         working-directory: impl/ts
-      - run: bun run corpus:run
+      # Every case, blessed or awaiting first review, in both replays.
+      - name: Run the complete Corpus on the TS Core
+        run: bun run corpus:run
         working-directory: impl/ts
       - run: bun test tests
         working-directory: tooling/fuzz

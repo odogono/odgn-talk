@@ -8,6 +8,8 @@
     "spec/commands.ts",
     "spec/commands.test.ts",
     "commits",
+    "corpus/bless.ts",
+    "corpus/bless.test.ts",
     "lints"
   ]
 }

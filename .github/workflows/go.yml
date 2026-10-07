@@ -51,7 +51,9 @@ jobs:
       # Verbose output reports API names not implemented yet, as #132 requires.
       - run: go test -race -v ./...
         working-directory: impl/go
-      - name: Enforce the Go corpus passing list
+      # Every case, in ordinary and save/restore replay; a failure names its
+      # first divergence and the command that reproduces it.
+      - name: Run the complete Corpus on the Go Core
         run: go run ./cmd/corpus --check-passing
         working-directory: impl/go
       # The TS workflow's deterministic dual-Core smoke, for changes to the Go Core.

@@ -1010,7 +1010,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 307 cases, including all text-model, load-diagnostic,
+`--check-passing` runs the complete Corpus and fails on any case that does not
+pass, listed or not, and on a listed case that no longer exists. Each failure
+ends with a `reproduce:` command. The list contains 307 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. All three
@@ -1076,9 +1078,10 @@ Two new cases agree on Go, TS and TS save/restore before blessing:
 `capabilities/ordinary-grants` pins alias bindings, revocation, trimming and caught
 raises before later Host calls. Their `Unblessed` headers await first human review.
 
-A listed regression or missing case fails; an unlisted passing case is reported
-for addition. Other cases retain first-divergence output or `SKIP` with a reason
-for unsupported facilities. Explicitly selecting an unsupported case fails.
+Under `--check-passing`, any failing or unsupported case fails, as does a listed
+case that no longer exists; an unlisted passing case is reported for addition.
+A plain run reports `SKIP` with a reason for unsupported facilities, and
+explicitly selecting an unsupported case fails.
 Session Transcripts reproduce their existing output and `case.trace` unchanged.
 The original nine first blessings were reviewed under [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419);
 the later `fenced-text` regression retains its first-review header.
