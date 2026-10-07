@@ -24,10 +24,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships nineteen implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(19);
+test('ships twenty implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(20);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(19);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(20);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -514,4 +514,58 @@ test('collecting advice respects profiles, suppression, splices and shadowing', 
       ),
     ).toEqual([]);
   }
+});
+
+const race = (body: string, profile: 'beginner' | 'standard' = 'standard') =>
+  lint(`on demo k, n\n${body}\nend demo`, { profile }).lints.filter(
+    l => l.id === 'store-race',
+  );
+
+test('store-race follows a read through locals to a set of the same key and Grant', () => {
+  expect(
+    race(
+      'ask s to get "best"\nput it + 1 into best\nask s to set "best", best',
+    ),
+  ).toMatchObject([
+    {
+      level: 'warning',
+      message:
+        'Another Script can change "best" between this get and set. Use increment or swap to update it in one call.',
+      span: { line: 4, col: 10 },
+    },
+  ]);
+  expect(
+    race('ask s to get "best"\nask s to set "best", it + 1', 'beginner'),
+  ).toMatchObject([{ level: 'hint' }]);
+  // The same binding as the key, unchanged in between.
+  expect(race('ask s to get k\nask s to set k, it')).toHaveLength(1);
+  for (const safe of [
+    // Another key, another Grant, or a key binding written in between.
+    'ask s to get "best"\nask s to set "other", it',
+    'ask s to get "best"\nask t to set "best", it',
+    'ask s to get k\nput "x" into k\nask s to set k, it',
+    // A value that doesn't come from the read.
+    'ask s to get "best"\nask s to set "best", n',
+    'ask s to get "best"\nput it into v\nput n into v\nask s to set "best", v',
+    // A later `ask` replaces `it`.
+    'ask s to get "best"\nask s to keys\nask s to set "best", it',
+    // The atomic Operations.
+    'ask s to increment "best", n',
+    // A nested Lambda is its own context.
+    'ask s to get "best"\nput given\nask s to set "best", it\nend given into f',
+    '-- lint: ignore store-race\nask s to set "best", 1\nask s to get "best"',
+  ]) {
+    expect(race(safe)).toEqual([]);
+  }
+  expect(
+    race(
+      'ask s to get "best"\nput [it] into v\n-- lint: ignore store-race\nask s to set "best", v',
+    ),
+  ).toEqual([]);
+  // Taint flows through a chunk write into its base.
+  expect(
+    race(
+      'put [] into v\nask s to get "best"\nput it into item 1 of v\nask s to set "best", v',
+    ),
+  ).toHaveLength(1);
 });
