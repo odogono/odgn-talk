@@ -8,8 +8,8 @@ Run these commands from the repository root. Both runners resolve relative case 
 
 | Runner | Entry point | Selection and gate |
 | --- | --- | --- |
-| TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or directory; `--list` reports support. Default execution excludes unblessed Trace Cases and Transcripts. |
-| Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), run inside `impl/go` | Named case directories; `--list` reports support, and `--check-passing` enforces [`corpus-passing.txt`](../impl/go/corpus-passing.txt). |
+| TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or directory; `--list` reports support. With no selection it runs every case, blessed or not. |
+| Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), run inside `impl/go` | Named case directories; `--list` reports support, and `--check-passing` runs every case and also enforces [`corpus-passing.txt`](../impl/go/corpus-passing.txt). |
 
 For Go, after the [build/test prerequisites](../impl/go/README.md#build-and-test):
 
@@ -18,13 +18,16 @@ For Go, after the [build/test prerequisites](../impl/go/README.md#build-and-test
 (cd impl/go && go run ./cmd/corpus --check-passing)
 ```
 
-Only the TS runner has `--bless`, and it requires named cases; it writes Disassembly, Trace or Transcript expectations, not encoding cases. Producing expectations is not first-blessing approval: follow [the agreement and human-review rules](../spec/11-the-trace-and-conformance.md#bless) and the [seed review notes](#seed-blessing). The Go runner never writes expectations.
+CI runs both commands on every change, so both Cores run the complete Corpus in ordinary and save/restore replay. Each failure reports the case's first divergence, followed by a `reproduce:` line with the command that replays it.
+
+Bless with [`tools/corpus/bless.ts`](../tools/corpus/bless.ts), which needs named cases and writes Disassembly, Trace or Transcript expectations, not encoding cases. The TS runner writes the expectations, then the TS and Go runners must each pass them in both replays. If either Core diverges, the case directory is restored and the divergence reported, as [chapter 11](../spec/11-the-trace-and-conformance.md#bless) requires. The TS runner's own `--bless` is the TS-only step it uses; the Go runner never writes expectations. Agreement is not first-blessing approval: follow the [seed review notes](#seed-blessing).
 
 ```sh
 bun run corpus:check          # what CI runs: every case reads as chapter 11 says
 bun run grammar:check         # every .talk file here parses
 bun run machine:check         # and lowers
-bun run corpus:run            # the TS Core runs the case kinds it implements, and blessed Trace Cases
+bun run corpus:run            # the TS Core runs every case
+bun run corpus:bless text-model/chunk-write-padding # bless when TS and Go agree
 bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
 ```
 

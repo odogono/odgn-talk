@@ -199,7 +199,7 @@ func (r Runner) Run(selection []string, list bool) error {
 		}
 		n, e := r.execute(c)
 		if e != nil {
-			fmt.Fprintln(r.Output, e)
+			r.fail(e, c.Name)
 			failures = append(failures, e)
 		} else {
 			fmt.Fprintf(r.Output, "PASS %s (%d lines)\n", c.Name, n)
@@ -211,8 +211,14 @@ func (r Runner) Run(selection []string, list bool) error {
 	return nil
 }
 
-// CheckPassing is the CI gate. A new passing case is reported, but only a
-// regression in the committed list (or a malformed case/list) fails this gate.
+// fail reports a case's first divergence and the command that reproduces it.
+func (r Runner) fail(e error, name string) {
+	fmt.Fprintf(r.Output, "FAIL %v\n  reproduce: go -C impl/go run ./cmd/corpus %s\n", e, name)
+}
+
+// CheckPassing is the CI gate, run over the complete Corpus (Appendix B).
+// Every case must pass; the committed list also catches a deleted case. A
+// passing case missing from the list is reported so it can be added.
 func (r Runner) CheckPassing(path string) error {
 	b, e := os.ReadFile(path)
 	if e != nil {
@@ -238,18 +244,14 @@ func (r Runner) CheckPassing(path string) error {
 		delete(required, c.Name)
 		reason := r.support(c)
 		if reason != "" {
-			if must {
-				fmt.Fprintf(r.Output, "FAIL %s (%s)\n", c.Name, reason)
-				failed = true
-			}
+			fmt.Fprintf(r.Output, "FAIL %s (%s)\n", c.Name, reason)
+			failed = true
 			continue
 		}
 		n, e := r.execute(c)
 		if e != nil {
-			fmt.Fprintln(r.Output, e)
-			if must {
-				failed = true
-			}
+			r.fail(e, c.Name)
+			failed = true
 		} else if must {
 			fmt.Fprintf(r.Output, "PASS %s (%d lines)\n", c.Name, n)
 		} else {
@@ -261,7 +263,7 @@ func (r Runner) CheckPassing(path string) error {
 		failed = true
 	}
 	if failed {
-		return fmt.Errorf("Go corpus passing-list regression")
+		return fmt.Errorf("Go corpus gate failed")
 	}
 	return nil
 }

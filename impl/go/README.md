@@ -1010,7 +1010,9 @@ go run ./cmd/corpus text-model/chunk-write-padding
 go run ./cmd/corpus --check-passing
 ```
 
-The gate contains 307 cases, including all text-model, load-diagnostic,
+`--check-passing` runs the complete Corpus and fails on any case that does not
+pass, listed or not, and on a listed case that no longer exists. Each failure
+ends with a `reproduce:` command. The list contains 307 cases, including all text-model, load-diagnostic,
 Disassembly and Value Encoding acceptance cases, plus reviewed scheduling,
 error, Decision, Capability, Library and Standard Library traces. Trace cases replay through the
 public embedding interface, with exact records, costs and final state. All three

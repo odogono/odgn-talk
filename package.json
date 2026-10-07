@@ -36,6 +36,7 @@
     "grammar:check": "bun run --cwd tools grammar:check",
     "machine:check": "bun run --cwd tools machine:check",
     "corpus:check": "bun run --cwd tools corpus:check",
+    "corpus:bless": "bun tools/corpus/bless.ts",
     "lints:generate": "bun run --cwd tools lints:generate",
     "lints:check": "bun run --cwd tools lints:check"
   },
