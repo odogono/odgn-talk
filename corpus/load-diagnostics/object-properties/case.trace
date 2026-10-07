@@ -1,4 +1,4 @@
-# Unblessed: declaration-aware Load diagnostics await human review (#305).
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 > load bad identity=a1f97eb2477eb46eb1695ecc1fbbd59a30717299abf3788ce526cdb4e75254bd
 diag bad code="can't write" pos=2:3
 diag bad code="can't write" pos=3:3

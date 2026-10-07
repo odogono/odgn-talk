@@ -1,4 +1,4 @@
-# Unblessed: corrected runtime alias and costs await human review (#305).
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # properties: `colour` isn't a property of a light, so it reads as Nothing.
 # The bulb is disposed between the two Deliveries. Its Fuel, allocation and
 # state figures use Cost Model 0 and agree in both Cores.

@@ -1,4 +1,4 @@
-# Unblessed: paired Go/TS ordinary and TS save/restore output awaits first human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 > load s identity=59ac3b1e1d8ecb6644e9acf70380975d2d6ad5781d10aeac7f464c04def5f034
 > deliver d1 to=s message=gather
 > pump clock=2026-09-30T09:00:00Z fuel-cap=41

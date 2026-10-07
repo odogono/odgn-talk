@@ -1,4 +1,4 @@
-# Unblessed: pure dynamic Object Guard keys and costs await human review (#305).
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 > load s identity=9647981b6629e1d860d1329251a8985d5d846406821002538b354257c321b9e9
 > deliver d1 to=s message=literal args=[{label: "on"}]
 > pump clock=2026-10-05T09:00:00Z

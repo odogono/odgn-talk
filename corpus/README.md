@@ -86,7 +86,8 @@ The corrected `decisions/undecided-on-cancel-delivery` seed agrees on Go and TS
 through public cancellation contexts/signals. Its post-seal cancellation queues
 no input under chapter 9, so that line is removed from the canonical Trace and
 injected by native replay tests instead. All output records and costs are
-unchanged. Its `Unblessed` header awaits human review of the correction; see the
+unchanged. The maintainer approved the correction on 2026-10-05; see the
+[step-3 approval record](../docs/reviews/step-three-blessings/README.md) and the
 [reconciliation](../docs/reviews/delivery-cancellation/README.md).
 
 The fenced-text regression cases `load-diagnostics/invalid-text-closing-margin`,
@@ -116,8 +117,9 @@ The two new error-delivery regression cases (`handler-delivery` and
 `handler-backstop`) pin chapter 6's separate error Runs, FIFO order, `during`
 bindings before Guards, unmatched-message handling and prevention of recursive
 error delivery. They also pin chapter 8's dispatch costs, retained mailbox state
-and Fuel Slice preemption. Both Cores agree on their complete Traces; their
-`Unblessed` headers remain pending human review of the first blessing.
+and Fuel Slice preemption. Both Cores agree on their complete Traces; the
+maintainer approved their first blessings on 2026-10-05; see the
+[step-3 approval record](../docs/reviews/step-three-blessings/README.md).
 
 The seed cases were written before any Core existed. Until a case is blessed, its `case.trace` has its `>` Host Input lines and its Core output lines written by hand, and says so in its header:
 
@@ -136,7 +138,7 @@ The three `counters/` cases pin lifetime work, mailbox and live state, fault rol
 
 The `event-test-slice-debt` and `event-test-group-cap` cases in `suspension/` pin observation Fuel, atomic waiter checks, dispatch ordering and slice debt. The `event-tests-fault-on-resume` case in `limits/` pins uncapped observation charges and the waiting Run's fault at its next resumed instruction. All three pass full and save/restore replay.
 
-The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation. Go supports registered handles, well-known bindings and queued disposal; the reviewed `builtins/object-kind` and `builtins/kind-of` traces pass unchanged in both Cores and are required by the Go passing gate. The corrected `objects/properties` trace uses a local alias for its runtime read-only write, adding two Fuel and shifting later source/instruction positions. New `load-diagnostics/object-properties` and `objects/guard-keys` cases cover declaration-aware Load refusals and pure dynamic Guard reads, including disposed Objects and Core ids. Both Cores agree on these three traces and all are required by the Go passing gate. Their `Unblessed` headers await human review of the new or corrected expectations. Current routing support is described in the [Go Object Message Paths guide](../impl/go/README.md#object-message-paths).
+The `moving-mailbox`, `moving-climb` and `wait-target` cases in `objects/` pin transfer admission and ordering, queued path continuation, fixed Targets and object-filtered event observation. Go supports registered handles, well-known bindings and queued disposal; the reviewed `builtins/object-kind` and `builtins/kind-of` traces pass unchanged in both Cores and are required by the Go passing gate. The corrected `objects/properties` trace uses a local alias for its runtime read-only write, adding two Fuel and shifting later source/instruction positions. New `load-diagnostics/object-properties` and `objects/guard-keys` cases cover declaration-aware Load refusals and pure dynamic Guard reads, including disposed Objects and Core ids. Both Cores agree on these three traces and all are required by the Go passing gate. The maintainer approved their first blessings on 2026-10-05 and a later `objects/properties` correction on 2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). Current routing support is described in the [Go Object Message Paths guide](../impl/go/README.md#object-message-paths).
 
 The four `functions/` cases cover Host and foreign calls, cancellation, defaults and previously exported callbacks returned through Capability Stubs and answers.
 
@@ -163,11 +165,11 @@ The `standard-calendar`, `standard-calendar-errors` and `standard-calendar-valid
 
 The `optional-args`, `optional-args-join` and `optional-args-fuel` cases cover trailing Optional Capability arguments: omission and explicit Nothing through a Library, immediate and fire-and-forget costs, Join members with different supplied counts, and rollback when an omitted-argument call cannot pay its declared Fuel.
 
-The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. All eight corrected event-test Traces and this regression agree byte for byte on Go and TS in ordinary and save/restore replay, including `reload/extend-units`. The regression's first blessing awaits human review. Four corrections originally received maintainer approval from TS-only agreement; the [charging reconciliation](../docs/reviews/event-test-charging/README.md) records that limited exception and the subsequent complete Go verification for [#277](https://github.com/odogono/odgn-talk/issues/277).
+The `suspension/wait-observation` case covers captured locals, live Script Variables in Guards, source-order branches, timeout ties, non-consuming observation and internal error messages before Handler dispatch. All eight corrected event-test Traces and this regression agree byte for byte on Go and TS in ordinary and save/restore replay, including `reload/extend-units`. The maintainer approved the regression's first blessing on 2026-10-05; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). Four corrections originally received maintainer approval from TS-only agreement; the [charging reconciliation](../docs/reviews/event-test-charging/README.md) records that limited exception and the subsequent complete Go verification for [#277](https://github.com/odogono/odgn-talk/issues/277).
 
-The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. `limits/self-send-persistent` was approved for #135 on 2026-10-05; the two suspension cases still await first human review. The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
+The `suspension/script-sends`, `suspension/send-preemption` and `limits/self-send-persistent` cases pin non-waiting sends to named Scripts and `me`, FIFO delivery, full/missing/invalid receiver errors, sender error survival, Trace record order and receiver identity retained across preemption without Value size, and same-Segment Persistent State checks after self-send. Go and TS ordinary execution agree byte for byte, as does TS save/restore replay. `limits/self-send-persistent` was approved for #135 on 2026-10-05; the maintainer approved the two suspension cases' first blessings on 2026-10-05 and a later `suspension/script-sends` correction on 2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). The corrected `suspension/wait-for` case also now agrees on Go, completing its ordinary-execution parity item in #277.
 
-The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Three new reply regressions agree on Go, TS ordinary execution and TS save/restore replay before blessing: `suspension/send-reply-preemption` pins a failed reply's unwind spending a Pump cap before catch instructions; `limits/send-wait-retention` counts the 48-byte pending call at suspension, while preserving the receiver after a sender fault; `suspension/send-wait-replacement` pins abandonment, cleanup and late replies when a sender is replaced. `limits/send-wait-retention` was approved for #135 on 2026-10-05; the two suspension cases retain their `Unblessed` headers for first human review. Paired execution exposed and corrected TS's omitted pending-call size at a Script send's suspension boundary.
+The reviewed `suspension/send-and-wait` case now also agrees on Go unchanged. Three new reply regressions agree on Go, TS ordinary execution and TS save/restore replay before blessing: `suspension/send-reply-preemption` pins a failed reply's unwind spending a Pump cap before catch instructions; `limits/send-wait-retention` counts the 48-byte pending call at suspension, while preserving the receiver after a sender fault; `suspension/send-wait-replacement` pins abandonment, cleanup and late replies when a sender is replaced. `limits/send-wait-retention` was approved for #135 on 2026-10-05; the maintainer approved the two suspension cases' first blessings on 2026-10-05 and a later `suspension/send-reply-preemption` correction on 2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). Paired execution exposed and corrected TS's omitted pending-call size at a Script send's suspension boundary.
 
 The Script-only Join cases `suspension/script-joins`, `suspension/join-preemption`,
 `limits/join-retention` and `limits/script-join-width` agree on actual Go, TS ordinary
@@ -177,9 +179,10 @@ retained across open-body preemption, pending state at suspension, tightened wid
 limits and body-error abandonment before a later unwind fault. The paired
 `load-diagnostics/missing-handler-wait` case rejects a plain local Handler call
 that could conceal an indirect nested Join. `limits/join-retention` and
-`limits/script-join-width` were approved for #135 on 2026-10-05; the two suspension
-cases and the load diagnostic retain their `Unblessed` headers for first human
-review. The mixed-Capability `suspension/joins` case also
+`limits/script-join-width` were approved for #135 on 2026-10-05. The maintainer
+approved the first blessings of the two suspension cases and the load diagnostic
+on 2026-10-05 and a later `suspension/script-joins` correction on 2026-10-07; see
+the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). The mixed-Capability `suspension/joins` case also
 agrees on ordinary Go execution.
 
 Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
@@ -187,8 +190,9 @@ Six reviewed ordinary Capability cases now pass unchanged on Go: `calls`,
 `optional-args-fuel`. The new `declared-allocation` and `ordinary-grants` cases
 agree on Go, TS ordinary execution and TS save/restore before blessing. They pin
 atomic declared costs, Optional arguments, alias Grants, revocation, trimming and
-caught raises before later Host calls. Their `Unblessed` headers await first human
-review. Library needs are now checked and retained when trimming Grants;
+caught raises before later Host calls. The maintainer approved their first
+blessings on 2026-10-05 and a later `ordinary-grants` correction on 2026-10-07;
+see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md). Library needs are now checked and retained when trimming Grants;
 Standard Capability factories remain separate Go work.
 
 Reviewed `suspension/answers`, mixed `suspension/joins`, `optional-args-join`,
@@ -197,7 +201,9 @@ unchanged on Go. The new `suspension/capability-resumption` regression agrees on
 Go, TS ordinary execution and TS save/restore. It covers early answers across Join
 body preemption, conversion/late Fuel under a Pump cap, fail-fast input ordering,
 late-cost faults preserving earlier Segments, Run cancellation and Reload
-abandonment. Its `Unblessed` header remains for first human review. The reviewed
+abandonment. The maintainer approved its first blessing on 2026-10-05 and a
+later correction on 2026-10-07; see the
+[step-3 approval record](../docs/reviews/step-three-blessings/README.md). The reviewed
 `reload/reload-carry-and-discard` case also passes unchanged; current Go
 lifecycle support is described in the [Go guide](../impl/go/README.md#save-restore-and-code-updates).
 
@@ -212,8 +218,9 @@ for the maintainer-approved mixed-Capability `suspension/joins` correction
 and its historical Lambda parity findings. `errors/lambda-capture-parity` now
 agrees on Go, TS ordinary execution and TS save/restore: nested Lambda errors
 name the enclosing Handler, Join failures/timeouts retain the closing token,
-and captured Values have the specified allocation and retained sizes. Its
-`Unblessed` marker remains for first human review.
+and captured Values have the specified allocation and retained sizes. The
+maintainer approved its first blessing on 2026-10-05 and a later correction on
+2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md).
 
 Every blessed Trace Case runs in TS CI, including the limits at their conformance minimums and all Text Pattern seeds. Its Fuel, allocation and Persistent State figures are Cost Model 0's. New unblessed cases can be selected explicitly, and the Go passing gate protects the Text Pattern and error-delivery regressions above. Every available Core must agree before a case is blessed.
 
@@ -246,8 +253,9 @@ trimming and Capability execution through caller-owned Library frames.
 The new `libraries/caller-capabilities` regression agrees on Go, TS ordinary
 execution and TS save/restore. It pins private/transitive needs, nested Library
 frame suspension and charges, cancellation cleanup, late answers and revocation.
-Its `Unblessed` header remains for first human review. Standard Capability
-factories, Host Objects and full lifecycle remain separate Go work.
+The maintainer approved its first blessing on 2026-10-05 and a later correction
+on 2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md).
+Standard Capability factories, Host Objects and full lifecycle remain separate Go work.
 
 ## Non-Script suspension retention audit
 

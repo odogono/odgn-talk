@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Chapter 6 queues error as a separate message after the failed Run's records.
 # Chapter 5 keeps FIFO order and suppresses Guard errors. During is bound before
 # testing each clause. Chapter 8 charges dispatch, even for skipped clauses.

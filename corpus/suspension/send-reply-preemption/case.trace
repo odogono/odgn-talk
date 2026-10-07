@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # A receiver failure resumes through a local Handler frame. Its unwind spends
 # the Pump cap atomically before the caller's catch instructions can run.
 > load a identity=1e45d82b5582ebd40818df3162473aaa2183c1c9497cc75c1fe7162f5f41df20

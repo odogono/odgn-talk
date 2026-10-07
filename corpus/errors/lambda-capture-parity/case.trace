@@ -1,6 +1,6 @@
 # Lambda Join failure, timeout and nested-Lambda errors retain enclosing Handler
 # attribution and charge captured Values according to Cost Model 0.
-# Unblessed: paired Go/TS execution and TS save/restore await first human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 > load a identity=61c93dddad44891d17c40441e7f25300e3a184d366ee61808ec6bfb3939d47df
 > load b identity=577cfad0fb58083ac6b5e81557ba95564019411039828b51d169641e51d9d002
 > deliver d1 to=a message=go args=[2]

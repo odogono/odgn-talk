@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # Chapter 5: non-waiting sends use FIFO mailboxes, including send to me.
 # A full mailbox raises at the paid send; errors precede later send records.
 # Missing receivers and wrong-kind Values are caught; an already sent message

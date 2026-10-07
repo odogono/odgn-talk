@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Chapters 5/8: pending waits observe without consuming the message. Captured
 # locals are pinned at registration; Script Variables are read at observation.
 # Guard errors skip a branch, source order breaks matches and timer ties, and

@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # Ordered answers, no dynamic members, fail-fast with surviving receivers, and queued self-sends.
 > load a identity=56c122b2cb943c0a630f68327e7a337f5b77f1c33119003521115dad40718c12
 > load b identity=374e1e6dd5a9c40ebfd24684a7b9eed40fddb8ae0951c1a85633b02badbdbdb6

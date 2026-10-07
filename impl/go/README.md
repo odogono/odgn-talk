@@ -925,8 +925,9 @@ Lambda Errors name their enclosing Handler or function in `at.handler`, while
 the generated body-table identities and PCs remain unchanged. Function Value
 sizes count captured Values; the `items` measure is zero for a Function Value,
 as Cost Model 0 specifies. `errors/lambda-capture-parity` agrees on Go, TS and
-TS save/restore for captured Join failures/timeouts and nested Lambdas. Its
-`Unblessed` marker remains for first human review.
+TS save/restore for captured Join failures/timeouts and nested Lambdas. The
+maintainer approved its first blessing on 2026-10-05 and a later correction on
+2026-10-07; see the [step-3 approval record](../../docs/reviews/step-three-blessings/README.md).
 
 Decisions expose a `Deciding` future and a `Decided` report. An
 ordinary Handler allows after its successful dispatch charge; an unmatched
@@ -1023,30 +1024,31 @@ limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
 18 step-5 save/restore, Extend and replacement cases, and all eleven Session
 Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
-sizes, and two new error-delivery regressions agree on both Cores. Their
-`Unblessed` headers remain until human review of the first blessing. Four
+sizes, and two new error-delivery regressions agree on both Cores. Four
 reviewed wait cases pin zero waits, deadlines, rollback and nested frames.
-Two new suspension regressions also agree on both Cores before their first
-blessing, covering work ordering, cap-held resumptions, nanosecond rounding and
-long durations. The reviewed Queueing Policy case also passes; two new
+Two new suspension regressions also agree on both Cores, covering work ordering,
+cap-held resumptions, nanosecond rounding and long durations. The maintainer
+approved the first blessings of these four regressions on 2026-10-05; see the
+[step-3 approval record](../../docs/reviews/step-three-blessings/README.md). The reviewed Queueing Policy case also passes; two new
 policy regressions agree on both Cores before blessing, covering selected
 clauses, Guard skips, preemption, and dispatch and Persistent State limits.
 The maintainer approved both policy regressions for #135 on 2026-10-05.
 Listing an unreviewed regression case here protects it while its first human
 blessing review remains pending.
 Three reviewed Decision cases pin errors, faults and preemption before sealing.
-A new Decision regression agrees on both Cores and retains its `Unblessed`
-header for first human review; it covers dispatch charges, dropping, veto
+A new Decision regression agrees on both Cores, and its first blessing was
+approved on 2026-10-05; it covers dispatch charges, dropping, veto
 cleanup, unmatched messages and a Run that resumes after its Verdict seals.
 Four observation traces reproduce the corrected event-test charge on both Cores,
 including atomic cap/slice overruns, debt, late Run faults and Decision sealing.
-A new observation regression also agrees on both Cores, retaining its `Unblessed`
-header for first human review; it covers pinned locals, live Script Variables,
+A new observation regression also agrees on both Cores, and its first blessing
+was approved on 2026-10-05; it covers pinned locals, live Script Variables,
 branch priority, Guard errors, non-consuming matches, sender filters, timeouts
 and internal error observation. The reviewed `suspension/wait-for` case now
 agrees on Go, including Script sends and sender filters. Three new send regressions
 agree on both Cores; `limits/self-send-persistent` was approved for #135 on
-2026-10-05, while the two suspension cases retain their `Unblessed` headers.
+2026-10-05, and the two suspension cases' first blessings were approved on
+2026-10-05, with a later `suspension/script-sends` correction approved on 2026-10-07.
 They pin FIFO and self sends, full/missing/invalid receiver errors, record order,
 immediate delivery surviving a sender error, and preempted receiver identity
 without Value size, and same-Segment Persistent State checks after self-send.
@@ -1067,21 +1069,26 @@ receiver errors, unmatched messages and timeout. Three new paired reply cases
 pin resumption unwinding under a Pump cap, pending-call retention faults, and
 replacement cancellation with cleanup and ignored late replies.
 `limits/send-wait-retention` was approved for #135 on 2026-10-05; the two
-suspension cases keep their `Unblessed` headers for first human review.
+suspension cases' first blessings were approved on 2026-10-05, with a later
+`suspension/send-reply-preemption` correction approved on 2026-10-07; see the
+[step-3 approval record](../../docs/reviews/step-three-blessings/README.md).
 
 Six reviewed ordinary Capability cases and `limits/mailbox-depth` pass unchanged: calls, argument Shapes,
 load checks, Host failures, charge faults and omitted optional arguments.
 Two new cases agree on Go, TS and TS save/restore before blessing:
 `capabilities/declared-allocation` pins atomic pre-Host charging in both modes;
 `capabilities/ordinary-grants` pins alias bindings, revocation, trimming and caught
-raises before later Host calls. Their `Unblessed` headers await first human review.
+raises before later Host calls. Their first blessings were approved on
+2026-10-05, with a later `ordinary-grants` correction approved on 2026-10-07;
+see the [step-3 approval record](../../docs/reviews/step-three-blessings/README.md).
 
 A listed regression or missing case fails; an unlisted passing case is reported
 for addition. Other cases retain first-divergence output or `SKIP` with a reason
 for unsupported facilities. Explicitly selecting an unsupported case fails.
 Session Transcripts reproduce their existing output and `case.trace` unchanged.
 The original nine first blessings were reviewed under [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419);
-the later `fenced-text` regression retains its first-review header.
+the later `fenced-text` Transcript was approved on 2026-10-05; see the
+[fenced-text approval record](../../docs/reviews/fenced-text-blessings/README.md).
 Each emitted Trace also replays independently through the public embedding API,
 both ordinarily and with Save/Restore between Pumps. Save/Restore replay is part
 of the Trace backend. The Go runner has no blessing mode and never changes expected
@@ -1100,7 +1107,8 @@ by the maintainer on 2026-10-05 for #275; see the
 Three reviewed Library Capability cases also pass unchanged: `libraries/needs-transitive`,
 `libraries/needs-suspending` and `capabilities/optional-args`. The new
 `libraries/caller-capabilities` regression agrees on Go, TS ordinary execution
-and TS save/restore, retaining its `Unblessed` header for first human review. It
+and TS save/restore. Its first blessing was approved on 2026-10-05, with a later
+correction approved on 2026-10-07; see the [step-3 approval record](../../docs/reviews/step-three-blessings/README.md). It
 pins private/transitive needs, caller calls and charges, nested suspension,
 Library cancellation cleanup, late answers and revocation. A separate acceptance
 test requires all four in the gate.
@@ -1139,8 +1147,9 @@ missing keys and disposal remain covered. Its added alias costs two Fuel and
 shifts later instruction and source positions. New `load-diagnostics/object-properties`
 and `objects/guard-keys` cases pin Load diagnostics, map keys, live/disposed Object
 Guard skips and Core ids. Both Cores agree on every record and cost before
-recording expectations. These three traces retain `Unblessed` headers for human
-review, and required-case tests protect them in the Go gate.
+recording expectations. Their first blessings were approved on 2026-10-05, with
+a later `objects/properties` correction approved on 2026-10-07 (see the
+[step-3 approval record](../../docs/reviews/step-three-blessings/README.md)), and required-case tests protect them in the Go gate.
 
 The four approved `capabilities/standard-store*` cases pass unchanged in ordinary
 and save/restore replay and are required in the Go passing gate. Their

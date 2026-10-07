@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Preemption after load-object retains a receiver Name, with zero Value size.
 # Continuing the sender commits exactly one send in the next Pump.
 > load a identity=d7fbd64a1c214d9d7eed76fe25ae47b0cc101e15d1319b99eeffa3a00cdbe7b9
