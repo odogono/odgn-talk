@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -573,6 +574,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 			}
 			if r.Status == machine.Preempted {
+				// An atomic search/lookup may spend both limits; slice wins
+				// in the canonical Trace, matching the post-instruction check.
+				if o.FuelSlice > 0 && used[s] >= budget[s] {
+					by = "slice"
+				}
 				common["by"] = by
 				g.record("preempt", false, []string{string(x.id), x.how}, common)
 				g.writeAbandon(x)
@@ -1053,7 +1059,8 @@ func (g *Group) replaceEarlier(s *Script, x *execution, reports *[]Report) {
 }
 
 func (g *Group) writeRaises(x *execution, from int) {
-	for _, raise := range x.run.Raises[max(from, x.raisesWritten):] {
+	for j, raise := range x.run.Raises[max(from, x.raisesWritten):] {
+		g.writeOffers(x, max(from, x.raisesWritten)+j)
 		fields := map[string]string{"at": fmt.Sprintf("%s:%d", raise.Unit, raise.PC), "pos": fmt.Sprintf("%d:%d", raise.Instruction.Pos.Line, raise.Instruction.Pos.Column)}
 		name := "raise"
 		if raise.Guard {
@@ -1067,8 +1074,28 @@ func (g *Group) writeRaises(x *execution, from int) {
 		g.record(name, false, []string{string(x.id)}, fields)
 	}
 	x.raisesWritten = len(x.run.Raises)
+	g.writeOffers(x, x.raisesWritten)
 	if !x.run.Cancelling {
 		g.writeAbandon(x)
+	}
+}
+
+func (g *Group) writeOffers(x *execution, raised int) {
+	for x.offersWritten < len(x.run.OfferRecords) {
+		rec := x.run.OfferRecords[x.offersWritten]
+		if rec.RaiseCount > raised {
+			break
+		}
+		fields := map[string]string{"attempt": strconv.Itoa(rec.Attempt), "target": fmt.Sprintf("%s:%d", rec.TargetUnit, rec.TargetPC)}
+		if rec.Kind == "offer-chosen" {
+			fields["name"] = corevalue.DisplayText(rec.Name)
+			fields["at"] = fmt.Sprintf("%s:%d", rec.Unit, rec.PC)
+			if len(rec.Args) > 0 {
+				fields["args"] = coretrace.Display(corevalue.NewList(rec.Args))
+			}
+		}
+		g.record(rec.Kind, false, []string{string(x.id)}, fields)
+		x.offersWritten++
 	}
 }
 

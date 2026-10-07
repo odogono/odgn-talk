@@ -1572,6 +1572,62 @@ var Corpus = CorpusTable{
 				},
 			},
 		},
+		CorpusTableRecordEntry{
+			Name:  "offer-chosen",
+			Input: false,
+			Ids: []string{
+				"run",
+			},
+			Is: "a successfully charged and validated Recovery Offer choice, before transfer cleanup",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "attempt",
+					Type: "count",
+					Is:   "the per-Run choice sequence, starting at one",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "name",
+					Type: "value",
+					Is:   "the chosen offer Name as text",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "at",
+					Type: "at",
+					Is:   "the choice instruction",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "target",
+					Type: "at",
+					Is:   "the action-entry instruction",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "args",
+					Type:     "value",
+					Is:       "the supplied arguments as a list, omitted when empty",
+					Optional: true,
+				},
+			},
+		},
+		CorpusTableRecordEntry{
+			Name:  "offer-entered",
+			Input: false,
+			Ids: []string{
+				"run",
+			},
+			Is: "entry into a chosen Recovery Offer after cleanup and atomic parameter binding",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "attempt",
+					Type: "count",
+					Is:   "the matching choice sequence",
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "target",
+					Type: "at",
+					Is:   "the action-entry instruction, before its first charge",
+				},
+			},
+		},
 	},
 	End: []CorpusTableEndEntry{
 		CorpusTableEndEntry{

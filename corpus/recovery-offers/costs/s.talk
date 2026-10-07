@@ -1,0 +1,9 @@
+on go
+  try
+    throw "bad"
+  offer recover value
+    return value
+  catch e before unwind
+    choose offer recover(7)
+  end try
+end go

@@ -1,0 +1,29 @@
+# Before choice: Fuel 20 and exact retained dispatch state; lookup is atomic.
+# The 13-Fuel choice exceeds a 5-Fuel slice, enters once, and leaves 8 debt.
+> load s identity=8601d7825855a6b542adc7198c25524257d4d8bad8ce0c7e2df51cb44718af5f
+> request d1 to=s message=go
+> pump clock=2026-09-30T09:00:00Z fuel-cap=20
+raise s/r1 code="bad" at=s:3 pos=3:5
+preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=20 alloc=48
+pumped state=sliced fuel=20
+> counters s
+counters s fuel=20 alloc=48 runs=1 faults=0 state=1532 mailbox=0
+> pump clock=2026-09-30T09:00:00Z fuel-slice=5 fuel-cap=1
+offer-chosen s/r1 attempt=1 name="recover" at=s:10 target=s:12 args=[7]
+offer-entered s/r1 attempt=1 target=s:12
+preempt s/r1 continue by=slice fuel=13 alloc=0
+pumped state=sliced fuel=13
+> counters s
+counters s fuel=33 alloc=48 runs=1 faults=0 state=1091 mailbox=0
+> pump clock=2026-09-30T09:00:00Z fuel-slice=5
+pumped state=sliced fuel=0
+> counters s
+counters s fuel=33 alloc=48 runs=1 faults=0 state=1091 mailbox=0
+> pump clock=2026-09-30T09:00:00Z fuel-slice=5
+seg s/r1 continue fuel=3 alloc=0 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=7 fuel=36 alloc=48
+pumped state=idle fuel=3
+> counters s
+counters s fuel=36 alloc=48 runs=1 faults=0 state=0 mailbox=0
+> vars
+vars s

@@ -399,6 +399,20 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		effect = func() { r.EventWait = w; r.Status = Suspended }
 	case "call-builtin":
 		m.Args = take(idx(1))
+		if name(0) == "offerAvailable" {
+			v := m.Args[0]
+			if v.Kind != value.Text {
+				bad(wrong("text", v))
+				break
+			}
+			found := offerLookup{}
+			if validOfferName(v.Text) {
+				found = r.lookupOffer(v.Text)
+			}
+			push(boolean(found.Offer != nil))
+			effect = func() { r.pay(int64(4*found.Frames), 0) }
+			break
+		}
 		v, e := builtin(name(0), m.Args, &m)
 		if e != nil {
 			bad(*e)
@@ -884,7 +898,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if !a.Equal(b) {
 			jump()
 		}
-	case "throw", "rethrow":
+	case "throw":
 		v := pop()
 		if v.Kind == value.Text {
 			v, _ = value.NewMap([]value.Pair{{Key: "code", Val: v}})
@@ -902,7 +916,29 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			}
 		}
 		bad(v)
+	case "catch-accept":
+		effect = func() { r.acceptCatch() }
+	case "catch-next":
+		effect = func() { r.nextCatch() }
+	case "choose-offer":
+		args := slices.Clone(f.Stack[len(f.Stack)-idx(1):])
+		m.Count = int64(idx(1))
+		effect = func() { r.Frames[len(r.Frames)-1].PC--; r.chooseOffer(name(0), args) }
 	case "end-cleanup":
+		if r.Cancelling {
+			effect = func() { r.nextCancellationCleanup() }
+			break
+		}
+		if len(r.Recoveries) > 0 && f.Transfer == r.Recoveries[len(r.Recoveries)-1] {
+			c := f.Transfer
+			effect = func() {
+				if c.Pending.Kind == "error" {
+					r.Raises = append(r.Raises, Raised{Unit: r.CodeName(), Handler: enclosingHandler(r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: c.Error.Get("code").Text, PC: r.PC, Instruction: r.At})
+				}
+				r.advanceTransfer(c)
+			}
+			break
+		}
 		c := r.Cleanup[len(r.Cleanup)-1]
 		effect = func() {
 			r.Cleanup = r.Cleanup[:len(r.Cleanup)-1]

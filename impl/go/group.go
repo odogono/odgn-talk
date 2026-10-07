@@ -95,6 +95,7 @@ type delivery struct {
 }
 type execution struct {
 	raisesWritten int
+	offersWritten int
 	run           *machine.Run
 	delivery      delivery
 	id            RunID

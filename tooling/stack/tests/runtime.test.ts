@@ -74,7 +74,7 @@ test('the browser debug bundle replays, reverses and preserves Trace without Bun
       result: undefined as number | undefined,
     };
     runInNewContext(await build.outputs[0]!.text(), context);
-    expect(context.result).toBe(9);
+    expect(context.result).toBe(21);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

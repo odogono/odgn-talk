@@ -283,7 +283,16 @@ class Parser {
     // error. `constant`, `use`, `private` and `script` can be command names.
     return (
       t.t === 'eof' ||
-      this.isWord(t, 'on', 'function', 'else', 'catch', 'finally', 'when')
+      this.isWord(
+        t,
+        'on',
+        'function',
+        'else',
+        'offer',
+        'catch',
+        'finally',
+        'when',
+      )
     );
   }
 
@@ -1079,6 +1088,11 @@ class Parser {
           ...((yield this.replace(true)) as Node),
           k: 'ReplaceStatement',
         };
+      case 'choose':
+        if (this.isWord(this.la2('choose-offer'), 'offer')) {
+          return (yield this.chooseOffer()) as Node;
+        }
+        break;
       case 'next':
         if (this.isWord(this.la2('next-repeat'), 'repeat')) {
           this.next();
@@ -1547,11 +1561,25 @@ class Parser {
     try {
       const at = this.next();
       this.endOfStatement();
-      const body = (yield this.block(['catch', 'finally', 'end'])) as Node[];
+      const body = (yield this.block([
+        'offer',
+        'catch',
+        'finally',
+        'end',
+      ])) as Node[];
+      const offers: Node[] = [];
+      while (this.atWord('offer')) {
+        offers.push((yield this.offerClause()) as Node);
+      }
       const catches: Node[] = [];
       while (this.atWord('catch')) {
         const ct = this.next();
         const pat = (yield this.pattern()) as Node;
+        let recovery = false;
+        if (this.atOperatorWord('before')) {
+          yield this.recoveryMarker();
+          recovery = true;
+        }
         let guard: Node | null = null;
         if (this.atOperatorWord('where')) {
           this.next('operator');
@@ -1560,6 +1588,7 @@ class Parser {
         this.endOfStatement();
         catches.push({
           k: 'Catch',
+          recovery,
           pat,
           guard,
           body: (yield this.block(['catch', 'finally', 'end'])) as Node[],
@@ -1574,7 +1603,71 @@ class Parser {
         fin = (yield this.block(['end'])) as Node[];
       }
       this.endBlock('try', at);
-      return { k: 'Try', body, catches, finally: fin };
+      return { k: 'Try', body, offers, catches, finally: fin };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  *offerClause(): ParseTask<Node> {
+    const frame = this.enter('OfferClause');
+    try {
+      this.expectWord('offer');
+      const name = (yield this.name()) as string;
+      const params: string[] = [];
+      if (!['nl', 'eof'].includes(this.peek(0).t)) {
+        for (;;) {
+          const parameter = this.enter('OfferParameter');
+          try {
+            params.push((yield this.name()) as string);
+          } finally {
+            this.leave(parameter);
+          }
+          if (!this.isOp(this.peek(0, 'operator'), ',')) {
+            break;
+          }
+          this.next('operator');
+        }
+      }
+      this.endOfStatement();
+      const body = (yield this.block([
+        'offer',
+        'catch',
+        'finally',
+        'end',
+      ])) as Node[];
+      return { k: 'Offer', name, params, body };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  *recoveryMarker(): ParseTask<void> {
+    const frame = this.enter('RecoveryMarker');
+    try {
+      this.expectWord('before', 'operator');
+      this.expectWord('unwind');
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  *chooseOffer(): ParseTask<Node> {
+    const frame = this.enter('ChooseOffer');
+    try {
+      this.expectWord('choose');
+      this.expectWord('offer');
+      const name = (yield this.name()) as string;
+      let args: Node[] = [];
+      const open = this.peek(0, 'operator');
+      if (this.isOp(open, '(') && !open.spaceBefore) {
+        this.next('operator');
+        if (!this.isOp(this.peek(0), ')')) {
+          args = (yield this.exprList()) as Node[];
+        }
+        this.expectOp(')', 'operator');
+      }
+      return { k: 'ChooseOffer', name, args };
     } finally {
       this.leave(frame);
     }
@@ -2342,7 +2435,7 @@ class Parser {
     try {
       const t = this.peek(0);
       if (
-        (t.t === 'word' || t.t === 'str') &&
+        (t.t === 'str' || (t.t === 'word' && t.v !== 'offer')) &&
         this.isOp(this.la2('map-key', 'operator'), ':')
       ) {
         this.next();

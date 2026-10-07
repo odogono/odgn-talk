@@ -56,8 +56,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 63 {
-		t.Fatalf("required set: %d cases, want 63", count)
+	if count != 64 {
+		t.Fatalf("required set: %d cases, want 64", count)
 	}
 }
 
@@ -976,6 +976,29 @@ func TestArgumentLabelsAcceptance(t *testing.T) {
 			}
 			if reason := runner.support(c); reason != "" {
 				t.Fatal(reason)
+			}
+			if _, err := runner.execute(c); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestRecoveryOffersAcceptance(t *testing.T) {
+	const root = "../../../../corpus"
+	cases, err := Discover(root, []string{"recovery-offers/basic", "recovery-offers/boundaries", "recovery-offers/costs", "recovery-offers/cleanup-restore", "recovery-offers/nested", "recovery-offers/cancellation", "recovery-offers/action-suspend", "disassembly/recovery-offers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := os.ReadFile("../../corpus-passing.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if !strings.Contains("\n"+string(listed), "\n"+c.Name+"\n") {
+				t.Error("Recovery Offers acceptance case missing from gate")
 			}
 			if _, err := runner.execute(c); err != nil {
 				t.Fatal(err)

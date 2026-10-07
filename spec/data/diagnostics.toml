@@ -36,9 +36,27 @@ sources = ["ADR 0020", "ADR 0059", "#115"]
 
 [[diagnostic]]
 code = "duplicate name"
-raised_when = "One pattern binds the same Name twice, or a Text Pattern has two Captures with one name"
+raised_when = "One pattern binds the same Name twice, a Text Pattern has two Captures with one name, or an offer repeats a parameter Name"
 at = "the second"
 sources = ["ADR 0010", "#115"]
+
+[[diagnostic]]
+code = "duplicate offer"
+raised_when = "A try declares two offers with the same Name"
+at = "the second offer Name"
+sources = ["ADR 0060", "#387"]
+
+[[diagnostic]]
+code = "not in recovery"
+raised_when = "A choice is outside a lexically enclosing Recovery Catch; functions and Lambdas reset permission"
+at = "`choose`"
+sources = ["ADR 0060", "#387"]
+
+[[diagnostic]]
+code = "leaves recovery catch"
+raised_when = "A Recovery Catch contains return, veto or pass, or a loop jump whose loop is outside it"
+at = "the statement's first token"
+sources = ["ADR 0060", "#387"]
 
 [[diagnostic]]
 code = "duplicate key"
@@ -108,7 +126,7 @@ sources = ["ADR 0012", "#115"]
 
 [[diagnostic]]
 code = "can't suspend here"
-raised_when = "A possible Suspension Point is in a `finally` block, or a named function, or a Handler called function-style, reaches one, directly or through what it calls"
+raised_when = "A possible Suspension Point is in a `finally` block or a Recovery Catch, or a named function, or a Handler called function-style, reaches one, directly or through what it calls"
 at = "the Suspension Point, or the call in the function or Handler through which it reaches one"
 sources = ["ADR 0017", "ADR 0020", "#115"]
 

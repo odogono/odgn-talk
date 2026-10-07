@@ -1,0 +1,14 @@
+script variable count = [6, 9]
+script variable backstop
+on go
+  try
+    throw "bad"
+  catch e
+    add 0 to count
+  finally
+    add 0 to count
+  end try
+end go
+on error e
+  put [the code of e, the code of the during of e, offerAvailable("recover")] into backstop
+end error

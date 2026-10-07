@@ -192,6 +192,21 @@ export const advancedTags = [
     "construct": "A computed message name",
     "written": "`send (e) with a to r`, e.g. `send (next) with order to me`",
     "beginner": "a `match` or `if` that picks between `send`s that name their message"
+  },
+  {
+    "construct": "A Recovery Offer",
+    "written": "`offer name` with optional plain parameters and a recovery block",
+    "beginner": "a local catch that calls an explicitly supplied policy callback"
+  },
+  {
+    "construct": "A Recovery Catch",
+    "written": "`catch pattern before unwind` with an optional Guard",
+    "beginner": "an ordinary local catch with an explicitly supplied policy callback"
+  },
+  {
+    "construct": "An offer choice",
+    "written": "`choose offer name` with optional call arguments",
+    "beginner": "a policy callback that returns a decision to a local catch"
   }
 ] as const;
 export const properties = [
@@ -417,5 +432,9 @@ export const builtins = [
   {
     "name": "quote",
     "kind": "constant"
+  },
+  {
+    "name": "offerAvailable",
+    "kind": "function"
   }
 ] as const;

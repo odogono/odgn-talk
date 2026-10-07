@@ -21,7 +21,7 @@ import type {
   SessionState,
   ToSession,
 } from './protocol';
-import { PlaygroundSession, type Tabs } from './session';
+import { frameViews, PlaygroundSession, type Tabs } from './session';
 
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<ToSession>) => void) | null;
@@ -250,14 +250,7 @@ const replayView = (result: ReplayResult | null): ReplayView => {
         mailbox: renderDebugView(snapshot, 'mailbox'),
         vars: renderDebugView(snapshot, 'vars'),
       },
-      frames: [...(run?.frames ?? [])].reverse().map(f => ({
-        unit: f.unit,
-        line: f.line,
-        handler: f.handler,
-        locals: f.locals.map(
-          ([name, value]) => `${name} = ${value.toString()}`,
-        ),
-      })),
+      frames: frameViews(run?.frames ?? []),
     };
   }
   return {

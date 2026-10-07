@@ -11,6 +11,7 @@ export const grammar = {
     "given",
     "if",
     "match",
+    "offer",
     "on",
     "repeat",
     "then",
@@ -137,6 +138,7 @@ export const grammar = {
     "binary-field",
     "can-be",
     "capture",
+    "choose-offer",
     "chunk-word",
     "code-point",
     "delimited-by",
@@ -640,6 +642,9 @@ export const diagnosticCodes = [
   "not a value",
   "name clash",
   "duplicate name",
+  "duplicate offer",
+  "not in recovery",
+  "leaves recovery catch",
   "duplicate key",
   "unknown kind",
   "no conversion",
@@ -1086,6 +1091,14 @@ export const builtins = [
   {
     "name": "quote",
     "kind": "constant"
+  },
+  {
+    "name": "offerAvailable",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
   }
 ] as const;
 export const libraryExports = [

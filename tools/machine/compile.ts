@@ -34,9 +34,15 @@ export type Body = {
 export type Unwind = {
   depth: number;
   from: number;
-  kind: 'catch' | 'finally' | 'guard';
+  kind: 'catch' | 'finally' | 'guard' | 'offer';
   target: number;
   to: number;
+};
+export type OfferEntry = {
+  body: number;
+  depth: number;
+  end: number;
+  offers: { binds: number[]; name: string; target: number }[];
 };
 export type EventEntry = {
   branches: {
@@ -59,6 +65,7 @@ export type Unit = {
   kind: 'script' | 'library';
   name: string;
   objects: string[];
+  offers?: OfferEntry[];
   unwind: Unwind[];
   variables: string[];
 };
@@ -300,6 +307,15 @@ export class UnitCompiler {
   pending: (() => void)[] = [];
   bodyCode = new Map<number, Instr[]>();
   bodyUnwind = new Map<number, Unwind[]>();
+  bodyOffers = new Map<
+    number,
+    {
+      body: number;
+      depth: number;
+      end: Label;
+      offers: { binds: number[]; name: string; target: Label }[];
+    }[]
+  >();
   events: EventEntry[] = [];
 
   constructor(
@@ -473,12 +489,28 @@ export class UnitCompiler {
         });
       }
       b.end = this.unit.code.length;
+      const offers = this.unit.offers ?? [];
+      const offerBase = offers.length;
+      for (const entry of this.bodyOffers.get(b.index) ?? []) {
+        offers.push({
+          ...entry,
+          end: b.start + entry.end.pc!,
+          offers: entry.offers.map(o => ({
+            ...o,
+            target: b.start + o.target.pc!,
+          })),
+        });
+      }
+      if (offers.length) {
+        this.unit.offers = offers;
+      }
       for (const u of this.bodyUnwind.get(b.index) ?? []) {
         this.unit.unwind.push({
           ...u,
           from: b.start + u.from,
           to: b.start + u.to,
-          target: b.start + u.target,
+          target:
+            u.kind === 'offer' ? offerBase + u.target : b.start + u.target,
         });
       }
     }
@@ -585,6 +617,12 @@ const boundNames = (stmts: Node[]): string[] => {
 export class BodyCompiler {
   code: Instr[] = [];
   unwind: Unwind[] = [];
+  offers: {
+    body: number;
+    depth: number;
+    end: Label;
+    offers: { binds: number[]; name: string; target: Label }[];
+  }[] = [];
   names = new Map<string, number>(); // local name → slot
   locals: string[] = ['it'];
   free: number[] = []; // released temp slots
@@ -596,6 +634,7 @@ export class BodyCompiler {
     catchRec: Rec | null;
     finally: number | null;
     finRec: Rec | null;
+    offerRec: Rec | null;
   }[] = [];
   // For each `finally` block being lowered, the loop depth where it began.
   inFinally: number[] = [];
@@ -688,6 +727,7 @@ export class BodyCompiler {
     this.body.locals = this.locals;
     this.u.bodyCode.set(this.body.index, this.code);
     this.u.bodyUnwind.set(this.body.index, this.unwind);
+    this.u.bodyOffers.set(this.body.index, this.offers);
   }
 
   fail(n: any, msg: string): never {
@@ -832,8 +872,16 @@ export class BodyCompiler {
             b.body.forEach(walk);
           }
           return;
+        case 'ChooseOffer':
+          return;
         case 'Try':
           s.body.forEach(walk);
+          for (const offer of s.offers ?? []) {
+            for (const name of offer.params) {
+              site(name, offer);
+            }
+            offer.body.forEach(walk);
+          }
           for (const c of s.catches) {
             patSites(c.pat);
             c.body.forEach(walk);
@@ -1218,6 +1266,13 @@ export class BodyCompiler {
         return this.repeat(s);
       case 'Match':
         return this.match(s);
+      case 'ChooseOffer':
+        for (const arg of s.args) {
+          this.expr(arg);
+        }
+        this.at(s);
+        this.emit('choose-offer', [s.name, s.args.length]);
+        return;
       case 'Try':
         return this.tryBlock(s);
       case 'Throw':
@@ -1828,7 +1883,7 @@ export class BodyCompiler {
     const from = this.tries.findIndex(t => t.finally === depth);
     const paused = this.tries
       .slice(from)
-      .flatMap(t => [t.catchRec, t.finRec])
+      .flatMap(t => [t.catchRec, t.offerRec, t.finRec])
       .filter((r): r is Rec => !!r && r.open !== null);
     for (const r of paused) {
       this.closeSpan(r);
@@ -1922,6 +1977,9 @@ export class BodyCompiler {
   tryBlock(s: Node) {
     const end = this.label();
     const hasFinally = !!s.finally;
+    const offerRec: Rec | null = s.offers?.length
+      ? { spans: [], open: this.code.length }
+      : null;
     const catchRec: Rec | null = s.catches.length
       ? { spans: [], open: this.code.length }
       : null;
@@ -1935,11 +1993,15 @@ export class BodyCompiler {
       finally: hasFinally ? this.finallies.length - 1 : null,
       catchRec,
       finRec,
+      offerRec,
     };
     this.tries.push(me);
     this.block(s.body);
     if (catchRec) {
       this.closeSpan(catchRec);
+    }
+    if (offerRec) {
+      this.closeSpan(offerRec);
     }
     if (hasFinally) {
       this.leave(me.finally!, () => this.emit('jump', [end]));
@@ -1957,6 +2019,9 @@ export class BodyCompiler {
           depth: this.iterators,
         });
       }
+      // Catch dispatch runs while protected-body continuations remain live.
+      const retainedFree = this.free;
+      this.free = [];
       const err = this.temp();
       // The error is on the stack until it is stored, so the finally spans
       // start after the store, at the static depth.
@@ -1986,21 +2051,63 @@ export class BodyCompiler {
               this.guardWith(c.guard, next, binds);
             }
           });
+          this.at(c);
+          if (!c.recovery) {
+            this.emit('catch-accept');
+          }
           this.commit(binds);
           this.block(c.body);
-          if (hasFinally) {
-            this.leave(me.finally!, () => this.emit('jump', [end]));
-          } else {
-            this.emit('jump', [end]);
+          if (!c.recovery) {
+            if (hasFinally) {
+              this.leave(me.finally!, () => this.emit('jump', [end]));
+            } else {
+              this.emit('jump', [end]);
+            }
           }
           this.place(next);
         });
       }
       this.pos(s.catches.at(-1), () => {
-        this.emit('load', [err]);
-        this.emit('rethrow');
+        this.emit('catch-next');
       });
       this.release(err);
+      this.free = [...retainedFree, ...this.free];
+    }
+    if (offerRec) {
+      const record = {
+        body: this.body.index,
+        depth: this.iterators,
+        end,
+        offers: [] as { binds: number[]; name: string; target: Label }[],
+      };
+      for (const offer of s.offers) {
+        const target = this.label();
+        this.place(target);
+        record.offers.push({
+          name: offer.name,
+          binds: offer.params.map((name: string) => this.names.get(name)!),
+          target,
+        });
+        this.block(offer.body);
+        this.pos(offer, () => {
+          if (hasFinally) {
+            this.leave(me.finally!, () => this.emit('jump', [end]));
+          } else {
+            this.emit('jump', [end]);
+          }
+        });
+      }
+      const index = this.offers.length;
+      this.offers.push(record);
+      for (const [from, to] of offerRec.spans) {
+        this.unwind.push({
+          from,
+          to,
+          kind: 'offer',
+          target: index,
+          depth: this.iterators,
+        });
+      }
     }
     this.tries.pop();
     if (finRec) {
@@ -2145,7 +2252,7 @@ export class BodyCompiler {
     bc.finish();
     return {
       body: b.index,
-      binds: names.map(n => this.names.get(n) ?? this.declare(n)),
+      binds: names.map((n: string) => this.names.get(n) ?? this.declare(n)),
       captures: b.captures,
     };
   }

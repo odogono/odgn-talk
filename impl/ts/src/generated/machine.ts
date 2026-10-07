@@ -1081,10 +1081,29 @@ export const instructions = [
     "suspends": false
   },
   {
-    "name": "rethrow",
-    "cost": "throw",
+    "name": "catch-accept",
+    "cost": "catch-accept",
     "operands": [],
-    "pops": 1,
+    "pops": 0,
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "catch-next",
+    "cost": "catch-next",
+    "operands": [],
+    "pops": 0,
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "choose-offer",
+    "cost": "choose-offer",
+    "operands": [
+      "name",
+      "count"
+    ],
+    "pops": "count",
     "pushes": 0,
     "suspends": false
   },
@@ -1320,7 +1339,7 @@ export const errorMessages = {
   "timeout": "No answer came within {after}",
   "would suspend": "This function may wait, so call it with `and wait`",
   "function gone": "The function no longer exists",
-  "wrong arity": "The function was called with the wrong number of arguments",
+  "wrong arity": "The function or offer was called with the wrong number of arguments",
   "not encodable": "A {kind} can't be encoded as plain data",
   "out of domain": "{value} is outside the domain of {function}",
   "out of range": "{value} is out of range for {field}",
@@ -1337,6 +1356,7 @@ export const errorMessages = {
   "scope in join": "The scope {scope} cannot open inside a Join",
   "segment participant conflict": "The Segment already participates through {participant}, so {capability} cannot join",
   "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called",
+  "offer unavailable": "The recovery offer {name} is unavailable",
   "invalid key": "A Store key can't be empty text",
   "can't store": "A {kind} object can't be kept in a Store",
   "store full": "The Store's {limit} limit would be exceeded",
@@ -1376,7 +1396,9 @@ export const costModel = {
     "frame": "64 + 8 * items(v) + contents(v)",
     "run": "96 + contents(v)",
     "message": "32 + contents(v)",
-    "pending call": "48"
+    "pending call": "48",
+    "dispatch context": "96 + 8 * items(v) + contents(v)",
+    "dispatch activation": "48 + contents(v)"
   },
   "rates": {
     "const": {
@@ -1734,6 +1756,26 @@ export const costModel = {
     "builtin.toInstant": {
       "fuel": "10",
       "alloc": "size(result)"
+    },
+    "catch-accept": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "catch-next": {
+      "fuel": "1",
+      "alloc": "0"
+    },
+    "choose-offer": {
+      "fuel": "8 + count",
+      "alloc": "0"
+    },
+    "builtin.offerAvailable": {
+      "fuel": "3 + utf8(x1) / 16",
+      "alloc": "0"
+    },
+    "offer-lookup": {
+      "fuel": "4 * frames",
+      "alloc": "0"
     }
   }
 };

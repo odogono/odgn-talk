@@ -1,0 +1,14 @@
+on go
+ try
+  try
+   throw "original"
+  offer recover
+  catch "original" before unwind
+   throw "policy"
+  end try
+ catch "policy" before unwind
+  put offerAvailable("recover") into visible
+ catch "policy"
+  return visible
+ end try
+end go

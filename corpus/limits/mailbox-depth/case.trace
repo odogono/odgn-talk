@@ -23,13 +23,13 @@ send sender/r1 to=sink message=note args=[1]
 send sender/r1 to=sink message=note args=[2]
 raise sender/r1 code="mailbox full" at=sender:10 pos=11:7
 call sender/r1.c1 op=log.write args=["full at 3"]
-seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=134 alloc=241 state=20 end=return
-run sender/r1 outcome=completed delivery=d1 handler=flood fuel=134 alloc=241
+seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=135 alloc=241 state=20 end=return
+run sender/r1 outcome=completed delivery=d1 handler=flood fuel=135 alloc=241
 seg sink/r1 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
 run sink/r1 outcome=completed handler=note fuel=16 alloc=24
 seg sink/r2 start from=sender/r1 handler=note clause=1 fuel=16 alloc=24 state=64 end=return
 run sink/r2 outcome=completed handler=note fuel=16 alloc=24
-pumped state=idle fuel=166
+pumped state=idle fuel=167
 
 > vars
 vars sender fullTo="sink"

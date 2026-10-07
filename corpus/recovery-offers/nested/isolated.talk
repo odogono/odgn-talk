@@ -1,0 +1,15 @@
+on go
+ try
+  throw "original"
+ offer recover value
+  return value
+ catch "original" before unwind
+  try
+   throw "inner"
+  catch "inner" before unwind
+   put offerAvailable("recover") into visible
+  catch "inner"
+  end try
+  choose offer recover(visible)
+ end try
+end go

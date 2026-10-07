@@ -742,6 +742,11 @@ export class Parser {
         return { k: 'Throw', value: this.expr() };
       case 'replace':
         return { ...this.replace(true), k: 'ReplaceStatement' };
+      case 'choose':
+        if (this.isWord(this.la2('choose-offer'), 'offer')) {
+          return this.chooseOffer();
+        }
+        break;
       case 'next':
         if (this.isWord(this.la2('next-repeat'), 'repeat')) {
           this.next();
@@ -1130,11 +1135,20 @@ export class Parser {
   tryStatement(): Node {
     const at = this.next();
     this.endOfStatement();
-    const body = this.block(['catch', 'finally', 'end']);
+    const body = this.block(['offer', 'catch', 'finally', 'end']);
+    const offers: Node[] = [];
+    while (this.atWord('offer')) {
+      offers.push(this.offerClause());
+    }
     const catches: Node[] = [];
     while (this.atWord('catch')) {
       const ct = this.next();
       const pat = this.pattern();
+      const recovery = this.atOperatorWord('before');
+      if (recovery) {
+        this.next('operator');
+        this.expectWord('unwind');
+      }
       let guard: Node | null = null;
       if (this.atOperatorWord('where')) {
         this.next('operator');
@@ -1143,6 +1157,7 @@ export class Parser {
       this.endOfStatement();
       catches.push({
         k: 'Catch',
+        recovery,
         pat,
         guard,
         body: this.block(['catch', 'finally', 'end']),
@@ -1158,7 +1173,45 @@ export class Parser {
     }
     this.expectWord('end');
     this.endSuffix('try', at);
-    return { k: 'Try', body, catches, finally: fin };
+    return { k: 'Try', body, offers, catches, finally: fin };
+  }
+
+  offerClause(): Node {
+    const at = this.expectWord('offer');
+    const name = this.name();
+    const params: string[] = [];
+    if (!['nl', 'eof'].includes(this.peek(0).t)) {
+      params.push(this.name());
+      while (this.isOp(this.peek(0, 'operator'), ',')) {
+        this.next('operator');
+        params.push(this.name());
+      }
+    }
+    this.endOfStatement();
+    return {
+      k: 'Offer',
+      line: at.line,
+      col: at.col,
+      name,
+      params,
+      body: this.block(['offer', 'catch', 'finally', 'end']),
+    };
+  }
+
+  chooseOffer(): Node {
+    this.expectWord('choose');
+    this.expectWord('offer');
+    const name = this.name();
+    let args: Node[] = [];
+    const open = this.peek(0, 'operator');
+    if (this.isOp(open, '(') && !open.spaceBefore) {
+      this.next('operator');
+      if (!this.isOp(this.peek(0), ')')) {
+        args = this.exprList();
+      }
+      this.expectOp(')', 'operator');
+    }
+    return { k: 'ChooseOffer', name, args };
   }
 
   // `replace [first] <p> in c with e`. As a statement `c` is a Container.
@@ -1761,7 +1814,7 @@ export class Parser {
   mapKey(): string {
     const t = this.peek(0);
     if (
-      (t.t === 'word' || t.t === 'str') &&
+      (t.t === 'str' || (t.t === 'word' && t.v !== 'offer')) &&
       this.isOp(this.la2('map-key', 'operator'), ':')
     ) {
       this.next();

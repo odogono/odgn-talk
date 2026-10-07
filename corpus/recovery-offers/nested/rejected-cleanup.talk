@@ -1,0 +1,20 @@
+on go
+ try
+  try
+   throw "original"
+  catch "original" before unwind
+   try
+    throw "policy"
+   finally
+    try
+     throw "cleanup"
+    catch "no"
+    end try
+   end try
+  catch "cleanup"
+   return "sibling"
+  end try
+ catch e
+  return [the code of e, the code of the during of e, the code of the during of the during of e]
+ end try
+end go

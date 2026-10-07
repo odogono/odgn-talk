@@ -29,11 +29,11 @@ raise a/r1 code="object gone" at=a:141 pos=51:5
 raise a/r1 code="mailbox full" at=a:114 pos=40:7
 raise a/r1 code="bad message name" at=a:66 pos=24:5
 raise a/r1 code="wrong kind" at=a:87 pos=30:7
-seg a/r1 start delivery=d1 handler=go clause=1 fuel=938 alloc=8120 state=7995 end=return
-run a/r1 outcome=completed delivery=d1 handler=go fuel=938 alloc=8120
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=954 alloc=8120 state=7995 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=954 alloc=8120
 seg sink/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=40 end=return
 run sink/r1 outcome=completed handler=note fuel=16 alloc=24
-pumped state=idle fuel=954
+pumped state=idle fuel=970
 > vars
 vars a seen=[{code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "a", handler: "toSeven", line: 59, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "send", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "not a name", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:to:", arguments: 1, at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "move:", arguments: 1, at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "bad message name", name: "move:in:", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "bad message name", name: "move:to", arguments: 2, at: {unit: "a", handler: "toSink", line: 42, column: 7}}, {code: "object gone", object: "ghost", at: {unit: "a", handler: "toGhost", line: 51, column: 5}}, {code: "mailbox full", to: "sink", at: {unit: "a", handler: "toSink", line: 40, column: 7}}, {code: "bad message name", name: "all", arguments: 1, at: {unit: "a", handler: "go", line: 24, column: 5}}, {code: "wrong kind", expected: "text", got: "list", value: ["note"], at: {unit: "a", handler: "go", line: 30, column: 7}}]
 vars sink got=[1]

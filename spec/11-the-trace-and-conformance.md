@@ -1,8 +1,7 @@
 # 11. The Trace and conformance
 
-**Pending addition:** [Recovery Offers Trace records](proposals/recovery-offers.md#trace) pair valid choices with successful action entry, and two-phase catch search moves a catch test's `guard-skip` ahead of records from deeper `finally` blocks. Neither Core emits these records or this order, and the current Trace registry does not accept the new records. Their implementation requires cross-Core execution agreement and separate human review of first corpus blessings.
 
-_Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#79](https://github.com/odogono/odgn-talk/issues/79).
+_Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#79](https://github.com/odogono/odgn-talk/issues/79), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
 
 Both Cores answer to the Spec and the Conformance Corpus, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)). This chapter gives the display form every value is written in, the ids the Core assigns, the Trace a Group writes, and the case kinds of the Corpus and how they are run. The formats are Data Files: the records and the `case.toml` keys are in [`corpus.toml`](data/corpus.toml), and the line grammars in [`trace.ebnf`](data/trace.ebnf).
 
@@ -156,6 +155,8 @@ A Trace is the record of a Group's life: every Host Input it received, in the or
 TraceFile      ::= ( TraceLine #xA )*
 TraceLine      ::= ( '> ' )? Record | '#' [^#xA]* | ''
 Record         ::= RecordName ( ' ' Id )* ( ' ' Field )*
+/* offer-chosen and offer-entered use the ordinary record grammar;
+   their ordered attempt/name/at/target/args keys are in corpus.toml. */
 RecordName     ::= [a-z] [a-z-]*
 Id             ::= [A-Za-z0-9_] [A-Za-z0-9_./:+-]*
 Field          ::= Key '=' FieldValue
@@ -339,6 +340,8 @@ A record is written when what it records happens, so a Trace is in the order the
 | `scope` | `call` | `grant`, `name`, `action` | the scope transition acknowledged by this Host call, before result validation, conversion or interruption |
 | `effect` | `segment` | `grant`, `phase`, `status` | a synchronous participant hook and its result, including hooks outside a Pump |
 | `effect-failure` | `run` | `grant`, `segment`, `phase`, `status`, `scope`? | an effect failure report; human-readable Host detail is excluded from parity |
+| `offer-chosen` | `run` | `attempt`, `name`, `at`, `target`, `args`? | a successfully charged and validated Recovery Offer choice, before transfer cleanup |
+| `offer-entered` | `run` | `attempt`, `target` | entry into a chosen Recovery Offer after cleanup and atomic parameter binding |
 
 <!-- end -->
 
@@ -443,6 +446,13 @@ A record is written when what it records happens, so a Trace is in the order the
 | `effect-failure` | `phase` | `word` | the failing lifecycle action: `abandon`, `begin`, `commit`, `rollback` |
 | `effect-failure` | `status` | `word` | the failure status: `failed`, `unknown` |
 | `effect-failure` | `scope` | `id` | the scope for abandonment failure |
+| `offer-chosen` | `attempt` | `count` | the per-Run choice sequence, starting at one |
+| `offer-chosen` | `name` | `value` | the chosen offer Name as text |
+| `offer-chosen` | `at` | `at` | the choice instruction |
+| `offer-chosen` | `target` | `at` | the action-entry instruction |
+| `offer-chosen` | `args` | `value` | the supplied arguments as a list, omitted when empty |
+| `offer-entered` | `attempt` | `count` | the matching choice sequence |
+| `offer-entered` | `target` | `at` | the action-entry instruction, before its first charge |
 
 <!-- end -->
 
@@ -452,6 +462,19 @@ A record is written when what it records happens, so a Trace is in the order the
 - **Abandoned calls:** after a Join's fail-fast `raise`, an `abandon` record follows for each member still pending, in start order. One also follows the `raise` of each `timeout`, for the call that timed out, and a Limit Fault's `fault` record, for each call it abandons. A cancellation's abandoned calls follow its first cleanup Stretch's `seg` or `preempt`, once, including when the cleanup is preempted before it ends.
 - **`fault`:** `rollback` lists the Script Variables whose bindings the rollback changed back ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
 - **`vars`:** a `vars` record is written for each Script in the Group, in load order. A Script whose first Load was rejected was never added to the Group ([chapter 9](09-embedding.md#loading-and-libraries)), so it has none. Each key is a Script Variable's name, and the record has no other keys. A Script with none is just `vars <script>`.
+
+### Recovery choice and entry
+
+A valid, fully charged choice emits `offer-chosen` before transfer cleanup. After cleanup, atomic parameter binding and PC transfer emit `offer-entered` before the action's first instruction charge. `at` is the choice instruction's CodePosition and `target` the action-entry CodePosition:
+
+```text
+offer-chosen <run> attempt=<int> name=<text> at=<CodePosition> target=<CodePosition> args=<list>
+offer-entered <run> attempt=<int> target=<CodePosition>
+```
+
+Keys use the order shown; omit empty `args`. The per-Run counter starts at zero and increments for each valid, successfully charged choice, first emitting attempt 1. Missing names, wrong arity and faults before lookup charging completes consume no attempt and emit neither record. Nested choices share that monotonically increasing sequence; save/restore preserves it.
+
+A first-action-instruction fault has an entry record. A choice cancelled by escaping cleanup, cancellation, Limit Fault or Stop has no entry; later Error/fault/outcome records explain that result without an abort record. Catch-test `guard-skip` precedes deeper finally records. Decline, lookup and successful transfer cleanup add no `raise`; new Errors, `throw` and Error-mode cleanup retain their ordinary raise records.
 
 ### End reasons
 

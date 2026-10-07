@@ -1,12 +1,12 @@
 # 10. Save and restore
 
-_Draws on:_ [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0038](../docs/adr/0038-settling-a-restored-call-is-a-queued-host-input.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72).
+_Draws on:_ [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0038](../docs/adr/0038-settling-a-restored-call-is-a-queued-host-input.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#72](https://github.com/odogono/odgn-talk/issues/72), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
 
 A Host can save a whole Group between Pumps and restore it later on the same Core family. It can also change a loaded Script's code, by reloading it or by extending it. This chapter states what each keeps and what each discards.
 
 ## The rule
 
-**Pending addition:** [Recovery Offers save/restore state](proposals/recovery-offers.md#save-and-restore) includes retained continuations during any catch dispatch, activation ownership, pending arguments and attempt counters. Neither Core supports saving this future state yet. Existing save-format compatibility and live-effect refusal still apply.
+Catch dispatch can be saved at any instruction boundary, including ordinary catch tests, policy, pending transfer cleanup and action entry. The saved state preserves retained failure control and shared owner locals, without changing the save-format compatibility or live-effect refusal rules.
 
 **Save then restore is unobservable** ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)). A restored Group, given the same later Host Inputs, Clock readings and Fuel Slices, gives the same results and reports, and the same Trace apart from the save and restore records, as the Group that was never saved. It uses the same Fuel and faults at the same instruction. Resetting any counter would let a Script launder Fuel through a save.
 
@@ -43,6 +43,8 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - the reply it waits for, if it waits in a `send … and wait` or a Function Value call to another Script
   - its wait, with each deadline as an absolute Instant and its place in the order waits began
   - its pending calls, and its Join's members with the answers that have arrived
+  - its dispatch-context stack, retained continuations, activation PCs and operand stacks, owning-frame identities and shared locals, the try being dispatched and selection boundaries
+  - its pending acceptance or offer target and evaluated arguments, cleanup queue and progress, inherited/entered scope identities, and per-Run offer-attempt counter
   - its cleanup stack
 - **Each pending call:** its call id, its Run, its Grant name and Operation, its arguments and its `maxPending` or `MaxWait` deadline. Its declared cost has always been charged by then. In TS it also records whether the original call used `start` or `run`, which decides Adopt eligibility independently of the rebound Host implementation.
 - **Each Host Object:** its kind, its id, its parent, and whether it is disposed. Native objects are never saved.
@@ -51,7 +53,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 ### What a save leaves out
 
-- **Anything the Host holds:** native objects, Grant bindings, Host function state, Trace sinks and `OnReady`.
+- **Anything the Host holds:** native objects, Grant bindings, Host function state, Trace sinks and `OnReady`. Tooling-only debugger callbacks, pauses and breakpoints are not saved.
 - **Stores:** a `store` Grant's Store belongs to the Host, so restoring an older save can leave Script Variables and the Store disagreeing ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)). A save can't be taken while a Segment's Store writes are uncommitted, as for any live participant ([ADR 0049](../docs/adr/0049-live-host-effects-prevent-saving.md)).
 - **Futures:** a `Request`, `Call` or `Decide` the Host is waiting on has a delivery id in the save, but its future belongs to the old Group. After a restore, the Host learns the outcome from the `run end` or `decided` report with that delivery id.
 - **Other Groups:** a save covers exactly one Group. A Delivery already made into another Group, and messages already sent outside it, aren't part of it.
@@ -60,13 +62,14 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 
 `Core.Restore(save, options)` builds a new Group from a save. It hasn't been pumped, and it is ready for Host Inputs. Restoring takes these steps, in order, and if any step fails, nothing is made:
 
-1. **Reading:** the TS Core reads its format 2 only (format 1 lacked completed Run totals). A save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
+1. **Reading:** each Core reads exactly its own supported private format version, with no automatic snapshot migration. A save this Core can't read, from another Core family, a save format it no longer reads, or corrupt bytes, is the Host error `invalid save`.
 2. **Libraries:** the Host passes compiled Libraries for the saved identities. The Core matches them by identity, and a Library it needs that isn't given is a mismatch.
 3. **Grants:** disabled status is preserved, including with variables-only policy, independently of rebinding. The Host's `Grants` function re-binds each Script's Grants, by the Script's name and the Grant's name. A Grant whose Capability, or kept Operations' declarations, differ from the saved ones is a mismatch. Only the saved Operation set is retained; additional Operations the Host offers, and their declarations, are ignored. A Grant the Host doesn't return is restored as revoked, so a call through it raises `capability revoked`. It still binds its name, so the Script still loads, in a variables-only restore too. The Core reconstructs all saved source units before applying revocation state, so an existing extension may still call a revoked Grant. It keeps its saved Capability and declarations for step 4, so on its own it never makes a mismatch.
 4. **Versions:** the Core computes the Group Fingerprint from the saved Scripts and limits, the Libraries and Grants from steps 2 and 3, and its own language and Cost Model versions. If it equals the saved one and the save-format version is its own, the restore is **full**. Otherwise it is a mismatch, and the Host's `Mismatch` policy decides: `RejectMismatch` fails with the Host error `save mismatch`, and `VariablesOnly` does a [variables-only restore](#variables-only-restore).
-5. **Host Objects:** the Host's `Resolve` function turns each saved `(kind, id)` into a native object. An id it can't resolve restores as a disposed Host Object, and its `[kind, id]` is listed in the result's `Disposed`. The Host gets each restored handle back with `group.ObjectByID(kind, id)` ([chapter 9](09-embedding.md#host-objects)).
-6. **Text Patterns** are recompiled from their source, charging nothing.
-7. **Pending calls** are returned for the Host to settle ([below](#settling-pending-calls)).
+5. **Control validation:** before accepting saved dispatch control, validate code identities, body/table/PC references, phase consistency, owner-local layouts and shared storage, pending target argument counts and slots, cleanup references/progress/scope identities, monotonic attempt counters and acyclic ownership/continuations. Malformed state is `invalid save`. Reconstruct aliases only from validated ownership.
+6. **Host Objects:** the Host's `Resolve` function turns each saved `(kind, id)` into a native object. An id it can't resolve restores as a disposed Host Object, and its `[kind, id]` is listed in the result's `Disposed`. The Host gets each restored handle back with `group.ObjectByID(kind, id)` ([chapter 9](09-embedding.md#host-objects)).
+7. **Text Patterns** are recompiled from their source, charging nothing.
+8. **Pending calls** are returned for the Host to settle ([below](#settling-pending-calls)).
 
 `Restore` returns the Group and a result holding whether the restore was variables-only, the pending calls, the Host Objects that didn't resolve, and for a variables-only restore, what it discarded ([below](#variables-only-restore)).
 

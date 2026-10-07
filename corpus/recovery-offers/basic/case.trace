@@ -1,0 +1,43 @@
+# Same-Run callback and two nested Libraries retain rows and offer scopes.
+# Guard skips precede cleanup, choice precedes cleanup, entry follows cleanup.
+> add-library rows identity=c20c9abf0cc63e37fbfdfe08765717a940e02c6e2f9914f29d9fa922b58c0cb7
+> add-library wrapper identity=4de118ee60ea223527aaea3bf37e78fc092549392944123a5ec48cad77d1be92
+> load reader identity=f9e878e6140285e6bea219dc8d37c1bccb2bef41c0277b83dac72b03618b2516
+> deliver d1 to=reader message=skipRows
+> deliver d2 to=reader message=replaceRows
+> deliver d3 to=reader message=checkChoices
+> pump clock=2026-09-30T09:00:00Z
+raise reader/r1 code="tidy" at=reader:8 pos=11:7
+raise reader/r1 code="can't convert" at=reader:5 pos=8:17
+offer-chosen reader/r1 attempt=1 name="skip" at=reader:95 target=rows:17
+raise reader/r1 code="tidy" at=reader:51 pos=11:7
+offer-entered reader/r1 attempt=1 target=rows:17
+raise reader/r1 code="tidy" at=reader:8 pos=11:7
+seg reader/r1 start delivery=d1 handler=skipRows clause=1 fuel=313 alloc=464 state=163 end=return
+run reader/r1 outcome=completed delivery=d1 handler=skipRows fuel=313 alloc=464
+raise reader/r2 code="tidy" at=reader:8 pos=11:7
+raise reader/r2 code="can't convert" at=reader:5 pos=8:17
+guard-skip reader/r2 at=reader:113 pos=30:33 code="division by zero"
+offer-chosen reader/r2 attempt=1 name="useValue" at=reader:123 target=rows:19 args=[0]
+raise reader/r2 code="tidy" at=reader:51 pos=11:7
+offer-entered reader/r2 attempt=1 target=rows:19
+raise reader/r2 code="tidy" at=reader:8 pos=11:7
+seg reader/r2 start delivery=d2 handler=replaceRows clause=1 fuel=293 alloc=488 state=214 end=return
+run reader/r2 outcome=completed delivery=d2 handler=replaceRows fuel=293 alloc=488
+raise reader/r3 code="can't convert" at=reader:5 pos=8:17
+raise reader/r3 code="offer unavailable" at=reader:139 pos=41:7
+raise reader/r3 code="wrong arity" at=reader:159 pos=46:7
+offer-chosen reader/r3 attempt=1 name="useValue" at=reader:179 target=rows:19 args=[0]
+raise reader/r3 code="tidy" at=reader:51 pos=11:7
+offer-entered reader/r3 attempt=1 target=rows:19
+raise reader/r3 code="can't convert" at=reader:5 pos=8:17
+raise reader/r3 code="offer unavailable" at=reader:139 pos=41:7
+raise reader/r3 code="wrong arity" at=reader:159 pos=46:7
+offer-chosen reader/r3 attempt=2 name="useValue" at=reader:179 target=rows:19 args=[0]
+raise reader/r3 code="tidy" at=reader:51 pos=11:7
+offer-entered reader/r3 attempt=2 target=rows:19
+seg reader/r3 start delivery=d3 handler=checkChoices clause=1 fuel=427 alloc=436 state=244 end=return
+run reader/r3 outcome=completed delivery=d3 handler=checkChoices fuel=427 alloc=436
+pumped state=idle fuel=1033
+> vars
+vars reader skipped=[5, 7] replaced=[5, 0, 7] checked=[0, 0] order="ccccccuacuac"

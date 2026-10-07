@@ -1,0 +1,37 @@
+[
+  {
+    "name": "raise search cannot partly charge frames",
+    "source": "function fail\n throw \"bad\"\nend fail\non go\n try\n  return fail()\n catch e\n  return 1\n end try\nend go",
+    "limit": 26,
+    "fuel": 23,
+    "line": 2
+  },
+  {
+    "name": "accept cannot partly charge",
+    "source": "function fail\n throw \"bad\"\nend fail\non go\n try\n  return fail()\n catch e\n  return 1\n end try\nend go",
+    "limit": 30,
+    "fuel": 30,
+    "line": 7
+  },
+  {
+    "name": "next cannot partly charge",
+    "source": "function fail\n try\n  throw \"bad\"\n catch \"other\"\n end try\nend fail\non go\n try\n  return fail()\n catch e\n  return 1\n end try\nend go",
+    "limit": 31,
+    "fuel": 31,
+    "line": 4
+  },
+  {
+    "name": "next search leaves frame atomically",
+    "source": "function fail\n try\n  throw \"bad\"\n catch \"other\"\n end try\nend fail\non go\n try\n  return fail()\n catch e\n  return 1\n end try\nend go",
+    "limit": 35,
+    "fuel": 32,
+    "line": 4
+  },
+  {
+    "name": "next search charged before outer test",
+    "source": "function fail\n try\n  throw \"bad\"\n catch \"other\"\n end try\nend fail\non go\n try\n  return fail()\n catch e\n  return 1\n end try\nend go",
+    "limit": 36,
+    "fuel": 36,
+    "line": 10
+  }
+]

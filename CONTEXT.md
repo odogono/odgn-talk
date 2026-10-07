@@ -427,7 +427,7 @@ The normative stack machine that every Core's compiler targets: its instruction 
 _Avoid_: bytecode, VM, IR
 
 **Unwind Table**:
-The normative table, one per code unit, that says where an error goes: for each instruction range, a `catch`, `finally` or `guard` entry and its target. Entering a `try` costs nothing; only raising and unwinding are charged.
+The normative table, one per code unit, that says where an error goes: for each instruction range, a `catch`, `finally`, `guard` or `offer` entry and its target. Catch search tests before unwinding, and an offer entry names the active recovery actions. Entering a `try` costs nothing.
 _Avoid_: exception table, handler table (a Handler is something else), landing pads
 
 **Fuel Slice**:
@@ -465,11 +465,11 @@ The lowercase text in words that names what went wrong, e.g. `"capability revoke
 _Avoid_: error type, error class, errno
 
 **Recovery Offer**:
-A named recovery block declared by active code with `offer`, which a caller may choose before failed frames are discarded. It preserves work in the owning frame and enters declared recovery code after exited cleanup; it never resumes an arbitrary failed expression. This is an [accepted design awaiting implementation](spec/proposals/recovery-offers.md).
+A named recovery block declared by active code with `offer`, which a caller may choose before failed frames are discarded. It preserves work in the owning frame and enters declared recovery code after exited cleanup; it never resumes an arbitrary failed expression.
 _Avoid_: restart, Error Restart, retry, continuation, resumable exception
 
 **Recovery Catch**:
-A catch explicitly marked `before unwind` whose body runs while failed continuations remain retained, so it can choose an active Recovery Offer within the current Run. It cannot suspend, and falling through declines to the next catch. Every catch is tested before unwinding; only an ordinary catch that accepts unwinds. This is an [accepted design awaiting implementation](spec/proposals/recovery-offers.md).
+A catch explicitly marked `before unwind` whose body runs while failed continuations remain retained, so it can choose an active Recovery Offer within the current Run. It cannot suspend, and falling through declines to the next catch. Every catch is tested before unwinding; only an ordinary catch that accepts unwinds.
 _Avoid_: error backstop, ordinary catch, handler (unqualified)
 
 **Host Error**:

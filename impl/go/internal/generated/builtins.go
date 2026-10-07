@@ -409,5 +409,11 @@ var Builtins = BuiltinsTable{
 			Call:  "U+0022",
 			Gives: "A double quote, as text",
 		},
+		BuiltinsTableBuiltinEntry{
+			Name:  "offerAvailable",
+			Group: "values",
+			Call:  "offerAvailable(textName)",
+			Gives: "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name",
+		},
 	},
 }

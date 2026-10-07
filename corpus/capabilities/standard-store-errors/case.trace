@@ -88,8 +88,8 @@ call s/r7.c1 op=st.swap args=["k", nothing, 2] error={code: "store busy", key: "
 raise s/r7 code="store busy" at=s:12 pos=6:5
 call s/r7.c2 op=st.increment args=["retries"] result=1
 effect s/r7.s1 grant=st phase=commit status=ok
-seg s/r7 start delivery=d7 handler=careful clause=1 fuel=57 alloc=79 state=0 end=return
-run s/r7 outcome=completed delivery=d7 handler=careful fuel=57 alloc=79
-pumped state=idle fuel=57
+seg s/r7 start delivery=d7 handler=careful clause=1 fuel=58 alloc=79 state=0 end=return
+run s/r7 outcome=completed delivery=d7 handler=careful fuel=58 alloc=79
+pumped state=idle fuel=58
 > vars
 vars s

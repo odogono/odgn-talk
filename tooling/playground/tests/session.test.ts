@@ -2,6 +2,60 @@ import { describe, expect, test } from 'bun:test';
 import { parseInstant } from '@odgn/northtalk';
 import { writeTranscript } from '@odgn/northtalk/session';
 import { PlaygroundSession, SESSION_TAB } from '../src/session';
+import {
+  recoveryLibrary,
+  recoveryScript,
+} from '../../stack/tests/verify-recovery-debug';
+
+test('a Library offer runs from the Script tab with dispatch owner views and Transcript replay', () => {
+  const { env } = environment();
+  const s = new PlaygroundSession(env);
+  const library = { name: 'rows', source: recoveryLibrary };
+  expect(s.saveLibrary(library)).toEqual([]);
+  expect(s.apply(recoveryScript)).toMatchObject({
+    kind: 'applied',
+    failed: [],
+  });
+  const tabs = { script: recoveryScript, libraries: [library] };
+  s.setBreakpoints(
+    [{ tab: SESSION_TAB, line: 8 }],
+    { error: false, limitFault: false },
+    tabs,
+  );
+  expect(s.input('go')).toEqual([]);
+  s.setBreakpoints([], { error: false, limitFault: false }, tabs);
+  s.continueDebug('stepOver');
+  expect(s.pauseView()?.tab).toEqual({ name: SESSION_TAB, line: 10 });
+  s.continueDebug('stepOver');
+  const pause = s.pauseView()!;
+  expect(pause.tab).toEqual({ name: SESSION_TAB, line: 11 });
+  const dispatch = pause.frames[0]!;
+  expect(dispatch.role).toBe('dispatch');
+  expect(dispatch.locals).toContain('policy = 2');
+  expect(pause.frames[dispatch.owner!]!.role).toBe('retained');
+  expect(pause.frames[dispatch.owner!]!.locals).toEqual(dispatch.locals);
+  s.setBreakpoints(
+    [{ tab: 'rows', line: 13 }],
+    { error: false, limitFault: false },
+    tabs,
+  );
+  s.continueDebug('resume');
+  expect(s.pauseView()?.tab).toEqual({ name: 'rows', line: 13 });
+  expect(s.pauseView()?.frames[0]!.locals).toContain('accumulated = 4');
+  expect(s.pauseView()?.frames[0]!.locals).toContain('value = 3');
+  s.setBreakpoints([], { error: false, limitFault: false }, tabs);
+  expect(s.continueDebug('resume')).toEqual([]);
+  expect(s.input('say "done"')).toEqual(['done']);
+  const opened = PlaygroundSession.replay(env, s.transcriptText);
+  if (!('session' in opened)) {
+    throw new Error('Recovery Transcript did not replay');
+  }
+  expect(opened.session.trace).toEqual(s.trace);
+  expect(opened.session.input('go')).toEqual([]);
+  expect(
+    s.trace.filter(line => line.startsWith('offer-entered ')),
+  ).toHaveLength(1);
+});
 
 const start = parseInstant('2026-09-30T10:00:00Z');
 const environment = () => {

@@ -1,0 +1,52 @@
+use loadRows from wrapper
+script variable skipped
+script variable replaced
+script variable checked
+script variable order = ""
+function convert line
+  try
+    return line as number
+  finally
+    try
+      throw "tidy"
+    catch "tidy"
+      put "c" after order
+    end try
+  end try
+end convert
+function available
+  return offerAvailable("skip")
+end available
+on skipRows
+  try
+    put loadRows(["5", "bad", "7"], convert) into skipped
+  catch e before unwind where offerAvailable("skip")
+    if available() then choose offer skip
+  end try
+end skipRows
+on replaceRows
+  try
+    put loadRows(["5", "bad", "7"], convert) into replaced
+  catch e before unwind where 1 / 0 = 0
+    choose offer skip
+  catch e before unwind
+    choose offer useValue(0)
+  end try
+end replaceRows
+on checkChoices
+  try
+    put loadRows(["bad", "bad"], convert) into checked
+  catch e before unwind
+    try
+      choose offer missing
+    catch "offer unavailable"
+      put "u" after order
+    end try
+    try
+      choose offer skip(1)
+    catch "wrong arity"
+      put "a" after order
+    end try
+    choose offer useValue(0)
+  end try
+end checkChoices

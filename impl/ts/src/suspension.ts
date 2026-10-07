@@ -2,6 +2,7 @@
 // suspend, inferred over the call graph to a fixpoint; `and wait` written
 // exactly on a Command Call to a Handler that may; and no Suspension Point
 // in a `finally` block, a named function, or a Handler called function-style.
+import { recoveryBody } from './recovery';
 import type { Report } from './control';
 import type {
   Binding,
@@ -28,9 +29,14 @@ const firstLeaf = (e: SemanticElement): Leaf => {
 
 type Facts = {
   /** Calls to a named function or, function-style, to a Handler. */
-  calls: { binding: Binding; name: SemanticName }[];
+  calls: { binding: Binding; name: SemanticName; restricted: boolean }[];
   /** Command Calls to a Handler, with or without `and wait`. */
-  commands: { binding: Binding; name: SemanticName; wait: boolean }[];
+  commands: {
+    binding: Binding;
+    name: SemanticName;
+    restricted: boolean;
+    wait: boolean;
+  }[];
   /** Its own possible Suspension Points. */
   points: Leaf[];
 };
@@ -86,7 +92,12 @@ const factsOf = (
         } else if (head?.kind === 'name') {
           const binding = head.binding;
           if (binding?.kind === 'handler') {
-            facts.commands.push({ binding, name: head, wait: waits });
+            facts.commands.push({
+              binding,
+              name: head,
+              wait: waits,
+              restricted: cleanup,
+            });
             if (waits && cleanup) {
               report("can't suspend here", head);
             }
@@ -107,7 +118,11 @@ const factsOf = (
           (name.binding?.kind === 'function' ||
             name.binding?.kind === 'handler')
         ) {
-          facts.calls.push({ binding: name.binding, name });
+          facts.calls.push({
+            binding: name.binding,
+            name,
+            restricted: cleanup,
+          });
         }
         break;
       }
@@ -116,7 +131,10 @@ const factsOf = (
       const child = node.children[i]!;
       if (child.kind === 'node') {
         // A `finally` block may hold no Suspension Point (chapter 6).
-        const inFinally = cleanup || word(node.children[i - 1], 'finally');
+        const inFinally =
+          cleanup ||
+          word(node.children[i - 1], 'finally') ||
+          recoveryBody(node, i);
         work.push({ node: child, cleanup: inFinally });
       }
     }
@@ -223,11 +241,14 @@ export const checkSuspension = (
   }
   for (const b of bodies) {
     for (const c of b.facts.commands) {
+      if (c.restricted && maySuspend(c.binding)) {
+        report("can't suspend here", c.name);
+      }
       if (!c.wait && maySuspend(c.binding)) {
         report('missing and wait', c.name);
       } else if (c.wait && !maySuspend(c.binding)) {
         report('needless and wait', c.name);
-      } else if (c.wait && b.kind === 'function') {
+      } else if (c.wait && (b.kind === 'function' || c.restricted)) {
         report("can't suspend here", c.name);
       }
     }
@@ -239,7 +260,7 @@ export const checkSuspension = (
     for (const c of b.facts.calls) {
       if (
         (c.binding.kind === 'handler' && maySuspend(c.binding)) ||
-        (b.kind === 'function' && reached(c.binding))
+        ((b.kind === 'function' || c.restricted) && reached(c.binding))
       ) {
         report("can't suspend here", c.name);
       }

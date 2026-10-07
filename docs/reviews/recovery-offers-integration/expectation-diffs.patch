@@ -1,0 +1,1763 @@
+--- corpus/builtins/function-values/case.trace (cdee6bf)
++++ corpus/builtins/function-values/case.trace (candidate)
+@@ -12,3 +12,3 @@
+-seg probe/r1 start delivery=d1 handler=go clause=1 fuel=270 alloc=3436 state=1818 end=return
+-run probe/r1 outcome=completed delivery=d1 handler=go fuel=270 alloc=3436
+-pumped state=idle fuel=270
++seg probe/r1 start delivery=d1 handler=go clause=1 fuel=272 alloc=3436 state=1818 end=return
++run probe/r1 outcome=completed delivery=d1 handler=go fuel=272 alloc=3436
++pumped state=idle fuel=272
+--- corpus/builtins/object-kind/case.trace (cdee6bf)
++++ corpus/builtins/object-kind/case.trace (candidate)
+@@ -9,3 +9,3 @@
+-seg router/r1 start delivery=d1 handler=go clause=1 fuel=183 alloc=1755 state=1031 end=return
+-run router/r1 outcome=completed delivery=d1 handler=go fuel=183 alloc=1755
+-pumped state=idle fuel=183
++seg router/r1 start delivery=d1 handler=go clause=1 fuel=184 alloc=1755 state=1031 end=return
++run router/r1 outcome=completed delivery=d1 handler=go fuel=184 alloc=1755
++pumped state=idle fuel=184
+--- corpus/capabilities/argument-shapes/case.trace (cdee6bf)
++++ corpus/capabilities/argument-shapes/case.trace (candidate)
+@@ -20,2 +20,2 @@
+-seg form/r2 start delivery=d2 handler=submit clause=1 fuel=22 alloc=792 state=1358 end=return
+-run form/r2 outcome=completed delivery=d2 handler=submit fuel=22 alloc=792
++seg form/r2 start delivery=d2 handler=submit clause=1 fuel=23 alloc=792 state=1358 end=return
++run form/r2 outcome=completed delivery=d2 handler=submit fuel=23 alloc=792
+@@ -23,2 +23,2 @@
+-seg form/r3 start delivery=d3 handler=submit clause=1 fuel=22 alloc=768 state=2034 end=return
+-run form/r3 outcome=completed delivery=d3 handler=submit fuel=22 alloc=768
++seg form/r3 start delivery=d3 handler=submit clause=1 fuel=23 alloc=768 state=2034 end=return
++run form/r3 outcome=completed delivery=d3 handler=submit fuel=23 alloc=768
+@@ -26,2 +26,2 @@
+-seg form/r4 start delivery=d4 handler=submit clause=1 fuel=22 alloc=779 state=2627 end=return
+-run form/r4 outcome=completed delivery=d4 handler=submit fuel=22 alloc=779
++seg form/r4 start delivery=d4 handler=submit clause=1 fuel=23 alloc=779 state=2627 end=return
++run form/r4 outcome=completed delivery=d4 handler=submit fuel=23 alloc=779
+@@ -29,2 +29,2 @@
+-seg form/r5 start delivery=d5 handler=submit clause=1 fuel=22 alloc=788 state=3224 end=return
+-run form/r5 outcome=completed delivery=d5 handler=submit fuel=22 alloc=788
++seg form/r5 start delivery=d5 handler=submit clause=1 fuel=23 alloc=788 state=3224 end=return
++run form/r5 outcome=completed delivery=d5 handler=submit fuel=23 alloc=788
+@@ -32,2 +32,2 @@
+-seg form/r6 start delivery=d6 handler=submit clause=1 fuel=22 alloc=693 state=3868 end=return
+-run form/r6 outcome=completed delivery=d6 handler=submit fuel=22 alloc=693
++seg form/r6 start delivery=d6 handler=submit clause=1 fuel=23 alloc=693 state=3868 end=return
++run form/r6 outcome=completed delivery=d6 handler=submit fuel=23 alloc=693
+@@ -35,3 +35,3 @@
+-seg form/r7 start delivery=d7 handler=wrapped clause=1 fuel=63 alloc=1099 state=4438 end=return
+-run form/r7 outcome=completed delivery=d7 handler=wrapped fuel=63 alloc=1099
+-pumped state=idle fuel=197
++seg form/r7 start delivery=d7 handler=wrapped clause=1 fuel=64 alloc=1099 state=4438 end=return
++run form/r7 outcome=completed delivery=d7 handler=wrapped fuel=64 alloc=1099
++pumped state=idle fuel=203
+--- corpus/capabilities/effect-begin-failed/case.trace (cdee6bf)
++++ corpus/capabilities/effect-begin-failed/case.trace (candidate)
+@@ -12,3 +12,3 @@
+-seg s/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=0 state=26 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=0
+-pumped state=idle fuel=29
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=30 alloc=0 state=26 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=30 alloc=0
++pumped state=idle fuel=30
+--- corpus/capabilities/effect-operation-error/case.trace (cdee6bf)
++++ corpus/capabilities/effect-operation-error/case.trace (candidate)
+@@ -16,3 +16,3 @@
+-seg s/r1 start delivery=d1 handler=go clause=1 fuel=26 alloc=0 state=16 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=26 alloc=0
+-pumped state=idle fuel=26
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=27 alloc=0 state=16 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=27 alloc=0
++pumped state=idle fuel=27
+--- corpus/capabilities/host-failures/case.trace (cdee6bf)
++++ corpus/capabilities/host-failures/case.trace (candidate)
+@@ -21,2 +21,2 @@
+-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=55 alloc=591 state=787 end=return
+-run shop/r1 outcome=completed delivery=d1 handler=check fuel=55 alloc=591
++seg shop/r1 start delivery=d1 handler=check clause=1 fuel=56 alloc=591 state=787 end=return
++run shop/r1 outcome=completed delivery=d1 handler=check fuel=56 alloc=591
+@@ -26,2 +26,2 @@
+-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=52 alloc=500 state=1238 end=return
+-run shop/r2 outcome=completed delivery=d2 handler=check fuel=52 alloc=500
++seg shop/r2 start delivery=d2 handler=check clause=1 fuel=53 alloc=500 state=1238 end=return
++run shop/r2 outcome=completed delivery=d2 handler=check fuel=53 alloc=500
+@@ -31,2 +31,2 @@
+-seg shop/r3 start delivery=d3 handler=check clause=1 fuel=52 alloc=500 state=1689 end=return
+-run shop/r3 outcome=completed delivery=d3 handler=check fuel=52 alloc=500
++seg shop/r3 start delivery=d3 handler=check clause=1 fuel=53 alloc=500 state=1689 end=return
++run shop/r3 outcome=completed delivery=d3 handler=check fuel=53 alloc=500
+@@ -36,2 +36,2 @@
+-seg shop/r4 start delivery=d4 handler=check clause=1 fuel=52 alloc=500 state=2140 end=return
+-run shop/r4 outcome=completed delivery=d4 handler=check fuel=52 alloc=500
++seg shop/r4 start delivery=d4 handler=check clause=1 fuel=53 alloc=500 state=2140 end=return
++run shop/r4 outcome=completed delivery=d4 handler=check fuel=53 alloc=500
+@@ -41,2 +41,2 @@
+-seg shop/r5 start delivery=d5 handler=check clause=1 fuel=52 alloc=500 state=2591 end=return
+-run shop/r5 outcome=completed delivery=d5 handler=check fuel=52 alloc=500
++seg shop/r5 start delivery=d5 handler=check clause=1 fuel=53 alloc=500 state=2591 end=return
++run shop/r5 outcome=completed delivery=d5 handler=check fuel=53 alloc=500
+@@ -46,3 +46,3 @@
+-seg shop/r6 start delivery=d6 handler=check clause=1 fuel=52 alloc=500 state=3042 end=return
+-run shop/r6 outcome=completed delivery=d6 handler=check fuel=52 alloc=500
+-pumped state=idle fuel=315
++seg shop/r6 start delivery=d6 handler=check clause=1 fuel=53 alloc=500 state=3042 end=return
++run shop/r6 outcome=completed delivery=d6 handler=check fuel=53 alloc=500
++pumped state=idle fuel=321
+@@ -55,3 +55,3 @@
+-seg shop/r7 start delivery=d7 handler=check clause=1 fuel=52 alloc=500 state=3542 end=return
+-run shop/r7 outcome=completed delivery=d7 handler=check fuel=52 alloc=500
+-pumped state=idle fuel=52
++seg shop/r7 start delivery=d7 handler=check clause=1 fuel=53 alloc=500 state=3542 end=return
++run shop/r7 outcome=completed delivery=d7 handler=check fuel=53 alloc=500
++pumped state=idle fuel=53
+--- corpus/capabilities/ordinary-grants/case.trace (cdee6bf)
++++ corpus/capabilities/ordinary-grants/case.trace (candidate)
+@@ -20,2 +20,2 @@
+-seg s/r2 start delivery=d2 handler=read clause=1 fuel=41 alloc=577 state=641 end=return
+-run s/r2 outcome=completed delivery=d2 handler=read fuel=41 alloc=577
++seg s/r2 start delivery=d2 handler=read clause=1 fuel=42 alloc=577 state=641 end=return
++run s/r2 outcome=completed delivery=d2 handler=read fuel=42 alloc=577
+@@ -23,3 +23,3 @@
+-seg s/r3 start delivery=d3 handler=read clause=1 fuel=22 alloc=709 state=1302 end=return
+-run s/r3 outcome=completed delivery=d3 handler=read fuel=22 alloc=709
+-pumped state=idle fuel=63
++seg s/r3 start delivery=d3 handler=read clause=1 fuel=23 alloc=709 state=1302 end=return
++run s/r3 outcome=completed delivery=d3 handler=read fuel=23 alloc=709
++pumped state=idle fuel=65
+@@ -30,3 +30,3 @@
+-seg s/r4 start delivery=d4 handler=read clause=1 fuel=22 alloc=520 state=1822 end=return
+-run s/r4 outcome=completed delivery=d4 handler=read fuel=22 alloc=520
+-pumped state=idle fuel=22
++seg s/r4 start delivery=d4 handler=read clause=1 fuel=23 alloc=520 state=1822 end=return
++run s/r4 outcome=completed delivery=d4 handler=read fuel=23 alloc=520
++pumped state=idle fuel=23
+@@ -39,3 +39,3 @@
+-seg s/r5 start delivery=d5 handler=caught clause=1 fuel=54 alloc=69 state=1822 end=return
+-run s/r5 outcome=completed delivery=d5 handler=caught fuel=54 alloc=69
+-pumped state=idle fuel=54
++seg s/r5 start delivery=d5 handler=caught clause=1 fuel=55 alloc=69 state=1822 end=return
++run s/r5 outcome=completed delivery=d5 handler=caught fuel=55 alloc=69
++pumped state=idle fuel=55
+--- corpus/capabilities/revoke-in-flight/case.trace (cdee6bf)
++++ corpus/capabilities/revoke-in-flight/case.trace (candidate)
+@@ -15,3 +15,3 @@
+-seg s/r1 resume fuel=25 alloc=58 state=74 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
+-pumped state=idle fuel=25
++seg s/r1 resume fuel=26 alloc=58 state=74 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
++pumped state=idle fuel=26
+--- corpus/capabilities/revoke-reissue/case.trace (cdee6bf)
++++ corpus/capabilities/revoke-reissue/case.trace (candidate)
+@@ -22,3 +22,3 @@
+-seg s/r1 resume fuel=25 alloc=58 state=74 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
+-pumped state=idle fuel=25
++seg s/r1 resume fuel=26 alloc=58 state=74 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
++pumped state=idle fuel=26
+--- corpus/capabilities/scope-failed-close/case.trace (cdee6bf)
++++ corpus/capabilities/scope-failed-close/case.trace (candidate)
+@@ -17,3 +17,3 @@
+-seg s/r1 start delivery=d1 handler=go clause=1 fuel=42 alloc=8 state=26 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=42 alloc=8
+-pumped state=idle fuel=42
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=43 alloc=8 state=26 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=43 alloc=8
++pumped state=idle fuel=43
+--- corpus/capabilities/scope-slots/case.trace (cdee6bf)
++++ corpus/capabilities/scope-slots/case.trace (candidate)
+@@ -27,3 +27,3 @@
+-seg s/r1 start delivery=d1 handler=go clause=1 fuel=107 alloc=48 state=30 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=107 alloc=48
+-pumped state=idle fuel=107
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=109 alloc=48 state=30 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=48
++pumped state=idle fuel=109
+--- corpus/capabilities/scope-suspension-boundaries/case.trace (cdee6bf)
++++ corpus/capabilities/scope-suspension-boundaries/case.trace (candidate)
+@@ -14,3 +14,3 @@
+-seg s/r1 start delivery=d1 handler=b0 clause=1 fuel=54 alloc=98 state=32 end=return
+-run s/r1 outcome=completed delivery=d1 handler=b0 fuel=54 alloc=98
+-pumped state=idle fuel=54
++seg s/r1 start delivery=d1 handler=b0 clause=1 fuel=55 alloc=98 state=32 end=return
++run s/r1 outcome=completed delivery=d1 handler=b0 fuel=55 alloc=98
++pumped state=idle fuel=55
+@@ -26,3 +26,3 @@
+-seg s/r2 start delivery=d2 handler=b1 clause=1 fuel=54 alloc=112 state=46 end=return
+-run s/r2 outcome=completed delivery=d2 handler=b1 fuel=54 alloc=112
+-pumped state=idle fuel=54
++seg s/r2 start delivery=d2 handler=b1 clause=1 fuel=55 alloc=112 state=46 end=return
++run s/r2 outcome=completed delivery=d2 handler=b1 fuel=55 alloc=112
++pumped state=idle fuel=55
+@@ -38,3 +38,3 @@
+-seg s/r3 start delivery=d3 handler=b2 clause=1 fuel=55 alloc=126 state=60 end=return
+-run s/r3 outcome=completed delivery=d3 handler=b2 fuel=55 alloc=126
+-pumped state=idle fuel=55
++seg s/r3 start delivery=d3 handler=b2 clause=1 fuel=56 alloc=126 state=60 end=return
++run s/r3 outcome=completed delivery=d3 handler=b2 fuel=56 alloc=126
++pumped state=idle fuel=56
+@@ -50,3 +50,3 @@
+-seg s/r4 start delivery=d4 handler=b3 clause=1 fuel=57 alloc=140 state=74 end=return
+-run s/r4 outcome=completed delivery=d4 handler=b3 fuel=57 alloc=140
+-pumped state=idle fuel=57
++seg s/r4 start delivery=d4 handler=b3 clause=1 fuel=58 alloc=140 state=74 end=return
++run s/r4 outcome=completed delivery=d4 handler=b3 fuel=58 alloc=140
++pumped state=idle fuel=58
+@@ -62,3 +62,3 @@
+-seg s/r5 start delivery=d5 handler=b4 clause=1 fuel=57 alloc=154 state=88 end=return
+-run s/r5 outcome=completed delivery=d5 handler=b4 fuel=57 alloc=154
+-pumped state=idle fuel=57
++seg s/r5 start delivery=d5 handler=b4 clause=1 fuel=58 alloc=154 state=88 end=return
++run s/r5 outcome=completed delivery=d5 handler=b4 fuel=58 alloc=154
++pumped state=idle fuel=58
+@@ -74,3 +74,3 @@
+-seg s/r6 start delivery=d6 handler=b5 clause=1 fuel=58 alloc=168 state=102 end=return
+-run s/r6 outcome=completed delivery=d6 handler=b5 fuel=58 alloc=168
+-pumped state=idle fuel=58
++seg s/r6 start delivery=d6 handler=b5 clause=1 fuel=59 alloc=168 state=102 end=return
++run s/r6 outcome=completed delivery=d6 handler=b5 fuel=59 alloc=168
++pumped state=idle fuel=59
+@@ -86,3 +86,3 @@
+-seg s/r7 start delivery=d7 handler=b6 clause=1 fuel=76 alloc=182 state=116 end=return
+-run s/r7 outcome=completed delivery=d7 handler=b6 fuel=76 alloc=182
+-pumped state=idle fuel=76
++seg s/r7 start delivery=d7 handler=b6 clause=1 fuel=77 alloc=182 state=116 end=return
++run s/r7 outcome=completed delivery=d7 handler=b6 fuel=77 alloc=182
++pumped state=idle fuel=77
+--- corpus/capabilities/standard-console-timeout/case.trace (cdee6bf)
++++ corpus/capabilities/standard-console-timeout/case.trace (candidate)
+@@ -13,3 +13,3 @@
+-seg s/r1 resume fuel=14 alloc=0 state=23 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go fuel=28 alloc=0
+-pumped state=idle fuel=14
++seg s/r1 resume fuel=15 alloc=0 state=23 end=return
++run s/r1 outcome=completed delivery=d1 handler=go fuel=29 alloc=0
++pumped state=idle fuel=15
+--- corpus/collecting/partial-error/case.trace (cdee6bf)
++++ corpus/collecting/partial-error/case.trace (candidate)
+@@ -6,3 +6,3 @@
+-seg s/r1 start delivery=d1 handler=go clause=1 fuel=73 alloc=392 state=0 end=return
+-run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=73 alloc=392
+-pumped state=idle fuel=73
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=74 alloc=392 state=0 end=return
++run s/r1 outcome=completed delivery=d1 handler=go value=[[3, 6], "division by zero"] fuel=74 alloc=392
++pumped state=idle fuel=74
+--- corpus/computed-sends/bad-names/case.trace (cdee6bf)
++++ corpus/computed-sends/bad-names/case.trace (candidate)
+@@ -32,2 +32,2 @@
+-seg a/r1 start delivery=d1 handler=go clause=1 fuel=938 alloc=8120 state=7995 end=return
+-run a/r1 outcome=completed delivery=d1 handler=go fuel=938 alloc=8120
++seg a/r1 start delivery=d1 handler=go clause=1 fuel=954 alloc=8120 state=7995 end=return
++run a/r1 outcome=completed delivery=d1 handler=go fuel=954 alloc=8120
+@@ -36 +36 @@
+-pumped state=idle fuel=954
++pumped state=idle fuel=970
+--- corpus/computed-sends/unhandled/case.trace (cdee6bf)
++++ corpus/computed-sends/unhandled/case.trace (candidate)
+@@ -22,3 +22,3 @@
+-seg a/r1 resume fuel=30 alloc=176 state=108 end=return
+-run a/r1 outcome=completed delivery=d1 handler=go fuel=111 alloc=344
+-pumped state=idle fuel=111
++seg a/r1 resume fuel=31 alloc=176 state=108 end=return
++run a/r1 outcome=completed delivery=d1 handler=go fuel=112 alloc=344
++pumped state=idle fuel=112
+--- corpus/disassembly/errors-and-loops/flow.dis (cdee6bf)
++++ corpus/disassembly/errors-and-loops/flow.dis (candidate)
+@@ -30,3 +30,3 @@
+-  3 handler guarded clause 1 (x) locals 9 0115..0192
+-  4 handler leaving clause 1 (xs) locals 6 0193..0310
+-  5 handler cleanup clause 1 (x) locals 3 0311..0333
++  3 handler guarded clause 1 (x) locals 11 0115..0193
++  4 handler leaving clause 1 (xs) locals 8 0194..0311
++  5 handler cleanup clause 1 (x) locals 3 0312..0334
+@@ -153,2 +153,2 @@
+-  0119 43:3 jump 0150
+-  0120 43:3 store 6 ; (6)
++  0119 43:3 jump 0151
++  0120 45:3 store 6 ; (6)
+@@ -156 +156 @@
+-  0122 45:9 test-map 0131
++  0122 45:9 test-map 0132
+@@ -158 +158 @@
+-  0124 45:9 map-get "code" 0131
++  0124 45:9 map-get "code" 0132
+@@ -161,207 +161,208 @@
+-  0127 45:9 test-constant 14 0131 ; "division by zero"
+-  0128 46:9 const 13 ; 0
+-  0129 46:5 store 2 ; y
+-  0130 45:3 jump 0150
+-  0131 47:9 load 6 ; (6)
+-  0132 47:9 test-map 0148
+-  0133 47:9 load 6 ; (6)
+-  0134 47:9 map-get "code" 0148
+-  0135 47:16 store 7 ; (7)
+-  0136 47:9 load 6 ; (6)
+-  0137 47:9 map-get "value" 0148
+-  0138 47:26 store 8 ; (8)
+-  0139 47:35 load 7 ; (7)
+-  0140 47:40 const 15 ; "wrong kind"
+-  0141 47:37 equal
+-  0142 47:35 branch-false 0148
+-  0143 47:3 move 7 3 ; (7), c
+-  0144 47:3 move 8 4 ; (8), v
+-  0145 48:9 load 4 ; v
+-  0146 48:5 store 2 ; y
+-  0147 47:3 jump 0150
+-  0148 43:3 load 6 ; (6)
+-  0149 43:3 rethrow
+-  0150 51:18 const 16 ; "custom"
+-  0151 51:36 load 1 ; x
+-  0152 51:11 map 17 2 ; ["code", "reason"]
+-  0153 51:5 throw
+-  0154 55:9 load 2 ; y
+-  0155 55:5 store 6 ; (6)
+-  0156 55:5 load-var 0 ; log
+-  0157 55:5 load 6 ; (6)
+-  0158 55:5 append
+-  0159 55:5 store-var 0 ; log
+-  0160 50:3 jump 0188
+-  0161 50:3 store 6 ; (6)
+-  0162 52:9 load 6 ; (6)
+-  0163 52:9 store 7 ; (7)
+-  0164 52:29 load 7 ; (7)
+-  0165 52:17 get-key "code"
+-  0166 52:34 const 16 ; "custom"
+-  0167 52:31 equal
+-  0168 52:17 branch-false 0179
+-  0169 52:3 move 7 5 ; (7), e
+-  0170 53:9 load 5 ; e
+-  0171 53:5 store 2 ; y
+-  0172 55:9 load 2 ; y
+-  0173 55:5 store 7 ; (7)
+-  0174 55:5 load-var 0 ; log
+-  0175 55:5 load 7 ; (7)
+-  0176 55:5 append
+-  0177 55:5 store-var 0 ; log
+-  0178 52:3 jump 0188
+-  0179 50:3 load 6 ; (6)
+-  0180 50:3 rethrow
+-  0181 55:9 load 2 ; y
+-  0182 55:5 store 6 ; (6)
+-  0183 55:5 load-var 0 ; log
+-  0184 55:5 load 6 ; (6)
+-  0185 55:5 append
+-  0186 55:5 store-var 0 ; log
+-  0187 50:3 end-cleanup
+-  0188 57:10 load 2 ; y
+-  0189 57:3 return
+-  0190 58:1 const 0 ; nothing
+-  0191 58:1 return
+-  0192 58:1 clause-fail
+-  0193 61:24 load 1 ; xs
+-  0194 61:3 iterate
+-  0195 61:3 next 0248
+-  0196 61:3 store 2 ; x
+-  0197 63:10 load 2 ; x
+-  0198 63:14 const 4 ; 1
+-  0199 63:12 equal
+-  0200 63:7 branch-false 0208
+-  0201 67:11 load 2 ; x
+-  0202 67:7 store 4 ; (4)
+-  0203 67:7 load-var 0 ; log
+-  0204 67:7 load 4 ; (4)
+-  0205 67:7 append
+-  0206 67:7 store-var 0 ; log
+-  0207 63:21 jump 0195
+-  0208 64:10 load 2 ; x
+-  0209 64:14 const 1 ; 2
+-  0210 64:12 equal
+-  0211 64:7 branch-false 0219
+-  0212 67:11 load 2 ; x
+-  0213 67:7 store 4 ; (4)
+-  0214 67:7 load-var 0 ; log
+-  0215 67:7 load 4 ; (4)
+-  0216 67:7 append
+-  0217 67:7 store-var 0 ; log
+-  0218 64:21 jump 0248
+-  0219 65:10 load 2 ; x
+-  0220 65:14 const 7 ; 3
+-  0221 65:12 equal
+-  0222 65:7 branch-false 0233
+-  0223 65:28 const 8 ; "three"
+-  0224 65:21 store 4 ; (4)
+-  0225 67:11 load 2 ; x
+-  0226 67:7 store 5 ; (5)
+-  0227 67:7 load-var 0 ; log
+-  0228 67:7 load 5 ; (5)
+-  0229 67:7 append
+-  0230 67:7 store-var 0 ; log
+-  0231 65:21 load 4 ; (4)
+-  0232 65:21 return
+-  0233 67:11 load 2 ; x
+-  0234 67:7 store 4 ; (4)
+-  0235 67:7 load-var 0 ; log
+-  0236 67:7 load 4 ; (4)
+-  0237 67:7 append
+-  0238 67:7 store-var 0 ; log
+-  0239 62:5 jump 0247
+-  0240 67:11 load 2 ; x
+-  0241 67:7 store 4 ; (4)
+-  0242 67:7 load-var 0 ; log
+-  0243 67:7 load 4 ; (4)
+-  0244 67:7 append
+-  0245 67:7 store-var 0 ; log
+-  0246 62:5 end-cleanup
+-  0247 61:3 jump 0195
+-  0248 61:3 pop
+-  0249 72:14 const 18 ; "inner"
+-  0250 72:7 store 4 ; (4)
+-  0251 74:11 const 18 ; "inner"
+-  0252 74:7 store 5 ; (5)
+-  0253 74:7 load-var 0 ; log
+-  0254 74:7 load 5 ; (5)
+-  0255 74:7 append
+-  0256 74:7 store-var 0 ; log
+-  0257 79:9 const 19 ; "outer"
+-  0258 79:5 store 5 ; (5)
+-  0259 79:5 load-var 0 ; log
+-  0260 79:5 load 5 ; (5)
+-  0261 79:5 append
+-  0262 79:5 store-var 0 ; log
+-  0263 72:7 load 4 ; (4)
+-  0264 72:7 return
+-  0265 74:11 const 18 ; "inner"
+-  0266 74:7 store 4 ; (4)
+-  0267 74:7 load-var 0 ; log
+-  0268 74:7 load 4 ; (4)
+-  0269 74:7 append
+-  0270 74:7 store-var 0 ; log
+-  0271 71:5 jump 0279
+-  0272 74:11 const 18 ; "inner"
+-  0273 74:7 store 4 ; (4)
+-  0274 74:7 load-var 0 ; log
+-  0275 74:7 load 4 ; (4)
+-  0276 74:7 append
+-  0277 74:7 store-var 0 ; log
+-  0278 71:5 end-cleanup
+-  0279 79:9 const 19 ; "outer"
+-  0280 79:5 store 4 ; (4)
+-  0281 79:5 load-var 0 ; log
+-  0282 79:5 load 4 ; (4)
+-  0283 79:5 append
+-  0284 79:5 store-var 0 ; log
+-  0285 70:3 jump 0308
+-  0286 70:3 store 4 ; (4)
+-  0287 76:9 load 4 ; (4)
+-  0288 76:9 store 5 ; (5)
+-  0289 76:3 move 5 3 ; (5), err
+-  0290 77:11 load 3 ; err
+-  0291 77:5 throw
+-  0292 79:9 const 19 ; "outer"
+-  0293 79:5 store 5 ; (5)
+-  0294 79:5 load-var 0 ; log
+-  0295 79:5 load 5 ; (5)
+-  0296 79:5 append
+-  0297 79:5 store-var 0 ; log
+-  0298 76:3 jump 0308
+-  0299 70:3 load 4 ; (4)
+-  0300 70:3 rethrow
+-  0301 79:9 const 19 ; "outer"
+-  0302 79:5 store 4 ; (4)
+-  0303 79:5 load-var 0 ; log
+-  0304 79:5 load 4 ; (4)
+-  0305 79:5 append
+-  0306 79:5 store-var 0 ; log
+-  0307 70:3 end-cleanup
+-  0308 81:1 const 0 ; nothing
+-  0309 81:1 return
+-  0310 81:1 clause-fail
+-  0311 84:7 load 1 ; x
+-  0312 84:3 store 2 ; (2)
+-  0313 84:3 load-var 0 ; log
+-  0314 84:3 load 2 ; (2)
+-  0315 84:3 append
+-  0316 84:3 store-var 0 ; log
+-  0317 86:7 const 20 ; "done"
+-  0318 86:3 store 2 ; (2)
+-  0319 86:3 load-var 0 ; log
+-  0320 86:3 load 2 ; (2)
+-  0321 86:3 append
+-  0322 86:3 store-var 0 ; log
+-  0323 85:1 jump 0331
+-  0324 86:7 const 20 ; "done"
+-  0325 86:3 store 2 ; (2)
+-  0326 86:3 load-var 0 ; log
+-  0327 86:3 load 2 ; (2)
+-  0328 86:3 append
+-  0329 86:3 store-var 0 ; log
+-  0330 85:1 end-cleanup
+-  0331 87:1 const 0 ; nothing
+-  0332 87:1 return
+-  0333 87:1 clause-fail
++  0127 45:9 test-constant 14 0132 ; "division by zero"
++  0128 45:3 catch-accept
++  0129 46:9 const 13 ; 0
++  0130 46:5 store 2 ; y
++  0131 45:3 jump 0151
++  0132 47:9 load 6 ; (6)
++  0133 47:9 test-map 0150
++  0134 47:9 load 6 ; (6)
++  0135 47:9 map-get "code" 0150
++  0136 47:16 store 7 ; (7)
++  0137 47:9 load 6 ; (6)
++  0138 47:9 map-get "value" 0150
++  0139 47:26 store 8 ; (8)
++  0140 47:35 load 7 ; (7)
++  0141 47:40 const 15 ; "wrong kind"
++  0142 47:37 equal
++  0143 47:35 branch-false 0150
++  0144 47:3 catch-accept
++  0145 47:3 move 7 3 ; (7), c
++  0146 47:3 move 8 4 ; (8), v
++  0147 48:9 load 4 ; v
++  0148 48:5 store 2 ; y
++  0149 47:3 jump 0151
++  0150 47:3 catch-next
++  0151 51:18 const 16 ; "custom"
++  0152 51:36 load 1 ; x
++  0153 51:11 map 17 2 ; ["code", "reason"]
++  0154 51:5 throw
++  0155 55:9 load 2 ; y
++  0156 55:5 store 6 ; (6)
++  0157 55:5 load-var 0 ; log
++  0158 55:5 load 6 ; (6)
++  0159 55:5 append
++  0160 55:5 store-var 0 ; log
++  0161 50:3 jump 0189
++  0162 52:3 store 9 ; (9)
++  0163 52:9 load 9 ; (9)
++  0164 52:9 store 10 ; (10)
++  0165 52:29 load 10 ; (10)
++  0166 52:17 get-key "code"
++  0167 52:34 const 16 ; "custom"
++  0168 52:31 equal
++  0169 52:17 branch-false 0181
++  0170 52:3 catch-accept
++  0171 52:3 move 10 5 ; (10), e
++  0172 53:9 load 5 ; e
++  0173 53:5 store 2 ; y
++  0174 55:9 load 2 ; y
++  0175 55:5 store 10 ; (10)
++  0176 55:5 load-var 0 ; log
++  0177 55:5 load 10 ; (10)
++  0178 55:5 append
++  0179 55:5 store-var 0 ; log
++  0180 52:3 jump 0189
++  0181 52:3 catch-next
++  0182 55:9 load 2 ; y
++  0183 55:5 store 6 ; (6)
++  0184 55:5 load-var 0 ; log
++  0185 55:5 load 6 ; (6)
++  0186 55:5 append
++  0187 55:5 store-var 0 ; log
++  0188 50:3 end-cleanup
++  0189 57:10 load 2 ; y
++  0190 57:3 return
++  0191 58:1 const 0 ; nothing
++  0192 58:1 return
++  0193 58:1 clause-fail
++  0194 61:24 load 1 ; xs
++  0195 61:3 iterate
++  0196 61:3 next 0249
++  0197 61:3 store 2 ; x
++  0198 63:10 load 2 ; x
++  0199 63:14 const 4 ; 1
++  0200 63:12 equal
++  0201 63:7 branch-false 0209
++  0202 67:11 load 2 ; x
++  0203 67:7 store 4 ; (4)
++  0204 67:7 load-var 0 ; log
++  0205 67:7 load 4 ; (4)
++  0206 67:7 append
++  0207 67:7 store-var 0 ; log
++  0208 63:21 jump 0196
++  0209 64:10 load 2 ; x
++  0210 64:14 const 1 ; 2
++  0211 64:12 equal
++  0212 64:7 branch-false 0220
++  0213 67:11 load 2 ; x
++  0214 67:7 store 4 ; (4)
++  0215 67:7 load-var 0 ; log
++  0216 67:7 load 4 ; (4)
++  0217 67:7 append
++  0218 67:7 store-var 0 ; log
++  0219 64:21 jump 0249
++  0220 65:10 load 2 ; x
++  0221 65:14 const 7 ; 3
++  0222 65:12 equal
++  0223 65:7 branch-false 0234
++  0224 65:28 const 8 ; "three"
++  0225 65:21 store 4 ; (4)
++  0226 67:11 load 2 ; x
++  0227 67:7 store 5 ; (5)
++  0228 67:7 load-var 0 ; log
++  0229 67:7 load 5 ; (5)
++  0230 67:7 append
++  0231 67:7 store-var 0 ; log
++  0232 65:21 load 4 ; (4)
++  0233 65:21 return
++  0234 67:11 load 2 ; x
++  0235 67:7 store 4 ; (4)
++  0236 67:7 load-var 0 ; log
++  0237 67:7 load 4 ; (4)
++  0238 67:7 append
++  0239 67:7 store-var 0 ; log
++  0240 62:5 jump 0248
++  0241 67:11 load 2 ; x
++  0242 67:7 store 4 ; (4)
++  0243 67:7 load-var 0 ; log
++  0244 67:7 load 4 ; (4)
++  0245 67:7 append
++  0246 67:7 store-var 0 ; log
++  0247 62:5 end-cleanup
++  0248 61:3 jump 0196
++  0249 61:3 pop
++  0250 72:14 const 18 ; "inner"
++  0251 72:7 store 4 ; (4)
++  0252 74:11 const 18 ; "inner"
++  0253 74:7 store 5 ; (5)
++  0254 74:7 load-var 0 ; log
++  0255 74:7 load 5 ; (5)
++  0256 74:7 append
++  0257 74:7 store-var 0 ; log
++  0258 79:9 const 19 ; "outer"
++  0259 79:5 store 5 ; (5)
++  0260 79:5 load-var 0 ; log
++  0261 79:5 load 5 ; (5)
++  0262 79:5 append
++  0263 79:5 store-var 0 ; log
++  0264 72:7 load 4 ; (4)
++  0265 72:7 return
++  0266 74:11 const 18 ; "inner"
++  0267 74:7 store 4 ; (4)
++  0268 74:7 load-var 0 ; log
++  0269 74:7 load 4 ; (4)
++  0270 74:7 append
++  0271 74:7 store-var 0 ; log
++  0272 71:5 jump 0280
++  0273 74:11 const 18 ; "inner"
++  0274 74:7 store 4 ; (4)
++  0275 74:7 load-var 0 ; log
++  0276 74:7 load 4 ; (4)
++  0277 74:7 append
++  0278 74:7 store-var 0 ; log
++  0279 71:5 end-cleanup
++  0280 79:9 const 19 ; "outer"
++  0281 79:5 store 4 ; (4)
++  0282 79:5 load-var 0 ; log
++  0283 79:5 load 4 ; (4)
++  0284 79:5 append
++  0285 79:5 store-var 0 ; log
++  0286 70:3 jump 0309
++  0287 76:3 store 6 ; (6)
++  0288 76:9 load 6 ; (6)
++  0289 76:9 store 7 ; (7)
++  0290 76:3 catch-accept
++  0291 76:3 move 7 3 ; (7), err
++  0292 77:11 load 3 ; err
++  0293 77:5 throw
++  0294 79:9 const 19 ; "outer"
++  0295 79:5 store 7 ; (7)
++  0296 79:5 load-var 0 ; log
++  0297 79:5 load 7 ; (7)
++  0298 79:5 append
++  0299 79:5 store-var 0 ; log
++  0300 76:3 jump 0309
++  0301 76:3 catch-next
++  0302 79:9 const 19 ; "outer"
++  0303 79:5 store 4 ; (4)
++  0304 79:5 load-var 0 ; log
++  0305 79:5 load 4 ; (4)
++  0306 79:5 append
++  0307 79:5 store-var 0 ; log
++  0308 70:3 end-cleanup
++  0309 81:1 const 0 ; nothing
++  0310 81:1 return
++  0311 81:1 clause-fail
++  0312 84:7 load 1 ; x
++  0313 84:3 store 2 ; (2)
++  0314 84:3 load-var 0 ; log
++  0315 84:3 load 2 ; (2)
++  0316 84:3 append
++  0317 84:3 store-var 0 ; log
++  0318 86:7 const 20 ; "done"
++  0319 86:3 store 2 ; (2)
++  0320 86:3 load-var 0 ; log
++  0321 86:3 load 2 ; (2)
++  0322 86:3 append
++  0323 86:3 store-var 0 ; log
++  0324 85:1 jump 0332
++  0325 86:7 const 20 ; "done"
++  0326 86:3 store 2 ; (2)
++  0327 86:3 load-var 0 ; log
++  0328 86:3 load 2 ; (2)
++  0329 86:3 append
++  0330 86:3 store-var 0 ; log
++  0331 85:1 end-cleanup
++  0332 87:1 const 0 ; nothing
++  0333 87:1 return
++  0334 87:1 clause-fail
+@@ -370,19 +371,19 @@
+-  0121..0127 guard -> 0131 depth 0
+-  0131..0142 guard -> 0148 depth 0
+-  0150..0153 catch -> 0161 depth 0
+-  0162..0168 guard -> 0179 depth 0
+-  0150..0153 finally -> 0181 depth 0
+-  0162..0171 finally -> 0181 depth 0
+-  0179..0180 finally -> 0181 depth 0
+-  0197..0200 finally -> 0240 depth 1
+-  0208..0211 finally -> 0240 depth 1
+-  0219..0224 finally -> 0240 depth 1
+-  0249..0250 finally -> 0272 depth 0
+-  0249..0250 catch -> 0286 depth 0
+-  0265..0278 catch -> 0286 depth 0
+-  0287..0288 guard -> 0299 depth 0
+-  0249..0250 finally -> 0301 depth 0
+-  0265..0278 finally -> 0301 depth 0
+-  0287..0291 finally -> 0301 depth 0
+-  0299..0300 finally -> 0301 depth 0
+-  0311..0316 finally -> 0324 depth 0
++  0121..0127 guard -> 0132 depth 0
++  0132..0143 guard -> 0150 depth 0
++  0151..0154 catch -> 0162 depth 0
++  0163..0169 guard -> 0181 depth 0
++  0151..0154 finally -> 0182 depth 0
++  0163..0173 finally -> 0182 depth 0
++  0181..0181 finally -> 0182 depth 0
++  0198..0201 finally -> 0241 depth 1
++  0209..0212 finally -> 0241 depth 1
++  0220..0225 finally -> 0241 depth 1
++  0250..0251 finally -> 0273 depth 0
++  0250..0251 catch -> 0287 depth 0
++  0266..0279 catch -> 0287 depth 0
++  0288..0289 guard -> 0301 depth 0
++  0250..0251 finally -> 0302 depth 0
++  0266..0279 finally -> 0302 depth 0
++  0288..0293 finally -> 0302 depth 0
++  0301..0301 finally -> 0302 depth 0
++  0312..0317 finally -> 0325 depth 0
+--- corpus/errors/lambda-capture-parity/case.trace (cdee6bf)
++++ corpus/errors/lambda-capture-parity/case.trace (candidate)
+@@ -22,2 +22,2 @@
+-seg a/r3 start delivery=d3 handler=nested clause=1 fuel=58 alloc=96 state=1155 end=return
+-run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=58 alloc=96
++seg a/r3 start delivery=d3 handler=nested clause=1 fuel=59 alloc=96 state=1155 end=return
++run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=59 alloc=96
+@@ -26,2 +26,2 @@
+-seg a/r1 resume fuel=11 alloc=0 state=456 end=return
+-run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=104 alloc=160
++seg a/r1 resume fuel=12 alloc=0 state=456 end=return
++run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=105 alloc=160
+@@ -29 +29 @@
+-pumped state=idle fuel=279 next=1970-01-01T00:00:00.01Z
++pumped state=idle fuel=281 next=1970-01-01T00:00:00.01Z
+@@ -33,3 +33,3 @@
+-seg a/r2 resume fuel=11 alloc=0 state=0 end=return
+-run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=75 alloc=96
+-pumped state=idle fuel=11 next=1970-01-01T00:00:01Z
++seg a/r2 resume fuel=12 alloc=0 state=0 end=return
++run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=76 alloc=96
++pumped state=idle fuel=12 next=1970-01-01T00:00:01Z
+--- corpus/libraries/caller-capabilities/case.trace (cdee6bf)
++++ corpus/libraries/caller-capabilities/case.trace (candidate)
+@@ -54,3 +54,3 @@
+-seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=51 alloc=42 state=154 end=return
+-run s/r4 outcome=completed delivery=d4 handler=revoked fuel=51 alloc=42
+-pumped state=idle fuel=51
++seg s/r4 start delivery=d4 handler=revoked clause=1 fuel=52 alloc=42 state=154 end=return
++run s/r4 outcome=completed delivery=d4 handler=revoked fuel=52 alloc=42
++pumped state=idle fuel=52
+--- corpus/libraries/errors/case.trace (cdee6bf)
++++ corpus/libraries/errors/case.trace (candidate)
+@@ -14,2 +14,2 @@
+-seg meter/r1 start delivery=d1 handler=go clause=1 fuel=76 alloc=0 state=469 end=return
+-run meter/r1 outcome=completed delivery=d1 handler=go fuel=76 alloc=0
++seg meter/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=0 state=469 end=return
++run meter/r1 outcome=completed delivery=d1 handler=go fuel=78 alloc=0
+@@ -23 +23 @@
+-pumped state=idle fuel=621
++pumped state=idle fuel=623
+--- corpus/limits/mailbox-depth/case.trace (cdee6bf)
++++ corpus/limits/mailbox-depth/case.trace (candidate)
+@@ -26,2 +26,2 @@
+-seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=134 alloc=241 state=20 end=return
+-run sender/r1 outcome=completed delivery=d1 handler=flood fuel=134 alloc=241
++seg sender/r1 start delivery=d1 handler=flood clause=1 fuel=135 alloc=241 state=20 end=return
++run sender/r1 outcome=completed delivery=d1 handler=flood fuel=135 alloc=241
+@@ -32 +32 @@
+-pumped state=idle fuel=166
++pumped state=idle fuel=167
+--- corpus/limits/max-wait-minimum/case.trace (cdee6bf)
++++ corpus/limits/max-wait-minimum/case.trace (candidate)
+@@ -30,3 +30,3 @@
+-seg waiter/r1 resume fuel=32 alloc=43 state=0 end=return
+-run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=47 alloc=43
+-pumped state=idle fuel=32
++seg waiter/r1 resume fuel=33 alloc=43 state=0 end=return
++run waiter/r1 outcome=completed delivery=d1 handler=fetch value="timed out" fuel=48 alloc=43
++pumped state=idle fuel=33
+--- corpus/objects/properties/case.trace (cdee6bf)
++++ corpus/objects/properties/case.trace (candidate)
+@@ -15,3 +15,3 @@
+-seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=130 alloc=1244 state=1094 end=return
+-run lamp/r1 outcome=completed delivery=d1 handler=go fuel=130 alloc=1244
+-pumped state=idle fuel=130
++seg lamp/r1 start delivery=d1 handler=go clause=1 fuel=132 alloc=1244 state=1094 end=return
++run lamp/r1 outcome=completed delivery=d1 handler=go fuel=132 alloc=1244
++pumped state=idle fuel=132
+@@ -22,3 +22,3 @@
+-seg lamp/r2 start delivery=d2 handler=later clause=1 fuel=45 alloc=577 state=1609 end=return
+-run lamp/r2 outcome=completed delivery=d2 handler=later fuel=45 alloc=577
+-pumped state=idle fuel=45
++seg lamp/r2 start delivery=d2 handler=later clause=1 fuel=46 alloc=577 state=1609 end=return
++run lamp/r2 outcome=completed delivery=d2 handler=later fuel=46 alloc=577
++pumped state=idle fuel=46
+--- corpus/save-restore/preempted-join-keeps-pending-members/case.trace (cdee6bf)
++++ corpus/save-restore/preempted-join-keeps-pending-members/case.trace (candidate)
+@@ -29 +29 @@
+-seg shop/r1 continue fuel=10 alloc=0 state=240 end=join-end
++seg shop/r1 continue fuel=10 alloc=0 state=256 end=join-end
+@@ -31,3 +31,3 @@
+-seg shop/r1 resume fuel=20 alloc=33 state=49 end=return
+-run shop/r1 outcome=completed delivery=d1 handler=gather fuel=68 alloc=33
+-pumped state=idle fuel=30
++seg shop/r1 resume fuel=21 alloc=33 state=49 end=return
++run shop/r1 outcome=completed delivery=d1 handler=gather fuel=69 alloc=33
++pumped state=idle fuel=31
+--- corpus/save-restore/settle-answer-and-fail/case.trace (cdee6bf)
++++ corpus/save-restore/settle-answer-and-fail/case.trace (candidate)
+@@ -19 +19 @@
+-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
++seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=380 end=ask-wait
+@@ -21 +21 @@
+-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
++seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
+@@ -31 +31 @@
+-seg shop/r1 resume fuel=21 alloc=156 state=356 end=return
++seg shop/r1 resume fuel=21 alloc=156 state=372 end=return
+@@ -34,3 +34,3 @@
+-seg shop/r2 resume fuel=27 alloc=180 state=176 end=return
+-run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=180
+-pumped state=idle fuel=48
++seg shop/r2 resume fuel=28 alloc=180 state=176 end=return
++run shop/r2 outcome=completed delivery=d2 handler=check fuel=143 alloc=180
++pumped state=idle fuel=49
+--- corpus/save-restore/settle-reissue-and-adopt/case.trace (cdee6bf)
++++ corpus/save-restore/settle-reissue-and-adopt/case.trace (candidate)
+@@ -20 +20 @@
+-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=364 end=ask-wait
++seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=380 end=ask-wait
+@@ -22 +22 @@
+-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=612 end=ask-wait
++seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
+@@ -43 +43 @@
+-seg shop/r2 resume fuel=21 alloc=156 state=340 end=return
++seg shop/r2 resume fuel=21 alloc=156 state=356 end=return
+@@ -47,3 +47,3 @@
+-seg shop/r1 resume fuel=26 alloc=154 state=171 end=return
+-run shop/r1 outcome=completed delivery=d1 handler=check fuel=141 alloc=154
+-pumped state=idle fuel=47
++seg shop/r1 resume fuel=27 alloc=154 state=171 end=return
++run shop/r1 outcome=completed delivery=d1 handler=check fuel=142 alloc=154
++pumped state=idle fuel=48
+--- corpus/save-restore/unbound-grant-and-unresolved-object/case.trace (cdee6bf)
++++ corpus/save-restore/unbound-grant-and-unresolved-object/case.trace (candidate)
+@@ -34,3 +34,3 @@
+-seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=46 alloc=77 state=149 end=return
+-run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=46 alloc=77
+-pumped state=idle fuel=46
++seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=48 alloc=77 state=149 end=return
++run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=48 alloc=77
++pumped state=idle fuel=48
+--- corpus/save-restore/unsettled-call-is-lost/case.trace (cdee6bf)
++++ corpus/save-restore/unsettled-call-is-lost/case.trace (candidate)
+@@ -23 +23 @@
+-seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=396 end=ask-wait
++seg shop/r1 start delivery=d1 handler=check clause=1 fuel=115 alloc=0 state=412 end=ask-wait
+@@ -25,2 +25,2 @@
+-seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 end=ask-wait
+-seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=804 end=wait until=2026-09-30T10:00:05Z
++seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=676 end=ask-wait
++seg shop/r3 start delivery=d3 handler=nap clause=1 fuel=15 alloc=0 state=836 end=wait until=2026-09-30T10:00:05Z
+@@ -35 +35 @@
+-seg shop/r1 resume fuel=21 alloc=156 state=532 end=return
++seg shop/r1 resume fuel=21 alloc=156 state=548 end=return
+@@ -38,2 +38,2 @@
+-seg shop/r2 resume fuel=26 alloc=158 state=365 end=return
+-run shop/r2 outcome=completed delivery=d2 handler=check fuel=141 alloc=158
++seg shop/r2 resume fuel=27 alloc=158 state=365 end=return
++run shop/r2 outcome=completed delivery=d2 handler=check fuel=142 alloc=158
+@@ -42 +42 @@
+-pumped state=idle fuel=65
++pumped state=idle fuel=66
+--- corpus/stdlib/errors-name-the-call/case.trace (cdee6bf)
++++ corpus/stdlib/errors-name-the-call/case.trace (candidate)
+@@ -12,2 +12,2 @@
+-seg checks/r1 start delivery=d1 handler=go clause=1 fuel=134 alloc=297 state=544 end=return
+-run checks/r1 outcome=completed delivery=d1 handler=go fuel=134 alloc=297
++seg checks/r1 start delivery=d1 handler=go clause=1 fuel=135 alloc=297 state=544 end=return
++run checks/r1 outcome=completed delivery=d1 handler=go fuel=135 alloc=297
+@@ -20 +20 @@
+-pumped state=idle fuel=1264
++pumped state=idle fuel=1265
+--- corpus/stdlib/template-migration/case.trace (cdee6bf)
++++ corpus/stdlib/template-migration/case.trace (candidate)
+@@ -16,3 +16,3 @@
+-seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=6968 alloc=17592 state=3148 end=return
+-run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=6968 alloc=17592
+-pumped state=idle fuel=46978
++seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=6973 alloc=17592 state=3148 end=return
++run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=6973 alloc=17592
++pumped state=idle fuel=46983
+--- corpus/suspension/answers/case.trace (cdee6bf)
++++ corpus/suspension/answers/case.trace (candidate)
+@@ -14 +14 @@
+-seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=509 end=ask-wait
++seg fetcher/r1 start delivery=d1 handler=fetch clause=1 fuel=55 alloc=0 state=525 end=ask-wait
+@@ -16 +16 @@
+-seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=757 end=ask-wait
++seg fetcher/r2 start delivery=d2 handler=fetch clause=1 fuel=55 alloc=0 state=789 end=ask-wait
+@@ -18 +18 @@
+-seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1005 end=ask-wait
++seg fetcher/r3 start delivery=d3 handler=fetch clause=1 fuel=55 alloc=0 state=1053 end=ask-wait
+@@ -20 +20 @@
+-seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1253 end=ask-wait
++seg fetcher/r4 start delivery=d4 handler=fetch clause=1 fuel=55 alloc=0 state=1317 end=ask-wait
+@@ -22 +22 @@
+-seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1501 end=ask-wait
++seg fetcher/r5 start delivery=d5 handler=fetch clause=1 fuel=55 alloc=0 state=1581 end=ask-wait
+@@ -29 +29 @@
+-seg fetcher/r1 resume fuel=22 alloc=40 state=1165 end=return
++seg fetcher/r1 resume fuel=22 alloc=40 state=1229 end=return
+@@ -32,2 +32,2 @@
+-seg fetcher/r2 resume fuel=19 alloc=524 state=1318 end=return
+-run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=74 alloc=524
++seg fetcher/r2 resume fuel=20 alloc=524 state=1366 end=return
++run fetcher/r2 outcome=completed delivery=d2 handler=fetch fuel=75 alloc=524
+@@ -36,2 +36,2 @@
+-seg fetcher/r3 resume fuel=17 alloc=501 state=1570 end=return
+-run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=72 alloc=501
++seg fetcher/r3 resume fuel=18 alloc=501 state=1602 end=return
++run fetcher/r3 outcome=completed delivery=d3 handler=fetch fuel=73 alloc=501
+@@ -40,3 +40,3 @@
+-seg fetcher/r4 resume fuel=17 alloc=501 state=1802 end=return
+-run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=72 alloc=501
+-pumped state=idle fuel=75 next=2026-09-30T09:00:03Z
++seg fetcher/r4 resume fuel=18 alloc=501 state=1818 end=return
++run fetcher/r4 outcome=completed delivery=d4 handler=fetch fuel=73 alloc=501
++pumped state=idle fuel=78 next=2026-09-30T09:00:03Z
+@@ -46,3 +46,3 @@
+-seg fetcher/r5 resume fuel=17 alloc=547 state=2052 end=return
+-run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=72 alloc=547
+-pumped state=idle fuel=17
++seg fetcher/r5 resume fuel=18 alloc=547 state=2052 end=return
++run fetcher/r5 outcome=completed delivery=d5 handler=fetch fuel=73 alloc=547
++pumped state=idle fuel=18
+--- corpus/suspension/capability-resumption/case.trace (cdee6bf)
++++ corpus/suspension/capability-resumption/case.trace (candidate)
+@@ -36,3 +36,3 @@
+-seg s/r2 resume fuel=8 alloc=16 state=32 end=return
+-run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=73 alloc=16
+-pumped state=idle fuel=8
++seg s/r2 resume fuel=9 alloc=16 state=32 end=return
++run s/r2 outcome=completed delivery=d2 handler=gather value={code: "gone", capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 2} fuel=74 alloc=16
++pumped state=idle fuel=9
+--- corpus/suspension/join-closing-position/case.trace (cdee6bf)
++++ corpus/suspension/join-closing-position/case.trace (candidate)
+@@ -20,2 +20,2 @@
+-seg a/r1 resume fuel=17 alloc=824 state=1288 end=return
+-run a/r1 outcome=completed delivery=d1 handler=direct fuel=89 alloc=920
++seg a/r1 resume fuel=18 alloc=824 state=1288 end=return
++run a/r1 outcome=completed delivery=d1 handler=direct fuel=90 alloc=920
+@@ -28,3 +28,3 @@
+-seg a/r2 resume fuel=21 alloc=823 state=1663 end=return
+-run a/r2 outcome=completed delivery=d2 handler=local fuel=106 alloc=919
+-pumped state=idle fuel=277
++seg a/r2 resume fuel=22 alloc=823 state=1663 end=return
++run a/r2 outcome=completed delivery=d2 handler=local fuel=107 alloc=919
++pumped state=idle fuel=279
+@@ -50,2 +50,2 @@
+-seg a/r3 resume fuel=17 alloc=479 state=2494 end=return
+-run a/r3 outcome=completed delivery=d3 handler=direct fuel=89 alloc=575
++seg a/r3 resume fuel=18 alloc=479 state=2494 end=return
++run a/r3 outcome=completed delivery=d3 handler=direct fuel=90 alloc=575
+@@ -54,3 +54,3 @@
+-seg a/r4 resume fuel=21 alloc=478 state=2620 end=return
+-run a/r4 outcome=completed delivery=d4 handler=local fuel=106 alloc=574
+-pumped state=idle fuel=38 next=2026-10-04T12:00:02Z
++seg a/r4 resume fuel=22 alloc=478 state=2620 end=return
++run a/r4 outcome=completed delivery=d4 handler=local fuel=107 alloc=574
++pumped state=idle fuel=40 next=2026-10-04T12:00:02Z
+@@ -64 +64 @@
+-counters a fuel=390 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
++counters a fuel=394 alloc=2988 runs=4 faults=0 state=2620 mailbox=0
+--- corpus/suspension/joins/case.trace (cdee6bf)
++++ corpus/suspension/joins/case.trace (candidate)
+@@ -21 +21 @@
+-seg board/r1 start delivery=d1 handler=gather clause=1 fuel=148 alloc=122 state=782 end=join-end
++seg board/r1 start delivery=d1 handler=gather clause=1 fuel=148 alloc=122 state=798 end=join-end
+@@ -24 +24 @@
+-seg board/r2 start delivery=d2 handler=gather clause=1 fuel=44 alloc=64 state=728 end=return
++seg board/r2 start delivery=d2 handler=gather clause=1 fuel=44 alloc=64 state=744 end=return
+@@ -32 +32 @@
+-seg board/r3 start delivery=d3 handler=gather clause=1 fuel=148 alloc=122 state=1115 end=join-end
++seg board/r3 start delivery=d3 handler=gather clause=1 fuel=148 alloc=122 state=1147 end=join-end
+@@ -37 +37 @@
+-seg board/r4 start delivery=d4 handler=gather clause=1 fuel=89 alloc=73 state=1406 end=join-end
++seg board/r4 start delivery=d4 handler=gather clause=1 fuel=89 alloc=73 state=1454 end=join-end
+@@ -43,2 +43,2 @@
+-seg board/r5 start delivery=d5 handler=early clause=1 fuel=80 alloc=140 state=1372 end=return
+-run board/r5 outcome=completed delivery=d5 handler=early fuel=80 alloc=140
++seg board/r5 start delivery=d5 handler=early clause=1 fuel=81 alloc=140 state=1420 end=return
++run board/r5 outcome=completed delivery=d5 handler=early fuel=81 alloc=140
+@@ -47 +47 @@
+-pumped state=idle fuel=569 next=2026-09-30T09:00:05Z
++pumped state=idle fuel=570 next=2026-09-30T09:00:05Z
+@@ -52 +52 @@
+-seg board/r1 resume fuel=16 alloc=272 state=895 end=return
++seg board/r1 resume fuel=16 alloc=272 state=927 end=return
+@@ -56,3 +56,3 @@
+-seg board/r3 resume fuel=18 alloc=478 state=1018 end=return
+-run board/r3 outcome=completed delivery=d3 handler=gather fuel=166 alloc=600
+-pumped state=idle fuel=34 next=2026-09-30T09:00:05Z
++seg board/r3 resume fuel=19 alloc=478 state=1034 end=return
++run board/r3 outcome=completed delivery=d3 handler=gather fuel=167 alloc=600
++pumped state=idle fuel=35 next=2026-09-30T09:00:05Z
+@@ -64,3 +64,3 @@
+-seg board/r4 resume fuel=17 alloc=591 state=1245 end=return
+-run board/r4 outcome=completed delivery=d4 handler=gather fuel=106 alloc=664
+-pumped state=idle fuel=17
++seg board/r4 resume fuel=18 alloc=591 state=1245 end=return
++run board/r4 outcome=completed delivery=d4 handler=gather fuel=107 alloc=664
++pumped state=idle fuel=18
+--- corpus/suspension/nested-waits/case.trace (cdee6bf)
++++ corpus/suspension/nested-waits/case.trace (candidate)
+@@ -20,3 +20,3 @@
+-seg napper/r3 start delivery=d3 handler=month clause=1 fuel=32 alloc=547 state=1179 end=return
+-run napper/r3 outcome=completed delivery=d3 handler=month fuel=32 alloc=547
+-pumped state=idle fuel=110 next=2026-09-30T09:00:01Z
++seg napper/r3 start delivery=d3 handler=month clause=1 fuel=33 alloc=547 state=1179 end=return
++run napper/r3 outcome=completed delivery=d3 handler=month fuel=33 alloc=547
++pumped state=idle fuel=111 next=2026-09-30T09:00:01Z
+--- corpus/suspension/script-joins/case.trace (cdee6bf)
++++ corpus/suspension/script-joins/case.trace (candidate)
+@@ -10 +10 @@
+-seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=488 end=join-end
++seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=504 end=join-end
+@@ -12 +12 @@
+-seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=464 end=return
++seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=480 end=return
+@@ -29 +29 @@
+-seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=608 end=join-end
++seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=624 end=join-end
+@@ -37,2 +37,2 @@
+-seg a/r3 resume fuel=17 alloc=824 state=936 end=return
+-run a/r3 outcome=completed delivery=d3 handler=gather fuel=147 alloc=992
++seg a/r3 resume fuel=18 alloc=824 state=936 end=return
++run a/r3 outcome=completed delivery=d3 handler=gather fuel=148 alloc=992
+@@ -40 +40 @@
+-pumped state=idle fuel=215 next=2026-10-04T12:00:02Z
++pumped state=idle fuel=216 next=2026-10-04T12:00:02Z
+@@ -70 +70 @@
+-counters a fuel=444 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
++counters a fuel=445 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
+--- corpus/suspension/script-sends/case.trace (cdee6bf)
++++ corpus/suspension/script-sends/case.trace (candidate)
+@@ -17,2 +17,2 @@
+-seg a/r1 start delivery=d1 handler=fire clause=1 fuel=151 alloc=289 state=185 end=return
+-run a/r1 outcome=completed delivery=d1 handler=fire fuel=151 alloc=289
++seg a/r1 start delivery=d1 handler=fire clause=1 fuel=152 alloc=289 state=185 end=return
++run a/r1 outcome=completed delivery=d1 handler=fire fuel=152 alloc=289
+@@ -23,2 +23,2 @@
+-seg a/r2 start delivery=d2 handler=missing clause=1 fuel=54 alloc=78 state=183 end=return
+-run a/r2 outcome=completed delivery=d2 handler=missing fuel=54 alloc=78
++seg a/r2 start delivery=d2 handler=missing clause=1 fuel=55 alloc=78 state=183 end=return
++run a/r2 outcome=completed delivery=d2 handler=missing fuel=55 alloc=78
+@@ -29,2 +29,2 @@
+-seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=84 alloc=196 state=213 end=return
+-run a/r3 outcome=completed delivery=d3 handler=wrong fuel=84 alloc=196
++seg a/r3 start delivery=d3 handler=wrong clause=1 fuel=85 alloc=196 state=213 end=return
++run a/r3 outcome=completed delivery=d3 handler=wrong fuel=85 alloc=196
+@@ -48 +48 @@
+-pumped state=idle fuel=482
++pumped state=idle fuel=485
+--- corpus/suspension/send-and-wait/case.trace (cdee6bf)
++++ corpus/suspension/send-and-wait/case.trace (candidate)
+@@ -14 +14 @@
+-seg front/r1 start delivery=d1 handler=query clause=1 fuel=28 alloc=50 state=470 end=send-wait
++seg front/r1 start delivery=d1 handler=query clause=1 fuel=28 alloc=50 state=486 end=send-wait
+@@ -18 +18 @@
+-seg front/r2 start delivery=d2 handler=query clause=1 fuel=28 alloc=51 state=690 end=send-wait
++seg front/r2 start delivery=d2 handler=query clause=1 fuel=28 alloc=51 state=722 end=send-wait
+@@ -23 +23 @@
+-seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=1190 end=send-wait
++seg front/r3 start delivery=d3 handler=query clause=1 fuel=28 alloc=53 state=1238 end=send-wait
+@@ -25 +25 @@
+-seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=1438 end=send-wait
++seg front/r4 start delivery=d4 handler=query clause=1 fuel=28 alloc=52 state=1502 end=send-wait
+@@ -29 +29 @@
+-seg front/r1 resume fuel=14 alloc=28 state=1148 end=return
++seg front/r1 resume fuel=14 alloc=28 state=1196 end=return
+@@ -33,2 +33,2 @@
+-seg front/r2 resume fuel=17 alloc=791 state=1388 end=return
+-run front/r2 outcome=completed delivery=d2 handler=query fuel=45 alloc=842
++seg front/r2 resume fuel=18 alloc=791 state=1420 end=return
++run front/r2 outcome=completed delivery=d2 handler=query fuel=46 alloc=842
+@@ -36,3 +36,3 @@
+-seg front/r3 resume fuel=17 alloc=466 state=1601 end=return
+-run front/r3 outcome=completed delivery=d3 handler=query fuel=45 alloc=519
+-pumped state=idle fuel=259 next=2026-09-30T09:00:02Z
++seg front/r3 resume fuel=18 alloc=466 state=1617 end=return
++run front/r3 outcome=completed delivery=d3 handler=query fuel=46 alloc=519
++pumped state=idle fuel=261 next=2026-09-30T09:00:02Z
+@@ -42,3 +42,3 @@
+-seg front/r4 resume fuel=17 alloc=437 state=1738 end=return
+-run front/r4 outcome=completed delivery=d4 handler=query fuel=45 alloc=489
+-pumped state=idle fuel=17 next=2026-09-30T09:00:05Z
++seg front/r4 resume fuel=18 alloc=437 state=1738 end=return
++run front/r4 outcome=completed delivery=d4 handler=query fuel=46 alloc=489
++pumped state=idle fuel=18 next=2026-09-30T09:00:05Z
+--- corpus/suspension/send-reply-preemption/case.trace (cdee6bf)
++++ corpus/suspension/send-reply-preemption/case.trace (candidate)
+@@ -26 +26 @@
+-counters a fuel=42 alloc=32 runs=1 faults=0 state=994 mailbox=0
++counters a fuel=42 alloc=32 runs=1 faults=0 state=1988 mailbox=0
+@@ -28,3 +28,3 @@
+-seg a/r1 continue fuel=15 alloc=0 state=0 end=return
+-run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=57 alloc=32
+-pumped state=idle fuel=15
++seg a/r1 continue fuel=16 alloc=0 state=0 end=return
++run a/r1 outcome=completed delivery=d1 handler=go value="errored" fuel=58 alloc=32
++pumped state=idle fuel=16
+--- corpus/text-model/chunk-write-out-of-range/case.trace (cdee6bf)
++++ corpus/text-model/chunk-write-out-of-range/case.trace (candidate)
+@@ -20,3 +20,3 @@
+-seg writes/r1 start delivery=d1 handler=go clause=1 fuel=215 alloc=732 state=602 end=return
+-run writes/r1 outcome=completed delivery=d1 handler=go fuel=215 alloc=732
+-pumped state=idle fuel=215
++seg writes/r1 start delivery=d1 handler=go clause=1 fuel=220 alloc=732 state=602 end=return
++run writes/r1 outcome=completed delivery=d1 handler=go fuel=220 alloc=732
++pumped state=idle fuel=220
+--- corpus/text-patterns/splice-wrong-kind/case.trace (cdee6bf)
++++ corpus/text-patterns/splice-wrong-kind/case.trace (candidate)
+@@ -10,3 +10,3 @@
+-seg splice/r1 start delivery=d1 handler=go clause=1 fuel=51 alloc=0 state=39 end=return
+-run splice/r1 outcome=completed delivery=d1 handler=go fuel=51 alloc=0
+-pumped state=idle fuel=51
++seg splice/r1 start delivery=d1 handler=go clause=1 fuel=52 alloc=0 state=39 end=return
++run splice/r1 outcome=completed delivery=d1 handler=go fuel=52 alloc=0
++pumped state=idle fuel=52
+--- corpus/recovery-offers/action-suspend/case.trace ((new))
++++ corpus/recovery-offers/action-suspend/case.trace (candidate)
+@@ -0,0 +1,21 @@
++# Unblessed: #389 first expectation approval remains pending #392.
++# A Handler offer action may suspend; its offering finally protects the resumed action.
++> load s identity=551aadada1dffecd0ef13a0bb057a55444da2501945f0f987b8a3f828fec0a5b
++> request d1 to=s message=go
++> pump clock=2026-10-06T09:00:00Z
++raise s/r1 code="original" at=s:5 pos=4:5
++call s/r1.c1 op=console.write args=["policy"]
++offer-chosen s/r1 attempt=1 name="recover" at=s:25 target=s:27
++offer-entered s/r1 attempt=1 target=s:27
++call s/r1.c2 op=console.write args=["action"]
++seg s/r1 start delivery=d1 handler=go clause=1 fuel=77 alloc=78 state=586 end=wait until=2026-10-06T09:00:01Z
++pumped state=idle fuel=77 next=2026-10-06T09:00:01Z
++> vars
++vars s order=["action"]
++> pump clock=2026-10-06T09:00:01Z
++call s/r1.c3 op=console.write args=["finally"]
++seg s/r1 resume fuel=33 alloc=62 state=108 end=return
++run s/r1 outcome=completed delivery=d1 handler=go value=["action", "resumed", "finally"] fuel=110 alloc=140
++pumped state=idle fuel=33
++> vars
++vars s order=["action", "resumed", "finally"]
+--- corpus/recovery-offers/basic/case.trace ((new))
++++ corpus/recovery-offers/basic/case.trace (candidate)
+@@ -0,0 +1,44 @@
++# Unblessed: #388 first expectation approval remains pending.
++# Same-Run callback and two nested Libraries retain rows and offer scopes.
++# Guard skips precede cleanup, choice precedes cleanup, entry follows cleanup.
++> add-library rows identity=c20c9abf0cc63e37fbfdfe08765717a940e02c6e2f9914f29d9fa922b58c0cb7
++> add-library wrapper identity=4de118ee60ea223527aaea3bf37e78fc092549392944123a5ec48cad77d1be92
++> load reader identity=f9e878e6140285e6bea219dc8d37c1bccb2bef41c0277b83dac72b03618b2516
++> deliver d1 to=reader message=skipRows
++> deliver d2 to=reader message=replaceRows
++> deliver d3 to=reader message=checkChoices
++> pump clock=2026-09-30T09:00:00Z
++raise reader/r1 code="tidy" at=reader:8 pos=11:7
++raise reader/r1 code="can't convert" at=reader:5 pos=8:17
++offer-chosen reader/r1 attempt=1 name="skip" at=reader:95 target=rows:17
++raise reader/r1 code="tidy" at=reader:51 pos=11:7
++offer-entered reader/r1 attempt=1 target=rows:17
++raise reader/r1 code="tidy" at=reader:8 pos=11:7
++seg reader/r1 start delivery=d1 handler=skipRows clause=1 fuel=313 alloc=464 state=163 end=return
++run reader/r1 outcome=completed delivery=d1 handler=skipRows fuel=313 alloc=464
++raise reader/r2 code="tidy" at=reader:8 pos=11:7
++raise reader/r2 code="can't convert" at=reader:5 pos=8:17
++guard-skip reader/r2 at=reader:113 pos=30:33 code="division by zero"
++offer-chosen reader/r2 attempt=1 name="useValue" at=reader:123 target=rows:19 args=[0]
++raise reader/r2 code="tidy" at=reader:51 pos=11:7
++offer-entered reader/r2 attempt=1 target=rows:19
++raise reader/r2 code="tidy" at=reader:8 pos=11:7
++seg reader/r2 start delivery=d2 handler=replaceRows clause=1 fuel=293 alloc=488 state=214 end=return
++run reader/r2 outcome=completed delivery=d2 handler=replaceRows fuel=293 alloc=488
++raise reader/r3 code="can't convert" at=reader:5 pos=8:17
++raise reader/r3 code="offer unavailable" at=reader:139 pos=41:7
++raise reader/r3 code="wrong arity" at=reader:159 pos=46:7
++offer-chosen reader/r3 attempt=1 name="useValue" at=reader:179 target=rows:19 args=[0]
++raise reader/r3 code="tidy" at=reader:51 pos=11:7
++offer-entered reader/r3 attempt=1 target=rows:19
++raise reader/r3 code="can't convert" at=reader:5 pos=8:17
++raise reader/r3 code="offer unavailable" at=reader:139 pos=41:7
++raise reader/r3 code="wrong arity" at=reader:159 pos=46:7
++offer-chosen reader/r3 attempt=2 name="useValue" at=reader:179 target=rows:19 args=[0]
++raise reader/r3 code="tidy" at=reader:51 pos=11:7
++offer-entered reader/r3 attempt=2 target=rows:19
++seg reader/r3 start delivery=d3 handler=checkChoices clause=1 fuel=427 alloc=436 state=244 end=return
++run reader/r3 outcome=completed delivery=d3 handler=checkChoices fuel=427 alloc=436
++pumped state=idle fuel=1033
++> vars
++vars reader skipped=[5, 7] replaced=[5, 0, 7] checked=[0, 0] order="ccccccuacuac"
+--- corpus/recovery-offers/boundaries/case.trace ((new))
++++ corpus/recovery-offers/boundaries/case.trace (candidate)
+@@ -0,0 +1,21 @@
++# Unblessed: #388 first expectation approval remains pending.
++# The foreign Function starts a new Home Run: caller offers are unavailable there.
++> load home identity=64b53f38d3491f01ca912e224ba1f12b0dbe76d86a8f88c852342914ab73b81f
++> load caller identity=1977c40cde75d5edfc1aed6e44d013a9e62ea84bdf9ffc7c3e3aa352c21ce173
++> deliver d1 to=home message=begin
++> pump clock=2026-09-30T09:00:00Z
++send home/r1 to=caller message=execute args=[<function home:probe>]
++seg home/r1 start delivery=d1 handler=begin clause=1 fuel=34 alloc=96 state=8 end=return
++run home/r1 outcome=completed delivery=d1 handler=begin fuel=34 alloc=96
++send caller/r1.c1 to=home fn=<function home:probe> wait=yes
++seg caller/r1 start from=home/r1 handler=execute clause=1 fuel=13 alloc=0 state=336 end=call-value-wait
++raise home/r2 code="remote" at=home:6 pos=4:3
++seg home/r2 start from=caller/r1.c1 fn=<function home:probe> fuel=22 alloc=48 state=8 end=error
++run home/r2 outcome=errored fn=<function home:probe> error={code: "remote", at: {unit: "home", handler: "probe", line: 4, column: 3}} fuel=22 alloc=48
++raise caller/r1 code="send failed" at=caller:3 pos=4:5
++seg caller/r1 resume fuel=34 alloc=67 state=67 end=return
++run caller/r1 outcome=completed handler=execute fuel=47 alloc=67
++pumped state=idle fuel=103
++> vars
++vars home observed=false
++vars caller result=["send failed", true]
+--- corpus/recovery-offers/cancellation/case.trace ((new))
++++ corpus/recovery-offers/cancellation/case.trace (candidate)
+@@ -0,0 +1,139 @@
++# Unblessed: #389 first expectation approval remains pending #392.
++# Pump caps stop at catch tests, immediately before choice, and just after choice.
++# Transfer is stopped at entry to the policy cleanup copy: ordinary cancellation abandons
++# the current cleanup rather than restarting it, so its 5 is absent in transfer cleanup.
++# Cancellation rolls back policy writes, then runs retained and active policy finally scopes once.
++> load tests identity=774fe5ac7d90dd42911c5401e8653f044d63ce797355047ce31922c9733100b2
++> deliver d1 to=tests message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=39
++raise tests/r1 code="bad" at=tests:7 pos=5:3
++preempt tests/r1 start delivery=d1 handler=go clause=1 by=cap fuel=39 alloc=48
++pumped state=sliced fuel=39
++> counters tests
++counters tests fuel=39 alloc=48 runs=1 faults=0 state=1230 mailbox=0
++> cancel-run tests/r1
++> pump clock=2026-10-06T09:00:00Z
++seg tests/r1 continue fuel=44 alloc=96 state=128 end=cancel
++run tests/r1 outcome=cancelled delivery=d1 handler=go fuel=83 alloc=144
++pumped state=idle fuel=44
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++> load policy identity=1228abf6c29af48d5eba33f1d3b62e2061ee219d9aeda7a306c2e60871261466
++> deliver d2 to=policy message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=46
++raise policy/r1 code="bad" at=policy:7 pos=5:3
++preempt policy/r1 start delivery=d2 handler=go clause=1 by=cap fuel=46 alloc=48
++pumped state=sliced fuel=46
++> counters policy
++counters policy fuel=46 alloc=48 runs=1 faults=0 state=1800 mailbox=0
++> cancel-run policy/r1
++> pump clock=2026-10-06T09:00:00Z
++seg policy/r1 continue fuel=55 alloc=120 state=152 end=cancel
++run policy/r1 outcome=cancelled delivery=d2 handler=go fuel=101 alloc=168
++pumped state=idle fuel=55
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++> load transfer identity=9fd2a412116d23fdaba7f0bdcd7d3435717b7d90effbed6fabc11448088e503a
++> deliver d3 to=transfer message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=62
++raise transfer/r1 code="bad" at=transfer:7 pos=5:3
++offer-chosen transfer/r1 attempt=1 name="recover" at=transfer:84 target=transfer:47
++preempt transfer/r1 start delivery=d3 handler=go clause=1 by=cap fuel=62 alloc=48
++pumped state=sliced fuel=62
++> counters transfer
++counters transfer fuel=62 alloc=48 runs=1 faults=0 state=1808 mailbox=0
++> cancel-run transfer/r1
++> pump clock=2026-10-06T09:00:00Z
++seg transfer/r1 continue fuel=44 alloc=96 state=128 end=cancel
++run transfer/r1 outcome=cancelled delivery=d3 handler=go fuel=106 alloc=144
++pumped state=idle fuel=44
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++vars transfer order=[1, 2, 3, 4] mark=0
++> load stopped identity=806d33ad0ba2cf93ef53e21ebd6c8a70600b2142a71f3990ab9e8c79a76a716d
++> deliver d4 to=stopped message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=62
++raise stopped/r1 code="bad" at=stopped:7 pos=5:3
++offer-chosen stopped/r1 attempt=1 name="recover" at=stopped:84 target=stopped:47
++preempt stopped/r1 start delivery=d4 handler=go clause=1 by=cap fuel=62 alloc=48
++pumped state=sliced fuel=62
++> counters stopped
++counters stopped fuel=62 alloc=48 runs=1 faults=0 state=1804 mailbox=0
++> stop stopped reason="host stop"
++> pump clock=2026-10-06T09:00:00Z
++stopped stopped reason="host stop" discarded=[stopped/r1]
++pumped state=idle fuel=0
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++vars transfer order=[1, 2, 3, 4] mark=0
++vars stopped order=[] mark=0
++> load faulted identity=868d94457dd7b0bbbbe8c2023c73822cbff822310efd794d747b00b5284bf868
++> deliver d5 to=faulted message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=62
++raise faulted/r1 code="bad" at=faulted:7 pos=5:3
++offer-chosen faulted/r1 attempt=1 name="recover" at=faulted:84 target=faulted:47
++preempt faulted/r1 start delivery=d5 handler=go clause=1 by=cap fuel=62 alloc=48
++pumped state=sliced fuel=62
++> counters faulted
++counters faulted fuel=62 alloc=48 runs=1 faults=0 state=1804 mailbox=0
++> pump clock=2026-10-06T09:00:00Z
++fault faulted/r1 limit=fuel at=faulted:92 pos=31:8 rollback=[mark]
++seg faulted/r1 continue fuel=0 alloc=0 state=32 end=fault
++run faulted/r1 outcome=limit-fault delivery=d5 handler=go limit=fuel fuel=62 alloc=48
++pumped state=idle fuel=0
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++vars transfer order=[1, 2, 3, 4] mark=0
++vars stopped order=[] mark=0
++vars faulted order=[] mark=0
++# A sliced policy cleanup and queued owner cleanup share locals after Restore.
++> load locals identity=9711798560e312677cef9c0cb86a6e9d0d5a8a160f6e484d74e4f28bd1fd33ff
++> deliver d6 to=locals message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=21
++raise locals/r1 code="bad" at=locals:7 pos=6:4
++preempt locals/r1 start delivery=d6 handler=go clause=1 by=cap fuel=21 alloc=48
++pumped state=sliced fuel=21
++> cancel-run locals/r1
++> pump clock=2026-10-06T09:00:00Z fuel-cap=1
++preempt locals/r1 continue by=cap fuel=1 alloc=0
++pumped state=sliced fuel=1
++> pump clock=2026-10-06T09:00:00Z
++seg locals/r1 continue fuel=15 alloc=16 state=16 end=cancel
++run locals/r1 outcome=cancelled delivery=d6 handler=go fuel=37 alloc=64
++pumped state=idle fuel=15
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++vars transfer order=[1, 2, 3, 4] mark=0
++vars stopped order=[] mark=0
++vars faulted order=[] mark=0
++vars locals result=1
++# Cancellation discards interrupted expression operands before queued cleanups.
++> load stack identity=18c96c57773bd2814cdfcdbb22b60e763c364b995e4e0e492fc1a3284fc3ab90
++> deliver d7 to=stack message=go
++> pump clock=2026-10-06T09:00:00Z fuel-cap=47
++raise stack/r1 code="bad" at=stack:7 pos=5:3
++preempt stack/r1 start delivery=d7 handler=go clause=1 by=cap fuel=47 alloc=48
++pumped state=sliced fuel=47
++> cancel-run stack/r1
++> pump clock=2026-10-06T09:00:00Z fuel-cap=1
++preempt stack/r1 continue by=cap fuel=1 alloc=0
++pumped state=sliced fuel=1
++> counters stack
++counters stack fuel=48 alloc=48 runs=1 faults=0 state=1421 mailbox=0
++> pump clock=2026-10-06T09:00:00Z
++seg stack/r1 continue fuel=54 alloc=120 state=152 end=cancel
++run stack/r1 outcome=cancelled delivery=d7 handler=go fuel=102 alloc=168
++pumped state=idle fuel=54
++> vars
++vars tests order=[1, 2, 3, 4] mark=0
++vars policy order=[5, 1, 2, 3, 4] mark=0
++vars transfer order=[1, 2, 3, 4] mark=0
++vars stopped order=[] mark=0
++vars faulted order=[] mark=0
++vars locals result=1
++vars stack order=[5, 1, 2, 3, 4] mark=0
+--- corpus/recovery-offers/cleanup-restore/case.trace ((new))
++++ corpus/recovery-offers/cleanup-restore/case.trace (candidate)
+@@ -0,0 +1,22 @@
++# Unblessed: #388 first expectation approval remains pending.
++# A catch-body Error reaches cleanup, then cleanup's Error replaces it.
++# Transparent Restore reconnects pending cleanup to the retained original Error.
++# A fresh on-error Run has no offers from the failed Run.
++> load s identity=aa68da9ec5b9ac74fa68aee28ef1e8498d0d9d7c4fc999ccac82a0bef8c67294
++> deliver d1 to=s message=go
++> pump clock=2026-09-30T09:00:00Z fuel-cap=28
++raise s/r1 code="bad" at=s:7 pos=5:5
++raise s/r1 code="wrong kind" at=s:24 pos=7:5
++preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=31 alloc=48
++pumped state=sliced fuel=31
++> counters s
++counters s fuel=31 alloc=48 runs=1 faults=0 state=1636 mailbox=0
++> pump clock=2026-09-30T09:00:00Z
++raise s/r1 code="wrong kind" at=s:38 pos=9:5
++seg s/r1 continue fuel=11 alloc=0 state=72 end=error
++run s/r1 outcome=errored delivery=d1 handler=go error={code: "wrong kind", expected: "number", got: "list", value: [6, 9], at: {unit: "s", handler: "go", line: 9, column: 5}, during: {code: "wrong kind", expected: "number", got: "list", value: [6, 9], at: {unit: "s", handler: "go", line: 7, column: 5}}} fuel=42 alloc=48
++seg s/r2 start from=s/r1 handler=error clause=1 fuel=31 alloc=100 state=164 end=return
++run s/r2 outcome=completed handler=error fuel=31 alloc=100
++pumped state=idle fuel=42
++> vars
++vars s count=[6, 9] backstop=["wrong kind", "wrong kind", false]
+--- corpus/recovery-offers/costs/case.trace ((new))
++++ corpus/recovery-offers/costs/case.trace (candidate)
+@@ -0,0 +1,30 @@
++# Unblessed: #388 first expectation approval remains pending.
++# Before choice: Fuel 20 and exact retained dispatch state; lookup is atomic.
++# The 13-Fuel choice exceeds a 5-Fuel slice, enters once, and leaves 8 debt.
++> load s identity=8601d7825855a6b542adc7198c25524257d4d8bad8ce0c7e2df51cb44718af5f
++> request d1 to=s message=go
++> pump clock=2026-09-30T09:00:00Z fuel-cap=20
++raise s/r1 code="bad" at=s:3 pos=3:5
++preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=20 alloc=48
++pumped state=sliced fuel=20
++> counters s
++counters s fuel=20 alloc=48 runs=1 faults=0 state=1532 mailbox=0
++> pump clock=2026-09-30T09:00:00Z fuel-slice=5 fuel-cap=1
++offer-chosen s/r1 attempt=1 name="recover" at=s:10 target=s:12 args=[7]
++offer-entered s/r1 attempt=1 target=s:12
++preempt s/r1 continue by=slice fuel=13 alloc=0
++pumped state=sliced fuel=13
++> counters s
++counters s fuel=33 alloc=48 runs=1 faults=0 state=1091 mailbox=0
++> pump clock=2026-09-30T09:00:00Z fuel-slice=5
++pumped state=sliced fuel=0
++> counters s
++counters s fuel=33 alloc=48 runs=1 faults=0 state=1091 mailbox=0
++> pump clock=2026-09-30T09:00:00Z fuel-slice=5
++seg s/r1 continue fuel=3 alloc=0 state=0 end=return
++run s/r1 outcome=completed delivery=d1 handler=go value=7 fuel=36 alloc=48
++pumped state=idle fuel=3
++> counters s
++counters s fuel=36 alloc=48 runs=1 faults=0 state=0 mailbox=0
++> vars
++vars s
+--- corpus/recovery-offers/nested/case.trace ((new))
++++ corpus/recovery-offers/nested/case.trace (candidate)
+@@ -0,0 +1,211 @@
++# Unblessed: #389 first expectation approval remains pending #392.
++# Nested failure chains are isolated; escaping policy skips siblings and preserves during.
++# nested recovery: nested policy catch cannot see original offers; expected result false.
++> load isolated identity=4ca89397bca95a4712fe6b75a7f65e5937e0c86d77e6b76219358d753145b294
++> request d1 to=isolated message=go
++> pump clock=2026-10-06T09:00:00Z
++raise isolated/r1 code="original" at=isolated:3 pos=3:3
++raise isolated/r1 code="inner" at=isolated:14 pos=8:4
++offer-chosen isolated/r1 attempt=1 name="recover" at=isolated:38 target=isolated:40 args=[false]
++offer-entered isolated/r1 attempt=1 target=isolated:40
++seg isolated/r1 start delivery=d1 handler=go clause=1 fuel=78 alloc=96 state=0 end=return
++run isolated/r1 outcome=completed delivery=d1 handler=go value=false fuel=78 alloc=96
++pumped state=idle fuel=78
++# nested recovery: nested policy cannot choose an original offer; expected result 7.
++> load unavailable identity=eac3e3230cb2aa5b5df8c0fae2e8ec987d415ec5e203716fd858b45dbca68a0a
++> request d2 to=unavailable message=go
++> pump clock=2026-10-06T09:00:00Z
++raise unavailable/r1 code="original" at=unavailable:3 pos=3:3
++raise unavailable/r1 code="inner" at=unavailable:14 pos=8:4
++raise unavailable/r1 code="offer unavailable" at=unavailable:25 pos=11:5
++offer-chosen unavailable/r1 attempt=1 name="recover" at=unavailable:51 target=unavailable:53 args=[7]
++offer-entered unavailable/r1 attempt=1 target=unavailable:53
++seg unavailable/r1 start delivery=d2 handler=go clause=1 fuel=94 alloc=96 state=0 end=return
++run unavailable/r1 outcome=completed delivery=d2 handler=go value=7 fuel=94 alloc=96
++pumped state=idle fuel=94
++# nested recovery: helper failure exposes its own offers and resumes outer policy; expected result [9, [true, false]].
++> load helper identity=de963930ae4ddf0a6c28e12f24cc3882e7b19c9151d1793cce922630a4c4f89e
++> request d3 to=helper message=go
++# Restore with both outer and nested dispatch active, just before inner choice.
++> pump clock=2026-10-06T09:00:00Z fuel-cap=96
++raise helper/r1 code="original" at=helper:11 pos=11:3
++raise helper/r1 code="inner" at=helper:3 pos=4:3
++preempt helper/r1 start delivery=d3 handler=go clause=1 by=cap fuel=96 alloc=144
++pumped state=sliced fuel=96
++> pump clock=2026-10-06T09:00:00Z
++offer-chosen helper/r1 attempt=1 name="inner" at=helper:49 target=helper:5 args=[9]
++offer-entered helper/r1 attempt=1 target=helper:5
++offer-chosen helper/r1 attempt=2 name="recover" at=helper:52 target=helper:13 args=[9]
++offer-entered helper/r1 attempt=2 target=helper:13
++seg helper/r1 continue fuel=43 alloc=96 state=48 end=return
++run helper/r1 outcome=completed delivery=d3 handler=go value=[9, [true, false]] fuel=139 alloc=240
++pumped state=idle fuel=43
++# nested recovery: locally handled policy error preserves writes and resumes selection; expected result 7.
++> load local identity=3300681e6bc28f00173598d2dee475045958e5c7d59dcaea71ea09ed1ccc5c59
++> request d4 to=local message=go
++> pump clock=2026-10-06T09:00:00Z
++raise local/r1 code="original" at=local:3 pos=3:3
++raise local/r1 code="policy" at=local:16 pos=9:4
++offer-chosen local/r1 attempt=1 name="recover" at=local:36 target=local:38 args=[7]
++offer-entered local/r1 attempt=1 target=local:38
++seg local/r1 start delivery=d4 handler=go clause=1 fuel=72 alloc=112 state=0 end=return
++run local/r1 outcome=completed delivery=d4 handler=go value=7 fuel=72 alloc=112
++pumped state=idle fuel=72
++# nested recovery: escaping policy skips siblings and cleans policy before retained scopes; expected result ["policy", "original", "policy;work;catching;"].
++> load escape identity=388a5bda60abd9883758de1d10d5a0f1c9fbe2cdff452070db966ffe17e63638
++> request d5 to=escape message=go
++> pump clock=2026-10-06T09:00:00Z
++raise escape/r1 code="original" at=escape:5 pos=4:3
++raise escape/r1 code="policy" at=escape:57 pos=17:5
++seg escape/r1 start delivery=d5 handler=go clause=1 fuel=108 alloc=312 state=37 end=return
++run escape/r1 outcome=completed delivery=d5 handler=go value=["policy", "original", "policy;work;catching;"] fuel=108 alloc=312
++pumped state=idle fuel=108
++# nested recovery: escaping policy preserves existing during; expected result ["policy", "prior"].
++> load prior identity=3939a009090f2208b24627eb4b50486d98ed43bf139f9d895952b1c08ec9048b
++> request d6 to=prior message=go
++> pump clock=2026-10-06T09:00:00Z
++raise prior/r1 code="original" at=prior:3 pos=3:3
++raise prior/r1 code="policy" at=prior:25 pos=13:4
++seg prior/r1 start delivery=d6 handler=go clause=1 fuel=80 alloc=397 state=0 end=return
++run prior/r1 outcome=completed delivery=d6 handler=go value=["policy", "prior"] fuel=80 alloc=397
++pumped state=idle fuel=80
++# nested recovery: policy and original finally scopes run once in transfer order; expected result "policy inner;policy outer;deep inner;deep outer;action;owner;".
++> load order identity=d5efbaa70a51aa825aeb92bb93219cb3f1241f55f9c1ea3f4b48bdce5ee36fb3
++> request d7 to=order message=go
++> pump clock=2026-10-06T09:00:00Z
++raise order/r1 code="original" at=order:5 pos=5:4
++offer-chosen order/r1 attempt=1 name="recover" at=order:78 target=order:45
++offer-entered order/r1 attempt=1 target=order:45
++seg order/r1 start delivery=d7 handler=go clause=1 fuel=151 alloc=253 state=77 end=return
++run order/r1 outcome=completed delivery=d7 handler=go value="policy inner;policy outer;deep inner;deep outer;action;owner;" fuel=151 alloc=253
++pumped state=idle fuel=151
++# nested recovery: locally handled transfer cleanup preserves pending choice and availability; expected result [true, "handled;action;owner;"].
++> load handled identity=eb8b162caade58f553df5088a22a5a9e5531c1acf2a0a18c2e0bf5471066957f
++> request d8 to=handled message=go
++> pump clock=2026-10-06T09:00:00Z
++raise handled/r1 code="original" at=handled:7 pos=5:3
++offer-chosen handled/r1 attempt=1 name="recover" at=handled:100 target=handled:67
++raise handled/r1 code="cleanup" at=handled:33 pos=8:4
++offer-entered handled/r1 attempt=1 target=handled:67
++seg handled/r1 start delivery=d8 handler=go clause=1 fuel=147 alloc=266 state=45 end=return
++run handled/r1 outcome=completed delivery=d8 handler=go value=[true, "handled;action;owner;"] fuel=147 alloc=266
++pumped state=idle fuel=147
++# nested recovery: escaping transfer cleanup cancels action and attaches original; expected result ["cleanup", "original", false, "owner;"].
++> load aborted identity=b11437a5ce2d72982aca2ab8bf154a0b461d154907dbffbd5c8beea35b1da430
++> request d9 to=aborted message=go
++> pump clock=2026-10-06T09:00:00Z
++raise aborted/r1 code="original" at=aborted:7 pos=5:3
++offer-chosen aborted/r1 attempt=1 name="recover" at=aborted:54 target=aborted:25
++raise aborted/r1 code="cleanup" at=aborted:12 pos=7:3
++seg aborted/r1 start delivery=d9 handler=go clause=1 fuel=128 alloc=251 state=30 end=return
++run aborted/r1 outcome=completed delivery=d9 handler=go value=["cleanup", "original", false, "owner;"] fuel=128 alloc=251
++pumped state=idle fuel=128
++# nested recovery: transfer cleanup error can reach offering try catch; expected result ["original", false].
++> load offering identity=2dc63cf6e542776e8a6aa42d8411c3a1f34764e621a42518d7270e51c0ad9921
++> request d10 to=offering message=go
++> pump clock=2026-10-06T09:00:00Z
++raise offering/r1 code="original" at=offering:5 pos=5:4
++offer-chosen offering/r1 attempt=1 name="recover" at=offering:49 target=offering:33
++raise offering/r1 code="cleanup" at=offering:10 pos=7:4
++seg offering/r1 start delivery=d10 handler=go clause=1 fuel=96 alloc=160 state=8 end=return
++run offering/r1 outcome=completed delivery=d10 handler=go value=["original", false] fuel=96 alloc=160
++pumped state=idle fuel=96
++# nested recovery: action error cannot reach sibling catch or sibling offer; expected result false.
++> load siblings identity=eabf72722e66eb1e7770c7cbc9706ec2e626f655aef50a24ebe6255193fa299b
++> request d11 to=siblings message=go
++> pump clock=2026-10-06T09:00:00Z
++raise siblings/r1 code="original" at=siblings:3 pos=3:3
++offer-chosen siblings/r1 attempt=1 name="recover" at=siblings:37 target=siblings:18
++offer-entered siblings/r1 attempt=1 target=siblings:18
++raise siblings/r1 code="action" at=siblings:19 pos=5:3
++seg siblings/r1 start delivery=d11 handler=go clause=1 fuel=111 alloc=96 state=0 end=return
++run siblings/r1 outcome=completed delivery=d11 handler=go value=false fuel=111 alloc=96
++pumped state=idle fuel=111
++# nested recovery: escaping failures cross consecutive selection boundaries; expected result ["deep", "middle", "inner policy;outer policy;work;"].
++> load boundaries identity=3f9d623f79bf07d9f18c096228d9c6060f4c56897c716bc6e2bfe927ba6623f1
++> request d12 to=boundaries message=go
++> pump clock=2026-10-06T09:00:00Z
++raise boundaries/r1 code="original" at=boundaries:5 pos=4:3
++raise boundaries/r1 code="middle" at=boundaries:34 pos=16:6
++raise boundaries/r1 code="deep" at=boundaries:45 pos=19:7
++seg boundaries/r1 start delivery=d12 handler=go clause=1 fuel=128 alloc=376 state=47 end=return
++run boundaries/r1 outcome=completed delivery=d12 handler=go value=["deep", "middle", "inner policy;outer policy;work;"] fuel=128 alloc=376
++pumped state=idle fuel=128
++# nested recovery: escaping policy charges no synthetic frame unwind; expected result 1.
++> load unwind identity=a24fddb2116176ee741b2ae5a42b6ca39bfc491c1ed84ee75585bc838fb36709
++> request d13 to=unwind message=go
++> pump clock=2026-10-06T09:00:00Z
++raise unwind/r1 code="original" at=unwind:3 pos=4:4
++raise unwind/r1 code="policy" at=unwind:14 pos=6:4
++seg unwind/r1 start delivery=d13 handler=go clause=1 fuel=46 alloc=96 state=0 end=return
++run unwind/r1 outcome=completed delivery=d13 handler=go value=1 fuel=46 alloc=96
++pumped state=idle fuel=46
++# A rejecting catch in policy cleanup must preserve propagation to the outer catch.
++# Expected result is ["cleanup", "policy", "original"].
++> load rejected_cleanup identity=a4ba7d38b320d555d65f86935eff7535c48e71de70024c46910c9435cf5ecdf7
++> request d14 to=rejected_cleanup message=go
++> pump clock=2026-10-06T09:00:00Z
++raise rejected_cleanup/r1 code="original" at=rejected_cleanup:3 pos=4:4
++raise rejected_cleanup/r1 code="policy" at=rejected_cleanup:14 pos=7:5
++raise rejected_cleanup/r1 code="cleanup" at=rejected_cleanup:31 pos=10:6
++seg rejected_cleanup/r1 start delivery=d14 handler=go clause=1 fuel=92 alloc=253 state=0 end=return
++run rejected_cleanup/r1 outcome=completed delivery=d14 handler=go value=["cleanup", "policy", "original"] fuel=92 alloc=253
++pumped state=idle fuel=92
++# Already searched original helpers are cleanup-only; total Fuel is 58.
++> load helper_unwind identity=99baf3b3059d59d396cb0c094ded301b0422a28e10f5523393430182d3b4eb76
++> request d15 to=helper_unwind message=go
++> pump clock=2026-10-06T09:00:00Z
++raise helper_unwind/r1 code="original" at=helper_unwind:3 pos=2:2
++raise helper_unwind/r1 code="policy" at=helper_unwind:18 pos=9:4
++seg helper_unwind/r1 start delivery=d15 handler=go clause=1 fuel=58 alloc=96 state=0 end=return
++run helper_unwind/r1 outcome=completed delivery=d15 handler=go value=1 fuel=58 alloc=96
++pumped state=idle fuel=58
++# A policy cleanup Error cancels the chosen action; expected ["cleanup", "original"].
++> load choice_cleanup identity=43562beb7315900e581d756d0c5631ee629be4175dbef6b7e305db92f6c635df
++> request d16 to=choice_cleanup message=go
++> pump clock=2026-10-06T09:00:00Z
++raise choice_cleanup/r1 code="original" at=choice_cleanup:3 pos=4:4
++offer-chosen choice_cleanup/r1 attempt=1 name="recover" at=choice_cleanup:13 target=choice_cleanup:56
++raise choice_cleanup/r1 code="cleanup" at=choice_cleanup:30 pos=12:6
++seg choice_cleanup/r1 start delivery=d16 handler=go clause=1 fuel=78 alloc=175 state=0 end=return
++run choice_cleanup/r1 outcome=completed delivery=d16 handler=go value=["cleanup", "original"] fuel=78 alloc=175
++pumped state=idle fuel=78
++# Escaping policy leaves its catching try; the original same-scope offer is unavailable.
++> load expired identity=43bfa0e611c816aadd92c1017f81ad5383b11f372b9cb5793906799c429ca2bc
++> request d17 to=expired message=go
++> pump clock=2026-10-06T09:00:00Z
++raise expired/r1 code="original" at=expired:3 pos=4:4
++raise expired/r1 code="policy" at=expired:14 pos=7:4
++seg expired/r1 start delivery=d17 handler=go clause=1 fuel=63 alloc=96 state=0 end=return
++run expired/r1 outcome=completed delivery=d17 handler=go value=false fuel=63 alloc=96
++pumped state=idle fuel=63
++# Scope filtering preserves an enclosing offer: expected ["outer", [false, true]].
++> load outer_offer identity=0c3aff4c275894221c42c0499ab985e8908d37c483796e31eb27198b83946767
++> request d18 to=outer_offer message=go
++> pump clock=2026-10-06T09:00:00Z
++raise outer_offer/r1 code="original" at=outer_offer:3 pos=4:4
++raise outer_offer/r1 code="policy" at=outer_offer:14 pos=7:4
++offer-chosen outer_offer/r1 attempt=1 name="outer" at=outer_offer:32 target=outer_offer:45
++offer-entered outer_offer/r1 attempt=1 target=outer_offer:45
++seg outer_offer/r1 start delivery=d18 handler=go clause=1 fuel=87 alloc=245 state=0 end=return
++run outer_offer/r1 outcome=completed delivery=d18 handler=go value=["outer", [false, true]] fuel=87 alloc=245
++pumped state=idle fuel=87
++> vars
++vars isolated
++vars unavailable
++vars helper seen=[true, false]
++vars local
++vars escape order="policy;work;catching;"
++vars prior
++vars order order="policy inner;policy outer;deep inner;deep outer;action;owner;"
++vars handled visible=true order="handled;action;owner;"
++vars aborted entered=false order="owner;"
++vars offering entered=false
++vars siblings
++vars boundaries order="inner policy;outer policy;work;"
++vars unwind
++vars rejected_cleanup
++vars helper_unwind
++vars choice_cleanup
++vars expired
++vars outer_offer
+--- corpus/disassembly/recovery-offers/recovery.dis ((new))
++++ corpus/disassembly/recovery-offers/recovery.dis (candidate)
+@@ -0,0 +1,93 @@
++unit recovery script
++constants
++  0 nothing
++  1 "bad"
++  2 true
++  3 "other"
++  4 0
++  5 "inner"
++  6 7
++  7 1
++bodies
++  0 init initialiser () locals 1 0000..0001
++  1 handler go clause 1 () locals 7 0002..0062
++code
++  0000 1:1 const 0 ; nothing
++  0001 1:1 return
++  0002 4:13 const 1 ; "bad"
++  0003 4:7 throw
++  0004 3:5 jump 0008
++  0005 6:11 load 1 ; value
++  0006 6:7 store 2 ; result
++  0007 5:5 jump 0008
++  0008 16:9 const 2 ; true
++  0009 16:5 store 4 ; cleaned
++  0010 2:3 jump 0058
++  0011 9:3 store 5 ; (5)
++  0012 9:9 load 5 ; (5)
++  0013 9:9 test-map 0029
++  0014 9:9 load 5 ; (5)
++  0015 9:9 map-get "code" 0029
++  0016 9:9 store 6 ; (6)
++  0017 9:9 load 6 ; (6)
++  0018 9:9 test-constant 3 0029 ; "other"
++  0019 9:3 catch-accept
++  0020 10:12 const 4 ; 0
++  0021 10:5 store 6 ; (6)
++  0022 16:9 const 2 ; true
++  0023 16:5 store 4 ; cleaned
++  0024 10:5 load 6 ; (6)
++  0025 10:5 return
++  0026 16:9 const 2 ; true
++  0027 16:5 store 4 ; cleaned
++  0028 9:3 jump 0058
++  0029 11:9 load 5 ; (5)
++  0030 11:9 store 6 ; (6)
++  0031 11:46 const 5 ; "inner"
++  0032 11:31 call-builtin offerAvailable 1
++  0033 11:31 branch-false 0037
++  0034 11:3 move 6 3 ; (6), e
++  0035 12:24 const 6 ; 7
++  0036 12:5 choose-offer inner 1
++  0037 13:9 load 5 ; (5)
++  0038 13:9 store 6 ; (6)
++  0039 13:3 catch-accept
++  0040 13:3 move 6 3 ; (6), e
++  0041 14:13 const 7 ; 1
++  0042 14:12 negate
++  0043 14:5 store 6 ; (6)
++  0044 16:9 const 2 ; true
++  0045 16:5 store 4 ; cleaned
++  0046 14:5 load 6 ; (6)
++  0047 14:5 return
++  0048 16:9 const 2 ; true
++  0049 16:5 store 4 ; cleaned
++  0050 13:3 jump 0058
++  0051 13:3 catch-next
++  0052 16:9 const 2 ; true
++  0053 16:5 store 4 ; cleaned
++  0054 8:3 jump 0058
++  0055 16:9 const 2 ; true
++  0056 16:5 store 4 ; cleaned
++  0057 2:3 end-cleanup
++  0058 18:10 load 2 ; result
++  0059 18:3 return
++  0060 19:1 const 0 ; nothing
++  0061 19:1 return
++  0062 19:1 clause-fail
++unwind
++  0002..0003 offer -> entry 0 depth 0
++  0002..0007 catch -> 0011 depth 0
++  0012..0018 guard -> 0029 depth 0
++  0029..0033 guard -> 0037 depth 0
++  0037..0038 guard -> 0051 depth 0
++  0002..0007 offer -> entry 1 depth 0
++  0002..0007 finally -> 0055 depth 0
++  0012..0021 finally -> 0055 depth 0
++  0029..0043 finally -> 0055 depth 0
++  0051..0051 finally -> 0055 depth 0
++offers
++  0 body 1 depth 0 end 0008
++    offer inner -> 0005 binds [1]
++  1 body 1 depth 0 end 0058
++    offer outer -> 0052 binds []
+--- corpus/capabilities/standard-store-errors/case.trace (c73d919)
++++ corpus/capabilities/standard-store-errors/case.trace (candidate)
+@@ -91,3 +91,3 @@
+-seg s/r7 start delivery=d7 handler=careful clause=1 fuel=57 alloc=79 state=0 end=return
+-run s/r7 outcome=completed delivery=d7 handler=careful fuel=57 alloc=79
+-pumped state=idle fuel=57
++seg s/r7 start delivery=d7 handler=careful clause=1 fuel=58 alloc=79 state=0 end=return
++run s/r7 outcome=completed delivery=d7 handler=careful fuel=58 alloc=79
++pumped state=idle fuel=58

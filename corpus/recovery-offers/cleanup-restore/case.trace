@@ -1,0 +1,21 @@
+# A catch-body Error reaches cleanup, then cleanup's Error replaces it.
+# Transparent Restore reconnects pending cleanup to the retained original Error.
+# A fresh on-error Run has no offers from the failed Run.
+> load s identity=aa68da9ec5b9ac74fa68aee28ef1e8498d0d9d7c4fc999ccac82a0bef8c67294
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T09:00:00Z fuel-cap=28
+raise s/r1 code="bad" at=s:7 pos=5:5
+raise s/r1 code="wrong kind" at=s:24 pos=7:5
+preempt s/r1 start delivery=d1 handler=go clause=1 by=cap fuel=31 alloc=48
+pumped state=sliced fuel=31
+> counters s
+counters s fuel=31 alloc=48 runs=1 faults=0 state=1636 mailbox=0
+> pump clock=2026-09-30T09:00:00Z
+raise s/r1 code="wrong kind" at=s:38 pos=9:5
+seg s/r1 continue fuel=11 alloc=0 state=72 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "wrong kind", expected: "number", got: "list", value: [6, 9], at: {unit: "s", handler: "go", line: 9, column: 5}, during: {code: "wrong kind", expected: "number", got: "list", value: [6, 9], at: {unit: "s", handler: "go", line: 7, column: 5}}} fuel=42 alloc=48
+seg s/r2 start from=s/r1 handler=error clause=1 fuel=31 alloc=100 state=164 end=return
+run s/r2 outcome=completed handler=error fuel=31 alloc=100
+pumped state=idle fuel=42
+> vars
+vars s count=[6, 9] backstop=["wrong kind", "wrong kind", false]

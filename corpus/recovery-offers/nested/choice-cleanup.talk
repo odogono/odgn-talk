@@ -1,0 +1,22 @@
+on go
+ try
+  try
+   throw "original"
+  offer recover
+   return "entered"
+  catch "original" before unwind
+   try
+    choose offer recover
+   finally
+    try
+     throw "cleanup"
+    catch "no"
+    end try
+   end try
+  catch "cleanup"
+   return "sibling"
+  end try
+ catch e
+  return [the code of e, the code of the during of e]
+ end try
+end go

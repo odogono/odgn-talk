@@ -31,9 +31,9 @@ pumped state=idle fuel=67
 > pump clock=2026-09-30T10:00:01Z
 raise lamp/r2 code="capability revoked" at=lamp:5 pos=9:5
 raise lamp/r2 code="object gone" at=lamp:30 pos=15:9
-seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=46 alloc=77 state=149 end=return
-run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=46 alloc=77
-pumped state=idle fuel=46
+seg lamp/r2 start delivery=d2 handler=poke clause=1 fuel=48 alloc=77 state=149 end=return
+run lamp/r2 outcome=completed delivery=d2 handler=poke fuel=48 alloc=77
+pumped state=idle fuel=48
 
 > vars
 vars lamp seen=["wrote", "off", "capability revoked", "object gone"]

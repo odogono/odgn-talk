@@ -1,6 +1,6 @@
 # 4. Expressions and statements
 
-_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md).
+_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md).
 
 This chapter says what each expression computes and what each statement does. [Chapter 2](02-grammar.md) has their syntax, and [chapter 3](03-values.md) the values they work on. Handler dispatch, messages and waiting are in [chapter 5](05-handlers-messages-and-scheduling.md), and how an error unwinds is in [chapter 6](06-errors-and-limits.md).
 
@@ -11,7 +11,7 @@ A load error, here as in every chapter, is a checker diagnostic: the Script or L
 ### Bodies and locals
 
 - **A body** is the code of a Handler, a function or a Lambda. Each Run of it has its own locals. A loop, a branch or a `try` block has no scope of its own.
-- **Its locals** are its parameters and every name it binds: a Container root it puts into that isn't a Script Variable, and the names bound by a `let`, `repeat for each`, `match`, `catch` or `wait for` pattern, including Captures ([Destructuring](#destructuring)), and a `repeat`'s collecting target.
+- **Its locals** are its parameters and every name it binds: a Container root it puts into that isn't a Script Variable, and the names bound by a `let`, `repeat for each`, `match`, `catch` or `wait for` pattern, including Captures ([Destructuring](#destructuring)), a `repeat`'s collecting target, and an offer's parameters.
 - **They start as Nothing.** When a body starts, every local that isn't a parameter holds Nothing, so reading one before anything is put into it gives Nothing.
 - **`it`** is a local of every body, and also starts as Nothing ([below](#it)).
 - **Script level:** a Script's Script Variables, Constants, Handlers, functions and Imports can be used from all of its bodies.
@@ -464,10 +464,112 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 
 ### `try` and `throw`
 
-- **`try`** runs its body. If an error is raised in it, its `catch` clauses are tried in order, each a pattern with an optional Guard, and the first that matches runs with its names bound. If none matches, the error keeps unwinding. `finally` runs after the body or the `catch` clause, whether or not an error is still unwinding.
+- **`try`** runs its body. When an Error is raised, the Core searches for a catch before unwinding any failed frame or running cleanup. Patterns and Guards are tried in source order, seeing pre-cleanup state. An accepting ordinary catch runs exited cleanup, discards deeper failed frames, then runs its body with its names bound. Rejecting catches are transparent to outer catches. With no accepting catch, every exited `finally` runs before the Run ends `errored`. The offering try's `finally` runs after an accepted catch or chosen action, including its ordinary exits ([chapter 6](06-errors-and-limits.md#catching)).
 - **`throw e`** raises `e`. A map with a text `code` is raised as it is, with the Core adding `at` only if it is missing, so `throw e` rethrows with the original position. Text is short for `{code: e}`. Anything else raises `bad throw`.
 - **A text literal** in a `catch` head is short for `{code: "…"}`.
 - **What `catch` never sees:** Limit Faults, cancellation and Stop Script, which aren't errors. `finally`'s full rules, and which errors each operation raises, are in [chapter 6](06-errors-and-limits.md).
+
+### Recovery Offers
+
+A Recovery Offer is a named block declared by an active `try`, which a caller may choose before failed frames are discarded. A `catch … before unwind` is a Recovery Catch: its policy runs with the failed continuations retained, sharing the catching body's actual locals. Falling through declines and tests the next catch, preserving any local or Script Variable writes. An ordinary accepting catch is a barrier; a rejecting catch is transparent.
+
+- **Declarations:** offers precede catches. Their plain parameters use ordinary local binding rules and require exact arity, with no defaults, patterns or Argument Labels. Nested tries may shadow offer names. No offer is a Script Value, ambient Library binding or durable handle.
+- **Availability:** eligible offers belong to protected try scopes still active in this Run's retained failure chain. Search scopes innermost first, declarations in source order; the nearest same-name offer wins. Local calls, Library frames and same-Run callbacks participate. Foreign Function Value receivers and fresh `on error` Runs have their own chains. [Chapter 7](07-libraries-and-the-standard-library.md#offer-availability) defines `offerAvailable`.
+- **Choice:** `choose offer name(args)` evaluates arguments left to right, then looks up the nearest name and checks exact arity. Missing names raise `offer unavailable` with `name`; wrong arity raises `wrong arity`, without selecting an outer same-name offer. Argument Errors follow ordinary local handling.
+- **Transfer:** a valid choice runs exited policy-local cleanup, then exited original failed scopes innermost first. The offering try's finally remains to protect the action. After cleanup, all action parameters bind atomically in the original owning frame, preserving its other locals and outer iterator state. The sibling offers expire at action entry. Normal action fallthrough continues after the try; return and loop exits use ordinary finally rules. No failed expression or instruction resumes.
+- **Policy boundaries:** selection cannot suspend. Choice permission is lexical, reset by entering a function or Lambda; helpers can compute values and query availability. A nested policy failure sees only its own bounded failure chain. [Chapter 6](06-errors-and-limits.md#catching) defines local handling, escaping policy and cleanup Errors, and cancellation.
+- **Action boundaries:** actions may suspend only where their surrounding body already permits it; functions remain non-suspending. Recovery creates no Segment boundary, effect rollback or automatic abandonment. Ordinary scope restrictions govern later suspension.
+
+For example, an outer policy chooses a block that preserves the callee's accumulated rows:
+
+```talk
+function parseRows lines
+  put [] into rows
+  repeat for each line in lines
+    try
+      put line as number after rows
+    offer skip
+      next repeat
+    offer useValue value
+      put value after rows
+    end try
+  end repeat
+  return rows
+end parseRows
+
+on parseInput
+  try
+    put parseRows(["5", "bad", "7"]) into parsed
+  catch {code: "can't convert"} before unwind
+    choose offer useValue(0)
+  end try
+  -- parsed is [5, 0, 7]; earlier conversion and accumulation were retained.
+end parseInput
+```
+
+The policy can choose `skip` instead, producing `[5, 7]`. It can also decline when an offer is unavailable:
+
+```talk
+function parseRows lines
+  put [] into rows
+  repeat for each line in lines
+    try
+      put line as number after rows
+    offer skip
+      next repeat
+    end try
+  end repeat
+  return rows
+end parseRows
+
+on parseInput
+  try
+    put parseRows(["5", "bad", "7"]) into parsed
+  catch {code: "can't convert"} before unwind
+    if offerAvailable("skip") then
+      choose offer skip
+    end if
+  catch {code: "can't convert"}
+    put [] into parsed
+  end try
+  -- This call offers skip, so parsed is [5, 7].
+end parseInput
+```
+
+The same local catch with an explicitly supplied policy callback remains useful when passing policy through the API is convenient:
+
+```talk
+function parseRowsWithPolicy lines, policy
+  put [] into rows
+  repeat for each line in lines
+    try
+      put line as number into value
+    catch {code: "can't convert"}
+      put policy(line) into decision
+      if the action of decision = "skip" then next repeat
+      put the value of decision into value
+    end try
+    put value after rows
+  end repeat
+  return rows
+end parseRowsWithPolicy
+
+function chooseSkip line
+  return {action: "skip"}
+end chooseSkip
+
+function chooseZero line
+  return {action: "use value", value: 0}
+end chooseZero
+
+on parseInput
+  put parseRowsWithPolicy(["5", "bad", "7"], chooseSkip) into skipped
+  put parseRowsWithPolicy(["5", "bad", "7"], chooseZero) into replaced
+  -- skipped is [5, 7]; replaced is [5, 0, 7].
+end parseInput
+```
+
+The function may live in a Library while the policies live in the calling Script and are passed as Function Values. Each policy must be non-suspending and callable in this Run, with its Home Script the caller's Script. This is a useful beginner alternative, but every API between caller and parser must explicitly forward the policy when the parser is deeper in the call chain.
 
 ### `return`
 
@@ -491,7 +593,7 @@ A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 
 
 ## Guards
 
-**Pending addition:** [two-phase catch search](proposals/recovery-offers.md#two-phase-catch-search) tests every catch's pattern and Guard before unwinding, so a Guard sees state from before deeper `finally` blocks run. Recovery Catches retain ordinary Guard restrictions and add `offerAvailable` for checking an eligible offer. The search, the new catch, offer and choice forms and the Built-in are not implemented by either Core or tooling yet.
+Catch patterns and Guards run before deeper `finally` blocks. A Recovery Catch keeps these same Guard restrictions; `offerAvailable` can test an eligible offer in its Guard ([chapter 7](07-libraries-and-the-standard-library.md#offer-availability)).
 
 A Guard is the `where` condition of a Handler Clause, a `match` branch, a `catch` clause or a `wait for` branch ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md)).
 

@@ -499,3 +499,22 @@ test('export rename permits the same spelling as a retained alias when no local 
     ],
   ).toHaveLength(1);
 });
+
+test('LSP publishes recovery diagnostics and beginner advice without lexical offer lookup', () => {
+  const source =
+    'on demo\nchoose offer missing\ntry\noffer skip\noffer skip\ncatch e before unwind\nwait 1 s\nreturn 1\nchoose offer remote(1)\nend try\nend demo';
+  const { sent } = setup(source);
+  const diagnostics = (sent.at(-1)!.params as Published).diagnostics;
+  expect(
+    diagnostics.filter(d => d.source === 'northtalk').map(d => d.code),
+  ).toEqual([
+    'not in recovery',
+    'duplicate offer',
+    "can't suspend here",
+    'leaves recovery catch',
+  ]);
+  expect(diagnostics.filter(d => d.code === 'advanced-construct')).toHaveLength(
+    5,
+  );
+  expect(diagnostics.some(d => d.code === 'unknown name')).toBe(false);
+});

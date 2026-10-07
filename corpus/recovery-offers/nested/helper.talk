@@ -1,0 +1,28 @@
+script variable seen
+function helper
+ try
+  throw "inner"
+ offer inner value
+  return value
+ end try
+end helper
+function work
+ try
+  throw "original"
+ offer recover value
+  return [value, seen]
+ end try
+end work
+on go
+ try
+  return work()
+ catch "original" before unwind
+  try
+   put helper() into replacement
+  catch "inner" before unwind
+   put [offerAvailable("inner"), offerAvailable("recover")] into seen
+   choose offer inner(9)
+  end try
+  choose offer recover(replacement)
+ end try
+end go

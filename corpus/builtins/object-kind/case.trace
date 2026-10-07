@@ -6,9 +6,9 @@
 > deliver d1 to=router message=go
 > pump clock=2026-10-02T09:00:00Z
 raise router/r1 code="wrong kind" at=router:59 pos=11:9
-seg router/r1 start delivery=d1 handler=go clause=1 fuel=183 alloc=1755 state=1031 end=return
-run router/r1 outcome=completed delivery=d1 handler=go fuel=183 alloc=1755
-pumped state=idle fuel=183
+seg router/r1 start delivery=d1 handler=go clause=1 fuel=184 alloc=1755 state=1031 end=return
+run router/r1 outcome=completed delivery=d1 handler=go fuel=184 alloc=1755
+pumped state=idle fuel=184
 > dispose object=<object item "x1">
 > deliver d2 to=router message=later
 > pump clock=2026-10-02T09:00:01Z

@@ -1568,3 +1568,51 @@ table = "operations"
 key = "segmentBound"
 is = "optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks"
 kinds = ["trace", "disassembly"]
+
+[[record]]
+name = "offer-chosen"
+input = false
+ids = ["run"]
+is = "a successfully charged and validated Recovery Offer choice, before transfer cleanup"
+
+[[record.key]]
+key = "attempt"
+type = "count"
+is = "the per-Run choice sequence, starting at one"
+
+[[record.key]]
+key = "name"
+type = "value"
+is = "the chosen offer Name as text"
+
+[[record.key]]
+key = "at"
+type = "at"
+is = "the choice instruction"
+
+[[record.key]]
+key = "target"
+type = "at"
+is = "the action-entry instruction"
+
+[[record.key]]
+key = "args"
+type = "value"
+optional = true
+is = "the supplied arguments as a list, omitted when empty"
+
+[[record]]
+name = "offer-entered"
+input = false
+ids = ["run"]
+is = "entry into a chosen Recovery Offer after cleanup and atomic parameter binding"
+
+[[record.key]]
+key = "attempt"
+type = "count"
+is = "the matching choice sequence"
+
+[[record.key]]
+key = "target"
+type = "at"
+is = "the action-entry instruction, before its first charge"

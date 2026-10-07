@@ -17,27 +17,27 @@ pumped state=idle fuel=88
 > pump clock=2026-10-04T12:00:01Z
 call s/r2.c1 op=a.read args=["x"] error={code: "unavailable", message: "Try later", reason: 7}
 raise s/r2 code="unavailable" at=s:32 pos=14:3
-seg s/r2 start delivery=d2 handler=read clause=1 fuel=41 alloc=577 state=641 end=return
-run s/r2 outcome=completed delivery=d2 handler=read fuel=41 alloc=577
+seg s/r2 start delivery=d2 handler=read clause=1 fuel=42 alloc=577 state=641 end=return
+run s/r2 outcome=completed delivery=d2 handler=read fuel=42 alloc=577
 raise s/r3 code="wrong kind" at=s:32 pos=14:3
-seg s/r3 start delivery=d3 handler=read clause=1 fuel=22 alloc=709 state=1302 end=return
-run s/r3 outcome=completed delivery=d3 handler=read fuel=22 alloc=709
-pumped state=idle fuel=63
+seg s/r3 start delivery=d3 handler=read clause=1 fuel=23 alloc=709 state=1302 end=return
+run s/r3 outcome=completed delivery=d3 handler=read fuel=23 alloc=709
+pumped state=idle fuel=65
 > revoke s grant=a
 > deliver d4 to=s message=read args=["x"]
 > pump clock=2026-10-04T12:00:02Z
 raise s/r4 code="capability revoked" at=s:32 pos=14:3
-seg s/r4 start delivery=d4 handler=read clause=1 fuel=22 alloc=520 state=1822 end=return
-run s/r4 outcome=completed delivery=d4 handler=read fuel=22 alloc=520
-pumped state=idle fuel=22
+seg s/r4 start delivery=d4 handler=read clause=1 fuel=23 alloc=520 state=1822 end=return
+run s/r4 outcome=completed delivery=d4 handler=read fuel=23 alloc=520
+pumped state=idle fuel=23
 > stub api.read value=9
 > deliver d5 to=s message=caught
 > pump clock=2026-10-04T12:00:03Z
 raise s/r5 code="caught" at=s:62 pos=25:3
 call s/r5.c1 op=b.read args=[] result=9
 call s/r5.c2 op=b.note args=[]
-seg s/r5 start delivery=d5 handler=caught clause=1 fuel=54 alloc=69 state=1822 end=return
-run s/r5 outcome=completed delivery=d5 handler=caught fuel=54 alloc=69
-pumped state=idle fuel=54
+seg s/r5 start delivery=d5 handler=caught clause=1 fuel=55 alloc=69 state=1822 end=return
+run s/r5 outcome=completed delivery=d5 handler=caught fuel=55 alloc=69
+pumped state=idle fuel=55
 > vars
 vars s replies=[7, 8] errors=[{code: "unavailable", message: "Try later", reason: 7, capability: "a", operation: "read", at: {unit: "s", handler: "read", line: 14, column: 3}}, {code: "wrong kind", expected: "text or nothing", got: "number", value: 3, capability: "a", operation: "read", argument: 1, at: {unit: "s", handler: "read", line: 14, column: 3}}, {code: "capability revoked", capability: "a", operation: "read", at: {unit: "s", handler: "read", line: 14, column: 3}}]

@@ -7,9 +7,9 @@
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping args=[1] wait=join
 send a/r1.c2 to=b message=ping args=[3] wait=join
-seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=488 end=join-end
+seg a/r1 start delivery=d1 handler=gather clause=1 fuel=102 alloc=120 state=504 end=join-end
 seg b/r1 start from=a/r1.c1 handler=ping clause=1 fuel=20 alloc=0 state=280 end=wait until=2026-10-04T12:00:01Z
-seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=464 end=return
+seg a/r2 start delivery=d2 handler=gather clause=1 fuel=60 alloc=64 state=480 end=return
 run a/r2 outcome=completed delivery=d2 handler=gather fuel=60 alloc=64
 seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=20 alloc=0 state=448 end=wait until=2026-10-04T12:00:01Z
 pumped state=idle fuel=202 next=2026-10-04T12:00:01Z
@@ -26,7 +26,7 @@ pumped state=idle fuel=38
 send a/r3.c1 to=b message=ping args=[1] wait=join
 send a/r3.c2 to=b message=ping args=[2] wait=join
 send a/r3.c3 to=b message=ping args=[3] wait=join
-seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=608 end=join-end
+seg a/r3 start delivery=d3 handler=gather clause=1 fuel=130 alloc=168 state=624 end=join-end
 seg b/r3 start from=a/r3.c1 handler=ping clause=1 fuel=20 alloc=0 state=376 end=wait until=2026-10-04T12:00:02Z
 raise b/r4 code="bad" at=b:10 pos=4:3
 seg b/r4 start from=a/r3.c2 handler=ping clause=1 fuel=28 alloc=111 state=328 end=error
@@ -34,10 +34,10 @@ run b/r4 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handle
 raise a/r3 code="send failed" at=a:16 pos=9:3
 abandon a/r3.c1
 abandon a/r3.c3
-seg a/r3 resume fuel=17 alloc=824 state=936 end=return
-run a/r3 outcome=completed delivery=d3 handler=gather fuel=147 alloc=992
+seg a/r3 resume fuel=18 alloc=824 state=936 end=return
+run a/r3 outcome=completed delivery=d3 handler=gather fuel=148 alloc=992
 seg b/r5 start from=a/r3.c3 handler=ping clause=1 fuel=20 alloc=0 state=819 end=wait until=2026-10-04T12:00:02Z
-pumped state=idle fuel=215 next=2026-10-04T12:00:02Z
+pumped state=idle fuel=216 next=2026-10-04T12:00:02Z
 > pump clock=2026-10-04T12:00:02Z
 seg b/r3 resume fuel=12 alloc=24 state=304 end=return
 run b/r3 outcome=completed handler=ping value=1 fuel=32 alloc=24
@@ -67,7 +67,7 @@ pumped state=idle fuel=16
 vars a results=[[], [1, 3], {code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 4, column: 3}}, at: {unit: "a", handler: "gather", line: 9, column: 3}, index: 2}, [7, 9]]
 vars b done=[1, 3, 1, 3]
 > counters a
-counters a fuel=444 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
+counters a fuel=445 alloc=1544 runs=6 faults=0 state=1008 mailbox=0
 > counters b
 counters b fuel=156 alloc=207 runs=5 faults=0 state=112 mailbox=0
 

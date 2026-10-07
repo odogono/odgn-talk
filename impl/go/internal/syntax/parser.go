@@ -357,6 +357,20 @@ func (p *parser) statement(inline bool) *Node {
 	if t.Raw == "wait" {
 		return p.waitStatement(inline)
 	}
+	if t.Raw == "choose" && p.second(Operand).Raw == "offer" {
+		n := node("choose-offer", p.take(Operand))
+		p.expect("offer")
+		n.NameToken = p.name()
+		n.Text = n.NameToken.Raw
+		if open := p.peek(Operator); open.Raw == "(" && open.Leading == "" {
+			p.take(Operator)
+			if !p.atOperand(")") {
+				n.Children = p.expressionList()
+			}
+			p.expect(")")
+		}
+		return n
+	}
 	n := node(t.Raw, p.take(Operand))
 	switch t.Raw {
 	case "put":
@@ -620,10 +634,28 @@ func (p *parser) matchStatement() *Node {
 func (p *parser) tryStatement() *Node {
 	n := node("try", p.take(Operand))
 	p.nl()
-	n.Body = p.block("catch", "finally", "end")
+	n.Body = p.block("offer", "catch", "finally", "end")
+	for p.at("offer") {
+		b := node("offer", p.take(Operand))
+		b.NameToken = p.name()
+		b.Text = b.NameToken.Raw
+		if !p.atOperand("\n") && p.peek(Operand).Kind != EOF {
+			b.Params = append(b.Params, node("offer-parameter", p.name()))
+			for p.accept(",") {
+				b.Params = append(b.Params, node("offer-parameter", p.name()))
+			}
+		}
+		p.nl()
+		b.Body = p.block("offer", "catch", "finally", "end")
+		n.Branches = append(n.Branches, b)
+	}
 	for p.at("catch") {
 		b := node("catch", p.take(Operand))
 		b.Params = []*Node{p.bindingPattern()}
+		if p.at("before") {
+			b.Flags = append(b.Flags, p.take(Operator))
+			p.expect("unwind")
+		}
 		if p.accept("where") {
 			b.Guard = p.expression()
 		}
@@ -1094,7 +1126,7 @@ func (p *parser) collection(mapping bool) *Node {
 		for {
 			if mapping {
 				k := p.peek(Operand)
-				if k.Kind != Word && k.Kind != Text {
+				if k.Kind != Word && k.Kind != Text || k.Kind == Word && k.Raw == "offer" {
 					p.fail(k)
 				}
 				p.take(Operand)
@@ -1140,7 +1172,7 @@ func (p *parser) bindingPattern() *Node {
 				var item *Node
 				if mapping {
 					key := p.peek(Operand)
-					if key.Kind != Word && key.Kind != Text {
+					if key.Kind != Word && key.Kind != Text || key.Kind == Word && key.Raw == "offer" {
 						p.fail(key)
 					}
 					if p.second(Operand).Raw == ":" {

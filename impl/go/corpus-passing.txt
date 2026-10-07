@@ -1,5 +1,7 @@
 # Cases the Go Core must continue to pass (issues #132–#136).
 # New regression cases retain Unblessed headers until their first human review.
+# Recovery Offers: all eight cases approved on 2026-10-07 at 0c3c33f (#392);
+# see docs/reviews/recovery-offers-integration/README.md.
 
 builtins/function-values
 builtins/kind-of
@@ -123,6 +125,7 @@ disassembly/errors-and-loops
 disassembly/expressions
 disassembly/fenced-text
 disassembly/messages-and-waiting
+disassembly/recovery-offers
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
@@ -224,6 +227,13 @@ objects/wait-target
 quantities/arithmetic-through-base-units
 quantities/incompatible-units
 quantities/value-encoding
+recovery-offers/action-suspend
+recovery-offers/basic
+recovery-offers/boundaries
+recovery-offers/cancellation
+recovery-offers/cleanup-restore
+recovery-offers/costs
+recovery-offers/nested
 reload/extend-units
 reload/extension-state-cap
 reload/function-staleness

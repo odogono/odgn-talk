@@ -13,8 +13,8 @@ call s/r1.c1 op=r.write args=[] error={}
 call-failed s/r1.c1 op=r.write
 raise s/r1 code="host error" at=s:4 pos=4:1
 effect s/r1.s1 grant=r phase=commit status=ok
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=26 alloc=0 state=16 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=26 alloc=0
-pumped state=idle fuel=26
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=27 alloc=0 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=27 alloc=0
+pumped state=idle fuel=27
 > vars
 vars s count=2

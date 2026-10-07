@@ -1,0 +1,13 @@
+function parseRows lines, convert
+  put [] into rows
+  repeat for each line in lines
+    try
+      put convert(line) after rows
+    offer skip
+      next repeat
+    offer useValue value
+      put value after rows
+    end try
+  end repeat
+  return rows
+end parseRows

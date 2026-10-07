@@ -80,6 +80,21 @@ export const fixtures: readonly {
   },
   {
     id: 'advanced-construct',
+    positive: script('try\noffer skip\nend try'),
+    negative: script('try\ncatch e\nend try'),
+  },
+  {
+    id: 'advanced-construct',
+    positive: script('try\ncatch e before unwind\nend try'),
+    negative: script('try\ncatch e\nend try'),
+  },
+  {
+    id: 'advanced-construct',
+    positive: script('choose offer skip'),
+    negative: script('choose 1'),
+  },
+  {
+    id: 'advanced-construct',
     positive: 'on demo {order: ^orderId}\nend demo',
     negative: 'on demo {order: o} where o = orderId\nend demo',
   },

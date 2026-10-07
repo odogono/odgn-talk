@@ -34,7 +34,8 @@ const LEAVES = new Set([
   'return',
   'clause-fail',
   'throw',
-  'rethrow',
+  'catch-next',
+  'choose-offer',
   'raise',
   'end-cleanup',
   'veto',
@@ -172,6 +173,12 @@ const verify = (unit: Unit, where: string) => {
           `${where}: body ${b.index} (${b.name}): the ${next.kind} entry at ${next.from} has depth ${next.depth}, but the stack there is ${depth.get(next.from)}`,
         );
       }
+      if (next.kind === 'offer') {
+        for (const offer of unit.offers![next.target]!.offers) {
+          reach(offer.target, next.depth, next.from);
+        }
+        continue;
+      }
       reach(
         next.target,
         next.kind === 'catch' ? next.depth + 1 : next.depth,
@@ -264,6 +271,19 @@ export const disassemble = (unit: Unit): string => {
         `  ${pad(u.from)}..${pad(u.to - 1)} ${u.kind} -> ${pad(u.target)} depth ${u.depth}`,
       );
     }
+  }
+  if (unit.offers?.length) {
+    out.push('offers');
+    unit.offers.forEach((entry, i) => {
+      out.push(
+        `  ${i} body ${entry.body} depth ${entry.depth} end ${pad(entry.end)}`,
+      );
+      for (const offer of entry.offers) {
+        out.push(
+          `    offer ${offer.name} -> ${pad(offer.target)} binds [${offer.binds.join(', ')}]`,
+        );
+      }
+    });
   }
   if (unit.events.length) {
     out.push('events');

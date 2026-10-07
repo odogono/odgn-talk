@@ -24,8 +24,8 @@ scope s/r1.c5 grant=r name=lock action=closed
 call s/r1.c6 op=r.close args=[] result=nothing
 scope s/r1.c6 grant=r name=file action=closed
 raise s/r1 code="scope not open" at=s:29 pos=15:1
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=107 alloc=48 state=30 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=107 alloc=48
-pumped state=idle fuel=107
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=109 alloc=48 state=30 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=48
+pumped state=idle fuel=109
 > vars
 vars s count="scope not open"

@@ -556,7 +556,7 @@ const pauseText = (
     '',
     'frames:',
     ...pause.frames.flatMap(f => [
-      `  ${f.handler ?? '?'} at ${f.unit}:${f.line}`,
+      `  ${f.handler ?? '?'} at ${f.unit}:${f.line}${f.role ? ` (${f.role}${f.owner === undefined ? '' : `, owner frame ${f.owner + 1}`})` : ''}`,
       ...f.locals.map(l => `    ${l}`),
     ]),
     '',

@@ -12,9 +12,9 @@ pumped state=idle fuel=24 next=2026-09-30T10:00:30Z
 > answer s/r1.c1 value=8
 > pump clock=2026-09-30T10:00:01Z
 raise s/r1 code="capability revoked" at=s:10 pos=7:5
-seg s/r1 resume fuel=25 alloc=58 state=74 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=58
-pumped state=idle fuel=25
+seg s/r1 resume fuel=26 alloc=58 state=74 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=50 alloc=58
+pumped state=idle fuel=26
 > reload s carry=yes source="on go" & newline & "  ask io to pause and wait" & newline & "end go" identity=14e45a50a925b720f7074bed98d5af3fe061deca142ee69756d2e78cb0a0dc51
 diag s code="unknown operation" pos=2:7
 > reload s carry=yes source="script variable answer = 0" & newline & "script variable seen = []" & newline & "on go" & newline & "  return answer" & newline & "end go" identity=c79a9d0a1270daf7f62482f1f44ab956fa101f06269e11ae851e1d3929748770

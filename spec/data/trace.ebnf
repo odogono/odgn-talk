@@ -47,6 +47,8 @@ ObjectValue    ::= '<object ' Word ' ' TextValue '>'
 TraceFile      ::= ( TraceLine #xA )*
 TraceLine      ::= ( '> ' )? Record | '#' [^#xA]* | ''
 Record         ::= RecordName ( ' ' Id )* ( ' ' Field )*
+/* offer-chosen and offer-entered use the ordinary record grammar;
+   their ordered attempt/name/at/target/args keys are in corpus.toml. */
 RecordName     ::= [a-z] [a-z-]*
 Id             ::= [A-Za-z0-9_] [A-Za-z0-9_./:+-]*
 Field          ::= Key '=' FieldValue

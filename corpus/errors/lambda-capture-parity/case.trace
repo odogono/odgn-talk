@@ -19,20 +19,20 @@ raise b/r2 code="bad" at=b:3 pos=2:3
 seg b/r2 start from=a/r1.c2 handler=ping clause=1 fuel=19 alloc=48 state=371 end=error
 run b/r2 outcome=errored handler=ping error={code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}} fuel=19 alloc=48
 raise a/r3 code="division by zero" at=a:92 pos=31:22
-seg a/r3 start delivery=d3 handler=nested clause=1 fuel=58 alloc=96 state=1155 end=return
-run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=58 alloc=96
+seg a/r3 start delivery=d3 handler=nested clause=1 fuel=59 alloc=96 state=1155 end=return
+run a/r3 outcome=completed delivery=d3 handler=nested value={code: "division by zero", at: {unit: "a", handler: "nested", line: 31, column: 22}} fuel=59 alloc=96
 raise a/r1 code="send failed" at=a:69 pos=7:7
 abandon a/r1.c2
-seg a/r1 resume fuel=11 alloc=0 state=456 end=return
-run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=104 alloc=160
+seg a/r1 resume fuel=12 alloc=0 state=456 end=return
+run a/r1 outcome=completed delivery=d1 handler=go value={code: "send failed", reason: "errored", error: {code: "bad", at: {unit: "b", handler: "ping", line: 2, column: 3}}, at: {unit: "a", handler: "go", line: 7, column: 7}, index: 1} fuel=105 alloc=160
 seg b/r3 start from=a/r2.c1 handler=slow clause=1 fuel=15 alloc=0 state=523 end=wait until=1970-01-01T00:00:01Z
-pumped state=idle fuel=279 next=1970-01-01T00:00:00.01Z
+pumped state=idle fuel=281 next=1970-01-01T00:00:00.01Z
 > pump clock=1970-01-01T00:00:00.01Z
 raise a/r2 code="timeout" at=a:77 pos=20:7
 abandon a/r2.c1
-seg a/r2 resume fuel=11 alloc=0 state=0 end=return
-run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=75 alloc=96
-pumped state=idle fuel=11 next=1970-01-01T00:00:01Z
+seg a/r2 resume fuel=12 alloc=0 state=0 end=return
+run a/r2 outcome=completed delivery=d2 handler=timeout value={code: "timeout", after: 10 ms, at: {unit: "a", handler: "timeout", line: 20, column: 7}, index: 1} fuel=76 alloc=96
+pumped state=idle fuel=12 next=1970-01-01T00:00:01Z
 > pump clock=1970-01-01T00:00:01Z
 seg b/r3 resume fuel=3 alloc=0 state=0 end=return
 run b/r3 outcome=completed handler=slow value=3 fuel=18 alloc=0

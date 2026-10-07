@@ -3,6 +3,8 @@ package driver
 import (
 	"bytes"
 	"context"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -87,5 +89,49 @@ func TestZeroOverridesReplayAndRestore(t *testing.T) {
 	}
 	if WriteTranscript(actual) != WriteTranscript(recorded) {
 		t.Fatal(WriteTranscript(actual))
+	}
+}
+
+func TestSessionChoosesLibraryRecoveryOffer(t *testing.T) {
+	library, err := os.ReadFile("../../../corpus/recovery-offers/basic/rows.talk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace []string
+	var items []session.Item
+	h := session.New(session.Environment{Record: func(i session.Item) { items = append(items, i) }, Trace: func(line string) { trace = append(trace, line) }})
+	for _, source := range []string{
+		":clock virtual 2026-09-30T10:00:00Z",
+		":library add rows\n" + strings.TrimRight(string(library), "\n"),
+		"use parseRows from rows",
+		"function convert row\n return row as number\nend convert",
+		"on go\n try\n  put parseRows([\"5\", \"bad\", \"7\"], convert) into rows\n catch e before unwind where offerAvailable(\"useValue\")\n  choose offer useValue(0)\n end try\n say rows\nend go",
+	} {
+		if out := h.Input(source); len(out) != 0 {
+			t.Fatalf("%s: %v", source, out)
+		}
+	}
+	if out := h.Input("go"); !reflect.DeepEqual(out, []string{"[5, 0, 7]"}) {
+		t.Fatal(out)
+	}
+	var replayedTrace []string
+	_, replayed, err := ReplayTranscript(items, func(line string) { replayedTrace = append(replayedTrace, line) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if WriteTranscript(replayed) != WriteTranscript(items) || !reflect.DeepEqual(replayedTrace, trace) {
+		t.Fatal("Recovery session replay changed Transcript or Trace", replayedTrace, trace)
+	}
+	chosen, entered := 0, 0
+	for _, line := range trace {
+		if strings.HasPrefix(line, "offer-chosen ") {
+			chosen++
+		}
+		if strings.HasPrefix(line, "offer-entered ") {
+			entered++
+		}
+	}
+	if chosen != 1 || entered != 1 {
+		t.Fatalf("choice/entry pairing: %d/%d", chosen, entered)
 	}
 }

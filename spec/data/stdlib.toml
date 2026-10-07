@@ -990,6 +990,11 @@ mode = "suspending"
 call = "read"
 gives = "The next line of input the user types, as text, without its line break"
 
+[[builtin]]
+name = "offerAvailable"
+group = "values"
+call = "offerAvailable(textName)"
+gives = "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name"
 [[operation]]
 capability = "store"
 name = "get"

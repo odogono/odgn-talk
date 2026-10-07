@@ -19,9 +19,9 @@ seg b/r3 start from=a/r1.c1 fuel=0 alloc=0 state=0 end=unhandled
 run b/r3 outcome=unhandled fuel=0 alloc=0
 unhandled message=missing args=[2]
 raise a/r1 code="send failed" at=a:16 pos=9:5
-seg a/r1 resume fuel=30 alloc=176 state=108 end=return
-run a/r1 outcome=completed delivery=d1 handler=go fuel=111 alloc=344
-pumped state=idle fuel=111
+seg a/r1 resume fuel=31 alloc=176 state=108 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=112 alloc=344
+pumped state=idle fuel=112
 > vars
 vars a seen=[["send failed", "unhandled"]]
 vars b

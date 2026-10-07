@@ -262,13 +262,13 @@ var Errors = ErrorsTable{
 		ErrorsTableErrorEntry{
 			Code:       "wrong arity",
 			Fields:     []string{},
-			RaisedWhen: "A Function Value is called with too few or too many arguments: a Lambda's count, or outside a named function's range from its required parameters to all of them",
+			RaisedWhen: "A Function Value is called outside its accepted argument range, or an offer choice does not match the nearest offer's exact parameter count",
 			Sources: []string{
 				"ADR 0017",
 				"ADR 0025",
 				"ADR 0035",
 			},
-			Message: "The function was called with the wrong number of arguments",
+			Message: "The function or offer was called with the wrong number of arguments",
 		},
 		ErrorsTableErrorEntry{
 			Code: "not encodable",
@@ -490,6 +490,17 @@ var Errors = ErrorsTable{
 				"ADR 0048",
 			},
 			Message: "The Grant for {capability} is disabled, so {operation} cannot be called",
+		},
+		ErrorsTableErrorEntry{
+			Code: "offer unavailable",
+			Fields: []string{
+				"name",
+			},
+			RaisedWhen: "A choice names no eligible Recovery Offer in the retained failure chain",
+			Sources: []string{
+				"ADR 0060",
+			},
+			Message: "The recovery offer {name} is unavailable",
 		},
 		ErrorsTableErrorEntry{
 			Code:       "invalid key",

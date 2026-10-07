@@ -9,15 +9,15 @@
 > deliver d3 to=checks message=invert
 > pump clock=2026-09-30T09:00:00Z
 raise checks/r1 code="out of domain" at=text:1313 pos=335:3
-seg checks/r1 start delivery=d1 handler=go clause=1 fuel=134 alloc=297 state=544 end=return
-run checks/r1 outcome=completed delivery=d1 handler=go fuel=134 alloc=297
+seg checks/r1 start delivery=d1 handler=go clause=1 fuel=135 alloc=297 state=544 end=return
+run checks/r1 outcome=completed delivery=d1 handler=go fuel=135 alloc=297
 raise checks/r2 code="can't decode" at=json:1296 pos=236:3
 seg checks/r2 start delivery=d2 handler=parse clause=1 fuel=1004 alloc=1933 state=512 end=error
 run checks/r2 outcome=errored delivery=d2 handler=parse error={code: "can't decode", format: "json", offset: 4, at: {unit: "checks", handler: "parse", line: 18, column: 10}} fuel=1004 alloc=1933
 raise checks/r3 code="division by zero" at=checks:37 pos=22:33
 seg checks/r3 start delivery=d3 handler=invert clause=1 fuel=126 alloc=208 state=990 end=error
 run checks/r3 outcome=errored delivery=d3 handler=invert error={code: "division by zero", at: {unit: "checks", handler: "invert", line: 22, column: 33}} fuel=126 alloc=208
-pumped state=idle fuel=1264
+pumped state=idle fuel=1265
 
 > vars
 vars checks caught={code: "out of domain", function: "pad", value: -1, at: {unit: "checks", handler: "go", line: 11, column: 9}}

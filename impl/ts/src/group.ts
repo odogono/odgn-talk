@@ -1064,11 +1064,8 @@ export class Group {
         ]),
       );
     }
-    const state = restoreGraph(
-      saved.graph,
-      group.snapshotReferences(),
-      mismatch,
-    ) as SavedState;
+    const refs = group.snapshotReferences();
+    const state = restoreGraph(saved.graph, refs, mismatch) as SavedState;
     const result: RestoreResult = {
       variablesOnly: mismatch,
       pending: [],
@@ -1137,6 +1134,7 @@ export class Group {
           );
         });
         for (const running of group.runsOf(script)) {
+          running.run.validateSnapshot(new Set(refs.byObject.keys()));
           running.run.host = group.hostFor(script, running.run);
           running.run.rebindCalls();
           running.run.persistentState = () => group.persistentState(script, 1);
@@ -4106,6 +4104,31 @@ export class Group {
         );
         continue;
       }
+      if (rec.kind === 'offer-chosen' || rec.kind === 'offer-entered') {
+        this.trace(
+          recordLine(
+            rec.kind,
+            [running.id],
+            [
+              ['attempt', String(rec.attempt)],
+              ...(rec.kind === 'offer-chosen'
+                ? ([
+                    ['name', traceValue(text(rec.name))],
+                    ['at', `${rec.at.unit}:${rec.at.pc}`],
+                  ] as [string, string][])
+                : []),
+              ['target', `${rec.target.unit}:${rec.target.pc}`],
+              ...(rec.kind === 'offer-chosen' && rec.args.length
+                ? ([['args', traceValue(listValues(rec.args))]] as [
+                    string,
+                    string,
+                  ][])
+                : []),
+            ],
+          ),
+        );
+        continue;
+      }
       const at = `${rec.unit}:${rec.pc}`;
       const pos = `${rec.line}:${rec.col}`;
       this.trace(
@@ -4416,9 +4439,10 @@ export class Group {
             ...view,
             fuel: run.fuel,
             segment: Number(run.segmentId.split('.s')[1]),
-            frames: run.frames.map(frame => {
+            frames: run.debugFrames().map(({ frame, ...control }) => {
               const ins = frame.code.unit.code[frame.pc]!;
               return {
+                ...control,
                 unit: frame.code.name,
                 handler: frame.handler,
                 pc: frame.pc,

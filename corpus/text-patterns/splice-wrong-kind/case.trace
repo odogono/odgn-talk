@@ -7,8 +7,8 @@
 > deliver d1 to=splice message=go
 > pump clock=2026-09-30T09:00:00Z
 raise splice/r1 code="wrong kind" at=splice:3 pos=6:9
-seg splice/r1 start delivery=d1 handler=go clause=1 fuel=51 alloc=0 state=39 end=return
-run splice/r1 outcome=completed delivery=d1 handler=go fuel=51 alloc=0
-pumped state=idle fuel=51
+seg splice/r1 start delivery=d1 handler=go clause=1 fuel=52 alloc=0 state=39 end=return
+run splice/r1 outcome=completed delivery=d1 handler=go fuel=52 alloc=0
+pumped state=idle fuel=52
 > vars
 vars splice expected="pattern" offending=42

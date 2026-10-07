@@ -44,10 +44,22 @@ type Body struct {
 	Checked     *check.Body
 	Code        []Instruction
 	Unwind      []unwind
+	Offers      []*OfferEntry
 	First       int
 	Clause      int
 	Index       int
 	DispatchEnd int // first instruction after parameter tests and the Guard
+}
+type OfferDescriptor struct {
+	Name   string
+	Binds  []int
+	Target int
+}
+type OfferEntry struct {
+	Body, Depth, End int
+	Offers           []OfferDescriptor
+	end              *label
+	index            *label
 }
 type EventBranch struct {
 	Message    string
@@ -67,6 +79,7 @@ type Unit struct {
 	Constants, Definitions, Variables, Objects []string
 	Bodies                                     []*Body
 	Events                                     []Event
+	Offers                                     []*OfferEntry
 	checked                                    *check.Unit
 	byNode                                     map[*syntax.Node]*Body
 	state                                      *builder
@@ -200,6 +213,7 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 		u.Constants = slices.Clone(previous.Constants)
 		u.Bodies = slices.Clone(previous.Bodies)
 		u.Events = slices.Clone(previous.Events)
+		u.Offers = slices.Clone(previous.Offers)
 		for node, body := range previous.byNode {
 			u.byNode[node] = body
 		}
@@ -261,6 +275,13 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 		}
 		body.First = pc
 		pc += len(body.Code)
+	}
+	for _, b := range u.Bodies[first:] {
+		for _, offer := range b.Offers {
+			offer.index.pc = len(u.Offers)
+			offer.End = offer.end.pc
+			u.Offers = append(u.Offers, offer)
+		}
 	}
 	return u, nil
 }
@@ -457,7 +478,25 @@ func (u *Unit) Disassemble() string {
 		fmt.Fprintln(&out, "unwind")
 		for _, b := range u.Bodies {
 			for _, entry := range b.Unwind {
-				fmt.Fprintf(&out, "  %04d..%04d %s -> %04d depth %d\n", b.First+entry.first, b.First+entry.last, entry.kind, b.First+entry.target.pc, entry.depth)
+				if entry.kind == "offer" {
+					fmt.Fprintf(&out, "  %04d..%04d offer -> entry %d depth %d\n", b.First+entry.first, b.First+entry.last, entry.target.pc, entry.depth)
+				} else {
+					fmt.Fprintf(&out, "  %04d..%04d %s -> %04d depth %d\n", b.First+entry.first, b.First+entry.last, entry.kind, b.First+entry.target.pc, entry.depth)
+				}
+			}
+		}
+	}
+	if len(u.Offers) > 0 {
+		fmt.Fprintln(&out, "offers")
+		for i, entry := range u.Offers {
+			b := u.Bodies[entry.Body]
+			fmt.Fprintf(&out, "  %d body %d depth %d end %04d\n", i, entry.Body, entry.Depth, b.First+entry.End)
+			for _, offer := range entry.Offers {
+				slots := []string{}
+				for _, slot := range offer.Binds {
+					slots = append(slots, strconv.Itoa(slot))
+				}
+				fmt.Fprintf(&out, "    offer %s -> %04d binds [%s]\n", offer.Name, b.First+offer.Target, strings.Join(slots, ", "))
 			}
 		}
 	}

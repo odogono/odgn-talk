@@ -14,8 +14,8 @@ call-failed s/r1.c2 op=r.close
 raise s/r1 code="host error" at=s:6 pos=5:1
 call s/r1.c3 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c3 grant=r name=file action=abandoned
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=42 alloc=8 state=26 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=42 alloc=8
-pumped state=idle fuel=42
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=43 alloc=8 state=26 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=43 alloc=8
+pumped state=idle fuel=43
 > vars
 vars s count="host error"
