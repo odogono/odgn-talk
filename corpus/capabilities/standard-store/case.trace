@@ -1,4 +1,4 @@
-# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
 # All six Operations through Stubs, with the first write enlisting the Grant.
 # The Store's answers belong to the Host and are replayed as Stubs.
 > load s identity=f277e6fd4c38d602ece04fed15e4b6044d3c845aebf2eb24d9fab3ef150a7505

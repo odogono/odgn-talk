@@ -1,4 +1,4 @@
-# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
 # The Core's checks: an empty key is `invalid key`, before the call is charged
 # or the Host runs; arguments break their Shapes; result kinds are checked.
 > load s identity=140028952c8b9c49037de054a9e23692afa6c7afe5629e425ab177a12792e7f7
