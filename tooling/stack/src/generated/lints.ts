@@ -151,6 +151,14 @@ export const lintCatalogue = [
     "standard": "off",
     "message": "Consider collecting each value into {name} in the repeat head.",
     "status": "implemented"
+  },
+  {
+    "id": "store-race",
+    "flags": "a `store` `set` of a key whose value came from a `get` of that key through the same Grant in one Handler",
+    "beginner": "hint",
+    "standard": "warning",
+    "message": "Another Script can change {key} between this get and set. Use increment or swap to update it in one call.",
+    "status": "implemented"
   }
 ] as const;
 export const longJoinBodyLines = 20;

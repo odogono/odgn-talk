@@ -1,10 +1,24 @@
 import { describe, expect, test } from 'bun:test';
-import { check, manifest, selected, skipped } from '../src/suite';
+import {
+  check,
+  Loaded,
+  manifest,
+  selected,
+  skipped,
+  sourceOf,
+} from '../src/suite';
 
 describe('the TS Core', () => {
   for (const b of manifest().filter(b => !b.skip?.ts)) {
     test(`${b.name} produces its expected output`, () => {
       expect(check(b, true).fuel).toBeGreaterThan(0);
+    });
+    test(`${b.name} can repeat on the same loaded Script`, () => {
+      const loaded = new Loaded(b.name, sourceOf(b), b.host);
+      const first = loaded.run(b.smoke.n);
+      expect(first.outcome).toBe('completed');
+      expect(first.result).toBe(b.smoke.expect);
+      expect(loaded.run(b.smoke.n)).toEqual(first);
     });
   }
 

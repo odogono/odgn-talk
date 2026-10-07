@@ -1,0 +1,8 @@
+-- Build ASCII text by repeated concatenation.
+on run n
+  put "" into output
+  repeat for each i in 1..n
+    put output & "abc" into output
+  end repeat
+  return the length of output
+end run

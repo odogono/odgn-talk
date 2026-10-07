@@ -1,0 +1,13 @@
+script variable count = 0
+on go
+  ask reader to get "k"
+  ask st to set "k", 1
+  put count + 1 into count
+  ask other to set "k", 2
+end go
+on spin
+  ask st to set "k", 1
+  put count + 1 into count
+  repeat while true
+  end repeat
+end spin

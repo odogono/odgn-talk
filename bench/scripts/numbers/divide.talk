@@ -1,0 +1,8 @@
+-- Exact fractional division with increasing operands.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    add i / 8 to total
+  end repeat
+  return round(total * 8, 0)
+end run

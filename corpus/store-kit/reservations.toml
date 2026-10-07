@@ -1,0 +1,104 @@
+# Keys an uncommitted write reserves against other Segments (ADR 0062).
+quotas = { size = 1048576, keys = 1000, value = 65536 }
+
+[[sequence]]
+name = "a pending set reserves its key against every write, but no read"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["k", 1]' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["k", 2]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "delete", args = '["k"]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "swap", args = '["k", nothing, 2]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "increment", args = '["k"]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "get", args = '["k"]', gives = 'nothing' },
+  { in = "b", do = "keys", gives = '[]' },
+  { in = "b", do = "set", args = '["other", 2]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "set", args = '["k", 2]' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "get", args = '["k"]', gives = '2' },
+]
+
+[[sequence]]
+name = "a pending delete reserves its key"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "delete", args = '["k"]' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["k", 2]', error = '{code: "store busy", key: "k"}' },
+  { in = "a", do = "rollback" },
+  { in = "b", do = "set", args = '["k", 2]' },
+]
+
+[[sequence]]
+name = "a swap that gives false reserves nothing, and one that writes reserves its key"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "set", args = '["w", "ann"]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin" },
+  { in = "b", do = "swap", args = '["w", "bob", "cy"]', gives = 'false' },
+  { in = "c", do = "begin" },
+  { in = "c", do = "swap", args = '["w", "ann", "dee"]', gives = 'true' },
+  { in = "b", do = "swap", args = '["w", "ann", "eve"]', error = '{code: "store busy", key: "w"}' },
+  { in = "b", do = "get", args = '["w"]', gives = '"ann"' },
+  { in = "c", do = "commit" },
+  { in = "b", do = "swap", args = '["w", "ann", "eve"]', gives = 'false' },
+  { in = "b", do = "swap", args = '["w", "dee", "eve"]', gives = 'true' },
+]
+
+[[sequence]]
+name = "pending increments reserve their key against every write but another increment"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "increment", args = '["n"]', gives = '1' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "increment", args = '["n", 2]', gives = '2' },
+  { in = "c", do = "begin" },
+  { in = "c", do = "set", args = '["n", 0]', error = '{code: "store busy", key: "n"}' },
+  { in = "c", do = "delete", args = '["n"]', error = '{code: "store busy", key: "n"}' },
+  { in = "c", do = "swap", args = '["n", nothing, 0]', error = '{code: "store busy", key: "n"}' },
+  { in = "c", do = "get", args = '["n"]', gives = 'nothing' },
+  { in = "a", do = "commit" },
+  { in = "c", do = "set", args = '["n", 0]', error = '{code: "store busy", key: "n"}' },
+  { in = "b", do = "commit" },
+  { in = "c", do = "swap", args = '["n", 3, 0]', gives = 'true' },
+]
+
+[[sequence]]
+name = "a pending set reserves its key against an increment, even by its own value's kind"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "increment", args = '["n"]', gives = '1' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "set", args = '["m", 1]' },
+  { in = "a", do = "increment", args = '["m"]', error = '{code: "store busy", key: "m"}' },
+  { in = "b", do = "increment", args = '["n"]', gives = '1' },
+]
+
+[[sequence]]
+name = "an increment that can't add to other Segments' pending increments fails at its call"
+steps = [
+  { in = "a", do = "begin" },
+  { in = "a", do = "increment", args = '["d", 1 m]', gives = '1 m' },
+  { in = "b", do = "begin" },
+  { in = "b", do = "increment", args = '["d", 1 kg]', error = '{code: "incompatible units", left: "m", right: "kg"}' },
+  { in = "b", do = "increment", args = '["d"]', error = '{code: "wrong kind", expected: "quantity", got: "number", value: 1}' },
+  { in = "b", do = "increment", args = '["d", 1 ft]', gives = '1 ft' },
+  { in = "a", do = "rollback" },
+  { in = "b", do = "increment", args = '["d", 1 kg]', error = '{code: "incompatible units", left: "ft", right: "kg"}' },
+]
+
+[[sequence]]
+name = "reservations are per Store"
+steps = [
+  { in = "a", do = "begin", store = "one" },
+  { in = "a", do = "set", store = "one", args = '["k", 1]' },
+  { in = "b", do = "begin", store = "two" },
+  { in = "b", do = "set", store = "two", args = '["k", 2]' },
+  { in = "b", do = "commit", store = "two" },
+  { in = "a", do = "commit", store = "one" },
+  { in = "c", do = "get", store = "one", args = '["k"]', gives = '1' },
+  { in = "c", do = "get", store = "two", args = '["k"]', gives = '2' },
+]

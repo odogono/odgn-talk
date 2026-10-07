@@ -1,0 +1,9 @@
+-- Convert millimetres to metres, then remove the unit for the checksum.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    put (i * 1000 mm) as m into distance
+    add distance / 1 m to total
+  end repeat
+  return round(total, 0)
+end run

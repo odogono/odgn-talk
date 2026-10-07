@@ -25,6 +25,13 @@ export const fixtures: readonly {
     ),
   },
   {
+    id: 'store-race',
+    positive: script(
+      'ask scores to get "best", 0\nput it + 1 into best\nask scores to set "best", best',
+    ),
+    negative: script('ask scores to increment "best"'),
+  },
+  {
     id: 'unreachable-clause',
     positive: 'on demo x\nend demo\non demo 1\nend demo',
     negative: 'on demo x where x > 1\nend demo\non demo 1\nend demo',

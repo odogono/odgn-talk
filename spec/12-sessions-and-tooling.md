@@ -14,9 +14,19 @@ A REPL or Playground session is an ordinary Host running an ordinary Script Grou
 - **Limits:** the default limit profile ([chapter 6](06-errors-and-limits.md#limits)). `:limits` tightens it for later Entries.
 - **Libraries:** the stdlib Libraries are always registered, so `use pad from text` works at the prompt ([chapter 7](07-libraries-and-the-standard-library.md#imports)). User Libraries come in with `:library`.
 - **Pumps** have no Fuel Slice and no Fuel cap, so a Segment always runs to its end within one Pump.
-- **Costs:** `console`'s Operations and every mock Operation cost nothing.
+- **Costs:** `console`'s Operations and every mock Operation cost nothing. `store`'s `get` and `keys` cost 2 Fuel, and its `set`, `delete`, `increment` and `swap` 4, with no declared allocation.
 - **The Clock** is real by default, and virtual under `:clock virtual`.
 - **The end of the Message Path:** a message that reaches it is reported, not an error, since the Session Script's path is flat.
+
+### The Session Store
+
+`store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
+
+- **In memory:** each Session Store lives in the Session Host's memory, and starts empty, so a Transcript replays the same way wherever it runs. `:store load` is the only way contents come in from outside.
+- **Named by the binding:** `:grant <name> store [<store>]` grants the Store named `<store>`, or `default`. Two Grants of one name share one Store.
+- **Quotas:** a total size of 1,048,576, 1,000 keys and a largest value of 65,536, each counted by logical size.
+- **Never busy:** Session Pumps have no Fuel Slice, so a Segment ends within its Pump, and `store busy` can't arise.
+- **Outside saves:** `:save` and `:restore` leave every Session Store as it is, as any Host's saves do ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)).
 
 ### The console
 
@@ -98,7 +108,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 
 | Command | Written | Does | Notes |
 | --- | --- | --- | --- |
-| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone or a `locale` Grant's default tag as `<binding>` | before the session starts |
+| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>` | before the session starts |
 | `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
 | `:stub` | `:stub <capability>.<operation> <value> \| :stub <capability>.<operation> fail <error>` | Queues the result of the next call of a mock immediate Operation, or an error map to fail it with |  |
 | `:answer` | `:answer <call> <value>` | Answers a pending call of a mock suspending Operation |  |
@@ -112,6 +122,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 | `:save` | `:save [<name>]` | Saves the session under `<name>`, or `default`, in the Host's memory |  |
 | `:restore` | `:restore [<name>]` | Restores the session saved under `<name>`, or `default` |  |
 | `:library` | `:library add <name> <path> \| :library replace <name> <path>` | Adds a user Library from a file, or replaces one, carrying Script Variables over |  |
+| `:store` | `:store [<store>] \| :store load <path> [<store>] \| :store save <path> [<store>] \| :store clear [<store>]` | Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store |  |
 | `:export` | `:export [<directory>]` | Shows the Session Script's source, or writes it and each user Library to a directory as `.talk` files |  |
 | `:help` | `:help [<command>]` | Shows help | not recorded |
 | `:quit` | `:quit` | Ends the session | not recorded |
@@ -122,8 +133,8 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Mocks:** `:mock` defines an Operation whose result has the `any` Shape, and which declares eight arguments, each an Optional `any`, so a call may give from none to eight. It declares no error codes. A call to one prints a `call` line, which names it by its Capability, whichever Grant the call goes through, and lists the arguments the call gave. An immediate one takes the next `:stub` queued for it, as a Trace Case's runner does ([chapter 11](11-the-trace-and-conformance.md#stubs)), and with none fails as `host error`. A suspending one waits for `:answer` or `:fail`, and a fire-and-forget one just succeeds.
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
-  - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, and a default BCP 47 tag for `locale`. With none, they bind `UTC` and `und`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
-  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar` or `locale`, or the name of a registered Host capability.
+  - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, a default BCP 47 tag for `locale`, and a Store name for `store`. With none, they bind `UTC`, `und` and `default`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
+  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar`, `locale` or `store`, or the name of a registered Host capability.
 - **`:clock`:**
   - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
   - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
@@ -140,6 +151,13 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **`:library`:** `add` compiles the file and adds the Library, and `replace` replaces it, carrying Script Variables over ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). A Transcript records it as `> :library add <name>` or `> :library replace <name>`, followed by the Library's source as `|` lines, instead of the path.
   - **Its source** is its lines, each ended by an LF, so a file whose last line has no line break is read as if it had one. Every user Library's version is `1`, and replacing one keeps it.
   - **Refused here:** `add` for a name the session has already added is refused as `name reused`, and `replace` for one it hasn't as `library mismatch`, without a Host Input. A Library that doesn't compile prints each of its diagnostics as `! <code> at <library>:<line>:<column>`.
+- **`:store`:** each form names a Session Store, by default `default`, so a Store called `load`, `save` or `clear` can only be shown through a Script. A Store no Grant names is still there to load, save, clear and show.
+  - **`:store`** prints one line per key, in Unicode code-point order, as `<key> = <value>`, with the key as text in the display form.
+  - **`:store load`** reads a file holding one JSON object, whose members are keys and their values in [the Value Encoding](09-embedding.md#json-and-the-value-encoding), and replaces the Store's contents with them. It prints `loaded <n> keys`. A file that isn't such an object, a key that is empty, a value that doesn't decode or holds a Host Object, or contents past a quota, is refused as `bad arguments`, and the Store is unchanged. A Transcript records it as `> :store load [<store>]`, followed by the file's lines as `|` lines, instead of the path, as for `:library`.
+  - **`:store save`** writes the Store's contents to the file as one JSON object, with its members in key order and no white space, and prints `wrote <file>`.
+  - **`:store clear`** empties the Store and prints `cleared <store>`.
+  - **Between Pumps:** each form runs between Pumps, when no Segment has uncommitted Store writes, and no form is a Host Input.
+  - **In the Playground,** `<path>` names a slot that the page keeps in its own storage, such as `localStorage`, since the session's worker has no file system.
 - **`:export`** prints the session source, its `use` lines included. Given a directory, it writes the session source as `session.talk` and each user Library as `<name>.talk`, and prints `wrote <file>` for each, with the file's name in the directory.
 - **`:help` and `:quit`** aren't recorded, and what they print is outside parity.
 

@@ -62,3 +62,5 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0058: A restored Group's Host Objects are found by kind and id](0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md)
 - [0059: A `repeat` may collect its results](0059-a-repeat-may-collect-its-results.md)
 - [0060: Errors may transfer to named Recovery Offers chosen before unwinding](0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)
+- [0061: Host Notifications share routing and are scoped by Grant bindings](0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)
+- [0062: A Store key is reserved while a Segment holds an uncommitted write](0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)

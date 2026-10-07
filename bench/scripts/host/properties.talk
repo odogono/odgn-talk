@@ -1,0 +1,8 @@
+-- Read a number from a Host Object property.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    add the value of meter to total
+  end repeat
+  return total
+end run

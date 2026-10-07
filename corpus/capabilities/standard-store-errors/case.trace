@@ -1,0 +1,95 @@
+# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
+# The Host fails with the codes each Operation declares, checked against the
+# catalogue's fields; anything else is `host error`.
+> load s identity=0f2981b98026e3059ea952e8575736f1b0995bad847c97ddcbe8b1f6a4e0748f
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "store busy", key: "k"}
+> stub-effect s.st phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r1.s1 grant=st phase=begin status=ok
+call s/r1.c1 op=st.set args=["k", 1] error={code: "store busy", key: "k"}
+raise s/r1 code="store busy" at=s:4 pos=2:3
+effect s/r1.s1 grant=st phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=26 alloc=60 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "store busy", key: "k", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=26 alloc=60
+pumped state=idle fuel=26
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "store full", limit: "size"}
+> stub-effect s.st phase=commit status=ok
+> deliver d2 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r2.s1 grant=st phase=begin status=ok
+call s/r2.c1 op=st.set args=["k", 1] error={code: "store full", limit: "size"}
+raise s/r2 code="store full" at=s:4 pos=2:3
+effect s/r2.s1 grant=st phase=commit status=ok
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=27 alloc=65 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=go error={code: "store full", limit: "size", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=27 alloc=65
+pumped state=idle fuel=27
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "can't store", kind: "room"}
+> stub-effect s.st phase=commit status=ok
+> deliver d3 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r3.s1 grant=st phase=begin status=ok
+call s/r3.c1 op=st.set args=["k", 1] error={code: "can't store", kind: "room"}
+raise s/r3 code="can't store" at=s:4 pos=2:3
+effect s/r3.s1 grant=st phase=commit status=ok
+seg s/r3 start delivery=d3 handler=go clause=1 fuel=26 alloc=64 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=go error={code: "can't store", kind: "room", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=26 alloc=64
+pumped state=idle fuel=26
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "store full", limit: "disk"}
+> stub-effect s.st phase=commit status=ok
+> deliver d4 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r4.s1 grant=st phase=begin status=ok
+call s/r4.c1 op=st.set args=["k", 1] error={code: "store full", limit: "disk"}
+call-failed s/r4.c1 op=st.set
+raise s/r4 code="host error" at=s:4 pos=2:3
+effect s/r4.s1 grant=st phase=commit status=ok
+seg s/r4 start delivery=d4 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=go error={code: "host error", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "invalid key"}
+> stub-effect s.st phase=commit status=ok
+> deliver d5 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r5.s1 grant=st phase=begin status=ok
+call s/r5.c1 op=st.set args=["k", 1] error={code: "invalid key"}
+call-failed s/r5.c1 op=st.set
+raise s/r5 code="host error" at=s:4 pos=2:3
+effect s/r5.s1 grant=st phase=commit status=ok
+seg s/r5 start delivery=d5 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r5 outcome=errored delivery=d5 handler=go error={code: "host error", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub-effect s.st phase=begin status=ok
+> stub store.set error={code: "incompatible units", left: "m", right: "kg"}
+> stub-effect s.st phase=commit status=ok
+> deliver d6 to=s message=go
+> pump clock=2026-10-07T12:00:00Z
+effect s/r6.s1 grant=st phase=begin status=ok
+call s/r6.c1 op=st.set args=["k", 1] error={code: "incompatible units", left: "m", right: "kg"}
+call-failed s/r6.c1 op=st.set
+raise s/r6 code="host error" at=s:4 pos=2:3
+effect s/r6.s1 grant=st phase=commit status=ok
+seg s/r6 start delivery=d6 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r6 outcome=errored delivery=d6 handler=go error={code: "host error", capability: "st", operation: "set", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub-effect s.st phase=begin status=ok
+> stub store.swap error={code: "store busy", key: "k"}
+> stub store.increment value=1
+> stub-effect s.st phase=commit status=ok
+> deliver d7 to=s message=careful
+> pump clock=2026-10-07T12:00:00Z
+effect s/r7.s1 grant=st phase=begin status=ok
+call s/r7.c1 op=st.swap args=["k", nothing, 2] error={code: "store busy", key: "k"}
+raise s/r7 code="store busy" at=s:12 pos=6:5
+call s/r7.c2 op=st.increment args=["retries"] result=1
+effect s/r7.s1 grant=st phase=commit status=ok
+seg s/r7 start delivery=d7 handler=careful clause=1 fuel=58 alloc=79 state=0 end=return
+run s/r7 outcome=completed delivery=d7 handler=careful fuel=58 alloc=79
+pumped state=idle fuel=58
+> vars
+vars s

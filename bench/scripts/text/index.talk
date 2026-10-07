@@ -1,0 +1,8 @@
+-- Index ASCII Characters, cycling through the input.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    if character (i mod 16 + 1) of "NorthTalk rocks!" = "o" then add 1 to total
+  end repeat
+  return total
+end run

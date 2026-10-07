@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { parseInstant } from '@odgn/northtalk';
+import { writeTranscript } from '@odgn/northtalk/session';
 import { PlaygroundSession, SESSION_TAB } from '../src/session';
 import {
   recoveryLibrary,
@@ -280,4 +281,34 @@ test('the prompt completes continued labelled Entries in the current session', (
   expect(s.incomplete('move (')).toBe(true);
   expect(s.incomplete('move (\n "knight"\n) to "e4"')).toBe(false);
   expect(s.input('move (\n "knight"\n) to "e4"')).toEqual(['knighte4']);
+});
+
+describe('The Session Store', () => {
+  test('`:store load` and `:store save` name slots the page keeps', () => {
+    const slots = new Map([['scores', '{"best":9}']]);
+    const { env } = environment();
+    const s = new PlaygroundSession({
+      ...env,
+      readStoreFile: slot => {
+        const text = slots.get(slot);
+        if (text === undefined) {
+          throw new Error('no slot');
+        }
+        return text;
+      },
+      writeStoreFile: (slot, text) => slots.set(slot, text),
+    });
+    expect(s.input(':store load scores')).toEqual(['loaded 1 keys']);
+    expect(s.input(':store load missing')).toEqual(['! bad arguments']);
+    expect(s.input(':grant s store')).toEqual([]);
+    expect(s.input('ask s to increment "best"')).toEqual([]);
+    expect(s.input(':store save copy')).toEqual(['wrote copy']);
+    expect(slots.get('copy')).toBe('{"best":10}');
+    // The Transcript holds the slot's contents, so it replays without them.
+    const replayed = PlaygroundSession.replay(
+      env,
+      writeTranscript(s.transcript),
+    );
+    expect('session' in replayed).toBe(true);
+  });
 });

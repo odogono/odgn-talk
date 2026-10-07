@@ -153,7 +153,7 @@ func (executionBackend) Support(c Case) string {
 		if r.Input && r.Name == "pump" {
 			for _, raw := range standards {
 				name := raw.(Setup)["capability"].(string)
-				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" {
+				if name != "clock" && name != "timer" && name != "console" && name != "calendar" && name != "locale" && name != "store" {
 					return name + " Standard Capability factory remains deferred"
 				}
 			}
@@ -206,11 +206,15 @@ func (executionBackend) Support(c Case) string {
 	return ""
 }
 func (executionBackend) Run(c Case, records []Record) ([]string, error) {
-	ordinary, err := runExecution(c, records, false)
+	return runReplayPair(c, records, nil)
+}
+
+func runReplayPair(c Case, records []Record, prepare func(*operationReplay)) ([]string, error) {
+	ordinary, err := runExecutionWithHost(c, records, false, prepare)
 	if err != nil {
 		return nil, err
 	}
-	restored, err := runExecution(c, records, true)
+	restored, err := runExecutionWithHost(c, records, true, prepare)
 	if err != nil {
 		return nil, fmt.Errorf("save/restore replay: %w", err)
 	}
@@ -220,6 +224,10 @@ func (executionBackend) Run(c Case, records []Record) ([]string, error) {
 	return ordinary, nil
 }
 func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
+	return runExecutionWithHost(c, records, roundTrip, nil)
+}
+
+func runExecutionWithHost(c Case, records []Record, roundTrip bool, prepare func(*operationReplay)) ([]string, error) {
 	x, err := newExecutionReplay(c.Setup, records, roundTrip, func(row Setup) (string, error) {
 		b, err := os.ReadFile(filepath.Join(c.Dir, row["source"].(string)))
 		return string(b), err
@@ -228,6 +236,9 @@ func runExecution(c Case, records []Record, roundTrip bool) ([]string, error) {
 		return nil, err
 	}
 	defer x.close()
+	if prepare != nil {
+		prepare(x.operations)
+	}
 	for _, i := range replayInputOrder(records) {
 		if records[i].Input && !x.inside[i] {
 			if err := x.apply(i); err != nil {

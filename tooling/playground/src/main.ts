@@ -31,7 +31,13 @@ import type {
   ToSession,
 } from './protocol';
 import { SESSION_TAB, type Library, type PauseView } from './session';
-import { loadSaved, save, type Saved } from './storage';
+import {
+  loadSaved,
+  loadStoreSlots,
+  save,
+  saveStoreSlot,
+  type Saved,
+} from './storage';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -421,6 +427,14 @@ const receive = (response: SessionResponse) => {
       break;
     case 'error':
       note(response.message, 'error');
+      break;
+    case 'storeSlot':
+      if (!saveStoreSlot(response.slot, response.text)) {
+        note(
+          `The page could not keep the Store slot ${response.slot}.`,
+          'error',
+        );
+      }
       break;
     default:
       break;
@@ -975,6 +989,7 @@ const start = async () => {
   renderTabs();
   const response = await call({
     t: 'open',
+    slots: loadStoreSlots(),
     ...((shared ?? saved) ? { shared: shared ?? saved! } : {}),
   });
   workbench.changed();

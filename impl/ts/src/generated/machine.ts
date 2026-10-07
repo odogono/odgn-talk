@@ -1356,7 +1356,11 @@ export const errorMessages = {
   "scope in join": "The scope {scope} cannot open inside a Join",
   "segment participant conflict": "The Segment already participates through {participant}, so {capability} cannot join",
   "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called",
-  "offer unavailable": "The recovery offer {name} is unavailable"
+  "offer unavailable": "The recovery offer {name} is unavailable",
+  "invalid key": "A Store key can't be empty text",
+  "can't store": "A {kind} object can't be kept in a Store",
+  "store full": "The Store's {limit} limit would be exceeded",
+  "store busy": "Another Segment is writing {key}"
 };
 export const limitDefaults = {
   "fuelPerRun": 10000000,

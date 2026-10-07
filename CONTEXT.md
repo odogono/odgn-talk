@@ -37,7 +37,7 @@ A Capability whose Operation Declarations the spec fixes, so every Host offers t
 _Avoid_: built-in capability, system capability, core capability
 
 **Store**:
-A Host-kept collection of named values that outlives any one Script load, reached through the planned `store` Standard Capability. It holds data values under text keys, never Function Values or Host Objects, and its changes commit or roll back with the Segment that made them.
+A Host-kept collection of named values that outlives any one Script load, reached through the `store` Standard Capability. A Store is named by its Grant's binding, so Scripts granted the same name share it. It holds data values under text keys, never Function Values or Host Objects, and its changes commit or roll back with the Segment that made them.
 _Avoid_: storage, database, cache, persistent state
 
 **Locale**:
@@ -103,6 +103,18 @@ _Avoid_: tick, step, run (a Run is something else)
 **Delivery**:
 One message the Host hands to a Script Group from outside, identified by a delivery id that the Run it starts reports.
 _Avoid_: event (unqualified), request, dispatch
+
+**Notification**:
+A message about a change or occurrence in a Host-owned source, made available to interested Scripts through their Grants under the planned [source-specific notification contract](docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). A Store change is one such Notification.
+_Avoid_: event (unqualified), broadcast (for a source-specific notification)
+
+**Subscription**:
+A Script's ongoing interest in Notifications from a Host-owned source named by its Grant binding. Sharing a message name alone does not give a Script access to that source's Notifications.
+_Avoid_: listener, callback, channel (for the interest itself)
+
+**Reconciliation Marker**:
+A Notification that calls for refreshing a Subscription's whole watched subset from the source's current state when individual change details are unavailable, such as after notification overload or an offline restore.
+_Avoid_: overflow event, dropped notification
 
 **Decision**:
 A Delivery by which the Host asks Scripts whether something may happen, such as a game move or a form submit, answered by a Verdict. Only a Handler Clause marked `, deciding` can `veto` it.

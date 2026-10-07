@@ -219,6 +219,10 @@ func (d Decimal) Float64Lossy() float64 // nearest, ties to even; every number f
 func DecodeJSON(b []byte) (Value, error)
 func EncodeJSON(v Value) ([]byte, error)
 
+// Add applies the `+` rules outside any Run, uncharged. Where `+` would
+// raise, it returns that error as a *ScriptError.
+func Add(a, b Value) (Value, error)
+
 // EncodeValue writes the Value Encoding deterministically. A Function Value
 // can't be encoded. DecodeValue asks resolve for each {"$object": [kind, id]}.
 func EncodeValue(v Value) ([]byte, error)
@@ -462,6 +466,27 @@ type ConsoleImpl interface {
 }
 
 func (c *Core) ConsoleCapability(impl ConsoleImpl, costs Costs) (*CapabilityDef, error)
+
+// store: the binding is the Store's name. The Core has checked the Shapes and
+// refused an empty key with `invalid key`; fallback and by are Nothing when
+// the call omits them. Set, Delete, Increment and Swap are Segment-bound: they
+// act on the calling Segment's pending writes, which Commit applies and
+// Rollback discards. Fail with ScriptError `can't store` {kind}, `store full`
+// {limit} or `store busy` {key}, and from Increment with the error Add returns
+// (chapter 7, ADR 0062).
+type StoreImpl interface {
+	Begin(ctx SegmentContext) EffectResult
+	Commit(ctx SegmentContext) EffectResult
+	Rollback(ctx SegmentContext) EffectResult
+	Get(c *Call, key string, fallback Value) (Value, error)
+	Set(c *Call, key string, value Value) error
+	Delete(c *Call, key string) error
+	Keys(c *Call, prefix string) (Value, error)
+	Increment(c *Call, key string, by Value) (Value, error)
+	Swap(c *Call, key string, expected, replacement Value) (bool, error)
+}
+
+func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, error)
 
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)

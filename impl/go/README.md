@@ -32,6 +32,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
 - `internal/decimal/` supplies exact-input decimals, arithmetic, integral
   rounding and elementary functions. Outward-rounded intervals increase
   precision until both bounds select the same 34-digit half-even result.
+  Exact addition, subtraction and multiplication use checked `int64`
+  coefficients when possible, preserving the decimal quantum and falling back
+  to `math/big` for overflow or rounding.
 - `internal/value/` owns values, Units, comparison, display and strict JSON.
   Containers copy input slices; public accessors return copies.
 - `internal/syntax/` owns lossless UTF-8 lexing and parsing. `Tree.Source()`
@@ -41,8 +44,14 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
 - `internal/lower/` produces canonical instructions, source maps, Unwind Tables
   and Event Tables. Labels use instruction indices, never byte offsets. Its
   Go-private byte encoding round-trips each body's instruction stream.
+  Operands, Cost Model keys and suspension flags are resolved after labels
+  receive their final instruction indices; runtime operand views are read-only.
 - `internal/machine/` executes checked code with heap frames, detached operand
   evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
+  Trial stacks and locals reuse detached buffers within an execution turn;
+  accepted charges copy their results back before effects commit. Returned
+  call frames supply cleared buffers for later calls in that turn. These
+  temporary buffers are discarded on preemption, suspension or completion.
 - `internal/snapshot/` encodes plain heap data and explicitly named Group/code
   references; Host bindings and futures stay outside snapshots.
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
@@ -123,7 +132,7 @@ Prompts, line editing and Ctrl-C presentation are outside Transcript parity.
 
 The Host supports `:grant`, `:mock`, `:stub`, `:answer`, `:fail`, `:clock`,
 `:limits`, `:cancel`, `:runs`, `:mailbox`, `:vars`, `:save`, `:restore`,
-`:library` and `:export`, as specified in
+`:library`, `:export` and `:store`, as specified in
 [chapter 12](../../spec/12-sessions-and-tooling.md). Configure Grants and mock
 Operations before the first Entry. `:clock virtual 2026-09-30T10:00:00Z` makes
 later Pumps deterministic; `:clock advance 1 s` resumes due Runs. Saves retain
@@ -134,8 +143,9 @@ failed replacements keep the previous code and variables.
 `session.New(Environment{...})` embeds the Host without terminal or filesystem
 access. `Now` supplies real-clock readings; `Record` receives Transcript Items;
 `Trace` receives canonical Group records; `ReadFile` and `WriteFile` support
-Library loading and export. Call the Host from one goroutine. The supplied
-built-ins are console and clock; other Capabilities can be mocked. The Host
+Library loading and export; `ReadStoreFile` and `WriteStoreFile` support Store
+imports and exports. Call the Host from one goroutine. The supplied built-ins
+are console, clock and store; other Capabilities can be mocked. The Host
 currently offers no external suspending built-in, so replay refuses `~` answer
 records. The CLI loads `:library add NAME PATH` and exports ordinary Library and
 starter Script files with `:export DIR`.
@@ -635,6 +645,47 @@ are traced and ignored. Both Operations retain the Script name and Grant
 binding, require copied valid costs and a non-nil implementation, and declare
 no Script error codes. Invalid read results and Host failures become `host error`.
 
+### Store Standard Capability
+
+`Core.StoreCapability(StoreImpl, Costs)` supplies immediate `get`, `set`,
+`delete`, `keys`, `increment` and `swap`. The Grant binding names the Store.
+Writes enlist the Grant as the Segment participant and use the implementation's
+`Begin`, `Commit` and `Rollback` hooks. Shape checks precede empty-key checks;
+`invalid key` is uncharged and never calls the Host. Results must meet each
+Operation's Shape. Only declared Store catalogue failures with valid fields
+pass through; malformed failures become `host error`.
+
+`Add(a, b)` uses the machine's `+` rules without charging a Run, including
+Quantity conversion and date arithmetic. It returns the same `*ScriptError`
+and catalogue fields as Script addition. `increment` accepts number and
+Quantity amounts at Load and at the Host crossing.
+
+[`store.New(store.Quotas{...})`](store/) supplies named in-memory Stores,
+starting empty. It keeps each live Segment's writes in call order, applies
+commits atomically, reserves keys against incompatible writes, and admits
+concurrent increments without losing counts. Ownership includes Group identity
+and Segment id. Quotas count logical key/value sizes and every Segment's
+nonnegative net growth, so another Segment's rollback cannot free capacity
+prematurely. This implementation provides no durable backend.
+
+The Session Host builds in this Store with chapter 12's quotas: total size
+1,048,576, 1,000 keys and largest value 65,536. `:grant scores store [name]`
+binds `default` when no name is supplied. `:mock` refuses `store`. `get` and
+`keys` cost 2 Fuel; writes cost 4, with no declared allocation. `:store` shows
+committed entries in Unicode code-point order; `load`, `save` and `clear`
+import, export and empty a named Store. Imports validate all contents before
+replacement and record file contents inline in Transcripts. Store contents
+outlive reload and remain outside saves and restores.
+
+Run every language-neutral Store kit sequence with:
+
+```sh
+go -C impl/go run ./cmd/storekit
+```
+
+The same kit runs in `go -C impl/go test ./internal/storekit`, alongside native
+cross-Group reservation, concurrent increment and Session Transcript tests.
+
 ### Calendar Standard Capability
 
 `Core.CalendarCapability(CalendarImpl, Costs)` supplies the six fixed immediate
@@ -1090,3 +1141,8 @@ and `objects/guard-keys` cases pin Load diagnostics, map keys, live/disposed Obj
 Guard skips and Core ids. Both Cores agree on every record and cost before
 recording expectations. These three traces retain `Unblessed` headers for human
 review, and required-case tests protect them in the Go gate.
+
+The four approved `capabilities/standard-store*` cases pass unchanged in ordinary
+and save/restore replay and are required in the Go passing gate. Their
+[first-blessing approval](../../docs/reviews/store-blessings/README.md) remains
+separate from the memory Store's 27 store-kit sequences.

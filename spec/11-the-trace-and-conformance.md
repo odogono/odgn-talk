@@ -522,7 +522,7 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
 
 - **The runner's, not the Core's:** the Core never sees a `stub` line. The runner writes it into the Trace itself, where the case has it, and queues it for its Operation, named by Capability, whichever Grant the call goes through.
 - **Immediate calls** take the next Stub for their Operation, and return its `value`, or fail with its `error`. One that finds none fails, and the Script sees `host error`, with a `call-failed` record.
-- **Standard `clock.now`** reads the Pump's Clock, so the runner refuses a Stub for it as an invalid case. Standard `timer` calls use fire-and-forget Stubs; the runner stores no durable timers, and the case writes each timer Delivery as an ordinary Host Input.
+- **Standard `clock.now`** reads the Pump's Clock, so the runner refuses a Stub for it as an invalid case. Standard `timer` calls use fire-and-forget Stubs; the runner stores no durable timers, and the case writes each timer Delivery as an ordinary Host Input. Standard `store` calls take immediate Stubs and their lifecycle hooks `stub-effect` lines, as any Segment-bound Grant's do; the runner keeps no Store, so a case states each answer, including `store busy` and `store full` failures.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
 - **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` only.
 - **Suspending calls** are answered by later `answer` and `fail` lines. The runner's Host functions do nothing else.

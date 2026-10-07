@@ -1,0 +1,8 @@
+-- Build a formatted text report; checksum its complete length.
+on run n
+  put "" into output
+  repeat for each i in 1..n
+    put output & "item " & i & ": " & (i * 2) & newline into output
+  end repeat
+  return the length of output
+end run

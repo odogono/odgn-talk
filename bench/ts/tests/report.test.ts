@@ -6,6 +6,7 @@ import {
   median,
   outliers,
   parseGoBench,
+  statsOf,
 } from '../src/report';
 
 const stats = { medianNs: 1, minNs: 1, samples: 1 };
@@ -35,6 +36,16 @@ const peer = (
 test('the median of an even count is the mean of the middle two', () => {
   expect(median([4, 1, 3])).toBe(3);
   expect(median([4, 1, 3, 2])).toBe(2.5);
+});
+
+test('large sample sets are summarised without expanding function arguments', () => {
+  const samples = Array<number>(1_000_000).fill(3);
+  samples[500_000] = 1;
+  expect(statsOf(samples)).toEqual({
+    medianNs: 3,
+    minNs: 1,
+    samples: 1_000_000,
+  });
 });
 
 test('Go benchmark output becomes one measurement per Benchmark', () => {

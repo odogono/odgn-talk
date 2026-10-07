@@ -36,7 +36,7 @@
 #   errors       optional: the Error Codes it declares or the Core raises for it
 
 libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
-capabilities = ["clock", "calendar", "locale", "timer", "console"]
+capabilities = ["clock", "calendar", "locale", "timer", "console", "store"]
 
 # ---------------------------------------------------------------------------
 # Built-ins
@@ -995,3 +995,49 @@ name = "offerAvailable"
 group = "values"
 call = "offerAvailable(textName)"
 gives = "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name"
+[[operation]]
+capability = "store"
+name = "get"
+mode = "immediate"
+call = "get key [, default]"
+gives = "The value under `key`, as the Segment sees the Store, or else `default`, or Nothing"
+errors = ["invalid key"]
+
+[[operation]]
+capability = "store"
+name = "set"
+mode = "immediate"
+call = "set key, value"
+gives = "Nothing; puts `value` under `key` when the Segment commits, and Nothing deletes the key"
+errors = ["invalid key", "can't store", "store full", "store busy"]
+
+[[operation]]
+capability = "store"
+name = "delete"
+mode = "immediate"
+call = "delete key"
+gives = "Nothing; removes `key` when the Segment commits, if it is there"
+errors = ["invalid key", "store busy"]
+
+[[operation]]
+capability = "store"
+name = "keys"
+mode = "immediate"
+call = "keys [prefix]"
+gives = "The keys the Segment sees that begin with `prefix`, in Unicode code-point order"
+
+[[operation]]
+capability = "store"
+name = "increment"
+mode = "immediate"
+call = "increment key [, by]"
+gives = "The key's value as the Segment sees it after adding `by`, 1 by default; commit adds `by` to the value committed then"
+errors = ["invalid key", "wrong kind", "incompatible units", "overflow", "store full", "store busy"]
+
+[[operation]]
+capability = "store"
+name = "swap"
+mode = "immediate"
+call = "swap key, expected, new"
+gives = "`true`, after putting `new` under `key`, if the Segment sees `expected` there, and `false` otherwise"
+errors = ["invalid key", "can't store", "store full", "store busy"]

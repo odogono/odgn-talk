@@ -29,10 +29,24 @@ const scope = self as unknown as {
 };
 
 const now = () => BigInt(Date.now()) * 1_000_000n;
+// The page's Store slots: it sends them at `open`, and keeps each one
+// `:store save` writes.
+const slots = new Map<string, string>();
 const env = {
   now,
   monotonic: () => performance.now(),
   builtIns: { calendar, locale },
+  readStoreFile: (slot: string) => {
+    const text = slots.get(slot);
+    if (text === undefined) {
+      throw new Error(`No Store slot ${slot}`);
+    }
+    return text;
+  },
+  writeStoreFile: (slot: string, text: string) => {
+    slots.set(slot, text);
+    scope.postMessage({ response: { t: 'storeSlot', slot, text } });
+  },
 };
 
 let session = new PlaygroundSession(env);
@@ -280,6 +294,9 @@ const readSource =
 const handle = (request: SessionRequest): SessionResponse => {
   switch (request.t) {
     case 'open': {
+      for (const [slot, text] of Object.entries(request.slots ?? {})) {
+        slots.set(slot, text);
+      }
       for (const timer of [sleeping, background]) {
         if (timer) {
           clearTimeout(timer);

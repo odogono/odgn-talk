@@ -54,6 +54,7 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - Opening a link replays its Transcript, then goes on live. If the replay prints differently, the page shows the first differing line, never goes live, and leaves the replay debugger to step through what did replay.
   - **Transcript** downloads `session.transcript`, which `bun run northtalk replay` replays.
 - **Autosave:** the tabs, launch Entry, setup, the Lint Profile and the **@ ~** choice are kept in `localStorage`.
+- **Store slots:** the session's worker has no file system, so `:store save <slot>` and `:store load <slot>` name slots the page keeps in `localStorage`. The Session Store itself stays in the worker's memory, and a Restart or Run fresh starts it empty. A Shared Link replays `:store load` from the contents its Transcript recorded, not from a slot.
   - On load they open as unapplied edits in an empty session, and nothing executes until you explicitly use Run fresh, Apply or the prompt. The session itself is never saved.
 
 ## Layout

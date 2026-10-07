@@ -139,6 +139,8 @@ export declare function record(o: Record<string, Value>): Value;
 
 export declare function decodeJson(s: string): Value; // numbers read from text, never JSON.parse
 export declare function encodeJson(v: Value): string;
+/** The `+` rules, outside any Run and uncharged. Throws the ScriptError `+` would raise. */
+export declare function add(a: Value, b: Value): Value;
 export declare function encodeValue(v: Value): string; // a Function Value throws
 export declare function decodeValue(
   s: string,
@@ -305,6 +307,22 @@ export interface TimerImpl {
   schedule(call: Call<unknown>, name: string, at: Value, message: string, args: Value): void;
   cancel(call: Call<unknown>, name: string): void;
 }
+/**
+ * The binding is the Store's name. The Core has checked the Shapes and
+ * refused an empty key with `invalid key`; default and by arrive as supplied.
+ * set, delete, increment and swap are Segment-bound: they act on the calling
+ * Segment's pending writes, which commit applies and rollback discards.
+ * Throw ScriptError `can't store` {kind}, `store full` {limit} or `store busy`
+ * {key}, and from increment the error `add` throws (chapter 7, ADR 0062).
+ */
+export interface StoreImpl extends SegmentLifecycle<string> {
+  get(call: Call<string>, key: string, fallback?: Value): Value;
+  set(call: Call<string>, key: string, value: Value): void;
+  delete(call: Call<string>, key: string): void;
+  keys(call: Call<string>, prefix?: string): Value;
+  increment(call: Call<string>, key: string, by?: Value): Value;
+  swap(call: Call<string>, key: string, expected: Value, replacement: Value): boolean;
+}
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {
   write(call: Call<unknown>, value: Value): void;
@@ -406,6 +424,7 @@ export interface Core {
   localeCapability(impl: LocaleImpl, costs: Costs): CapabilityDef<string>;     // binding: default tag
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
+  storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

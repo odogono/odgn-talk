@@ -1,0 +1,12 @@
+-- Transform record rows into invoice amounts, then aggregate them.
+on run n
+  repeat for each i in 1..n collecting {price: i, quantity: 2} into rows
+  end repeat
+  repeat for each row in rows collecting row's price * row's quantity into amounts
+  end repeat
+  put 0 into total
+  repeat for each amount in amounts
+    add amount to total
+  end repeat
+  return total
+end run

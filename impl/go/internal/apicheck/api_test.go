@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,11 @@ func TestEmbeddingAPI(t *testing.T) {
 	missing, failures := compare(want, got)
 	for _, failure := range failures {
 		t.Error(failure)
+	}
+	for _, name := range []string{"Add", "Core.StoreCapability", "StoreImpl"} {
+		if slices.Contains(missing, name) {
+			t.Errorf("Store API remains unimplemented: %s", name)
+		}
 	}
 	// Until #141, unimplemented declarations are reported rather than stubbed.
 	t.Logf("%d declared API names remain unimplemented: %s", len(missing), strings.Join(missing, ", "))

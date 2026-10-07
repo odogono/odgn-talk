@@ -1,0 +1,10 @@
+on go
+  ask st to set "k", 1
+end go
+on careful
+  try
+    ask st to swap "k", nothing, 2
+  catch e
+    if the code of e = "store busy" then ask st to increment "retries"
+  end try
+end careful

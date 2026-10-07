@@ -25,9 +25,12 @@ func ref(kind string, i int) operand { return operand{kind: kind, index: i} }
 func target(l *label) operand        { return operand{kind: "label", target: l} }
 
 type Instruction struct {
-	Name string
-	Pos  syntax.Position
-	args []operand
+	Name     string
+	Pos      syntax.Position
+	args     []operand
+	operands []Operand
+	Cost     string
+	Suspends bool
 }
 type unwind struct {
 	first, last int
@@ -103,7 +106,7 @@ type builder struct {
 }
 
 func (u *Unit) emit(pos syntax.Position, name string, args ...operand) {
-	u.state.body.Code = append(u.state.body.Code, Instruction{name, pos, args})
+	u.state.body.Code = append(u.state.body.Code, Instruction{Name: name, Pos: pos, args: args})
 }
 func (u *Unit) pc() int       { return len(u.state.body.Code) }
 func (u *Unit) mark(l *label) { l.pc = u.pc() }
@@ -264,11 +267,10 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	}
 	pc := 0
 	for _, body := range u.Bodies[first:] {
-		for _, instruction := range body.Code {
-			for _, opcode := range generated.Machine.Instruction {
-				if opcode.Name == instruction.Name && opcode.Suspends {
-					body.Checked.MaySuspend = true
-				}
+		for j := range body.Code {
+			body.Code[j].prepare()
+			if body.Code[j].Suspends {
+				body.Checked.MaySuspend = true
 			}
 		}
 		body.First = pc

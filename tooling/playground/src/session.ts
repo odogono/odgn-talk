@@ -32,7 +32,10 @@ export type Library = { name: string; source: string };
 export type Tabs = { libraries: Library[]; script: string };
 
 /** The Playground Host's Clock and built-in Capabilities. */
-export type PlaygroundEnvironment = Pick<SessionEnvironment, 'builtIns'> & {
+export type PlaygroundEnvironment = Pick<
+  SessionEnvironment,
+  'builtIns' | 'readStoreFile' | 'writeStoreFile'
+> & {
   /** Milliseconds from a monotonic clock, for subtracting paused time. */
   monotonic(): number;
   now(): bigint;
@@ -96,6 +99,12 @@ const refusedOrDiagnostic = (lines: readonly string[]) =>
 const libraryCommand = (how: 'add' | 'replace', library: Library) =>
   `:library ${how} ${library.name}\n${library.source.replace(/\n+$/u, '')}`;
 
+// The page's Store slots, as `:store load` and `:store save` name them.
+const storeFiles = (env: PlaygroundEnvironment) => ({
+  ...(env.readStoreFile ? { readStoreFile: env.readStoreFile } : {}),
+  ...(env.writeStoreFile ? { writeStoreFile: env.writeStoreFile } : {}),
+});
+
 export class PlaygroundSession {
   readonly host: SessionHost;
   /** The session's Session Transcript so far. */
@@ -122,6 +131,7 @@ export class PlaygroundSession {
       new SessionHost({
         now: () => this.now(),
         capabilities: canvasCapabilities,
+        ...storeFiles(env),
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => this.transcript.push(item),
         trace: line => this.trace.push(line),
@@ -152,6 +162,7 @@ export class PlaygroundSession {
       trace: line => (session ? session.trace : trace).push(line),
       live: {
         now: () => session!.now(),
+        ...storeFiles(env),
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => session!.transcript.push(item),
       },

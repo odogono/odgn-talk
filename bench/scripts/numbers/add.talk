@@ -1,0 +1,8 @@
+-- Exact fractional additions; scale the checksum to an integer.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    add 0.125 to total
+  end repeat
+  return round(total * 8, 0)
+end run

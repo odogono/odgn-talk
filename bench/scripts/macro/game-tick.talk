@@ -1,0 +1,14 @@
+-- Call a game-tick Handler that updates an actor under value semantics.
+on tick actor
+  add actor's vx to actor's x
+  add actor's vy to actor's y
+  return actor
+end tick
+
+on run n
+  put {x: 0, y: 0, vx: 1, vy: 2} into state
+  repeat for each i in 1..n
+    put tick(state) into state
+  end repeat
+  return state's x + state's y
+end run

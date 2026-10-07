@@ -1,7 +1,7 @@
 // Measures the selected Benchmarks on the TS Core with mitata and prints
 // their measurements as JSON. `main.ts` runs it in its own process.
 import { memoryUsage } from 'bun:jsc';
-import { measure } from 'mitata';
+import { measure } from './measurement';
 import { type Measurement, statsOf } from './report';
 import { check, Loaded, manifest, selected, sizeOf, sourceOf } from './suite';
 
@@ -21,10 +21,10 @@ for (const b of manifest().filter(
   let loads = 0;
   // A fresh name for each Load, so the compile cache never hits.
   const load = await measure(
-    () => new Loaded(`load${++loads}`, source),
+    () => new Loaded(`load${++loads}`, source, b.host),
     options,
   );
-  const loaded = new Loaded(b.name, source);
+  const loaded = new Loaded(b.name, source, b.host);
   const { n } = sizeOf(b, smoke);
   const run = await measure(() => loaded.run(n), options);
   measurements.push({

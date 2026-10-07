@@ -1,0 +1,12 @@
+-- Build a Map with text keys, then iterate its entries.
+on run n
+  put {} into values
+  put 0 into total
+  repeat for each i in 1..n
+    put i into the (i as text) of values
+  end repeat
+  repeat for each v in the values of values
+    add v to total
+  end repeat
+  return total
+end run

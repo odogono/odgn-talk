@@ -1,6 +1,6 @@
 # 7. Libraries and the Standard Library
 
-_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md).
+_Draws on:_ [ADR 0002](../docs/adr/0002-single-decimal-number-type.md), [ADR 0003](../docs/adr/0003-no-implicit-coercion.md), [ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md), [ADR 0007](../docs/adr/0007-text-patterns-are-linear-time.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0036](../docs/adr/0036-a-ranges-ends-are-read-with-two-built-ins.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md).
 
 Scripts share code through Libraries: stateless units of source that the Host registers on a Script Group, and whose code runs in the caller's Run. The Standard Library is two tiers. The Built-ins are a small set of functions and Constants that the Cores implement natively and that are always available. The seven stdlib Libraries are written in the language and imported like any other Library. The Standard Capabilities are Capabilities whose Operation Declarations this chapter fixes, and whose answers each Host supplies.
 
@@ -604,14 +604,14 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 ## Standard Capabilities
 
-A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer` and `console` ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
+A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console` and `store` ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar` and `locale` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
+- **Modes:** every `clock`, `calendar`, `locale` and `store` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. Chapter 6 says how both are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -736,7 +736,60 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 `write` takes exactly one argument, with the `value` Shape: every value, including Function Values nested in lists or maps. `read` takes no arguments and returns text, including empty text for an empty line. Both declare no Script error codes; a Host failure becomes `host error`. The Console factory forwards `write`'s Value to the Host, which shows its text form, and starts `read` with a `Call` that the Host answers with text. Both calls retain the Grant's binding and the Script's name.
 
+### `store`
+
+<!-- generated: stdlib.capability.store -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `get key [, default]` | immediate | The value under `key`, as the Segment sees the Store, or else `default`, or Nothing | `invalid key` |
+| `set key, value` | immediate | Nothing; puts `value` under `key` when the Segment commits, and Nothing deletes the key | `invalid key`, `can't store`, `store full`, `store busy` |
+| `delete key` | immediate | Nothing; removes `key` when the Segment commits, if it is there | `invalid key`, `store busy` |
+| `keys [prefix]` | immediate | The keys the Segment sees that begin with `prefix`, in Unicode code-point order |  |
+| `increment key [, by]` | immediate | The key's value as the Segment sees it after adding `by`, 1 by default; commit adds `by` to the value committed then | `invalid key`, `wrong kind`, `incompatible units`, `overflow`, `store full`, `store busy` |
+| `swap key, expected, new` | immediate | `true`, after putting `new` under `key`, if the Segment sees `expected` there, and `false` otherwise | `invalid key`, `can't store`, `store full`, `store busy` |
+
+<!-- end -->
+
+`store` keeps data values under text keys, outside every Script, so they outlive a reload and are shared by every Script granted the same Store ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)). Its writes commit or roll back with the Segment that made them, as Script Variables do ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)). Like `timer`, the Spec states its semantics as obligations on the Host, and the Core takes no part in keeping the Store.
+
+- **Naming a Store:** the Grant's binding is the Store's name, never the Script's text. Every Grant whose binding names the same Store reaches the same contents, across Scripts and Groups.
+- **Shapes:** every Operation's first argument, `key`, is text. `get` takes an Optional `any` default; `set` an `any` value; `keys` an Optional text prefix; `increment` an Optional choice of number or Quantity; and `swap` two `any` values. `delete` takes only its key.
+- **Keys** are nonempty text, compared exactly as NFC text ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)). Empty text raises `invalid key` after the Shape checks, before the call is charged or the Host function runs.
+- **Values** are data values, stored by [the Value Encoding](09-embedding.md#json-and-the-value-encoding). A Function Value anywhere in a value raises `not encodable` from the Shape check, and the Host fails with `can't store`, with `kind` the Object Kind, for a Host Object anywhere in one. A key holding Nothing and a missing key are one state, so setting Nothing deletes the key.
+- **What a Segment sees:** the committed Store, with the Segment's own uncommitted writes applied in call order. Every other Segment sees only the committed Store.
+- **Segment-bound:** `set`, `delete`, `increment` and `swap` are Segment-bound, so the first of them in a Segment enlists the Grant as its participant ([the lifecycle contract](embedding/scoped-effects.md#segment-participant)). Their effects reach the committed Store only when the Segment commits, and a rollback discards them. A Grant of only `get` and `keys` never enlists, and writing to a second writable Store in one Segment raises `segment participant conflict`.
+- **`get key [, default]`** gives the value the Segment sees, or else `default` if one was given, or Nothing.
+- **`set key, value`** and **`delete key`** give Nothing. Deleting a missing key changes nothing.
+- **`keys [prefix]`** gives the keys the Segment sees whose code points begin with `prefix`'s, all of them without one, as a list of text in Unicode code-point order.
+- **`increment key [, by]`:** `by` is 1 if omitted or Nothing. The answer is the value the Segment sees plus `by`, under the `+` rules of [chapter 3](03-values.md#arithmetic), and a missing key gives `by` itself, so a Quantity can start a key. A value that isn't a number or a Quantity, or doesn't add to `by`, makes the Host fail with the error `+` would raise: `wrong kind`, `incompatible units` or `overflow`. Commit adds `by` to the value committed then, so increments from several Segments never lose a count. The call also fails if `by` wouldn't add to the committed value with every other live Segment's pending increments of the key applied, so a commit never meets those errors.
+- **`swap key, expected, new`** gives `true` and writes `new`, which deletes for Nothing, if the value the Segment sees equals `expected` under `=`. Otherwise it gives `false` and writes nothing. `expected` of Nothing means "only if missing".
+- **Reserved keys:** an uncommitted `set`, `delete` or `swap` that wrote reserves its key until its Segment ends, and an uncommitted `increment` reserves its key against every write but another `increment`. A write to a key another live Segment has reserved makes the Host fail with `store busy`, with `{key}`, before anything changes ([ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)). Reads are never refused. Only a Run preempted inside its Segment holds a reservation while another Script runs, so a Host without a Fuel Slice never raises it.
+- **Quotas:** each Store has a total size, a key count and a largest value, which its Host sets. A key and its value count by their [logical sizes](08-the-abstract-machine-and-the-cost-model.md#logical-sizes). A write that would take the committed Store, with every live Segment's pending writes, past a quota makes the Host fail with `store full`, with `limit` one of `size`, `keys` and `value`. So a commit never exceeds a quota.
+- **Commit** applies the Segment's writes to the committed Store at once, in call order, and one that fails reports `failed` or `unknown` as any Segment-bound commit does. Reservations make a commit's result independent of other Segments' writes, so a Store fails a commit only when its own storage fails.
+- **Outside the Script:** Store contents never count toward Persistent State, and no save includes them ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)). Converting a value `get` gives is charged to the Run, as for any result ([chapter 9](09-embedding.md#capabilities)).
+- **Results:** `get` gives a data value; `set` and `delete` Nothing; `keys` a list of text; `increment` a number or a Quantity; and `swap` a boolean. The Core checks these result kinds, and a mismatch becomes `host error`.
+
+All six Operations are immediate: a Segment-bound Operation must be, and a read answers at once. A Host backed by remote storage answers from a working set it holds.
+
+> **Example.**
+>
+> ```talk
+> script variable total = 0
+>
+> on scored points
+>   ask scores to increment "total", points
+>   put it into total
+> end scored
+>
+> on claimPrize name
+>   ask scores to swap "winner", nothing, name
+>   if it then tell log to write name & " won"
+> end claimPrize
+> ```
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.
 - **Per-call costs** of Standard Capability Operations are set by each Host.
+- **Store contents** are each Host's own, like its zone and Locale data. The Trace records what each `store` call gave.

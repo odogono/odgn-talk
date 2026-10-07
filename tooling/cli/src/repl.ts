@@ -61,6 +61,8 @@ export const repl = ({
       mkdirSync(directory, { recursive: true });
       writeFileSync(join(directory, file), text);
     },
+    readStoreFile: path => readFileSync(path, 'utf8'),
+    writeStoreFile: (path, text) => writeFileSync(path, text),
     ...(transcript
       ? {
           record: item => appendFileSync(transcript, writeTranscript([item])),
