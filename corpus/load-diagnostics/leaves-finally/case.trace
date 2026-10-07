@@ -1,4 +1,4 @@
-# Pins `leaves finally` and its source position. New case for human review.
+# Pins `leaves finally` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=638fc5f48ca30130470c568c14cb5218e9ffe885f6019e4ef01e3074e0c7705f
 diag bad code="leaves finally" pos=4:1
 > vars

@@ -1,4 +1,4 @@
-# Pins `empty join` and its source position. New case for human review.
+# Pins `empty join` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=aee220ebcd5841327f5accf8e423499be482289974e6e812d26099af767f0b53
 diag bad code="empty join" pos=2:1
 > vars

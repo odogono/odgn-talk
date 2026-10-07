@@ -1,4 +1,4 @@
-# Pins `not a value` and its source position. New case for human review.
+# Pins `not a value` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=d08d9fcf0c780fa32758661e3404ccea3094b99d65a2edbea357f67a10f2f5c6
 diag bad code="not a value" pos=2:8
 > vars

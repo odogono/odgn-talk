@@ -603,8 +603,8 @@ All seventeen scope traces pass, including `scope-slots` and
 `scope-suspension-boundaries` with corrected guard Fuel and allocation
 expectations. Both Cores agree on the complete Traces; the
 [charging reconciliation](../../docs/reviews/scope-guard-charging/README.md)
-records the boundary audit. The original first-review headers remain pending
-human review in #222. Disabled Grants survive full and variables-only restore;
+records the boundary audit. Their first blessings were approved for #141; see the
+[approval record](../../docs/reviews/milestone-one-blessings/README.md). Disabled Grants survive full and variables-only restore;
 Save refuses a preempted Run with live scope slots without abandoning them.
 
 ### Clock and Timer Standard Capabilities

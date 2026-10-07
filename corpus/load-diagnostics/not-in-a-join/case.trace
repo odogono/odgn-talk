@@ -1,4 +1,4 @@
-# Pins `not in a join` and its source position. New case for human review.
+# Pins `not in a join` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=b383ced2b730f675f64ea996069c6507f366f227333aabc458942f1706a9db01
 diag bad code="empty join" pos=2:1
 diag bad code="not in a join" pos=3:1

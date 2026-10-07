@@ -1,4 +1,4 @@
-# Pins `unknown kind` and its source position. New case for human review.
+# Pins `unknown kind` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=510a15eeb45c91b7c03fcceb0219e0bdda9b729265d615f58c1298f1de5c6e86
 diag bad code="unknown kind" pos=2:15
 > vars

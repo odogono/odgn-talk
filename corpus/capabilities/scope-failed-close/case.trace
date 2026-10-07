@@ -1,5 +1,5 @@
 # scope-failed-close: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
 > load s identity=bbd59526950b85da124b3f6824d9ea654a68ecea7f1440fa88fc20223053ae34
 > stub resource.open value=nothing

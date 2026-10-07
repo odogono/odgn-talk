@@ -1,3 +1,4 @@
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # calls-and-lambdas: pins chapter 8's Calls, Lambdas and Function Values
 # lowering: `call` for the unit's own functions, `call-import` for an
 # imported one, `call-handler` for a Handler, `call-builtin` for a Built-in

@@ -1,4 +1,4 @@
-# Pins `capture in repetition` and its source position. New case for human review.
+# Pins `capture in repetition` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=7c6c57cb44cf7eb63d8574f59cf283343772f07fefd1b8d7d6d4c7a4718704d5
 diag bad code="capture in repetition" pos=2:18
 > vars

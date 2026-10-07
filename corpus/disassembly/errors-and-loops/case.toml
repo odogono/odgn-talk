@@ -1,3 +1,4 @@
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # errors-and-loops: pins chapter 8's lowering of `if`, the five `repeat`
 # forms, `exit repeat` and `next repeat`, `try`, `throw` and a Handler that
 # ends in `finally`. Each `try` has a `catch` entry for its body and a

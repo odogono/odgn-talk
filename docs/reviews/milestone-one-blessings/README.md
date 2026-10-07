@@ -130,3 +130,99 @@ After the edit, at `origin/main` `18278ef`:
 - `bun run corpus:check` accepts all 307 cases.
 
 No `# Unblessed:` marker remains in the Corpus.
+
+## Further cases found by the full sweep
+
+These 58 cases had not been reviewed either, but their headers or guides said
+so without using an `Unblessed` marker, so this package missed them at first. A
+sweep of every case's `case.toml`, Trace and Transcript headers found them.
+Every case they pin passes on both Cores, and `bun run corpus:bless` on all 58
+reported TS and Go agreement with no file changed.
+
+The maintainer approved them on 2026-10-07 in the same conversation:
+
+- 30 load diagnostics, 17 scope cases and 7 Disassembly Cases: “Approve all
+  54 now”, given with cross-Core agreement as the evidence;
+- the four effect cases the final sweep found: “Approve these 4 too”.
+
+In each file, the pending note became the same approval sentence. The scope and
+effect Traces also replace “Go parity is unverified” with “Go and TS agree”.
+Each Disassembly Case's `case.toml` gains the approval line. No Host Input,
+output record, `.dis` line or cost changed.
+
+### Load diagnostics (#250), 30 Traces
+
+- `load-diagnostics/bad-number`
+- `load-diagnostics/bits-not-whole-bytes`
+- `load-diagnostics/cant-suspend-here`
+- `load-diagnostics/cant-write`
+- `load-diagnostics/capture-in-repetition`
+- `load-diagnostics/default-order`
+- `load-diagnostics/duplicate-key`
+- `load-diagnostics/duplicate-name`
+- `load-diagnostics/empty-join`
+- `load-diagnostics/initialiser-failed`
+- `load-diagnostics/leaves-finally`
+- `load-diagnostics/name-clash`
+- `load-diagnostics/needless-and-wait`
+- `load-diagnostics/no-conversion`
+- `load-diagnostics/no-item-chunk`
+- `load-diagnostics/not-a-property`
+- `load-diagnostics/not-a-value`
+- `load-diagnostics/not-constant`
+- `load-diagnostics/not-in-a-guard`
+- `load-diagnostics/not-in-a-join`
+- `load-diagnostics/not-in-a-lambda`
+- `load-diagnostics/not-in-a-script`
+- `load-diagnostics/nothing-to-fold`
+- `load-diagnostics/outside-a-loop`
+- `load-diagnostics/pattern-too-large`
+- `load-diagnostics/rest-not-last`
+- `load-diagnostics/unknown-import`
+- `load-diagnostics/unknown-kind`
+- `load-diagnostics/unknown-name`
+- `load-diagnostics/wrong-argument-count`
+
+### Scope and Segment-effect cases (#222), 21 Traces
+
+The other 22 effect cases were approved for #135; see the
+[Go step-4 record](../go-step-four-blessings/README.md).
+
+- `capabilities/effect-close-preemption-fault`
+- `capabilities/effect-reload-fatal`
+- `capabilities/effect-replace-fatal`
+- `capabilities/effect-replace-library`
+- `capabilities/scope-cancel-run`
+- `capabilities/scope-close-conversion`
+- `capabilities/scope-conversion-fault`
+- `capabilities/scope-disabled-reject`
+- `capabilities/scope-disabled-variables-only`
+- `capabilities/scope-dispose`
+- `capabilities/scope-failed-close`
+- `capabilities/scope-grants-as-used`
+- `capabilities/scope-limit-fault`
+- `capabilities/scope-malformed-acquisition`
+- `capabilities/scope-ordinary-error`
+- `capabilities/scope-preemption-save`
+- `capabilities/scope-reverse-abandonment`
+- `capabilities/scope-revoked-cleanup`
+- `capabilities/scope-slots`
+- `capabilities/scope-stop`
+- `capabilities/scope-suspension-boundaries`
+
+### Disassembly Cases, 7
+
+`collecting` is approved above and `recovery-offers` was approved for #392.
+
+- `disassembly/calls-and-lambdas`
+- `disassembly/containers`
+- `disassembly/destructuring`
+- `disassembly/errors-and-loops`
+- `disassembly/expressions`
+- `disassembly/fenced-text`
+- `disassembly/messages-and-waiting`
+
+After these edits, the header sweep finds no unapproved review note, and
+`corpus:run`, `--check-passing` and `corpus:check` pass all 307 cases. A case
+whose header and guides never mentioned its review state can't be found this
+way; the existing review records cover the rest of the Corpus.

@@ -1,4 +1,4 @@
-# Pins `bits not whole bytes` and its source position. New case for human review.
+# Pins `bits not whole bytes` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=f80630b2619632b3d1e8d49d33050952ca61e20d191cf1baaea75b0829558448
 diag bad code="bits not whole bytes" pos=2:10
 > vars

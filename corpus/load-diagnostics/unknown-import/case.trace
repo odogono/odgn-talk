@@ -1,4 +1,4 @@
-# Pins `unknown import` and its source position. New case for human review.
+# Pins `unknown import` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=926a1b03a25e35c3ceac209d86c3a0cf265d5a640e6a3834a9232bacf40489e9
 diag bad code="unknown import" pos=1:12
 > vars

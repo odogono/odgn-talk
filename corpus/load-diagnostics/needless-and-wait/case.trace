@@ -1,4 +1,4 @@
-# Pins `needless and wait` and its source position. New case for human review.
+# Pins `needless and wait` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=c6f97d6cf0fcb0bbc0b17bd7ecd6783101823e5185d501b78cd5e31d08f74190
 diag bad code="needless and wait" pos=2:1
 > vars

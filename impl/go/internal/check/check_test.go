@@ -237,7 +237,7 @@ func TestReviewEdgeCases(t *testing.T) {
 	}
 }
 
-// These new TS-blessed cases are awaiting the human review required by #132.
+// These cases' first blessings were approved for #141.
 // The worker Trace replay joins #249; here the checker pins every diag record.
 func TestLoadDiagnosticCorpus(t *testing.T) {
 	files, err := filepath.Glob("../../../../corpus/load-diagnostics/*/case.trace")

@@ -1,4 +1,4 @@
-# Pins `nothing to fold` and its source position. New case for human review.
+# Pins `nothing to fold` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=67d8b83c8cb4d7abbd10ff32fcddb60277c75fa69a2a7584e45a0089848be053
 diag bad code="nothing to fold" pos=2:22
 > vars

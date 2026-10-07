@@ -1,4 +1,4 @@
-# Pins `wrong argument count` and its source position. New case for human review.
+# Pins `wrong argument count` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=949c2cb7f5d687370c3b1d4bac2e3f8a8d290197427e442331dd245ba3f0de71
 diag bad code="wrong argument count" pos=5:8
 > vars
