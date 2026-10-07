@@ -1,4 +1,4 @@
-# Pins `name clash` and its source position. New case for human review.
+# Pins `name clash` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=24911049e44672078e1e18ff7199b102c47a69564945c73e4c8ab258b5e06f19
 diag bad code="name clash" pos=2:6
 > vars

@@ -1,4 +1,4 @@
-# Unblessed: new regression case, awaiting human review of its first blessing.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # Programs contain 1, 4 and 4 instructions, including the trailing match.
 # Their logical sizes are 24, 48 and 48 bytes; loading is uncharged.
 > load zero identity=eabf6cca9e19f249a9155bd8d693b22e7bcca08fd7f1892a5ea0d9d8a1f82550

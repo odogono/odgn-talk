@@ -1,5 +1,5 @@
 # scope-preemption-save: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
 > load s identity=342771b9f8304d463d3d1b8abed29d61ced0efd37a57c37aba252f4e926a5b25
 > stub resource.open value=nothing

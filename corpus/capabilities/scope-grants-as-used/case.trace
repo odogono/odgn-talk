@@ -1,5 +1,5 @@
 # scope-grants-as-used: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
 > load s identity=21671f9ab7581bc81ccda3e10f879b1239aad496b289c4ec715ea43e00d74d5a
 > stub resource.open value=nothing

@@ -1,4 +1,4 @@
-# Unblessed: new regression case, awaiting human review of its first blessing.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # Chapter 4 requires expected="pattern", retaining the offending value.
 # make-pattern has no result, so costs 20 Fuel and allocates nothing.
 # Dispatch, its operand and the matching catch/body add 31 Fuel; no frames

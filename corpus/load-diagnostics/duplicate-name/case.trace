@@ -1,4 +1,4 @@
-# Pins `duplicate name` and its source position. New case for human review.
+# Pins `duplicate name` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=7b7f72d1b5ad1c0731d238b00631744da72fc75ddfd1671eca6203df8305fcdd
 diag bad code="duplicate name" pos=2:9
 > vars

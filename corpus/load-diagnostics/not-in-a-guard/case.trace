@@ -1,4 +1,4 @@
-# Pins `not in a guard` and its source position. New case for human review.
+# Pins `not in a guard` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=e0723872006f0981685414453182e069e95b8de0b9399ad99ead5ab466556e75
 diag bad code="not in a guard" pos=4:14
 > vars

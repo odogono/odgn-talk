@@ -1,3 +1,4 @@
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # messages-and-waiting: pins chapter 8's lowering of sends, Command Calls to
 # Handlers and up the Message Path, Capability calls, `say`, `wait`, the
 # one-line and block `wait for`, Joins, `veto` and `pass`. A `wait for`

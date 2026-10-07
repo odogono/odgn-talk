@@ -29,5 +29,5 @@ Constant/object clashes, nested pattern bindings, captured writes and local
 Handler shadowing.
 
 First-blessing approval is separate from execution agreement. Maintainer review
-is outstanding for all six linked `case.trace` files and `collect.dis`; their
-`Unblessed` markers remain. No existing corpus expectation was changed.
+for all six linked `case.trace` files and `collect.dis` was given on 2026-10-07;
+see the [approval record](../milestone-one-blessings/README.md). No existing corpus expectation was changed.

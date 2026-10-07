@@ -1,4 +1,4 @@
-# Unblessed: first human review required for #281.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 > load below identity=e0d9744684a1e262d8a5621eb7baffa6cd132cf13bf9febc99351b9b52190d5f
 > load exact identity=b7381c159eda8b232bd0750d90f2f29bf5861f6567ffcdede617d0ff24a7ea02
 > deliver d1 to=below message=go

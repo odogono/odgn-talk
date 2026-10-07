@@ -1,4 +1,5 @@
-# Unblessed: labelled Selectors follow the Message Path and preserve the Target.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
+# Labelled Selectors follow the Message Path and preserve the Target.
 > load board identity=41f90bf4739ac3f35d03125a7f5e37fd763573ece09c89bdb10819d0f9ce566c
 > load knight identity=ee7315a47d071454471e4ecb04c32302fa0c0b2003a3af05c23094f9cdef60f2
 > decide to=<object piece "knight"> message=move:with: args=[1, 2]

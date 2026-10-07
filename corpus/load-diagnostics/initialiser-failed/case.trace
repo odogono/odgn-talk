@@ -1,4 +1,4 @@
-# Pins `initialiser failed` and its source position. New case for human review.
+# Pins `initialiser failed` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=5e36e1ee2d10f9f2489be63b25bd6631aa34a98d259de2bc82818d2fc555d57d
 diag bad code="initialiser failed" pos=1:16
 > vars

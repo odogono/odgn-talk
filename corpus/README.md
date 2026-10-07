@@ -37,7 +37,7 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 
 | Directory | What its cases pin |
 | --- | --- |
-| [`load-diagnostics/`](load-diagnostics/) | rejected loads: each step 1 diagnostic family and its source position ([chapter 2](../spec/02-grammar.md#load-time-diagnostics)); new TS-blessed cases awaiting human review (#250) |
+| [`load-diagnostics/`](load-diagnostics/) | rejected loads: each step 1 diagnostic family and its source position ([chapter 2](../spec/02-grammar.md#load-time-diagnostics)); first blessings approved for #141 ([record](../docs/reviews/milestone-one-blessings/README.md)) |
 | [`examples/`](examples/) | worked examples of the format |
 | [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, including inside a Join, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, Grants and Libraries the Host no longer has, overdue `wait`s after a restore, and reissue Fuel charges, debt and cutoff ([chapter 10](../spec/10-save-and-restore.md)) |
 | [`counters/`](counters/) | lifetime work and current state through preemption, faults, cleanup, Stop, code changes and both restore policies ([chapter 9](../spec/09-embedding.md#script-counters)) |
@@ -56,7 +56,7 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 | [`stdlib/`](stdlib/) | calls into the stdlib Libraries with no `add-library` line, and errors raised in stdlib code naming the Script's call ([chapter 7](../spec/07-libraries-and-the-standard-library.md#the-standard-library), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)) |
 | [`math/`](math/) | the correctly rounded number functions and fractional `^`, the Float Built-ins, and their domain errors ([chapter 7](../spec/07-libraries-and-the-standard-library.md#numbers)) |
 | [`functions/`](functions/) | Host and foreign Function Value calls, defaults, Capability callbacks, replies, staleness and cancellation ([chapters 5](../spec/05-handlers-messages-and-scheduling.md#function-values-in-another-script) and [9](../spec/09-embedding.md#function-values)) |
-| [`collecting/`](collecting/) | Collecting Clause initialization, filtering, early exit, partial lists after errors, conditions and waiting bodies ([ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md)); Go/TS ordinary and save/restore agreement, with first-blessing review pending in the [review record](../docs/reviews/collecting/README.md) |
+| [`collecting/`](collecting/) | Collecting Clause initialization, filtering, early exit, partial lists after errors, conditions and waiting bodies ([ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md)); Go/TS ordinary and save/restore agreement, [evidence](../docs/reviews/collecting/README.md); first blessings approved on 2026-10-07 ([approval record](../docs/reviews/milestone-one-blessings/README.md)) |
 | [`computed-sends/`](computed-sends/) | `send (e)` with a computed Name or Selector, waiting and in a Join, forwarding `wait for`'s `it`, climbing to `unhandled`, and `wrong kind` and `bad message name` checked before the receiver ([chapter 5](../spec/05-handlers-messages-and-scheduling.md#sending), [ADR 0057](../docs/adr/0057-a-send-may-compute-its-message-name.md)); first blessings approved, see the [approval record](../docs/reviews/computed-send-blessings/README.md) |
 | [`decisions/`](decisions/) | Decisions: first-Segment seals across preemption, veto and pass, dispatch and pending waits, undecided errors and faults, and Broadcast recipient aggregation ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)) |
 | [`cancellation/`](cancellation/) | Broadcast recipients, Queueing Policies, cancelled cleanup and its failures, Host crossings, owner disposal and sticky Stop ([chapters 5 and 6](../spec/06-errors-and-limits.md#cancellation-and-stop)) |
@@ -67,7 +67,7 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 
 ## Seed blessing
 
-The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review except scoped-effect cases outside the approved step-4 set (below), the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
+The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
 
 The corrected `capabilities/scope-slots` and `scope-suspension-boundaries`
 Traces agree on Go and TS, including TS save/restore replay. Rejected scope
@@ -78,12 +78,12 @@ on Go ordinary execution and TS ordinary/save-restore execution. Go supports
 Segment-bound Operations following #340. The maintainer approved the first
 blessings of seven limit/cancellation regressions and 22 effect cases on
 2026-10-05 for #135 and #326; see the
-[approval record](../docs/reviews/go-step-four-blessings/README.md). Scope cases
-outside that set retain their #222 first-review headers. For current Save and
+[approval record](../docs/reviews/go-step-four-blessings/README.md). The other scope and
+effect cases were approved for #141 ([approval record](../docs/reviews/milestone-one-blessings/README.md)). For current Save and
 Library replacement support, see the [Go lifecycle guide](../impl/go/README.md#save-restore-and-code-updates). See the
 [boundary audit and expectation diff](../docs/reviews/scope-guard-charging/README.md).
 
-The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. They retain `Unblessed` headers pending human review of the first blessing; no existing expectation was re-blessed for these fixes.
+The three new Text Pattern regression cases (`counted-program-sizes`, `empty-literal-composition` and `splice-wrong-kind`) pin chapter 8's program sizes, chapter 11's empty-group canonical source and chapter 4's wrong-kind splice fields. Both Cores reproduce their complete Traces. The maintainer approved their first blessings on 2026-10-07; see the [approval record](../docs/reviews/milestone-one-blessings/README.md). No existing expectation was re-blessed for these fixes.
 
 The corrected `decisions/undecided-on-cancel-delivery` seed agrees on Go and TS
 through public cancellation contexts/signals. Its post-seal cancellation queues
@@ -137,7 +137,7 @@ The seed cases were written before any Core existed. Until a case is blessed, it
 
 A human reviews each case's diff when it is first blessed, and a case whose hand-written lines turn out to be wrong is fixed then, with a Spec fix if the Spec was unclear.
 
-The three `counters/` cases pin lifetime work, mailbox and live state, fault rollback, failed cleanup, Reload/Extend and full or variables-only restore. All three agree on Go and TS ordinary/save-restore replay and are protected by the Go passing gate. The corrected `faults-and-cleanup` case cancels a Request through its public context/signal, keeping every output and counter unchanged. Its `Unblessed` header awaits human review of this correction; see the [Spec derivation](../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
+The three `counters/` cases pin lifetime work, mailbox and live state, fault rollback, failed cleanup, Reload/Extend and full or variables-only restore. All three agree on Go and TS ordinary/save-restore replay and are protected by the Go passing gate. The corrected `faults-and-cleanup` case cancels a Request through its public context/signal, keeping every output and counter unchanged. The maintainer approved the correction on 2026-10-07 ([approval record](../docs/reviews/milestone-one-blessings/README.md)); see the [Spec derivation](../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 
 The `event-test-slice-debt` and `event-test-group-cap` cases in `suspension/` pin observation Fuel, atomic waiter checks, dispatch ordering and slice debt. The `event-tests-fault-on-resume` case in `limits/` pins uncapped observation charges and the waiting Run's fault at its next resumed instruction. All three pass full and save/restore replay.
 
@@ -234,15 +234,15 @@ selector-aware faults in nested Lambdas, Host Selector refusals, suspension
 checks and chunk/Unit traps. Go and TS agree on their complete ordinary and
 save/restore Traces. The `sessions/argument-labels` Transcript agrees on both
 Cores and covers Entry recognition and positional/labelled Handlers sharing a first word. Their
-`Unblessed` headers retain the first human review requirement.
+first blessings were approved on 2026-10-07; see the [approval record](../docs/reviews/milestone-one-blessings/README.md).
 
 ## The Disassembly Cases
 
 The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript was approved on 2026-10-05; see the [fenced-text approval record](../docs/reviews/fenced-text-blessings/README.md).
 
-The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). They await their first human review, as every case does, and the Go Core must agree before they count as blessed by both.
+The cases under [`disassembly/`](disassembly/) were written with the TS Core's lowering, and their expected `.dis` files were written by `bun run corpus:run --bless`, with the TS Core the only Core available ([chapter 11](../spec/11-the-trace-and-conformance.md#bless)). Both Cores agree on every `.dis` file, and every Disassembly Case's first blessing is approved; the earlier ones for #141 ([approval record](../docs/reviews/milestone-one-blessings/README.md)).
 
-The 43 `scope-*` and `effect-*` cases under `capabilities/` cover scope slots, automatic cleanup, participant outcomes, cancellation cleanup, disablement, code changes and Save refusal. They pass TS normal and save/restore replay, plus replay using recorded Host results with Stub inputs removed. Their first human review is pending in #222. The [matrix reconciliation](capabilities/scoped-effects.md) identifies executable native Host tests and the unimplemented Message Layer transport coverage. Go parity remains unverified.
+The 43 `scope-*` and `effect-*` cases under `capabilities/` cover scope slots, automatic cleanup, participant outcomes, cancellation cleanup, disablement, code changes and Save refusal. They pass TS normal and save/restore replay, plus replay using recorded Host results with Stub inputs removed. Both Cores agree on all of them in both replays, and their first blessings are approved (#135, #141). The [matrix reconciliation](capabilities/scoped-effects.md) identifies executable native Host tests and the unimplemented Message Layer transport coverage.
 
 The Go ordinary Library slice also passes the reviewed `libraries/calls`,
 `libraries/errors`, `libraries/registration`, `stdlib/calls`,
@@ -266,8 +266,8 @@ The eight #281 cases named in the [review record](../docs/reviews/suspension-ret
 agree on actual Go and TS execution, including both save/restore replays. They
 pin the one-byte-below and exact Persistent State boundaries for suspending
 Operations, foreign Function Value calls, one-line and block event captures
-and object filters, pending Join members and early answers. Their first human
-review remains outstanding; each new Trace retains its `Unblessed` header.
+and object filters, pending Join members and early answers. The maintainer
+approved their first blessings on 2026-10-07; see the [approval record](../docs/reviews/milestone-one-blessings/README.md).
 Current behavior is described in the [TS verification guide](../impl/ts/README.md#verification-and-corpus-selection).
 
 The Recovery Offers cases `basic`, `boundaries`, `costs`, `cleanup-restore`,

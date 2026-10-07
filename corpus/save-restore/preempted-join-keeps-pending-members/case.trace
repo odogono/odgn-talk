@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # preempted-join-keeps-pending-members: pins the pending calls of a Run that a
 # Fuel Slice preempts in a Join's body, after it has started both members but
 # before the Join's closing `end` suspends it.

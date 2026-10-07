@@ -1,4 +1,4 @@
-# Unblessed: new selector regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 > load a identity=775c73d5032574699a0aa129fd79bd42dacce37f56fbcfacbf654e2a02824f72
 > load b identity=68b4df455f6f2516099afe01018b608543f5604d33ff68a7aa993e5bb69ac87f
 > deliver d1 to=a message=go

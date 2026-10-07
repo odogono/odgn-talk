@@ -1,4 +1,4 @@
-# Pins `outside a loop` and its source position. New case for human review.
+# Pins `outside a loop` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=d53d580999b960bc845227d7c661e4e8389c95601ce0b64beb469062e6ef5ec6
 diag bad code="outside a loop" pos=2:1
 > vars

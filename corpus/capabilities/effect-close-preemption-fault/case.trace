@@ -1,5 +1,5 @@
 # effect-close-preemption-fault: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
 > load s identity=e49d73ae4dfc503d6d05ca1bf12eb59dff9895ba21a43afc7556b4d56630e2c4
 > stub resource.open value=nothing

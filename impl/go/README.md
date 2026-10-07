@@ -375,7 +375,7 @@ cases through the public embedding API and protects their passing-list entries.
 Additional tests pin normative programs, composition errors, conversions,
 absent Captures and compilation charges. Three new regression cases for empty
 literals, counted program sizes and wrong-kind splices agree on both Cores;
-their `Unblessed` headers remain until the first human review.
+their first blessings were approved on 2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)).
 
 `matching-fuel-exhaustion` and `pattern-size-made-at-run-time` pass with exact
 exhaustion instructions, uncharged failing work and Segment rollback. A separate
@@ -603,8 +603,8 @@ All seventeen scope traces pass, including `scope-slots` and
 `scope-suspension-boundaries` with corrected guard Fuel and allocation
 expectations. Both Cores agree on the complete Traces; the
 [charging reconciliation](../../docs/reviews/scope-guard-charging/README.md)
-records the boundary audit. The original first-review headers remain pending
-human review in #222. Disabled Grants survive full and variables-only restore;
+records the boundary audit. Their first blessings were approved for #141; see the
+[approval record](../../docs/reviews/milestone-one-blessings/README.md). Disabled Grants survive full and variables-only restore;
 Save refuses a preempted Run with live scope slots without abandoning them.
 
 ### Clock and Timer Standard Capabilities
@@ -1019,8 +1019,8 @@ error, Decision, Capability, Library and Standard Library traces. Trace cases re
 public embedding interface, with exact records, costs and final state. All three
 Counters cases are protected in ordinary and save/restore replay.
 `counters/faults-and-cleanup` uses a public Request context for queued cancellation;
-it starts no Run and charges no Fuel. Its corrected input retains an `Unblessed`
-header pending human review; see the [Spec derivation](../../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
+it starts no Run and charges no Fuel. Its corrected input was approved on
+2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)); see the [Spec derivation](../../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 Tests separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
 18 step-5 save/restore, Extend and replacement cases, and all eleven Session

@@ -1,4 +1,4 @@
-# Pins `rest not last` and its source position. New case for human review.
+# Pins `rest not last` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=1d52b9b4465a88a9bcf39f3631e6ef519e19e67c7ca6e2e5d9cc4428c50bf61f
 diag bad code="rest not last" pos=2:6
 > vars

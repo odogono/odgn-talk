@@ -1,5 +1,5 @@
 # Rollback keeps spent Fuel; queued cancellation starts no Run; failed cleanup is cancellation.
-# Unblessed: the Request cancellation correction awaits human review for #364.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 > load s identity=a1524e7afe2e7c1592893f89d1fa49e604abd422e4e049ca587cf4480a0f0634
 > counters s
 counters s fuel=0 alloc=0 runs=0 faults=0 state=16 mailbox=0

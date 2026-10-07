@@ -1,4 +1,4 @@
-# Pins `duplicate key` and its source position. New case for human review.
+# Pins `duplicate key` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=e936fad16aed3125e881312fa23831ed16f5323dd307efa32d76da6480eac97d
 diag bad code="duplicate key" pos=2:15
 > vars

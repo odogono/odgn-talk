@@ -1,4 +1,5 @@
-# Unblessed: Session Entries recognise a Handler Selector by its first word.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
+# Session Entries recognise a Handler Selector by its first word.
 > :clock virtual 2026-09-30T09:00:00Z
 > on move x to y
 |   say x + y

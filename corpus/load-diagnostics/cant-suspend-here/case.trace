@@ -1,4 +1,4 @@
-# Pins `can't suspend here` and its source position. New case for human review.
+# Pins `can't suspend here` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=639f34b2d6e210e921c51e0ac9232ab8b345b235abbe9cc7344d748956089860
 diag bad code="can't suspend here" pos=2:1
 > vars

@@ -1,4 +1,4 @@
-# Pins `default order` and its source position. New case for human review.
+# Pins `default order` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=7c4d6ff514cc3818ae021c3476132bbe82639623cab780c06ff590b3b2719cb6
 diag bad code="default order" pos=1:19
 > vars

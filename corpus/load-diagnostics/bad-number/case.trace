@@ -1,4 +1,4 @@
-# Pins `bad number` and its source position. New case for human review.
+# Pins `bad number` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
 > load bad identity=416a8841a0882882123de2148900d93a8b4e9d004cb283473ee7af958a9e48f8
 diag bad code="bad number" pos=1:14
 > vars

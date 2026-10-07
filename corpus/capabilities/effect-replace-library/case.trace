@@ -1,5 +1,5 @@
 # effect-replace-library: lifecycle ordering and results specified by chapter 11.
-# TS expectations; first human review pending in #222. Go parity is unverified.
+# First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
 > add-library user identity=82e71f84bc526e24d744a868fb416e7a66910bab719bdd38cc96de7abbebcd7e
 > load s identity=b0c71986421917d636293b254b378064c68571dea02c29972442ab6d34267a9b
