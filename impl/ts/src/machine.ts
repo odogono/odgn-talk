@@ -1964,6 +1964,37 @@ export class Run {
     return this.frames.at(-1)!;
   }
 
+  /** Tooling-only control views; never part of Inspect or saved state. */
+  debugFrames(): {
+    frame: Frame;
+    owner?: number;
+    role?: 'retained' | 'dispatch';
+  }[] {
+    const retained = new Set(this.recoveries.flatMap(c => c.retained));
+    const frames: Frame[] = [];
+    // Transfer cleanup can execute after its owner leaves the active stack.
+    const add = (frame: Frame) => {
+      if (!frames.includes(frame)) {
+        if (frame.owner) {
+          add(frame.owner);
+        }
+        frames.push(frame);
+      }
+    };
+    for (const frame of [...retained, ...this.frames]) {
+      add(frame);
+    }
+    return frames.map(frame => ({
+      frame,
+      ...(frame.owner ? { owner: frames.indexOf(this.realOwner(frame)) } : {}),
+      ...(retained.has(frame) || !this.frames.includes(frame)
+        ? { role: 'retained' as const }
+        : frame.owner
+          ? { role: 'dispatch' as const }
+          : {}),
+    }));
+  }
+
   // ------------------------------------------------------------- charging
 
   /** Charge an instruction, faulting before it does anything if it can't pay. */

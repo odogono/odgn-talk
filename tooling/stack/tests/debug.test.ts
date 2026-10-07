@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 import { compileSource, newGroup, num } from '@odgn/northtalk';
 import { LiveDebugger, renderDebugView } from '../src/debug';
+import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';
+
+test('Recovery Offers use active stepping depth and shared owner frame views', () => {
+  expect(verifyRecoveryDebugFeatures()).toBe(12);
+});
 
 const source =
   'script variable n = 0\non go\n  put 1 into n\n  put 2 into n\n  return n\nend';

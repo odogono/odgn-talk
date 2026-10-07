@@ -17,6 +17,43 @@ const run = (args: string[], stdin = '') => {
   };
 };
 
+test('the REPL chooses a Library offer and replays the recorded session', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-recovery-'));
+  const transcript = join(dir, 'session.transcript');
+  const rows = resolve(
+    import.meta.dir,
+    '../../../corpus/recovery-offers/basic/rows.talk',
+  );
+  const input = [
+    ':clock virtual 2026-09-30T10:00:00Z',
+    `:library add rows ${rows}`,
+    'use parseRows from rows',
+    'function convert row',
+    ' return row as number',
+    'end convert',
+    'on go',
+    ' try',
+    '  put parseRows(["5", "bad", "7"], convert) into rows',
+    ' catch e before unwind where offerAvailable("useValue")',
+    '  choose offer useValue(0)',
+    ' end try',
+    ' say rows',
+    'end go',
+    'go',
+    ':quit',
+    '',
+  ].join('\n');
+  expect(run(['--transcript', transcript], input)).toEqual({
+    code: 0,
+    stdout: '[5, 0, 7]\n',
+    stderr: '',
+  });
+  expect(readFileSync(transcript, 'utf8')).toContain(
+    '|   choose offer useValue(0)',
+  );
+  expect(run(['replay', transcript]).code).toBe(0);
+});
+
 test('the REPL reads Entries a line at a time and records a Transcript that replays', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
   const transcript = join(dir, 'session.transcript');

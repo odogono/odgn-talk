@@ -1,5 +1,6 @@
 import { compileSource, newGroup, num } from '@odgn/northtalk';
 import { LiveDebugger, ReplayDebugger, renderDebugView } from '../src/debug';
+import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';
 
 /** The same live-debugging checks run in Bun, Node and browser environments. */
 export const verifyDebugFeatures = (): number => {
@@ -74,5 +75,5 @@ export const verifyDebugFeatures = (): number => {
   if (replay.runToHostInput(0).state !== 'input' || replay.trace.length) {
     throw new Error('Host Input seek failed');
   }
-  return 9;
+  return 9 + verifyRecoveryDebugFeatures();
 };

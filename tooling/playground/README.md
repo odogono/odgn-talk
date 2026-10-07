@@ -42,13 +42,13 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
   - **Lints** chooses the `beginner` (the default) or `standard` Lint Profile.
 - **Live debugging:** click the gutter to set a breakpoint in the Script tab or a saved Library tab.
   - A breakpoint pauses the whole session during any Run, and the tab shows the paused line. While paused, the prompt waits.
-  - Continue, Step, Over and Out work as chapter 12 describes. The panel shows the frames with their locals, and the session's runs, mailbox and Script Variables.
+  - Continue, Step, Over and Out work as chapter 12 describes. Recovery Offer dispatch follows the active policy/cleanup cursor. The panel labels retained and dispatch frames, identifies the shared owner by its displayed frame number, and shows the actual owner locals. It also shows the session's runs, mailbox and Script Variables.
   - The pause isn't a Host Input, so the Transcript and the Trace are as they would be without it, and the paused time doesn't count on the Clock.
   - A breakpoint in a tab with unapplied edits is shown faded until Apply or a save loads it.
 - **Replay debugging:** the Replay debugger replays a Trace on the TS Core.
   - With no Trace pasted, it replays this session, or a Shared Link's Transcript that replayed differently.
   - A pasted Trace from another Host needs its Setup as JSON (a `case.toml` converted to JSON). The Setup's source files come from tabs of the same name, and the panel asks for any it can't find.
-  - Breakpoints are `unit:line`. **Back** steps backwards, and **Run to Host Input** seeks to a Host Input.
+  - Breakpoints are `unit:line`. **Back** steps backwards through dispatch statements too, and **Run to Host Input** seeks to a Host Input. The frame labels and owner locals match the live panel.
 - **Sharing:** **Share** makes a Shared Link.
   - The link's fragment carries the tabs, launch Entry, setup commands and, optionally, the Session Transcript, deflated and base64url-encoded, so it never reaches a server.
   - Opening a link replays its Transcript, then goes on live. If the replay prints differently, the page shows the first differing line, never goes live, and leaves the replay debugger to step through what did replay.

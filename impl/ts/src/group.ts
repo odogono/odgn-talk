@@ -4439,9 +4439,10 @@ export class Group {
             ...view,
             fuel: run.fuel,
             segment: Number(run.segmentId.split('.s')[1]),
-            frames: run.frames.map(frame => {
+            frames: run.debugFrames().map(({ frame, ...control }) => {
               const ins = frame.code.unit.code[frame.pc]!;
               return {
+                ...control,
                 unit: frame.code.name,
                 handler: frame.handler,
                 pc: frame.pc,

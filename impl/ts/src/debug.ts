@@ -19,10 +19,16 @@ export type DebugPause = Location & {
   run: string;
   script: string;
 };
+export type DebugFrame = Location & {
+  locals: [string, Value][];
+  /** Zero-based index of the shared-local owner in this Run's frame view. */
+  owner?: number;
+  role?: 'retained' | 'dispatch';
+};
 export type DebugSnapshot = Omit<Inspection, 'scripts'> & {
   scripts: (Omit<Inspection['scripts'][number], 'runs'> & {
     runs: (Inspection['scripts'][number]['runs'][number] & {
-      frames: (Location & { locals: [string, Value][] })[];
+      frames: DebugFrame[];
       fuel: number;
       segment: number;
     })[];
@@ -72,6 +78,7 @@ export class DebugController {
   private landing: { hostInputIndex: number; pc: DebugInstruction } | null =
     null;
   private pause: DebugPause | null = null;
+  private pauseDepth = 0;
   private notifying = false;
   private since = 0;
   private elapsed = 0;
@@ -151,14 +158,11 @@ export class DebugController {
     if (!pause) {
       throw new Error('The Group is not debug-paused');
     }
-    const run = this.read()
-      .scripts.flatMap(s => s.runs)
-      .find(r => r.id === pause.run)!;
     const parent = this.parents.get(pause.run);
     this.stepping =
-      mode === 'out' && run.frames.length === 1 && parent
+      mode === 'out' && this.pauseDepth === 1 && parent
         ? { mode: 'over', run: parent, depth: Infinity }
-        : { mode, run: pause.run, depth: run.frames.length };
+        : { mode, run: pause.run, depth: this.pauseDepth };
     return this.continue();
   }
   private assertCanContinue(): void {
@@ -201,6 +205,22 @@ export class DebugController {
       return null;
     }
     const ins = frame.code.unit.code[frame.pc]!;
+    // A dispatch cursor replaces its owner's control path. Failed callees
+    // stay retained for offer lookup, but are not callers of the policy.
+    const active: Run['frames'] = [];
+    for (const frame of run.frames) {
+      let owner = frame.owner;
+      while (owner) {
+        const index = active.indexOf(owner);
+        if (index >= 0) {
+          active.length = index;
+          break;
+        }
+        owner = owner.owner;
+      }
+      active.push(frame);
+    }
+    const depth = active.length;
     const matches = (at: DebugInstruction) =>
       (!at.unit || at.unit === frame.code.name) &&
       at.pc === frame.pc &&
@@ -233,15 +253,14 @@ export class DebugController {
       statementStarts.has(ins) &&
       ((step.mode === 'in' && follows) ||
         (step.run === run.id &&
-          (step.mode === 'over'
-            ? run.frames.length <= step.depth
-            : run.frames.length < step.depth)))
+          (step.mode === 'over' ? depth <= step.depth : depth < step.depth)))
     ) {
       reason = 'step';
     }
     if (!reason) {
       return null;
     }
+    this.pauseDepth = depth;
     return {
       reason,
       run: run.id,
