@@ -25,8 +25,10 @@ After approval, remove only the seven Recovery Offers Trace `Unblessed` markers
 and the marker in `corpus/disassembly/recovery-offers/case.toml`. That metadata
 file is included in the approval scope; it is not an additional expected output.
 Existing cases that await approval for unrelated work retain their markers.
-The eight Recovery Offers cases are already in the Go passing gate; final review
-must preserve that coverage rather than re-add duplicate entries.
+The eight Recovery Offers cases are already in the Go passing gate. The
+[acceptance test](../../../impl/go/internal/corpus/execution_test.go) now checks
+each required entry, including Disassembly, so removing one cannot silently
+shrink the gate; approval does not re-add duplicate entries.
 
 ### Human review links
 
