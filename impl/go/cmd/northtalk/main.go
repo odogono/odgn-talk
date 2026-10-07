@@ -30,7 +30,9 @@ func run() error {
 	}
 	var trace *os.File
 	env := session.Environment{
-		ReadFile: func(path string) (string, error) { b, err := os.ReadFile(path); return string(b), err },
+		ReadStoreFile:  func(path string) (string, error) { b, err := os.ReadFile(path); return string(b), err },
+		WriteStoreFile: func(path, source string) error { return os.WriteFile(path, []byte(source), 0644) },
+		ReadFile:       func(path string) (string, error) { b, err := os.ReadFile(path); return string(b), err },
 		WriteFile: func(dir, file, source string) error {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return err

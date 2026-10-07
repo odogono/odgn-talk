@@ -221,7 +221,9 @@ func (r *tomlReader) value() (any, error) {
 		return n, nil
 	}
 }
-func ReadSetup(text string) (Setup, error) {
+
+// ReadTOML reads the shared TOML subset without imposing the Trace Case schema.
+func ReadTOML(text string) (Setup, error) {
 	if !utf8.ValidString(text) {
 		return nil, fmt.Errorf("invalid UTF-8 case.toml")
 	}
@@ -317,6 +319,14 @@ func ReadSetup(text string) (Setup, error) {
 		if r.at < len(text) && !r.take("\n") {
 			return nil, r.error()
 		}
+	}
+	return root, nil
+}
+
+func ReadSetup(text string) (Setup, error) {
+	root, err := ReadTOML(text)
+	if err != nil {
+		return nil, err
 	}
 	kind, ok := root["kind"].(string)
 	if !ok || !strings.Contains("|trace|disassembly|transcript|encoding|", "|"+kind+"|") {

@@ -33,3 +33,8 @@ The [implementation guide](README.md) describes the supported subset and its lim
 Standard Capability construction lives in [standard_capability.go](standard_capability.go). Session cases use `corpus/sessions/<case>/session.transcript` with a companion `case.trace`; discover case names with `rg --files corpus/sessions`. Check Transcript parity with `go -C impl/go test ./internal/corpus -run TestSession`. For a single test, append `-run TestName` to the appropriate `go -C impl/go test` command.
 
 These checks start the feedback loop; use the implementation guide and CI workflows for broader validation before completing a change.
+
+Store Host semantics live in [store/](store/), with the fixed Core factory in
+[store_capability.go](store_capability.go). The language-neutral runner lives in
+[internal/storekit/](internal/storekit/); run `go -C impl/go run ./cmd/storekit`
+or `go -C impl/go test ./store ./internal/storekit ./session` for Store changes.
