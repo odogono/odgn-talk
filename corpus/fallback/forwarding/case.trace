@@ -1,0 +1,80 @@
+# First blessing approved by the maintainer on 2026-10-07 for #333.
+# `proxy` handles `status` and forwards `sum`, `move:to:` and `ping` to
+# `backend` with their own Selectors and arguments; the reply comes back
+# through the Fallback's result. `client` spreads lists into sends, including
+# Join Members and an empty spread. `frob` is forwarded, but `backend` has no
+# Handler for it, so `proxy`'s Run errors and `client` gets `send failed`;
+# `proxy`'s `error` message doesn't reach its Fallback. A spread of a number
+# raises `wrong kind`, and a Selector with too few spread arguments raises
+# `bad message name`.
+> load client identity=1220a361f38742300a738ecb4c77383eda4f09fa0476180c6b713fd92743210f
+> load proxy identity=e0b9bd7b22eb5667f4fe60e47ea704ef741908127ba8458a483d5785377d0434
+> load backend identity=0d6e3a126aeb06c40a3eb3cb27bc1c558cb17e72830bb634da66adaa0e27111a
+> deliver d1 to=client message=go
+> pump clock=2026-10-07T09:00:00Z
+send client/r1.c1 to=proxy message=sum args=[2, 3] wait=yes
+seg client/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=64 state=464 end=send-wait
+send proxy/r1.c1 to=backend message=sum args=[2, 3] wait=yes
+seg proxy/r1 start from=client/r1.c1 handler=sum fallback=yes clause=1 fuel=50 alloc=160 state=427 end=send-wait
+seg backend/r1 start from=proxy/r1.c1 handler=sum clause=1 fuel=12 alloc=16 state=0 end=return
+run backend/r1 outcome=completed handler=sum value=5 fuel=12 alloc=16
+seg proxy/r1 resume fuel=4 alloc=0 state=16 end=return
+run proxy/r1 outcome=completed handler=sum fallback=yes value=5 fuel=54 alloc=160
+send client/r1.c2 to=proxy message=move:to: args=["knight", "e4"] wait=yes
+seg client/r1 resume fuel=37 alloc=96 state=504 end=send-wait
+send proxy/r2.c1 to=backend message=move:to: args=["knight", "e4"] wait=yes
+seg proxy/r2 start from=client/r1.c2 handler=move:to: fallback=yes clause=1 fuel=51 alloc=176 state=440 end=send-wait
+seg backend/r2 start from=proxy/r2.c1 handler=move:to: clause=1 fuel=17 alloc=48 state=0 end=return
+run backend/r2 outcome=completed handler=move:to: value="knight@e4" fuel=17 alloc=48
+seg proxy/r2 resume fuel=4 alloc=0 state=16 end=return
+run proxy/r2 outcome=completed handler=move:to: fallback=yes value="knight@e4" fuel=55 alloc=176
+send client/r1.c3 to=proxy message=ping wait=yes
+seg client/r1 resume fuel=32 alloc=65 state=555 end=send-wait
+send proxy/r3.c1 to=backend message=ping wait=yes
+seg proxy/r3 start from=client/r1.c3 handler=ping fallback=yes clause=1 fuel=48 alloc=80 state=380 end=send-wait
+seg backend/r3 start from=proxy/r3.c1 handler=ping clause=1 fuel=7 alloc=0 state=0 end=return
+run backend/r3 outcome=completed handler=ping value="pong" fuel=7 alloc=0
+seg proxy/r3 resume fuel=4 alloc=0 state=16 end=return
+run proxy/r3 outcome=completed handler=ping fallback=yes value="pong" fuel=52 alloc=80
+send client/r1.c4 to=proxy message=status wait=yes
+seg client/r1 resume fuel=32 alloc=60 state=573 end=send-wait
+seg proxy/r4 start from=client/r1.c4 handler=status clause=1 fuel=7 alloc=0 state=16 end=return
+run proxy/r4 outcome=completed handler=status value="proxy ok" fuel=7 alloc=0
+send client/r1.c5 to=backend message=sum args=[4, 5] wait=yes
+seg client/r1 resume fuel=46 alloc=240 state=613 end=send-wait
+seg backend/r4 start from=client/r1.c5 handler=sum clause=1 fuel=12 alloc=16 state=0 end=return
+run backend/r4 outcome=completed handler=sum value=9 fuel=12 alloc=16
+send client/r1.c6 to=backend message=sum args=[1, 2] wait=yes
+seg client/r1 resume fuel=48 alloc=248 state=621 end=send-wait
+seg backend/r5 start from=client/r1.c6 handler=sum clause=1 fuel=12 alloc=16 state=0 end=return
+run backend/r5 outcome=completed handler=sum value=3 fuel=12 alloc=16
+send client/r1.c7 to=backend message=sum args=[1, 1] wait=join
+send client/r1.c8 to=backend message=move:to: args=["rook", "a1"] wait=join
+seg client/r1 resume fuel=103 alloc=458 state=693 end=join-end
+seg backend/r6 start from=client/r1.c7 handler=sum clause=1 fuel=12 alloc=16 state=70 end=return
+run backend/r6 outcome=completed handler=sum value=2 fuel=12 alloc=16
+seg backend/r7 start from=client/r1.c8 handler=move:to: clause=1 fuel=17 alloc=44 state=0 end=return
+run backend/r7 outcome=completed handler=move:to: value="rook@a1" fuel=17 alloc=44
+send client/r1 to=backend message=ping
+send client/r1.c9 to=proxy message=frob args=[1] wait=yes
+seg client/r1 resume fuel=63 alloc=278 state=834 end=send-wait
+send proxy/r5.c1 to=backend message=frob args=[1] wait=yes
+seg proxy/r5 start from=client/r1.c9 handler=frob fallback=yes clause=1 fuel=50 alloc=120 state=404 end=send-wait
+seg backend/r8 start from=client/r1 handler=ping clause=1 fuel=7 alloc=0 state=48 end=return
+run backend/r8 outcome=completed handler=ping value="pong" fuel=7 alloc=0
+seg backend/r9 start from=proxy/r5.c1 fuel=0 alloc=0 state=0 end=unhandled
+run backend/r9 outcome=unhandled fuel=0 alloc=0
+unhandled message=frob args=[1]
+raise proxy/r5 code="send failed" at=proxy:22 pos=12:3
+seg proxy/r5 resume fuel=4 alloc=0 state=16 end=error
+run proxy/r5 outcome=errored handler=frob fallback=yes error={code: "send failed", reason: "unhandled", at: {unit: "proxy", handler: "any message", line: 12, column: 3}} fuel=54 alloc=120
+raise client/r1 code="send failed" at=client:109 pos=26:5
+raise client/r1 code="wrong kind" at=client:137 pos=31:5
+raise client/r1 code="bad message name" at=client:169 pos=36:5
+seg client/r1 resume fuel=125 alloc=628 state=524 end=return
+run client/r1 outcome=completed delivery=d1 handler=go fuel=515 alloc=2137
+pumped state=idle fuel=833
+> vars
+vars client results=[5, "knight@e4", "pong", "proxy ok", 9, 3, [2, "rook@a1"], ["send failed", "errored"], ["wrong kind", "list"], ["bad message name", 1]]
+vars proxy forwarded=4
+vars backend

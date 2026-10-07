@@ -65,6 +65,8 @@ const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
 const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait', 'tell'];
+// The Fallback Handler's name, in its body table and its `pass` (ADR 0064).
+const FALLBACK = 'any message';
 const endSuffixExpected = (name: string, at: Token) =>
   `end of line or \`${name}\` after \`end\` (closing line ${at.line})`;
 // The operand-starting Reserved Words.
@@ -597,10 +599,27 @@ class Parser {
     if (t.t === 'nl' || t.t === 'eof') {
       return;
     }
+    // A Fallback Handler's end names it in full, and closes nothing else.
+    if (name === FALLBACK) {
+      if (!this.atAnyMessage()) {
+        this.fail(t, endSuffixExpected(name, at));
+      }
+      this.next();
+      this.next();
+      return;
+    }
     if (!this.isWord(t, name)) {
       this.fail(t, endSuffixExpected(name, at));
     }
     this.next();
+  }
+
+  // `any message` after `on`, `pass` or a Handler's `end` names the Fallback
+  // Handler; otherwise `any` is a Name (ADR 0064).
+  atAnyMessage(): boolean {
+    return (
+      this.atWord('any') && this.isWord(this.la2('any-message'), 'message')
+    );
   }
 
   // Can this token, in operand position, start an expression?
@@ -756,14 +775,26 @@ class Parser {
     const frame = this.enter('Handler');
     try {
       const on = this.next();
-      const name = (yield this.messageName('a Handler name')) as string;
+      // `on any message m`: the Fallback Handler, whose head is exactly one
+      // pattern. `any` and `message` are leaves of the Handler, which has no
+      // MessageName (ADR 0064).
+      const fallback = this.atAnyMessage();
+      if (fallback) {
+        this.next();
+        this.next();
+      }
+      const name = fallback
+        ? FALLBACK
+        : ((yield this.messageName('a Handler name')) as string);
       const params: Node[] = [];
       let guard: Node | null = null;
       const suffixes: string[] = [];
       let during: string | null = null;
       const t = this.peek(0);
       const labels: string[] = [];
-      if (!(
+      if (fallback) {
+        params.push((yield this.pattern()) as Node);
+      } else if (!(
         t.t === 'nl' ||
         t.t === 'eof' ||
         this.isWord(t, 'where') ||
@@ -774,7 +805,7 @@ class Parser {
       }
       // Parameters, then a Guard, then suffixes. After a comma, a suffix word
       // is always a suffix, so it can't be a parameter name there.
-      let inParams = params.length > 0;
+      let inParams = params.length > 0 && !fallback;
       let canGuard = true;
       for (;;) {
         const c = this.peek(0, 'operator');
@@ -824,7 +855,8 @@ class Parser {
       const end = this.endBlock(name, on, true);
       return {
         k: 'Handler',
-        name: this.selector(name, labels),
+        fallback,
+        name: fallback ? FALLBACK : this.selector(name, labels),
         params,
         guard,
         suffixes,
@@ -1070,6 +1102,12 @@ class Parser {
       }
       case 'pass': {
         this.next();
+        // A Fallback Handler's pass (ADR 0064).
+        if (this.atAnyMessage()) {
+          this.next();
+          this.next();
+          return { k: 'Pass', name: FALLBACK, fallback: true };
+        }
         const name = (yield this.messageName(
           'a message name after `pass`',
         )) as string;
@@ -1161,6 +1199,29 @@ class Parser {
     }
   }
 
+  // A receiver-last `send`'s `with` list, whose items may spread a list as a
+  // list literal's do: a `...` leaf before the item's Expression (ADR 0064).
+  *sendList(): ParseTask<Node[]> {
+    const frame = this.enter('ExpressionList');
+    try {
+      const out: Node[] = [];
+      do {
+        if (out.length) {
+          this.next('operator');
+        }
+        if (this.isOp(this.peek(0), '...')) {
+          this.next();
+          out.push({ k: 'Spread', e: (yield this.expr()) as Node });
+        } else {
+          out.push((yield this.expr()) as Node);
+        }
+      } while (this.isOp(this.peek(0, 'operator'), ','));
+      return out;
+    } finally {
+      this.leave(frame);
+    }
+  }
+
   // A Container: a name, or a Chunk Expression or key path rooted in one.
   *container(): ParseTask<Node> {
     const frame = this.enter('Container');
@@ -1236,7 +1297,7 @@ class Parser {
       let args: Node[] = [];
       if (this.atWord('with')) {
         this.next();
-        args = (yield this.exprList()) as Node[];
+        args = (yield this.sendList()) as Node[];
       }
       this.expectWord('to', 'operator');
       const target = (yield this.expr()) as Node;

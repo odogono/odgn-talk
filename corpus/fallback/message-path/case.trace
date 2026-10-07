@@ -1,0 +1,32 @@
+# First blessing approved by the maintainer on 2026-10-07 for #333.
+# `keypress "x"` is passed by name, so it skips the knight's Fallback and the
+# board's Fallback takes it. `keypress "escape"` is handled. `poke` ends in
+# the knight's first Fallback clause. `jump` reaches the knight's second
+# Fallback clause, which passes it up unchanged to the board's Fallback, so
+# the Request's reply comes from the board.
+> load board identity=54971a989830c6223f5d7676912e1703f7d172510000d2a203e0629c81e0ddee
+> load piece identity=a576bbffa633b764df5fa46152045e5947a96e485d515dad6efd0154b29b49b0
+> set-parent object=<object piece "knight"> parent=<object board "board">
+> deliver d1 to=<object piece "knight"> message=keypress args=["x"]
+> deliver d2 to=<object piece "knight"> message=keypress args=["escape"]
+> deliver d3 to=<object piece "knight"> message=poke
+> pump clock=2026-10-07T09:00:00Z
+seg piece/r1 start delivery=d1 handler=keypress clause=1 fuel=30 alloc=0 state=102 end=pass
+run piece/r1 outcome=completed delivery=d1 handler=keypress fuel=30 alloc=0
+seg board/r1 start delivery=d1 handler=keypress fallback=yes clause=1 fuel=36 alloc=237 state=121 end=return
+run board/r1 outcome=completed delivery=d1 handler=keypress fallback=yes value="board took keypress" fuel=36 alloc=237
+seg piece/r2 start delivery=d2 handler=keypress clause=1 fuel=13 alloc=0 state=48 end=return
+run piece/r2 outcome=completed delivery=d2 handler=keypress value="closed" fuel=13 alloc=0
+seg piece/r3 start delivery=d3 handler=poke fallback=yes clause=1 fuel=25 alloc=29 state=45 end=return
+run piece/r3 outcome=completed delivery=d3 handler=poke fallback=yes fuel=25 alloc=29
+pumped state=idle fuel=104
+> request d4 to=<object piece "knight"> message=jump args=[3]
+> pump clock=2026-10-07T09:00:00Z
+seg piece/r4 start delivery=d4 handler=jump fallback=yes clause=2 fuel=51 alloc=28 state=73 end=pass
+run piece/r4 outcome=completed delivery=d4 handler=jump fallback=yes fuel=51 alloc=28
+seg board/r2 start delivery=d4 handler=jump fallback=yes clause=1 fuel=35 alloc=223 state=221 end=return
+run board/r2 outcome=completed delivery=d4 handler=jump fallback=yes value="board took jump" fuel=35 alloc=223
+pumped state=idle fuel=86
+> vars
+vars board log=[["keypress", ["x"]], ["jump", [3]]]
+vars piece log=["poked", "jump"]

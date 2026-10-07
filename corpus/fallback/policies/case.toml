@@ -1,0 +1,12 @@
+# policies: a Fallback clause's Queueing Policy applies as any clause's does
+# (chapter 5, Queueing Policies; ADR 0064).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

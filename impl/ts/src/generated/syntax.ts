@@ -133,6 +133,7 @@ export const grammar = {
   ],
   "decision": [
     "and-wait",
+    "any-message",
     "as-in-build",
     "begins-with",
     "binary-field",

@@ -737,3 +737,28 @@ on t
     tell log to write "x"
   end tell
 end t
+-- case: a Fallback Handler has exactly one parameter
+-- expect: unexpected token at 1:19
+on any message m, n
+end any message
+-- case: a Fallback Handler has no labels
+-- expect: unexpected token at 1:18
+on any message m to n
+end any message
+-- case: a Fallback Handler needs its parameter
+-- expect: unexpected token at 1:15
+on any message
+end any message
+-- case: `end any message` closes only a Fallback Handler
+-- expect: unexpected token at 2:9
+on any m
+end any message
+-- case: a Fallback Handler's end names it in full
+-- expect: unexpected token at 2:5
+on any message m
+end any
+-- case: a target-first send has no spread
+-- expect: unexpected token at 2:20
+on t
+  send to me: ping ...xs
+end t

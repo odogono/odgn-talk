@@ -1,0 +1,15 @@
+-- s.talk: Fallback clauses with Queueing Policies. `tick`s that arrive
+-- while one is waiting are dropped; every other message is queued.
+
+script variable ticks = 0
+script variable seen = []
+
+on any message m where the name of m is "tick", dropping
+  wait 1 s
+  add 1 to ticks
+end any message
+
+on any message m, queued
+  wait 1 s
+  put the name of m after seen
+end any message

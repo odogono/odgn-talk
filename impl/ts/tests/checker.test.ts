@@ -717,6 +717,32 @@ describe('Core control-flow and body-context checks', () => {
     ).toEqual([['wrong message', 5, 7]]);
   });
 
+  test('a Fallback Handler passes only `any message`, and only it may', () => {
+    expect(
+      diagnostics(
+        'on any message m\n pass any message\n pass jump\n put given: 1 into f\nend any message\non jump\n pass any message\nend jump\non any message m, deciding\nend\non any message m\n put given\n  pass any message\n end given into f\nend',
+      ),
+    ).toEqual([
+      ['wrong message', 3, 7],
+      ['wrong message', 7, 7],
+      ['bad suffixes', 9, 19],
+      ['not in a lambda', 13, 3],
+    ]);
+  });
+
+  test('a Library may not hold a Fallback Handler', () => {
+    const result = checkSource('on any message m\n return 1\nend any message', {
+      unit: 'library',
+    });
+    expect(
+      result.diagnostics.map(d => [d.code, d.span.line, d.span.col]),
+    ).toEqual([['not in a library', 1, 1]]);
+  });
+
+  test('`any` before anything but `message` still names a Handler', () => {
+    expect(diagnostics('on any x\n pass any\nend any')).toEqual([]);
+  });
+
   test('valid Handler suffix combinations are accepted', () => {
     expect(
       diagnostics(

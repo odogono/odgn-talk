@@ -1,0 +1,21 @@
+# forwarding: a Fallback forwards a message whose Selector and argument count
+# it doesn't know, with a computed name and a spread in `with` (chapter 5,
+# The Fallback Handler, Sending; ADR 0064).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "client"
+source = "client.talk"
+
+[[scripts]]
+name = "proxy"
+source = "proxy.talk"
+
+[[scripts]]
+name = "backend"
+source = "backend.talk"

@@ -278,6 +278,69 @@ describe('Deliveries and Pumps', () => {
   });
 });
 
+describe('the Fallback Handler', () => {
+  test('a message no clause matches runs it, reported with its Selector', async () => {
+    const { g, lines } = group();
+    const a = g.load({
+      name: 'a',
+      source: [
+        'on greet who where who is "Ann"',
+        '  return "hi"',
+        'end greet',
+        'on any message {name: n, args: a}',
+        '  return [n, a]',
+        'end any message',
+      ].join('\n'),
+    });
+    a.deliver({ name: 'greet', args: [text('Bob')] });
+    const reply = a.request({ name: 'dance', args: [num(1)] });
+    const result = g.pump(clock);
+    expect(result.reports).toMatchObject([
+      { kind: 'run end', handler: 'greet', fallback: true },
+      { kind: 'run end', handler: 'dance', fallback: true },
+    ]);
+    expect((await reply.result).toString()).toBe('["dance", [1]]');
+    expect(lines).toContain(
+      'run a/r2 outcome=completed delivery=d2 handler=dance fallback=yes value=["dance", [1]] fuel=21 alloc=93',
+    );
+  });
+
+  test('a local Command Call still raises `no match`', () => {
+    const { g } = group();
+    const a = g.load({
+      name: 'a',
+      source: [
+        'script variable got = nothing',
+        'on go',
+        '  try',
+        '    greet 1',
+        '  catch {code: c}',
+        '    put c into got',
+        '  end try',
+        'end go',
+        'on greet who where who is "Ann"',
+        'end greet',
+        'on any message m',
+        '  put "fallback" into got',
+        'end any message',
+      ].join('\n'),
+    });
+    a.deliver({ name: 'go' });
+    g.pump(clock);
+    expect(g.inspect().scripts[0]!.vars).toEqual([['got', text('no match')]]);
+  });
+
+  test('a Script extended with a Fallback dispatches to it', () => {
+    const { g } = group();
+    const a = g.load({ name: 'a', source: 'on go\nend go' });
+    a.extend('on any message m\n  return the name of m\nend any message');
+    a.deliver({ name: 'hop' });
+    expect(g.pump(clock).reports).toMatchObject([
+      { kind: 'run end', handler: 'hop', fallback: true, outcome: 'completed' },
+    ]);
+  });
+});
+
 describe('a runaway Script', () => {
   test('ends in its own Limit Fault, leaving the other Scripts and its own state intact', async () => {
     const { g, lines } = group();

@@ -1,0 +1,40 @@
+-- client.talk: talks to `backend` through `proxy`, and spreads arguments
+-- into its own sends.
+
+script variable results = []
+
+on go
+  send sum with 2, 3 to proxy and wait
+  put it after results
+  send ("move:to:") with "knight", "e4" to proxy and wait
+  put it after results
+  send ping to proxy and wait
+  put it after results
+  send status to proxy and wait
+  put it after results
+  send sum with ...[4, 5] to backend and wait
+  put it after results
+  send sum with 1, ...[2] to backend and wait
+  put it after results
+  wait for all
+    send sum with ...[1, 1] to backend and wait
+    send ("move:to:") with ...["rook", "a1"] to backend and wait
+  end wait
+  put it after results
+  send ping with ...[] to backend
+  try
+    send frob with 1 to proxy and wait
+  catch {code: c, reason: r}
+    put [c, r] after results
+  end try
+  try
+    send sum with ...5 to backend
+  catch {code: c, expected: k}
+    put [c, k] after results
+  end try
+  try
+    send ("move:to:") with ...["bishop"] to backend
+  catch {code: c, arguments: n}
+    put [c, n] after results
+  end try
+end go

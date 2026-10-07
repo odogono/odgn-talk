@@ -121,6 +121,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "fallback-routes-known",
+    "flags": "a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail",
+    "beginner": "hint",
+    "standard": "hint",
+    "message": "{message} has its own Handler, so this Fallback clause runs only when that Handler's clauses don't match.",
+    "status": "implemented"
+  },
+  {
     "id": "ambiguous-ignoring-case",
     "flags": "a trailing `ignoring case` after an `and` or `or` chain, which binds only to the nearest comparison",
     "beginner": "warning",
@@ -207,6 +215,11 @@ export const advancedTags = [
     "construct": "An offer choice",
     "written": "`choose offer name` with optional call arguments",
     "beginner": "a policy callback that returns a decision to a local catch"
+  },
+  {
+    "construct": "A spread in `send … with`",
+    "written": "`...e` in a receiver-last `send`'s `with` list, e.g. `send (the name of m) with ...(the args of m) to other`",
+    "beginner": "the arguments listed one by one in `with`"
   }
 ] as const;
 export const properties = [

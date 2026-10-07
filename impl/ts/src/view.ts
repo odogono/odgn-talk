@@ -196,6 +196,8 @@ export type Stmt =
       /** The message name, or for `send (e)` the expression that computes it. */
       message: string | Expr;
       pos: Pos;
+      /** Which `with` items are spreads, when any is (ADR 0064). */
+      spread?: boolean[];
       target: Expr;
       wait: boolean;
     }
@@ -259,6 +261,8 @@ export type Handler = {
   deciding: boolean;
   during: SemanticName | null;
   end: Pos;
+  /** A Fallback Handler clause, named `any message` (ADR 0064). */
+  fallback: boolean;
   finally: Stmt[] | null;
   finallyPos: Pos | null;
   guard: Guard | null;
@@ -464,7 +468,18 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
       const listAt = nodeAt(nameAt + 1, 'ExpressionList');
       // `send (e) …`: the bracketed expression computes the name (ADR 0057).
       const computed = isToken(children[1], '(');
+      // A `...` leaf before a `with` item spreads it (ADR 0064).
+      const list = withAt >= 0 ? children[withAt + 1] : undefined;
+      const spread =
+        !targetFirst && list?.kind === 'node'
+          ? list.children.flatMap((child, i) =>
+              child.kind === 'node'
+                ? [isToken(list.children[i - 1], '...')]
+                : [],
+            )
+          : [];
       return {
+        ...(spread.includes(true) ? { spread } : {}),
         k: 'send',
         pos: at,
         message: computed
@@ -906,6 +921,8 @@ const blockAt = (node: SemanticNode, i: number, of: Of): Stmt[] => {
 
 const handler = (node: SemanticNode, of: Of): Handler => {
   const { children } = node;
+  // `on any message m`: the Fallback Handler (ADR 0064).
+  const fallback = isToken(children[1], 'any');
   const params: Pattern[] = [];
   let guard: Guard | null = null;
   let during: SemanticName | null = null;
@@ -947,7 +964,8 @@ const handler = (node: SemanticNode, of: Of): Handler => {
         ['queued', 'dropping', 'replacing'].includes(t),
       ) as Handler['policy'],
     pos: pos(node),
-    name: of<SemanticName>(children[1]).text,
+    name: fallback ? 'any message' : of<SemanticName>(children[1]).text,
+    fallback,
     scope: node.scope,
     params,
     guard,
@@ -1081,7 +1099,10 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
       return {
         k: 'pass',
         pos: at,
-        message: of<SemanticName>(operands[0]).text,
+        // `pass any message` passes a Fallback Handler's message (ADR 0064).
+        message: isToken(children[1], 'any')
+          ? 'any message'
+          : of<SemanticName>(operands[0]).text,
       };
     case 'exit':
     case 'next':

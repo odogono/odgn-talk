@@ -227,7 +227,8 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	for _, n := range checked.Tree.Declarations {
 		if b := checked.Bodies[n]; b != nil {
 			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies)}
-			if b.Kind == "handler" {
+			// A Fallback's clauses are numbered as `any message`'s (ADR 0064).
+			if b.Kind == "handler" || b.Kind == "fallback" {
 				clauses[b.Name]++
 				lowered.Clause = clauses[b.Name]
 			}
@@ -326,7 +327,7 @@ func (u *Unit) compileBody(body *Body) {
 		u.expression(n.Guard)
 		u.emit(n.Guard.FirstPos(), "branch-false", target(fail))
 	}
-	if end := u.pc(); end > start && (body.Checked.Kind == "handler" || body.Checked.Kind == "event") {
+	if end := u.pc(); end > start && (body.Checked.Kind == "handler" || body.Checked.Kind == "fallback" || body.Checked.Kind == "event") {
 		body.Unwind = append(body.Unwind, unwind{start, end - 1, "guard", fail, 0})
 	}
 	body.DispatchEnd = u.pc()
@@ -358,7 +359,7 @@ func (u *Unit) compileBody(body *Body) {
 		u.emit(n.End.Pos, "return")
 	}
 	u.mark(fail)
-	if body.Checked.Kind == "handler" {
+	if body.Checked.Kind == "handler" || body.Checked.Kind == "fallback" {
 		u.emit(n.End.Pos, "clause-fail")
 	} else if body.Checked.Kind == "lambda" && u.hasPatternParams(n) {
 		u.emit(n.Pos(), "raise", text("no match"))

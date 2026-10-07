@@ -206,6 +206,12 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "any",
+			Positions: []string{
+				"after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler)",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "as",
 			Positions: []string{
 				"after an operand (a conversion)",
@@ -368,6 +374,12 @@ var Grammar = GrammarTable{
 			Word: "lazily",
 			Positions: []string{
 				"after a Text Pattern element",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "message",
+			Positions: []string{
+				"after `any` (the Fallback Handler)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -670,6 +682,10 @@ var Grammar = GrammarTable{
 			Rule: "`and` followed by `wait` ends the expression before it, and is never a boolean `and`",
 		},
 		GrammarTableDecisionEntry{
+			Name: "any-message",
+			Rule: "after `on`, `pass` or a Handler's `end`, `any` followed by `message` names the Fallback Handler; otherwise `any` is a Name",
+		},
+		GrammarTableDecisionEntry{
 			Name: "as-in-build",
 			Rule: "inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type",
 		},
@@ -807,6 +823,11 @@ var Grammar = GrammarTable{
 			Construct: "An offer choice",
 			Written:   "`choose offer name` with optional call arguments",
 			Beginner:  "a policy callback that returns a decision to a local catch",
+		},
+		GrammarTableAdvancedEntry{
+			Construct: "A spread in `send … with`",
+			Written:   "`...e` in a receiver-last `send`'s `with` list, e.g. `send (the name of m) with ...(the args of m) to other`",
+			Beginner:  "the arguments listed one by one in `with`",
 		},
 	},
 	SyntaxError: []GrammarTableSyntaxErrorEntry{

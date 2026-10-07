@@ -1,0 +1,6 @@
+-- any.talk: `any` not followed by `message` still names a Handler.
+script variable got = nothing
+
+on any x
+  put x into got
+end any

@@ -1,6 +1,6 @@
 # 5. Handlers, messages and scheduling
 
-_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md).
+_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md), [ADR 0057](../docs/adr/0057-a-send-may-compute-its-message-name.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md).
 
 This chapter says how a message reaches a Handler, how Runs of one Script interleave, and how a Pump schedules the Scripts of a Group. The syntax of Handlers and of the statements here is in [chapter 2](02-grammar.md). What happens when something fails is in [chapter 6](06-errors-and-limits.md), and the Host calls that feed the scheduler are in [chapter 9](09-embedding.md).
 
@@ -20,7 +20,7 @@ This chapter says how a message reaches a Handler, how Runs of one Script interl
 | `limit fault` | exceeded a resource limit ([chapter 6](06-errors-and-limits.md#limit-faults)) |
 | `effect failed` | a definite failure prevented Segment participant commit ([chapter 6](06-errors-and-limits.md#effect-failures)) |
 | `cancelled` | was cancelled by `, replacing`, `CancelRun` or `cancel-delivery` ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)) |
-| `unhandled` | found no Handler Clause that matched its message |
+| `unhandled` | found no Handler Clause that matched its message, nor a [Fallback Handler](#the-fallback-handler) clause |
 | `dropped` | was ended at dispatch by a `, dropping` clause |
 
 A Run discarded by Stop Script, by disposing its Script's owner or by a Reload has no `run end`. The `stop` report lists it ([chapter 9](09-embedding.md)).
@@ -29,7 +29,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 
 - **Clauses:** every `on m` Handler in a Script is a Handler Clause for the message `m`, and a message's clauses are tried in source order. A message is named by its Selector: `on move piece to square` is a clause for `move:to:`, never for `move` ([chapter 2](02-grammar.md#argument-labels)).
 - **Dispatch** tries each clause in turn. A clause matches when the message has as many arguments as the clause has parameters, each argument passes its parameter's Destructuring pattern, and then the Guard, if there is one, gives `true`. The first clause that matches runs, with its parameters bound.
-- **No match:** if no clause matches, the Run ends as `unhandled`, and the message goes on along the [Message Path](#the-message-path).
+- **No match:** if no clause matches, the Script's [Fallback Handler](#the-fallback-handler), if it has one, gets the message next. If nothing matches there either, the Run ends as `unhandled`, and the message goes on along the [Message Path](#the-message-path).
 - **Charged to the Run:** dispatch is the Run's own code, so every clause it tries is charged to it by the Cost Model ([chapter 8](08-the-abstract-machine-and-the-cost-model.md)), even when no clause matches.
 - **Never suspends:** dispatch, Guards and the walk along the Message Path never suspend.
 - **Guards** may call Built-ins, and nothing else: no Script or Library function and no Function Value. Of a Host Object's properties, a Guard may read only its id (`where the id of item is "object-slot-183"`), and it may call `isDisposed` and `objectKind`. The loader checks this.
@@ -68,7 +68,7 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 - **Delivery to an object:** a message addressed to an object goes to the mailbox of its Owning Script, or else to that of its nearest ancestor that has one. If no ancestor has one, the message is reported as `unhandled`, and what that means is up to the Host, for each kind of object.
 - **Walked at dispatch:** the path is read from the parents the Core holds when the message reaches the head of its mailbox, before observing any `wait for` or starting a Run. A disposed object drops out of the chain, so the walk skips to its parent. An object-addressed message waiting in a mailbox follows its object if the object moves. If its nearest Owning Script has changed, the message leaves the old mailbox and joins the new one at its tail, keeping its Target, delivery and reply ids. This move starts no Run and spends no Fuel; the new Script dispatches it on its own turn. If there is no remaining Owning Script, the message is `unhandled` without a Run. A Run already started, including one preempted during dispatch or parked by a Queueing Policy, stays in its Script.
 - **Moved-message admission:** moving an already admitted message is not a new admission: it joins the destination mailbox even past its depth, like a Host Delivery drained after its depth was checked. New sends and climbs still check depth. A moved or climbed message uses the receiving Script’s limits, with each Host override applied as an additional cap; it can never loosen those limits.
-- **Climbing:** when a Run ends `unhandled`, or its Handler reaches `pass`, the message goes on from the parent of the object whose Owning Script received it. It goes to the mailbox of the next Owning Script up the path, behind the messages already there. While waiting there, the message reads its path from the current parent of the last object whose Owning Script handled it; it does not restart from the Target. If that mailbox is full at the climb, the climb ends: the Trace records a `note`, and the message is reported as `unhandled`.
+- **Climbing:** when a Run ends `unhandled`, or its Handler reaches `pass` or `pass any message`, the message goes on from the parent of the object whose Owning Script received it. It goes to the mailbox of the next Owning Script up the path, behind the messages already there. While waiting there, the message reads its path from the current parent of the last object whose Owning Script handled it; it does not restart from the Target. If that mailbox is full at the climb, the climb ends: the Trace records a `note`, and the message is reported as `unhandled`.
 - **The end of the path:** a message that climbs past the last object with an Owning Script is reported as `unhandled`. A `send … and wait` or `Request` for it fails with `send failed`, reason `unhandled`.
 - **Messages to a Script:** a message addressed to a Script rather than an object (`script.Deliver`, or a `send` to a Script) goes to that Script's mailbox. If it isn't handled, it climbs from the parent of the Script's owner. A Script with no owner reports it as `unhandled`.
 
@@ -87,16 +87,40 @@ A Run discarded by Stop Script, by disposing its Script's owner or by a Reload h
 > end keypress
 > ```
 
+### The Fallback Handler
+
+A Script's Fallback Handler, `on any message m`, takes the messages none of its Handler Clauses matches ([ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
+
+- **When it runs:** after dispatch has tried every clause for the message's Selector and none matched, including when the Script has no Handler for it, and before the message climbs. An explicit `pass m` in a named clause skips the Fallback and climbs at once.
+- **Which messages:** a message sent to an object or to a Script, by a `send`, a Host Delivery or Request, or a climb, may reach it, in each Script on its path. A [Broadcast](#broadcast), a [Decision](#decisions) and an `error` message never do, anywhere on their path: they dispatch as if the Script had no Fallback. Neither does a local Command Call, which still raises `no match`, nor a Function Value call, which has no clauses.
+- **The message:** `m` is bound to the map `{name, args}`, as `wait for`'s `it` gives it: the Selector as text, and the arguments as a list.
+- **Clauses:** a Fallback may have several clauses, each with one Destructuring pattern on the message map and an optional Guard, tried in source order after the named clauses, by the same rules. If none matches, the Run ends `unhandled`. Each clause may have a [Queueing Policy](#queueing-policies). `, deciding` and `, during` on a Fallback are load errors (`bad suffixes`), and so is a Fallback in a Library (`not in a library`).
+- **Ending the message:** a Fallback Run that doesn't pass ends the message, with the Run's outcome, and its result is the [reply](#replies). `pass any message` ends the Run as `completed` and sends the message on up the path unchanged, as `pass` does. In a Fallback, `pass` must name `any message`, and `pass any message` outside one is a load error (`wrong message`).
+- **Forwarding:** with a [computed name](#sending) and a spread, a Fallback can forward a message whose Selector and argument count it doesn't know.
+
+> **Example.**
+>
+> ```talk
+> on any message {name: n, args: a} where n begins with "debug"
+>   send (n) with ...a to logger
+> end any message
+>
+> on any message m
+>   say "I don't know how to " & the name of m
+> end any message
+> ```
+
 ### Broadcast
 
-- **Who gets it:** `group.Broadcast` delivers a message only to the Scripts that want it when the Broadcast is drained: those with a Handler for it, or a `wait for` pending on it. Scripts that don't want it pay nothing.
+- **Who gets it:** `group.Broadcast` delivers a message only to the Scripts that want it when the Broadcast is drained: those with a Handler for it, or a `wait for` pending on it. A [Fallback Handler](#the-fallback-handler) doesn't make a Script want it. Scripts that don't want it pay nothing.
 - **Recipients** are taken in the order their Scripts were loaded into the Group. Each gets its own Delivery id under one broadcast id, and the Trace records the recipients.
-- **It never climbs:** a Broadcast is never reported as `unhandled` and never climbs a Message Path.
+- **It never climbs:** a Broadcast is never reported as `unhandled` and never climbs a Message Path. A recipient none of whose clauses matches never runs its Fallback.
 
 ## Sending
 
 - **`send m with args to x`**, or `send to x: m args` with the receiver first, puts the message at the back of the receiver's mailbox and returns at once. The target-first form takes [Argument Labels](02-grammar.md#argument-labels), so `send to board: move knight to "e4"` sends `move:to:` with two arguments. It isn't a Suspension Point. The receiver is `me`, another Script of the Group, or a Host Object. Across Groups, the Host routes.
 - **A computed name:** `send (e) with args to x` sends the message whose name is the text `e` gives: a Name such as `"greet"`, or a Selector such as `"move:to:"` with one argument for each part. So `send (the name of it) with x to log` forwards a one-argument message that `wait for` saw. The name is checked before the receiver, and before anything is sent. A name that isn't text raises `wrong kind`, with `expected` `"text"`. Text that isn't a Name or a Selector, or that is `all` or a Reserved Word, or a Selector with a part count other than the number of arguments, raises `bad message name`, with `name` and `arguments`. A well-formed name that no Handler takes climbs the [Message Path](#the-message-path) like any other message. Only the receiver-last form computes its name, since a Selector already holds its labels ([ADR 0057](../docs/adr/0057-a-send-may-compute-its-message-name.md)).
+- **A spread:** in the receiver-last form, `...e` in the `with` list stands for the items of the list `e`, in order, anywhere in the list and as often as in a list literal. So `send (the name of m) with ...(the args of m) to other` forwards a message with any number of arguments. A spread value that isn't a list raises `wrong kind`, with `expected` `"list"`, before the name is checked. A computed name is then checked against the total number of arguments ([ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
 - **Order:** mailboxes are FIFO, so two messages from one sender to one receiver are dispatched in the order they were sent.
 - **Never nested:** the receiver never runs inside the sender. A `send` to `me` goes through the mailbox too. In a Script that owns no object, where `me` is Nothing, `send … to me` sends to the Script itself.
 - **A full mailbox:** a `send` that finds the receiver's mailbox full raises `mailbox full`, with `to`, at the `send`, even one that doesn't wait. Nothing is sent. `to` is the receiver as the `send` named it: a Host Object, `me`'s object included, or a Script's name as text, since a Script isn't a value.
@@ -231,6 +255,7 @@ A Decision is a Delivery by which the Host asks whether something may happen, an
 - **`pass`** in a `, deciding` Run hands the open Verdict up the Message Path with the message.
 - **Undecided:** a deciding Run that errors, hits a Limit Fault, or is cancelled or stopped before the seal leaves the Decision undecided, with that outcome. A `, dropping` clause that drops a new Decision leaves it undecided, with outcome `dropped`. The Core never guesses allowed or vetoed.
 - **Clauses without `, deciding`** allow the Decision at dispatch. If such a Run later passes, the message climbs as an ordinary one.
+- **No Fallback:** a Decision never reaches a [Fallback Handler](#the-fallback-handler), anywhere on its path, so a child's Fallback can't allow a Decision before a parent sees it.
 - **One Verdict per Decision:** an allow or a veto ends the Decision, so a parent never sees a Decision a child already decided. Reaching the end of the Message Path allows it, and `unhandled` is reported as usual.
 - **`, replacing`** on a `, deciding` clause cancels only earlier Runs that are already past their seal.
 - **Load errors:**

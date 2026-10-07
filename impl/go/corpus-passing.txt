@@ -134,6 +134,11 @@ errors/handler-delivery
 errors/lambda-capture-parity
 errors/queued-error-before-parked-run
 examples/orders-pricing
+fallback/exclusions
+fallback/forwarding
+fallback/message-path
+fallback/no-match
+fallback/policies
 functions/capability-callbacks
 functions/foreign-calls
 functions/host-calls
@@ -184,6 +189,7 @@ load-diagnostics/duplicate-key
 load-diagnostics/duplicate-name
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
+load-diagnostics/fallback-handler
 load-diagnostics/initialiser-failed
 load-diagnostics/invalid-raw-text-closing-margin
 load-diagnostics/invalid-text-closing-margin

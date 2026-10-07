@@ -48,6 +48,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `a` | after `is` or `is not`, before a kind; after `can be`; before a kind in a Text Pattern (a Typed Element) |
 | `all` | straight after `wait for` (a Join) |
 | `an` | as `a` |
+| `any` | after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler) |
 | `as` | after an operand (a conversion); after a pattern (binding the whole value); after the Library name in `use`, before the new name; after a Text Pattern element; after the value of a Binary Pattern build field |
 | `before` | after the value in `put`; after a catch pattern, before `unwind` |
 | `begins` | operator position, before `with` |
@@ -74,6 +75,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `ignoring` | after a comparison, a `match` subject or a Text Pattern element, before `case` |
 | `lazily` | after a Text Pattern element |
 | `matches` | operator position |
+| `message` | after `any` (the Fallback Handler) |
 | `mod` | operator position |
 | `next` | at the start of a statement, before `repeat` |
 | `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
@@ -166,9 +168,12 @@ An Entry is what a Session reads at its prompt ([ADR 0014](../docs/adr/0014-a-se
 <!-- generated: ebnf.handlers -->
 
 ```ebnf
-Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
-                   /* a Name after `end`, if present, is the Handler's name */
+Handler        ::= 'on' ( 'any' 'message' FallbackHead | MessageName HandlerHead ) NL Block
+                   ( 'finally' NL Block )? 'end' ( 'any' 'message' | Name )? NL
+                   /* `any message` is the Fallback Handler, and closes only it; a Name
+                      after `end`, if present, is the Handler's name */
 HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
+FallbackHead   ::= Pattern Guard? ( ',' Suffix )*
 Label          ::= Name | 'to'
                    /* an Argument Label: any Name but those grammar.toml's [labels]
                       excludes, or one of its Reserved Words; never the start of an
@@ -184,6 +189,7 @@ MessageName    ::= Name  /* not `all` */
 - **The head** is the parameters, then an optional Guard, then the suffixes, in that order. Each parameter is one Destructuring pattern. The parameters are a comma-separated list, or one parameter followed by [Argument Labels](#argument-labels), each with its parameter.
 - **Suffixes:** after a comma in a head, `queued`, `dropping`, `replacing` and `deciding` are always suffixes, so none of them can be a parameter name there. `during` followed by a Name is the `during` suffix. Which suffixes may combine is a load rule ([chapter 5](05-handlers-messages-and-scheduling.md)).
 - **The end:** a Name after `end`, if present, must be the Handler's name, which for a labelled Handler is its first word (`end move`). If an inner `repeat` is still open, `end handlerName` is a syntax error at `handlerName`; it cannot close through the `repeat`.
+- **The Fallback Handler:** `on any message m` declares a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler). `any` followed by `message` is decided on two tokens, so `on any x` still declares a Handler named `any`. Its head is exactly one Destructuring pattern, with no labels, then the usual Guard and suffixes. It ends with `end any message` or a bare `end`, and `end any message` closes nothing else ([ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
 - **`finally`** may end a Handler's body, as sugar for a `try` around it ([chapter 6](06-errors-and-limits.md)).
 
 > **Example.**
@@ -253,14 +259,14 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' ExpressionList )? 'to' Expression
+Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
 AndWait        ::= 'and' 'wait'
 Return         ::= 'return' Expression?
 Veto           ::= 'veto' Expression?
-Pass           ::= 'pass' MessageName Label*
+Pass           ::= 'pass' ( 'any' 'message' | MessageName Label* )
 Exit           ::= 'exit' 'repeat'
 Next           ::= 'next' 'repeat'
 Throw          ::= 'throw' Expression
@@ -269,6 +275,7 @@ CallStatement  ::= Call AndWait?
 CommandCall    ::= CommandPhrase AndWait?
 CommandPhrase  ::= Name ( Expression ( ( ',' Expression )* | ( Label Expression )+ ) )?
 ExpressionList ::= Expression ( ',' Expression )*
+SendList       ::= ListItem ( ',' ListItem )*
 ```
 
 <!-- end -->
@@ -277,13 +284,13 @@ ExpressionList ::= Expression ( ',' Expression )*
 - **`say`:** the grammar reads `say x` as an ordinary Command Call. [Chapter 12](12-sessions-and-tooling.md) makes it short for `tell console to write x`.
 - **Command Calls:** a Name, then its arguments, if the next token can start an expression. So `greet "Ann"` passes one argument, `blink and wait` passes none, and `n - 1` passes `-1` to a Handler `n`. The arguments are a comma-separated list, or one argument followed by [Argument Labels](#argument-labels) (`move knight to "e4"`), and the call names the Selector they make.
 - **Call statements:** a Name straight followed by `(`, with no space, is a call (`refresh()`), not a Command Call. With a space, `(` groups an argument, so `say (1 + 2) & "!"` passes one argument.
-- **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels. A bracketed expression in place of the message name computes it (`send (next) with order to me`), and `(` can't start a Name, so one token decides that too.
+- **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels. A bracketed expression in place of the message name computes it (`send (next) with order to me`), and `(` can't start a Name, so one token decides that too. In the receiver-last form, `...e` in the `with` list spreads a list into the arguments, as in a list literal (`send log with "seen", ...rest to me`).
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
 - **Operations:** the Word after `ask … to` or `tell … to` is always an Operation name, even a Reserved Word (`ask files to delete path`). The one-line `tell` never takes `and wait`. After `tell`'s receiver, `to` gives the one-line form and the end of the line opens a [`tell` block](#blocks), so one token decides.
 - **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name is `not a container`, reported at the Container's first token (`put 1 into 3`, `put "Z" into character 20 of "short"`). What a root Name refers to is a load rule.
 - **`put ...`** splices a list, and so takes only `after` or `before`.
 - **`return` and `veto`** take an expression if one starts next. `return` is never an operand ([chapter 1](01-lexical-structure.md#text-literals)).
-- **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
+- **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. A Fallback Handler passes its message with `pass any message`, decided on two tokens as in its head, so a Handler for `any:message:` can't name itself in `pass`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
 - **`replace`:** at the start of a statement, `replace <p> in c with e` rewrites the Container `c`. In operand position, the same words give the new text. There, `c` is any expression but a Lambda, and `e` an expression at the level of `&`, so `put replace <"-"> in s with "+" & x into t` replaces with `"+" & x`, and `into` ends the expression, since it isn't an operator. `replace first` replaces only the first match.
 
 ### Recovery Offers and choices
@@ -630,6 +637,7 @@ These are the only places where the parser reads a second token before it choose
 | Decision | Rule |
 | --- | --- |
 | `and-wait` | `and` followed by `wait` ends the expression before it, and is never a boolean `and` |
+| `any-message` | after `on`, `pass` or a Handler's `end`, `any` followed by `message` names the Fallback Handler; otherwise `any` is a Name |
 | `as-in-build` | inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type |
 | `begins-with` | `begins` or `ends` followed by `with` is the operator; otherwise the word ends the expression |
 | `binary-field` | in a Binary Pattern, a word followed by `:` names a field |
@@ -677,6 +685,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | A Recovery Offer | `offer name` with optional plain parameters and a recovery block | a local catch that calls an explicitly supplied policy callback |
 | A Recovery Catch | `catch pattern before unwind` with an optional Guard | an ordinary local catch with an explicitly supplied policy callback |
 | An offer choice | `choose offer name` with optional call arguments | a policy callback that returns a decision to a local catch |
+| A spread in `send … with` | `...e` in a receiver-last `send`'s `with` list, e.g. `send (the name of m) with ...(the args of m) to other` | the arguments listed one by one in `with` |
 
 <!-- end -->
 
@@ -735,7 +744,7 @@ Source that parses is then checked, and each rule it breaks is a load error: the
 | `unknown import` | A `use` line names a Library the Group doesn't hold, or a name the Library doesn't export | the Library's name, or the name | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `import cycle` | Libraries import each other in a cycle | the `use` line that closes the cycle | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `missing grant` | A Library the Script imports, directly or through another Library, needs an Operation that the Script's Grants don't give | the `use` line | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `not in a library` | Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` | its first token | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `not in a library` | Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler | its first token | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a script` | A Script's declaration starts with `private` | `private` | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a lambda` | `pass` or `the target` is inside a Lambda | `pass` or `the` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a guard` | A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id | the call's name, the Lambda's `given`, or the key's `the` or `'s` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
@@ -745,8 +754,8 @@ Source that parses is then checked, and each rule it breaks is a load error: the
 | `outside a loop` | An `exit repeat` or `next repeat` is outside any loop | its first token | [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `veto outside a decision` | `veto` is outside a `, deciding` Handler: in a function, a Lambda, or a Handler reached by a local call, Command Call or function-style | `veto` | [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `after a suspension` | A `veto` or `pass` in a `, deciding` Handler is reached, on some path from the Handler's start, through a possible Suspension Point | `veto` or `pass` | [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `wrong message` | `pass m` names a message other than the one its Handler handles | the message's name | [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `bad suffixes` | A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, or `, during` on a Handler other than `on error` | the first suffix that breaks the rule | [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `wrong message` | `pass m` names a message other than the one its Handler handles, `pass any message` is outside a Fallback Handler, or a Fallback Handler's `pass` names a message | the message's name, or `any` | [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `bad suffixes` | A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler | the first suffix that breaks the rule | [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `can't write` | A Container is rooted in a Constant, a Lambda puts into a captured local, the body of a `repeat` that collects writes its collecting target, through a Container rooted in it, a pattern that binds it or an inner loop that collects into it, or `set` writes a read-only property of a Host Object whose kind and key are known at load | the Container's root, the binding, the inner loop's collecting target, or `set` | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not a property` | `set` writes a bare variable, not a key of a Host Object | `set` | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not constant` | The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins | the first token that isn't allowed | [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |

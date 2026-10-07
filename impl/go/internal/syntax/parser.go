@@ -248,13 +248,26 @@ func (p *parser) declaration() *Node {
 		if t.Raw == "function" {
 			n.Kind = "function"
 		}
-		name := p.name()
-		if n.Kind == "handler" && name.Raw == "all" {
-			p.fail(name)
+		// `on any message m`: the Fallback Handler, whose head is exactly one
+		// pattern. `any` before `message` is decided on two tokens, so `on any
+		// x` still declares a Handler named `any` (ADR 0064).
+		fallback := n.Kind == "handler" && p.atAnyMessage()
+		var name Token
+		if fallback {
+			name = p.take(Operand)
+			p.take(Operand)
+			n.Text = FallbackName
+			n.NameToken = name
+			n.Params = []*Node{p.bindingPattern()}
+		} else {
+			name = p.name()
+			if n.Kind == "handler" && name.Raw == "all" {
+				p.fail(name)
+			}
+			n.Text = name.Raw
+			n.NameToken = name
 		}
-		n.Text = name.Raw
-		n.NameToken = name
-		for !p.atOperand("\n") && !p.at("where") && !p.at(",") && (n.Kind != "handler" || !p.suffixStart()) {
+		for !fallback && !p.atOperand("\n") && !p.at("where") && !p.at(",") && (n.Kind != "handler" || !p.suffixStart()) {
 			if n.Kind == "function" {
 				param := node("name", p.name())
 				if p.accept("=") {
@@ -299,12 +312,41 @@ func (p *parser) declaration() *Node {
 			f.Body = p.block("end")
 			n.Branches = append(n.Branches, f)
 		}
-		n.End = p.closing(name.Raw)
+		if fallback {
+			// A Fallback ends with `end any message` or a bare `end`.
+			n.End = p.expect("end")
+			if p.atAnyMessage() {
+				p.take(Operand)
+				p.take(Operand)
+			} else if !p.atOperand("\n") {
+				p.fail(p.peek(Operand))
+			}
+		} else {
+			n.End = p.closing(name.Raw)
+		}
 		p.nl()
 	default:
 		p.fail(t)
 	}
 	return n
+}
+
+// FallbackName names the Fallback Handler's bodies and its `pass`. It holds a
+// space, so it is never a Selector (ADR 0064).
+const FallbackName = "any message"
+
+// IsFallback reports whether a declaration is a Fallback Handler clause.
+func (n *Node) IsFallback() bool { return n.Kind == "handler" && n.Text == FallbackName }
+
+// atAnyMessage decides `any message` after `on`, `pass` or a Handler's `end`
+// on two tokens; otherwise `any` is a Name (chapter 2, any-message).
+func (p *parser) atAnyMessage() bool {
+	t := p.peek(Operand)
+	if t.Kind != Word || t.Raw != "any" {
+		return false
+	}
+	next := p.second(Operand)
+	return next.Kind == Word && next.Raw == "message"
 }
 func (p *parser) suffixStart() bool {
 	return p.at(",") && slices.Contains([]string{"queued", "dropping", "replacing", "deciding", "during"}, p.second(Operand).Raw)
@@ -328,6 +370,23 @@ func (p *parser) expressionList() []*Node {
 	args := []*Node{p.expression()}
 	for p.accept(",") {
 		args = append(args, p.expression())
+	}
+	return args
+}
+
+// sendList reads a receiver-last `send`'s `with` list, whose items may
+// spread a list as a list literal's do (ADR 0064).
+func (p *parser) sendList() []*Node {
+	item := func() *Node {
+		if p.acceptOperand("...") {
+			e := p.expression()
+			return node("spread", e.Token, e)
+		}
+		return p.expression()
+	}
+	args := []*Node{item()}
+	for p.accept(",") {
+		args = append(args, item())
 	}
 	return args
 }
@@ -482,7 +541,7 @@ func (p *parser) statement(inline bool) *Node {
 			n.NameToken = name
 		}
 		if p.accept("with") {
-			n.Children = p.expressionList()
+			n.Children = p.sendList()
 		}
 		p.expect("to")
 		n.Params = []*Node{p.expression()}
@@ -509,6 +568,13 @@ func (p *parser) statement(inline bool) *Node {
 	case "throw":
 		n.Children = []*Node{p.expression()}
 	case "pass":
+		if p.atAnyMessage() {
+			// `pass any message`: the Fallback Handler's pass (ADR 0064).
+			n.NameToken = p.take(Operand)
+			p.take(Operand)
+			n.Text = FallbackName
+			break
+		}
 		name := p.name()
 		n.NameToken = name
 		if name.Raw == "all" {

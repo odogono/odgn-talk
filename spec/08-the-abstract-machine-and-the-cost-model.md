@@ -56,10 +56,10 @@ An extension keeps the older code units unchanged. Its variables table starts wi
 The body table lists every body of the code unit, in this order:
 
 1. **The initialiser**, body 0, named `initialiser`. Every newly allocated Script Variable slot starts as Nothing. A declaration without `=` emits no initialiser instructions. The initialiser evaluates each explicitly written Script Variable initial value, each Constant and each parameter default, in source order, stores them with `store-var` or `store-definition`, and ends with `const nothing` and `return`. It runs once, when the unit loads. An explicit `= nothing` still emits `const nothing` and `store-var`.
-2. **Each function, and each Handler Clause,** in source order. A Handler's clauses are numbered from 1, in source order.
+2. **Each function, and each Handler Clause,** in source order. A Handler's clauses are numbered from 1, in source order. A Fallback Handler's clauses are bodies of kind `fallback`, named `any message`, numbered from 1 in source order, each with one parameter, the message map ([chapter 5](05-handlers-messages-and-scheduling.md#the-fallback-handler)).
 3. **Each Lambda and each event test,** in the order the lowering reaches it: in the initialiser first, then in each declaration in source order.
 
-Each entry gives the body's kind (`init`, `function`, `handler`, `lambda` or `event`), its name, its clause number, its parameters, its defaults, its number of captures, its number of locals, whether it may suspend, and its range of instructions. A Lambda is named by its enclosing body's name, then its position (`compare:25:8`, `compare:25:8:25:20` for a Lambda inside it, and `initialiser:3:14` for one in a Constant), and an event test by its message.
+Each entry gives the body's kind (`init`, `function`, `handler`, `fallback`, `lambda` or `event`), its name, its clause number, its parameters, its defaults, its number of captures, its number of locals, whether it may suspend, and its range of instructions. A Lambda is named by its enclosing body's name, then its position (`compare:25:8`, `compare:25:8:25:20` for a Lambda inside it, and `initialiser:3:14` for one in a Constant), and an event test by its message.
 
 - **May suspend:** a body may suspend when it holds a Suspension Point instruction (`suspends` in the table below). For a Lambda, the flag is part of the Function Value ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)). A Handler that may suspend is one whose body may, or that calls one that may, found by the loader over the call graph ([chapter 5](05-handlers-messages-and-scheduling.md)).
 
@@ -326,6 +326,8 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
 | `send-named` | `count` | count + 2 | 0 | Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
 | `send-named-wait` (suspends) | `count` | count + 2 | 1 | Sends as `send-named` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
+| `send-spread` |  | 3 | 0 | A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
+| `send-spread-wait` (suspends) |  | 3 | 1 | Sends as `send-spread` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
 | `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full` |
 | `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open` |
 | `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind`, `scope open` |
@@ -335,9 +337,10 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled` |
 | `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind` |
 | `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
+| `join-send-spread` |  | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
 | `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
 | `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
-| `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path |  |
+| `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message` |  |
 
 <!-- end -->
 
@@ -354,7 +357,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 
 - **Calling a body:** `call`, `call-import`, `call-handler` and `call-value` pop their arguments and push a new frame for the callee's body, with the arguments in slots 1 on and every other local Nothing. The callee's `return` pops its result and its frame, and pushes the result onto the caller's stack.
 - **Defaults:** a call to a function that passes fewer arguments than it has parameters fills each missing one from its default's definition ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)). The loader has checked the count.
-- **Handlers:** `call-handler` and `call-handler-wait`, like a Delivery, try the Handler's clauses in order. For each clause whose parameter count matches the argument count, it pushes a frame for the clause body and runs it. A clause body that reaches `clause-fail` is popped, and the next clause is tried. If none matches, `call-handler` raises `no match`, and a Delivery ends as `unhandled` ([chapter 5](05-handlers-messages-and-scheduling.md)). Each clause tried is charged at its body's first instruction ([Charging](#charging)).
+- **Handlers:** `call-handler` and `call-handler-wait`, like a Delivery, try the Handler's clauses in order. For each clause whose parameter count matches the argument count, it pushes a frame for the clause body and runs it. A clause body that reaches `clause-fail` is popped, and the next clause is tried. If none matches, `call-handler` raises `no match`. A Delivery that may reach a Fallback Handler then tries the Script's `fallback` clauses the same way, with the message map `{name, args}` as their one argument, built without charge. If none of those matches either, it ends as `unhandled` ([chapter 5](05-handlers-messages-and-scheduling.md#the-fallback-handler)). Each clause tried is charged at its body's first instruction ([Charging](#charging)).
 - **Built-ins:** `call-builtin` runs the Built-in in place, with no frame, as one instruction. It fills missing arguments from the Built-in's defaults.
 - **Function Values:** `call-value` checks, in order, that the value is a Function Value, that it isn't stale, that its Home Script is this Script, that it can't suspend and that it takes that many arguments ([chapter 4](04-expressions-and-statements.md#calls)). `call-value-wait` makes the same local call, suspending if the body does, or sends a foreign call to the Home Script and waits for its reply.
 - **Lambdas:** a Lambda body's frame has its captured values in its capture slots, from the Function Value.
@@ -526,6 +529,8 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `say e` | ⟦e⟧ `tell console write 1` |
 | `send m with a, … to r` | ⟦a⟧ … ⟦r⟧ `send`, or `send-wait` `store 0`, or `join-send` in a Join |
 | `send (e) with a, … to r` | ⟦e⟧ ⟦a⟧ … ⟦r⟧ `send-named`, or `send-named-wait` `store 0`, or `join-send-named` in a Join |
+| a `send` whose `with` list has a `...` item | ⟦e⟧ for `send (e)`, or `const` of the name's text, then the arguments as a list literal with the same items lowers, then ⟦r⟧ `send-spread`, or `send-spread-wait` `store 0`, or `join-send-spread` in a Join |
+| `pass any message` | `pass any message`, as `pass m` lowers |
 | `wait d` | ⟦d⟧ `wait` |
 | `wait for …` | [below](#waiting) |
 | `wait for all … end wait` | `join-start`, the body, `join-end` `store 0` |
@@ -666,6 +671,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Joins:** `join-end` is the closing `end` token, whether bare or written `end wait`. The Join's `join-start` and following `store 0` keep the `wait for all` head's position.
 - **Waiting:** an event test's own instructions (its bindings' `load`s, `list`, `return` and `clause-fail`), the `load`s of its captures, and a block `wait for` branch's `load t` `const i` `equal` `branch-false` and `jump`, are the branch's first word, or the `wait` of a one-line `wait for`.
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
+- **Sends:** a spreading `send`'s `const` of its static name, `list 0`, `list-append`s and `list-extend`s are the `send`'s, while each item's own expression keeps its position.
 - **`tell` blocks:** a line's `ask`, `ask-wait`, `join-ask` or `tell`, and the `store 0` after an `ask`, are its Operation name, since the line has no `ask` or `tell` of its own.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
@@ -769,12 +775,12 @@ The Cost Model says how much Fuel and allocation each instruction is charged, an
 ### Charging
 
 - **At the instruction:** each instruction is charged its key's Fuel formula and its allocation formula, together, when it runs, with every measure taken from the values it works on. If either takes the Run past its limit, the Run has a Limit Fault at that instruction, before it does anything ([chapter 6](06-errors-and-limits.md#limit-faults)).
-- **Its own limit first:** an instruction that has a limit of its own checks it before its charge: a call checks the call depth, `make-pattern` the Text Pattern size, and `join-ask`, `join-send` and `join-send-named` `MaxJoin`. One that passes it faults on that limit, and is never charged. So `make-pattern` compiles its program and measures it, and is charged by its size only when it fits.
+- **Its own limit first:** an instruction that has a limit of its own checks it before its charge: a call checks the call depth, `make-pattern` the Text Pattern size, and `join-ask`, `join-send`, `join-send-named` and `join-send-spread` `MaxJoin`. One that passes it faults on that limit, and is never charged. So `make-pattern` compiles its program and measures it, and is charged by its size only when it fits.
 - **Run-ending state check:** a `return` that ends the Run, `pass` and `veto` check Persistent State before their own Fuel and allocation, excluding the ending Run's frames. A breach faults at that instruction without its charge. Calls returning to a caller do not end the Run. Suspension still charges its instruction and any Host effect before measuring the state it retains.
 - **Fuel next:** Fuel is checked before allocation, so a Run past both faults on Fuel.
 - **A foreign Function Value call** uses `call-value-wait`'s `call` key (8 Fuel, no allocation), not the `send` key. Its receiver starts a Run with one frame and no Handler Clause, so dispatch charges no `clause`. The mailbox message's contents include the Function Value (including its captures) and supplied arguments. The caller's depth does not grow; subsequent calls in the receiver count toward its own call depth limit.
 - **A Built-in** is charged by its own rate, `builtin.<name>`, in place of `call-builtin`'s key.
-- **Dispatch** charges the `clause` rate for each Handler Clause it tries, at the clause body's first instruction, added to that instruction's own charge. So a Run that can't pay for a clause faults at that instruction, with its position, and the clause is never tried. This holds for a Delivery's dispatch and for `call-handler` and `call-handler-wait` ([chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Dispatch** charges the `clause` rate for each Handler Clause it tries, Fallback clauses included, at the clause body's first instruction, added to that instruction's own charge. So a Run that can't pay for a clause faults at that instruction, with its position, and the clause is never tried. This holds for a Delivery's dispatch and for `call-handler` and `call-handler-wait` ([chapter 5](05-handlers-messages-and-scheduling.md)).
 - **Search and lookup** are indivisible. `unwind` charges `4 * frames` for frames the current search step leaves, at its driving raise or `catch-next`; subsequent popping is free. `offer-lookup` charges `4 * frames` atomically for the complete scan, including unknown names and wrong arity. Neither metadata nor entering a try costs Fuel. Search and lookup can incur Fuel Slice debt and preempt at the next instruction boundary. Cancellation charges no `unwind`.
 - **A Capability call** charges the Operation's declared cost, which the Host sets, through `declared`, plus the conversion of its result. A Host function may charge more through its budget handle before it does the work ([chapter 9](09-embedding.md)).
 - **A late answer:** an answer to a suspending call, or a Join member's answer, is charged when the Run resumes, in start order, by the rate of the instruction that waited: only its terms over `result`, since the rest was charged at the call, plus any cost that came with the answer. So a reply to `send … and wait` and the end of a `wait` charge nothing more.

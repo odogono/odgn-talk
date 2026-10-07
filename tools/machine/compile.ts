@@ -24,7 +24,7 @@ export type Body = {
   defaults: (number | null)[]; // a definition index per parameter, for a function
   end: number;
   index: number;
-  kind: 'init' | 'handler' | 'function' | 'lambda' | 'event';
+  kind: 'init' | 'handler' | 'fallback' | 'function' | 'lambda' | 'event';
   locals: string[];
   maySuspend: boolean;
   name: string;
@@ -420,8 +420,14 @@ export class UnitCompiler {
         );
         this.functions.set(d.name, b.index);
       } else if (d.k === 'Handler') {
+        // A Fallback Handler's clauses are `fallback` bodies (ADR 0064).
         const list = this.handlers.get(d.name) ?? [];
-        const b = this.newBody('handler', d.name, [], list.length + 1);
+        const b = this.newBody(
+          d.fallback ? 'fallback' : 'handler',
+          d.name,
+          [],
+          list.length + 1,
+        );
         list.push(b.index);
         this.handlers.set(d.name, list);
       }
@@ -688,6 +694,7 @@ export class BodyCompiler {
         'ask-wait',
         'send-wait',
         'send-named-wait',
+        'send-spread-wait',
         'send-up-wait',
         'call-handler-wait',
         'wait',
@@ -2188,6 +2195,33 @@ export class BodyCompiler {
   }
 
   send(s: Node) {
+    // A spread in `with` builds the arguments as one list, below the
+    // receiver, under the name as text (ADR 0064).
+    if (s.args.some((a: Node) => a.k === 'Spread')) {
+      if (s.name) {
+        this.expr(s.name);
+      } else {
+        this.at(s);
+        this.constant(textConstant(s.msg));
+      }
+      this.at(s);
+      this.emit('list', [0]);
+      for (const a of s.args) {
+        this.expr(a.k === 'Spread' ? a.e : a);
+        this.at(s);
+        this.emit(a.k === 'Spread' ? 'list-extend' : 'list-append');
+      }
+      this.expr(s.target);
+      this.at(s);
+      if (s.wait && this.join) {
+        return void this.emit('join-send-spread', []);
+      }
+      this.emit(s.wait ? 'send-spread-wait' : 'send-spread', []);
+      if (s.wait) {
+        this.emit('store', [0], ['it']);
+      }
+      return;
+    }
     // A computed name is evaluated first, below the arguments (ADR 0057).
     if (s.name) {
       this.expr(s.name);

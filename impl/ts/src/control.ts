@@ -24,6 +24,8 @@ type Context = {
   /** Loop depth at the Recovery Catch granting lexical choice permission. */
   recovery: number | null;
 };
+// A Fallback Handler's message, as its `pass` names it (ADR 0064).
+const FALLBACK = 'any message';
 const loopSuffixes = new Set(['queued', 'dropping', 'replacing']);
 const suffixes = new Set([...loopSuffixes, 'deciding', 'during']);
 const outside: Context = {
@@ -109,7 +111,8 @@ const checkSuffixes = (
       (loopSuffixes.has(text) && [...seen].some(s => loopSuffixes.has(s))) ||
       (text === 'queued' && seen.has('deciding')) ||
       (text === 'deciding' && seen.has('queued')) ||
-      (text === 'during' && message !== 'error')
+      (text === 'during' && message !== 'error') ||
+      (text === 'deciding' && message === FALLBACK)
     ) {
       report('bad suffixes', suffix);
       return;
@@ -350,7 +353,15 @@ export const checkControl = (
         break;
       }
       case 'Handler': {
-        const message = messageName(childNode(node, 'MessageName'))?.text;
+        // `on any message m`: the Fallback Handler, which a Library can't
+        // hold, since imported Handlers are never entry points (ADR 0064).
+        const fallback = word(node.children[1], 'any');
+        if (fallback && unit === 'library') {
+          report('not in a library', node.children[0] as Leaf);
+        }
+        const message = fallback
+          ? FALLBACK
+          : messageName(childNode(node, 'MessageName'))?.text;
         context = { ...outside, message: message ?? null };
         checkSuffixes(node, context.message, report);
         break;
@@ -439,13 +450,18 @@ export const checkControl = (
             if (context.finally !== null) {
               report('leaves finally', head);
             }
-            const name = messageName(childNode(node, 'MessageName'));
+            // `pass any message` names a Fallback's message, at `any`.
+            const named = messageName(childNode(node, 'MessageName'));
+            const name = word(next, 'any')
+              ? { leaf: next, text: FALLBACK }
+              : named && { leaf: named, text: named.text };
+            // Only a Fallback may pass `any message`, so a function can't.
             if (
               name &&
-              context.message !== null &&
-              name.text !== context.message
+              ((context.message !== null && name.text !== context.message) ||
+                (name.text === FALLBACK && context.message !== FALLBACK))
             ) {
-              report('wrong message', name);
+              report('wrong message', name.leaf);
             }
           }
         } else if (

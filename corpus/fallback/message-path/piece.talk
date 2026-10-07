@@ -1,0 +1,18 @@
+-- piece.talk: the knight's Script. Its Fallback logs what it doesn't
+-- handle and passes it up to the board, except `poke`, which it ends.
+
+script variable log = []
+
+on keypress k
+  if k is "escape" then return "closed"
+  pass keypress
+end keypress
+
+on any message m where the name of m is "poke"
+  put "poked" after log
+end any message
+
+on any message m
+  put the name of m after log
+  pass any message
+end any message

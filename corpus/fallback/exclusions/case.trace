@@ -1,0 +1,37 @@
+# First blessing approved by the maintainer on 2026-10-07 for #333.
+# The Broadcast `ping 1` reaches `s`, which wants `ping`, but its clause
+# fails and its Fallback doesn't run. The Broadcast `zap` reaches only `t`.
+# The Decision `beforeOpen` skips `s`'s Fallback, reaches the end of its
+# path, and is allowed. `fail` errors, and the `error` message it sends is
+# dropped without reaching the Fallback. Only `hello` reaches it.
+> load s identity=80f31bcc4c5db3b036e835a62342a487c37777fb4a0868e12977163bc493e735
+> load t identity=0d5ee02cfc9f66bdbbb905c244f37c4b692470de3fee1c70d021ec19df025eff
+> broadcast b1 message=ping args=[1] recipients=[s:d1]
+> broadcast b2 message=zap recipients=[t:d2]
+> pump clock=2026-10-07T09:00:00Z
+seg s/r1 start delivery=d1 broadcast=b1 handler=ping fuel=11 alloc=0 state=16 end=unhandled
+run s/r1 outcome=unhandled delivery=d1 broadcast=b1 handler=ping fuel=11 alloc=0
+seg t/r1 start delivery=d2 broadcast=b2 handler=zap clause=1 fuel=17 alloc=16 state=16 end=return
+run t/r1 outcome=completed delivery=d2 broadcast=b2 handler=zap fuel=17 alloc=16
+pumped state=idle fuel=28
+> decide d3 to=<object door "front"> message=beforeOpen args=["knock"]
+> pump clock=2026-10-07T09:00:00Z
+seg s/r2 start delivery=d3 fuel=0 alloc=0 state=16 end=unhandled
+run s/r2 outcome=unhandled delivery=d3 fuel=0 alloc=0
+unhandled d3 message=beforeOpen args=["knock"] target=<object door "front">
+decided d3 verdict=allowed
+pumped state=idle fuel=0
+> deliver d4 to=s message=fail
+> pump clock=2026-10-07T09:00:00Z
+raise s/r3 code="oops" at=s:19 pos=11:3
+seg s/r3 start delivery=d4 handler=fail clause=1 fuel=23 alloc=112 state=16 end=error
+run s/r3 outcome=errored delivery=d4 handler=fail error={code: "oops", at: {unit: "s", handler: "fail", line: 11, column: 3}} fuel=23 alloc=112
+pumped state=idle fuel=23
+> deliver d5 to=s message=hello
+> pump clock=2026-10-07T09:00:00Z
+seg s/r4 start delivery=d5 handler=hello fallback=yes clause=1 fuel=19 alloc=29 state=45 end=return
+run s/r4 outcome=completed delivery=d5 handler=hello fallback=yes fuel=19 alloc=29
+pumped state=idle fuel=19
+> vars
+vars s seen=["hello"]
+vars t zaps=1

@@ -72,9 +72,12 @@ Entry          ::= NL* ( Declaration | Statement NL | Expression NL )
 
 /* ## handlers */
 
-Handler        ::= 'on' MessageName HandlerHead NL Block ( 'finally' NL Block )? 'end' Name? NL
-                   /* a Name after `end`, if present, is the Handler's name */
+Handler        ::= 'on' ( 'any' 'message' FallbackHead | MessageName HandlerHead ) NL Block
+                   ( 'finally' NL Block )? 'end' ( 'any' 'message' | Name )? NL
+                   /* `any message` is the Fallback Handler, and closes only it; a Name
+                      after `end`, if present, is the Handler's name */
 HandlerHead    ::= ( Pattern ( ( ',' Pattern )* | ( Label Pattern )+ ) )? Guard? ( ',' Suffix )*
+FallbackHead   ::= Pattern Guard? ( ',' Suffix )*
 Label          ::= Name | 'to'
                    /* an Argument Label: any Name but those grammar.toml's [labels]
                       excludes, or one of its Reserved Words; never the start of an
@@ -101,14 +104,14 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
-Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' ExpressionList )? 'to' Expression
+Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
 Tell           ::= 'tell' Expression 'to' Word ExpressionList?
 AndWait        ::= 'and' 'wait'
 Return         ::= 'return' Expression?
 Veto           ::= 'veto' Expression?
-Pass           ::= 'pass' MessageName Label*
+Pass           ::= 'pass' ( 'any' 'message' | MessageName Label* )
 Exit           ::= 'exit' 'repeat'
 Next           ::= 'next' 'repeat'
 Throw          ::= 'throw' Expression
@@ -117,6 +120,7 @@ CallStatement  ::= Call AndWait?
 CommandCall    ::= CommandPhrase AndWait?
 CommandPhrase  ::= Name ( Expression ( ( ',' Expression )* | ( Label Expression )+ ) )?
 ExpressionList ::= Expression ( ',' Expression )*
+SendList       ::= ListItem ( ',' ListItem )*
 
 /* ## blocks */
 

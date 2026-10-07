@@ -75,7 +75,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 - **`, during name`** binds `name` to the message the failed Run was handling, as the map `{name, args}`, or `{fn, args}` for a Run started by a Function Value call. The suffix is allowed only on `on error`.
 - **Only for `errored`:** there is no `error` message for a Limit Fault, `cancelled`, `unhandled` or `dropped`.
 - **No chain:** a Run started by an `error` message that errors itself sends no further `error` message.
-- **Nowhere to go:** an `error` message that no clause matches, including when the Script has no `on error`, is dropped. It never climbs the Message Path and isn't reported as `unhandled`. If the mailbox is full, the message is dropped, and the Trace records a `note`.
+- **Nowhere to go:** an `error` message that no clause matches, including when the Script has no `on error`, is dropped, and never reaches a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler). It never climbs the Message Path and isn't reported as `unhandled`. If the mailbox is full, the message is dropped, and the Trace records a `note`.
 
 > **Example.**
 >

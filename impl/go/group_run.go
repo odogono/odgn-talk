@@ -40,7 +40,10 @@ func (s *Script) start(d delivery) {
 	if d.function != nil {
 		r = machine.StartFunction(s.state, *d.function, args, limits)
 	} else {
-		r = machine.StartDelivery(s.state, d.message.Name, args, limits)
+		// Broadcasts, Decisions and `error` messages never reach a Fallback
+		// Handler, anywhere on their path (ADR 0064).
+		fallback := d.broadcast == "" && d.decision == nil && d.during == nil
+		r = machine.StartDelivery(s.state, d.message.Name, args, limits, fallback)
 	}
 	r.Target = d.targetValue()
 	if d.during != nil {
@@ -566,6 +569,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				if x.delivery.function != nil {
 					common["fn"] = Value{*x.delivery.function}.String()
+				} else if x.fallback(s) {
+					common["handler"] = x.delivery.message.Name
+					common["fallback"] = "yes"
 				} else if x.handler != "" {
 					common["handler"] = x.handler
 				}
@@ -774,6 +780,23 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	return result, nil
 }
 
+// fallback reports whether a Fallback Handler clause started this Run: the
+// clause it selected, or, while it dispatches, the clause it is trying, so
+// that `fallback` agrees with the start record's `clause` (ADR 0064).
+func (x *execution) fallback(s *Script) bool {
+	if x.clause >= 0 {
+		return machine.Fallback(s.state.Unit.Bodies[x.clause])
+	}
+	r := x.run
+	if x.delivery.function == nil && len(r.Frames) > 0 {
+		f := r.Frames[0]
+		return machine.Fallback(f.Code.Unit.Bodies[f.Body])
+	}
+	return false
+}
+
+// hasHandler counts only named Handler Clauses: a Fallback never makes a
+// Script want a Broadcast (ADR 0064).
 func (s *Script) hasHandler(name string) bool {
 	for _, b := range s.state.Unit.Bodies {
 		if b.Checked.Kind == "handler" && b.Checked.Name == name {
@@ -907,7 +930,7 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, report
 		return nil
 	}
 	seal()
-	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Broadcast: x.delivery.broadcast, Handler: x.handler, Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
+	report := &RunEnd{Script: s.name, Run: x.id, Delivery: x.delivery.id, Broadcast: x.delivery.broadcast, Handler: x.handler, Fallback: x.fallback(s), Outcome: outcome, Result: Value{r.Result}, Fuel: r.Fuel, Alloc: r.Alloc, Limit: ""}
 	if outcome == Cancelled && (r.CancelCode != "" || r.CancelLimit != "") {
 		report.CleanupFailed = &CleanupFailure{Code: r.CancelCode, Limit: r.CancelLimit}
 	}
@@ -928,6 +951,9 @@ func (g *Group) finish(s *Script, x *execution, common map[string]string, report
 	}
 	if x.handler == "" {
 		delete(outputs, "handler")
+	}
+	if report.Fallback {
+		outputs["fallback"] = "yes"
 	}
 	if outcome == Completed && r.Result.Kind != corevalue.Nothing {
 		outputs["value"] = coretrace.Display(r.Result)
@@ -1037,6 +1063,10 @@ func (g *Group) selectClause(s *Script, x *execution, reports *[]Report, allow f
 	}
 	x.clause = body.Index
 	x.deciding = machine.DecidingClause(body)
+	if machine.Fallback(body) {
+		// A Fallback Run's Handler is its message's Selector (ADR 0064).
+		x.handler = x.delivery.message.Name
+	}
 	switch {
 	case busy && policy == "queued":
 		r.Park()

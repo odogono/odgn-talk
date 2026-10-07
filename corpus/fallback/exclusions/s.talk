@@ -1,0 +1,16 @@
+-- s.talk: the door's Script. It takes `ping` only above 10, and fails on
+-- `fail`. Its Fallback records the ordinary messages that reach it.
+
+script variable seen = []
+
+on ping n where n > 10
+  put n after seen
+end ping
+
+on fail
+  throw {code: "oops"}
+end fail
+
+on any message m
+  put the name of m after seen
+end any message
