@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # `, deciding` on a Fallback is `bad suffixes`. A Fallback's `pass` must be
 # `pass any message`, which is `wrong message` anywhere else. A second
 # parameter is a syntax error. `on any x` is an ordinary Handler named `any`.

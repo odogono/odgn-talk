@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # The Broadcast `ping 1` reaches `s`, which wants `ping`, but its clause
 # fails and its Fallback doesn't run. The Broadcast `zap` reaches only `t`.
 # The Decision `beforeOpen` skips `s`'s Fallback, reaches the end of its

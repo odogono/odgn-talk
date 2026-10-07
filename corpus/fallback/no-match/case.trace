@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # `b`'s `greet` clause takes only "Ann". Every other message `a` sends,
 # including `greet` with the wrong argument or the wrong number of them,
 # reaches `b`'s Fallback, whose Runs carry `fallback=yes` and the message's

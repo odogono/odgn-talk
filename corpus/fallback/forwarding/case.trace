@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # `proxy` handles `status` and forwards `sum`, `move:to:` and `ping` to
 # `backend` with their own Selectors and arguments; the reply comes back
 # through the Fallback's result. `client` spreads lists into sends, including

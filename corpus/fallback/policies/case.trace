@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # The second `tick` arrives while the first waits, so the `, dropping`
 # clause drops it. `jump` and `hop` take the `, queued` clause, so `hop`
 # parks until `jump` ends.

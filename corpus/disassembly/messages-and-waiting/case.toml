@@ -10,7 +10,8 @@
 # the receiver, and `send-named`, `send-named-wait` or `join-send-named`.
 # `fallback` pins the Fallback Handler's `fallback` bodies and `pass any
 # message`, and a spread in `send … with`: the name as text, the arguments as
-# one list, and `send-spread`, `send-spread-wait` or `join-send-spread`.
+# one list, and `send-spread`, `send-spread-wait` or `join-send-spread`. Its
+# first blessing was approved by the maintainer on 2026-10-07 for #333.
 
 kind = "disassembly"
 

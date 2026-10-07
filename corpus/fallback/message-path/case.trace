@@ -1,4 +1,4 @@
-# Unblessed: the output lines are written by bless, and await their first review.
+# First blessing approved by the maintainer on 2026-10-07 for #333.
 # `keypress "x"` is passed by name, so it skips the knight's Fallback and the
 # board's Fallback takes it. `keypress "escape"` is handled. `poke` ends in
 # the knight's first Fallback clause. `jump` reaches the knight's second
