@@ -67,10 +67,13 @@ func (h *Host) command(source string) []string {
 			return refusal("session started")
 		}
 		if name == "grant" {
-			if len(words) != 2 || !nameText.MatchString(words[0]) || words[0] == "console" {
+			if len(words) < 2 || len(words) > 3 || !nameText.MatchString(words[0]) || words[0] == "console" {
 				return refusal("bad arguments")
 			}
-			found := words[1] == "clock"
+			if len(words) == 3 && words[1] != "store" {
+				return refusal("bad arguments")
+			}
+			found := words[1] == "clock" || words[1] == "store"
 			for _, m := range h.mocks {
 				found = found || m.capability == words[1]
 			}
@@ -78,6 +81,14 @@ func (h *Host) command(source string) []string {
 				return refusal("bad arguments")
 			}
 			h.granted[words[0]] = words[1]
+			delete(h.bindings, words[0])
+			if words[1] == "store" {
+				binding := "default"
+				if len(words) == 3 {
+					binding = words[2]
+				}
+				h.bindings[words[0]] = binding
+			}
 			return nil
 		}
 		if len(words) != 2 {
@@ -93,7 +104,7 @@ func (h *Host) command(source string) []string {
 		case "fire-and-forget":
 			mode = talk.FireAndForget
 		}
-		if slices.Contains([]string{"ask", "tell", "send", "wait"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" {
+		if slices.Contains([]string{"ask", "tell", "send", "wait"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" {
 			return refusal("bad arguments")
 		}
 		m := mock{cap, op, mode}
@@ -111,7 +122,7 @@ func (h *Host) command(source string) []string {
 		return nil
 	}
 	switch name {
-	case "stub", "answer", "fail", "clock", "limits", "cancel", "save", "restore", "library", "export":
+	case "stub", "answer", "fail", "clock", "limits", "cancel", "save", "restore", "library", "export", "store":
 		h.start()
 	case "runs", "mailbox", "vars":
 		if len(words) > 0 {
@@ -120,7 +131,7 @@ func (h *Host) command(source string) []string {
 		h.start()
 	case "help":
 		h.recording = nil
-		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :help :quit"}
+		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :help :quit"}
 	case "quit":
 		h.recording = nil
 		return nil
@@ -215,6 +226,8 @@ func (h *Host) command(source string) []string {
 			return h.save(key)
 		}
 		return h.restore(key)
+	case "store":
+		return h.store(rest)
 	case "library":
 		return h.library(rest)
 	case "export":

@@ -61,7 +61,7 @@ func (sessionBackend) Run(c Case, _ []Record) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	replayed, err := (executionBackend{}).Run(Case{Name: c.Name, Dir: dir, Kind: "trace", Setup: setup}, records)
+	replayed, err := runReplayPair(Case{Name: c.Name, Dir: dir, Kind: "trace", Setup: setup}, records, sessionStoreReplies(host, records))
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +80,9 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 	grants := Setup{"console": Setup{"ops": "all"}}
 	for name, cap := range h.Grants() {
 		grants[name] = Setup{"capability": cap, "ops": "all"}
+		if cap == "store" {
+			grants[name].(Setup)["binding"] = h.GrantBinding(name)
+		}
 	}
 	var operations []any
 	for _, m := range h.MockOperations() {
@@ -95,12 +98,28 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 		operations = append(operations, op)
 	}
 	standard := []any{Setup{"capability": "console", "costs": Setup{"write": Setup{"fuel": int64(0)}, "read": Setup{"fuel": int64(0)}}}}
+	seen := map[string]bool{}
 	for _, cap := range h.Grants() {
+		if seen[cap] {
+			continue
+		}
+		seen[cap] = true
 		if cap == "clock" {
 			standard = append(standard, Setup{"capability": "clock", "costs": Setup{"now": Setup{"fuel": int64(0)}}})
-			break
+		}
+		if cap == "store" {
+			costs := Setup{}
+			for _, name := range []string{"get", "keys", "set", "delete", "increment", "swap"} {
+				fuel := int64(4)
+				if name == "get" || name == "keys" {
+					fuel = 2
+				}
+				costs[name] = Setup{"fuel": fuel}
+			}
+			standard = append(standard, Setup{"capability": "store", "costs": costs})
 		}
 	}
+
 	var libraries []any
 	for _, l := range h.UserLibraries() {
 		file := l.Name + ".talk"
@@ -113,4 +132,44 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 		return nil, err
 	}
 	return Setup{"operations": operations, "standard": standard, "libraries": libraries, "scripts": []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}}, nil
+}
+
+// Session Store results belong to the Host, outside the Trace's Host Inputs.
+// Seed them as invisible Stubs for independent ordinary/save-restore replay;
+// loaded files and committed contents are never copied into the replay Core.
+func sessionStoreReplies(h *session.Host, records []Record) func(*operationReplay) {
+	grants := h.Grants()
+	return func(o *operationReplay) {
+		for _, r := range records {
+			if r.Input || len(r.IDs) == 0 {
+				continue
+			}
+			fields := map[string]Field{}
+			for _, f := range r.Fields {
+				fields[f.Key] = f
+			}
+			if r.Name == "call" {
+				grant, op, ok := strings.Cut(fields["op"].Raw, ".")
+				if !ok || grants[grant] != "store" {
+					continue
+				}
+				stub := map[string]Field{}
+				if result, ok := fields["result"]; ok {
+					stub["value"] = result
+				}
+				if failure, ok := fields["error"]; ok {
+					stub["error"] = failure
+				}
+				if charged, ok := fields["charged"]; ok {
+					stub["charge"] = charged
+				}
+				o.stubs["store."+op] = append(o.stubs["store."+op], stub)
+			}
+			if r.Name == "effect" && grants[fields["grant"].Raw] == "store" {
+				script, _, _ := strings.Cut(r.IDs[0], "/")
+				key := script + "." + fields["grant"].Raw + "." + fields["phase"].Raw
+				o.effectStubs[key] = append(o.effectStubs[key], map[string]Field{"status": fields["status"]})
+			}
+		}
+	}
 }

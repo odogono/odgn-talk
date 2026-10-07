@@ -13,6 +13,7 @@ import (
 
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"github.com/odogono/odgn-talk/impl/go/store"
 )
 
 // Item is one Transcript record. Kind is input, read, clock, answer, comment or
@@ -26,11 +27,13 @@ type Item struct {
 // serialize Input, Read and Tick. Record receives every printed line as well
 // as recorded inputs and real Clock readings. Trace receives canonical lines.
 type Environment struct {
-	Now       func() time.Time
-	Record    func(Item)
-	Trace     func(string)
-	ReadFile  func(string) (string, error)
-	WriteFile func(directory, file, source string) error
+	Now            func() time.Time
+	Record         func(Item)
+	Trace          func(string)
+	ReadFile       func(string) (string, error)
+	WriteFile      func(directory, file, source string) error
+	ReadStoreFile  func(path string) (string, error)
+	WriteStoreFile func(path, source string) error
 }
 
 type Waiting struct {
@@ -102,6 +105,8 @@ type Host struct {
 	readOrder                    []string
 	mocks                        []mock
 	granted                      map[string]string
+	bindings                     map[string]string
+	stores                       *store.Stores
 	grants                       map[string]*talk.Grant
 	stubs                        map[string][]stub
 	libraries                    map[string]library
@@ -119,7 +124,7 @@ func New(env Environment) *Host {
 	if env.Now == nil {
 		env.Now = time.Now
 	}
-	return &Host{env: env, core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}}
+	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}}
 }
 func (h *Host) Source() string          { return sourceOf(h.declarations) }
 func (h *Host) Started() bool           { return h.group != nil }
@@ -232,12 +237,18 @@ func (h *Host) start() {
 		must(err)
 	}
 	for name, capability := range h.granted {
+		if capability == "store" && defs[capability] == nil {
+			defs[capability], err = h.core.StoreCapability(h.stores, storeCosts())
+			must(err)
+		}
 		if capability == "clock" {
 			defs[capability], err = h.core.ClockCapability(talk.Costs{"now": {}})
 			must(err)
 		}
 		names := []string{}
-		if capability == "clock" {
+		if capability == "store" {
+			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
+		} else if capability == "clock" {
 			names = []string{"now"}
 		} else {
 			for _, m := range h.mocks {
@@ -246,7 +257,11 @@ func (h *Host) start() {
 				}
 			}
 		}
-		h.grants[name], err = defs[capability].Grant(names, nil)
+		var binding any
+		if capability == "store" {
+			binding = h.bindings[name]
+		}
+		h.grants[name], err = defs[capability].Grant(names, binding)
 		must(err)
 	}
 	h.script, err = h.group.Load(talk.LoadOptions{Name: "session", Source: "", Grants: h.grants})
@@ -581,4 +596,10 @@ func (h *Host) UserLibraries() []talk.LibrarySource {
 		out = append(out, talk.LibrarySource{Name: name, Version: "1", Source: h.libraries[name].added})
 	}
 	return out
+}
+
+// GrantBinding is the recorded binding used for independent Session replay.
+func (h *Host) GrantBinding(name string) string { return h.bindings[name] }
+func storeCosts() talk.Costs {
+	return talk.Costs{"get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
 }
