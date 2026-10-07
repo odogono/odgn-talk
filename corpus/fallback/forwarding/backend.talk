@@ -1,0 +1,13 @@
+-- backend.talk: the Handlers the proxy forwards to.
+
+on sum a, b
+  return a + b
+end sum
+
+on move piece to square
+  return piece & "@" & square
+end move
+
+on ping
+  return "pong"
+end ping

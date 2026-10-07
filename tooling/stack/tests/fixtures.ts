@@ -139,6 +139,18 @@ export const fixtures: readonly {
     negative: script('send ping to me'),
   },
   {
+    id: 'advanced-construct',
+    positive: script('send ping with ...[1] to me'),
+    negative: script('send ping with 1 to me'),
+  },
+  {
+    id: 'fallback-routes-known',
+    positive:
+      'on ping\nend ping\non any message m where the name of m is "ping"\nend any message',
+    negative:
+      'on ping\nend ping\non any message m where the name of m is "pong"\nend any message',
+  },
+  {
     id: 'prefer-explicit-end',
     positive: 'on demo\nif true then\nsay 1\nend\nend',
     negative: 'on demo\nif true then\nsay 1\nend if\nend demo',

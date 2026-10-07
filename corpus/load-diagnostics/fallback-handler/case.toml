@@ -1,0 +1,28 @@
+# fallback-handler: the load rules and syntax of the Fallback Handler
+# (chapter 2; chapter 5, The Fallback Handler; ADR 0064).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "deciding"
+source = "deciding.talk"
+
+[[scripts]]
+name = "named-pass"
+source = "named-pass.talk"
+
+[[scripts]]
+name = "stray-pass"
+source = "stray-pass.talk"
+
+[[scripts]]
+name = "two-params"
+source = "two-params.talk"
+
+[[scripts]]
+name = "any"
+source = "any.talk"

@@ -1,0 +1,14 @@
+-- proxy.talk: answers `status` itself, and forwards every other message to
+-- `backend`, whatever its Selector and argument count.
+
+script variable forwarded = 0
+
+on status
+  return "proxy ok"
+end status
+
+on any message m
+  add 1 to forwarded
+  send (the name of m) with ...(the args of m) to backend and wait
+  return it
+end any message

@@ -79,6 +79,11 @@ const unwrap = (root: SemanticNode): SemanticElement => {
   }
   return e;
 };
+// A node's tokens and names, in source order, bodies included.
+const words = (node: SemanticNode) =>
+  elements(node, true).filter(
+    (x): x is Exclude<SemanticElement, SemanticNode> => x.kind !== 'node',
+  );
 const message = (node: SemanticNode) => {
   const name = child(node, 'MessageName');
   return name && first(name);
@@ -939,6 +944,62 @@ export const lintBindings = (
           message: name.replaceAll(':', ' ').trim(),
         });
       }
+    }
+  }
+  // A Fallback clause that routes on a Selector the Script has named clauses
+  // for runs only when those clauses fail (ADR 0064).
+  const known = (t: SemanticElement | undefined) =>
+    t?.kind === 'token' && t.type === 'str' && handlers.has(t.text)
+      ? t
+      : undefined;
+  for (const e of all) {
+    if (e.kind !== 'node' || e.rule !== 'Handler' || message(e)) {
+      continue;
+    }
+    const head = leaves(e).map(t => t.text);
+    if (head[1] !== 'any' || head[2] !== 'message') {
+      continue;
+    }
+    const pattern = child(e, 'Pattern');
+    const bound = pattern && words(pattern);
+    const param = bound?.length === 1 ? bound[0]!.text : null;
+    const routed: Exclude<SemanticElement, SemanticNode>[] = [];
+    if (pattern && !param) {
+      // `{name: "x", …}` in the head.
+      const ws = words(pattern);
+      ws.forEach((t, i) => {
+        const k = known(ws[i + 2]);
+        if (t.text === 'name' && ws[i + 1]?.text === ':' && k) {
+          routed.push(k);
+        }
+      });
+    }
+    if (param) {
+      // `the name of m is "x"`, either way round, in the Guard or body.
+      const ws = words(e);
+      const read = (j: number) =>
+        ws[j]?.text === 'the' &&
+        ws[j + 1]?.text === 'name' &&
+        ws[j + 2]?.text === 'of' &&
+        ws[j + 3]?.text === param;
+      ws.forEach((t, i) => {
+        if (t.text === 'is' && read(i - 4)) {
+          const k = known(ws[i + 1]);
+          if (k) {
+            routed.push(k);
+          }
+        } else if (t.text === 'is' && read(i + 1)) {
+          const k = known(ws[i - 1]);
+          if (k) {
+            routed.push(k);
+          }
+        }
+      });
+    }
+    for (const t of routed) {
+      emit('fallback-routes-known', t.span, {
+        message: t.text.replaceAll(':', ' ').trim(),
+      });
     }
   }
   const scriptNames = new Set(

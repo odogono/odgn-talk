@@ -6,7 +6,6 @@ Run commands in this guide from the repository root. Workspace-only scripts sele
 
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
 
-
 ## Task navigation
 
 **Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested policy searches stay within their selection boundary; escaping policy Errors carry `during` outward, transfer cleanup preserves or cancels choices as appropriate, and cancellation enumerates dispatch-local and retained scopes once. Dispatch saves retain control stacks, shared owner locals, pending transfers, cleanup progress and attempt numbers. Restore validates every retained code/body/PC, ownership chain, target and cleanup reference before resuming; search and lookup preempt only at the following instruction boundary. [Save/restore evidence](../../docs/reviews/recovery-offers-saves/README.md) covers ordinary catches, nested policy, transfer cleanup, action entry and cancellation. Session Scripts can choose Library offers and replay their Transcripts. The shared TS debugger and Playground follow active dispatch control and display retained frames with shared owner locals; Go reproduces their execution Traces through its replay backend. See the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [language rules](../../spec/04-expressions-and-statements.md#recovery-offers).
@@ -77,10 +76,20 @@ Messages, property writes and unrelated immediate effects remain outside this gu
 Under Bun, import from the package:
 
 ```ts
-import { text, num, list, map, encodeValue, readDisplay } from "@odgn/northtalk";
+import {
+  text,
+  num,
+  list,
+  map,
+  encodeValue,
+  readDisplay,
+} from '@odgn/northtalk';
 
-const title = text("e\u0301"); // NFC: é
-const values = map([["title", title], ["count", num(1)]]);
+const title = text('e\u0301'); // NFC: é
+const values = map([
+  ['title', title],
+  ['count', num(1)],
+]);
 console.log(values.toString()); // {title: "é", count: 1}
 console.log(encodeValue(values)); // {"title":"é","count":1}
 console.log(readDisplay(values.toString()).equals(values)); // true
@@ -95,7 +104,7 @@ Text is checked for lone surrogates and normalized to NFC at construction. Lists
 ## Lossless source parsing
 
 ```ts
-import { parseSource, syntaxText } from "@odgn/northtalk";
+import { parseSource, syntaxText } from '@odgn/northtalk';
 
 const result = parseSource('on greet\n  say "hi" -- greeting\nend greet');
 if (result.error) {
@@ -115,9 +124,11 @@ For a file being edited, `parseSourceRecovering(source)` always returns a lossle
 Recovery uses the same productions as the strict parser. Failed regions become `Error` nodes owning their partial productions and skipped tokens. Expression recovery resumes at a comma, closing delimiter, separator or physical newline; statement and declaration recovery resume at a physical newline. Incomplete blocks retain their parsed bodies at EOF or an enclosing branch or reserved declaration boundary. A missing ending can have a zero-width `Error` node; no token or source character is invented. `syntaxText` reconstructs the complete original input, including malformed regions. Recovery is best effort: malformed heads or delimiters can hide otherwise valid code, and later errors may follow from earlier ones. It does not make malformed source compilable or change `parseSource`, `checkSource`, `parseEntry` or compilation.
 
 ```ts
-import { parseSourceRecovering, checkSyntax } from "@odgn/northtalk";
+import { parseSourceRecovering, checkSyntax } from '@odgn/northtalk';
 
-const parsed = parseSourceRecovering('on greet name\n  @\n  return name\nend greet');
+const parsed = parseSourceRecovering(
+  'on greet name\n  @\n  return name\nend greet',
+);
 const checked = checkSyntax(parsed.tree); // Handler and parameter bindings remain available
 // Show parsed.diagnostics before checked.diagnostics; all output after the
 // first syntax error is tooling recovery, outside parity.
@@ -138,9 +149,11 @@ The generator copies the syntax lists from `grammar.toml`, Unit spellings and Un
 ## Semantic names and bindings
 
 ```ts
-import { checkSource, checkSyntax, parseSource } from "@odgn/northtalk";
+import { checkSource, checkSyntax, parseSource } from '@odgn/northtalk';
 
-const result = checkSource('on greet\n return later\n put 1 into later\nend greet');
+const result = checkSource(
+  'on greet\n return later\n put 1 into later\nend greet',
+);
 console.log(result.ok); // true: later starts as Nothing
 console.log(result.tree?.scopes); // unit and body bindings, including it
 
@@ -198,13 +211,24 @@ non-text raises `wrong kind`, and text that isn't a Name or a Selector with one
 argument per part raises `bad message name`. A receiver Name for a Script the
 Group doesn't hold raises `object gone` at the send, after that check.
 
+`on any message m` declares a Fallback Handler ([ADR 0064](../../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md)).
+Its clauses lower to `fallback` bodies named `any message`, which `Code`
+keeps apart from the Selector-keyed clauses, so Broadcast "want" and local
+Command Calls never see them. A Delivery that isn't a Broadcast, a Decision or
+an `error` message tries them after its Selector's clauses, with the map
+`{name, args}`, and its Run reports `fallback` with the Selector as `handler`.
+Queueing Policies key a Fallback clause by its number alone. A spread in
+`send … with` builds the arguments as one list under the name as text, and
+`send-spread`, `send-spread-wait` or `join-send-spread` pops the name, the
+list and the receiver, checking the name as `send-named` does.
+
 ## Lowering and canonical disassembly
 
 ```ts
-import { compileSource, disassemble } from "@odgn/northtalk";
+import { compileSource, disassemble } from '@odgn/northtalk';
 
 const result = compileSource('on greet name\n  say "hi " & name\nend greet', {
-  name: "greeter",
+  name: 'greeter',
 });
 if (result.unit) {
   console.log(disassemble(result.unit)); // chapter 8's canonical text
@@ -230,13 +254,13 @@ Core tests lower the Standard Library, every corpus source and the prototype's c
 ## The Abstract Machine and Cost Model 0
 
 ```ts
-import { compileSource, deliver, loadScript, text } from "@odgn/northtalk";
+import { compileSource, deliver, loadScript, text } from '@odgn/northtalk';
 
 const unit = compileSource('on greet name\n  return "hi " & name\nend greet', {
-  name: "greeter",
+  name: 'greeter',
 }).unit!;
 const script = loadScript(unit); // runs the initialiser, uncharged
-const run = deliver(script, "greet", [text("Ann")]);
+const run = deliver(script, 'greet', [text('Ann')]);
 console.log(run.finish()); // { kind: "completed", result: "hi Ann" }
 console.log(run.fuel, run.alloc); // Cost Model 0's Fuel and allocation
 ```
@@ -270,15 +294,15 @@ Core tests run every text-model seed case's Script through the machine and repro
 ## The Group and Trace Cases
 
 ```ts
-import { newGroup, parseInstant } from "@odgn/northtalk";
+import { newGroup, parseInstant } from '@odgn/northtalk';
 
-const group = newGroup({ name: "demo", trace: line => console.log(line) });
+const group = newGroup({ name: 'demo', trace: line => console.log(line) });
 const counter = group.load({
-  name: "counter",
-  source: "script variable n = 0\non bump\n  add 1 to n\nend bump",
+  name: 'counter',
+  source: 'script variable n = 0\non bump\n  add 1 to n\nend bump',
 });
-counter.deliver({ name: "bump" });
-group.pump(parseInstant("2026-09-30T09:00:00Z"));
+counter.deliver({ name: 'bump' });
+group.pump(parseInstant('2026-09-30T09:00:00Z'));
 group.inspect();
 // > load counter identity=…
 // > deliver d1 to=counter message=bump

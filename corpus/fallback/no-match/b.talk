@@ -1,0 +1,12 @@
+-- b.talk: greets only Ann, and answers every other message itself.
+
+script variable seen = []
+
+on greet who where who is "Ann"
+  return "hello " & who
+end greet
+
+on any message m
+  put the name of m after seen
+  return "I don't know how to " & the name of m
+end any message

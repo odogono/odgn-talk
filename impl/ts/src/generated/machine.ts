@@ -1204,6 +1204,22 @@ export const instructions = [
     "suspends": true
   },
   {
+    "name": "send-spread",
+    "cost": "send",
+    "operands": [],
+    "pops": 3,
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "send-spread-wait",
+    "cost": "send",
+    "operands": [],
+    "pops": 3,
+    "pushes": 1,
+    "suspends": true
+  },
+  {
     "name": "send-up",
     "cost": "send",
     "operands": [
@@ -1291,6 +1307,14 @@ export const instructions = [
       "count"
     ],
     "pops": "count + 2",
+    "pushes": 0,
+    "suspends": false
+  },
+  {
+    "name": "join-send-spread",
+    "cost": "send",
+    "operands": [],
+    "pops": 3,
     "pushes": 0,
     "suspends": false
   },

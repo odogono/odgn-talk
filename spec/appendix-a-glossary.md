@@ -350,6 +350,10 @@ _Avoid_: signature, method name
 One of several Handlers for the same message, chosen by Destructuring the message's arguments and checking an optional Guard, Elixir-style.
 _Avoid_: overload
 
+**Fallback Handler**:
+A Script's `on any message m … end any message` Handler, which takes a message after none of the Script's Handler Clauses for its Selector matches, before it climbs the Message Path. It never takes a Broadcast, a Decision or an `error` message.
+_Avoid_: catch-all (that suggests catching errors), doesNotUnderstand, default handler, method_missing
+
 **Queueing Policy**:
 What a Handler Clause does with a message that arrives while an earlier Run of the clause is still suspended. With no suffix the new Run starts and they run concurrently. `, queued` runs them one at a time, `, dropping` ends the new Run as dropped, and `, replacing` cancels the earlier Run.
 _Avoid_: concurrency mode, lock
@@ -379,7 +383,7 @@ A Capability with an Operation that the Host declares may take time to answer, s
 _Avoid_: async function, blocking call
 
 **Message Path**:
-The chain a message follows when a Script has no matching Handler Clause for it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
+The chain a message follows when a Script has no matching Handler Clause for it, and no Fallback Handler takes it (or a Handler passes it on): from the target object up through the parents the Host declares. What happens at the end of the chain is Host-defined for each kind of message.
 _Avoid_: bubbling, propagation, inheritance chain
 
 **Owning Script**:

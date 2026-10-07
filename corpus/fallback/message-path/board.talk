@@ -1,0 +1,9 @@
+-- board.talk: the board's Script, the parent of the knight. Its Fallback
+-- answers whatever reaches it.
+
+script variable log = []
+
+on any message {name: n, args: a}
+  put [n, a] after log
+  return "board took " & n
+end any message

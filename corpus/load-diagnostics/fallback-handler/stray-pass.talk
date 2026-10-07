@@ -1,0 +1,4 @@
+-- stray-pass.talk: `pass any message` outside a Fallback.
+on jump
+  pass any message
+end jump

@@ -1,0 +1,73 @@
+unit fallback script
+constants
+  0 nothing
+  1 "log"
+  2 "seen"
+  3 "move:to:"
+  4 1
+  5 "debug"
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler relay clause 1 (rest) locals 2 may suspend 0002..0031
+  2 fallback any message clause 1 (…) locals 4 0032..0052
+  3 fallback any message clause 2 (m) locals 2 0053..0056
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 9:3 const 1 ; "log"
+  0003 9:3 list 0
+  0004 9:17 const 2 ; "seen"
+  0005 9:3 list-append
+  0006 9:28 load 1 ; rest
+  0007 9:3 list-extend
+  0008 9:36 me
+  0009 9:3 send-spread
+  0010 10:9 const 3 ; "move:to:"
+  0011 10:3 list 0
+  0012 10:29 load 1 ; rest
+  0013 10:3 list-extend
+  0014 10:37 me
+  0015 10:3 send-spread-wait
+  0016 10:3 store 0 ; it
+  0017 11:3 join-start
+  0018 12:23 load 0 ; it
+  0019 12:11 get-key "name"
+  0020 12:5 list 0
+  0021 12:35 load 1 ; rest
+  0022 12:5 list-extend
+  0023 12:41 const 4 ; 1
+  0024 12:5 list-append
+  0025 12:46 me
+  0026 12:5 join-send-spread
+  0027 13:3 join-end
+  0028 11:3 store 0 ; it
+  0029 14:1 const 0 ; nothing
+  0030 14:1 return
+  0031 14:1 clause-fail
+  0032 16:16 load 1 ; (1)
+  0033 16:16 test-map 0052
+  0034 16:16 load 1 ; (1)
+  0035 16:16 map-get "name" 0052
+  0036 16:23 store 2 ; n
+  0037 16:16 load 1 ; (1)
+  0038 16:16 map-get "args" 0052
+  0039 16:32 store 3 ; a
+  0040 16:41 load 2 ; n
+  0041 16:55 const 5 ; "debug"
+  0042 16:43 begins-with
+  0043 16:41 branch-false 0052
+  0044 17:9 load 2 ; n
+  0045 17:3 list 0
+  0046 17:20 load 3 ; a
+  0047 17:3 list-extend
+  0048 17:25 me
+  0049 17:3 send-spread
+  0050 18:1 const 0 ; nothing
+  0051 18:1 return
+  0052 18:1 clause-fail
+  0053 21:3 pass any message
+  0054 22:1 const 0 ; nothing
+  0055 22:1 return
+  0056 22:1 clause-fail
+unwind
+  0032..0043 guard -> 0052 depth 0

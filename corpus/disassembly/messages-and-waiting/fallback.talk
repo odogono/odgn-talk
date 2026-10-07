@@ -1,0 +1,22 @@
+-- fallback.talk: a Fallback Handler and a spread in `send … with` (ADR
+-- 0064). Part of the messages-and-waiting case. Each Fallback clause is a
+-- `fallback` body named `any message`, with the message map as its one
+-- parameter. A spreading `send` builds its arguments as one list, under the
+-- name as text, and ends in `send-spread`, `send-spread-wait` or
+-- `join-send-spread`.
+
+on relay rest
+  send log with "seen", ...rest to me
+  send ("move:to:") with ...rest to me and wait
+  wait for all
+    send (the name of it) with ...rest, 1 to me and wait
+  end wait
+end relay
+
+on any message {name: n, args: a} where n begins with "debug"
+  send (n) with ...a to me
+end any message
+
+on any message m, queued
+  pass any message
+end

@@ -8,6 +8,16 @@ const rules = (node: SyntaxNode): string[] => [
   ),
 ];
 
+// A parsed Handler's word leaves, and its first declaration's Handler.
+const leaves = (node: SyntaxNode) =>
+  node.children.flatMap(child =>
+    child.kind === 'token' && child.t === 'word' ? [child.v] : [],
+  );
+const handler = (source: string) => {
+  const declaration = parseSource(source).tree!.children[0] as SyntaxNode;
+  return declaration.children[0] as SyntaxNode;
+};
+
 describe('lossless Core parser', () => {
   test('preserves source, trivia, continuations and trailing comments', () => {
     const source =
@@ -19,6 +29,45 @@ describe('lossless Core parser', () => {
     expect(result.tree!.start).toBe(0);
     expect(result.tree!.end).toBe(source.length);
     expect(rules(result.tree!)).toContain('List');
+  });
+
+  test('a Fallback Handler has `any` and `message` leaves and no MessageName', () => {
+    const fallback = handler(
+      'on any message m where m is 1\n  pass any message\nend any message',
+    );
+    expect(fallback.rule).toBe('Handler');
+    expect(
+      fallback.children.flatMap(c => (c.kind === 'node' ? [c.rule] : [])),
+    ).toEqual(['Pattern', 'Expression', 'Block']);
+    expect(leaves(fallback)).toEqual([
+      'on',
+      'any',
+      'message',
+      'where',
+      'end',
+      'any',
+      'message',
+    ]);
+    expect(rules(handler('on any x\nend any'))).toContain('MessageName');
+  });
+
+  test('a spread in `send … with` is a `...` leaf before its Expression', () => {
+    const send = parseSource(
+      'on t\n  send log with 1, ...xs to me\nend t',
+    ).tree!;
+    const find = (node: SyntaxNode, rule: string): SyntaxNode | undefined =>
+      node.rule === rule
+        ? node
+        : node.children
+            .flatMap(c => (c.kind === 'node' ? [find(c, rule)] : []))
+            .find(Boolean);
+    const list = find(send, 'ExpressionList')!;
+    expect(list.children.map(c => (c.kind === 'node' ? c.rule : c.v))).toEqual([
+      'Expression',
+      ',',
+      '...',
+      'Expression',
+    ]);
   });
 
   test('parses empty source and source containing only trivia', () => {

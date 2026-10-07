@@ -66,6 +66,23 @@ describe('the TextMate grammar', () => {
     expect(scopeOf('  end repeat', 'repeat')).toBe('keyword.control.northtalk');
   });
 
+  test('scopes the Fallback Handler', () => {
+    const source = 'on any message m\n  pass any message\nend any message';
+    expect(tokenize(source)).toEqual([
+      ['on', 'storage.type.function.northtalk'],
+      ['any', 'keyword.other.northtalk'],
+      ['message', 'keyword.other.northtalk'],
+      ['m', 'variable.other.northtalk'],
+      ['pass', 'keyword.other.northtalk'],
+      ['any', 'keyword.other.northtalk'],
+      ['message', 'keyword.other.northtalk'],
+      ['end', 'keyword.control.northtalk'],
+      ['any', 'keyword.other.northtalk'],
+      ['message', 'keyword.other.northtalk'],
+    ]);
+    expect(scopeOf('on any x', 'any')).toBe('entity.name.function.northtalk');
+  });
+
   test('scopes keywords, constants and Built-ins', () => {
     const source = 'put upper(name) & newline into it -- shout';
     expect(tokenize(source)).toEqual([

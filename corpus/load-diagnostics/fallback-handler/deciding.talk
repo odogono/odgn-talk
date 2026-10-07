@@ -1,0 +1,3 @@
+-- deciding.talk: a Fallback may not hold a Decision.
+on any message m, deciding
+end any message

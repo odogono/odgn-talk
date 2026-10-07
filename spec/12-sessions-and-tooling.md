@@ -258,6 +258,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 > | `serialised-self-join` | a Join that sends to `me` for a message whose clauses all opt out of concurrency | warning / warning |
 > | `key-shadows-property` | a map literal key that shadows a Built-in property | warning / warning |
 > | `unknown-message` | a Handler for a message the Host Manifest doesn't declare | hint / hint |
+> | `fallback-routes-known` | a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail | hint / hint |
 > | `ambiguous-ignoring-case` | a trailing `ignoring case` after an `and` or `or` chain, which binds only to the nearest comparison | warning / hint |
 > | `shadows-builtin` | a Script name that shadows a Built-in Constant or function | warning / hint |
 > | `unconvertible-literal` | a literal text given to `as civil date` or `as instant` that can't convert | warning / warning |

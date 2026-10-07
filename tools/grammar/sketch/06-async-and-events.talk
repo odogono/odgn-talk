@@ -143,3 +143,25 @@ end forwarding
 on moving board, knight
   send ("move:" & "to:") with knight, "e4" to board and wait
 end moving
+
+-- A spread in `send … with` (ADR 0064): `...e` stands for a list's items,
+-- anywhere in the list, as in a list literal.
+on spreading next, rest
+  send log with "seen", ...rest to me
+  send (next) with ...rest, 1 to me and wait
+end spreading
+
+-- The Fallback Handler (ADR 0064): the messages no clause matches, as the
+-- map {name, args}. `any` before `message` is decided on two tokens.
+on any message {name: n, args: a} where n begins with "debug", queued
+  send (n) with ...a to logger
+end any message
+
+on any message m
+  say "I don't know how to " & the name of m
+  pass any message
+end
+
+on any x
+  say x
+end any

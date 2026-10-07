@@ -1,0 +1,4 @@
+-- named-pass.talk: a Fallback passes only `any message`.
+on any message m
+  pass jump
+end any message
