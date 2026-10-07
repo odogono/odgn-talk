@@ -1,4 +1,4 @@
-# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
 # A read-only Grant never enlists. A second writable Store in one Segment is
 # `segment participant conflict`, and a Limit Fault rolls the Store writes back.
 > load s identity=678585f2c9979ca1f94f9ccf5121157110386df1d51ae9eb63164fe2f8cc5bbe

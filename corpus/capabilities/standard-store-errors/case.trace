@@ -1,4 +1,4 @@
-# Unblessed: the store Standard Capability (#226); first blessing awaits human review.
+# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
 # The Host fails with the codes each Operation declares, checked against the
 # catalogue's fields; anything else is `host error`.
 > load s identity=0f2981b98026e3059ea952e8575736f1b0995bad847c97ddcbe8b1f6a4e0748f
