@@ -7,6 +7,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -59,8 +60,13 @@ func TestDisassemblyCorpus(t *testing.T) {
 				if !bytes.Equal(body.Bytecode(), roundTrip.Bytecode()) {
 					t.Fatal("bytecode changed after decoding")
 				}
-				for _, instruction := range body.Code {
+				for j, instruction := range body.Code {
 					emitted[instruction.Name] = true
+					raw := instruction
+					raw.operands = nil
+					if !slices.Equal(instruction.Operands(), raw.Operands()) || !slices.Equal(instruction.Operands(), decoded[j].Operands()) || instruction.Cost == "" || instruction.Cost != decoded[j].Cost || instruction.Suspends != decoded[j].Suspends {
+						t.Fatalf("runtime metadata differs for %s at instruction %d", instruction.Name, j)
+					}
 				}
 			}
 			actual := unit.Disassemble()

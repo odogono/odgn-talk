@@ -237,6 +237,11 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "return", "veto":
 		v := pop()
 		effect = func() {
+			retired := r.Frames[len(r.Frames)-1]
+			clear(retired.Stack[:cap(retired.Stack)])
+			clear(retired.Locals[:cap(retired.Locals)])
+			r.spareFrames = append(r.spareFrames, Frame{Stack: retired.Stack[:0], Locals: retired.Locals[:0]})
+			r.Frames[len(r.Frames)-1] = Frame{}
 			r.Frames = r.Frames[:len(r.Frames)-1]
 			if len(r.Frames) == 0 {
 				if i.Name == "veto" {
@@ -360,10 +365,9 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		body := callee.Unit.Bodies[data.Body]
 		maySuspend := body.Checked.MaySuspend
 		for _, ins := range body.Code {
-			for _, op := range generated.Machine.Instruction {
-				if ins.Name == op.Name && op.Suspends {
-					maySuspend = true
-				}
+			if ins.Suspends {
+				maySuspend = true
+				break
 			}
 		}
 		if maySuspend && i.Name == "call-value" {

@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
@@ -103,6 +102,7 @@ type Run struct {
 	During        value.Value
 	State         *State
 	Frames        []Frame
+	spareFrames   []Frame // empty buffers reused only within ExecuteHosted
 	Base          []value.Value
 	Limits        Limits
 	Status        Status
@@ -204,7 +204,15 @@ func (r *Run) nextClause() {
 func (r *Run) pushFrame(body int, args []value.Value) { r.pushCodeFrame(r.State, body, args) }
 func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
 	b := code.Unit.Bodies[body]
-	f := Frame{Code: code, Body: body, Locals: make([]value.Value, len(b.Checked.Locals)), Clause: b.Clause > 0}
+	f := Frame{Code: code, Body: body, Clause: b.Clause > 0}
+	if n := len(r.spareFrames); n > 0 {
+		spare := r.spareFrames[n-1]
+		r.spareFrames[n-1] = Frame{}
+		r.spareFrames = r.spareFrames[:n-1]
+		f.Stack = spare.Stack[:0]
+		f.Locals = spare.Locals[:0]
+	}
+	f.Locals = append(f.Locals, make([]value.Value, len(b.Checked.Locals))...)
 	copy(f.Locals[1:], args)
 	if b.Checked.During != "" {
 		f.Locals[b.Checked.Slot(b.Checked.During)] = r.During
@@ -297,7 +305,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		return
 	}
 	r.Status = Running
+	defer func() { r.spareFrames = nil }()
 	start := r.Fuel
+	var stack, locals []value.Value
 	for r.Status == Running {
 		if len(boundary) > 0 {
 			boundary[0]()
@@ -412,11 +422,11 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("persistent")
 			break
 		}
-		// Evaluate against a detached operand stack. State changes commit only
-		// after the complete instruction charge has been accepted.
+		// Reuse detached trial buffers within this turn. They never become
+		// live frame storage: copy back only after the whole charge succeeds.
 		trial := *f
-		trial.Stack = slices.Clone(f.Stack)
-		trial.Locals = slices.Clone(f.Locals)
+		trial.Stack = append(stack[:0], f.Stack...)
+		trial.Locals = append(locals[:0], f.Locals...)
 		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
 		m, effect, err := r.evaluate(&trial, i)
 		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !r.foreignWaitCall(f, i) && err == nil && r.Limits.Depth > 0 && len(r.Frames) >= r.Limits.Depth {
@@ -440,17 +450,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		key := ""
-		for _, entry := range generated.Machine.Instruction {
-			if entry.Name == i.Name {
-				key = entry.Cost
-				break
-			}
-		}
-		if i.Name == "call-builtin" {
-			key = "builtin." + i.Operands()[0].Text
-		}
-		fuel, alloc := Charge(key, m)
+		fuel, alloc := Charge(i.Cost, m)
 		if f.Clause {
 			fuel += 4
 		}
@@ -490,6 +490,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			continue
 		}
 		trial.PC++
+		stack, locals = trial.Stack, trial.Locals
+		trial.Stack = append(f.Stack[:0], trial.Stack...)
+		trial.Locals = append(f.Locals[:0], trial.Locals...)
 		*f = trial
 		if effect != nil {
 			effect()

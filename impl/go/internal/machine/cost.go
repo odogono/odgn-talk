@@ -119,6 +119,11 @@ func formula(s string, m Measures, v value.Value) int64 {
 	if s == "" {
 		return 0
 	}
+	if s[0] >= '0' && s[0] <= '9' && !strings.Contains(s, " ") {
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return n
+		}
+	}
 	var total int64
 	for _, term := range strings.Split(s, " + ") {
 		parts := strings.Fields(term)
@@ -132,8 +137,10 @@ func formula(s string, m Measures, v value.Value) int64 {
 			divisor, _ = strconv.ParseInt(parts[2], 10, 64)
 		}
 		token := parts[0]
-		n, err := strconv.ParseInt(token, 10, 64)
-		if err != nil {
+		var n int64
+		if token[0] >= '0' && token[0] <= '9' {
+			n, _ = strconv.ParseInt(token, 10, 64)
+		} else {
 			if at := strings.IndexByte(token, '('); at >= 0 {
 				subject := token[at+1 : len(token)-1]
 				x := v
@@ -187,6 +194,14 @@ func formula(s string, m Measures, v value.Value) int64 {
 		}
 		// Evaluate each rounded term exactly, then saturate the internal
 		// counter. Overflow must never turn an unaffordable charge negative.
+		if total >= 0 && factor >= 0 && n >= 0 && divisor > 0 && (factor == 0 || n <= (math.MaxInt64-(divisor-1))/factor) {
+			term := (factor*n + divisor - 1) / divisor
+			if term > math.MaxInt64-total {
+				return math.MaxInt64
+			}
+			total += term
+			continue
+		}
 		term := new(big.Int).Mul(big.NewInt(factor), big.NewInt(n))
 		term.Add(term, big.NewInt(divisor-1))
 		term.Quo(term, big.NewInt(divisor))
