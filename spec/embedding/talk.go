@@ -300,7 +300,7 @@ type ErrorDecl struct {
 // Operation is one Operation Declaration paired with the Host function that
 // implements it. Exactly one of Do, Start and Fire is set, matching Mode.
 type Operation struct {
-	Name         string  // a literal word; `ask`, `tell`, `send` and `wait` are refused
+	Name         string  // a literal word; `ask`, `tell`, `send`, `wait` and `end` are refused
 	Args         []Shape // an Optional suffix may be omitted; Host functions receive only supplied args
 	Result       Shape
 	Cost         Cost

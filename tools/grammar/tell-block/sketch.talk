@@ -1,0 +1,62 @@
+-- `tell` blocks (ADR 0063): several Operations of one Grant. The Cores' tests
+-- don't read this file until both Cores parse it.
+
+on draw
+  tell canvas
+    background "#f5f0e8"
+    noStroke
+    fill "#235f75"
+    rectangle 70, 70, 180, 180
+
+    -- blank lines and comments may go between lines
+    fill "#e0a458"
+    ellipse 250, 250, 160, 160
+  end tell
+end draw
+
+-- An answer lands in `it`, so a later line can read it.
+on export content
+  tell output
+    open "report.txt"
+    write content, it
+    close it
+  end
+end export
+
+-- Reserved Words name Operations, and `and wait` marks every Suspension Point.
+on update base, auth
+  tell http
+    put base & "/orders/7", {json: {qty: 3}, headers: auth} and wait
+    delete base & "/orders/7" and wait
+    get base & "/health" and wait
+  end tell
+  tell log to write "updated " & the status of it
+end update
+
+-- In a Join, a line with `and wait` is a Join Member.
+on fetchBoth a, b
+  wait for all
+    tell http
+      get a and wait
+      get b and wait
+    end tell
+  end wait
+end fetchBoth
+
+-- The block goes inside a loop, and a Lambda may be an argument.
+on dots points
+  repeat for each [x, y] in points
+    tell canvas
+      ellipse x, y, 4, 4
+      onClick given e
+        say e
+      end given
+    end tell
+  end repeat
+end dots
+
+-- An empty block parses.
+on nothingYet
+  tell canvas
+  end tell
+end nothingYet

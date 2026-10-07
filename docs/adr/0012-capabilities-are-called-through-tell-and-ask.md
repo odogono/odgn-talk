@@ -16,3 +16,4 @@ A Script calls a Capability in one uniform form: `ask <capability> to <operation
 - Operation names become part of a Host's documented surface, and the LSP can complete them from the grant list.
 - Narrowed by ADR 0019: a call to a suspending Operation is written `ask … and wait`, and the loader checks the form against the Operation Declaration both ways, so every Suspension Point is visible in the source.
 - Settled by #72: Grants are keyed by the name the Script uses, so a Host can grant one Capability twice under two names with different bindings. Defining a Capability refuses `ask`, `tell`, `send` and `wait` as Operation names, and the rest of the Operation naming guide is advice. See [the embedding interface](../../spec/09-embedding.md).
+- Narrowed by ADR 0063: a `tell g` block calls several Operations of the Grant `g`, each line called as its declared mode requires, so `tell` there may also ask. `DefineCapability` refuses `end` as an Operation name too.
