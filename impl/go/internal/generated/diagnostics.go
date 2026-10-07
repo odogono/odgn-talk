@@ -147,20 +147,22 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "unknown operation",
-			RaisedWhen: "`ask` or `tell` names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare",
+			RaisedWhen: "`ask`, `tell` or a `tell` block names a Grant the Script doesn't hold, including one revoked before a Reload, or an Operation its Grant doesn't declare",
 			At:         "the Grant's name, or the Operation's",
 			Sources: []string{
 				"ADR 0012",
 				"ADR 0015",
+				"ADR 0063",
 				"#115",
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "wrong mode",
-			RaisedWhen: "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, or `tell` on one that isn't fire-and-forget",
-			At:         "`ask` or `tell`",
+			RaisedWhen: "A call doesn't fit its Operation's mode: `ask … and wait` on an immediate Operation, `ask` without `and wait` on a suspending one, `ask` on a fire-and-forget one, `tell … to` on one that isn't fire-and-forget, or a `tell` block line whose `and wait` is there on an Operation that isn't suspending, or missing on one that is",
+			At:         "`ask` or `tell`, or a `tell` block line's Operation name",
 			Sources: []string{
 				"ADR 0012",
+				"ADR 0063",
 				"#115",
 			},
 		},

@@ -59,7 +59,7 @@ const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 const LABEL_RESERVED = new Set<string>(grammar.labels.reserved);
 const LABEL_EXCLUDED = new Set<string>(grammar.labels.excluded);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
-const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
+const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait', 'tell'];
 const endSuffixExpected = (name: string, at: Token) =>
   `end of line or \`${name}\` after \`end\` (closing line ${at.line})`;
 // The operand-starting Reserved Words.
@@ -647,6 +647,9 @@ export class Parser {
     if (this.isWord(t, 'wait')) {
       return this.at(t, this.wait(true));
     }
+    if (this.isWord(t, 'tell')) {
+      return this.at(t, this.tell());
+    }
     return this.simpleStatement();
   }
 
@@ -873,19 +876,49 @@ export class Parser {
     const target = this.expr();
     this.expectWord('to', 'operator');
     // The word after `to` is always an Operation name, reserved or not.
+    return { k: verb, target, ...this.operation(verb === 'ask') };
+  }
+
+  // `tell g to op args`, or, where a block may go, a `tell g` block of
+  // Operation lines (ADR 0063). After the receiver, `to` or the end of the
+  // line decides on one token.
+  tell(): Node {
+    const at = this.next();
+    const target = this.expr();
+    if (!this.atEnd()) {
+      this.expectWord('to', 'operator');
+      return { k: 'tell', target, ...this.operation(false) };
+    }
+    this.endOfStatement();
+    const lines: Node[] = [];
+    for (;;) {
+      this.skipNL();
+      const t = this.peek(0);
+      if (t.t === 'eof') {
+        this.fail(t, '`end`');
+      }
+      // `end` always closes the block, so it is never an Operation here.
+      if (this.isWord(t, 'end')) {
+        break;
+      }
+      lines.push(this.at(t, { k: 'OperationLine', ...this.operation(true) }));
+      this.endOfStatement();
+    }
+    this.next();
+    this.endSuffix('tell', at);
+    return { k: 'TellBlock', target, lines };
+  }
+
+  // An Operation name, which may be any word, even a Reserved Word, then its
+  // arguments, and `and wait` where `waits` allows it.
+  operation(waits: boolean): { args: Node[]; op: string; wait: boolean } {
     const t = this.peek(0);
     if (t.t !== 'word' || t.v === '_') {
       this.fail(t, 'an Operation name');
     }
     const op = this.next().v;
     const args = this.startsExpr(this.peek(0)) ? this.exprList() : [];
-    return {
-      k: verb,
-      target,
-      op,
-      args,
-      wait: verb === 'ask' ? this.andWait() : false,
-    };
+    return { op, args, wait: waits ? this.andWait() : false };
   }
 
   // `wait d`, `wait for ev [or d]`, and, where a block may go, the block
