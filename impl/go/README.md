@@ -1078,9 +1078,10 @@ Two new cases agree on Go, TS and TS save/restore before blessing:
 `capabilities/ordinary-grants` pins alias bindings, revocation, trimming and caught
 raises before later Host calls. Their `Unblessed` headers await first human review.
 
-A listed regression or missing case fails; an unlisted passing case is reported
-for addition. Other cases retain first-divergence output or `SKIP` with a reason
-for unsupported facilities. Explicitly selecting an unsupported case fails.
+Under `--check-passing`, any failing or unsupported case fails, as does a listed
+case that no longer exists; an unlisted passing case is reported for addition.
+A plain run reports `SKIP` with a reason for unsupported facilities, and
+explicitly selecting an unsupported case fails.
 Session Transcripts reproduce their existing output and `case.trace` unchanged.
 The original nine first blessings were reviewed under [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419);
 the later `fenced-text` regression retains its first-review header.
