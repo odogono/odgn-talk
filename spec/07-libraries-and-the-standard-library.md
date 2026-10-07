@@ -790,6 +790,8 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 
 ### `store`
 
+**Pending addition:** [Store Notifications](proposals/store-notifications.md) adds `watch` and `unwatch`, which deliver a Notification to a Script for each commit that changes the keys it watches. Neither Core nor Session Host offers them yet, and the table below lists only the supported Operations.
+
 <!-- generated: stdlib.capability.store -->
 
 | Operation | Mode | Gives | Errors |

@@ -19,6 +19,8 @@ A REPL or Playground session is an ordinary Host running an ordinary Script Grou
 
 ### The Session Store
 
+**Pending addition:** [the Session Host's Store Notifications](proposals/store-notifications.md#the-session-host) grant `watch` and `unwatch`, set their costs and limits, pump while Notifications are queued, and keep checkpoints for `:save` and `:restore`. Neither Session Host supports them yet.
+
 `store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 
 - **In memory:** each Session Store lives in the Session Host's memory, and starts empty, so a Transcript replays the same way wherever it runs. `:store load` is the only way contents come in from outside.
