@@ -1,0 +1,8 @@
+**
+!package.json
+!README.md
+!language-configuration.json
+!syntaxes/**
+!dist/extension.js
+!dist/server.mjs
+!dist/UNICODE-LICENSE.txt
