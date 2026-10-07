@@ -393,6 +393,7 @@ const readLibraryCase = (file: string) =>
     'utf8',
   );
 
+// Repeated whole-Group restores exceed Bun's default 5-second budget on CI.
 test('Library offers and same-Run callbacks save every boundary and keep attempts increasing', () => {
   const libraries: Library[] = [];
   for (const name of ['rows', 'wrapper']) {
@@ -443,4 +444,4 @@ test('Library offers and same-Run callbacks save every boundary and keep attempt
     }
   }
   throw new Error('Library recovery did not finish');
-});
+}, 30_000);
