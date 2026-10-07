@@ -1,4 +1,4 @@
-# Unblessed: Collecting Clause regression (#380); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 > load s identity=a92780b0bf92db41223c87c411aa1d93c8090a120f0868b647c625d1acf42d9b
 > request d1 to=s message=go
 > pump clock=2026-10-06T12:00:00Z

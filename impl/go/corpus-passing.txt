@@ -1,6 +1,6 @@
 # Cases the Go Core must continue to pass (issues #132–#136). The gate also
 # fails on any case missing from this list that does not pass (#141).
-# New regression cases retain Unblessed headers until their first human review.
+# A new case carries an Unblessed header until its first human review.
 # Recovery Offers: all eight cases approved on 2026-10-07 at 0c3c33f (#392);
 # see docs/reviews/recovery-offers-integration/README.md.
 

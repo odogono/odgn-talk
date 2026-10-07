@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # queued-error-before-parked-run: pins the order of the two things a `, queued`
 # clause's errored Run leaves behind (#363).
 #

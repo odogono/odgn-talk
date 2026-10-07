@@ -56,7 +56,11 @@ passing gate and each Core's acceptance tests now require these cases.
   Join body is preempted. The other member costs 48 bytes. Only that pending
   member is abandoned on the fault; exact-limit completion preserves the answer.
 
-## Approval still needed
+## Approval
+
+Approved by the maintainer on 2026-10-07; see the
+[approval record](../milestone-one-blessings/README.md). The original request follows.
+
 
 The `case.trace` in each of the eight directories above awaits first human
 review under [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).

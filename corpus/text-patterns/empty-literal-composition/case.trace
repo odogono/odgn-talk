@@ -1,4 +1,4 @@
-# Unblessed: new regression case, awaiting human review of its first blessing.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 # Chapter 11 removes the empty nested group from the canonical source.
 # Empty's program has 1 instruction (size 24), composed's 2 (size 32).
 # make-pattern costs 24 Fuel and allocates 32 bytes. Matching takes 2 steps,

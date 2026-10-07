@@ -1,8 +1,9 @@
 # Milestone 1 first-blessing review package (#141)
 
-Approval status: **pending**. This package collects the last expectations that
-still carry an `Unblessed` marker, so the maintainer can give the first-blessing
-review that [#141](https://github.com/odogono/odgn-talk/issues/141) and
+Approval status: **approved by the maintainer on 2026-10-07**. After #415
+merged, the maintainer approved all 25 cases in this package in the #141 T3 Code
+conversation: “Yes I approve all”. This package collected the expectations that
+still carried an `Unblessed` marker, for the first-blessing review that [#141](https://github.com/odogono/odgn-talk/issues/141) and
 [Appendix B](../../../spec/appendix-b-implementation-order.md#when-it-is-done)
 require. Execution agreement is evidence for that review, not approval
 ([chapter 11](../../../spec/11-the-trace-and-conformance.md#bless)).
@@ -109,12 +110,23 @@ only `> deliver d2` becomes `> request d2`; the other 33 records are
 unchanged. Evidence: the
 [Spec derivation](../delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 
-## After approval
+## Approval record
 
-Replace each approved marker with
-`# First blessing approved by the maintainer on <date> for #141.`
-For `disassembly/collecting`, the marker is in `case.toml`. Change nothing else.
-Record the approval and its exact scope here. Then check that `bun run
-corpus:run`, `go -C impl/go run ./cmd/corpus --check-passing` and
-`bun run corpus:check` still pass. A case that is not approved keeps its marker
-and gets an issue for its correction.
+The approval covers exactly the 26 files that carried a marker: the 25 cases
+above, with `sessions/argument-labels` marking both its Transcript and its
+Trace. `disassembly/collecting` carries its marker in `case.toml`. Each
+`# Unblessed:` line became
+`# First blessing approved by the maintainer on 2026-10-07 for #141.`. Where
+the marker line also described the case (the three Argument Labels files),
+that description is kept as its own comment line. No Host Input, output
+record, `.dis` line or cost changed.
+
+After the edit, at `origin/main` `18278ef`:
+
+- `bun run corpus:bless` on all 25 cases reports TS and Go agreement and leaves
+  every file as edited;
+- `bun run corpus:run` and `go -C impl/go run ./cmd/corpus --check-passing`
+  each pass all 307 cases;
+- `bun run corpus:check` accepts all 307 cases.
+
+No `# Unblessed:` marker remains in the Corpus.

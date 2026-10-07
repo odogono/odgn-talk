@@ -1,5 +1,5 @@
 # Collecting initialization and append positions, for every head and destructuring.
-# Unblessed: first expectation review pending for #380.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 kind = "disassembly"
 
 [versions]

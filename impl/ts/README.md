@@ -365,8 +365,8 @@ adds no Value size. A retention fault rolls back Script Variables and abandons
 pending calls after the fault record, while preserving already-started Host
 work and receiver messages. The [suspension retention audit](../../docs/reviews/suspension-retention/README.md)
 records the tight-limit regressions, their Go/TS ordinary and save/restore
-agreement, and the expectations awaiting first human review for
-[#281](https://github.com/odogono/odgn-talk/issues/281).
+agreement, and the expectations for [#281](https://github.com/odogono/odgn-talk/issues/281), whose first
+blessings were approved on 2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)).
 Join failures, timeouts and faults at `join-end` use the closing `end` token's
 source position, for bare `end` and `end wait`, including Joins in local Handlers
 and block Lambdas. Member indices remain 1-based, and failed replies retain the

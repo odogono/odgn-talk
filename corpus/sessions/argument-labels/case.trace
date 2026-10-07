@@ -32,4 +32,4 @@ run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=41 alloc=16
 pumped state=idle fuel=41
 > vars
 vars session
-# Unblessed: new labelled Session Entries; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07 for #141.

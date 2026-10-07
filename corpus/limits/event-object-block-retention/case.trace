@@ -1,4 +1,4 @@
-# Unblessed: first human review required for #281.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
 > load below identity=1ec84f4db575f46330f7a56021abc33f9f2ee733ed79a9d418a5283eb2365b2e
 > load exact identity=53195198b15a9c7ef97fa576c4780044b89d5e6edc3488a0620abe1991761917
 > set-parent object=<object door "d"> parent=<object door "root">

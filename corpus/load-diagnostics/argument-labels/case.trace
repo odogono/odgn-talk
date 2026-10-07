@@ -1,4 +1,5 @@
-# Unblessed: labelled pass checks, syntax traps, suspension and selector clashes.
+# First blessing approved by the maintainer on 2026-10-07 for #141.
+# Labelled pass checks, syntax traps, suspension and selector clashes.
 > load bad identity=af1159183da5f435cbab8bed303b9b0951c9092b6bde6ea7b80efb0a9a95eef6
 diag bad code="wrong message" pos=2:8
 > load wrong-label identity=5730bb5b75f215ec43566a459ca9c160bbd1b76e8bf511ce5acb2e701c857d0e
