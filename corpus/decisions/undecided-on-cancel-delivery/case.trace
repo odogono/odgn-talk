@@ -1,4 +1,4 @@
-# Unblessed: corrected by Go and TS agreement; human review of the removed
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # post-seal cancel input is pending. See docs/reviews/delivery-cancellation/.
 # undecided-on-cancel-delivery: the board is part-way through a long
 # `recount` when a Decision arrives. A preempted Run holds up its Script's

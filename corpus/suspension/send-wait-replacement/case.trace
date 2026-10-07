@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Replacing a sender abandons its reply and runs cleanup; the receiver keeps
 # running. Only the second sender receives its answer when both receivers end.
 > load a identity=52b1f9e5034f4f8d8edc5ae220acff2629b011da21398ef2d7be848ef6cc591f

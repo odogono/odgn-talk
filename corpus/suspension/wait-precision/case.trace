@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Exact durations round to nanoseconds, half even. Negative and zero waits
 # still await a later Pump. A 60-billion-second wait exceeds time.Duration.
 > load s identity=411ab64b7d6d7e1366c912f23b881359e950e13b5d9e3b963ad4d2f3acc7065b

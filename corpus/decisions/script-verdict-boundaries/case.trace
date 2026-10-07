@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Chapters 5/8/9: ordinary dispatch requires the combined first charge;
 # clause 4 + const 1 cannot be paid with 4 Fuel, so it stays undecided.
 # Five Fuel pays dispatch and allows before a later fault. Preemption keeps

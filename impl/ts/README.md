@@ -355,8 +355,9 @@ boundary and retain replies arriving while an open body is preempted. Buffered
 replies are applied in arrival order at `join-end`; their answers and receiver
 error maps count toward Persistent State. Ordinary Capability calls and mixed Joins now agree with Go on the reviewed answer
 and Join cases and the new `suspension/capability-resumption` regression. The new
-case also agrees on TS save/restore, retaining its `Unblessed` header for first
-human review. Suspending Operations and foreign Function Value calls also
+case also agrees on TS save/restore. Its first blessing was approved on 2026-10-05,
+with a later correction approved on 2026-10-07; see the
+[step-3 approval record](../../docs/reviews/step-three-blessings/README.md). Suspending Operations and foreign Function Value calls also
 count their new 48-byte pending calls at the charged boundary, after consuming
 their operands. Event waits count each branch's evaluated object filter and
 captured Values at that boundary, including repeated captures; a named Script

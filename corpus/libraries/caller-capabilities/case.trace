@@ -1,4 +1,4 @@
-# Unblessed: paired Go/TS execution and TS save/restore await first human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # Missing transitive/private needs, caller calls and charges, sequential suspending
 # answers, Library cleanup after cancellation, late answers and revocation.
 > add-library helper identity=ffc627371a9cf81d1cf1398481fc3760976500b638eb62574908ca69b61b73ee

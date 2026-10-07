@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # A reply arriving while the Join body is preempted survives the next Pump and TS save/restore.
 > load a identity=fed2684dfb43d501ca35f886004b149f93d36e8a14a3326b36c45720d434694c
 > load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c

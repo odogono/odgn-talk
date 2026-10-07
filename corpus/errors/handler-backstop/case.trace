@@ -1,4 +1,4 @@
-# Unblessed: new regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134.
 # Chapter 6: no matching internal error clause means no unhandled report;
 # an error Run that errors again ends errored but sends no further message.
 # Without any error clauses, dispatch spends no Fuel and starts no Run.

@@ -1,4 +1,4 @@
-# Unblessed: paired Go/TS regression; first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 > load s identity=ba6ef8fba0318da2b51a6b97e72ef37776630090adf50b81dd09b2261d41d014
 > stub api.read value=7
 > stub api.read value=8
