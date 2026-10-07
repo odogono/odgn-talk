@@ -75,5 +75,8 @@ jobs:
       # Runs the same stdio LSP workspace under Node.
       - run: bun run build && bun run test:node
         working-directory: tooling/cli
+      # The editor extension's grammar tests, and its bundled client and server.
+      - run: bun test tests && bun run build
+        working-directory: tooling/vscode
       - run: bun run build
         working-directory: impl/ts

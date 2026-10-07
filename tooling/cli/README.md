@@ -162,8 +162,9 @@ language-servers = ["northtalk"]
 roots = [".git"]
 ```
 
-A generic VS Code LSP client can use the same process configuration and
-`northtalk` document selector; the server needs no dedicated NorthTalk extension.
+For VS Code and Cursor, install the [NorthTalk extension](../vscode/), which
+bundles this server and adds syntax highlighting. A generic VS Code LSP client
+can instead use the same process configuration and `northtalk` document selector.
 The editor must recognize the file's language ID. Enable inlay hints to show
 suspension marks. A syntax grammar is not required for these LSP features.
 

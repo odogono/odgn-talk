@@ -1,0 +1,99 @@
+{
+  "name": "northtalk",
+  "displayName": "NorthTalk",
+  "description": "NorthTalk syntax highlighting and language server for .talk files",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "odgn",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/odogono/odgn-talk"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:northtalk"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "northtalk",
+        "aliases": [
+          "NorthTalk",
+          "northtalk"
+        ],
+        "extensions": [
+          ".talk"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "northtalk",
+        "scopeName": "source.northtalk",
+        "path": "./syntaxes/northtalk.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "NorthTalk",
+      "properties": {
+        "northtalk.profile": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "beginner"
+          ],
+          "default": "standard",
+          "description": "The Lint profile the language server reports advice from."
+        },
+        "northtalk.manifest": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a Host Manifest (*.talk-manifest.json). A relative path resolves against the first workspace folder. Empty selects the single manifest in the workspace roots, if there is one."
+        },
+        "northtalk.server.runtime": {
+          "type": "string",
+          "default": "",
+          "description": "The JavaScript runtime that runs the language server, such as `node` or `bun`. Empty uses the editor's own Node runtime."
+        },
+        "northtalk.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "The `northtalk` CLI script to launch with `lsp`, such as a checkout's tooling/cli/src/main.ts under Bun. Empty uses the server bundled with the extension."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "northtalk.restartServer",
+        "title": "NorthTalk: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests",
+    "grammar:generate": "bun tools/grammar.ts",
+    "grammar:check": "bun tools/grammar.ts --check",
+    "build": "bun tools/grammar.ts --check && bun tools/build.ts",
+    "package": "bun run build && bunx @vscode/vsce@3 package --no-dependencies --skip-license --out dist/northtalk.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@odgn/northtalk": "workspace:*",
+    "@types/vscode": "~1.90.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}
