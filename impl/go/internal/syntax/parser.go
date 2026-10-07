@@ -337,6 +337,7 @@ func (p *parser) andWait(n *Node) {
 		p.expect("wait")
 	}
 }
+
 // operation reads an Operation name, which may be any word, then its
 // arguments, and `and wait` where waits allows it.
 func (p *parser) operation(n *Node, waits bool) {
