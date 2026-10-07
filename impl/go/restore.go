@@ -362,6 +362,15 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 					}
 				}
 			}
+			knownCode := map[*machine.State]bool{}
+			for _, ref := range refs {
+				if state, ok := ref.(*machine.State); ok && !state.Gone {
+					knownCode[state] = true
+				}
+			}
+			if err := x.run.ValidateSnapshot(knownCode); err != nil {
+				return nil, result, invalid(err.Error())
+			}
 			x.run.RestoreRecoveryLocals()
 			for _, t := range row.Timers {
 				x.memberTimers = append(x.memberTimers, memberTimer{t.ID, t.Deadline, t.Order, t.MS})

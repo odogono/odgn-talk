@@ -481,7 +481,7 @@ type RecoveryDispatch = {
   entry?: UnwindEntry;
   error: Value;
   excluded: Map<Frame, Set<string>>;
-  exited: { entry: UnwindEntry; frame: Frame }[];
+  exited: { entry: UnwindEntry; frame: Frame; index: number }[];
   owner?: Frame;
   pending?:
     | { kind: 'error' }
@@ -499,6 +499,13 @@ type RecoveryDispatch = {
   retained: Frame[];
   seen: Map<Frame, Set<number>>;
 };
+const requireSnapshot = (ok: unknown): void => {
+  if (!ok) {
+    throw new HostError('invalid save');
+  }
+};
+const snapshotCounter = (n: number) => Number.isSafeInteger(n) && n >= 0;
+
 // A `finally` block running because of an error: its frame, the error, and
 // where its cleanup copy starts.
 type Cleanup = { error: Value; frame: Frame; start: number };
@@ -1329,6 +1336,277 @@ export class Run {
     Object.assign(this, state);
     this.host = null;
     this.persistentState = () => this.script.variablesSize();
+  }
+
+  /** Validate decoded control after the graph is complete, before Host rebinding. */
+  validateSnapshot(knownCode: ReadonlySet<object>): void {
+    try {
+      this.validateControl(knownCode);
+    } catch {
+      throw new HostError('invalid save');
+    }
+  }
+
+  private validateControl(knownCode: ReadonlySet<object>): void {
+    requireSnapshot(
+      snapshotCounter(this.offerAttempt) &&
+        snapshotCounter(this.fuel) &&
+        snapshotCounter(this.alloc),
+    );
+    requireSnapshot(
+      Array.isArray(this.frames) && Array.isArray(this.recoveries),
+    );
+    requireSnapshot(
+      Array.isArray(this.segmentBase) &&
+        this.segmentBase.length === this.script.variables.length,
+    );
+    requireSnapshot(
+      this.cancellation === null || Array.isArray(this.cancellation),
+    );
+    requireSnapshot(!this.cancelling || this.recoveries.length === 0);
+    requireSnapshot(this.cancelling || this.cancellationOwners.length === 0);
+    requireSnapshot(this.done || this.frames.length > 0);
+    const frames = new Set<Frame>();
+    const add = (f: Frame) => {
+      requireSnapshot(f && typeof f === 'object');
+      frames.add(f);
+    };
+    this.frames.forEach(add);
+    this.cancellationOwners.forEach(add);
+    this.cleanups.forEach(c => add(c.frame));
+    this.cancellation?.forEach(c => add(c.frame));
+    const contexts = new Set(this.recoveries);
+    requireSnapshot(contexts.size === this.recoveries.length);
+    for (const c of this.recoveries) {
+      requireSnapshot(c && Array.isArray(c.retained) && c.retained.length > 0);
+      requireSnapshot(
+        snapshotCounter(c.cursor) && c.cursor < c.retained.length,
+      );
+      requireSnapshot(Value.isValue(c.error) && c.error.kind === 'map');
+      requireSnapshot(
+        Object.getPrototypeOf(c.seen) === Map.prototype &&
+          Object.getPrototypeOf(c.excluded) === Map.prototype &&
+          Object.getPrototypeOf(c.cleanupOnly) === Set.prototype,
+      );
+      requireSnapshot(Array.isArray(c.queue) && Array.isArray(c.exited));
+      c.retained.forEach(add);
+      if (c.owner) {
+        add(c.owner);
+      }
+      if (c.activation) {
+        add(c.activation);
+      }
+      if (c.cleanup) {
+        add(c.cleanup);
+      }
+      if (c.pending && c.pending.kind !== 'error') {
+        add(c.pending.frame);
+      }
+      c.queue.forEach(s => add(s.frame));
+      c.exited.forEach(s => add(s.frame));
+      c.seen.forEach((_, f) => add(f));
+      c.excluded.forEach((_, f) => add(f));
+      c.cleanupOnly.forEach(add);
+    }
+    // Include owner-only continuations, then reject cycles without recursion.
+    for (const f of frames) {
+      if (f.owner) {
+        add(f.owner);
+      }
+    }
+    const checkedOwners = new Set<Frame>();
+    for (const f of frames) {
+      requireSnapshot(
+        knownCode.has(f.code) && f.code.unit.bodies.includes(f.body),
+      );
+      requireSnapshot(
+        snapshotCounter(f.pc) && f.pc >= f.body.start && f.pc < f.body.end,
+      );
+      requireSnapshot(
+        Array.isArray(f.locals) &&
+          f.locals.length === f.body.locals.length &&
+          f.locals.every(Value.isValue),
+      );
+      requireSnapshot(Array.isArray(f.stack));
+      requireSnapshot(f.activation === undefined || f.activation === true);
+      if (f.activation) {
+        requireSnapshot(f.owner);
+      }
+      if (f.owner) {
+        requireSnapshot(
+          f.owner.code === f.code &&
+            f.owner.body === f.body &&
+            f.owner.locals === f.locals,
+        );
+      }
+      const chain = new Set<Frame>();
+      let owner: Frame | undefined = f;
+      while (owner && !checkedOwners.has(owner)) {
+        requireSnapshot(!chain.has(owner));
+        chain.add(owner);
+        owner = owner.owner;
+      }
+      chain.forEach(f => checkedOwners.add(f));
+    }
+    const entry = (f: Frame, e: UnwindEntry | undefined, kind: string) => {
+      requireSnapshot(e && e.kind === kind && f.code.unit.unwind.includes(e));
+      requireSnapshot(e!.start >= f.body.start && e!.end <= f.body.end);
+    };
+    const cleanup = (s: { entry: UnwindEntry; frame: Frame }) => {
+      entry(s.frame, s.entry, 'finally');
+      requireSnapshot(this.activeEntries(s.frame).includes(s.entry));
+      requireSnapshot(s.frame.stack.length >= s.entry.depth);
+    };
+    this.cancellation?.forEach(cleanup);
+    for (const [i, c] of this.recoveries.entries()) {
+      if (c.boundary) {
+        requireSnapshot(this.recoveries.slice(0, i).includes(c.boundary.outer));
+        requireSnapshot(
+          c.retained.includes(c.boundary.frame) && c.boundary.frame.activation,
+        );
+        requireSnapshot(
+          c.boundary.outer.activation === c.boundary.frame ||
+            c.boundary.outer.cleanup === c.boundary.frame,
+        );
+      }
+      if (c.owner || c.entry) {
+        requireSnapshot(c.owner === c.retained[c.cursor]);
+        entry(c.owner!, c.entry, 'catch');
+        requireSnapshot(
+          this.activeEntries(c.owner!).includes(c.entry!) &&
+            c.seen.get(c.owner!)?.has(c.entry!.target),
+        );
+      }
+      if (c.activation) {
+        requireSnapshot(
+          c.activation.activation &&
+            c.activation.owner === c.owner &&
+            c.activation.pc >= c.entry!.target,
+        );
+      }
+      if (!c.pending) {
+        requireSnapshot(
+          c.owner &&
+            c.entry &&
+            c.activation &&
+            !c.cleanup &&
+            !c.cleanupEntry &&
+            c.queue.length === 0,
+        );
+        requireSnapshot(
+          c.activation!.owner === c.owner && c.activation!.activation,
+        );
+      } else {
+        requireSnapshot(['error', 'catch', 'offer'].includes(c.pending.kind));
+        requireSnapshot(c.cleanup && c.cleanupEntry && c.exited.length > 0);
+        entry(c.cleanup!, c.cleanupEntry, 'finally');
+        requireSnapshot(
+          c.cleanup!.pc >= c.cleanupEntry!.target &&
+            c.cleanup!.pc <
+              cleanupEnd(c.cleanup!.code.unit, c.cleanupEntry!.target),
+        );
+        const p = c.pending;
+        if (p.kind !== 'error') {
+          requireSnapshot(c.owner && c.entry && c.retained.includes(p.frame));
+          requireSnapshot(
+            snapshotCounter(p.pc) &&
+              p.pc >= p.frame.body.start &&
+              p.pc < p.frame.body.end &&
+              Array.isArray(p.stack),
+          );
+          if (p.kind === 'catch') {
+            requireSnapshot(
+              p.frame === c.owner &&
+                c.activation &&
+                p.pc === c.activation.pc + 1 &&
+                p.frame.code.unit.code[p.pc - 1]?.op === 'catch-accept',
+            );
+          } else {
+            requireSnapshot(
+              snapshotCounter(p.attempt) &&
+                p.attempt > 0 &&
+                p.attempt <= this.offerAttempt,
+            );
+            requireSnapshot(
+              Array.isArray(p.args) &&
+                p.args.every(Value.isValue) &&
+                Array.isArray(p.binds) &&
+                p.args.length === p.binds.length,
+            );
+            const target = this.activeEntries(p.frame).find(
+              e =>
+                e.kind === 'offer' &&
+                p.frame.code.unit.offers?.[e.target]?.offers.some(
+                  o =>
+                    o.target === p.pc &&
+                    o.binds.length === p.binds.length &&
+                    o.binds.every((slot, j) => slot === p.binds[j]),
+                ),
+            );
+            requireSnapshot(target && p.stack.length === target.depth);
+          }
+        }
+      }
+      const scopes = new Map<Frame, Set<UnwindEntry>>();
+      for (const s of [...c.exited, ...c.queue]) {
+        cleanup(s);
+        requireSnapshot(
+          snapshotCounter(s.index) &&
+            (c.retained[s.index] === s.frame ||
+              (s.index === c.retained.length &&
+                s.frame.activation &&
+                s.frame.owner === c.owner)),
+        );
+        const seen = scopes.get(s.frame) ?? new Set<UnwindEntry>();
+        requireSnapshot(!seen.has(s.entry));
+        seen.add(s.entry);
+        scopes.set(s.frame, seen);
+      }
+      c.seen.forEach((targets, f) => {
+        requireSnapshot(Object.getPrototypeOf(targets) === Set.prototype);
+        targets.forEach(pc =>
+          requireSnapshot(
+            f.code.unit.unwind.some(
+              e =>
+                e.kind === 'catch' &&
+                e.target === pc &&
+                e.start >= f.body.start &&
+                e.end <= f.body.end,
+            ),
+          ),
+        );
+      });
+      c.excluded.forEach((keys, f) => {
+        requireSnapshot(Object.getPrototypeOf(keys) === Set.prototype);
+        keys.forEach(key =>
+          requireSnapshot(
+            f.code.unit.unwind.some(
+              e =>
+                this.entryKey(e) === key &&
+                e.start >= f.body.start &&
+                e.end <= f.body.end,
+            ),
+          ),
+        );
+      });
+    }
+    const attempts = new Set<number>();
+    for (const r of this.records) {
+      if (r.kind === 'offer-chosen') {
+        requireSnapshot(
+          snapshotCounter(r.attempt) &&
+            r.attempt > 0 &&
+            r.attempt <= this.offerAttempt &&
+            !attempts.has(r.attempt),
+        );
+        attempts.add(r.attempt);
+      }
+    }
+    let lastAttempt = 0;
+    for (const attempt of attempts) {
+      lastAttempt = Math.max(lastAttempt, attempt);
+    }
+    requireSnapshot(this.offerAttempt === lastAttempt);
   }
 
   get cancelling(): boolean {

@@ -14,7 +14,7 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 ## Task navigation
 
-**Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested policy searches stay within their selection boundary; escaping policy Errors carry `during` outward, transfer cleanup preserves or cancels choices as appropriate, and cancellation enumerates dispatch-local and retained scopes once. Full snapshot validation and debugger/session integration remain separate slices [#390](https://github.com/odogono/odgn-talk/issues/390) and [#391](https://github.com/odogono/odgn-talk/issues/391); see the [handoff](../../spec/proposals/recovery-offers.md).
+**Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested policy searches stay within their selection boundary; escaping policy Errors carry `during` outward, transfer cleanup preserves or cancels choices as appropriate, and cancellation enumerates dispatch-local and retained scopes once. Dispatch saves retain control stacks, shared owner locals, pending transfers, cleanup progress and attempt numbers. Restore validates every retained code/body/PC, ownership chain, target and cleanup reference before resuming; search and lookup preempt only at the following instruction boundary. [Save/restore evidence](../../docs/reviews/recovery-offers-saves/README.md) covers ordinary catches, nested policy, transfer cleanup, action entry and cancellation. Debugger/session integration remains [#391](https://github.com/odogono/odgn-talk/issues/391); see the [handoff](../../spec/proposals/recovery-offers.md).
 
 Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 
@@ -302,9 +302,10 @@ Snapshots retain preempted and suspended Runs, including their rollback bases.
 
 ## Save, restore and code updates
 
-`Group.Save` returns opaque `go/1` bytes for a Quiescent Group. It retains the
+`Group.Save` returns opaque `go/2` bytes for a Quiescent Group. It retains the
 Clock, sources and extensions, heap Values and closures, frames and rollback
-bases, budgets and slice debt, ordered work and input queues, pending replies,
+bases, dispatch contexts and activations, owner identities, pending transfers,
+cleanup progress and attempt counters, budgets and slice debt, ordered work and input queues, pending replies,
 Decisions and Broadcasts, Objects and Grant state. It never starts work, drains
 inputs or calls Host cleanup. Live scopes or participants, including unresolved
 external effect state, refuse Save with `effects pending`.
@@ -312,7 +313,11 @@ external effect state, refuse Save with `effects pending`.
 `Core.Restore` rebuilds code and checks the saved Group Fingerprint against
 current language/cost versions, Library identities, Grant declarations and
 limits. Saves are specific to the Go Core family and format; corrupt or
-unreadable bytes return `invalid save`. Native Object bindings, Host functions,
+unreadable bytes return `invalid save`. Format `go/1` is no longer readable;
+`go/2` requires transfer references to belong to surviving dispatch contexts,
+including after cancellation. Restore validates retained and active code/body/PC
+references, shared owner-local layouts, phases, action arguments, cleanup tables
+and acyclic ownership before rebuilding aliases. Native Object bindings, Host functions,
 lifecycle hooks and Host futures are supplied again rather than serialized.
 Missing Grant bindings become revoked; unresolved Objects become disposed.
 
