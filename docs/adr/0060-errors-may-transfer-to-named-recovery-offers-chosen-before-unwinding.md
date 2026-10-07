@@ -1,6 +1,6 @@
 # Errors may transfer to named Recovery Offers chosen before unwinding
 
-Code may make named Recovery Offers, and an explicitly marked Recovery Catch may choose one before failed frames are discarded. Every catch is tested before anything unwinds, so only an accepting catch is a barrier. This lets an outer caller set policy across deep Library calls without forwarding a callback through every API, while retaining the Library's local work; recovery remains a structured transfer to code the callee declared, never arbitrary failed-instruction resumption. Settled in [#367](https://github.com/odogono/odgn-talk/issues/367); the complete [staged specification](../../spec/proposals/recovery-offers.md) is accepted, with implementation pending.
+Code may make named Recovery Offers, and an explicitly marked Recovery Catch may choose one before failed frames are discarded. Every catch is tested before anything unwinds, so only an accepting catch is a barrier. This lets an outer caller set policy across deep Library calls without forwarding a callback through every API, while retaining the Library's local work; recovery remains a structured transfer to code the callee declared, never arbitrary failed-instruction resumption. Settled in [#367](https://github.com/odogono/odgn-talk/issues/367); the [language rules](../../spec/04-expressions-and-statements.md#recovery-offers) and [machine contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#the-unwind-table) specify the delivered behavior.
 
 ## Why this boundary
 
@@ -14,7 +14,7 @@ Code may make named Recovery Offers, and an explicitly marked Recovery Catch may
 
 ## Delivery
 
-The design/spec/docs PR lands the full contract as a staged proposal, terms and examples. Executable grammar, catalogues, generated tables, reference tools, both Cores and tooling land through [implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) on one integration branch; declaring opcodes or Advanced tags now would require unsupported coverage (the [change-impact guide](../agents/spec-changes.md)). Two-phase search ships with Recovery Offers, not ahead of them. Proposed examples remain visibly implementation-pending `text` blocks; the supported callback example is checked `talk`.
+The original design was staged in PRs #382 and #386. [Implementation issue #383](https://github.com/odogono/odgn-talk/issues/383) delivered grammar/checks (#394), execution and costs (#396), nested recovery/cancellation (#400), dispatch snapshots (#401), debugger/session/Playground integration (#405), and final chapter integration (#392) on `feat/recovery-offers`. The numbered chapters and executable Data Files now own the rules, and examples are checked `talk` blocks. Two-phase search ships with Recovery Offers.
 
 The language remains `1.0-rc.2` because it is unreleased. Cost Model 0 remains provisional. Two-phase search changes ordinary Error Fuel and Trace order, so implementation re-derives the affected corpus expectations. Recovery state is saved without duplicated owner locals, and both Cores must agree before corpus expectations receive their separate first-blessing review.
 

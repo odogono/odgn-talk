@@ -90,12 +90,12 @@ do not approve this new runtime-derived change.
 
 ## Delivery boundary
 
-This is slice 2 against `feat/recovery-offers`, not the final merge to `main`.
-Nested recovery and cancellation scope enumeration belong to #389; complete
-snapshot phase/reference validation belongs to #390; debugger/session/Playground
-integration belongs to #391. Existing ordinary Save/Restore regressions remain
-passing, including shared owner locals reconstructed by the Go private codec.
-The final conformance/blessing audit remains #392.
+This record describes slice 2 at PR #396 on `feat/recovery-offers`. Later merged
+slices delivered nested recovery/cancellation (#400), snapshot validation (#401)
+and debugger/session/Playground integration (#405). Current support belongs in
+the Core/tooling guides. The [final approval package](../recovery-offers-integration/README.md)
+consolidates the exact changed expectations and independent boundary arithmetic;
+first-blessing approval is still separate from execution agreement.
 
 ## Verification (2026-10-06)
 

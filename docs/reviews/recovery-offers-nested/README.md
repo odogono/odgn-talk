@@ -31,9 +31,9 @@ owner once. These are implementation corrections at the existing rates.
 Candidates are replay-derived without `--bless`. Both Cores compare the complete
 ordinary and transparent Save/Restore Traces. No prior expectation is blessed
 or replaced by this slice. The [TS](../../../impl/ts/README.md) and
-[Go](../../../impl/go/README.md) guides describe current support; complete
-snapshot validation (#390), debugger/session integration (#391) and final
-conformance/blessing (#392) remain separate work.
+[Go](../../../impl/go/README.md) guides describe current support; subsequent merged PRs #401 and #405 delivered snapshot validation and
+debugger/session integration. The [final review](../recovery-offers-integration/README.md)
+consolidates first-blessing approval for #392.
 
 Shared standalone [nested cases](../../../tools/machine/recovery-nested-cases.json)
 add consecutive selection-boundary escape and exact 46-Fuel same-owner policy

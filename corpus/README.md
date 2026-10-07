@@ -259,12 +259,14 @@ and object filters, pending Join members and early answers. Their first human
 review remains outstanding; each new Trace retains its `Unblessed` header.
 Current behavior is described in the [TS verification guide](../impl/ts/README.md#verification-and-corpus-selection).
 
-The #388 Recovery Offers slice adds unblessed `recovery-offers/basic`,
-`recovery-offers/boundaries`, `recovery-offers/costs`,
-`recovery-offers/cleanup-restore` and
-`disassembly/recovery-offers` cases. They pin retained Library work, choice/entry
-ordering and attempts, foreign-Run boundaries, exact dispatch sizes and atomic
-lookup debt. The [expectation review](../docs/reviews/recovery-offers-runtime/README.md)
-lists every changed existing expectation and keeps approval separate from
-cross-Core execution agreement. Nested dispatch/cancellation and full saved/debug
-recovery integration remain later slices of #383.
+The Recovery Offers cases `basic`, `boundaries`, `costs`, `cleanup-restore`,
+`nested`, `cancellation` and `action-suspend`, plus `disassembly/recovery-offers`,
+cover retained Library work, choice/entry ordering, foreign-Run boundaries,
+exact dispatch sizes, atomic lookup debt, nested policy, cancellation and action
+suspension. Both Cores execute ordinary and restored replay, and the Go passing
+gate protects them. Their first-blessing approval and the corrections to
+existing catch expectations remain in the
+[final review package](../docs/reviews/recovery-offers-integration/README.md).
+Current language rules are in [chapter 4](../spec/04-expressions-and-statements.md#recovery-offers);
+Core/tooling guides describe support, while the slice review notes record
+historical evidence.
