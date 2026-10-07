@@ -3,9 +3,9 @@
 // module only decides which Entries and Session Commands to give it, and maps
 // debugger positions between tabs and loaded code units. It does no I/O.
 import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
-import { type Value } from '@odgn/northtalk';
 import type {
   DebugController,
+  DebugFrame,
   DebugInstruction,
   DebugPause,
 } from '@odgn/northtalk/debug';
@@ -45,7 +45,15 @@ export type Faults = { error: boolean; limitFault: boolean };
 /** Where a debug pause is, shown against the tabs when it falls in one. */
 export type PauseView = {
   error?: string;
-  frames: { handler?: string; line: number; locals: string[]; unit: string }[];
+  frames: {
+    handler?: string;
+    line: number;
+    locals: string[];
+    /** Zero-based index in this displayed (innermost-first) frame list. */
+    owner?: number;
+    role?: DebugFrame['role'];
+    unit: string;
+  }[];
   limit?: string;
   line: number;
   reason: DebugPause['reason'];
@@ -55,6 +63,19 @@ export type PauseView = {
   unit: string;
   views: { mailbox: string[]; runs: string[]; vars: string[] };
 };
+
+/** Frame views shared by the live and replay panels, innermost first. */
+export const frameViews = (
+  frames: readonly DebugFrame[],
+): PauseView['frames'] =>
+  [...frames].reverse().map(f => ({
+    unit: f.unit,
+    line: f.line,
+    ...(f.handler ? { handler: f.handler } : {}),
+    ...(f.role ? { role: f.role } : {}),
+    ...(f.owner === undefined ? {} : { owner: frames.length - 1 - f.owner }),
+    locals: f.locals.map(([name, value]) => `${name} = ${value.toString()}`),
+  }));
 
 export type ApplyResult =
   | { error: string; kind: 'syntax' }
@@ -501,14 +522,7 @@ export class PlaygroundSession {
         mailbox: renderDebugView(snapshot, 'mailbox'),
         vars: renderDebugView(snapshot, 'vars'),
       },
-      frames: [...(run?.frames ?? [])].reverse().map(f => ({
-        unit: f.unit,
-        line: f.line,
-        ...(f.handler ? { handler: f.handler } : {}),
-        locals: f.locals.map(
-          ([name, value]: [string, Value]) => `${name} = ${value.toString()}`,
-        ),
-      })),
+      frames: frameViews(run?.frames ?? []),
     };
   }
 

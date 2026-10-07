@@ -1,6 +1,50 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { parseEntry, parseInstant } from '../src/index';
-import { SessionHost } from '../src/session';
+import {
+  parseTranscript,
+  replayTranscript,
+  SessionHost,
+  writeTranscript,
+  type TranscriptItem,
+} from '../src/session';
+
+test('a Session Script chooses a Library offer and replays its Transcript and Trace', () => {
+  const trace: string[] = [];
+  const items: TranscriptItem[] = [];
+  const host = new SessionHost({
+    now: () => start,
+    record: item => items.push(item),
+    trace: line => trace.push(line),
+  });
+  const library = readFileSync(
+    new URL('../../../corpus/recovery-offers/basic/rows.talk', import.meta.url),
+    'utf8',
+  );
+  for (const source of [
+    ':clock virtual 2026-09-30T10:00:00Z',
+    `:library add rows\n${library.trimEnd()}`,
+    'use parseRows from rows',
+    'function convert row\n return row as number\nend convert',
+    'on go\n try\n  put parseRows(["5", "bad", "7"], convert) into rows\n catch e before unwind where offerAvailable("useValue")\n  choose offer useValue(0)\n end try\n say rows\nend go',
+  ]) {
+    expect(host.input(source)).toEqual([]);
+  }
+  expect(host.input('go')).toEqual(['[5, 0, 7]']);
+  const text = writeTranscript(items);
+  const replayedTrace: string[] = [];
+  const replayed = replayTranscript(parseTranscript(text), {
+    trace: line => replayedTrace.push(line),
+  });
+  expect(writeTranscript(replayed.items)).toBe(text);
+  expect(replayedTrace).toEqual(trace);
+  expect(trace.filter(line => line.startsWith('offer-chosen '))).toHaveLength(
+    1,
+  );
+  expect(trace.filter(line => line.startsWith('offer-entered '))).toHaveLength(
+    1,
+  );
+});
 
 const start = parseInstant('2026-09-30T10:00:00Z');
 const session = () => {
