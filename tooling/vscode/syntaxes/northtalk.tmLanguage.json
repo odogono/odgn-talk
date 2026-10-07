@@ -30,6 +30,9 @@
           "include": "#number"
         },
         {
+          "include": "#fallback"
+        },
+        {
           "include": "#declaration"
         },
         {
@@ -168,6 +171,26 @@
         },
         "2": {
           "name": "keyword.other.unit.northtalk"
+        }
+      }
+    },
+    "fallback": {
+      "match": "(?<![A-Za-z0-9_])(?:(on)|(end)|(pass))[ \\t]+(any)[ \\t]+(message)(?![A-Za-z0-9_])",
+      "captures": {
+        "1": {
+          "name": "storage.type.function.northtalk"
+        },
+        "2": {
+          "name": "keyword.control.northtalk"
+        },
+        "3": {
+          "name": "keyword.other.northtalk"
+        },
+        "4": {
+          "name": "keyword.other.northtalk"
+        },
+        "5": {
+          "name": "keyword.other.northtalk"
         }
       }
     },

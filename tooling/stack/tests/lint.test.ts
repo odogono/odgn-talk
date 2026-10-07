@@ -24,10 +24,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(20);
+test('ships twenty-one implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(21);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(20);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(21);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -379,6 +379,30 @@ test('unknown-message is manifest-only and respects suppression and Library cont
       checkOptions: { unit: 'library' },
     }).lints,
   ).toEqual([]);
+});
+
+test('a Fallback Handler is no message for unknown-message, and names its own end', () => {
+  const source = 'on any message m\nend';
+  expect(lint(source, { manifest: fixtureManifest }).lints).toEqual([]);
+  expect(
+    lint(source, { profile: 'beginner' }).lints.map(l => l.message),
+  ).toEqual([expect.stringContaining('any message')]);
+});
+
+test('fallback-routes-known reads the head pattern and either side of `is`', () => {
+  const handlers = 'on ping\nend ping\non move a to b\nend move\n';
+  for (const [clause, expected] of [
+    ['on any message {name: "ping"}', 1],
+    ['on any message {name: "move:to:", args: a}', 1],
+    ['on any message m where "ping" is the name of m', 1],
+    ['on any message m\n  if the name of m is "ping" then return 1', 1],
+    ['on any message {name: "pong"}', 0],
+    ['on any message m where the name of n is "ping"', 0],
+  ] as const) {
+    expect(
+      advice(`${handlers}${clause}\nend any message`, 'fallback-routes-known'),
+    ).toHaveLength(expected);
+  }
 });
 
 test('key presence guards and immutable map constants make emptiness tests safe', () => {

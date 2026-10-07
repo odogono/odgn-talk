@@ -1,0 +1,29 @@
+# Unblessed: the output lines are written by bless, and await their first review.
+# The second `tick` arrives while the first waits, so the `, dropping`
+# clause drops it. `jump` and `hop` take the `, queued` clause, so `hop`
+# parks until `jump` ends.
+> load s identity=06911220586c38acd6a67ccd16f47a89c9d1c3174d400c2fef02eefc8dbb53af
+> deliver d1 to=s message=tick
+> deliver d2 to=s message=tick
+> deliver d3 to=s message=jump
+> deliver d4 to=s message=hop
+> pump clock=2026-10-07T09:00:00Z
+seg s/r1 start delivery=d1 handler=tick fallback=yes clause=1 fuel=24 alloc=0 state=436 end=wait until=2026-10-07T09:00:01Z
+seg s/r2 start delivery=d2 handler=tick fallback=yes clause=1 fuel=13 alloc=0 state=404 end=dropped
+run s/r2 outcome=dropped delivery=d2 handler=tick fallback=yes fuel=13 alloc=0
+seg s/r3 start delivery=d3 handler=jump fallback=yes clause=2 fuel=30 alloc=0 state=680 end=wait until=2026-10-07T09:00:01Z
+seg s/r4 start delivery=d4 handler=hop fallback=yes clause=2 fuel=19 alloc=0 state=955 end=park
+pumped state=idle fuel=86 next=2026-10-07T09:00:01Z
+> pump clock=2026-10-07T09:00:01Z
+seg s/r1 resume fuel=13 alloc=16 state=647 end=return
+run s/r1 outcome=completed delivery=d1 handler=tick fallback=yes fuel=37 alloc=16
+seg s/r3 resume fuel=15 alloc=28 state=367 end=return
+run s/r3 outcome=completed delivery=d3 handler=jump fallback=yes fuel=45 alloc=28
+seg s/r4 resume fuel=11 alloc=0 state=367 end=wait until=2026-10-07T09:00:02Z
+pumped state=idle fuel=39 next=2026-10-07T09:00:02Z
+> pump clock=2026-10-07T09:00:02Z
+seg s/r4 resume fuel=15 alloc=27 state=87 end=return
+run s/r4 outcome=completed delivery=d4 handler=hop fallback=yes fuel=45 alloc=27
+pumped state=idle fuel=15
+> vars
+vars s ticks=1 seen=["jump", "hop"]

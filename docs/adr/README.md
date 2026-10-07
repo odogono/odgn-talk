@@ -64,3 +64,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0060: Errors may transfer to named Recovery Offers chosen before unwinding](0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md)
 - [0061: Host Notifications share routing and are scoped by Grant bindings](0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)
 - [0062: A Store key is reserved while a Segment holds an uncommitted write](0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)
+- [0063: A Fallback Handler receives the messages no clause matches](0063-a-fallback-handler-receives-messages-no-clause-matches.md)

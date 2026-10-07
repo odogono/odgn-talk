@@ -33,7 +33,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
 - **The Clock is an argument:** `Pump(now, …)` takes the Group's one Clock reading, and `Call.Now()` returns it. A reading earlier than the last Pump's is `clock backwards`. A game pauses by not pumping, and freezes time by passing the same `now`.
 - **Reports are returned, never called back:** a Pump returns its reports as one ordered list, and `Request` and `Call` futures settle as it finishes. Calls that end Runs outside a Pump (`Reload` and `ReplaceLibrary`) return their reports.
 - **The report kinds:**
-  - `run end`, carrying its delivery id and any broadcast id. An `errored` Run's error reaches the Host as a `ScriptError`: its `code`, its text `message`, and its other fields as its data. Its `at` is the raise that no Unwind Table entry caught, the Run's last `raise` record, and a Limit Fault's is its faulting instruction, the `fault` record's: each gives the code unit, the frame's Handler as an error's `at` names it, the instruction index and the source position. Other outcomes have no `at`
+  - `run end`, carrying its delivery id and any broadcast id. A Run that a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler) clause ran sets `fallback`, and its `handler` is the message's Selector. An `errored` Run's error reaches the Host as a `ScriptError`: its `code`, its text `message`, and its other fields as its data. Its `at` is the raise that no Unwind Table entry caught, the Run's last `raise` record, and a Limit Fault's is its faulting instruction, the `fault` record's: each gives the code unit, the frame's Handler as an error's `at` names it, the instruction index and the source position. Other outcomes have no `at`
   - `stop`
   - `unhandled`
   - `call failed`, which carries the Host-side detail of a `host error` the Script saw
@@ -253,7 +253,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `counters`, `grants` | – | `Counters`, or `{name: [ops]}` | `Counters`, `Grants` |
 | `export-manifest` | the manifest's definitions, by handle | `manifest`: bytes | `ExportManifest` |
 
-- **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `outcome`, `result (V)`, `error`, `limit`, `effect`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed`, `effect failure` and `decided`.
+- **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `fallback`, `outcome`, `result (V)`, `error`, `limit`, `effect`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed`, `effect failure` and `decided`.
 - **Encodings:** `now` and `nextDeadline` are `$instant` text, byte strings (saves, identities, fingerprints) are `{"$bytes": …}`, durations are whole milliseconds, and every other integer is a JSON integer when its magnitude is below 2⁵³, and its decimal text in a JSON string otherwise.
 - **Traces:** when a Group was made with `trace: true`, the reply to every message that is a Host Input recorded in the Trace carries `trace`, the records it made ([chapter 11](11-the-trace-and-conformance.md)).
 - **Framing:** over WASI, the Host writes a frame into a buffer the export `talk_buffer(n)` gives, and `talk_send(n)` returns the reply's pointer and length packed as `ptr << 32 | len`. A sidecar sends each frame as a 4-byte big-endian length, then the JSON, both ways on stdio.

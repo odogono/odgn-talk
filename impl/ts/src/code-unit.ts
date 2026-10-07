@@ -10,7 +10,8 @@ export type Instruction = {
   op: string;
   operands: Operand[];
 };
-export type BodyKind = 'init' | 'function' | 'handler' | 'lambda' | 'event';
+export type BodyKind =
+  'init' | 'function' | 'handler' | 'fallback' | 'lambda' | 'event';
 export type Body = {
   /** First body instruction after successful Handler dispatch. */
   acceptedAt?: number;

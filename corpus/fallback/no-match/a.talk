@@ -1,0 +1,15 @@
+-- a.talk: sends `b` messages it has no clause for, and one it has.
+
+script variable replies = []
+
+on go
+  send missing with 1 to b
+  send greet with "Bob" to b
+  send greet with "Ann", "Bob" to b
+  send greet with "Ann" to b and wait
+  put it after replies
+  send frobnicate to b and wait
+  put it after replies
+  send ("move:to:") with "knight", "e4" to b and wait
+  put it after replies
+end go

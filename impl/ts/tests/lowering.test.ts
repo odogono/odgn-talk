@@ -280,6 +280,51 @@ describe('the code unit', () => {
     );
   });
 
+  test('a Fallback Handler clause is a `fallback` body named `any message`', () => {
+    const unit = compile(
+      [
+        'on any message m where the name of m is "x"',
+        '  put given: m into f',
+        'end any message',
+        'on any x',
+        'end any',
+        'on any message m, queued',
+        '  pass any message',
+        'end',
+      ].join('\n'),
+    );
+    expect(
+      section(unit, 'bodies').map(line => line.replace(/ locals.*$/, '')),
+    ).toEqual([
+      '0 init initialiser ()',
+      '1 fallback any message clause 1 (m)',
+      '2 handler any clause 1 (x)',
+      '3 fallback any message clause 2 (m)',
+      '4 lambda any message:2:7 () captures 1',
+    ]);
+    expect(code(unit, 3)[0]).toBe('0016 7:3 pass any message');
+  });
+
+  test('a spreading send builds one list under the name, at the send', () => {
+    const unit = compile(
+      'on t xs\n  send log with 1, ...xs to me and wait\nend t',
+    );
+    expect(code(unit)).toEqual([
+      '0002 2:3 const 1 ; "log"',
+      '0003 2:3 list 0',
+      '0004 2:17 const 2 ; 1',
+      '0005 2:3 list-append',
+      '0006 2:23 load 1 ; xs',
+      '0007 2:3 list-extend',
+      '0008 2:29 me',
+      '0009 2:3 send-spread-wait',
+      '0010 2:3 store 0 ; it',
+      '0011 3:1 const 0 ; nothing',
+      '0012 3:1 return',
+      '0013 3:1 clause-fail',
+    ]);
+  });
+
   test('definitions: Constants, imported ones, then defaults, in source order', () => {
     const unit = compile(
       [

@@ -230,6 +230,8 @@ export type Report =
       delivery?: string;
       effect?: EffectFailure;
       error?: ScriptError;
+      /** Set when a Fallback Handler clause ran it; `handler` is then the Selector. */
+      fallback?: boolean;
       fn?: Value;
       fuel: number;
       handler?: string;
@@ -383,6 +385,12 @@ type Running = {
   run: Run;
   selected?: boolean;
 };
+// Whether two Runs took the same clause, for its Queueing Policy. A Fallback
+// Handler clause is one clause whatever the message (ADR 0063).
+const sameClause = (a: Running, b: Running): boolean =>
+  a.run.fallback === b.run.fallback &&
+  (a.run.fallback || a.delivery.message === b.delivery.message) &&
+  a.run.clauseNumber === b.run.clauseNumber;
 // A timer (chapter 5, A Pump): fired in deadline order, then set order.
 type TimerAction =
   | { k: 'wake'; running: Running; s: ScriptState }
@@ -3571,7 +3579,15 @@ export class Group {
             ...s.limits,
             ...limits,
           })
-        : dispatch(s.loaded, delivery.message, delivery.args, limits);
+        : dispatch(
+            s.loaded,
+            delivery.message,
+            delivery.args,
+            limits,
+            // A Broadcast, a Decision and an `error` message never reach a
+            // Fallback Handler, anywhere on their path (ADR 0063).
+            !delivery.broadcast && !delivery.ballot && !delivery.during,
+          );
       // At this Run's end, the rest of the queue is what the Script keeps.
       run.persistentState = () => this.persistentState(s, 1);
       head = {
@@ -3605,11 +3621,7 @@ export class Group {
 
     const earlierRuns = () =>
       this.runsOf(s).filter(
-        r =>
-          r !== running &&
-          r.selected &&
-          r.delivery.message === running.delivery.message &&
-          r.run.clauseNumber === run.clauseNumber,
+        r => r !== running && r.selected && sameClause(r, running),
       );
     const replaceEarlier = () => {
       for (const r of earlierRuns()) {
@@ -3774,8 +3786,12 @@ export class Group {
     }
     outcome = run.ended;
     this.active = null;
+    // A Run a Fallback Handler clause took names the message's Selector as
+    // its Handler; one that ended unhandled took no clause (ADR 0063).
+    const fallback = run.fallback && outcome?.kind !== 'unhandled';
     const handler =
-      !running.delivery.fn && s.loaded.clauses.has(running.delivery.message)
+      !running.delivery.fn &&
+      (fallback || s.loaded.clauses.has(running.delivery.message))
         ? running.delivery.message
         : null;
     const observe = (end: string, until?: bigint) =>
@@ -3797,6 +3813,7 @@ export class Group {
             ['broadcast', running.delivery.broadcast ?? null],
             ['from', running.delivery.from],
             ['handler', handler],
+            ['fallback', fallback ? 'yes' : null],
             // No clause matched an unhandled Run.
             [
               'clause',
@@ -3928,7 +3945,7 @@ export class Group {
     }
     this.writeCancellationAbandons(run);
     run.openVerdict = false;
-    this.endRun(s, running, outcome, reports, handler);
+    this.endRun(s, running, outcome, reports, handler, fallback);
   }
 
   private writeCancellationAbandons(run: Run) {
@@ -4165,6 +4182,7 @@ export class Group {
     outcome: Outcome,
     reports: Report[],
     handler: string | null,
+    fallback: boolean,
   ) {
     const { run, delivery } = running;
     this.accumulateRunCosts(s, run);
@@ -4190,6 +4208,7 @@ export class Group {
           ['delivery', delivery.id],
           ['broadcast', delivery.broadcast ?? null],
           ['handler', handler],
+          ['fallback', fallback ? 'yes' : null],
           ['fn', delivery.fn ? traceValue(delivery.fn) : null],
           [
             'value',
@@ -4237,6 +4256,7 @@ export class Group {
       ...(delivery.id ? { delivery: delivery.id } : {}),
       ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
       ...(handler ? { handler } : {}),
+      ...(fallback ? { fallback } : {}),
       ...(delivery.fn ? { fn: delivery.fn } : {}),
       ...(outcome.kind === 'cancelled' && outcome.cleanupFailed
         ? {
@@ -4350,15 +4370,12 @@ export class Group {
   }
 
   private releaseParked(s: ScriptState, ended: Running) {
-    const sameClause = (r: Running) =>
-      !r.delivery.fn &&
-      !ended.delivery.fn &&
-      r.delivery.message === ended.delivery.message &&
-      r.run.clauseNumber === ended.run.clauseNumber;
-    if (this.runsOf(s).some(r => !r.parked && sameClause(r))) {
+    const same = (r: Running) =>
+      !r.delivery.fn && !ended.delivery.fn && sameClause(r, ended);
+    if (this.runsOf(s).some(r => !r.parked && same(r))) {
       return;
     }
-    const next = s.parked.find(sameClause);
+    const next = s.parked.find(same);
     if (!next) {
       return;
     }

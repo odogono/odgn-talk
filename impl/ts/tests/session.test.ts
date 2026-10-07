@@ -186,6 +186,24 @@ describe('The Session Host', () => {
     );
   });
 
+  test('extends with a Fallback Handler, and redefines it in its place', () => {
+    const { host } = session();
+    host.input('put [] into seen');
+    host.input(
+      'on any message m\n  put the name of m after seen\nend any message',
+    );
+    host.input('send hop with 1 to session');
+    expect(host.input('seen')).toEqual(['["hop"]']);
+    expect(
+      host.input('on any message m\n  put 0 after seen\nend any message'),
+    ).toEqual([]);
+    host.input('send skip to session');
+    expect(host.input('seen')).toEqual(['["hop", 0]']);
+    expect(host.source).toBe(
+      'script variable seen\non any message m\n  put 0 after seen\nend any message\n',
+    );
+  });
+
   test('redefines a declaration in its place, carrying Script Variables over', () => {
     const { host } = session();
     host.input('put 5 into n');

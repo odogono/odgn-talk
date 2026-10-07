@@ -1,0 +1,36 @@
+# message-path: a Fallback runs in each Script on a message's path, before
+# the climb. `pass keypress` in a named clause skips the knight's own
+# Fallback; `pass any message` climbs with the message unchanged (chapter 5,
+# The Fallback Handler; ADR 0063).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "board"
+parentKinds = []
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "board"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "board" }
+
+[[scripts]]
+name = "piece"
+source = "piece.talk"
+owner = { kind = "piece", id = "knight" }

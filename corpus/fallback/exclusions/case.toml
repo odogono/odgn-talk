@@ -1,0 +1,26 @@
+# exclusions: a Broadcast, a Decision and an `error` message never reach a
+# Fallback Handler, and a Fallback doesn't make its Script want a Broadcast
+# (chapter 5, The Fallback Handler; chapter 6, Uncaught errors; ADR 0063).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "door"
+parentKinds = []
+
+[[objects]]
+kind = "door"
+id = "front"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+owner = { kind = "door", id = "front" }
+
+[[scripts]]
+name = "t"
+source = "t.talk"

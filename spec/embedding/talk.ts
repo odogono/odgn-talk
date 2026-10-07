@@ -611,6 +611,7 @@ export type Report =
       delivery?: string;
       broadcast?: string;
       handler?: string; // absent with run
+      fallback?: boolean; // a Fallback Handler clause ran it; handler is then the message's Selector
       outcome: Outcome;
       effect?: EffectFailure; // effect failed: the failure that prevented commit
       cleanupFailed?: { code: string } | { limit: "cleanup" | "alloc" | "persistent" | "depth" | "pattern" | "join" };

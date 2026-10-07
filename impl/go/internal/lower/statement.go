@@ -3,6 +3,7 @@ package lower
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"slices"
 	"strconv"
 )
 
@@ -148,6 +149,10 @@ func (u *Unit) statement(n *syntax.Node) {
 			u.store(pos, 0)
 		}
 	case "send":
+		if slices.ContainsFunc(n.Children, func(arg *syntax.Node) bool { return arg.Kind == "spread" }) {
+			u.spreadSend(n)
+			return
+		}
 		// A computed name is evaluated first, below the arguments (ADR 0057).
 		named := len(n.Params) > 1
 		if named {
@@ -188,6 +193,39 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.wait(n)
 	default:
 		panic("unhandled statement " + n.Kind)
+	}
+}
+
+// spreadSend lowers a `send` whose `with` list spreads a list: the name as
+// text, the arguments as one list built as a list literal's, the receiver,
+// then `send-spread`, `send-spread-wait` or `join-send-spread`. The send's
+// own instructions keep its position (chapter 8, Sends; ADR 0063).
+func (u *Unit) spreadSend(n *syntax.Node) {
+	pos := n.Pos()
+	if len(n.Params) > 1 {
+		u.expression(n.Params[1])
+	} else {
+		u.value(pos, quote(n.Text))
+	}
+	u.emit(pos, "list", number(0))
+	for _, arg := range n.Children {
+		if arg.Kind == "spread" {
+			u.expression(arg.Children[0])
+			u.emit(pos, "list-extend")
+		} else {
+			u.expression(arg)
+			u.emit(pos, "list-append")
+		}
+	}
+	u.expression(n.Params[0])
+	switch {
+	case !syntax.HasFlag(n, "and"):
+		u.emit(pos, "send-spread")
+	case u.state.join > 0:
+		u.emit(pos, "join-send-spread")
+	default:
+		u.emit(pos, "send-spread-wait")
+		u.store(pos, 0)
 	}
 }
 func (u *Unit) repeat(n *syntax.Node) {

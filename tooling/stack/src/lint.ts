@@ -309,6 +309,10 @@ export const lintSyntax = (
           child => child.rule === 'MessageName' || child.rule === 'Name',
         );
         suffix = name ? summaries.get(name)!.first!.v : suffix;
+        // A Fallback Handler closes with `end any message` (ADR 0063).
+        if (!name && direct[1]?.v === 'any' && direct[2]?.v === 'message') {
+          suffix = 'any message';
+        }
       }
       emit('prefer-explicit-end', ending, { ending: suffix });
     }
@@ -495,6 +499,13 @@ export const lintSyntax = (
     }
     if (node.rule === 'Send' && direct[1]?.v === '(') {
       advanced('A computed message name', direct[1]);
+    }
+    if (node.rule === 'Send') {
+      const list = children.find(child => child.rule === 'ExpressionList');
+      const spread = list && tokens(list).find(token => token.v === '...');
+      if (spread) {
+        advanced('A spread in `send … with`', spread);
+      }
     }
     if (node.rule === 'Element') {
       for (const token of direct) {

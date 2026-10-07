@@ -726,6 +726,15 @@ var Corpus = CorpusTable{
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:  "fallback",
+					Type: "word",
+					Is:   "for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector",
+					Words: []string{
+						"yes",
+					},
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:      "clause",
 					Type:     "count",
 					Is:       "for a start, the clause that matched; an unhandled Run has none",
@@ -808,6 +817,15 @@ var Corpus = CorpusTable{
 					Key:      "handler",
 					Type:     "id",
 					Is:       "for a start, the Handler dispatched to",
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "fallback",
+					Type: "word",
+					Is:   "for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector",
+					Words: []string{
+						"yes",
+					},
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
@@ -1161,6 +1179,15 @@ var Corpus = CorpusTable{
 					Key:      "handler",
 					Type:     "id",
 					Is:       "its Handler",
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:  "fallback",
+					Type: "word",
+					Is:   "for a Run started by the Fallback Handler, `yes`; `handler` is then the message's Selector",
+					Words: []string{
+						"yes",
+					},
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{

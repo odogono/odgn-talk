@@ -125,6 +125,14 @@ message = "The Host Manifest does not declare the message {message}."
 status = "implemented"
 
 [[lint]]
+id = "fallback-routes-known"
+flags = "a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail"
+beginner = "hint"
+standard = "hint"
+message = "{message} has its own Handler, so this Fallback clause runs only when that Handler's clauses don't match."
+status = "implemented"
+
+[[lint]]
 id = "ambiguous-ignoring-case"
 flags = "a trailing `ignoring case` after an `and` or `or` chain, which binds only to the nearest comparison"
 beginner = "warning"

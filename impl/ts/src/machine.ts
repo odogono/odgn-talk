@@ -154,6 +154,11 @@ export class Code {
   readonly constants: Constant[];
   readonly definitions: Value[];
   readonly clauses = new Map<string, Body[]>();
+  /**
+   * Its Fallback Handler's clauses, in source order. They are kept apart
+   * from `clauses`, so no Selector finds them (ADR 0063).
+   */
+  fallback: Body[] = [];
   /** The Libraries it imports, by name. */
   readonly libraries = new Map<string, Code>();
   /** Whether it is a stdlib Library's, whose errors name the caller (ADR 0037). */
@@ -185,6 +190,8 @@ export class Code {
         const list = this.clauses.get(body.name) ?? [];
         list.push(body);
         this.clauses.set(body.name, list);
+      } else if (body.kind === 'fallback') {
+        this.fallback.push(body);
       }
     }
   }
@@ -267,6 +274,11 @@ export class Script extends Code {
     this.variables = [...extension.variables];
     for (const [name, clauses] of extension.clauses) {
       this.clauses.set(name, clauses);
+    }
+    // A Fallback Handler in an extension replaces the older one, as a
+    // Handler's clauses do (ADR 0063).
+    if (extension.fallback.length) {
+      this.fallback = extension.fallback;
     }
   }
 
@@ -455,7 +467,17 @@ const homeConstant = (root: Value, home: Script): Value => {
 
 // A Function Value's code: the code unit its body is in, and the body.
 type FunctionCode = { body: Body; code: Code; home: Script };
-type Dispatch = { args: Value[]; clauses: Body[]; code: Code; next: number };
+type Dispatch = {
+  args: Value[];
+  clauses: Body[];
+  code: Code;
+  /**
+   * A Delivery that may reach a Fallback Handler: its clauses, tried after
+   * `clauses` with the message map, and the message's Selector (ADR 0063).
+   */
+  fallback?: { clauses: Body[]; selector: string };
+  next: number;
+};
 type Frame = {
   activation?: boolean;
   body: Body;
@@ -758,10 +780,18 @@ const keyValue = (k: string | number): Value =>
   typeof k === 'number' ? dec(String(k)) : text(k);
 // The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
 // The sends that pop a computed message name (ADR 0057).
+// A spreading send pops its name, as text, and its arguments as one list
+// (ADR 0063).
+const spreadSends = new Set([
+  'send-spread',
+  'send-spread-wait',
+  'join-send-spread',
+]);
 const namedSends = new Set([
   'send-named',
   'send-named-wait',
   'join-send-named',
+  ...spreadSends,
 ]);
 const reservedKeys = new Set([
   'code',
@@ -1157,6 +1187,8 @@ export class Run {
   private entryError: 'wrong arity' | null = null;
   private m: Measured = {};
   private clause = 0;
+  /** Its entry dispatch reached the Fallback Handler's clauses (ADR 0063). */
+  private viaFallback = false;
   private during: Value = nothing;
   private cancellation:
     { entry: CodeUnit['unwind'][number]; frame: Frame }[] | null = null;
@@ -1815,14 +1847,31 @@ export class Run {
     args: Value[],
     readonly limits: Limits = script.limits,
     code: Code = script,
+    /** The Selector of a Delivery that may reach a Fallback Handler. */
+    fallback?: string,
   ) {
     this.segmentBase = [...script.variables];
     const clauses = Array.isArray(entry) ? entry : [entry];
     if (!Array.isArray(entry)) {
       this.push(code, entry, args, null);
-    } else if (!this.dispatch({ clauses, code: script, next: 0, args })) {
+    } else if (
+      !this.dispatch({
+        clauses,
+        code: script,
+        next: 0,
+        args,
+        ...(fallback !== undefined && script.fallback.length
+          ? { fallback: { clauses: script.fallback, selector: fallback } }
+          : {}),
+      })
+    ) {
       this.outcome = { kind: 'unhandled' };
     }
+  }
+
+  /** Whether a Fallback Handler clause runs, or is being tried (ADR 0063). */
+  get fallback(): boolean {
+    return this.viaFallback;
   }
 
   /** A mailbox call has no Handler Clause and starts in the value's code unit. */
@@ -1936,7 +1985,9 @@ export class Run {
       locals,
       stack: [],
       dispatch,
-      clauseCharge: body.kind === 'handler' && dispatch !== null,
+      clauseCharge:
+        (body.kind === 'handler' || body.kind === 'fallback') &&
+        dispatch !== null,
       handler:
         body.kind === 'lambda'
           ? body.name.replace(/(?::\d+:\d+)+$/, '')
@@ -1945,19 +1996,46 @@ export class Run {
   }
 
   // Push the next clause whose parameter count matches, or report none.
+  // When a Delivery's clauses are exhausted, its Fallback Handler's are
+  // tried next, with the message map as their one argument, built without
+  // charge (chapter 8, Handlers).
   private dispatch(d: Dispatch): boolean {
-    while (d.next < d.clauses.length) {
-      const body = d.clauses[d.next++]!;
-      if (body.params.length === d.args.length) {
-        // The Run's clause is its entry Handler's, not a called Handler's.
-        if (!this.frames.length) {
-          this.clause = body.clause ?? 0;
+    for (;;) {
+      while (d.next < d.clauses.length) {
+        const body = d.clauses[d.next++]!;
+        if (body.params.length === d.args.length) {
+          // The Run's clause is its entry Handler's, not a called Handler's.
+          if (!this.frames.length) {
+            this.clause = body.clause ?? 0;
+          }
+          this.push(d.code, body, d.args, d);
+          return true;
         }
-        this.push(d.code, body, d.args, d);
-        return true;
       }
+      if (!d.fallback) {
+        return false;
+      }
+      const { clauses, selector } = d.fallback;
+      delete d.fallback;
+      d.clauses = clauses;
+      d.next = 0;
+      d.args = [
+        map([
+          ['name', text(selector)],
+          ['args', listValues(d.args)],
+        ]),
+      ];
+      this.viaFallback = true;
     }
-    return false;
+  }
+
+  /** Whether a dispatch has a clause left to try after the current one. */
+  private static more(d: Dispatch | null): boolean {
+    return (
+      !!d &&
+      (!!d.fallback?.clauses.length ||
+        d.clauses.slice(d.next).some(b => b.params.length === d.args.length))
+    );
   }
 
   private get frame(): Frame {
@@ -4433,20 +4511,30 @@ export class Run {
       case 'send-named':
       case 'send-named-wait':
       case 'join-send-named':
+      case 'send-spread':
+      case 'send-spread-wait':
+      case 'join-send-spread':
       case 'send-up':
       case 'send-up-wait': {
-        const join = ins.op === 'join-send' || ins.op === 'join-send-named';
+        const join =
+          ins.op === 'join-send' ||
+          ins.op === 'join-send-named' ||
+          ins.op === 'join-send-spread';
         if (join) {
           this.joinWidth();
         }
         const up = ins.op === 'send-up' || ins.op === 'send-up-wait';
         const named = namedSends.has(ins.op);
-        const n = (named ? a : b) as number;
+        // A spread's arguments are one list, below the receiver (ADR 0063).
+        const spread = spreadSends.has(ins.op)
+          ? listItems(frame.stack.at(-2) as Value)
+          : null;
+        const n = (spread ? spread.length : named ? a : b) as number;
         // A computed name, below the arguments, is checked before the
         // receiver (chapter 5, A computed name).
         let message = a as string;
         if (named) {
-          const name = frame.stack.at(-n - 2) as Value;
+          const name = frame.stack.at(spread ? -3 : -n - 2) as Value;
           if (name.kind !== 'text') {
             throw wrongKind('text', name);
           }
@@ -4477,10 +4565,12 @@ export class Run {
           }
           target = o;
         }
-        const args = this.frame.stack.slice(
-          this.frame.stack.length - n - (up ? 0 : 1),
-          up ? undefined : -1,
-        ) as Value[];
+        const args =
+          spread ??
+          (this.frame.stack.slice(
+            this.frame.stack.length - n - (up ? 0 : 1),
+            up ? undefined : -1,
+          ) as Value[]);
         const size = partSize(
           'message',
           0,
@@ -4489,7 +4579,10 @@ export class Run {
         m.inputSize = size;
         // A send that waits is a call, with an id of its own.
         const waits =
-          ins.op !== 'send' && ins.op !== 'send-named' && ins.op !== 'send-up';
+          ins.op !== 'send' &&
+          ins.op !== 'send-named' &&
+          ins.op !== 'send-spread' &&
+          ins.op !== 'send-up';
         if (waits) {
           this.checkScopeBoundary();
         }
@@ -4498,7 +4591,7 @@ export class Run {
         const reached = up
           ? this.host!.sendUp(message, args, id)
           : this.host!.send(target!, message, args, id);
-        frame.stack.length -= n + (up ? 0 : 1) + (named ? 1 : 0);
+        frame.stack.length -= spread ? 3 : n + (up ? 0 : 1) + (named ? 1 : 0);
         const object = typeof target === 'object' && target ? target : null;
         if (reached === null) {
           // Past the last Owning Script: `unhandled`, and nothing to wait on.
@@ -4697,12 +4790,7 @@ export class Run {
         return this.returnFrom(value);
       }
       case 'clause-fail': {
-        if (
-          this.frames.length === 1 &&
-          !frame.dispatch?.clauses
-            .slice(frame.dispatch.next)
-            .some(b => b.params.length === frame.dispatch!.args.length)
-        ) {
+        if (this.frames.length === 1 && !Run.more(frame.dispatch)) {
           this.checkState();
         }
         this.pay(key);
@@ -4994,17 +5082,25 @@ const cleanupEnd = (unit: CodeUnit, start: number): number => {
   return unit.code.length;
 };
 
-/** Start a Run by dispatching a message to a Handler's clauses. */
+/**
+ * Start a Run by dispatching a message to a Handler's clauses, and then, for
+ * a message that may reach one, to the Script's Fallback Handler's (ADR 0063).
+ */
 export const deliver = (
   script: Script,
   message: string,
   args: Value[],
   limits?: Partial<Limits>,
+  fallback = false,
 ): Run =>
-  new Run(script, script.clauses.get(message) ?? [], args, {
-    ...script.limits,
-    ...limits,
-  });
+  new Run(
+    script,
+    script.clauses.get(message) ?? [],
+    args,
+    { ...script.limits, ...limits },
+    script,
+    fallback ? message : undefined,
+  );
 
 /** Call a named function of the unit, as a Run on its own. */
 export const callFunction = (

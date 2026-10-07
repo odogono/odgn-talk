@@ -1,0 +1,3 @@
+-- two-params.talk: a Fallback head has exactly one pattern.
+on any message m, n
+end any message

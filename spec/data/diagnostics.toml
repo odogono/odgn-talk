@@ -150,9 +150,9 @@ sources = ["ADR 0020", "#115"]
 
 [[diagnostic]]
 code = "not in a library"
-raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable`"
+raised_when = "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler"
 at = "its first token"
-sources = ["ADR 0016", "ADR 0020", "#115"]
+sources = ["ADR 0016", "ADR 0020", "ADR 0063", "#115"]
 
 [[diagnostic]]
 code = "not in a script"
@@ -210,15 +210,15 @@ sources = ["ADR 0031", "#115"]
 
 [[diagnostic]]
 code = "wrong message"
-raised_when = "`pass m` names a message other than the one its Handler handles"
-at = "the message's name"
-sources = ["#115"]
+raised_when = "`pass m` names a message other than the one its Handler handles, `pass any message` is outside a Fallback Handler, or a Fallback Handler's `pass` names a message"
+at = "the message's name, or `any`"
+sources = ["ADR 0063", "#115"]
 
 [[diagnostic]]
 code = "bad suffixes"
-raised_when = "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, or `, during` on a Handler other than `on error`"
+raised_when = "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler"
 at = "the first suffix that breaks the rule"
-sources = ["ADR 0031", "#115"]
+sources = ["ADR 0031", "ADR 0063", "#115"]
 
 [[diagnostic]]
 code = "can't write"

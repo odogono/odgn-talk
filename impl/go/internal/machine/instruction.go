@@ -142,7 +142,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "load-object":
 		if v, ok := r.State.Objects[name(0)]; ok {
 			push(v)
-		} else if slices.Contains(r.State.ScriptNames, name(0)) || namedSend(code.Unit.Bodies[f.Body].Code[f.PC+1].Name) {
+		} else if next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name; slices.Contains(r.State.ScriptNames, name(0)) || namedSend(next) || spreadSend(next) {
 			// A computed name is checked first, so its send raises `object gone`.
 			receiver(name(0))
 		} else {
@@ -150,7 +150,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 	case "me":
 		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name
-		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send" || namedSend(next)) {
+		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send" || namedSend(next) || spreadSend(next)) {
 			receiver(r.State.Unit.Name)
 		} else {
 			push(r.State.Me)
@@ -165,9 +165,22 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		} else {
 			effect = func() { r.Status = Suspended }
 		}
-	case "send", "send-wait", "join-send", "send-named", "send-named-wait", "join-send-named", "send-up", "send-up-wait":
+	case "send", "send-wait", "join-send", "send-named", "send-named-wait", "join-send-named", "send-spread", "send-spread-wait", "join-send-spread", "send-up", "send-up-wait":
 		n := 0
-		if namedSend(i.Name) {
+		if spreadSend(i.Name) {
+			// The name, the argument list and the receiver: the name is
+			// checked against the list's length, before the receiver
+			// (chapter 5, A spread; ADR 0063).
+			list, v := f.Stack[len(f.Stack)-2], f.Stack[len(f.Stack)-3]
+			n = len(list.Items)
+			if v.Kind != value.Text {
+				bad(wrong("text", v))
+				break
+			} else if !syntax.ValidComputedMessageName(v.Text, n) {
+				bad(failure("bad message name", value.Pair{Key: "name", Val: v}, value.Pair{Key: "arguments", Val: integer(int64(n))}))
+				break
+			}
+		} else if namedSend(i.Name) {
 			// A computed name, below the arguments, is checked before the
 			// receiver (chapter 5, A computed name).
 			n = idx(0)
@@ -188,7 +201,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(wrong("object", v))
 				break
 			}
-			if namedSend(i.Name) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
+			if (namedSend(i.Name) || spreadSend(i.Name)) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
 				bad(failure("object gone", value.Pair{Key: "object", Val: text(name)}))
 				break
 			}
@@ -197,15 +210,19 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				break
 			}
 		}
-		m.Args = take(n)
-		if namedSend(i.Name) {
+		if spreadSend(i.Name) {
+			m.Args = slices.Clone(pop().Items)
+		} else {
+			m.Args = take(n)
+		}
+		if namedSend(i.Name) || spreadSend(i.Name) {
 			pop()
 		}
 		m.InputSize = 32
 		for _, v := range m.Args {
 			m.InputSize = saturatingAdd(m.InputSize, Size(v))
 		}
-		if i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-up-wait" {
+		if i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" {
 			effect = func() { r.SendWait = true; r.Status = Suspended }
 		}
 	case "target":

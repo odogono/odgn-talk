@@ -160,6 +160,12 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			u.declaration(n, Symbol{Kind: "variable", Name: n.Text, Index: len(u.Variables)})
 			u.Variables = append(u.Variables, n.Text)
 		case "function", "handler":
+			// A Fallback Handler's clauses share the name `any message`, which
+			// no Selector can spell. Imported Handlers are never entry points,
+			// so a Library can't hold one (ADR 0063).
+			if n.IsFallback() && options.Library {
+				u.add("not in a library", n.Pos())
+			}
 			required := 0
 			for _, param := range n.Params {
 				if len(param.Children) == 0 {
@@ -211,7 +217,9 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 	initNode := &syntax.Node{Kind: "init", Children: initExpressions}
 	u.prepareBody(initNode, nil, "init", "initialiser")
 	for _, n := range tree.Declarations {
-		if n.Kind == "function" || n.Kind == "handler" {
+		if n.IsFallback() {
+			u.prepareBody(n, nil, "fallback", n.Text)
+		} else if n.Kind == "function" || n.Kind == "handler" {
 			u.prepareBody(n, nil, n.Kind, n.Text)
 		}
 	}
@@ -610,7 +618,7 @@ type context struct {
 
 func (u *Unit) validateBody(b *Body, ctx context) {
 	ctx.body = b
-	if b.Kind == "handler" {
+	if b.Kind == "handler" || b.Kind == "fallback" {
 		u.handlerSuffixes(b.Node)
 	}
 	if b.Kind == "lambda" {
@@ -660,7 +668,7 @@ func (u *Unit) handlerSuffixes(n *syntax.Node) {
 		policy := flag.Raw == "queued" || flag.Raw == "dropping" || flag.Raw == "replacing"
 		if seen[flag.Raw] || policy && (seen["queued"] || seen["dropping"] || seen["replacing"]) ||
 			flag.Raw == "queued" && seen["deciding"] || flag.Raw == "deciding" && seen["queued"] ||
-			flag.Raw == "during" && n.Text != "error" {
+			flag.Raw == "during" && n.Text != "error" || flag.Raw == "deciding" && n.IsFallback() {
 			u.add("bad suffixes", flag.Pos)
 			return
 		}
@@ -744,7 +752,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	}
-	if n.Kind == "pass" && ctx.lambda == 0 && b.Kind == "handler" && n.Text != b.Name {
+	// A Fallback passes only `any message`, which nothing else may pass.
+	if n.Kind == "pass" && ctx.lambda == 0 && (b.Kind == "handler" || b.Kind == "fallback") && n.Text != b.Name ||
+		n.Kind == "pass" && ctx.lambda == 0 && b.Kind != "fallback" && n.Text == syntax.FallbackName {
 		u.add("wrong message", n.NameToken.Pos)
 	}
 	if ctx.lambda > 0 && (n.Kind == "pass" || n.Kind == "target") {

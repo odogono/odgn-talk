@@ -89,3 +89,19 @@ on collectingScalers
   end
   return fs
 end collectingScalers
+
+on spreading next, rest
+  send log with "seen", ...rest to me
+  send (next) with ...rest, 1 to me and wait
+  wait for all
+    send (next) with ...rest to me and wait
+  end wait
+end spreading
+
+on any message {name: n, args: a} where n begins with "debug"
+  send (n) with ...a to me
+end any message
+
+on any message m, queued
+  pass any message
+end

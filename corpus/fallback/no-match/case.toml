@@ -1,0 +1,18 @@
+# no-match: a Fallback Handler takes a message no Handler Clause matches:
+# a Selector with no Handler, and one whose clauses fail on their Guard or
+# arity. Its result is the reply to `send … and wait` and to a Request
+# (chapter 5, The Fallback Handler; ADR 0063).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "a"
+source = "a.talk"
+
+[[scripts]]
+name = "b"
+source = "b.talk"

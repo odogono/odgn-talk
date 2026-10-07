@@ -1401,6 +1401,28 @@ errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "send
 does = "Sends as `send-named` does, then suspends until the reply"
 
 [[instruction]]
+name = "send-spread"
+group = "effects"
+operands = []
+pops = 3
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind"]
+does = "A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does"
+
+[[instruction]]
+name = "send-spread-wait"
+group = "effects"
+operands = []
+pops = 3
+pushes = 1
+suspends = true
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind", "send failed", "timeout", "scope open"]
+does = "Sends as `send-spread` does, then suspends until the reply"
+
+[[instruction]]
 name = "send-up"
 group = "effects"
 operands = ["message", "count"]
@@ -1500,6 +1522,17 @@ errors = ["bad message name", "mailbox full", "object gone", "wrong kind"]
 does = "Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does"
 
 [[instruction]]
+name = "join-send-spread"
+group = "effects"
+operands = []
+pops = 3
+pushes = 0
+suspends = false
+cost = "send"
+errors = ["bad message name", "mailbox full", "object gone", "wrong kind"]
+does = "Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does"
+
+[[instruction]]
 name = "join-end"
 group = "effects"
 operands = []
@@ -1528,4 +1561,4 @@ pops = 0
 pushes = 0
 suspends = false
 cost = "send"
-does = "Ends the Run and sends its message on up the Message Path"
+does = "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`"

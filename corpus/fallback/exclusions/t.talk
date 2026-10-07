@@ -1,0 +1,7 @@
+-- t.talk: another Script of the Group, which wants `zap`.
+
+script variable zaps = 0
+
+on zap
+  add 1 to zaps
+end zap

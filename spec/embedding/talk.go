@@ -922,6 +922,7 @@ type RunEnd struct {
 	Delivery      DeliveryID  // empty for a Run started by another Script's send
 	Broadcast     BroadcastID // empty unless the Delivery was a Broadcast's
 	Handler       string
+	Fallback      bool // a Fallback Handler clause ran it; Handler is then the message's Selector
 	Outcome       Outcome
 	Effect        *EffectFailure  // EffectFailureOutcome
 	CleanupFailed *CleanupFailure // Cancelled, only when its cleanup failed

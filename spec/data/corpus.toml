@@ -597,6 +597,13 @@ optional = true
 is = "for a start, the Handler dispatched to"
 
 [[record.key]]
+key = "fallback"
+type = "word"
+optional = true
+words = ["yes"]
+is = "for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector"
+
+[[record.key]]
 key = "clause"
 type = "count"
 optional = true
@@ -675,6 +682,13 @@ key = "handler"
 type = "id"
 optional = true
 is = "for a start, the Handler dispatched to"
+
+[[record.key]]
+key = "fallback"
+type = "word"
+optional = true
+words = ["yes"]
+is = "for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector"
 
 [[record.key]]
 key = "clause"
@@ -957,6 +971,13 @@ key = "handler"
 type = "id"
 optional = true
 is = "its Handler"
+
+[[record.key]]
+key = "fallback"
+type = "word"
+optional = true
+words = ["yes"]
+is = "for a Run started by the Fallback Handler, `yes`; `handler` is then the message's Selector"
 
 [[record.key]]
 key = "fn"

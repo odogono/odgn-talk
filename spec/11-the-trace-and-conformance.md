@@ -186,7 +186,7 @@ A record is written when what it records happens, so a Trace is in the order the
 - **A queued call never drained,** because a worker call discarded it first, as a variables-only restore drops the saved input queue, is written just before that worker call's line, in the order the calls were made.
 - **A Host Input refused at the call,** with a Host error or `MailboxFull`, is written at the call, with none of the ids the Core would assign, and a `refused` record follows it. It changes nothing. The ids the Host supplies, such as a `settle`'s call id, are kept.
 - **Calls made inside a Pump,** from a Host function, land when that function returns: a queued call is drained by the next Pump, and a refused one, a `Stop` or a `CancelRun` is written right after the record of that crossing ([below](#stops-and-cancels-inside-a-pump)).
-- **Inside a Pump,** the records follow in the order they happened, and the Pump ends with `pumped`. A Stretch of a Run is written as `seg` or `preempt` when it ends, so the `call`, `send`, `raise`, `guard-skip` and `note` records it made come before it, and a Run's `run` record comes after its last Stretch. A Run's first Stretch carries the start keys (`delivery`, `broadcast`, `from`, `handler`, `clause` and `fn`), whether it is a `seg` or a `preempt`.
+- **Inside a Pump,** the records follow in the order they happened, and the Pump ends with `pumped`. A Stretch of a Run is written as `seg` or `preempt` when it ends, so the `call`, `send`, `raise`, `guard-skip` and `note` records it made come before it, and a Run's `run` record comes after its last Stretch. A Run's first Stretch carries the start keys (`delivery`, `broadcast`, `from`, `handler`, `fallback`, `clause` and `fn`), whether it is a `seg` or a `preempt`.
 - **A Verdict** is written as `decided` right after the record of what settled it. A seal comes at the end of a Segment, so an allowed or vetoed Decision's `decided` follows the sealing `seg`, and comes before the Run's `run`. An undecided Verdict is settled by the Run's end, so its `decided` follows the `run` record, or the `stopped` record for a Run stopped before its seal. A Decision cancelled in the mailbox is settled as it is drained, after its `run` record with no id, and a Broadcast Decision with no recipients as it is drained. An allow at successful dispatch to a clause without `, deciding`, or by a matching `wait for`, is written at that dispatch, before the Handler body’s records and Stretch. A Broadcast Decision with recipients is settled by its last recipient to settle. An open Decision a variables-only restore discarded or dropped is settled in the first Pump, before any Stretch, in delivery id order.
 - **A reissued call,** settled with `how=reissue`, crosses to the Host again as the first Pump drains the `settle`: a `call` record under its saved call id, before any Stretch. It has `charged` only if the Host function draws with `Charge`, since the declared cost isn't charged again.
 - **Guard regions:** an error raised in a guard region, which skips its clause or branch, is written as `guard-skip` with its code, and not as `raise`. A Guard that gives something other than a boolean is a `guard-skip` with that `value`.
@@ -317,8 +317,8 @@ A record is written when what it records happens, so a Trace is in the order the
 
 | Record | Ids | Keys | Says |
 | --- | --- | --- | --- |
-| `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
-| `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
+| `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
+| `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
 | `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `automatic`? | a Capability call |
 | `prop` | `run` | `object`, `name`, `op`, `value`?, `error`? | a Host Object property call |
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
@@ -328,7 +328,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `fault` | `run` | `limit`, `at`, `pos`, `rollback`? | a Limit Fault |
 | `cleanup-failed` | `run` | `code`?, `limit`? | a cancelled Run's cleanup that failed |
 | `note` | `subject` | `kind` | something the Core noted, about a Run, a call or a Delivery |
-| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fn`?, `value`?, `error`?, `limit`?, `effect`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
+| `run` | `run` (optional) | `outcome`, `delivery`?, `broadcast`?, `handler`?, `fallback`?, `fn`?, `value`?, `error`?, `limit`?, `effect`?, `fuel`, `alloc` | a `run end` report; the id is absent for a Delivery cancelled before it started |
 | `stopped` | `script` | `reason`, `discarded`?, `dropped`?, `abandoned`? | a `stop` report |
 | `unhandled` | `delivery` (optional) | `message`, `args`?, `target`? | an `unhandled` report; the id is absent for a message a Script sent |
 | `call-failed` | `call` | `op` | a `call failed` report, whose detail is left out |
@@ -354,6 +354,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `broadcast` | `id` | for a start, its Broadcast |
 | `seg` | `from` | `id` | for a start, the call or Run that sent its message |
 | `seg` | `handler` | `id` | for a start, the Handler dispatched to |
+| `seg` | `fallback` | `word` | for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector: `yes` |
 | `seg` | `clause` | `count` | for a start, the clause that matched; an unhandled Run has none |
 | `seg` | `fn` | `value` | for a start by a Function Value call, the Function Value |
 | `seg` | `fuel` | `count` | the Fuel the stretch used |
@@ -367,6 +368,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `preempt` | `broadcast` | `id` | for a start, its Broadcast |
 | `preempt` | `from` | `id` | for a start, the call or Run that sent its message |
 | `preempt` | `handler` | `id` | for a start, the Handler dispatched to |
+| `preempt` | `fallback` | `word` | for a start by the Fallback Handler, `yes`; `handler` is then the message's Selector: `yes` |
 | `preempt` | `clause` | `count` | for a start, the clause that matched; an unhandled Run has none |
 | `preempt` | `fn` | `value` | for a start by a Function Value call, the Function Value |
 | `preempt` | `by` | `word` | what preempted it: `slice`, `cap` |
@@ -406,6 +408,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `run` | `delivery` | `id` | its Delivery |
 | `run` | `broadcast` | `id` | its Broadcast |
 | `run` | `handler` | `id` | its Handler |
+| `run` | `fallback` | `word` | for a Run started by the Fallback Handler, `yes`; `handler` is then the message's Selector: `yes` |
 | `run` | `fn` | `value` | for a Run started by a Function Value call, the Function Value |
 | `run` | `value` | `value` | for `completed`, its result |
 | `run` | `error` | `value` | for `errored`, the error map |

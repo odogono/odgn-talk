@@ -482,16 +482,32 @@ export class Parser {
     return { k: 'Use', names, library, rename };
   }
 
+  // `any message` after `on`, `pass` or a Handler's `end` names the Fallback
+  // Handler; otherwise `any` is a Name (ADR 0063).
+  atAnyMessage(): boolean {
+    return (
+      this.atWord('any') && this.isWord(this.la2('any-message'), 'message')
+    );
+  }
+
   handler(): Node {
     const on = this.next();
-    const name = this.messageName('a Handler name');
+    // `on any message m`: the Fallback Handler, with exactly one pattern.
+    const fallback = this.atAnyMessage();
+    if (fallback) {
+      this.next();
+      this.next();
+    }
+    const name = fallback ? '' : this.messageName('a Handler name');
     const params: Node[] = [];
     let guard: Node | null = null;
     const suffixes: string[] = [];
     let during: string | null = null;
     const t = this.peek(0);
     const labels: string[] = [];
-    if (!(
+    if (fallback) {
+      params.push(this.pattern());
+    } else if (!(
       t.t === 'nl' ||
       t.t === 'eof' ||
       this.isWord(t, 'where') ||
@@ -502,7 +518,7 @@ export class Parser {
     }
     // Parameters, then a Guard, then suffixes. After a comma, a suffix word
     // is always a suffix, so it can't be a parameter name there.
-    let inParams = params.length > 0;
+    let inParams = params.length > 0 && !fallback;
     let canGuard = true;
     for (;;) {
       const c = this.peek(0, 'operator');
@@ -527,6 +543,8 @@ export class Parser {
         this.next();
         during = this.next().v;
         inParams = canGuard = false;
+      } else if (fallback && guard === null && !suffixes.length && !during) {
+        this.fail(w, 'a suffix (a Fallback Handler has one parameter)');
       } else if (inParams && labels.length) {
         this.fail(w, 'a suffix (no commas between labelled parameters)');
       } else if (inParams) {
@@ -547,11 +565,19 @@ export class Parser {
       fin = this.block(['end']);
     }
     const end = this.expectWord('end');
-    this.endSuffix(name, on);
+    if (!fallback) {
+      this.endSuffix(name, on);
+    } else if (this.atAnyMessage()) {
+      this.next();
+      this.next();
+    } else if (!this.atEnd('operand')) {
+      this.fail(this.peek(0), endSuffixExpected('any message', on));
+    }
     this.endOfStatement();
     return {
       k: 'Handler',
-      name: this.selector(name, labels),
+      fallback,
+      name: fallback ? 'any message' : this.selector(name, labels),
       params,
       guard,
       suffixes,
@@ -726,6 +752,11 @@ export class Parser {
       }
       case 'pass': {
         this.next();
+        if (this.atAnyMessage()) {
+          this.next();
+          this.next();
+          return { k: 'Pass', name: 'any message', fallback: true };
+        }
         const name = this.messageName('a message name after `pass`');
         const labels: string[] = [];
         while (this.isLabel(this.peek(0, 'operator'))) {
@@ -785,6 +816,24 @@ export class Parser {
       this.labelled(() => this.expr(), labels, args);
     }
     return { k: 'Command', name: this.selector(name, labels), args };
+  }
+
+  // A receiver-last `send`'s `with` list, whose items may spread a list as a
+  // list literal's do (ADR 0063).
+  sendList(): Node[] {
+    const item = (): Node => {
+      if (this.isOp(this.peek(0), '...')) {
+        this.next();
+        return { k: 'Spread', e: this.expr() };
+      }
+      return this.expr();
+    };
+    const out = [item()];
+    while (this.isOp(this.peek(0, 'operator'), ',')) {
+      this.next('operator');
+      out.push(item());
+    }
+    return out;
   }
 
   exprList(): Node[] {
@@ -861,7 +910,7 @@ export class Parser {
     let args: Node[] = [];
     if (this.atWord('with')) {
       this.next();
-      args = this.exprList();
+      args = this.sendList();
     }
     this.expectWord('to', 'operator');
     const target = this.expr();

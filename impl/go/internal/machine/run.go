@@ -103,7 +103,8 @@ type Run struct {
 	Clause         int
 	Clauses        []int
 	Arguments      []value.Value
-	PersistentBase int64 // retained Script state outside variables and this Run
+	Message        value.Value // the Fallback's message map, once a Delivery may reach one
+	PersistentBase int64       // retained Script state outside variables and this Run
 
 	Target        value.Value
 	During        value.Value
@@ -189,11 +190,22 @@ func Start(s *State, body int, args []value.Value, limits Limits) *Run {
 }
 
 // StartDelivery retains dispatch state across preemption and clause failure.
-func StartDelivery(s *State, name string, args []value.Value, limits Limits) *Run {
+// A Delivery that may reach a Fallback Handler tries the Script's Fallback
+// clauses, in every code unit, after the Selector's own, with the message map
+// {name, args} as their one argument, built without charge (ADR 0063).
+func StartDelivery(s *State, name string, args []value.Value, limits Limits, fallback bool) *Run {
 	r := &Run{State: s, Limits: limits, Base: slices.Clone(s.Variables), Arguments: slices.Clone(args), PolicyDispatch: true}
 	for _, b := range s.Unit.Bodies {
 		if b.Checked.Kind == "handler" && b.Checked.Name == name && len(b.Checked.Node.Params) == len(args) {
 			r.Clauses = append(r.Clauses, b.Index)
+		}
+	}
+	if fallback {
+		for _, b := range s.Unit.Bodies {
+			if b.Checked.Kind == "fallback" {
+				r.Clauses = append(r.Clauses, b.Index)
+				r.Message, _ = value.NewMap([]value.Pair{{Key: "name", Val: text(name)}, {Key: "args", Val: value.NewList(slices.Clone(args))}})
+			}
 		}
 	}
 	r.nextClause()
@@ -208,9 +220,17 @@ func (r *Run) nextClause() {
 	}
 	body := r.Clauses[0]
 	r.Clauses = r.Clauses[1:]
-	r.Clause = r.State.Unit.Bodies[body].Clause
-	r.pushFrame(body, r.Arguments)
+	b := r.State.Unit.Bodies[body]
+	r.Clause = b.Clause
+	args := r.Arguments
+	if b.Checked.Kind == "fallback" {
+		args = []value.Value{r.Message}
+	}
+	r.pushFrame(body, args)
 }
+
+// Fallback reports whether a body is a Fallback Handler clause (ADR 0063).
+func Fallback(b *lower.Body) bool { return b.Checked.Kind == "fallback" }
 
 func (r *Run) pushFrame(body int, args []value.Value) { r.pushCodeFrame(r.State, body, args) }
 func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
@@ -425,7 +445,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if (i.Name == "join-send" || i.Name == "join-send-named") && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
+		if (i.Name == "join-send" || i.Name == "join-send-named" || i.Name == "join-send-spread") && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 			r.fault("join")
 			break
 		}
@@ -452,7 +472,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("pattern")
 			break
 		}
-		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
+		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
 			if f.Clause {
 				if !r.pay(4, 0) {
 					break
@@ -485,11 +505,16 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 				recipient.Name = f.ReceiverNames[len(f.Stack)-1]
 				recipient.Object = f.Stack[len(f.Stack)-1]
 			}
-			message := i.Operands()[0].Text
-			if namedSend(i.Name) {
+			var message string
+			switch {
+			case namedSend(i.Name):
 				message = f.Stack[len(f.Stack)-len(m.Args)-2].Text
+			case spreadSend(i.Name):
+				message = f.Stack[len(f.Stack)-3].Text
+			default:
+				message = i.Operands()[0].Text
 			}
-			err = send(recipient, message, m.Args, i.Name != "send" && i.Name != "send-named" && i.Name != "send-up")
+			err = send(recipient, message, m.Args, i.Name != "send" && i.Name != "send-named" && i.Name != "send-spread" && i.Name != "send-up")
 		}
 		if err == nil && r.foreignWaitCall(f, i) {
 			n := i.Operands()[0].Index
@@ -963,10 +988,16 @@ func sends(name string) bool {
 	case "send", "send-wait", "join-send", "send-up", "send-up-wait":
 		return true
 	}
-	return namedSend(name)
+	return namedSend(name) || spreadSend(name)
 }
 
 // namedSend reports whether a send pops a computed message name (ADR 0057).
 func namedSend(name string) bool {
 	return name == "send-named" || name == "send-named-wait" || name == "join-send-named"
+}
+
+// spreadSend reports whether a send pops its name, its arguments as one list
+// and its receiver (ADR 0063).
+func spreadSend(name string) bool {
+	return name == "send-spread" || name == "send-spread-wait" || name == "join-send-spread"
 }

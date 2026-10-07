@@ -1,0 +1,42 @@
+# Unblessed: the output lines are written by bless, and await their first review.
+# `b`'s `greet` clause takes only "Ann". Every other message `a` sends,
+# including `greet` with the wrong argument or the wrong number of them,
+# reaches `b`'s Fallback, whose Runs carry `fallback=yes` and the message's
+# Selector as `handler`. Nothing is reported `unhandled`. A Host Request to
+# `b` for a message it has no Handler for is answered by the Fallback too.
+> load a identity=abba0e914ab0aafef946dd1a2282122dbce031adbe7f1c30001b6aeb5184d305
+> load b identity=1a09f80b0f0c7dededa880c1a7fecb3b0575653999b45ffbd60e7aa7ad4e1e96
+> deliver d1 to=a message=go
+> pump clock=2026-10-07T09:00:00Z
+send a/r1 to=b message=missing args=[1]
+send a/r1 to=b message=greet args=["Bob"]
+send a/r1 to=b message=greet args=["Ann", "Bob"]
+send a/r1.c1 to=b message=greet args=["Ann"] wait=yes
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=102 alloc=220 state=256 end=send-wait
+seg b/r1 start from=a/r1 handler=missing fallback=yes clause=1 fuel=28 alloc=74 state=219 end=return
+run b/r1 outcome=completed handler=missing fallback=yes value="I don't know how to missing" fuel=28 alloc=74
+seg b/r2 start from=a/r1 handler=greet fallback=yes clause=1 fuel=40 alloc=70 state=197 end=return
+run b/r2 outcome=completed handler=greet fallback=yes value="I don't know how to greet" fuel=40 alloc=70
+seg b/r3 start from=a/r1 handler=greet fallback=yes clause=1 fuel=28 alloc=70 state=156 end=return
+run b/r3 outcome=completed handler=greet fallback=yes value="I don't know how to greet" fuel=28 alloc=70
+seg b/r4 start from=a/r1.c1 handler=greet clause=1 fuel=18 alloc=25 state=105 end=return
+run b/r4 outcome=completed handler=greet value="hello Ann" fuel=18 alloc=25
+send a/r1.c2 to=b message=frobnicate wait=yes
+seg a/r1 resume fuel=32 alloc=65 state=323 end=send-wait
+seg b/r5 start from=a/r1.c2 handler=frobnicate fallback=yes clause=1 fuel=28 alloc=80 state=139 end=return
+run b/r5 outcome=completed handler=frobnicate fallback=yes value="I don't know how to frobnicate" fuel=28 alloc=80
+send a/r1.c3 to=b message=move:to: args=["knight", "e4"] wait=yes
+seg a/r1 resume fuel=37 alloc=126 state=419 end=send-wait
+seg b/r6 start from=a/r1.c3 handler=move:to: fallback=yes clause=1 fuel=28 alloc=76 state=171 end=return
+run b/r6 outcome=completed handler=move:to: fallback=yes value="I don't know how to move:to:" fuel=28 alloc=76
+seg a/r1 resume fuel=13 alloc=52 state=155 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=184 alloc=463
+pumped state=idle fuel=354
+> request d2 to=b message=dance args=[1, 2]
+> pump clock=2026-10-07T09:00:00Z
+seg b/r7 start delivery=d2 handler=dance fallback=yes clause=1 fuel=28 alloc=70 state=200 end=return
+run b/r7 outcome=completed delivery=d2 handler=dance fallback=yes value="I don't know how to dance" fuel=28 alloc=70
+pumped state=idle fuel=28
+> vars
+vars a replies=["hello Ann", "I don't know how to frobnicate", "I don't know how to move:to:"]
+vars b seen=["missing", "greet", "greet", "frobnicate", "move:to:", "dance"]

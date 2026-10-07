@@ -238,13 +238,14 @@ func TestReviewEdgeCases(t *testing.T) {
 }
 
 // These cases' first blessings were approved for #141.
-// The worker Trace replay joins #249; here the checker pins every diag record.
+// The worker Trace replay joins #249; here the checker pins every diag record,
+// for each Script of the case, by its source file's name.
 func TestLoadDiagnosticCorpus(t *testing.T) {
 	files, err := filepath.Glob("../../../../corpus/load-diagnostics/*/case.trace")
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := regexp.MustCompile(`(?m)^diag bad code="([^"]+)" pos=(\d+):(\d+)$`)
+	record := regexp.MustCompile(`(?m)^diag (\S+) code="([^"]+)" pos=(\d+):(\d+)$`)
 	for _, file := range files {
 		if strings.Contains(file, "initialiser-failed/") {
 			continue
@@ -253,36 +254,79 @@ func TestLoadDiagnosticCorpus(t *testing.T) {
 			continue // Declaration-backed checks run through the embedding in corpus.TestObjectPropertyAcceptance.
 		}
 		t.Run(filepath.Base(filepath.Dir(file)), func(t *testing.T) {
-			source, err := os.ReadFile(filepath.Join(filepath.Dir(file), "bad.talk"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			tree, parseErr := syntax.Parse(string(source))
-			var actual []Diagnostic
-			if parseErr != nil {
-				e, ok := parseErr.(*syntax.Error)
-				if !ok {
-					t.Fatal(parseErr)
-				}
-				actual = []Diagnostic{{Code: e.Code, Pos: e.Pos}}
-			} else {
-				actual = Check(tree, Options{}).Diagnostics
-			}
 			trace, err := os.ReadFile(file)
 			if err != nil {
 				t.Fatal(err)
 			}
-			var expected []Diagnostic
+			expected := map[string][]Diagnostic{}
 			for _, match := range record.FindAllStringSubmatch(string(trace), -1) {
-				line, _ := strconv.Atoi(match[2])
-				column, _ := strconv.Atoi(match[3])
-				expected = append(expected, Diagnostic{Code: match[1], Pos: syntax.Position{Line: line, Column: column}})
+				line, _ := strconv.Atoi(match[3])
+				column, _ := strconv.Atoi(match[4])
+				expected[match[1]] = append(expected[match[1]], Diagnostic{Code: match[2], Pos: syntax.Position{Line: line, Column: column}})
 			}
 			if len(expected) == 0 {
 				t.Fatal("case has no diagnostic records")
 			}
-			if !slices.Equal(actual, expected) {
-				t.Fatalf("expected %v, got %v", expected, actual)
+			sources, _ := filepath.Glob(filepath.Join(filepath.Dir(file), "*.talk"))
+			for _, path := range sources {
+				name := strings.TrimSuffix(filepath.Base(path), ".talk")
+				source, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				tree, parseErr := syntax.Parse(string(source))
+				var actual []Diagnostic
+				if parseErr != nil {
+					e, ok := parseErr.(*syntax.Error)
+					if !ok {
+						t.Fatal(parseErr)
+					}
+					actual = []Diagnostic{{Code: e.Code, Pos: e.Pos}}
+				} else {
+					actual = Check(tree, Options{}).Diagnostics
+				}
+				if !slices.Equal(actual, expected[name]) {
+					t.Fatalf("%s: expected %v, got %v", name, expected[name], actual)
+				}
+			}
+		})
+	}
+}
+
+// The Fallback Handler's load rules (ADR 0063).
+func TestFallbackHandlerDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		source, code string
+		line, col    int
+		library      bool
+	}{
+		{"on any message m\n pass any message\nend any message", "", 0, 0, false},
+		{"on any message m, queued\n send (the name of m) with ...(the args of m) to me\nend", "", 0, 0, false},
+		{"on any message m, during e\nend", "bad suffixes", 1, 19, false},
+		{"on any message m, dropping, deciding\nend", "bad suffixes", 1, 29, false},
+		{"on any message m\n pass go\nend", "wrong message", 2, 7, false},
+		{"on go\n pass any message\nend go", "wrong message", 2, 7, false},
+		{"function f\n pass any message\nend f", "wrong message", 2, 7, false},
+		{"on any message m\n put given x\n  pass any message\n end given into f\nend", "not in a lambda", 3, 3, false},
+		{"on any message m\n veto\nend", "veto outside a decision", 2, 2, false},
+		{"on any message m\nend", "not in a library", 1, 1, true},
+		{"on any x\n pass any\nend any", "", 0, 0, false},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			tree, err := syntax.Parse(tc.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u := Check(tree, Options{Library: tc.library})
+			if tc.code == "" {
+				if len(u.Diagnostics) != 0 {
+					t.Fatal(u.Diagnostics)
+				}
+				return
+			}
+			want := Diagnostic{Code: tc.code, Pos: syntax.Position{Line: tc.line, Column: tc.col}}
+			if len(u.Diagnostics) == 0 || u.Diagnostics[0] != want {
+				t.Fatalf("want %v, got %v", want, u.Diagnostics)
 			}
 		})
 	}

@@ -103,6 +103,7 @@ const tmLanguage = {
         { include: '#interpolated-text' },
         { include: '#quoted-text' },
         { include: '#number' },
+        { include: '#fallback' },
         { include: '#declaration' },
         { include: '#block-end' },
         { include: '#use' },
@@ -185,6 +186,18 @@ const tmLanguage = {
       captures: {
         1: { name: 'constant.numeric.northtalk' },
         2: { name: 'keyword.other.unit.northtalk' },
+      },
+    },
+    // `any message` after `on`, `end` or `pass` names the Fallback Handler
+    // (ADR 0063); `on any x` is still a Handler named `any`.
+    fallback: {
+      match: String.raw`(?<![A-Za-z0-9_])(?:(on)|(end)|(pass))[ \t]+(any)[ \t]+(message)(?![A-Za-z0-9_])`,
+      captures: {
+        1: { name: 'storage.type.function.northtalk' },
+        2: { name: 'keyword.control.northtalk' },
+        3: { name: 'keyword.other.northtalk' },
+        4: { name: 'keyword.other.northtalk' },
+        5: { name: 'keyword.other.northtalk' },
       },
     },
     declaration: {

@@ -8,6 +8,9 @@
 # waiting body's slots. A body that holds a Suspension Point may suspend.
 # `router` pins a computed message name: the name, then the arguments and
 # the receiver, and `send-named`, `send-named-wait` or `join-send-named`.
+# `fallback` pins the Fallback Handler's `fallback` bodies and `pass any
+# message`, and a spread in `send … with`: the name as text, the arguments as
+# one list, and `send-spread`, `send-spread-wait` or `join-send-spread`.
 
 kind = "disassembly"
 
@@ -57,3 +60,11 @@ expected = "waiter.dis"
 [[disassembly]]
 unit = "router"
 expected = "router.dis"
+
+[[scripts]]
+name = "fallback"
+source = "fallback.talk"
+
+[[disassembly]]
+unit = "fallback"
+expected = "fallback.dis"

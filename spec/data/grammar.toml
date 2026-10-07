@@ -90,6 +90,10 @@ word = "all"
 positions = ["straight after `wait for` (a Join)"]
 
 [[contextual]]
+word = "any"
+positions = ["after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler)"]
+
+[[contextual]]
 word = "as"
 positions = ["after an operand (a conversion)", "after a pattern (binding the whole value)", "after the Library name in `use`, before the new name", "after a Text Pattern element", "after the value of a Binary Pattern build field"]
 
@@ -192,6 +196,10 @@ positions = ["after a comparison, a `match` subject or a Text Pattern element, b
 [[contextual]]
 word = "lazily"
 positions = ["after a Text Pattern element"]
+
+[[contextual]]
+word = "message"
+positions = ["after `any` (the Fallback Handler)"]
 
 [[contextual]]
 word = "matches"
@@ -372,6 +380,10 @@ name = "and-wait"
 rule = "`and` followed by `wait` ends the expression before it, and is never a boolean `and`"
 
 [[decision]]
+name = "any-message"
+rule = "after `on`, `pass` or a Handler's `end`, `any` followed by `message` names the Fallback Handler; otherwise `any` is a Name"
+
+[[decision]]
 name = "as-in-build"
 rule = "inside `<< >>`, `as` followed by an integer type, a number, `(` or `^` ends the value and gives the field type"
 
@@ -507,6 +519,11 @@ beginner = "an ordinary local catch with an explicitly supplied policy callback"
 construct = "An offer choice"
 written = "`choose offer name` with optional call arguments"
 beginner = "a policy callback that returns a decision to a local catch"
+
+[[advanced]]
+construct = "A spread in `send … with`"
+written = "`...e` in a receiver-last `send`'s `with` list, e.g. `send (the name of m) with ...(the args of m) to other`"
+beginner = "the arguments listed one by one in `with`"
 
 [[syntax_error]]
 code = "bad character"

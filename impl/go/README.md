@@ -174,6 +174,19 @@ non-text raises `wrong kind`, and text that isn't a Name or a Selector with one
 argument per part raises `bad message name`. A receiver Name for a Script the
 Group doesn't hold raises `object gone` at the send, after that check.
 
+A Fallback Handler, `on any message m`, takes the messages no Handler Clause
+matches ([ADR 0063](../../docs/adr/0063-a-fallback-handler-receives-messages-no-clause-matches.md)).
+Its clauses are `fallback` bodies named `any message`, and `pass any message`
+lowers to `pass`. `machine.StartDelivery` appends them, from every code unit,
+after the Selector's clauses, with the uncharged message map `{name, args}` as
+their one argument. Broadcasts, Decisions and `error` messages never reach
+them, and neither do local Command Calls. A Fallback Run reports its message's
+Selector as its Handler, plus `fallback`, which is derived from the selected
+body's kind, so snapshots need nothing new to keep it. A receiver-last `send`
+whose `with` list holds `...e` builds its arguments as one list and ends in
+`send-spread`, `send-spread-wait` or `join-send-spread`, which check the name
+against the list's length as `send-named` does.
+
 Tests reconstruct every grammar sketch, Corpus source and stdlib Library,
 and pin the first errors in `tools/grammar/broken.talk`. The Disassembly Cases
 match byte for byte, including pools, slots, positions,

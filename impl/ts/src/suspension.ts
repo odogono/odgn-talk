@@ -177,7 +177,12 @@ export const checkSuspension = (
         );
         bodies.push({
           kind: node.rule === 'Handler' ? 'handler' : 'function',
-          name: named ? firstLeaf(named).text : '',
+          // A Fallback Handler has no MessageName (ADR 0063).
+          name: named
+            ? firstLeaf(named).text
+            : node.rule === 'Handler'
+              ? 'any message'
+              : '',
           facts: factsOf(node, report, lambdas),
         });
       }

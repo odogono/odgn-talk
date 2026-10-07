@@ -1,0 +1,20 @@
+# Unblessed: the output lines are written by bless, and await their first review.
+# `, deciding` on a Fallback is `bad suffixes`. A Fallback's `pass` must be
+# `pass any message`, which is `wrong message` anywhere else. A second
+# parameter is a syntax error. `on any x` is an ordinary Handler named `any`.
+> load deciding identity=46bae1c1512cd98abc8d1e386216331fd6433da736c14dac00fe08b5df4d8492
+diag deciding code="bad suffixes" pos=2:19
+> load named-pass identity=e91426c5a1daaabef752d7a67fac0061a5c055265954900e5c274506260b5086
+diag named-pass code="wrong message" pos=3:8
+> load stray-pass identity=2051e8b3b699339240a66e6589129997ced7088d4218681c0a814bed5ae9851c
+diag stray-pass code="wrong message" pos=3:8
+> load two-params identity=cb2fd42d56b4a0e8339119af8f314f00aba0460d93ca0b7cbdb9f363716dacb4
+diag two-params code="unexpected token" pos=2:19
+> load any identity=ae027adde3e5b9b35485b91f6c863e9ea3ee76ec001724288a0e81b6e6fce7aa
+> deliver d1 to=any message=any args=[7]
+> pump clock=2026-10-07T09:00:00Z
+seg any/r1 start delivery=d1 handler=any clause=1 fuel=10 alloc=0 state=16 end=return
+run any/r1 outcome=completed delivery=d1 handler=any fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars any got=7

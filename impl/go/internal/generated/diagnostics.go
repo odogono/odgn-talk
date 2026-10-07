@@ -221,11 +221,12 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a library",
-			RaisedWhen: "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable`",
+			RaisedWhen: "Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler",
 			At:         "its first token",
 			Sources: []string{
 				"ADR 0016",
 				"ADR 0020",
+				"ADR 0063",
 				"#115",
 			},
 		},
@@ -311,18 +312,20 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "wrong message",
-			RaisedWhen: "`pass m` names a message other than the one its Handler handles",
-			At:         "the message's name",
+			RaisedWhen: "`pass m` names a message other than the one its Handler handles, `pass any message` is outside a Fallback Handler, or a Fallback Handler's `pass` names a message",
+			At:         "the message's name, or `any`",
 			Sources: []string{
+				"ADR 0063",
 				"#115",
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "bad suffixes",
-			RaisedWhen: "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, or `, during` on a Handler other than `on error`",
+			RaisedWhen: "A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler",
 			At:         "the first suffix that breaks the rule",
 			Sources: []string{
 				"ADR 0031",
+				"ADR 0063",
 				"#115",
 			},
 		},
