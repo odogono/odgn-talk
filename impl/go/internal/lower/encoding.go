@@ -123,6 +123,7 @@ func decodeBytecode(data []byte) ([]Instruction, error) {
 			}
 			instruction.args = append(instruction.args, arg)
 		}
+		instruction.prepare()
 		code = append(code, instruction)
 	}
 	if len(data) != 0 {

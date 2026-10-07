@@ -55,6 +55,10 @@ Then port it to each Peer Language under `peers/`: Lua, Starlark, JavaScript, Py
 
 `bun test` in `ts/` and `go test ./...` in `go/` check every Benchmark's smoke output on their Core and every port on their Host's Peer Languages. `uv run --no-project --managed-python python -m unittest` in `peers/python/` checks the Python ports.
 
+`go -C bench/go test -run TestCoreRunAllocationBudgets` checks the four full-size
+core workloads against host-allocation ceilings one tenth of the pre-#322
+baseline, and pins their output and Fuel. Timing comparisons remain advisory.
+
 ## Peer Languages
 
 Each port is idiomatic rather than a literal translation of the Script, so that it shows what a user of that language would see. Native Go and TS are the ceilings for their Cores. No runner uses a JIT except native TS on Bun.

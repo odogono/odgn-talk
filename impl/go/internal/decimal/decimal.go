@@ -165,6 +165,19 @@ func (n Number) String() string {
 func pow10(n int) *big.Int     { return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil) }
 func (n Number) Rat() *big.Rat { return new(big.Rat).SetFrac(n.coefficientInt(), pow10(-n.exponent)) }
 func (n Number) Compare(m Number) int {
+	if n.comparisonExponent == "" && m.comparisonExponent == "" && n.exponent == m.exponent {
+		a, ae := strconv.ParseInt(n.coefficientOrZero(), 10, 64)
+		b, be := strconv.ParseInt(m.coefficientOrZero(), 10, 64)
+		if ae == nil && be == nil {
+			if a < b {
+				return -1
+			}
+			if a > b {
+				return 1
+			}
+			return 0
+		}
+	}
 	a, b := n.coefficientInt(), m.coefficientInt()
 	as, bs := a.Sign(), b.Sign()
 	if as != bs {
@@ -369,6 +382,9 @@ func roundScaled(r *big.Rat, shift, ideal int, op string, bounded bool) (Number,
 	return Number{coefficient: c.String(), exponent: exponent}, nil
 }
 func Calculate(op string, a, b Number) (Number, *Error) {
+	if n, ok := calculateSmall(op, a, b); ok {
+		return n, nil
+	}
 	x, y := a.Rat(), b.Rat()
 	ideal := min(a.exponent, b.exponent)
 	switch op {

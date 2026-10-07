@@ -32,6 +32,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
 - `internal/decimal/` supplies exact-input decimals, arithmetic, integral
   rounding and elementary functions. Outward-rounded intervals increase
   precision until both bounds select the same 34-digit half-even result.
+  Exact addition, subtraction and multiplication use checked `int64`
+  coefficients when possible, preserving the decimal quantum and falling back
+  to `math/big` for overflow or rounding.
 - `internal/value/` owns values, Units, comparison, display and strict JSON.
   Containers copy input slices; public accessors return copies.
 - `internal/syntax/` owns lossless UTF-8 lexing and parsing. `Tree.Source()`
@@ -41,8 +44,14 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
 - `internal/lower/` produces canonical instructions, source maps, Unwind Tables
   and Event Tables. Labels use instruction indices, never byte offsets. Its
   Go-private byte encoding round-trips each body's instruction stream.
+  Operands, Cost Model keys and suspension flags are resolved after labels
+  receive their final instruction indices; runtime operand views are read-only.
 - `internal/machine/` executes checked code with heap frames, detached operand
   evaluation, clause dispatch, unwind state and generated Cost Model 0 charges.
+  Trial stacks and locals reuse detached buffers within an execution turn;
+  accepted charges copy their results back before effects commit. Returned
+  call frames supply cleared buffers for later calls in that turn. These
+  temporary buffers are discarded on preemption, suspension or completion.
 - `internal/snapshot/` encodes plain heap data and explicitly named Group/code
   references; Host bindings and futures stay outside snapshots.
 - `internal/trace/` orders records and keys by `corpus.toml`. It removes the
