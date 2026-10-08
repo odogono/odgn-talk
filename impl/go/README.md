@@ -123,7 +123,7 @@ Independent Go Trace replay currently normalizes decomposed source-bearing text 
 
 - **Declaration Documentation:** `--|` blocks attach to the next top-level declaration as the specification says. A leading block keeps an Entry `NeedsMore`, and the Host refuses a block that documents nothing with `! bad arguments`. The source a declaration was entered with keeps its block, through redefinition, export and reload. `Documentation(name)`, `LibraryDocumentation(library, name)` and `FunctionDocumentation(value)` return the documentation. Each Handler Clause has its own entry. An Import resolves to the declaration that defines it, and a Built-in uses its `stdlib.toml` description. A Function Value's documentation comes from the code that defined it, so a stale one keeps its documentation, including across save and restore.
 - **Tracing and Fuel:** the Session Host reads only the public Run accounting reports for these commands. `:trace` filters latch a dispatched Run by its message Selector when it starts; a Command Call shares its caller's Run and is not traced separately, and a Function Value's Run has no Selector to match. `trace start` and `trace end` rows follow a Host call's ordinary output, and Fuel rows follow them. `:fuel <entry>` measures the Entry's root Delivery and every Run and message spawned from it, summing each member Run's latest cumulative Fuel. It stays pending until the root's causal work reports no live Runs and no queued messages. `NeedsMore` waits for a multiline `:fuel` Entry. `:save` keeps filters, latched Runs and measurements; `:restore` prints `fuel abandoned` for each measurement still pending, then continues from the saved ones. The `sessions/observation` case pins the output on both Cores.
-- **`:describe` and `:apropos`:** both read declaration source and the Built-in catalogue, so they execute nothing. Describing a current Script Variable takes one explicit `vars` snapshot for its value rows; no other lookup reads the Group. A signature ends at the declaration's grammar head: a function's or Handler's head line, or a Constant's or Script Variable's name. A Function Value whose code a restore dropped shows `nothing` for its name and arity ([#449](https://github.com/odogono/odgn-talk/issues/449)). Describing an Object variable renders its actual Kind metadata without calling getters.
+- **`:describe` and `:apropos`:** both read declaration source and the Built-in catalogue, so they execute nothing. Describing a current Script Variable takes one explicit `vars` snapshot for its value rows; no other lookup reads the Group. A signature ends at the declaration's grammar head: a function's or Handler's head line, or a Constant's or Script Variable's name. A stale Function Value keeps its original name, arity and documentation through save and restore, even after its executable code is discarded. Describing an Object variable renders its actual Kind metadata without calling getters.
 
 
 From `impl/go/`, run the Go REPL or record/replay a Transcript:
@@ -345,7 +345,7 @@ Public Run accounting is returned by Pump, Reload, Library replacement and Resto
 Dispatch/discard events precede cumulative Fuel and causal queue counts; observation
 charges, detached sends and error Handlers are included without adding Trace records.
 
-`Group.Save` returns opaque `go/4` bytes for a Quiescent Group. It retains the
+`Group.Save` returns opaque `go/5` bytes for a Quiescent Group. It retains the
 Clock, sources and extensions, heap Values and closures, frames and rollback
 bases, dispatch contexts and activations, owner identities, pending transfers,
 cleanup progress and attempt counters, budgets and slice debt, ordered work and input queues, pending replies,
@@ -356,8 +356,8 @@ external effect state, refuse Save with `effects pending`.
 `Core.Restore` rebuilds code and checks the saved Group Fingerprint against
 current language/cost versions, Library identities, Grant declarations and
 limits. Saves are specific to the Go Core family and format; corrupt or
-unreadable bytes return `invalid save`. Formats `go/1` to `go/3` are no longer readable. Format `go/4` keeps the
-Declaration Documentation of stale Function Values' code, and requires
+unreadable bytes return `invalid save`. Formats `go/1` to `go/4` are no longer readable. Format `go/5` keeps stale
+Function Values' names, arities and Declaration Documentation, and requires
 causal accounting state as well as transfer references to belong to surviving dispatch contexts,
 including after cancellation. Restore validates retained and active code/body/PC
 references, shared owner-local layouts, phases, action arguments, cleanup tables

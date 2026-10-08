@@ -7,6 +7,53 @@ import (
 	"time"
 )
 
+func TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore(t *testing.T) {
+	h := New(Environment{})
+	for _, source := range []string{
+		":clock virtual 2026-09-30T10:00:00Z",
+		"--| Original double.\nfunction double n, m = 1\n  return n * 2\nend double",
+		"put double into g",
+		"put given [x, y], z: x + y + z into pair",
+		"put given: 1 into zero",
+		"function double n\n  return n + n\nend double",
+	} {
+		if out := h.Input(source); len(out) != 0 {
+			t.Fatal(source, out)
+		}
+	}
+	for _, entry := range []struct {
+		source string
+		want   string
+	}{
+		{"functionName(g)", `"double"`},
+		{"functionArity(g)", "1..2"},
+		{"[functionName(pair), functionArity(pair)]", "[nothing, 2..2]"},
+		{"[functionName(zero), functionArity(zero)]", "[nothing, 0..0]"},
+		{"try\n  g(2)\ncatch e\n  say the code of e\nend try", "function gone"},
+		{":save s", "saved s"},
+		{":restore s", "restored s"},
+		{"functionName(g)", `"double"`},
+		{"functionArity(g)", "1..2"},
+		{"[functionName(pair), functionArity(pair)]", "[nothing, 2..2]"},
+		{"[functionName(zero), functionArity(zero)]", "[nothing, 0..0]"},
+		{"try\n  g(2)\ncatch e\n  say the code of e\nend try", "function gone"},
+		{":save s", "saved s"},
+		{":restore s", "restored s"},
+		{"functionName(g)", `"double"`},
+		{"functionArity(g)", "1..2"},
+	} {
+		if out := h.Input(entry.source); !reflect.DeepEqual(out, []string{entry.want}) {
+			t.Fatalf("%s: got %v, want %s", entry.source, out, entry.want)
+		}
+	}
+	out := h.Input(":describe g")
+	for _, want := range []string{`function {name: "double", arity: 1..2, home: "session"}`, `doc "Original double."`} {
+		if !strings.Contains(strings.Join(out, "\n"), want) {
+			t.Fatalf("describe: got %v, missing %s", out, want)
+		}
+	}
+}
+
 func TestOfferMapKeyEchoReadsBack(t *testing.T) {
 	h := New(Environment{})
 	for _, source := range []string{":clock virtual 2026-09-30T10:00:00Z", "put {} into m", "put 1 into the offer of m", "put true into the if of m"} {

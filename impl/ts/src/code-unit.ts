@@ -47,6 +47,19 @@ export const arityOf = (body: Body): { max: number; min: number } =>
         min: body.defaults.filter(d => d === null || d === undefined).length,
         max: body.params.length,
       };
+/** Introspection metadata outlives a Function Value's executable body. */
+export type FunctionHead = { max: number; min: number; name: string | null };
+export const functionHead = (code: unknown): FunctionHead | null => {
+  const c = code as { body?: Body; head?: FunctionHead } | null;
+  if (c?.head) {
+    return c.head;
+  }
+  const body = c?.body;
+  return body
+    ? { ...arityOf(body), name: body.kind === 'lambda' ? null : body.name }
+    : null;
+};
+
 export type UnwindEntry = {
   depth: number;
   /** One past the range's last instruction. */

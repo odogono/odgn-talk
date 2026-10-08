@@ -25,20 +25,6 @@ func init() {
 			return "", 0, 0, false
 		}
 		fn := value.inner.Function
-		state, ok := fn.Owner.(*machine.State)
-		if code, held := fn.CodeState.(*machine.State); held {
-			state, ok = code, true
-		}
-		if !ok || state == nil || state.Unit == nil || fn.Body < 0 || fn.Body >= len(state.Unit.Bodies) {
-			return "", 0, 0, false
-		}
-		body := state.Unit.Bodies[fn.Body]
-		required := 0
-		for _, p := range body.Checked.Node.Params {
-			if body.Checked.Kind != "function" || len(p.Children) == 0 {
-				required++
-			}
-		}
-		return fn.Name, required, len(body.Checked.Node.Params), true
+		return fn.Name, fn.Required, fn.Total, true
 	}
 }

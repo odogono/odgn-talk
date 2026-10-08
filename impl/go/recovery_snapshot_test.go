@@ -390,3 +390,18 @@ func TestRecoverySaveFormatRejectsPriorTransferLayout(t *testing.T) {
 		t.Fatalf("prior transfer layout accepted: %v", err)
 	}
 }
+
+func TestSaveFormatRejectsPriorFunctionMetadataLayout(t *testing.T) {
+	saved, err := New().NewGroup(GroupOptions{}).Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved = rewriteSave(t, saved, func(data map[string]any) { data["Format"] = "go/4" })
+	for _, policy := range []MismatchPolicy{RejectMismatch, VariablesOnly} {
+		_, _, err = New().Restore(saved, RestoreOptions{Mismatch: policy})
+		host, ok := err.(*HostError)
+		if !ok || host.Code != InvalidSave {
+			t.Fatalf("prior function metadata layout accepted: %v", err)
+		}
+	}
+}
