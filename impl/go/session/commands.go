@@ -129,9 +129,13 @@ func (h *Host) command(source string) []string {
 			return refusal("bad arguments")
 		}
 		h.start()
+	case "trace", "untrace":
+		return h.trace(name, rest)
+	case "fuel":
+		return h.fuel(rest)
 	case "help":
 		h.recording = nil
-		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :help :quit"}
+		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :trace :untrace :fuel :help :quit"}
 	case "quit":
 		h.recording = nil
 		return nil

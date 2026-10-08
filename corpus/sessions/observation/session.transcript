@@ -1,0 +1,138 @@
+# Unblessed: Session observation (#438); first blessing awaits human review.
+# `:trace` and `:fuel` (session-observation.md): trace rows follow a Host
+# call's ordinary output, and Fuel rows follow them. A Command Call shares
+# its Entry's Run, so only dispatched Runs are traced. A Fuel Measurement
+# follows its Entry's detached sends and error Handler, stays pending while
+# any of them waits, and keeps its spent Fuel when a Reload discards work.
+> :clock virtual 2026-09-30T10:00:00Z
+> on greet name
+|   say "hi " & name
+| end greet
+> on move x to y
+|   say x + y
+| end move
+> on nap
+|   wait 5 s
+|   say "woke"
+| end nap
+> on boom
+|   return 1 / 0
+| end boom
+> on error e
+|   say "caught " & the code of e
+| end error
+> :trace nap
+> :trace greet
+> :trace move:to:
+> :trace error
+> :trace greet
+> :trace
+trace "error"
+trace "greet"
+trace "move:to:"
+trace "nap"
+> :trace bad name
+! bad arguments
+> :untrace move:
+! bad arguments
+> greet "Ann"
+hi Ann
+> send greet with "Bo" to session
+[session/r3] hi Bo
+trace start {script: "session", run: "session/r3", selector: "greet", args: ["Bo"]}
+trace end {script: "session", run: "session/r3", selector: "greet", outcome: "completed", result: nothing}
+> send to session: move 1 to 2
+[session/r5] 3
+trace start {script: "session", run: "session/r5", selector: "move:to:", args: [1, 2]}
+trace end {script: "session", run: "session/r5", selector: "move:to:", outcome: "completed", result: nothing}
+> :fuel 1 + 2
+3
+fuel {entry: "entry4", fuel: 12, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :fuel send nap to session
+trace start {script: "session", run: "session/r8", selector: "nap", args: []}
+fuel {entry: "entry5", fuel: 44, state: "pending", interrupted: false, runs: 1, queued: 0}
+> :fuel
+fuel {entry: "entry4", fuel: 12, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry5", fuel: 44, state: "pending", interrupted: false, runs: 1, queued: 0}
+> :untrace nap
+> :fuel send boom to session
+[session/r10] ! error {code: "division by zero"} at session+4:2:12
+[session/r11] caught division by zero
+trace start {script: "session", run: "session/r11", selector: "error", args: [{code: "division by zero", at: {unit: "session+4", handler: "boom", line: 2, column: 12}}]}
+trace end {script: "session", run: "session/r11", selector: "error", outcome: "completed", result: nothing}
+fuel {entry: "entry6", fuel: 69, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :clock advance 5 s
+[session/r8] woke
+trace end {script: "session", run: "session/r8", selector: "nap", outcome: "completed", result: nothing}
+fuel {entry: "entry5", fuel: 58, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :fuel function f
+|   return 1
+| end f
+! bad arguments
+> :fuel :runs
+! bad arguments
+> :fuel put 1 +
+! unexpected token at 1:8
+> :fuel repeat 2 times
+|   send greet with "Cy" to session
+| end repeat
+[session/r13] hi Cy
+[session/r14] hi Cy
+trace start {script: "session", run: "session/r13", selector: "greet", args: ["Cy"]}
+trace end {script: "session", run: "session/r13", selector: "greet", outcome: "completed", result: nothing}
+trace start {script: "session", run: "session/r14", selector: "greet", args: ["Cy"]}
+trace end {script: "session", run: "session/r14", selector: "greet", outcome: "completed", result: nothing}
+fuel {entry: "entry7", fuel: 115, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :save
+saved default
+> :trace nap
+> :fuel send nap to session
+trace start {script: "session", run: "session/r16", selector: "nap", args: []}
+fuel {entry: "entry8", fuel: 44, state: "pending", interrupted: false, runs: 1, queued: 0}
+> :restore
+restored default
+fuel abandoned "entry8"
+> :fuel
+fuel {entry: "entry4", fuel: 12, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry5", fuel: 58, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry6", fuel: 69, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry7", fuel: 115, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :trace
+trace "error"
+trace "greet"
+trace "move:to:"
+> :fuel send nap to session
+fuel {entry: "entry8", fuel: 44, state: "pending", interrupted: false, runs: 1, queued: 0}
+> on nap
+|   say "replaced"
+| end nap
+! discarded session/r16
+fuel {entry: "entry8", fuel: 44, state: "interrupted", interrupted: true, runs: 0, queued: 0}
+> :fuel
+fuel {entry: "entry4", fuel: 12, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry5", fuel: 58, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry6", fuel: 69, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry7", fuel: 115, state: "complete", interrupted: false, runs: 0, queued: 0}
+fuel {entry: "entry8", fuel: 44, state: "interrupted", interrupted: true, runs: 0, queued: 0}
+> on doze
+|   wait 5 s
+| end doze
+> :trace doze
+> :fuel send doze to session
+trace start {script: "session", run: "session/r18", selector: "doze", args: []}
+fuel {entry: "entry9", fuel: 44, state: "pending", interrupted: false, runs: 1, queued: 0}
+> :cancel session/r18
+[session/r18] ! cancelled
+trace end {script: "session", run: "session/r18", selector: "doze", outcome: "cancelled"}
+fuel {entry: "entry9", fuel: 44, state: "complete", interrupted: false, runs: 0, queued: 0}
+> on spin
+|   spin
+| end spin
+> :trace spin
+> :fuel send spin to session
+[session/r20] ! limit fault depth at session+3:2:3
+trace start {script: "session", run: "session/r20", selector: "spin", args: []}
+trace end {script: "session", run: "session/r20", selector: "spin", outcome: "limit fault", limit: "depth"}
+fuel {entry: "entry10", fuel: 2417, state: "complete", interrupted: false, runs: 0, queued: 0}
+> :untrace
+> :trace

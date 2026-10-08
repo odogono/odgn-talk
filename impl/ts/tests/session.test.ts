@@ -768,3 +768,34 @@ test('Session Entries recognise the first word of a labelled Handler', () => {
   expect(host.input('on move x toward y\n  say x * y\nend move')).toEqual([]);
   expect(host.input('move 3 toward 4')).toEqual(['12']);
 });
+
+describe('Session observation', () => {
+  test('`:fuel` continues its Entry like any other', () => {
+    const host = new SessionHost({ now: () => start });
+    for (const [source, more] of [
+      [':fuel repeat 2 times', true],
+      [':fuel repeat 2 times\nsay 1\nend repeat', false],
+      [':fuel 1 + 2', false],
+      [':fuel', false],
+      [':runs', false],
+      [':trace greet', false],
+    ] as const) {
+      expect([source, host.incomplete(source)]).toEqual([source, more]);
+    }
+  });
+
+  // A measured Entry that yields to `read` prints its pending row, then its
+  // final row at the Host call where its family settles.
+  test('Fuel rows print at the yield and at settlement', () => {
+    const host = new SessionHost({ now: () => start });
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    expect(host.input(':fuel ask console to read and wait')).toEqual([
+      'fuel {entry: "entry1", fuel: 14, state: "pending", interrupted: false, runs: 1, queued: 0}',
+    ]);
+    expect(host.waiting.k).toBe('read');
+    expect(host.read('hi')).toEqual([
+      'fuel {entry: "entry1", fuel: 19, state: "complete", interrupted: false, runs: 0, queued: 0}',
+    ]);
+    expect(host.tick()).toEqual([]);
+  });
+});

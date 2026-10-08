@@ -41,8 +41,8 @@ func TestSessionTranscriptParity(t *testing.T) {
 			}
 		})
 	}
-	if count != 12 {
-		t.Fatalf("expected 12 Session Transcripts, got %d", count)
+	if count != 13 {
+		t.Fatalf("expected 13 Session Transcripts, got %d", count)
 	}
 }
 

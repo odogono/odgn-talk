@@ -1,6 +1,6 @@
 # NorthTalk Playground
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The prompt and Script-tab Apply retain `--|` Declaration Documentation, and editor hover shares the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The prompt and Script-tab Apply retain `--|` Declaration Documentation, and editor hover shares the Core's extraction and Built-in catalogue. `:trace`, `:untrace` and `:fuel` work as in the Session Host, including a multiline `:fuel` Entry ([#438](https://github.com/odogono/odgn-talk/issues/438)). `:describe`, `:inspect`, `:apropos` and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 
 The browser counterpart of the REPL, on the TS Core ([chapter 12](../../spec/12-sessions-and-tooling.md#the-playground)). A Playground session is an ordinary Session Host, so everything it prints and records is the same as the REPL's. The page itself is tooling, and none of it is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

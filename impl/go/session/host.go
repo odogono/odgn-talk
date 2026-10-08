@@ -83,6 +83,7 @@ type saved struct {
 	virtual, lastClock, deadline time.Time
 	virtualOn, hasClock          bool
 	lastEntry, units             int
+	observation                  observation
 }
 
 // Host turns Entries and Session Commands into ordinary Group inputs.
@@ -118,13 +119,15 @@ type Host struct {
 	lastEntry, units             int
 	waiting                      Waiting
 	recording                    *string
+	observation                  observation
+	measuring                    bool // the next Entry's Run is a Fuel Measurement
 }
 
 func New(env Environment) *Host {
 	if env.Now == nil {
 		env.Now = time.Now
 	}
-	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}}
+	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
 }
 func (h *Host) Source() string          { return sourceOf(h.declarations) }
 func (h *Host) Started() bool           { return h.group != nil }
@@ -142,8 +145,11 @@ func (h *Host) recorded() {
 		h.recording = nil
 	}
 }
+
+// printed ends a Host call: trace and Fuel rows follow its ordinary output.
 func (h *Host) printed(out []string) []string {
 	h.recorded()
+	out = append(out, h.observed()...)
 	for _, s := range out {
 		h.record(Item{Kind: "output", Text: s})
 	}
@@ -334,8 +340,14 @@ func libraryHandler(l *talk.Library, name string) bool {
 }
 
 // NeedsMore classifies continuation with the same names as actual submission.
-// A leading doc block waits for the declaration it documents.
+// A leading doc block waits for the declaration it documents, and `:fuel`
+// waits for the whole Entry it measures.
 func (h *Host) NeedsMore(source string) bool {
+	if name, rest := split(source); name == ":fuel" && rest != "" {
+		source = rest
+	} else if strings.HasPrefix(source, ":") {
+		return false
+	}
 	_, _, err := syntax.ParseEntry(source, h.isHandler)
 	var e *syntax.Error
 	return errors.As(err, &e) && e.Incomplete || err == nil && syntax.LeadingDoc(source) == syntax.DocPending
@@ -523,6 +535,9 @@ func (h *Host) runAt(source string, expression bool, node *syntax.Node, adjust p
 	}
 	h.foreground = entryRun{delivery: string(id)}
 	h.latest = h.foreground
+	if h.measuring {
+		h.observation.measurements = append(h.observation.measurements, &measurement{entry: n, root: string(id), fuel: map[string]int64{}})
+	}
 	if expression {
 		h.expressions[string(id)] = true
 	}
@@ -559,6 +574,7 @@ func (h *Host) refused(err error, p placement, length int) []string {
 	panic(err)
 }
 func (h *Host) discarded(reports []talk.Report) []string {
+	h.observe(reports, nil)
 	var out []string
 	for _, r := range reports {
 		if stop, ok := r.(*talk.Stop); ok {

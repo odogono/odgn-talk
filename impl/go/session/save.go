@@ -1,6 +1,8 @@
 package session
 
 import (
+	"fmt"
+
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"maps"
 	"slices"
@@ -19,7 +21,7 @@ func (h *Host) save(name string) []string {
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
-	h.saves[name] = saved{bytes: bytes, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units}
+	h.saves[name] = saved{bytes: bytes, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units, observation: h.observation.clone()}
 	return []string{"saved " + name}
 }
 func (h *Host) restore(name string) []string {
@@ -52,6 +54,9 @@ func (h *Host) restore(name string) []string {
 	h.deadline = saved.deadline
 	h.lastEntry = saved.lastEntry
 	h.units = saved.units
+	abandoned := h.observation.measurements
+	h.observation = saved.observation.clone()
+	h.observe(result.Reports, nil)
 	h.foreground = entryRun{}
 	h.waiting = Waiting{Kind: "prompt"}
 	h.writes = map[string]talk.Value{}
@@ -72,6 +77,12 @@ func (h *Host) restore(name string) []string {
 	for _, run := range result.DiscardedRuns {
 		delete(h.segments, string(run))
 		out = append(out, "! discarded "+string(run))
+	}
+	// Work still pending in the replaced timeline is abandoned, not counted.
+	for _, m := range abandoned {
+		if !m.settled() {
+			out = append(out, "fuel abandoned "+textForm(fmt.Sprintf("entry%d", m.entry)))
+		}
 	}
 	return out
 }
