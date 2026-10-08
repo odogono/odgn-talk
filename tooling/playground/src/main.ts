@@ -400,7 +400,7 @@ const renderLine = (line: ConsoleLine) => {
       ? 'in'
       : item.k === 'read'
         ? 'read'
-        : item.k === 'clock' || item.k === 'answer'
+        : item.k === 'clock' || item.k === 'answer' || item.k === 'envelope'
           ? 'reading'
           : item.k === 'comment'
             ? 'note'

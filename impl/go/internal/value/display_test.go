@@ -194,3 +194,15 @@ func TestDisplayRejectsMalformedCanonicalNumbersDatesAndFunctions(t *testing.T) 
 		}
 	}
 }
+
+func TestNamedExtensionFunctionDisplayRetainsCodeIdentity(t *testing.T) {
+	fn := &FunctionData{Home: "session", Code: "session+3:plus", Name: "plus"}
+	v := Value{Kind: Function, Function: fn}
+	if v.Display() != `<function session:plus>` || fn.Code != "session+3:plus" {
+		t.Fatal(v.Display(), fn.Code)
+	}
+	other := Value{Kind: Function, Function: &FunctionData{Home: "session", Code: "session+4:plus", Name: "plus"}}
+	if v.Equal(other) {
+		t.Fatal("display name collapsed defining code identity")
+	}
+}

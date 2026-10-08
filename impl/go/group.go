@@ -22,6 +22,7 @@ import (
 var ErrMailboxFull error = errors.New("mailbox full")
 
 type Group struct {
+	sessionExpose           func(any)
 	accounting              accountingState
 	accountingDiscardReason string
 	traceMu                 sync.Mutex

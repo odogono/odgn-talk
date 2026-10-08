@@ -6,6 +6,7 @@ import (
 	"time"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/docs"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -99,6 +100,7 @@ func (h *Host) pump() []string {
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
+	h.objectSession.reports(result.Reports)
 	h.deadline = result.NextDeadline
 	ends := map[string]*talk.RunEnd{}
 	for _, r := range result.Reports {
@@ -155,7 +157,16 @@ func (h *Host) pump() []string {
 			text := ""
 			switch e.outcome {
 			case "completed":
-				if h.expressions[e.delivery] {
+				if h.inspections[e.delivery] && end != nil {
+					rows, _ := docs.Inspection(end.Result)
+					for _, row := range rows {
+						out = append(out, h.prefix(e.run)+row)
+					}
+					if end.Result.Kind() == talk.KindObject {
+						x := end.Result
+						h.reader = &x
+					}
+				} else if h.expressions[e.delivery] {
 					text = "nothing"
 					if end != nil {
 						text = end.Result.String()
@@ -183,11 +194,17 @@ func (h *Host) pump() []string {
 				out = append(out, h.prefix(e.run)+text)
 			}
 			delete(h.expressions, e.delivery)
+			delete(h.inspections, e.delivery)
 		}
 	}
 	h.observe(result.Reports, errors)
 	h.pruneCalls()
 	h.settleForeground()
+	if h.reader != nil {
+		x := *h.reader
+		h.reader = nil
+		out = append(out, h.readProperties(x)...)
+	}
 	return out
 }
 func (h *Host) prefix(run string) string {

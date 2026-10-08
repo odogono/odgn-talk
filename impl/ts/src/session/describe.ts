@@ -3,19 +3,18 @@
 // catalogue; only describing a current Script Variable reads the Group,
 // through one explicit vars Host Input.
 import type { Token } from '../lexer';
-import { arityOf, type Body } from '../code-unit';
 import { checkSource } from '../checker';
-import { declarationDocs, functionDoc } from '../documentation';
+import { declarationDocs } from '../documentation';
 import { builtins } from '../generated/syntax';
 import { stdlibSources } from '../generated/stdlib';
 import { parseSource } from '../parser';
 import { readDisplay } from '../readers';
 import type { SyntaxElement, SyntaxNode } from '../syntax';
-import { characters } from '../text';
 import { lower } from '../unicode';
 import { text, type Value } from '../values';
 import { viewSource } from '../view';
 import { selectorText } from './observe';
+import { valueRows } from './inspect';
 
 /** One declaration of the session source, as `:describe` reads it. */
 export type DeclaredName = {
@@ -276,37 +275,6 @@ export const describe = (names: Names, rest: string): string[] => {
         out.push(...valueRows(value));
       }
     }
-  }
-  return out;
-};
-
-// Inspection's passive rows for a held value: no getter is read and nothing
-// executes.
-const valueRows = (v: Value): string[] => {
-  const out = [`value {kind: ${show(v.kind)}, value: ${v.toString()}}`];
-  if (v.kind === 'list') {
-    out.push(`size ${v.length}`);
-  } else if (v.kind === 'bytes') {
-    out.push(`size ${v.asBytes()!.length}`);
-  } else if (v.kind === 'text') {
-    out.push(`size ${characters(v.asText()!).length}`);
-  } else if (v.kind === 'map') {
-    const fields = v.entries();
-    out.push(`size ${fields.length}`);
-    fields.sort(([a], [b]) => byCodePoint(a, b));
-    for (const [key, value] of fields) {
-      out.push(`field ${show(key)} = ${value.toString()}`);
-    }
-  } else if (v.kind === 'function') {
-    const fn = v.asFunction()!;
-    // Code that a save dropped keeps only its documentation.
-    const body = (fn.code as { body?: Body } | null)?.body;
-    const name = !body || body.kind === 'lambda' ? 'nothing' : show(body.name);
-    const arity = body ? arityOf(body) : null;
-    out.push(
-      `function {name: ${name}, arity: ${arity ? `${arity.min}..${arity.max}` : 'nothing'}, home: ${show(fn.home)}}`,
-      `doc ${show(functionDoc(v) ?? '')}`,
-    );
   }
   return out;
 };

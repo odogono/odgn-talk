@@ -27,13 +27,16 @@ type Item struct {
 // serialize Input, Read and Tick. Record receives every printed line as well
 // as recorded inputs and real Clock readings. Trace receives canonical lines.
 type Environment struct {
-	Now            func() time.Time
-	Record         func(Item)
-	Trace          func(string)
-	ReadFile       func(string) (string, error)
-	WriteFile      func(directory, file, source string) error
-	ReadStoreFile  func(path string) (string, error)
-	WriteStoreFile func(path, source string) error
+	Objects          func(*Objects) map[string]*talk.Object
+	ResolveObject    func(kind, id string) (any, bool)
+	ObjectTranscript []Item
+	Now              func() time.Time
+	Record           func(Item)
+	Trace            func(string)
+	ReadFile         func(string) (string, error)
+	WriteFile        func(directory, file, source string) error
+	ReadStoreFile    func(path string) (string, error)
+	WriteStoreFile   func(path, source string) error
 }
 
 type Waiting struct {
@@ -76,6 +79,7 @@ type saved struct {
 	implicit                     map[string]bool
 	placements                   map[string]placement
 	expressions                  map[string]bool
+	inspections                  map[string]bool
 	segments                     map[string]segment
 	stubs                        map[string][]stub
 	latest                       entryRun
@@ -90,6 +94,11 @@ type saved struct {
 // Foreground bookkeeping reads only the Trace; Inspect is reserved for the
 // three explicit inspection commands, each of which is a vars Host Input.
 type Host struct {
+	objectItems                  []Item
+	objectSession                *Objects
+	objectBindings               map[string]*talk.Object
+	inspecting                   bool
+	reader                       *talk.Value
 	env                          Environment
 	core                         *talk.Core
 	group                        *talk.Group
@@ -98,6 +107,7 @@ type Host struct {
 	implicit                     map[string]bool
 	placements                   map[string]placement
 	expressions                  map[string]bool
+	inspections                  map[string]bool
 	segments                     map[string]segment
 	foreground, latest           entryRun
 	events                       []event
@@ -127,7 +137,7 @@ func New(env Environment) *Host {
 	if env.Now == nil {
 		env.Now = time.Now
 	}
-	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
+	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, inspections: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
 }
 func (h *Host) Source() string          { return sourceOf(h.declarations) }
 func (h *Host) Started() bool           { return h.group != nil }
@@ -135,6 +145,7 @@ func (h *Host) VirtualClock() bool      { return h.virtualOn }
 func (h *Host) Waiting() Waiting        { return h.waiting }
 func (h *Host) NextDeadline() time.Time { return h.deadline }
 func (h *Host) record(i Item) {
+	h.objectItems = append(h.objectItems, i)
 	if h.env.Record != nil {
 		h.env.Record(i)
 	}
@@ -272,7 +283,15 @@ func (h *Host) start() {
 		h.grants[name], err = defs[capability].Grant(names, binding)
 		must(err)
 	}
-	h.script, err = h.group.Load(talk.LoadOptions{Name: "session", Source: "", Grants: h.grants})
+	h.objectSession = newObjects(h.core, h.group, func(i Item) { h.record(i) }, h.env.ObjectTranscript, h.env.ObjectTranscript == nil || hasEnvelopes(h.env.ObjectTranscript))
+	h.objectBindings = map[string]*talk.Object{}
+	if h.env.ObjectTranscript != nil {
+		h.objectBindings = h.objectSession.preload()
+	} else if h.env.Objects != nil {
+		h.objectBindings = h.env.Objects(h.objectSession)
+	}
+	h.objectSession.initial(h.objectBindings)
+	h.script, err = h.group.Load(talk.LoadOptions{Name: "session", Source: "", Grants: h.grants, Objects: h.objectBindings})
 	must(err)
 }
 func must(err error) {
@@ -343,7 +362,7 @@ func libraryHandler(l *talk.Library, name string) bool {
 // A leading doc block waits for the declaration it documents, and `:fuel`
 // waits for the whole Entry it measures.
 func (h *Host) NeedsMore(source string) bool {
-	if name, rest := split(source); name == ":fuel" && rest != "" {
+	if name, rest := split(source); (name == ":fuel" || name == ":inspect") && rest != "" {
 		source = rest
 	} else if strings.HasPrefix(source, ":") {
 		return false
@@ -365,6 +384,9 @@ func documentable(source, kind string, node *syntax.Node) bool {
 	return true
 }
 func (h *Host) has(name string) bool {
+	if h.objectBindings[name] != nil {
+		return true
+	}
 	for _, d := range h.declarations {
 		if slices.Contains(d.names, name) {
 			return true
@@ -538,6 +560,9 @@ func (h *Host) runAt(source string, expression bool, node *syntax.Node, adjust p
 	if h.measuring {
 		h.observation.measurements = append(h.observation.measurements, &measurement{entry: n, root: string(id), fuel: map[string]int64{}})
 	}
+	if h.inspecting {
+		h.inspections[string(id)] = true
+	}
 	if expression {
 		h.expressions[string(id)] = true
 	}
@@ -574,6 +599,9 @@ func (h *Host) refused(err error, p placement, length int) []string {
 	panic(err)
 }
 func (h *Host) discarded(reports []talk.Report) []string {
+	if h.objectSession != nil {
+		h.objectSession.reports(reports)
+	}
 	h.observe(reports, nil)
 	var out []string
 	for _, r := range reports {
@@ -594,10 +622,13 @@ func (h *Host) discarded(reports []talk.Report) []string {
 
 // Inspect is the explicit vars Host Input, also used to finish a corpus case.
 func (h *Host) Inspect() talk.Inspection {
+	h.recorded()
 	if h.group == nil {
 		return talk.Inspection{}
 	}
-	return h.group.Inspect()
+	view := h.group.Inspect()
+	h.objectSession.snapshot(view)
+	return view
 }
 
 // MockOperation is a mock declaration used by independent Trace replay.
@@ -634,4 +665,26 @@ func (h *Host) UserLibraries() []talk.LibrarySource {
 func (h *Host) GrantBinding(name string) string { return h.bindings[name] }
 func storeCosts() talk.Costs {
 	return talk.Costs{"get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
+}
+
+func hasEnvelopes(items []Item) bool {
+	for _, i := range items {
+		if i.Kind == "envelope" {
+			return true
+		}
+	}
+	return false
+}
+func (h *Host) ReplayObjectItem(index int) { h.start(); h.objectSession.drain(index) }
+func (h *Host) FinishObjectReplay() {
+	if h.objectSession != nil {
+		h.objectSession.finish()
+	}
+}
+
+func (h *Host) ObjectTranscript() []Item {
+	if !hasEnvelopes(h.objectItems) {
+		return nil
+	}
+	return slices.Clone(h.objectItems)
 }

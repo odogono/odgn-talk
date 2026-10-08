@@ -697,6 +697,7 @@ export type RunHost = {
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
   disableGrant(name: string): void;
+  expose?(tree: unknown): void;
   /**
    * Queues its failure, as `fail`; null fails with what isn't a Script error,
    * which `detail` describes for the `call failed` report.
@@ -1096,6 +1097,7 @@ export class Run {
         automatic: true,
       };
       try {
+        this.host?.expose?.(listValues([]));
         const result = scope.op.do(call);
         if (
           contractFailure ||
@@ -1325,8 +1327,10 @@ export class Run {
         throw new Error('A saved call is not suspending');
       }
       if (op.start) {
+        this.host?.expose?.(listValues(args));
         op.start(call, ...args);
       } else {
+        this.host?.expose?.(listValues(args));
         this.forwardResult(op.run!(call, ...args), call);
       }
       this.records.push({ ...record, charged });
@@ -2557,6 +2561,7 @@ export class Run {
             op: 'get',
             error: failed,
           }),
+        hostDetail(error),
       );
     }
     if (
@@ -2630,6 +2635,7 @@ export class Run {
             value,
             error: failed,
           }),
+        hostDetail(error),
       );
     }
     this.recordCrossing({ kind: 'prop', object: v, name, op: 'set', value });
@@ -3663,6 +3669,7 @@ export class Run {
       args,
     };
     let result: unknown;
+    this.host?.expose?.(listValues(args));
     try {
       if (op.mode === 'immediate') {
         result = op.do(call, ...args);
@@ -3792,15 +3799,14 @@ export class Run {
   // `host error` for a call, with its `call-failed` record, which carries the
   // Host-side detail the Script never sees (chapter 6).
   private hostError(ctx: CallContext, detail: string): ScriptError {
-    // A property call has no call id; its `prop` record carries the failure.
-    if (ctx.id) {
-      this.records.push({
-        kind: 'call-failed',
-        id: ctx.id,
-        op: ctx.opName,
-        detail,
-      });
-    }
+    // Property failures have no call id and no additional Trace record, but
+    // their Host-only detail still belongs in the public failure report.
+    this.records.push({
+      kind: 'call-failed',
+      id: ctx.id,
+      op: ctx.opName,
+      detail,
+    });
     return new ScriptError('host error', ctx.named, true);
   }
 

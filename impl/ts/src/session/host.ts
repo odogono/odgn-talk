@@ -21,6 +21,7 @@ import {
 import {
   newGroup,
   observeRuns,
+  observeValues,
   restore,
   type Group,
   type Inspection,
@@ -64,6 +65,10 @@ import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
 import { viewSource } from '../view';
+import { SessionObjects } from './objects';
+import type { HostObject } from '../objects';
+import { inspectReader } from '../generated/session';
+import { propertyNames, valueRows } from './inspect';
 import { Observation } from './observe';
 import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
 import type { TranscriptItem } from './transcript';
@@ -79,6 +84,10 @@ export type SessionEnvironment = {
   capabilities?(): readonly CapabilityDef<unknown>[];
   /** A real Clock reading, in epoch nanoseconds. */
   now(): bigint;
+  /** Initial bindings and all later objects/actions use the recording adapter. */
+  objects?(context: SessionObjects): Record<string, HostObject>;
+  /** Internal replay source; original native callbacks are never consulted. */
+  objectTranscript?: readonly TranscriptItem[];
   /** A user Library's source, for `:library` given a path. */
   readFile?(path: string): string;
   /** A Store's contents, from the file `:store load` names. */
@@ -89,6 +98,7 @@ export type SessionEnvironment = {
    * reading before its Pump, each line typed for `read`, and each line printed.
    */
   record?(item: TranscriptItem): void;
+  resolveObject?(kind: string, id: string): { native: unknown } | undefined;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
   /** Writes a file of `:export`, given a directory. */
@@ -190,6 +200,7 @@ type Saved = {
   declarations: Declaration[];
   expressions: Set<string>;
   implicit: Set<string>;
+  inspections: Set<string>;
   lastClock: bigint | null;
   lastEntry: number;
   lastSeg: Map<string, Extract<RunEvent, { k: 'seg' }>>;
@@ -237,6 +248,8 @@ const nodes = (node: SyntaxNode) =>
 /** A Session Host for one session (chapter 12). */
 export class SessionHost {
   private group: Group | null = null;
+  private objectSession: SessionObjects | null = null;
+  private objectBindings: Record<string, HostObject> = {};
   private script: Script | null = null;
   private declarations: Declaration[] = [];
   // The implicit Handlers the Script still has, until a Reload drops them.
@@ -246,6 +259,9 @@ export class SessionHost {
   // Code units made for statement and expression Entries.
   private placements = new Map<string, Placement>();
   private expressions = new Set<string>(); // deliveries of expression Entries
+  private inspections = new Set<string>();
+  private inspecting = false;
+  private reader: Value | null = null;
   private foreground: { delivery: string; run?: string } | null = null;
   private lastSeg = new Map<string, Extract<RunEvent, { k: 'seg' }>>();
   private writes = new Map<string, Value>();
@@ -411,7 +427,7 @@ export class SessionHost {
    * leading doc block waits for the declaration it documents.
    */
   incomplete(source: string): boolean {
-    const fuel = /^\s*:fuel\s+(\S.*)$/su.exec(source);
+    const fuel = /^\s*:(?:fuel|inspect)\s+(\S.*)$/su.exec(source);
     if (fuel) {
       source = fuel[1]!;
     } else if (source.startsWith(':')) {
@@ -453,7 +469,7 @@ export class SessionHost {
         [...this.libraries].map(([name, l]) => [name, l.library.source]),
       ),
       variable: name =>
-        this.group!.inspect()
+        this.inspect()!
           .scripts.find(s => s.name === NAME)!
           .vars.find(([n]) => n === name)?.[1],
     };
@@ -480,9 +496,14 @@ export class SessionHost {
   // The Entry or Session Command, as its Transcript records it, until the
   // Pump it causes or the lines it prints.
   private recording: string | null = null;
+  private readonly recordedItems: TranscriptItem[] = [];
+  private record(item: TranscriptItem) {
+    this.recordedItems.push(item);
+    this.env.record?.(item);
+  }
   private recorded() {
     if (this.recording !== null) {
-      this.env.record?.({ k: 'input', source: this.recording });
+      this.record({ k: 'input', source: this.recording });
       this.recording = null;
     }
   }
@@ -490,7 +511,7 @@ export class SessionHost {
   private printed(lines: string[]): string[] {
     const out = [...lines, ...this.observation.observed()];
     for (const text of out) {
-      this.env.record?.({ k: 'output', text });
+      this.record({ k: 'output', text });
     }
     return out;
   }
@@ -535,14 +556,30 @@ export class SessionHost {
       return [];
     }
     this.reads.delete(pending[0]);
-    this.env.record?.({ k: 'read', line });
+    this.record({ k: 'read', line });
     pending[1].call.answer(text(line));
     return this.printed(this.pump());
   }
 
   /** `Inspect()`, which is the Host Input `vars`; null before the session starts. */
   inspect(): Inspection | null {
-    return this.group?.inspect() ?? null;
+    this.recorded();
+    const view = this.group?.inspect() ?? null;
+    if (view) {
+      this.objectSession?.snapshot(view.scripts);
+    }
+    return view;
+  }
+  /** Replay an external action at its recorded position. */
+  replayObjectItem(item: TranscriptItem) {
+    this.start();
+    this.objectSession!.drain(item);
+  }
+  get objectTranscript(): readonly TranscriptItem[] {
+    return this.objectSession?.items.length ? this.recordedItems : [];
+  }
+  finishObjectReplay() {
+    this.objectSession?.finish();
   }
 
   /** Pumps at a deadline, under a real Clock. */
@@ -567,7 +604,24 @@ export class SessionHost {
     this.grantsByName = grants;
     this.declarations0 = Object.fromEntries(capabilities);
     this.group = group;
-    this.script = group.load({ name: NAME, source: '', grants });
+    this.objectSession = new SessionObjects(
+      item => this.record(item),
+      this.env.objectTranscript,
+      this.env.objectTranscript === undefined ||
+        !!this.env.objectTranscript?.some(i => i.k === 'envelope'),
+    );
+    this.objectSession.attach(group);
+    group[observeValues](tree => this.objectSession!.expose(tree));
+    this.objectBindings = this.env.objectTranscript
+      ? this.objectSession.preload()
+      : (this.env.objects?.(this.objectSession) ?? {});
+    this.objectSession.initial(this.objectBindings);
+    this.script = group.load({
+      name: NAME,
+      source: '',
+      grants,
+      objects: this.objectBindings,
+    });
   }
 
   // The Capabilities the session grants, and its Grants by name.
@@ -649,7 +703,7 @@ export class SessionHost {
         try {
           value = host.call(impl, call, ...args);
         } catch (error) {
-          this.env.record?.({
+          this.record({
             k: 'answer',
             call: call.id,
             answer: `fail ${
@@ -664,7 +718,7 @@ export class SessionHost {
           });
           throw error;
         }
-        this.env.record?.({
+        this.record({
           k: 'answer',
           call: call.id,
           answer: value.toString(),
@@ -787,6 +841,8 @@ export class SessionHost {
       case 'trace':
       case 'untrace':
         return this.observation.trace(name, rest) ?? refuse('bad arguments');
+      case 'inspect':
+        return this.inspectExpression(rest);
       case 'fuel':
         return this.fuel(rest);
       case 'describe':
@@ -924,6 +980,7 @@ export class SessionHost {
 
   private has(name: string): boolean {
     return (
+      Object.hasOwn(this.objectBindings, name) ||
       this.implicit.has(name) ||
       this.declarations.some(d => d.names.includes(name))
     );
@@ -1161,6 +1218,7 @@ export class SessionHost {
       units: this.units,
       placements: new Map(this.placements),
       expressions: new Set(this.expressions),
+      inspections: new Set(this.inspections),
       lastSeg: new Map(this.lastSeg),
       latest: this.latest && { ...this.latest },
       limits: { ...this.limits },
@@ -1180,6 +1238,7 @@ export class SessionHost {
     if (!saved) {
       return refuse('no such save');
     }
+    this.recorded();
     let restored: ReturnType<typeof restore>;
     try {
       restored = restore(saved.bytes, {
@@ -1187,7 +1246,8 @@ export class SessionHost {
         trace: line => this.env.trace?.(line),
         libraries: [...this.libraries.values()].map(l => l.library),
         grants: (_, grant) => this.grantsByName[grant],
-        resolve: () => undefined,
+        resolve: (kind, id) =>
+          this.objectSession!.resolve(kind, id, this.env.resolveObject),
         onMismatch: 'reject',
       });
     } catch (error) {
@@ -1199,6 +1259,10 @@ export class SessionHost {
     const { group, result } = restored;
     group[observeRuns](e => this.events.push(e));
     this.group = group;
+    this.objectSession!.restored();
+    this.objectSession!.attach(group);
+    this.objectSession!.reports(result.reports);
+    group[observeValues](tree => this.objectSession!.expose(tree));
     this.controller = null;
     this.script = group.script(NAME)!;
     this.declarations = [...saved.declarations];
@@ -1207,6 +1271,7 @@ export class SessionHost {
     this.units = saved.units;
     this.placements = new Map(saved.placements);
     this.expressions = new Set(saved.expressions);
+    this.inspections = new Set(saved.inspections);
     this.lastSeg = new Map(saved.lastSeg);
     this.latest = saved.latest && { ...saved.latest };
     this.limits = { ...saved.limits };
@@ -1410,7 +1475,7 @@ export class SessionHost {
 
   // `:runs`, `:mailbox` and `:vars` render `Inspect()`, the Host Input `vars`.
   private inspected(what: 'runs' | 'mailbox' | 'vars'): string[] {
-    const script = this.group!.inspect().scripts.find(s => s.name === NAME)!;
+    const script = this.inspect()!.scripts.find(s => s.name === NAME)!;
     if (what === 'vars') {
       return script.vars.map(
         ([name, value]) => `${name} = ${value.toString()}`,
@@ -1441,6 +1506,7 @@ export class SessionHost {
   }
 
   private discarded(reports: readonly Report[]): string[] {
+    this.objectSession?.reports(reports);
     this.observation.observe(reports);
     const out: string[] = [];
     for (const r of reports) {
@@ -1476,6 +1542,65 @@ export class SessionHost {
       return [`! ${error.code}`];
     }
     throw error;
+  }
+
+  private inspectExpression(source: string): string[] {
+    const parsed = parseEntry(source, name => this.isHandler(name));
+    if (parsed.error) {
+      if (!parsed.incomplete) {
+        return refuse('bad arguments');
+      }
+      return [
+        `! ${parsed.error.code} at ${parsed.error.tok.line}:${parsed.error.tok.col}`,
+      ];
+    }
+    if (
+      parsed.kind !== 'expression' ||
+      !documentable(parsed.tree, parsed.kind)
+    ) {
+      refuse('bad arguments');
+    }
+    this.start();
+    this.inspecting = true;
+    try {
+      return this.run(source.replace(/\n+$/, ''), true).out;
+    } finally {
+      this.inspecting = false;
+    }
+  }
+
+  private readProperties(value: Value): string[] {
+    const identifiers = [...new Set(inspectReader.match(/\bentry0\w*/g))];
+    let n = this.lastEntry + 1;
+    while (
+      identifiers.some(
+        id =>
+          this.has(id.replace('entry0', `entry${n}`)) ||
+          this.isHandler(id.replace('entry0', `entry${n}`)),
+      )
+    ) {
+      n++;
+    }
+    const handler = `entry${n}`;
+    const source = inspectReader.replaceAll(/\bentry0\w*/g, id =>
+      id.replace('entry0', handler),
+    );
+    try {
+      this.script!.extend(source);
+    } catch (error) {
+      return this.refused(error, { line: 0, col: 0 });
+    }
+    this.lastEntry = n;
+    this.implicit.add(handler);
+    this.units++;
+    const { id } = this.script!.request({
+      name: `${handler}:to:`,
+      args: [value, listValues(propertyNames(value).map(text))],
+      ...(Object.keys(this.limits).length ? { limits: this.limits } : {}),
+    });
+    this.foreground = { delivery: id };
+    this.latest = { delivery: id };
+    return this.pump();
   }
 
   // ------------------------------------------------------------- statements
@@ -1536,6 +1661,9 @@ export class SessionHost {
     if (this.measuring) {
       this.observation.measure(n, id);
     }
+    if (this.inspecting) {
+      this.inspections.add(id);
+    }
     if (expression) {
       this.expressions.add(id);
     }
@@ -1581,7 +1709,9 @@ export class SessionHost {
     return (scope?.bindings ?? [])
       .filter(b => {
         const site = sites.get(b.id);
-        return site && !site.pattern && site.first < Infinity;
+        return (
+          site && !site.pattern && site.first < Infinity && !this.has(b.name)
+        );
       })
       .sort((a, b) => sites.get(a.id)!.first - sites.get(b.id)!.first)
       .map(b => b.name);
@@ -1593,7 +1723,7 @@ export class SessionHost {
     this.recorded();
     const reading = this.virtual ?? this.env.now();
     if (this.virtual === null) {
-      this.env.record?.({ k: 'clock', at: reading });
+      this.record({ k: 'clock', at: reading });
     }
     const now =
       this.lastClock !== null && reading < this.lastClock
@@ -1612,8 +1742,14 @@ export class SessionHost {
   // A completed Pump's lines.
   private pumped(result: PumpResult): string[] {
     this.deadline = result.nextDeadline;
+    this.objectSession?.reports(result.reports);
     const out = this.print(result.reports);
     this.settleForeground();
+    if (this.reader) {
+      const value = this.reader;
+      this.reader = null;
+      out.push(...this.readProperties(value));
+    }
     return out;
   }
 
@@ -1677,9 +1813,10 @@ export class SessionHost {
         this.lastSeg.delete(e.run);
         const line = this.ended(e, ends.get(e.run), errors);
         if (line !== null) {
-          out.push(this.prefix(e.run) + line);
+          out.push(...line.split('\n').map(l => this.prefix(e.run) + l));
         }
         if (e.delivery) {
+          this.inspections.delete(e.delivery);
           this.expressions.delete(e.delivery);
         }
       }
@@ -1695,6 +1832,15 @@ export class SessionHost {
   ): string | null {
     switch (e.outcome) {
       case 'completed':
+        if (e.delivery && this.inspections.has(e.delivery)) {
+          const value = report?.result;
+          if (value) {
+            if (value.kind === 'object') {
+              this.reader = value;
+            }
+            return valueRows(value).join('\n');
+          }
+        }
         return e.delivery && this.expressions.has(e.delivery)
           ? (report?.result?.toString() ?? 'nothing')
           : null;

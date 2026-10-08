@@ -1,5 +1,6 @@
 // Chapter 12, Session Transcripts: reading and writing their lines, and
 // replaying one through a fresh Session Host.
+import { parseEnvelope } from './objects';
 import { formatInstant, parseInstant } from '../dates';
 import type { LocaleImpl } from '../locale-capability';
 import { readDisplay } from '../readers';
@@ -18,11 +19,12 @@ export type TranscriptItem =
   | { at: bigint; k: 'clock' }
   /** A built-in Capability's answer to a call. */
   | { answer: string; call: string; k: 'answer' }
+  | { json: string; k: 'envelope' }
   | { k: 'comment'; text: string }
   | { k: 'output'; text: string };
 
 // An output line that is empty or starts with one of these is written after `'`.
-const MARKS = new Set(['>', '|', '<', '@', '~', '#', "'"]);
+const MARKS = new Set(['>', '|', '<', '@', '~', '%', '#', "'"]);
 
 /** Read a Transcript's lines (chapter 12). */
 export const parseTranscript = (source: string): TranscriptItem[] => {
@@ -74,6 +76,13 @@ export const parseTranscript = (source: string): TranscriptItem[] => {
         call: answer!.slice(0, space),
         answer: answer!.slice(space + 1),
       });
+    } else if (mark === '%') {
+      const json = rest('%');
+      if (!json) {
+        fail('an envelope after `% `');
+      }
+      parseEnvelope(json!);
+      items.push({ k: 'envelope', json: json! });
     } else if (mark === '#') {
       items.push({ k: 'comment', text: line });
     } else if (mark === "'") {
@@ -102,6 +111,9 @@ export const writeTranscript = (items: readonly TranscriptItem[]): string =>
           return [`@ ${formatInstant(item.at)}`];
         case 'answer':
           return [`~ ${item.call} ${item.answer}`];
+        case 'envelope':
+          parseEnvelope(item.json);
+          return [`% ${item.json}`];
         case 'comment':
           return [item.text];
         case 'output':
@@ -191,8 +203,9 @@ export const replayTranscript = (
       ]),
     );
   // The reading the next Pump takes, if a recorded `@` line gave one.
-  let offered: bigint | null = null;
+  let clock: (() => bigint) | null = null;
   const host = new SessionHost({
+    objectTranscript: recorded,
     ...((options.capabilities ?? options.live?.capabilities)
       ? { capabilities: options.capabilities ?? options.live?.capabilities }
       : {}),
@@ -200,12 +213,7 @@ export const replayTranscript = (
       if (live) {
         return options.live!.now();
       }
-      if (offered === null) {
-        throw new Error('The Transcript has no `@` reading for a Pump');
-      }
-      const at = offered;
-      offered = null;
-      return at;
+      return clock!();
     },
     record: item => {
       items.push(item);
@@ -237,46 +245,70 @@ export const replayTranscript = (
     writeFile: () => {},
     writeStoreFile: () => {},
   });
-  // The first `@` after a line is the reading of the Pump that line causes.
-  // One the line didn't use is a Pump the Session Host made at a deadline.
-  const reading = (i: number) => {
-    const next = recorded[i + 1];
-    offered = next?.k === 'clock' ? next.at : null;
-    return offered === null ? i : i + 1;
-  };
-  const deadline = () => {
-    if (offered !== null) {
-      host.tick();
+  // One input may cause two Pumps (the expression and its object reader).
+  // Offer all readings in that input's block and consume them on demand.
+  const consumed = new Set<number>();
+  let readings: { at: bigint; index: number }[] = [];
+  let clockStart = 0;
+  const prepare = (i: number) => {
+    clockStart = i + 1;
+    readings = [];
+    for (let n = i + 1; n < recorded.length; n++) {
+      const item = recorded[n]!;
+      if (item.k === 'input' || item.k === 'read') {
+        break;
+      }
+      if (item.k === 'clock') {
+        readings.push({ index: n, at: item.at });
+      }
     }
   };
+  clock = () => {
+    const next = readings.shift();
+    if (!next) {
+      throw new Error('The Transcript has no `@` reading for a Pump');
+    }
+    for (let n = clockStart; n < next.index; n++) {
+      const item = recorded[n]!;
+      if (item.k === 'envelope') {
+        host.replayObjectItem(item);
+      }
+    }
+    clockStart = next.index + 1;
+    consumed.add(next.index);
+    return next.at;
+  };
   for (let i = 0; i < recorded.length; i++) {
+    if (consumed.has(i)) {
+      continue;
+    }
     const item = recorded[i]!;
     switch (item.k) {
       case 'input':
-        i = reading(i);
+        prepare(i);
         host.input(item.source);
-        deadline();
         break;
       case 'read':
-        i = reading(i);
+        prepare(i);
         host.read(item.line);
-        deadline();
         break;
       case 'clock':
-        offered = item.at;
+        clockStart = i;
+        readings = [{ index: i, at: item.at }];
         host.tick();
-        offered = null;
         break;
-      case 'answer':
-        // The built-in Capability's call takes it from `answers`.
+      case 'envelope':
+        host.replayObjectItem(item);
         break;
       case 'comment':
         items.push(item);
         break;
+      case 'answer':
       case 'output':
         break;
     }
   }
+  host.finishObjectReplay();
   live = options.live !== undefined;
   return { host, items };
 };

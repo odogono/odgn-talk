@@ -104,6 +104,11 @@ func (v Value) Display() string {
 		return "<object " + v.Object.Kind + " " + DisplayText(v.Object.ID) + ">"
 	case Function:
 		place := v.Function.Home + ":" + v.Function.Code
+		// Named functions retain extension code identity internally, while
+		// their display names the Home Script and declaration.
+		if v.Function.Name != "" && strings.HasPrefix(v.Function.Code, v.Function.Home+"+") {
+			place = v.Function.Home + ":" + v.Function.Name
+		}
 		// An extension Lambda's Code is unit:line:column. Keep the unit in
 		// its identity, but display it without repeating the Home Script.
 		if strings.HasPrefix(v.Function.Code, v.Function.Home+"+") && strings.Count(v.Function.Code, ":") == 2 {

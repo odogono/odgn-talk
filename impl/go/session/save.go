@@ -21,7 +21,7 @@ func (h *Host) save(name string) []string {
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
-	h.saves[name] = saved{bytes: bytes, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units, observation: h.observation.clone()}
+	h.saves[name] = saved{bytes: bytes, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), inspections: maps.Clone(h.inspections), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units, observation: h.observation.clone()}
 	return []string{"saved " + name}
 }
 func (h *Host) restore(name string) []string {
@@ -29,20 +29,25 @@ func (h *Host) restore(name string) []string {
 	if !ok {
 		return refusal("no such save")
 	}
+	h.recorded()
 	var libraries []*talk.Library
 	for _, name := range h.libraryOrder {
 		libraries = append(libraries, h.libraries[name].compiled)
 	}
-	group, result, err := h.core.Restore(saved.bytes, talk.RestoreOptions{Name: "session", Trace: h, Libraries: libraries, Grants: func(script, name string) *talk.Grant { return h.grants[name] }})
+	group, result, err := h.core.Restore(saved.bytes, talk.RestoreOptions{Name: "session", Trace: h, Libraries: libraries, Grants: func(script, name string) *talk.Grant { return h.grants[name] }, Resolve: func(kind, id string) (any, bool) { return h.objectSession.resolve(kind, id, h.env.ResolveObject) }})
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
 	h.group = group
+	h.objectSession.restored()
+	h.objectSession.attach(group)
+	h.objectSession.reports(result.Reports)
 	h.script = group.Script("session")
 	h.declarations = slices.Clone(saved.declarations)
 	h.implicit = maps.Clone(saved.implicit)
 	h.placements = maps.Clone(saved.placements)
 	h.expressions = maps.Clone(saved.expressions)
+	h.inspections = maps.Clone(saved.inspections)
 	h.segments = maps.Clone(saved.segments)
 	h.stubs = cloneStubs(saved.stubs)
 	h.latest = saved.latest

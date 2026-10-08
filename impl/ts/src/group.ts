@@ -148,6 +148,8 @@ export type RunEvent =
       outcome: string;
       run: string;
     };
+export const observeValues = Symbol('Session value exposures');
+export const sessionReply = Symbol('Session message-layer reply');
 export const observeRuns = Symbol('observeRuns');
 export type LoadOptions = {
   /** Its Grants, by the name the Script uses for each. */
@@ -250,7 +252,6 @@ export type Report =
       error?: ScriptError;
       /** Set when a Fallback Handler clause ran it; `handler` is then the Selector. */
       fallback?: boolean;
-      fn?: Value;
       fuel: number;
       handler?: string;
       kind: 'run end';
@@ -620,6 +621,13 @@ export class Script {
 }
 
 export class Group {
+  private valueObserver?: (tree: unknown) => void;
+  [observeValues](observer: (tree: unknown) => void) {
+    this.valueObserver = observer;
+  }
+  [sessionReply](id: string, reply: Resumption) {
+    this.settleReply(id, reply);
+  }
   readonly name: string;
   private readonly trace: (line: string) => void;
   private readonly onReady: (() => void) | undefined;
@@ -1572,7 +1580,6 @@ export class Group {
             script: s.name,
             ...(d.id ? { delivery: d.id } : {}),
             ...(d.broadcast ? { broadcast: d.broadcast } : {}),
-            ...(d.fn ? { fn: d.fn } : {}),
             outcome: 'cancelled',
             fuel: 0,
             alloc: 0,
@@ -2705,6 +2712,7 @@ export class Group {
       object: name =>
         Object.hasOwn(s.objects, name) ? s.objects[name]!.value : undefined,
       isScript: name => this.scripts.some(other => other.name === name),
+      expose: tree => this.valueObserver?.(tree),
       callValue: (fn, args, reply) => {
         const receiver = this.scripts.find(
           other => other.name === fn.homeScript(),
@@ -4372,8 +4380,10 @@ export class Group {
         continue;
       }
       if (rec.kind === 'call-failed') {
-        this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
-        this.observer?.({ k: 'call', call: rec.id, run: running.id });
+        if (rec.id) {
+          this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
+          this.observer?.({ k: 'call', call: rec.id, run: running.id });
+        }
         this.drainReports.push(this.callFailed(run.script.name, rec));
         continue;
       }
@@ -4533,7 +4543,6 @@ export class Group {
       ...(delivery.broadcast ? { broadcast: delivery.broadcast } : {}),
       ...(handler ? { handler } : {}),
       ...(fallback ? { fallback } : {}),
-      ...(delivery.fn ? { fn: delivery.fn } : {}),
       ...(outcome.kind === 'cancelled' && outcome.cleanupFailed
         ? {
             cleanupFailed:

@@ -336,12 +336,12 @@ export const readDisplayText = (source: string): string => {
 
 // Preserve raw JSON structure until tag processing: arrays for objects avoid
 // JS's numeric-key ordering and make duplicate keys detectable before NFC.
-type Json = null | boolean | string | JsonNumber | Json[] | JsonObject;
-class JsonNumber {
+export type Json = null | boolean | string | JsonNumber | Json[] | JsonObject;
+export class JsonNumber {
   readonly kind = 'number';
   constructor(readonly source: string) {}
 }
-class JsonObject {
+export class JsonObject {
   readonly kind = 'object';
   constructor(readonly pairs: [string, Json][]) {}
 }
@@ -490,7 +490,11 @@ class JsonReader extends Reader {
   }
 }
 
-const fromJson = (value: Json, resolve?: ObjectResolver): Value => {
+const fromJson = (
+  value: Json,
+  resolve?: ObjectResolver,
+  functionResolve?: (handle: string) => Value,
+): Value => {
   let result = nothing;
   const tasks: (() => void)[] = [];
   const enqueue = (node: Json, assign: (v: Value) => void): void => {
@@ -535,6 +539,14 @@ const fromJson = (value: Json, resolve?: ObjectResolver): Value => {
           invalidValue('Value Encoding tag must be the only key');
         }
         const [tag, data] = pairs[0]!;
+        if (
+          tag === '$sessionFunction' &&
+          typeof data === 'string' &&
+          functionResolve
+        ) {
+          assign(functionResolve(data));
+          return;
+        }
         if (tag === '$dec' && typeof data === 'string') {
           const v = dec(data);
           if (v.toString() !== data) {
@@ -651,12 +663,13 @@ const abs = (n: bigint) => (n < 0n ? -n : n);
 export const decodeValue = (
   source: string,
   resolve?: ObjectResolver,
+  functionResolve?: (handle: string) => Value,
 ): Value => {
   const reader = new JsonReader(source);
   const value = reader.value();
   reader.whitespace();
   reader.done();
-  return fromJson(value, resolve);
+  return fromJson(value, resolve, functionResolve);
 };
 
 /**
@@ -680,4 +693,13 @@ export const decodeValueMembers = (
     return invalidValue('Expected one JSON object');
   }
   return value.pairs.map(([key, member]) => [key, fromJson(member, resolve)]);
+};
+
+/** Parse raw, ordered JSON, rejecting duplicate keys before tag interpretation. */
+export const readOrderedJSON = (source: string): Json => {
+  const reader = new JsonReader(source);
+  const value = reader.value();
+  reader.whitespace();
+  reader.done();
+  return value;
 };

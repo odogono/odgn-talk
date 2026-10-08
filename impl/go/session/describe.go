@@ -11,7 +11,6 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
-	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 // `:describe` and `:apropos` (Session observation, Names and passive describe
@@ -233,50 +232,13 @@ func (h *Host) describeCommand(rest string) []string {
 		}
 		if d.variable != "" {
 			// One explicit snapshot, even when cached state would do.
-			for _, p := range h.group.Inspect().Scripts[0].Vars {
+			for _, p := range h.Inspect().Scripts[0].Vars {
 				if p.Key == d.variable {
-					out = append(out, valueRows(p.Val)...)
+					rows, _ := docs.Inspection(p.Val)
+					out = append(out, rows...)
 				}
 			}
 		}
-	}
-	return out
-}
-
-// valueRows are inspection's passive rows for a held value: no getter is
-// read and nothing executes.
-func valueRows(v talk.Value) []string {
-	out := []string{fmt.Sprintf("value {kind: %s, value: %s}", textDisplay(value.KindNames[v.Kind()]), v)}
-	switch v.Kind() {
-	case talk.KindList:
-		out = append(out, fmt.Sprintf("size %d", v.Len()))
-	case talk.KindBytes:
-		b, _ := v.AsBytes()
-		out = append(out, fmt.Sprintf("size %d", len(b)))
-	case talk.KindText:
-		s, _ := v.AsText()
-		boundaries, err := coreunicode.Boundaries(s)
-		must(err)
-		out = append(out, fmt.Sprintf("size %d", len(boundaries)-1))
-	case talk.KindMap:
-		fields := v.Entries()
-		out = append(out, fmt.Sprintf("size %d", len(fields)))
-		// Go orders strings by their UTF-8 bytes, which is code-point order.
-		slices.SortStableFunc(fields, func(a, b talk.Pair) int { return strings.Compare(a.Key, b.Key) })
-		for _, p := range fields {
-			out = append(out, fmt.Sprintf("field %s = %s", textDisplay(p.Key), p.Val))
-		}
-	case talk.KindFunction:
-		name, arity := "nothing", "nothing"
-		if n, required, total, ok := docs.FunctionHead(v); ok {
-			arity = fmt.Sprintf("%d..%d", required, total)
-			if n != "" {
-				name = textDisplay(n)
-			}
-		}
-		home, _ := v.HomeScript()
-		doc, _ := docs.Function(v)
-		out = append(out, fmt.Sprintf("function {name: %s, arity: %s, home: %s}", name, arity, textDisplay(home)), "doc "+textDisplay(doc))
 	}
 	return out
 }
