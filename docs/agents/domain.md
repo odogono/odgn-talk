@@ -6,4 +6,4 @@ Before exploring, look up the relevant terms with `rg -n -A4 '^\*\*Term' CONTEXT
 
 Find decisions in the [ADR index](../adr/README.md), then read the relevant ADRs and follow their supersession links. Add new decisions to that index when recording an ADR.
 
-Use terms defined in `CONTEXT.md` when naming domain concepts. If an output would contradict an ADR, call out that conflict explicitly.
+Use terms defined in `CONTEXT.md` when naming domain concepts. `bun run spec:gen` generates [Appendix A](../../spec/appendix-a-glossary.md) from `CONTEXT.md`; run it after editing a definition. If an output would contradict an ADR, call out that conflict explicitly.

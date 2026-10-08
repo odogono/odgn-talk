@@ -2,6 +2,6 @@
 
 ## Documentation consistency
 
-When reviewing a behavior change, reconcile existing descriptions of that behavior, including claims that it is missing or unsupported. Keep limitations beside the affected API or feature. Track outstanding work in GitHub Issues; guides describe supported behavior rather than duplicating issue progress.
+When reviewing a behavior change, reconcile existing descriptions of that behavior, including claims that it is missing or unsupported. When one Core gains a feature, check the other Core's guide and `CONTEXT.md` too: each tends to say what its peer lacks. Keep limitations beside the affected API or feature. Track outstanding work in GitHub Issues; guides describe supported behavior rather than duplicating issue progress.
 
 Keep current implementation support and limitations in the affected Core or tooling guide; link there from corpus and review notes. Review records describe evidence at a named commit/PR or date, with first-blessing approval separate from execution agreement. When work lands, reconcile pending-support claims and expectation headers with their approval records, and update the implementation issue’s remaining-work block.
