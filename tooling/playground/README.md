@@ -85,16 +85,18 @@ Use **Load drawing example** in the Canvas inspector, then **Run fresh**. Altern
 
 ```northtalk
 on draw
-  ask canvas to background "#f5f0e8"
-  ask canvas to noStroke
-  ask canvas to fill "#235f75"
-  ask canvas to rectangle 70, 70, 180, 180
-  ask canvas to fill "#e0a458"
-  ask canvas to ellipse 250, 250, 160, 160
+  tell canvas
+    background "#f5f0e8"
+    noStroke
+    fill "#235f75"
+    rectangle 70, 70, 180, 180
+    fill "#e0a458"
+    ellipse 250, 250, 160, 160
+  end tell
 end draw
 ```
 
-Set Launch to `draw`. Operations are immediate and return Nothing, so use `ask`, not `tell` or `and wait`.
+Set Launch to `draw`. Operations are immediate and return Nothing. A `tell canvas` block calls each line as an `ask`, so no line takes `and wait`; a single call is `ask canvas to fill "#235f75"`.
 
 | Operation | Arguments and behavior |
 | --- | --- |

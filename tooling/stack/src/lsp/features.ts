@@ -449,12 +449,31 @@ export const completion = (
     return [];
   }
 
+  const operations = (grant: string, prefix: string) =>
+    [...(manifest?.grants.get(grant)?.values() ?? [])]
+      .filter(op => op.name.startsWith(prefix))
+      .map(op => item(op.name, 2, JSON.stringify(op.declaration)));
   const operation =
     /\b(?:ask|tell)\s+([\p{L}\p{N}_]+)\s+to\s+([\p{L}\p{N}_]*)$/u.exec(line);
   if (operation) {
-    return [...(manifest?.grants.get(operation[1]!)?.values() ?? [])]
-      .filter(op => op.name.startsWith(operation[2]!))
-      .map(op => item(op.name, 2, JSON.stringify(op.declaration)));
+    return operations(operation[1]!, operation[2]!);
+  }
+  // A `tell` block's line starts with an Operation of its receiver (ADR 0063).
+  const lineStart = /^\s*([\p{L}\p{N}_]*)$/u.exec(line);
+  if (lineStart) {
+    const block = elements<SyntaxElement>(analysis.syntax).find(
+      (e): e is SyntaxNode =>
+        e.kind === 'node' &&
+        e.rule === 'TellBlock' &&
+        e.start < offset &&
+        offset <= e.end,
+    );
+    const receiver = block?.children[1];
+    const head = receiver?.kind === 'node' ? receiver : undefined;
+    const grant = head && source.slice(head.start, head.end).trim();
+    if (head && head.end < offset && grant && /^[\p{L}\p{N}_]+$/u.test(grant)) {
+      return operations(grant, lineStart[1]!);
+    }
   }
   if (/^\s*catch\s+[^\n]*$/.test(line)) {
     return [
@@ -597,19 +616,37 @@ export const hover = (
   offset: number,
   manifest: HostManifest | null,
 ) => {
+  const within = (n: SemanticNode) =>
+    n.span.start <= offset && offset < n.span.end;
   const node = analysis.nodes.find(
-    n => n.rule === 'AskTell' && n.span.start <= offset && offset < n.span.end,
+    n => (n.rule === 'AskTell' || n.rule === 'OperationLine') && within(n),
   );
   if (node) {
-    const leaves = semanticElements(node).filter(e => e.kind !== 'node');
-    const to = leaves.findIndex(e => e.text === 'to');
-    const grant = leaves[to - 1];
-    const op = leaves[to + 1];
+    type Leaf = Exclude<ReturnType<typeof leaf>, undefined>;
+    let grant: Leaf | undefined;
+    let op: Leaf | undefined;
+    if (node.rule === 'AskTell') {
+      const leaves = semanticElements(node).filter(e => e.kind !== 'node');
+      const to = leaves.findIndex(e => e.text === 'to');
+      grant = leaves[to - 1];
+      op = leaves[to + 1];
+    } else {
+      // A `tell` block's line calls an Operation of the block's receiver.
+      const block = analysis.nodes.find(
+        n => n.rule === 'TellBlock' && n.children.includes(node),
+      );
+      const receiver = block?.children.find(
+        (e): e is SemanticNode => e.kind === 'node' && e.rule === 'Expression',
+      );
+      grant = receiver && leaf(receiver);
+      const first = node.children[0];
+      op = first?.kind === 'node' ? undefined : first;
+    }
     const declaration =
       grant &&
       op &&
       manifest?.grants.get(grant.text)?.get(op.text)?.declaration;
-    if (declaration && op.span.start <= offset && offset < op.span.end) {
+    if (declaration && op && op.span.start <= offset && offset < op.span.end) {
       return {
         contents: {
           kind: 'plaintext',
@@ -648,7 +685,9 @@ export const suspensionHints = (analysis: Analysis, requested: Range) => {
   const points = analysis.nodes.filter(
     n =>
       n.rule === 'Wait' ||
-      (['Send', 'AskTell', 'SimpleStatement'].includes(n.rule) &&
+      (['Send', 'AskTell', 'OperationLine', 'SimpleStatement'].includes(
+        n.rule,
+      ) &&
         n.children.some(c => c.kind === 'node' && c.rule === 'AndWait')),
   );
   const marks = [...points];

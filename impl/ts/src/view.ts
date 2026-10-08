@@ -3,12 +3,13 @@
 // trivia and the precedence ladder are gone. Conversion is post-order over an
 // explicit stack, so deep source doesn't depend on the native call stack.
 import { grammar } from './generated/syntax';
-import type {
-  Binding,
-  SemanticElement,
-  SemanticName,
-  SemanticNode,
-  SemanticToken,
+import {
+  toldLines,
+  type Binding,
+  type SemanticElement,
+  type SemanticName,
+  type SemanticNode,
+  type SemanticToken,
 } from './semantic';
 
 export type Pos = { col: number; line: number };
@@ -208,6 +209,8 @@ export type Stmt =
       pos: Pos;
       wait: boolean;
     }
+  /** A `tell` block's lines, each the call the checker chose (ADR 0063). */
+  | { k: 'tell-block'; lines: Stmt[]; pos: Pos }
   | { duration: Expr; k: 'wait'; pos: Pos }
   | { event: Event; k: 'wait-for'; pos: Pos; timeout: Expr | null }
   | { branches: WaitBranch[]; k: 'wait-block'; pos: Pos }
@@ -506,6 +509,39 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         operation: (children[3] as Leaf).text,
         args: list >= 0 ? of<Expr[]>(children[list]) : [],
         wait: nodeAt(4, 'AndWait') >= 0,
+      } satisfies Stmt;
+    }
+    // A `tell` block reads its lines itself, since each needs its receiver.
+    case 'OperationLine':
+      return null;
+    case 'TellBlock': {
+      const target = of<Expr>(children[1]);
+      if (target.k !== 'name') {
+        return shape(node);
+      }
+      return {
+        k: 'tell-block',
+        pos: at,
+        lines: children.flatMap(child => {
+          if (child.kind !== 'node' || child.rule !== 'OperationLine') {
+            return [];
+          }
+          const list = child.children.findIndex(
+            c => c.kind === 'node' && c.rule === 'ExpressionList',
+          );
+          return [
+            {
+              k: toldLines.has(child) ? 'tell' : 'ask',
+              pos: pos(child),
+              grant: target.name.text,
+              operation: (child.children[0] as Leaf).text,
+              args: list >= 0 ? of<Expr[]>(child.children[list]) : [],
+              wait: child.children.some(
+                c => c.kind === 'node' && c.rule === 'AndWait',
+              ),
+            } satisfies Stmt,
+          ];
+        }),
       } satisfies Stmt;
     }
     case 'Wait':

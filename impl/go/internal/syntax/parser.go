@@ -396,6 +396,42 @@ func (p *parser) andWait(n *Node) {
 		p.expect("wait")
 	}
 }
+
+// operation reads an Operation name, which may be any word, then its
+// arguments, and `and wait` where waits allows it.
+func (p *parser) operation(n *Node, waits bool) {
+	n.NameToken = p.word()
+	n.Text = n.NameToken.Raw
+	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
+		n.Children = p.expressionList()
+	}
+	if waits {
+		p.andWait(n)
+	}
+}
+
+// operationLines reads a `tell` block's lines up to its `end` (ADR 0063).
+// Each line is an `ask` of the block's receiver, marked as a line, and the
+// checker makes it a `tell` when its Operation is fire-and-forget.
+func (p *parser) operationLines(receiver *Node) []*Node {
+	var lines []*Node
+	for {
+		t := p.peek(Operand)
+		if t.Kind == EOF || t.Raw == "end" {
+			return lines
+		}
+		if t.Kind == LineBreak {
+			p.take(Operand)
+			continue
+		}
+		line := node("ask", t)
+		line.Params = []*Node{receiver}
+		line.Flags = append(line.Flags, Token{Raw: "line"})
+		p.operation(line, true)
+		lines = append(lines, line)
+		p.nl()
+	}
+}
 func (p *parser) statement(inline bool) *Node {
 	t := p.peek(Operand)
 	if slices.Contains([]string{"if", "repeat", "match", "try"}, t.Raw) && inline {
@@ -515,15 +551,16 @@ func (p *parser) statement(inline bool) *Node {
 		p.andWait(n)
 	case "ask", "tell":
 		n.Params = []*Node{p.expression()}
+		// After `tell`'s receiver, the end of the line opens a block (ADR 0063).
+		if t.Raw == "tell" && !inline && (p.at("\n") || p.peek(Operator).Kind == EOF) {
+			n.Kind = "tell-block"
+			p.nl()
+			n.Body = p.operationLines(n.Params[0])
+			n.End = p.closing("tell")
+			break
+		}
 		p.expect("to")
-		n.NameToken = p.word()
-		n.Text = n.NameToken.Raw
-		if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
-			n.Children = p.expressionList()
-		}
-		if t.Raw == "ask" {
-			p.andWait(n)
-		}
+		p.operation(n, t.Raw == "ask")
 	case "return", "veto":
 		if !p.atOperand("\n") && !p.at("else") {
 			n.Children = []*Node{p.expression()}

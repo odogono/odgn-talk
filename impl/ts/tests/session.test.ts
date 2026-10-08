@@ -92,6 +92,10 @@ describe('Entries', () => {
     expect(incomplete('put 1 + into x')).toBe(false);
     expect(incomplete('on greet name')).toBe(true);
     expect(incomplete('1 + 2')).toBe(null);
+    // A `tell` block reads lines until its `end` (ADR 0063).
+    expect(incomplete('tell canvas')).toBe(true);
+    expect(incomplete('tell canvas\n  fill 1')).toBe(true);
+    expect(incomplete('tell canvas\n  fill 1\nend tell')).toBe(null);
   });
 });
 

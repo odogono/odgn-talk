@@ -1,0 +1,51 @@
+unit draw script
+constants
+  0 nothing
+  1 1
+  2 2
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler oneline clause 1 (x) locals 2 may suspend 0002..0015
+  2 handler block clause 1 (x) locals 2 may suspend 0016..0029
+  3 handler both clause 1 (a, b) locals 3 may suspend 0030..0039
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 4:22 load 1 ; x
+  0003 4:3 ask canvas fill 1
+  0004 4:3 store 0 ; it
+  0005 5:27 const 1 ; 1
+  0006 5:30 const 2 ; 2
+  0007 5:33 load 0 ; it
+  0008 5:3 ask canvas rectangle 3
+  0009 5:3 store 0 ; it
+  0010 6:22 load 1 ; x
+  0011 6:3 ask-wait canvas load 1
+  0012 6:3 store 0 ; it
+  0013 7:1 const 0 ; nothing
+  0014 7:1 return
+  0015 7:1 clause-fail
+  0016 11:10 load 1 ; x
+  0017 11:5 ask canvas fill 1
+  0018 11:5 store 0 ; it
+  0019 12:15 const 1 ; 1
+  0020 12:18 const 2 ; 2
+  0021 12:21 load 0 ; it
+  0022 12:5 ask canvas rectangle 3
+  0023 12:5 store 0 ; it
+  0024 13:10 load 1 ; x
+  0025 13:5 ask-wait canvas load 1
+  0026 13:5 store 0 ; it
+  0027 15:1 const 0 ; nothing
+  0028 15:1 return
+  0029 15:1 clause-fail
+  0030 18:3 join-start
+  0031 20:12 load 1 ; a
+  0032 20:7 join-ask canvas load 1
+  0033 21:12 load 2 ; b
+  0034 21:7 join-ask canvas load 1
+  0035 23:3 join-end
+  0036 18:3 store 0 ; it
+  0037 24:1 const 0 ; nothing
+  0038 24:1 return
+  0039 24:1 clause-fail

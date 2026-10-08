@@ -1,0 +1,7 @@
+-- s.talk: the library case's Script.
+
+use record from audit
+
+on go
+  record "x"
+end go

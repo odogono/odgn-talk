@@ -1,0 +1,12 @@
+-- block.talk: the equivalent case's `tell` block.
+
+script variable total = 0
+
+on ring sku
+  tell till
+    price sku
+    note "rang " & sku & " at " & it
+    fetch sku and wait
+  end tell
+  add it to total
+end ring

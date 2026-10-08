@@ -149,6 +149,8 @@ func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, 
 		}
 		l.exports[n.Text] = symbol
 	}
+	// The recorded calls are rechecked as this compilation called them.
+	check.ResolveLines(tree, grants)
 	l.calls = check.OperationUses(tree, src.Name)
 	type siteKey struct {
 		identity [32]byte

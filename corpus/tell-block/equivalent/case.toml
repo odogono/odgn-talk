@@ -1,0 +1,48 @@
+# equivalent: a `tell` block calls each line as the one-line call its
+# Operation's mode allows (ADR 0063). `oneline` and `block` make the same
+# calls, so their Runs have the same calls, answers, Fuel, allocation and
+# Persistent State. `price` is immediate, so its line leaves its answer in
+# `it` for the next line; `note` is fire-and-forget, so `it` keeps it; and
+# `fetch` suspends, so its line says `and wait`. A line's failure is raised at
+# its Operation name (spec chapter 4, Capabilities; chapter 8, positions).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 10 }
+errors = [{ code = "no price" }]
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "till"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+
+[[scripts]]
+name = "oneline"
+source = "oneline.talk"
+grants = { till = { ops = "all" } }
+
+[[scripts]]
+name = "block"
+source = "block.talk"
+grants = { till = { ops = "all" } }

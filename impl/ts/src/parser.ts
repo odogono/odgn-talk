@@ -64,7 +64,7 @@ const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
-const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait'];
+const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait', 'tell'];
 // The Fallback Handler's name, in its body table and its `pass` (ADR 0064).
 const FALLBACK = 'any message';
 const endSuffixExpected = (name: string, at: Token) =>
@@ -1004,6 +1004,9 @@ class Parser {
       if (this.isWord(t, 'wait')) {
         return this.at(t, (yield this.wait(true)) as Node);
       }
+      if (this.isWord(t, 'tell')) {
+        return (yield this.tell()) as Node;
+      }
       return (yield this.simpleStatement()) as Node;
     } finally {
       this.leave(frame);
@@ -1316,23 +1319,106 @@ class Parser {
     try {
       const verb = this.next().v;
       const target = (yield this.expr()) as Node;
-      this.expectWord('to', 'operator');
-      // The word after `to` is always an Operation name, reserved or not.
-      const t = this.peek(0);
-      if (t.t !== 'word' || t.v === '_') {
-        this.fail(t, 'an Operation name');
+      return (yield this.askTellRest(verb, target)) as Node;
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  *askTellRest(verb: string, target: Node): ParseTask<Node> {
+    this.expectWord('to', 'operator');
+    // The word after `to` is always an Operation name, reserved or not.
+    const call = (yield this.operation(verb === 'ask')) as Node;
+    return { ...call, k: verb, target };
+  }
+
+  // An Operation name, which may be any word, even a Reserved Word, then its
+  // arguments, and `and wait` where `waits` allows it.
+  *operation(waits: boolean): ParseTask<Node> {
+    const t = this.peek(0);
+    if (t.t !== 'word' || t.v === '_') {
+      this.fail(t, 'an Operation name');
+    }
+    const op = this.next().v;
+    const args = this.startsExpr(this.peek(0))
+      ? ((yield this.exprList()) as Node[])
+      : [];
+    return {
+      k: 'Operation',
+      op,
+      args,
+      wait: waits ? ((yield this.andWait()) as boolean) : false,
+    };
+  }
+
+  // `tell g to op args`, or, where a block may go, a `tell g` block of
+  // Operation lines (ADR 0063). `tell` and its receiver are read first, then
+  // moved into the production that the next token chooses: `to` gives the
+  // one-line form, with its usual SimpleStatement and AskTell nodes, and the
+  // end of the line a TellBlock.
+  *tell(): ParseTask<Node> {
+    const at = this.peek(0);
+    this.next();
+    const target = (yield this.expr()) as Node;
+    if (!this.atEnd()) {
+      const simple = this.enter('SimpleStatement', 2);
+      try {
+        const frame = this.enter('AskTell', 2);
+        try {
+          return this.at(at, (yield this.askTellRest('tell', target)) as Node);
+        } finally {
+          this.leave(frame);
+        }
+      } finally {
+        this.leave(simple);
       }
-      const op = this.next().v;
-      const args = this.startsExpr(this.peek(0))
-        ? ((yield this.exprList()) as Node[])
-        : [];
-      return {
-        k: verb,
-        target,
-        op,
-        args,
-        wait: verb === 'ask' ? ((yield this.andWait()) as boolean) : false,
-      };
+    }
+    const frame = this.enter('TellBlock', 2);
+    try {
+      this.endOfStatement();
+      const lines: Node[] = [];
+      for (;;) {
+        this.skipNL();
+        const t = this.peek(0);
+        // `end` always closes the block, so it is never an Operation here.
+        if (this.isWord(t, 'end')) {
+          break;
+        }
+        if (t.t === 'eof' || (this.recovering && this.blockBoundary(t))) {
+          // As block() does, recovery records the missing ending here and
+          // leaves the token to the enclosing block or the source.
+          try {
+            this.fail(t, t.t === 'eof' ? '`end`' : 'an Operation name');
+          } catch (error) {
+            if (!this.recovering || !(error instanceof ParseError)) {
+              throw error;
+            }
+            this.record(error);
+            frame.children.push({
+              kind: 'node',
+              rule: 'Error',
+              children: [],
+              start: this.offset,
+              end: this.offset,
+            });
+          }
+          break;
+        }
+        const line = this.enter('OperationLine');
+        try {
+          lines.push(
+            this.at(t, {
+              ...((yield this.operation(true)) as Node),
+              k: 'OperationLine',
+            }),
+          );
+        } finally {
+          this.leave(line);
+        }
+        this.endOfStatement();
+      }
+      this.endBlock('tell', at);
+      return this.at(at, { k: 'TellBlock', target, lines });
     } finally {
       this.leave(frame);
     }

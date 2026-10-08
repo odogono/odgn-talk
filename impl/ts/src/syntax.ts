@@ -40,6 +40,8 @@ export type SyntaxRule =
   | 'AndWait'
   | 'Send'
   | 'AskTell'
+  | 'TellBlock'
+  | 'OperationLine'
   | 'Wait'
   | 'Event'
   | 'If'

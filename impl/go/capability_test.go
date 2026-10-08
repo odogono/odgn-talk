@@ -396,3 +396,14 @@ func TestCleanupOperationHasANewSegmentID(t *testing.T) {
 		})
 	}
 }
+
+// `end` closes a `tell` block, so no line could call it (ADR 0063).
+func TestDefineCapabilityRefusesStatementWordNames(t *testing.T) {
+	for _, name := range []string{"ask", "tell", "send", "wait", "end"} {
+		_, err := New().DefineCapability("x", Operation{Name: name, Mode: FireAndForget, Fire: func(*Call, []Value) error { return nil }})
+		var host *HostError
+		if !errors.As(err, &host) || host.Code != InvalidValue {
+			t.Errorf("%s: got %v, want invalid value", name, err)
+		}
+	}
+}

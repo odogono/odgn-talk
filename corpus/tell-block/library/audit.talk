@@ -1,0 +1,8 @@
+-- audit.talk: the library case's Library.
+
+on record what
+  tell log
+    write "start " & what
+    write "done " & what
+  end tell
+end record

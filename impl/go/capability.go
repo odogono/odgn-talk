@@ -80,7 +80,7 @@ func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, ops ..
 	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle}
 	for _, op := range ops {
 		invalid := func(detail string) (*CapabilityDef, error) { return nil, &HostError{InvalidValue, detail} }
-		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait"}, op.Name) {
+		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op.Name) {
 			return invalid("invalid Operation name")
 		}
 		if _, ok := d.ops[op.Name]; ok {

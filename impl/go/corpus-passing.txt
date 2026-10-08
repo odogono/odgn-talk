@@ -127,6 +127,7 @@ disassembly/expressions
 disassembly/fenced-text
 disassembly/messages-and-waiting
 disassembly/recovery-offers
+disassembly/tell-block
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
@@ -291,6 +292,10 @@ suspension/wait-for
 suspension/wait-observation
 suspension/wait-precision
 suspension/wait-work-order
+tell-block/equivalent
+tell-block/join
+tell-block/library
+tell-block/load-checks
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters
 text-model/chunk-write-out-of-range

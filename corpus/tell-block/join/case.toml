@@ -1,0 +1,24 @@
+# join: in a Join's body, a `tell` block's line with `and wait` is a Join
+# Member, as `ask … and wait` is, so both fetches start before the Join
+# suspends at its `end`, and `it` is their answers in order (ADR 0063;
+# spec chapter 5, Joins).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { feed = { ops = ["fetch"] } }

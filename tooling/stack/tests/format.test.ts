@@ -131,6 +131,16 @@ test('formats block waits containing only a timeout branch', () => {
   );
 });
 
+test("indents a tell block's lines and comments, and keeps its ending", () => {
+  expect(
+    formatSource(
+      'on draw\ntell canvas\n      fill "red"   -- c\n\n  -- next\n        rectangle 1, 2\n    load x and wait\n      end tell\ntell log to write "x"\nend draw\n',
+    ).source,
+  ).toBe(
+    'on draw\n  tell canvas\n    fill "red" -- c\n\n    -- next\n    rectangle 1, 2\n    load x and wait\n  end tell\n  tell log to write "x"\nend draw\n',
+  );
+});
+
 test('treats punctuation inside text as text', () => {
   for (const punctuation of [
     '[',

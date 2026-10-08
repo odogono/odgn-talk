@@ -99,7 +99,7 @@ func TestStopAtCapabilityCrossingRollsBackAndSkipsConversion(t *testing.T) {
 		t.Run(map[Mode]string{Immediate: "immediate", Suspending: "suspending"}[mode], func(t *testing.T) {
 			c := New()
 			var call *Call
-			op := Operation{Name: "end", Mode: mode, Result: NumberShape}
+			op := Operation{Name: "finish", Mode: mode, Result: NumberShape}
 			stop := func(c *Call) { call = c; c.Group().Script(c.ScriptName()).Stop("crossing") }
 			if mode == Immediate {
 				op.Do = func(c *Call, _ []Value) (Value, error) { stop(c); return Int(7), nil }
@@ -116,7 +116,7 @@ func TestStopAtCapabilityCrossingRollsBackAndSkipsConversion(t *testing.T) {
 			if mode == Suspending {
 				wait = " and wait"
 			}
-			s, err := g.Load(LoadOptions{Name: "s", Grants: map[string]*Grant{"api": def.GrantAll(nil)}, Source: "script variable n=0\non go, deciding\n try\n  put 9 into n\n  ask api to end" + wait + "\n  put 8 into n\n finally\n  put 99 into n\n end try\nend go\n"})
+			s, err := g.Load(LoadOptions{Name: "s", Grants: map[string]*Grant{"api": def.GrantAll(nil)}, Source: "script variable n=0\non go, deciding\n try\n  put 9 into n\n  ask api to finish" + wait + "\n  put 8 into n\n finally\n  put 99 into n\n end try\nend go\n"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -256,7 +256,7 @@ func TestStopLandsAtPumpEndWithoutHostCrossing(t *testing.T) {
 
 func TestStopAtFailedHostChargeRemainsSticky(t *testing.T) {
 	c := New()
-	def, err := c.DefineCapability("api", Operation{Name: "end", Mode: Immediate, Result: NumberShape, Do: func(call *Call, _ []Value) (Value, error) {
+	def, err := c.DefineCapability("api", Operation{Name: "finish", Mode: Immediate, Result: NumberShape, Do: func(call *Call, _ []Value) (Value, error) {
 		call.Group().Script(call.ScriptName()).Stop("requested")
 		return Nothing, call.Charge(100000)
 	}})
@@ -264,7 +264,7 @@ func TestStopAtFailedHostChargeRemainsSticky(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := c.NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\n ask api to end\nend go\n", Limits: Limits{FuelPerRun: 100}, Grants: map[string]*Grant{"api": def.GrantAll(nil)}})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\n ask api to finish\nend go\n", Limits: Limits{FuelPerRun: 100}, Grants: map[string]*Grant{"api": def.GrantAll(nil)}})
 	if err != nil {
 		t.Fatal(err)
 	}

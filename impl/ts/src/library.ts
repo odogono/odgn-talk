@@ -8,7 +8,12 @@ import {
   type CheckOptions,
   type ExistingName,
 } from './checker';
-import { checkEffectCall, operationUses, type GrantDecls } from './effects';
+import {
+  checkEffectCall,
+  operationUses,
+  type EffectUse,
+  type GrantDecls,
+} from './effects';
 import type { SemanticNode } from './semantic';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
@@ -59,11 +64,8 @@ export const codeIdentity = (
     ].join('\n'),
   );
 
-type CallSite = {
-  capability: string;
+type CallSite = EffectUse & {
   identity: string;
-  node: SemanticNode;
-  operation: string;
   unit: string;
 };
 type Compiled = {
@@ -160,7 +162,7 @@ const checkLibraryNeeds = (
           missing.add(reference);
         }
       } else {
-        checkEffectCall(site.node, grants, code => report(code));
+        checkEffectCall(site, grants, code => report(code));
       }
     }
   }

@@ -236,13 +236,6 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// `tell` blocks (ADR 0063), which the Cores' tests don't read until both
-// Cores parse them.
-mustParse(
-  readFileSync(join(import.meta.dir, 'tell-block/sketch.talk'), 'utf8'),
-  'tools/grammar/tell-block/sketch.talk',
-);
-broken(join(import.meta.dir, 'tell-block/broken.talk'));
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

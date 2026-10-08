@@ -87,13 +87,16 @@ describe('Shapes', () => {
 });
 
 describe('defining and granting', () => {
-  test('refuses an Operation named ask, tell, send or wait, and an unknown grant', () => {
+  test('refuses an Operation named ask, tell, send, wait or end, and an unknown grant', () => {
     const fire = {
       mode: 'fire-and-forget' as const,
       cost: { fuel: 0 },
       fire: () => {},
     };
-    expect(() => defineCapability('x', { send: fire })).toThrow(HostError);
+    // `end` closes a `tell` block, so no line could call it (ADR 0063).
+    for (const name of ['ask', 'tell', 'send', 'wait', 'end']) {
+      expect(() => defineCapability('x', { [name]: fire })).toThrow(HostError);
+    }
     expect(() =>
       defineCapability('x', { a: fire }).grant(['b'], undefined),
     ).toThrow(HostError);

@@ -191,7 +191,13 @@ const leaves = (tree: SyntaxNode, source: string): Leaf[] => {
       }
       const next = {
         element: child,
-        depth: depth + (element.rule === 'Block' ? 1 : 0) + branchDepth,
+        // A `tell` block's lines sit inside it, as a Block's statements do.
+        depth:
+          depth +
+          (element.rule === 'Block' || element.rule === 'OperationLine'
+            ? 1
+            : 0) +
+          branchDepth,
         attachRight:
           child.kind === 'token' &&
           child.t === 'op' &&

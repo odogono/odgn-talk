@@ -795,6 +795,9 @@ class BodyLowering {
       case 'call':
         yield this.call(s.call, s.wait);
         return void this.emit(at, 'store', 0);
+      case 'tell-block':
+        // Each line is the one-line call the checker chose for it (ADR 0063).
+        return yield* this.block(s.lines);
       case 'ask':
       case 'tell': {
         for (const arg of s.args) {

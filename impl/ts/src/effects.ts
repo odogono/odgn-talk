@@ -5,11 +5,12 @@
 // argument fits its Shape.
 import { acceptsArgumentCount, type Shape } from './capabilities';
 import type { Report } from './control';
-import type {
-  SemanticElement,
-  SemanticName,
-  SemanticNode,
-  SemanticToken,
+import {
+  toldLines,
+  type SemanticElement,
+  type SemanticName,
+  type SemanticNode,
+  type SemanticToken,
 } from './semantic';
 import { parseUnit, unitEntry, unitText, UnitError } from './units';
 
@@ -152,8 +153,21 @@ const fits = (l: Literal, s: Shape): boolean => {
   }
 };
 
-const effectNodes = (root: SemanticNode): SemanticNode[] => {
-  const found: SemanticNode[] = [];
+/**
+ * A Capability call: a one-line `ask` or `tell`, a line of a `tell` block,
+ * whose Grant is the block's receiver (ADR 0063), or `say`.
+ */
+export type EffectUse = {
+  capability: string;
+  grant: Leaf;
+  node: SemanticNode;
+  op: Leaf;
+  operation: string;
+};
+
+/** Every Capability call in source order, retaining the call for import checks. */
+export const operationUses = (root: SemanticNode): EffectUse[] => {
+  const found: EffectUse[] = [];
   const work: SemanticNode[] = [root];
   while (work.length) {
     const node = work.pop()!;
@@ -163,68 +177,81 @@ const effectNodes = (root: SemanticNode): SemanticNode[] => {
         work.push(child);
       }
     }
-    if (
-      node.rule === 'AskTell' ||
-      (node.rule === 'SimpleStatement' &&
-        node.children[0]?.kind === 'name' &&
-        node.children[0].text === 'say')
-    ) {
-      found.push(node);
+    if (node.rule === 'SimpleStatement') {
+      const head = node.children[0];
+      if (head?.kind === 'name' && head.text === 'say') {
+        found.push({
+          capability: 'console',
+          operation: 'write',
+          node,
+          grant: head,
+          op: head,
+        });
+      }
+    } else if (node.rule === 'AskTell') {
+      const target = node.children[1];
+      const grant = target && firstLeaf(target);
+      const op = node.children[3];
+      if (grant && isLeaf(op)) {
+        found.push({
+          capability: grant.text,
+          operation: op.text,
+          node,
+          grant,
+          op,
+        });
+      }
+    } else if (node.rule === 'TellBlock') {
+      const target = node.children[1];
+      const grant = target && firstLeaf(target);
+      for (const line of nodesOf(node, 'OperationLine')) {
+        const op = line.children[0];
+        if (grant && isLeaf(op)) {
+          found.push({
+            capability: grant.text,
+            operation: op.text,
+            node: line,
+            grant,
+            op,
+          });
+        }
+      }
     }
   }
-  return found;
+  return found.sort((a, b) => a.node.span.start - b.node.span.start);
 };
-
-/** Operation references in source order, retaining the call for import checks. */
-export const operationUses = (root: SemanticNode) =>
-  effectNodes(root).flatMap(node => {
-    if (node.rule === 'SimpleStatement') {
-      return [{ capability: 'console', operation: 'write', node }];
-    }
-    const target = node.children[1];
-    const op = node.children[3];
-    const grant = target && firstLeaf(target);
-    return grant && isLeaf(op)
-      ? [{ capability: grant.text, operation: op.text, node }]
-      : [];
-  });
 
 /** Check one call without revisiting any Lambda inside its arguments. */
 export const checkEffectCall = (
-  node: SemanticNode,
+  use: EffectUse,
   grants: GrantDecls,
   report: Report,
 ) => {
+  const { node, grant, op } = use;
   const say = node.rule === 'SimpleStatement';
-  if (!say && node.rule !== 'AskTell') {
-    return;
-  }
-  const head = node.children[0] as Leaf;
-  const target = node.children[1];
-  const grant = say ? head : target && firstLeaf(target);
-  const op = say ? head : node.children[3];
-  if (!grant || !isLeaf(op)) {
-    return;
-  }
-  const grantName = say ? 'console' : grant.text;
-  const operation = say ? 'write' : op.text;
-  const ops = Object.hasOwn(grants, grantName) ? grants[grantName] : null;
+  const line = node.rule === 'OperationLine';
+  const ops = Object.hasOwn(grants, use.capability)
+    ? grants[use.capability]
+    : null;
   if (!ops) {
     report('unknown operation', grant);
     return;
   }
-  const decl = Object.hasOwn(ops, operation) ? ops[operation] : null;
+  const decl = Object.hasOwn(ops, use.operation) ? ops[use.operation] : null;
   if (!decl) {
     report('unknown operation', op);
     return;
   }
   const wait = nodesOf(node, 'AndWait').length > 0;
-  const asked = !say && head.text === 'ask';
+  // A `tell` block's line is called as its checker chose (ADR 0063).
+  const asked = line
+    ? !toldLines.has(node)
+    : !say && (node.children[0] as Leaf).text === 'ask';
   const fitsMode = asked
     ? decl.mode === (wait ? 'suspending' : 'immediate')
     : decl.mode === 'fire-and-forget';
   if (!fitsMode) {
-    report('wrong mode', head);
+    report('wrong mode', line ? op : (node.children[0] as Leaf));
     return;
   }
   const list = nodesOf(node, 'ExpressionList')[0];
@@ -244,13 +271,41 @@ export const checkEffectCall = (
   });
 };
 
-/** Check every Capability call in a Script against its Grants. */
+/**
+ * Check every Capability call in a Script against its Grants. A `tell`
+ * block's line is called as `tell` when its Operation is fire-and-forget and
+ * it has no `and wait`, and as `ask` otherwise, decided here once (ADR 0063),
+ * so an importer's recheck never changes it. A Grant the Script doesn't hold
+ * is reported once for a block, at its receiver.
+ */
 export const checkEffects = (
   root: SemanticNode,
   grants: GrantDecls,
   report: Report,
 ) => {
-  for (const node of effectNodes(root)) {
-    checkEffectCall(node, grants, report);
+  const reported = new Set<Leaf>();
+  for (const use of operationUses(root)) {
+    if (use.node.rule !== 'OperationLine') {
+      checkEffectCall(use, grants, report);
+      continue;
+    }
+    const ops = Object.hasOwn(grants, use.capability)
+      ? grants[use.capability]!
+      : {};
+    const decl = Object.hasOwn(ops, use.operation)
+      ? ops[use.operation]
+      : undefined;
+    if (
+      decl?.mode === 'fire-and-forget' &&
+      !nodesOf(use.node, 'AndWait').length
+    ) {
+      toldLines.add(use.node);
+    }
+    checkEffectCall(use, grants, (code, at) => {
+      if (!reported.has(at)) {
+        reported.add(at);
+        report(code, at);
+      }
+    });
   }
 };

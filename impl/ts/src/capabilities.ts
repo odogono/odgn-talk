@@ -343,7 +343,7 @@ export type Grant<B> = {
   readonly ops: ReadonlySet<string>;
 };
 
-const refusedNames = new Set(['ask', 'tell', 'send', 'wait']);
+const refusedNames = new Set(['ask', 'tell', 'send', 'wait', 'end']);
 const scopeWord = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Z_a-z]\w*$/.test(value);
 

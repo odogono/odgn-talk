@@ -1298,6 +1298,15 @@ export class BodyCompiler {
       case 'ask':
       case 'tell':
         return this.askTell(s);
+      case 'TellBlock':
+        // Each line is the one-line call its Operation's mode allows (ADR
+        // 0063). With no declarations here, a line is lowered as an `ask`,
+        // which is what loading chooses for any Operation but a
+        // fire-and-forget one.
+        for (const line of s.lines) {
+          this.askTell({ ...line, k: 'ask', target: s.target });
+        }
+        return;
       case 'Send':
         return this.send(s);
       case 'Wait':

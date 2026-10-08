@@ -1,0 +1,41 @@
+# library: a Library's `tell` block line is called as its mode allowed when
+# the Library compiled, and an importing Script's Grants are checked against
+# it (ADR 0063; spec chapter 7, Grants and `needs`). `log.write` is
+# fire-and-forget, so the line is a `tell`. `quiet` grants `log` as `hush`,
+# whose `write` is immediate, so its load reports `wrong mode` at the `use`
+# line, once for each of the Library's calls.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "hush"
+name = "write"
+mode = "immediate"
+args = ["text"]
+result = "text"
+
+[[libraries]]
+name = "audit"
+version = "1"
+source = "audit.talk"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { log = { ops = ["write"] } }
+
+[[scripts]]
+name = "quiet"
+source = "s.talk"
+grants = { log = { capability = "hush", ops = ["write"] } }
