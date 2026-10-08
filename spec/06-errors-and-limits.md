@@ -89,6 +89,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 
 - **`Fail`:** a Host function that fails with a `ScriptError` raises its code as is. Its `message` becomes `message`, and the entries of its `Data` become top-level fields, converted and charged to the calling Run. The Core adds `capability`, `operation` and `at`.
 - **Becomes `host error`,** with only `capability` and `operation`:
+  - a `Fail` whose `Data` is neither a map nor Nothing
   - a `Fail` with a catalogue code, unless it is a Standard Capability code its Operation declares (below)
   - a `Fail` whose `Data` uses a reserved key, listed in [the catalogue](#the-error-code-catalogue)
   - a `Fail` with a code outside its Operation's declared list, when the Operation lists its codes

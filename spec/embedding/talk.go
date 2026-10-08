@@ -90,7 +90,9 @@ var ErrMailboxFull error
 // An Operation fails with one. The Script sees Code as `code`, Message as
 // `message` and Data's entries as further fields. A catalogue code the
 // Operation doesn't declare, a code outside a declared list, or a Data key
-// that clashes with a reserved key (errors.toml) becomes `host error` instead.
+// that clashes with a reserved key (errors.toml), or Data that is neither a map
+// nor Nothing, becomes `host error` instead. The Host-side detail goes only in
+// the `call failed` report.
 type ScriptError struct {
 	Code    string
 	Message string
