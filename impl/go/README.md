@@ -563,30 +563,38 @@ starts. Inspection reports `ask-wait` and pending ids. No turn callback is retai
 in machine state.
 Ordinary calls have no scope and are not automatic. Immediate and
 fire-and-forget calls carry a background Context. Segment-bound Operations use
-`DefineSegmentCapability` with synchronous lifecycle hooks, described below.
+`DefineSegmentCapability` or `DefineCoordinatedCapability` with synchronous
+lifecycle hooks, described below.
 
 ### Segment-bound Operations
 
-`DefineSegmentCapability` takes a `SegmentLifecycle` with synchronous `Begin`,
-`Commit` and `Rollback` hooks. Segment-bound Operations must be immediate, and
-all lifecycle Operations for a scope agree on their Segment-bound status.
-Hooks receive the Group instance, binding, Script and named Grant, Run and
-Segment ids, and last observed Clock. They spend no Script resources; reentrant
+A Segment's participant is a Segment Coordinator, a `*SegmentLifecycle` with
+synchronous `Begin`, `Commit` and `Rollback` hooks ([ADR 0069](../../docs/adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)).
+`DefineCoordinatedCapability` maps each binding to its coordinator once, when
+the Grant is created; Load, Reload and Restore keep that pointer, and Grants
+with the same pointer share a participant. `DefineSegmentCapability` takes one
+`SegmentLifecycle` and gives each named Grant, aliases included, a coordinator
+of its own. Segment-bound Operations must be immediate, and all lifecycle
+Operations for a scope agree on their Segment-bound status. Hooks receive the
+Group instance, Script, Run and Segment ids, last observed Clock, the first
+enrolled Grant's name and binding, and every enrolled Grant in `Grants`. They spend no Script resources; reentrant
 worker calls are refused. Hook results are `EffectOK`, `EffectFailed` or
 `EffectUnknown`; a panic or malformed result is unknown, with Host detail kept
 out of the Trace.
 
-The first paid Segment-bound call enrolls its named Grant before entering the
-Operation. Later calls share that participant, while another Grant alias raises
-`segment participant conflict` before charging or entering the Host. Preemption,
+The first paid Segment-bound call enrolls its named Grant and calls `Begin`
+before entering the Operation. A later call through another Grant on the same
+coordinator enrolls it with no hook, while a Grant on another coordinator raises
+`segment participant conflict`, naming the first enrolled Grant, before charging
+or entering the Host. Preemption,
 caught errors and empty Joins retain the participant. Completion and ordinary
 errors commit after all boundary checks and scope abandonment; actual suspension
 commits before its report or Verdict. Limit Faults, Stop, disposal and successful
-Reload roll back. Cancellation first abandons the participating Grant's scopes
+Reload roll back. Cancellation first abandons every enrolled Grant's scopes
 and rolls back, then runs finally cleanup in a new Segment with its own participant.
 
-Failed participating abandonment prevents commit; an unrelated abandonment
-failure only disables its Grant. Definite non-commit restores the Segment's
+Failed abandonment on any enrolled Grant prevents commit and disables only that
+Grant; an unrelated abandonment failure only disables its Grant. Definite non-commit restores the Segment's
 Script Variables and ends `effect failed`, failing waiting senders without a
 Limit Fault, Script catch/finally or an error Handler. Uncertain begin or commit,
 and any unsuccessful rollback, stop every Script as `effect state unknown`.
@@ -601,6 +609,8 @@ The maintainer approved the first blessings of the original 22 effect cases on
 2026-10-05; the
 [step-4 approval record](../../docs/reviews/go-step-four-blessings/README.md)
 records that review. The four remaining cases execute unchanged in the step-5 gate.
+The runner gives Grants sharing a `case.toml` `coordinator` name one coordinator,
+and each other Grant its own.
 
 ### Capability Scopes
 

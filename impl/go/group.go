@@ -205,7 +205,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		if template == nil || template.definition == nil {
 			return nil, g.refuse(InvalidValue, "invalid Grant")
 		}
-		bound := &Grant{definition: template.definition, operations: map[string]bool{}, binding: template.binding}
+		bound := template.named()
 		declarations[name] = map[string]check.OperationCheck{}
 		for op := range template.operations {
 			bound.operations[op] = true

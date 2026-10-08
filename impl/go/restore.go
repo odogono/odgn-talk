@@ -124,7 +124,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 			}
 			selected := placeholder
 			if offered != nil && offered.definition != nil {
-				selected = &Grant{definition: offered.definition, binding: offered.binding, operations: map[string]bool{}}
+				selected = &Grant{definition: offered.definition, binding: offered.binding, coordinator: offered.coordinator, operations: map[string]bool{}}
 				for _, op := range sg.Operations {
 					if offered.operations[op.Name] {
 						selected.operations[op.Name] = true

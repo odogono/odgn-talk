@@ -8,9 +8,18 @@ import (
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
+// segmentParticipant is a Segment's Segment Coordinator and the named Grants
+// enrolled in it, in enrollment order.
 type segmentParticipant struct {
-	name  string
-	grant *Grant
+	coordinator *SegmentLifecycle
+	grants      []SegmentGrant
+}
+
+// name is the first enrolled Grant, which reports and the Trace identify.
+func (p *segmentParticipant) name() string { return p.grants[0].GrantName }
+
+func (p *segmentParticipant) enrolled(grantName string) bool {
+	return slices.ContainsFunc(p.grants, func(e SegmentGrant) bool { return e.GrantName == grantName })
 }
 
 func invokeEffect(hook func(SegmentContext) EffectResult, ctx SegmentContext) (result EffectResult) {
@@ -27,27 +36,36 @@ func invokeEffect(hook func(SegmentContext) EffectResult, ctx SegmentContext) (r
 }
 
 func (g *Group) effectHook(s *Script, x *execution, p *segmentParticipant, phase string, reports *[]Report) *EffectFailure {
-	lifecycle := p.grant.definition.lifecycle
+	lifecycle := p.coordinator
 	hook := lifecycle.Begin
 	if phase == "commit" {
 		hook = lifecycle.Commit
 	} else if phase == "rollback" {
 		hook = lifecycle.Rollback
 	}
-	ctx := SegmentContext{Group: g, ScriptName: s.name, RunID: x.id, GrantName: p.name, SegmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), Binding: p.grant.binding, Now: g.clock, Grants: []SegmentGrant{{GrantName: p.name, Binding: p.grant.binding}}}
+	first := p.grants[0]
+	ctx := SegmentContext{Group: g, ScriptName: s.name, RunID: x.id, GrantName: first.GrantName, SegmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), Binding: first.Binding, Now: g.clock, Grants: slices.Clone(p.grants)}
 	result := invokeEffect(hook, ctx)
-	g.record("effect", false, []string{ctx.SegmentID}, map[string]string{"grant": p.name, "phase": phase, "status": string(result.Status)})
+	g.record("effect", false, []string{ctx.SegmentID}, map[string]string{"grant": first.GrantName, "phase": phase, "status": string(result.Status)})
 	if result.Status == EffectOK {
 		return nil
 	}
-	failure := &EffectFailure{Script: s.name, Run: x.id, Grant: p.name, Segment: ctx.SegmentID, Phase: phase, Status: result.Status, Detail: result.Detail}
+	failure := &EffectFailure{Script: s.name, Run: x.id, Grant: first.GrantName, Segment: ctx.SegmentID, Phase: phase, Status: result.Status, Detail: result.Detail}
 	*reports = append(*reports, failure)
-	g.record("effect-failure", false, []string{string(x.id)}, map[string]string{"grant": p.name, "segment": ctx.SegmentID, "phase": phase, "status": string(result.Status)})
+	g.record("effect-failure", false, []string{string(x.id)}, map[string]string{"grant": first.GrantName, "segment": ctx.SegmentID, "phase": phase, "status": string(result.Status)})
 	return failure
 }
 
+// enrollParticipant enrolls a Grant whose coordinator the conflict check has
+// accepted. Only the first enrollment in a Segment invokes begin.
 func (g *Group) enrollParticipant(s *Script, x *execution, name string, grant *Grant, reports *[]Report) *EffectFailure {
-	p := &segmentParticipant{name, grant}
+	if p := x.participant; p != nil {
+		if !p.enrolled(name) {
+			p.grants = append(p.grants, SegmentGrant{GrantName: name, Binding: grant.binding})
+		}
+		return nil
+	}
+	p := &segmentParticipant{grant.coordinator, []SegmentGrant{{GrantName: name, Binding: grant.binding}}}
 	failure := g.effectHook(s, x, p, "begin", reports)
 	if failure == nil || failure.Status == EffectUnknown {
 		x.participant = p
@@ -75,7 +93,7 @@ func (g *Group) rollbackParticipant(s *Script, x *execution, reports *[]Report) 
 	}
 }
 
-// Scope abandonment precedes finalization. Only abandonment on the
+// Scope abandonment precedes finalization. Only abandonment on a
 // participating Grant prevents commit; unrelated release failures disable
 // their Grant without changing this participant's decision.
 func (g *Group) finalizeParticipant(s *Script, x *execution, reports *[]Report) {

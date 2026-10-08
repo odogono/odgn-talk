@@ -1057,7 +1057,7 @@ func (g *Group) cancelExecution(s *Script, x *execution, reports *[]Report) {
 		}
 	}
 	if x.participant != nil {
-		g.abandonGrantScopes(s, x, x.participant.name, reports)
+		g.abandonGrantScopes(s, x, x.participant, reports)
 		g.rollbackParticipant(s, x, reports)
 		if g.effectUnknown {
 			return
