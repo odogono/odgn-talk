@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # decision-at-crossing: a Decision's Verdict is sealed only at the end of its
 # first Segment (ADR 0031), so a Rewind at a crossing before then leaves it
 # open (ADR 0068): no `decided` record follows the rewound stretch. After a
