@@ -60,6 +60,12 @@ test('display text splits hidden scalar values and keeps literal backslashes', (
   }
 });
 
+test('display quotes an offer map key, which source reserves', () => {
+  const value = record({ offer: num(1), if: bool(true) });
+  expect(value.toString()).toBe('{"offer": 1, if: true}');
+  expect(readDisplay(value.toString()).equals(value)).toBe(true);
+});
+
 test('Value Encoding uses only the specified string escapes', () => {
   expect(encodeValue(text('"\\\n\t\r\b\f\u0000\u001f/é\u2028'))).toBe(
     '"\\"\\\\\\u000a\\u0009\\u000d\\u0008\\u000c\\u0000\\u001f/é\u2028"',
