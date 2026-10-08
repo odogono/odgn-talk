@@ -1,0 +1,5 @@
+script variable n = 0
+on ping
+  add 1 to n
+  return the id of the target
+end ping

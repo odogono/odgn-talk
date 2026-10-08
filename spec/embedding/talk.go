@@ -50,7 +50,7 @@ type Diagnostic struct {
 	Col     int
 }
 
-// HostError is Host misuse, refused at the call that made it. Its Code comes
+// HostError is Host misuse, refused at admission or reported by Pump at drain. Its Code comes
 // from the Host error catalogue (09-embedding.md), so both Cores refuse the same
 // misuse with the same code.
 type HostError struct {
@@ -923,10 +923,13 @@ type Counters struct {
 // Reports (ADR 0015)
 // ---------------------------------------------------------------------------
 
-// Report is one of *RunEnd, *Stop, *Unhandled, *CallFailed, *EffectFailure or *Decided. Hosts switch
+// Report includes *HostError for drain-time Host refusals, alongside execution,
+// lifecycle, Decision and accounting reports. Hosts switch
 // on its type. Accounting also adds *RunStarted, *RunDiscarded,
 // *RunAccounting and *CausalWork.
 type Report interface{ isReport() }
+
+func (*HostError) isReport()
 
 type RunID string
 

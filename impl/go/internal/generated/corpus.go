@@ -1474,7 +1474,7 @@ var Corpus = CorpusTable{
 			Name:  "refused",
 			Input: false,
 			Ids:   []string{},
-			Is:    "the Host Input before it was refused at the call, and changed nothing",
+			Is:    "a Host Input was refused at the call or at drain, and changed nothing",
 			Key: []CorpusTableRecordEntryKeyEntry{
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "code",

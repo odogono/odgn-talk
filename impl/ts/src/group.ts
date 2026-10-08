@@ -240,6 +240,11 @@ export type EffectFailure = {
 };
 export type Report =
   | AccountingReport
+  | {
+      code: HostErrorCode;
+      detail?: string;
+      kind: 'host error';
+    }
   | ({ kind: 'effect failure' } & EffectFailure)
   | {
       alloc: number;
@@ -1725,9 +1730,22 @@ export class Group {
           this.reportDecision(action.decision);
         }
         break;
-      case 'set-parent':
-        action.child.parent = action.up;
+      case 'set-parent': {
+        const code = this.parentError(action.child, action.up);
+        if (code) {
+          this.drainReports.push({
+            kind: 'host error',
+            code,
+            detail: 'invalid queued parent relationship',
+          });
+          this.trace(
+            recordLine('refused', [], [['code', JSON.stringify(code)]]),
+          );
+        } else {
+          action.child.parent = action.up;
+        }
         break;
+      }
       case 'dispose':
         action.state.disposed = true;
         if (action.state.owner) {
@@ -3445,7 +3463,22 @@ export class Group {
     return state;
   }
 
-  /** Queued. Sets an object's parent, which the Core holds; a cycle is refused. */
+  private parentError(
+    child: ObjectState,
+    up: ObjectState | null,
+  ): HostErrorCode | undefined {
+    if (child.disposed) {
+      return 'invalid value';
+    }
+    for (let x = up; x; x = x.parent) {
+      if (x === child) {
+        return 'parent cycle';
+      }
+    }
+    return undefined;
+  }
+
+  /** Queued. Refuses cycles and disposed children at admission and again at drain. */
   setParent(o: HostObject, parent: HostObject | undefined): void {
     const child = this.held(o);
     const up = parent ? this.held(parent) : null;
@@ -3458,14 +3491,10 @@ export class Group {
       ],
       true,
     );
-    for (let x = up; x; x = x.parent) {
-      if (x === child) {
-        this.recordRefusal(line, 'parent cycle');
-        throw new HostError(
-          'parent cycle',
-          `${o.value} would be its own ancestor`,
-        );
-      }
+    const code = this.parentError(child, up);
+    if (code) {
+      this.recordRefusal(line, code);
+      throw new HostError(code, 'invalid parent relationship');
     }
     this.queueInput({
       line,

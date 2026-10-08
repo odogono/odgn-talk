@@ -257,6 +257,8 @@ save/restore Traces. The `sessions/argument-labels` Transcript agrees on both
 Cores and covers Entry recognition and positional/labelled Handlers sharing a first word. Their
 first blessings were approved on 2026-10-07; see the [approval record](../docs/reviews/milestone-one-blessings/README.md).
 
+The `objects/queued-parent-refusals` case (#457) pins drain-time `parent cycle` and `invalid value` refusals, unchanged parents, subsequent routing and final Script Variables. TS and Go agree in ordinary and save/restore replay. The maintainer approved its `case.trace` first blessing on 2026-10-08 in the #457 implementation thread. Direct API tests in both Cores additionally cover a parent change saved while queued whose child becomes unresolved at Restore; the Trace case does not claim that explicit Save boundary.
+
 ## The Disassembly Cases
 
 The Session Transcripts under [`sessions/`](sessions/) were written by hand and blessed by `bun run corpus:run --bless`, which filled in their run ids and wrote their `case.trace` from the TS Session Host's. Each `case.trace` also passes as a Trace Case on both Cores, ordinarily and with Save/Restore between Pumps. The original nine first blessings were reviewed in their PRs, as recorded in [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419). The later `fenced-text` Transcript was approved on 2026-10-05; see the [fenced-text approval record](../docs/reviews/fenced-text-blessings/README.md). The `describe` and `apropos` Transcripts ([#437](https://github.com/odogono/odgn-talk/issues/437)) await first-blessing review.
