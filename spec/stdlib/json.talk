@@ -9,6 +9,7 @@ use join, repeated from text
 
 -- Decoding -------------------------------------------------------------------
 
+--| The value the JSON text `t` holds
 function decodeJson t
   needText(t)
   put the code points of t into cps
@@ -238,6 +239,7 @@ end invalid
 
 -- Encoding -------------------------------------------------------------------
 
+--| The value `v` as compact JSON text
 function encodeJson v
   return encodeValue(v, [])
 end encodeJson

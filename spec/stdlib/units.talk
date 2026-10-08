@@ -6,31 +6,37 @@
 -- temperature is a plain number. Each function computes exactly its entry's
 -- expression, left to right.
 
+--| `c * 9 / 5 + 32`
 function celsiusToFahrenheit c
   needNumber(c)
   return c * 9 / 5 + 32
 end celsiusToFahrenheit
 
+--| `(f - 32) * 5 / 9`
 function fahrenheitToCelsius f
   needNumber(f)
   return (f - 32) * 5 / 9
 end fahrenheitToCelsius
 
+--| `c + 273.15`
 function celsiusToKelvin c
   needNumber(c)
   return c + 273.15
 end celsiusToKelvin
 
+--| `k - 273.15`
 function kelvinToCelsius k
   needNumber(k)
   return k - 273.15
 end kelvinToCelsius
 
+--| `(f - 32) * 5 / 9 + 273.15`
 function fahrenheitToKelvin f
   needNumber(f)
   return (f - 32) * 5 / 9 + 273.15
 end fahrenheitToKelvin
 
+--| `(k - 273.15) * 9 / 5 + 32`
 function kelvinToFahrenheit k
   needNumber(k)
   return (k - 273.15) * 9 / 5 + 32

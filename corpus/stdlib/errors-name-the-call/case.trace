@@ -3,15 +3,15 @@
 # in the Lambda, at its `/`. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> load checks identity=d2fd0c2991b8cb308866e4a7358a5bb1291f684163047f956a52d58762171a2b
+> load checks identity=8a7928aa1230e72a8a71069f2ba4b0635d94f6d37ed6f296851e3a35c489f771
 > deliver d1 to=checks message=go
 > deliver d2 to=checks message=parse
 > deliver d3 to=checks message=invert
 > pump clock=2026-09-30T09:00:00Z
-raise checks/r1 code="out of domain" at=text:1313 pos=335:3
+raise checks/r1 code="out of domain" at=text:1313 pos=347:3
 seg checks/r1 start delivery=d1 handler=go clause=1 fuel=135 alloc=297 state=544 end=return
 run checks/r1 outcome=completed delivery=d1 handler=go fuel=135 alloc=297
-raise checks/r2 code="can't decode" at=json:1296 pos=236:3
+raise checks/r2 code="can't decode" at=json:1296 pos=237:3
 seg checks/r2 start delivery=d2 handler=parse clause=1 fuel=1004 alloc=1933 state=512 end=error
 run checks/r2 outcome=errored delivery=d2 handler=parse error={code: "can't decode", format: "json", offset: 4, at: {unit: "checks", handler: "parse", line: 18, column: 10}} fuel=1004 alloc=1933
 raise checks/r3 code="division by zero" at=checks:37 pos=22:33

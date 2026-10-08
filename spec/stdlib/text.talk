@@ -4,6 +4,7 @@
 
 -- Padding and trimming -------------------------------------------------------
 
+--| `t` with `fill` added at the end until it is `width` Characters long
 function pad t, width, fill = " "
   needText(t)
   needInteger(width)
@@ -14,6 +15,7 @@ function pad t, width, fill = " "
   return t & repeated(fill, width - the length of t)
 end pad
 
+--| `t` with `fill` added at the start until it is `width` Characters long
 function padLeft t, width, fill = " "
   needText(t)
   needInteger(width)
@@ -24,11 +26,13 @@ function padLeft t, width, fill = " "
   return repeated(fill, width - the length of t) & t
 end padLeft
 
+--| `t` without the white space at its start and end
 function trim t
   needText(t)
   return trimEnd(trimStart(t))
 end trim
 
+--| `t` without the white space at its start
 function trimStart t
   needText(t)
   put the characters of t into cs
@@ -38,6 +42,7 @@ function trimStart t
   return ""
 end trimStart
 
+--| `t` without the white space at its end
 function trimEnd t
   needText(t)
   put the characters of t into cs
@@ -51,6 +56,7 @@ end trimEnd
 
 -- Splitting and joining ------------------------------------------------------
 
+--| The list of the texts between the matches of `separator`, a text or a Text Pattern, in `t`
 function split t, separator
   needText(t)
   if separator is a text then
@@ -74,6 +80,7 @@ function split t, separator
   return pieces
 end split
 
+--| The items of `xs`, each shown as `&` shows it, with `separator` between each pair
 function join xs, separator = ""
   needList(xs)
   needText(separator)
@@ -85,6 +92,7 @@ function join xs, separator = ""
   return joined(parts)
 end join
 
+--| `n` copies of `t`, joined
 function repeated t, n
   needText(t)
   needInteger(n)
@@ -98,6 +106,7 @@ end repeated
 
 -- Searching ------------------------------------------------------------------
 
+--| The Character position where the last match of `needle`, a text or a Text Pattern, starts in `t`, or 0 if there is none
 function lastOffset needle, t
   if needle is a text then
     put <(needle)> into p
@@ -114,6 +123,7 @@ end lastOffset
 
 -- Templates ------------------------------------------------------------------
 
+--| `template` with each `${name}` replaced by the value of that key of `values`, shown as `&` shows it
 function format template, values
   needText(template)
   needMap(values)
@@ -146,6 +156,7 @@ end format
 
 -- Numbers in a Locale --------------------------------------------------------
 
+--| The number `n` written with a Locale's `numberSymbols`, rounded to `places` digits after the point if `places` is given
 function formatNumber n, symbols, places = nothing
   needNumber(n)
   needMap(symbols)
@@ -165,6 +176,7 @@ function formatNumber n, symbols, places = nothing
   return sign & whole & the decimal of symbols & localDigits(item 2 of halves, symbols)
 end formatNumber
 
+--| The number `t` writes with a Locale's `numberSymbols`
 function parseNumber t, symbols
   needText(t)
   needMap(symbols)

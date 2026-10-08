@@ -4,6 +4,7 @@
 
 -- Aggregates -----------------------------------------------------------------
 
+--| The items of `xs` added with `+`, left to right, or 0 for an empty list
 function sum xs
   needList(xs)
   if xs is empty then return 0
@@ -14,6 +15,7 @@ function sum xs
   return total
 end sum
 
+--| The sum of `xs` divided by its length
 function average xs
   needList(xs)
   if xs is empty then outOfDomain("average", xs)
@@ -22,6 +24,7 @@ end average
 
 -- Reshaping ------------------------------------------------------------------
 
+--| The list of pairs `[x, y]` of items at the same position, as long as the shorter list
 function zip xs, ys
   needList(xs)
   needList(ys)
@@ -33,6 +36,7 @@ function zip xs, ys
   return pairs
 end zip
 
+--| `xs` without the items equal to an earlier item
 function unique xs
   needList(xs)
   put [] into kept
@@ -42,6 +46,7 @@ function unique xs
   return kept
 end unique
 
+--| `xs` in reverse order
 function reverse xs
   needList(xs)
   put [] into backwards
@@ -53,6 +58,7 @@ function reverse xs
   return backwards
 end reverse
 
+--| `xs` with each item that is a list replaced by its items, one level deep
 function flatten xs
   needList(xs)
   put [] into flat
@@ -68,6 +74,7 @@ end flatten
 
 -- Sorting --------------------------------------------------------------------
 
+--| `xs` sorted by `<`, stably
 function sort xs, direction = "ascending"
   needList(xs)
   needText(direction)
@@ -79,6 +86,7 @@ function sort xs, direction = "ascending"
   return secondOfEach(mergeByKey(keyed, down))
 end sort
 
+--| `xs` sorted by `<` on the value `key` gives for each item, stably
 function sortBy xs, key, direction = "ascending"
   needList(xs)
   needFunction(key)
@@ -91,6 +99,7 @@ function sortBy xs, key, direction = "ascending"
   return secondOfEach(mergeByKey(keyed, down))
 end sortBy
 
+--| `xs` sorted by the two-argument comparator `compare`, stably
 function sortWith xs, compare, direction = "ascending"
   needList(xs)
   needFunction(compare)
@@ -179,6 +188,7 @@ end secondOfEach
 
 -- Calling a Function Value on each item --------------------------------------
 
+--| The items of `xs` for which `keep` gives true, in order
 function filter xs, keep
   needList(xs)
   needFunction(keep)
@@ -189,6 +199,7 @@ function filter xs, keep
   return kept
 end filter
 
+--| The list of what `f` gives for each item of `xs`, in order
 function map xs, f
   needList(xs)
   needFunction(f)
@@ -199,6 +210,7 @@ function map xs, f
   return mapped
 end map
 
+--| `f(f(f(initial, x1), x2), …)` over the items of `xs`, or `initial` for an empty list
 function reduce xs, f, initial
   needList(xs)
   needFunction(f)
@@ -209,6 +221,7 @@ function reduce xs, f, initial
   return acc
 end reduce
 
+--| A map from each text `key` gives to the list of items that gave it, keyed in first-seen order
 function group xs, key
   needList(xs)
   needFunction(key)
@@ -225,6 +238,7 @@ function group xs, key
   return groups
 end group
 
+--| `[matching, rest]`: the items for which `keep` gives true and the others, each in order
 function partition xs, keep
   needList(xs)
   needFunction(keep)
@@ -240,6 +254,7 @@ function partition xs, keep
   return [matching, others]
 end partition
 
+--| Whether `test` gives true for some item, stopping at the first that does
 function any xs, test
   needList(xs)
   needFunction(test)
@@ -249,6 +264,7 @@ function any xs, test
   return false
 end any
 
+--| Whether `test` gives true for every item, stopping at the first that doesn't
 function all xs, test
   needList(xs)
   needFunction(test)
@@ -258,6 +274,7 @@ function all xs, test
   return true
 end all
 
+--| The first item for which `test` gives true, or Nothing
 function find xs, test
   needList(xs)
   needFunction(test)
@@ -267,6 +284,7 @@ function find xs, test
   return nothing
 end find
 
+--| The position of the first item equal to `value`, or 0 if there is none
 function indexOf xs, value
   needList(xs)
   put 1 into i

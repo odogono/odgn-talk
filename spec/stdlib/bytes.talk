@@ -6,6 +6,7 @@ use join from text
 
 -- Hexadecimal ----------------------------------------------------------------
 
+--| The Bytes `b` as lowercase hexadecimal text, two digits per byte
 function toHex b
   needBytes(b)
   put [] into parts
@@ -15,6 +16,7 @@ function toHex b
   return join(parts)
 end toHex
 
+--| The Bytes the hexadecimal text `t` writes
 function fromHex t
   needText(t)
   put the characters of t into cs
@@ -45,21 +47,25 @@ end hexValue
 private constant base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 private constant base64UrlAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
+--| The Bytes `b` in the base64 alphabet of RFC 4648, padded
 function toBase64 b
   needBytes(b)
   return encode64(b, base64Alphabet, true)
 end toBase64
 
+--| The Bytes the padded base64 text `t` writes
 function fromBase64 t
   needText(t)
   return decode64(t, base64Alphabet, true, "base64")
 end fromBase64
 
+--| The Bytes `b` in the base64url alphabet of RFC 4648, unpadded
 function toBase64Url b
   needBytes(b)
   return encode64(b, base64UrlAlphabet, false)
 end toBase64Url
 
+--| The Bytes the unpadded base64url text `t` writes
 function fromBase64Url t
   needText(t)
   return decode64(t, base64UrlAlphabet, false, "base64url")
@@ -145,6 +151,7 @@ private constant encodings = ["utf-8", "utf-16le", "utf-16be", "latin-1", "windo
 -- The code points of bytes 0x80 to 0x9F in the WHATWG windows-1252 index.
 private constant windows1252 = [0x20AC, 0x81, 0x201A, 0x192, 0x201E, 0x2026, 0x2020, 0x2021, 0x2C6, 0x2030, 0x160, 0x2039, 0x152, 0x8D, 0x17D, 0x8F, 0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x2DC, 0x2122, 0x161, 0x203A, 0x153, 0x9D, 0x17E, 0x178]
 
+--| The text the Bytes `b` hold in `encoding`, normalised to NFC
 function decodeText b, encoding = "utf-8", mode = "strict"
   needBytes(b)
   needText(encoding)
@@ -181,6 +188,7 @@ function decodeText b, encoding = "utf-8", mode = "strict"
   return join(parts)
 end decodeText
 
+--| The Bytes of the text `t` in `encoding`
 function encodeText t, encoding = "utf-8"
   needText(t)
   needText(encoding)

@@ -629,7 +629,8 @@ const stdlibCheck = (d: Data) => {
 
 // spec/stdlib/<library>.talk (ADR 0021): each stdlib Library's normative
 // source exports exactly what stdlib.toml lists, with the same parameters and
-// defaults. Private definitions are the source's own business.
+// defaults, and documents each export with its `gives` sentence as one `--|`
+// line. Private definitions are the source's own business.
 const stdlibSourceCheck = async (d: Data) => {
   const s = d.stdlib;
   for (const lib of s.libraries ?? []) {
@@ -641,19 +642,21 @@ const stdlibSourceCheck = async (d: Data) => {
     }
     const source = await Bun.file(file).text();
     const exported = new Map<string, string>();
-    for (const m of source.matchAll(
-      /^(private\s+)?(function|constant)\s+(\w+)(.*)$/gm,
+    const documented = new Map<string, string>();
+    for (const [, doc, priv, kind, name, tail] of source.matchAll(
+      /(?:^--\| (.*)\n)?^(private\s+)?(function|constant)\s+(\w+)(.*)$/gm,
     )) {
-      if (m[1]) {
+      if (priv) {
         continue;
       }
-      if (exported.has(m[3]!)) {
-        problems.push(`${rel}: "${m[3]}" is defined twice`);
+      documented.set(name!, doc ?? '');
+      if (exported.has(name!)) {
+        problems.push(`${rel}: "${name}" is defined twice`);
       }
-      const rest = m[4]!.trim();
+      const rest = tail!.trim();
       exported.set(
-        m[3]!,
-        m[2] === 'function' ? `${m[3]}(${rest})` : rest.replace(/^=\s*/, ''),
+        name!,
+        kind === 'function' ? `${name}(${rest})` : rest.replace(/^=\s*/, ''),
       );
     }
     const listed = (s.export ?? []).filter((e: any) => e.library === lib);
@@ -670,6 +673,10 @@ const stdlibSourceCheck = async (d: Data) => {
       } else if (!isFunction(e) && !got.includes(e.call)) {
         problems.push(
           `${rel}: the Constant "${e.name}" is \`${got}\`, but stdlib.toml gives \`${e.call}\``,
+        );
+      } else if (documented.get(e.name) !== e.gives) {
+        problems.push(
+          `${rel}: "${e.name}"'s \`--|\` documentation isn't its stdlib.toml \`gives\``,
         );
       }
     }
