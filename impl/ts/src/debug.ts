@@ -25,11 +25,19 @@ export type DebugFrame = Location & {
   owner?: number;
   role?: 'retained' | 'dispatch';
 };
+/** An effect a Rewind leaves done, so it happens again (ADR 0068). */
+export type RepeatedEffect =
+  | { id: string; kind: 'call'; op: string }
+  | { kind: 'send'; message?: string; to: string };
 export type DebugSnapshot = Omit<Inspection, 'scripts'> & {
   scripts: (Omit<Inspection['scripts'][number], 'runs'> & {
     runs: (Inspection['scripts'][number]['runs'][number] & {
       frames: DebugFrame[];
       fuel: number;
+      /** Effects so far that a Rewind would repeat; empty unless rewindable. */
+      repeated: RepeatedEffect[];
+      /** It hasn't passed a Suspension Point, so it can be rewound. */
+      rewindable: boolean;
       segment: number;
     })[];
   })[];
@@ -77,6 +85,9 @@ export class DebugController {
   private parents = new Map<string, string>();
   private landing: { hostInputIndex: number; pc: DebugInstruction } | null =
     null;
+  /** Pause at the next Run of this Script to start, once (Fix and Continue). */
+  private restart: string | null = null;
+  private readonly seen = new WeakSet<Run>();
   private pause: DebugPause | null = null;
   private pauseDepth = 0;
   private notifying = false;
@@ -137,6 +148,10 @@ export class DebugController {
   }
   stepOut(): PumpResult {
     return this.stepped('out');
+  }
+  /** Pause, as a step, at the first instruction of the Script's next new Run. */
+  pauseAtNextStart(script: string): void {
+    this.restart = script;
   }
   landAt(hostInputIndex: number, pc: DebugInstruction | number): void {
     if (typeof pc === 'number') {
@@ -236,6 +251,12 @@ export class DebugController {
     }
     if (!reason && (this.breaks.get(frame.pc) ?? []).some(matches)) {
       reason = 'breakpoint';
+    }
+    const fresh = !this.seen.has(run);
+    this.seen.add(run);
+    if (this.restart === script && fresh) {
+      this.restart = null;
+      reason ??= 'step';
     }
     const step = this.stepping;
     let follows = run.id === step?.run;

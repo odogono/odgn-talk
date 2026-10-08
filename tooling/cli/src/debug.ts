@@ -18,7 +18,8 @@ const help = `:break <line>[:<column>]  add a source breakpoint
 :runs / :mailbox / :vars  inspect the paused Group
 :errors on|off           break on caught and uncaught Errors
 :limits on|off           break on Limit Faults
-:reload                  reload the file, carrying Script Variables
+:reload                  reload the file, carrying Script Variables; while
+                         paused, rerun the paused Run on it (Fix and Continue)
 :help / :quit`;
 
 export const debugScript = async (
@@ -55,6 +56,8 @@ export const debugScript = async (
   const faults = { error: false, limitFault: false };
   let timer: ReturnType<typeof setTimeout> | undefined;
   let exitCode = 0;
+  // A Fix and Continue waiting for its y/N answer.
+  let confirming: (() => void) | null = null;
   const prompt = () => {
     if (process.stdin.isTTY) {
       rl.setPrompt('debug> ');
@@ -112,6 +115,45 @@ export const debugScript = async (
     }
     prompt();
   };
+  // Check the edit and list what will happen again, then wait for y/N
+  // (ADR 0068). Only a Run still in its first Segment can be rewound.
+  const fixAndContinue = () => {
+    const pause = debug.current!;
+    const run = debug
+      .snapshot()
+      .scripts.find(s => s.name === pause.script)!
+      .runs.find(r => r.id === pause.run)!;
+    if (!run.rewindable) {
+      throw new Error(
+        `${pause.run} has passed a Suspension Point, so it can't be rewound; :continue first`,
+      );
+    }
+    const changed = readFileSync(file, 'utf8');
+    const compiled = compileSource(changed, { name });
+    if (!compiled.unit) {
+      throw new Error(
+        `not reloaded: ${compiled.diagnostics.map(d => d.message).join('; ')}`,
+      );
+    }
+    const effects = debug
+      .repeatedEffects()
+      .map(e =>
+        e.kind === 'call'
+          ? `  call ${e.op} (${e.id})`
+          : `  send ${e.message ?? 'a message'} to ${e.to}`,
+      );
+    console.log(
+      `Fix and Continue rewinds ${pause.run} and runs its message again on the new code.`,
+    );
+    console.log(
+      effects.length
+        ? `These effects happen again:\n${effects.join('\n')}`
+        : 'No effects happen again.',
+    );
+    console.log(`Rewind ${pause.run} and reload? [y/N]`);
+    return () =>
+      show(debug.fixAndContinue(changed, 'carry variables', compiled.unit!));
+  };
   console.log(
     `NorthTalk live debugger: ${file}\n:help lists commands. :run starts a Handler.`,
   );
@@ -119,6 +161,22 @@ export const debugScript = async (
   try {
     for await (const line of rl) {
       const [command, ...args] = line.trim().split(/\s+/);
+      if (confirming) {
+        const confirmed = /^y(es)?$/i.test(line.trim());
+        const fix = confirming;
+        confirming = null;
+        try {
+          if (confirmed) {
+            fix();
+          } else {
+            console.log(`not reloaded; ${debug.current!.run} is still paused`);
+          }
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : error);
+        }
+        prompt();
+        continue;
+      }
       try {
         if (command === ':quit') {
           break;
@@ -185,6 +243,8 @@ export const debugScript = async (
           )) {
             console.log(row);
           }
+        } else if (command === ':reload' && debug.isPaused) {
+          confirming = fixAndContinue();
         } else if (command === ':reload') {
           const changed = readFileSync(file, 'utf8');
           script.reload(changed, 'carry variables');

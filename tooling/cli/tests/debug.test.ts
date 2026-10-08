@@ -161,3 +161,128 @@ for (const alias of ['same', 'relative', 'symlink', 'hardlink']) {
     }
   });
 }
+
+// Drive the debugger a step at a time: write each input, then read stdout
+// until its expected text, so a test can edit the file while paused.
+const session = async (
+  file: string,
+  steps: { edit?: string; input: string; until?: string }[],
+) => {
+  const child = Bun.spawn([process.execPath, main, 'debug', file], {
+    stdin: 'pipe',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const reader = child.stdout.getReader();
+  const decoder = new TextDecoder();
+  let output = '';
+  try {
+    for (const step of steps) {
+      if (step.edit !== undefined) {
+        writeFileSync(file, step.edit);
+      }
+      child.stdin.write(step.input);
+      child.stdin.flush();
+      while (step.until && !output.includes(step.until)) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          throw new Error(`Debugger ended before "${step.until}": ${output}`);
+        }
+        output += decoder.decode(chunk.value, { stream: true });
+      }
+    }
+    child.stdin.end();
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      output += decoder.decode(chunk.value, { stream: true });
+    }
+    return {
+      code: await child.exited,
+      output,
+      errors: await new Response(child.stderr).text(),
+    };
+  } finally {
+    child.kill();
+  }
+};
+
+const sending =
+  'script variable n = 0\non go\n send ping to me\n put 1 into n\n return n\nend\non ping\nend';
+
+test('debug CLI :reload while paused is Fix and Continue', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));
+  const file = join(dir, 'fix.talk');
+  writeFileSync(file, sending);
+  try {
+    const { code, output, errors } = await session(file, [
+      { input: ':break 4\n:run go\n', until: 'paused breakpoint fix:4:' },
+      {
+        edit: sending.replace('put 1', 'put 2'),
+        input: ':reload\n',
+        until: '[y/N]',
+      },
+      { input: 'y\n', until: 'paused step fix:' },
+      { input: ':vars\n:clear\n:continue\n:quit\n' },
+    ]);
+    expect(code).toBe(0);
+    expect(output).toContain('happen again:\n  send ping to fix');
+    expect(output).toContain('paused step fix:3:15 fix/r2');
+    expect(output).toContain('[fix] n = 0');
+    // go runs again first, from the head of the mailbox; then both pings
+    // run, the first rewound Run's and the rerun's.
+    expect(output).toContain(
+      'fix/r2 completed 2\nfix/r3 completed nothing\nfix/r4 completed nothing',
+    );
+    expect(errors).toBe('');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('debug CLI keeps the paused Run when Fix and Continue is declined', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));
+  const file = join(dir, 'fix.talk');
+  writeFileSync(file, sending);
+  try {
+    const { output, errors } = await session(file, [
+      { input: ':break 4\n:run go\n', until: 'paused breakpoint fix:4:' },
+      {
+        edit: sending.replace('put 1', 'put 2'),
+        input: ':reload\n',
+        until: '[y/N]',
+      },
+      { input: '\n', until: 'not reloaded' },
+      { input: ':continue\n', until: 'completed 1' },
+      // Not paused, :reload is an ordinary Reload.
+      { input: ':reload\n', until: 'reloaded' },
+      { input: ':quit\n' },
+    ]);
+    expect(output).toContain('fix/r1 completed 1');
+    expect(errors).toBe('');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('debug CLI refuses Fix and Continue past a Suspension Point', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));
+  const file = join(dir, 'fix.talk');
+  const waiting =
+    'script variable n = 0\non go\n wait 1 ms\n put 1 into n\nend';
+  writeFileSync(file, waiting);
+  try {
+    const { output, errors } = await session(file, [
+      { input: ':break 4\n:run go\n', until: 'paused breakpoint fix:4:' },
+      { input: ':reload\n:continue\n:quit\n' },
+    ]);
+    expect(errors).toContain(
+      "fix/r1 has passed a Suspension Point, so it can't be rewound; :continue first",
+    );
+    expect(output).not.toContain('[y/N]');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

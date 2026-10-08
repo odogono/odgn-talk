@@ -1,5 +1,14 @@
 import { expect, test } from 'bun:test';
-import { compileSource, newGroup, num } from '@odgn/northtalk';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  compileSource,
+  defineCapability,
+  newGroup,
+  num,
+} from '@odgn/northtalk';
+import { replay } from '../../../impl/ts/tools/trace-case';
 import { LiveDebugger, renderDebugView } from '../src/debug';
 import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';
 
@@ -201,4 +210,108 @@ test('paused-time subtraction cannot make a coarse Host Clock go backwards', () 
   debug.clearBreakpoints();
   debug.resume();
   expect(() => debug.pump()).not.toThrow();
+});
+
+// Fix and Continue (ADR 0068): `go` makes a fire-and-forget call, then pauses
+// at line 4, still in its first Segment.
+const logged =
+  'script variable n = 0\non go\n  tell log to write\n  put 1 into n\n  return n\nend';
+const fixedLog = logged.replace('put 1', 'put 2');
+const loggingSetup = () => {
+  const trace: string[] = [];
+  const log = defineCapability('log', {
+    write: { mode: 'fire-and-forget', cost: { fuel: 1 }, fire: () => {} },
+  });
+  const group = newGroup({ name: 'g', trace: line => trace.push(line) });
+  const script = group.load({
+    name: 's',
+    source: logged,
+    grants: { log: log.grant('all', undefined) },
+  });
+  const debug = new LiveDebugger(group, { now: () => 0n });
+  debug.registerSource(compileSource(logged, { name: 's' }).unit!, 's');
+  debug.setBreakpoints([{ unit: 's', script: 's', line: 4 }]);
+  return { script, debug, trace };
+};
+
+test('Fix and Continue reruns the paused message on the edited code', () => {
+  const { script, debug } = loggingSetup();
+  script.deliver({ name: 'go' });
+  expect(debug.pump()).toMatchObject({ state: 'paused' });
+  expect(debug.repeatedEffects()).toEqual([
+    { kind: 'call', id: 's/r1.c1', op: 'log.write' },
+  ]);
+  const restarted = debug.fixAndContinue(
+    fixedLog,
+    'carry variables',
+    compileSource(fixedLog, { name: 's' }).unit!,
+  );
+  // Paused at the first instruction of the Run that runs d1 again.
+  expect(restarted).toMatchObject({
+    state: 'paused',
+    pause: { run: 's/r2', reason: 'step' },
+  });
+  expect(renderDebugView(debug.snapshot(), 'vars')).toEqual(['[s] n = 0']);
+  debug.clearBreakpoints();
+  const done = debug.resume();
+  expect(done.state).toBe('idle');
+  const ended =
+    done.state !== 'paused' && done.reports.find(r => r.kind === 'run end');
+  expect(
+    ended && ended.kind === 'run end' && ended.result?.equals(num(2)),
+  ).toBe(true);
+});
+
+test('Fix and Continue refuses a Run past its first Segment', () => {
+  const { debug, script } = setup(
+    'on go\n  wait 1 ms\n  put 1 into n\n  return n\nend',
+  );
+  debug.setBreakpoints([{ unit: 's', script: 's', line: 3 }]);
+  script.deliver({ name: 'go' });
+  debug.pump();
+  expect(debug.pump(2_000_000n).state).toBe('paused');
+  expect(() =>
+    debug.fixAndContinue(
+      'on go\nend',
+      'reset variables',
+      compileSource('on go\nend', { name: 's' }).unit!,
+    ),
+  ).toThrow('passed a Suspension Point');
+  expect(debug.isPaused).toBe(true);
+});
+
+test('a Rewind landed at a live breakpoint replays at the same instruction', () => {
+  const { script, debug, trace } = loggingSetup();
+  script.deliver({ name: 'go' });
+  debug.pump();
+  debug.fixAndContinue(
+    fixedLog,
+    'carry variables',
+    compileSource(fixedLog, { name: 's' }).unit!,
+  );
+  debug.clearBreakpoints();
+  debug.resume();
+  expect(trace.find(l => l.startsWith('> rewind-run'))).toMatch(/ pc=\d+$/);
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-fix-'));
+  try {
+    writeFileSync(join(dir, 's.talk'), logged);
+    const setup = {
+      kind: 'trace',
+      versions: { language: '1.0-rc.2', costModel: '0' },
+      operations: [
+        {
+          capability: 'log',
+          name: 'write',
+          mode: 'fire-and-forget',
+          cost: { fuel: 1 },
+        },
+      ],
+      scripts: [
+        { name: 's', source: 's.talk', grants: { log: { ops: 'all' } } },
+      ],
+    };
+    expect(replay(dir, setup as never, trace)).toEqual(trace);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
 });

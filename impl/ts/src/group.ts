@@ -20,6 +20,7 @@ import {
   statementStarts,
   type DebugPause,
   type DebugSnapshot,
+  type RepeatedEffect,
   type DebugSource,
 } from './debug';
 // The embedding interface's Group (chapter 9) for the Core's implemented
@@ -1998,9 +1999,13 @@ export class Group {
   // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
   private queueInput(input: QueuedInput): void {
     const landing = this.debugController?.current;
+    // An input made at any pause lands there, between instructions, so its
+    // line carries the instruction for replay (chapter 11).
     if (
-      landing?.reason === 'replay' &&
-      (input.action.k === 'stop' || input.action.k === 'cancel-run') &&
+      landing &&
+      (input.action.k === 'stop' ||
+        input.action.k === 'cancel-run' ||
+        input.action.k === 'rewind-run') &&
       typeof input.line === 'string'
     ) {
       input.line += ` pc=${landing.pc}`;
@@ -4718,6 +4723,29 @@ export class Group {
     };
   }
 
+  /** A Run's calls and sends that a Rewind leaves done (ADR 0068). */
+  private repeatedEffects(s: ScriptState, run: Run): RepeatedEffect[] {
+    return run.records.flatMap((r): RepeatedEffect[] => {
+      if (r.kind === 'send') {
+        return [
+          {
+            kind: 'send',
+            to: r.to,
+            ...(r.message ? { message: r.message } : {}),
+          },
+        ];
+      }
+      if (r.kind !== 'call' || r.automatic) {
+        return [];
+      }
+      const [grant, op] = r.op.split('.') as [string, string];
+      const declared = s.grants.get(grant)?.capability.operations.get(op);
+      return declared && 'segmentBound' in declared && declared.segmentBound
+        ? []
+        : [{ kind: 'call', id: r.id, op: r.op }];
+    });
+  }
+
   private debugSnapshot(): DebugSnapshot {
     const view = this.inspection();
     return {
@@ -4730,6 +4758,10 @@ export class Group {
           return {
             ...view,
             fuel: run.fuel,
+            rewindable: run.rewindable,
+            repeated: run.rewindable
+              ? this.repeatedEffects(this.scripts[i]!, run)
+              : [],
             segment: Number(run.segmentId.split('.s')[1]),
             frames: run.debugFrames().map(({ frame, ...control }) => {
               const ins = frame.code.unit.code[frame.pc]!;

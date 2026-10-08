@@ -243,7 +243,12 @@ load or argument failures give 2. Invalid interactive commands print an error
 and keep the prompt available.
 
 `:reload` reads the file again and uses Reload with `carry variables`, then
-rebinds breakpoints. First resume any paused Pump to completion. The CLI never
+rebinds breakpoints. While paused, it is Fix and Continue (ADR 0068): if the
+paused Run hasn't passed a Suspension Point and the edit compiles, it lists the
+calls and sends that will happen again and asks `[y/N]`. On `y` it rewinds the
+Run, reloads keeping the mailbox, and pauses at the first instruction of the
+Run that takes its message again; anything else keeps the pause. A Run past a
+Suspension Point is refused; `:continue` it first. The CLI never
 writes the source or sets Variables. This minimal Bun Host loads one Script,
 without Grants, Host Objects or user Libraries, and delivers messages without
 arguments. For richer Hosts and worker integration, use the
