@@ -41,7 +41,7 @@ func TestScopeDefinitionsAndGrantDependencies(t *testing.T) {
 	if _, err := s.Deliver(Message{Name: "go"}); err != nil {
 		t.Fatal(err)
 	}
-	if r, err := g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil || len(r.Reports) != 1 {
+	if r, err := g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
 }
@@ -106,7 +106,7 @@ func TestScopeAllowsLocalWaitMarkedCallsAndRefusesJoinAcquisition(t *testing.T) 
 			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 			v, failure := p.Result()
 			if joining {
-				if err != nil || failure == nil || r.Reports[0].(*RunEnd).Error.Code != "scope in join" || opened != 0 {
+				if err != nil || failure == nil || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "scope in join" || opened != 0 {
 					t.Fatal(r, err, failure, opened)
 				}
 			} else if err != nil || failure != nil || v.String() != "7" || opened != 1 {
@@ -136,7 +136,7 @@ func TestScopeRejectsForeignFunctionWaitBeforeDelivery(t *testing.T) {
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	_, failure := p.Result()
-	if err != nil || failure == nil || r.Reports[0].(*RunEnd).Error.Code != "scope open" || home.Counters().Runs != 1 {
+	if err != nil || failure == nil || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "scope open" || home.Counters().Runs != 1 {
 		t.Fatal(r, err, failure, home.Counters())
 	}
 }
@@ -250,16 +250,16 @@ func TestScopeAutomaticContractsAndDisabledReload(t *testing.T) {
 			now := time.Unix(1, 0)
 			r, err := g.Pump(now, PumpOptions{})
 			_, failure := p.Result()
-			if err != nil || failure != nil || len(r.Reports) != 2 || closed != 1 {
+			if err != nil || failure != nil || len(operationalReports(r.Reports)) != 2 || closed != 1 {
 				t.Fatal(r, err, failure, closed)
 			}
-			effect, ok := r.Reports[0].(*EffectFailure)
+			effect, ok := operationalReports(r.Reports)[0].(*EffectFailure)
 			status := EffectUnknown
 			if contract == "declared error" {
 				status = EffectFailed
 			}
 			if !ok || effect.Status != status || effect.Phase != "abandon" || effect.Scope != "file" {
-				t.Fatal(r.Reports)
+				t.Fatal(operationalReports(r.Reports))
 			}
 			if !slices.Equal(g.Inspect().Scripts[0].DisabledGrants, []string{"r"}) {
 				t.Fatal(g.Inspect())
@@ -280,7 +280,7 @@ func TestScopeAutomaticContractsAndDisabledReload(t *testing.T) {
 			if err != nil || failure == nil || failure.Data.String() == "nothing" || r.FuelUsed != 8 || closed != 1 {
 				t.Fatal(r, err, failure, closed)
 			}
-			if end := r.Reports[0].(*RunEnd); end.Error.Code != "capability disabled" {
+			if end := operationalReports(r.Reports)[0].(*RunEnd); end.Error.Code != "capability disabled" {
 				t.Fatal(end)
 			}
 		})
@@ -350,7 +350,7 @@ func TestScopeGuardPaysLocalHandlerDispatch(t *testing.T) {
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	// 4 outer dispatch + 11 acquisition/conversion + 1 drop + 8 local
 	// call + 4 helper dispatch + 8 unwind. The guarded wait costs nothing.
-	if err != nil || r.FuelUsed != 36 || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Error.Code != "scope open" {
+	if err != nil || r.FuelUsed != 36 || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "scope open" {
 		t.Fatal(r, err)
 	}
 }
@@ -383,7 +383,7 @@ func TestScopeStopAcknowledgesAcquisitionBeforeCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || r.State != Stopped || len(r.Reports) != 1 || opened == nil || abandoned == nil {
+	if err != nil || r.State != Stopped || len(operationalReports(r.Reports)) != 1 || opened == nil || abandoned == nil {
 		t.Fatal(r, err, opened, abandoned)
 	}
 	if opened.Automatic() || !abandoned.Automatic() || opened.ScopeName() != "file" || abandoned.ScopeName() != "file" || abandoned.ID() == opened.ID() || abandoned.RunID() != opened.RunID() || abandoned.SegmentID() != opened.SegmentID() || abandoned.Binding() != "binding" || s.Counters().AllocTotal != 0 {

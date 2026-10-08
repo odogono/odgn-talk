@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   compileLibrary,
@@ -245,7 +246,9 @@ test.each([false, true])(
         })
         .deliver({ name: 'go' });
       const result = group.pump(now);
-      expect(result.reports.find(r => r.kind === 'run end')).toMatchObject({
+      expect(
+        operationalReports(result.reports).find(r => r.kind === 'run end'),
+      ).toMatchObject({
         outcome: ending.startsWith('fault') ? 'limit fault' : 'completed',
       });
       expect(open).toBe(false);
@@ -383,7 +386,9 @@ test('repair followed by a fresh Script load recovers the Grant without resettin
   group.pump(now);
   damaged = false;
   script.deliver({ name: 'go' });
-  const refused = group.pump(now).reports.find(r => r.kind === 'run end');
+  const refused = operationalReports(group.pump(now).reports).find(
+    r => r.kind === 'run end',
+  );
   expect(refused).toMatchObject({
     outcome: 'errored',
     error: { code: 'capability disabled' },
@@ -391,9 +396,9 @@ test('repair followed by a fresh Script load recovers the Grant without resettin
   group
     .load({ name: 'fresh', source, grants: { r: grant } })
     .deliver({ name: 'go' });
-  expect(group.pump(now).reports.find(r => r.kind === 'run end')).toMatchObject(
-    { outcome: 'completed' },
-  );
+  expect(
+    operationalReports(group.pump(now).reports).find(r => r.kind === 'run end'),
+  ).toMatchObject({ outcome: 'completed' });
   expect(acquired).toBe(2);
   expect(group.inspect().scripts.map(s => s.disabledGrants ?? [])).toEqual([
     ['r'],

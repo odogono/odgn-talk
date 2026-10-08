@@ -330,19 +330,23 @@ Snapshots retain preempted and suspended Runs, including their rollback bases.
 
 ## Save, restore and code updates
 
-`Group.Save` returns opaque `go/2` bytes for a Quiescent Group. It retains the
+Public Run accounting is returned by Pump, Reload, Library replacement and Restore.
+Dispatch/discard events precede cumulative Fuel and causal queue counts; observation
+charges, detached sends and error Handlers are included without adding Trace records.
+
+`Group.Save` returns opaque `go/3` bytes for a Quiescent Group. It retains the
 Clock, sources and extensions, heap Values and closures, frames and rollback
 bases, dispatch contexts and activations, owner identities, pending transfers,
 cleanup progress and attempt counters, budgets and slice debt, ordered work and input queues, pending replies,
-Decisions and Broadcasts, Objects and Grant state. It never starts work, drains
+Decisions and Broadcasts, causal ancestry and accounting order, Objects and Grant state. It never starts work, drains
 inputs or calls Host cleanup. Live scopes or participants, including unresolved
 external effect state, refuse Save with `effects pending`.
 
 `Core.Restore` rebuilds code and checks the saved Group Fingerprint against
 current language/cost versions, Library identities, Grant declarations and
 limits. Saves are specific to the Go Core family and format; corrupt or
-unreadable bytes return `invalid save`. Format `go/1` is no longer readable;
-`go/2` requires transfer references to belong to surviving dispatch contexts,
+unreadable bytes return `invalid save`. Formats `go/1` and `go/2` are no longer readable. Format `go/3` requires
+causal accounting state as well as transfer references to belong to surviving dispatch contexts,
 including after cancellation. Restore validates retained and active code/body/PC
 references, shared owner-local layouts, phases, action arguments, cleanup tables
 and acyclic ownership before rebuilding aliases. Native Object bindings, Host functions,

@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   newGroup,
@@ -102,7 +103,7 @@ describe('save and full restore', () => {
     const { group: copy } = restore(g.save(), options(resumed));
     original.length = 0;
     resumed.length = 0;
-    expect(copy.pump(0n).reports[0]).toMatchObject({
+    expect(operationalReports(copy.pump(0n).reports)[0]).toMatchObject({
       delivery: 'd1',
       outcome: 'completed',
     });
@@ -210,7 +211,7 @@ describe('pending calls after restore', () => {
     expect(calls[2]!.id).toBe('s/r1.c1');
     expect(calls[2]!.now).toBe(5_000_000_000n);
     adopted.answer(num(7));
-    const r = copy.pump(6_000_000_000n).reports[0]!;
+    const r = operationalReports(copy.pump(6_000_000_000n).reports)[0]!;
     expect(r).toMatchObject({ delivery: 'd2', outcome: 'completed' });
   });
 });
@@ -245,7 +246,7 @@ describe('restore compatibility and durable values', () => {
     });
     expect(copy.inspect().scripts[0]!.vars[0]![1].toString()).toBe('1');
     expect(copy.script('s')!.deliver({ name: 'go' })).toBe('d3');
-    expect(copy.pump(1n).reports).toEqual([]);
+    expect(operationalReports(copy.pump(1n).reports)).toEqual([]);
   });
 
   test('unbound Grants keep their declarations and unresolved objects become disposed', () => {
@@ -300,7 +301,9 @@ describe('restore compatibility and durable values', () => {
     copy.script('s')!.deliver({ name: 'answer', args: [num(3)] });
     copy.pump(1n);
     copy.script('s')!.deliver({ name: 'useit' });
-    const r = copy.pump(2n).reports.find(r => r.kind === 'run end')!;
+    const r = operationalReports(copy.pump(2n).reports).find(
+      r => r.kind === 'run end',
+    )!;
     expect('result' in r && r.result!.toString()).toBe('7');
     const extra = compileLibrary({
       name: 'extra',
@@ -313,7 +316,9 @@ describe('restore compatibility and durable values', () => {
       onMismatch: 'variables only',
     });
     changed.script('s')!.deliver({ name: 'useit' });
-    expect(changed.pump(1n).reports[0]).toMatchObject({ outcome: 'errored' });
+    expect(operationalReports(changed.pump(1n).reports)[0]).toMatchObject({
+      outcome: 'errored',
+    });
   });
 
   test('a changed Operation declaration is a mismatch and bindings are never saved', () => {
@@ -349,7 +354,7 @@ test('deep values restore without a JavaScript recursion limit', () => {
   }
   g.script('s')!.deliver({ name: 'echo', args: [value] });
   const { group: copy } = restore(g.save(), options([]));
-  const r = copy.pump(0n).reports[0]!;
+  const r = operationalReports(copy.pump(0n).reports)[0]!;
   expect('result' in r && r.result!.equals(value)).toBe(true);
 });
 
@@ -395,7 +400,7 @@ test('variables-only restore reports discarded and queued Decisions with their S
     libraries: [library],
     onMismatch: 'variables only',
   });
-  const reports = copy.pump(1n).reports;
+  const reports = operationalReports(copy.pump(1n).reports);
   expect(reports.filter(r => r.kind === 'decided')).toMatchObject([
     {
       delivery: 'd1',
@@ -438,14 +443,23 @@ test('reissue Charge counts against Pump cap, Script slice and later debt', () =
     },
   });
   const grant = cap.grant('all', undefined);
-  const { group: copy } = restore(pendingGroup(grant).save(), {
-    ...options([]),
-    grants: () => grant,
-  });
+  const { group: copy, result: baseline } = restore(
+    pendingGroup(grant).save(),
+    {
+      ...options([]),
+      grants: () => grant,
+    },
+  );
   reissued = true;
   copy.settle('s/r1.c1', { reissue: true });
   copy.script('s')!.deliver({ name: 'go' });
-  expect(copy.pump(1n, { fuelCap: 10, fuelSlice: 10 })).toMatchObject({
+  const pumped = copy.pump(1n, { fuelCap: 10, fuelSlice: 10 });
+  const before = baseline.reports.find(r => r.kind === 'run accounting')!;
+  expect(pumped.reports.find(r => r.kind === 'run accounting')).toMatchObject({
+    run: 's/r1',
+    fuel: before.fuel + 50,
+  });
+  expect(pumped).toMatchObject({
     fuelUsed: 50,
     state: 'sliced',
   });
@@ -470,7 +484,7 @@ test('queued reissue and adopt stay settled through another save before Pump', (
     expect(() => again.settle('s/r1.c1', { reissue: true })).toThrow(
       'unknown call',
     );
-    expect(again.pump(1n).reports).toEqual([]);
+    expect(operationalReports(again.pump(1n).reports)).toEqual([]);
   }
 });
 
@@ -604,9 +618,8 @@ test('pending and lost calls use numeric Run counters after the Script name', ()
     Array.from({ length: 11 }, (_, i) => `s/r${i + 1}.c1`),
   );
   expect(
-    copy
-      .pump(2n)
-      .reports.filter(r => r.kind === 'run end')
+    operationalReports(copy.pump(2n).reports)
+      .filter(r => r.kind === 'run end')
       .map(r => r.run),
   ).toEqual(Array.from({ length: 11 }, (_, i) => `s/r${i + 1}`));
 });
@@ -620,11 +633,15 @@ test('partly sealed Broadcasts keep their ballots and discarded reports survive 
   });
   g.decideBroadcast({ name: 'go' });
   expect(
-    g.pump(0n, { fuelSlice: 30 }).reports.filter(r => r.kind === 'decided'),
+    operationalReports(g.pump(0n, { fuelSlice: 30 }).reports).filter(
+      r => r.kind === 'decided',
+    ),
   ).toEqual([]);
   const bytes = g.save();
   const { group: full } = restore(bytes, options([]));
-  expect(full.pump(1n).reports.find(r => r.kind === 'decided')).toMatchObject({
+  expect(
+    operationalReports(full.pump(1n).reports).find(r => r.kind === 'decided'),
+  ).toMatchObject({
     broadcast: 'b1',
     verdict: 'vetoed',
     vetoes: [{ script: 'a' }],
@@ -642,7 +659,9 @@ test('partly sealed Broadcasts keep their ballots and discarded reports survive 
   };
   const { group: variables } = restore(bytes, settings);
   const { group: again } = restore(variables.save(), settings);
-  expect(again.pump(1n).reports.find(r => r.kind === 'decided')).toMatchObject({
+  expect(
+    operationalReports(again.pump(1n).reports).find(r => r.kind === 'decided'),
+  ).toMatchObject({
     broadcast: 'b1',
     verdict: 'vetoed',
     vetoes: [{ script: 'a', run: 'a/r1' }],
@@ -702,7 +721,7 @@ test('a backwards restored Pump records its refusal and keeps queued work', () =
     '> pump clock=1970-01-01T00:00:00.000000004Z',
     'refused code="clock backwards"',
   ]);
-  expect(copy.pump(5n).reports[0]).toMatchObject({
+  expect(operationalReports(copy.pump(5n).reports)[0]).toMatchObject({
     outcome: 'completed',
     delivery: 'd1',
   });
@@ -744,7 +763,9 @@ test('reissue Fuel exhaustion preserves committed variables and abandons its Cal
   });
   reissued = true;
   copy.settle('s/r1.c1', { reissue: true });
-  expect(copy.pump(1n).reports[0]).toMatchObject({ outcome: 'limit fault' });
+  expect(operationalReports(copy.pump(1n).reports)[0]).toMatchObject({
+    outcome: 'limit fault',
+  });
   expect(copy.inspect().scripts[0]!.vars[0]![1].toString()).toBe('9');
   expect(signal!.aborted).toBe(true);
   expect(lines).toContain('abandon s/r1.c1');

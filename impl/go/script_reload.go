@@ -53,7 +53,9 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	if e != nil {
 		return nil, e
 	}
-	return s.applyReload(state, source)
+	reports, err := s.applyReload(state, source)
+	g.flushAccounting(&reports)
+	return reports, err
 }
 
 func (s *Script) prepareReload(source string, carry CarryOver) (*machine.State, error) {
@@ -139,6 +141,11 @@ func (s *Script) applyReload(state *machine.State, source string) ([]Report, err
 	s.runs = nil
 	s.active = nil
 	for _, x := range runs {
+		reason := "reload"
+		if g.accountingDiscardReason != "" {
+			reason = g.accountingDiscardReason
+		}
+		g.accountEnd(x, "discarded", reason, &reports)
 		stop.DiscardedRuns = append(stop.DiscardedRuns, x.id)
 		// Keep the same call order as the machine, including Script replies.
 		if x.waitCall != "" {
@@ -165,6 +172,7 @@ func (s *Script) applyReload(state *machine.State, source string) ([]Report, err
 			continue
 		}
 		d := item.delivery
+		g.accountDrop(d)
 		g.release(s)
 		if d.id != "" {
 			stop.DroppedMessages = append(stop.DroppedMessages, d.id)

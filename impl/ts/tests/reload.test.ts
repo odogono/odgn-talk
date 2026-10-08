@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   compileLibrary,
@@ -39,13 +40,15 @@ describe('Reload', () => {
       'script variable n = 8\nscript variable fresh = 2\non go\n  return n + fresh\nend go',
       'carry variables',
     );
-    expect(reports).toMatchObject([{ kind: 'stop', reason: 'reload' }]);
+    expect(operationalReports(reports)).toMatchObject([
+      { kind: 'stop', reason: 'reload' },
+    ]);
     expect(vars(g)).toEqual([
       ['n', '4'],
       ['fresh', '2'],
     ]);
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { run: 's/r2', outcome: 'completed' },
     ]);
     s.reload('script variable n = 8', 'reset variables');
@@ -97,7 +100,7 @@ describe('Reload', () => {
       'script variable n = 2\non go, deciding\n  veto "new"\nend go',
       'carry variables',
     );
-    expect(reports).toMatchObject([
+    expect(operationalReports(reports)).toMatchObject([
       { kind: 'stop', discardedRuns: ['s/r1'], pendingCalls: ['s/r1.c1'] },
     ]);
     expect(pending.signal.aborted).toBe(true);
@@ -137,13 +140,13 @@ describe('Reload', () => {
     g.pump(0n);
     s.reload(source, 'carry variables');
     s.deliver({ name: 'useit' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect(r).toMatchObject({ outcome: 'errored' });
     expect('error' in r && r.error!.code).toBe('function gone');
     s.deliver({ name: 'make' });
     g.pump(0n);
     s.deliver({ name: 'useit' });
-    const good = g.pump(0n).reports[0]!;
+    const good = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in good && good.result!.toString()).toBe(num(3).toString());
   });
 });
@@ -167,7 +170,7 @@ describe('Extend', () => {
       ['fresh', '7'],
     ]);
     s.deliver({ name: 'newone' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
     g.pump(1_000_000_000n);
     expect(vars(g)[0]).toEqual(['n', '13']);
@@ -192,7 +195,7 @@ describe('Extend', () => {
       'on later 1\n  hold and wait\nend later\non later value\n  return value\nend later',
     );
     s.deliver({ name: 'later', args: [num(2)] });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('2');
   });
 
@@ -264,7 +267,14 @@ describe('Library replacement', () => {
       version: '2',
       source: 'function count\n  return 7\nend count',
     });
-    expect(g.replaceLibrary(replacement, 'carry variables')).toMatchObject([
+    const replacementReports = g.replaceLibrary(replacement, 'carry variables');
+    expect(
+      replacementReports.find(r => r.kind === 'run discarded'),
+    ).toMatchObject({ run: 'a/r1', reason: 'library replacement' });
+    expect(
+      replacementReports.find(r => r.kind === 'run accounting'),
+    ).toMatchObject({ run: 'a/r1', state: 'discarded' });
+    expect(operationalReports(replacementReports)).toMatchObject([
       { kind: 'stop', script: 'a', discardedRuns: ['a/r1'] },
       { kind: 'stop', script: 'b' },
     ]);
@@ -274,9 +284,9 @@ describe('Library replacement', () => {
     ]);
     a.deliver({ name: 'go' });
     b.deliver({ name: 'go' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
-    const later = g.pump(1_000_000_000n).reports[0]!;
+    const later = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
     expect('result' in later && later.result!.toString()).toBe('22');
   });
 
@@ -304,14 +314,14 @@ describe('Library replacement', () => {
       'unknown import',
     );
     expect(trace.some(l => l.startsWith('stopped '))).toBe(false);
-    const r = g.pump(1_000_000_000n).reports[0]!;
+    const r = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('1');
     const next = g.load({
       name: 'next',
       source: 'use count from base\non go\n  return count()\nend go',
     });
     next.deliver({ name: 'go' });
-    const good = g.pump(1_000_000_000n).reports[0]!;
+    const good = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
     expect('result' in good && good.result!.toString()).toBe('1');
   });
 });
@@ -333,11 +343,11 @@ describe('code-change boundaries', () => {
       'nothing',
     ]);
     s.deliver({ name: 'one' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('8');
     s.extend('on two\n  return f(2)\nend two');
     s.deliver({ name: 'two' });
-    const later = g.pump(0n).reports[0]!;
+    const later = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in later && later.result!.toString()).toBe('6');
   });
 
@@ -354,7 +364,7 @@ describe('code-change boundaries', () => {
     expect(vars(g)).toEqual([['n', '"abcdefghij"']]);
     s.extend('on go\n  return 1 / 0\nend go');
     s.deliver({ name: 'go' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('error' in r && r.error!.data.get('at').get('unit').toString()).toBe(
       '"s+1"',
     );
@@ -395,7 +405,7 @@ describe('code-change boundaries', () => {
       source: 'use total from middle\non go\n  return total()\nend go',
     });
     s.deliver({ name: 'go' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('1');
   });
 });
@@ -436,14 +446,14 @@ describe('review regressions', () => {
     g.load({ name: 'n', source: '' });
     s.extend('on go\n  return n + s\nend go');
     s.deliver({ name: 'go' });
-    let r = g.pump(0n).reports[0]!;
+    let r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
     s.reload(
       'script variable n = 1\nscript variable s = 2\non go\n  return n + s\nend go',
       'carry variables',
     );
     s.deliver({ name: 'go' });
-    r = g.pump(0n).reports[0]!;
+    r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
   });
 
@@ -470,13 +480,13 @@ describe('review regressions', () => {
         'script variable f = (given x: x + 1)\non getit\n  return f\nend getit',
     });
     s.deliver({ name: 'getit' });
-    const old = g.pump(0n).reports[0]!;
+    const old = operationalReports(g.pump(0n).reports)[0]!;
     s.reload(
       'script variable f = (given x: x + 2)\non getit\n  return f\nend getit',
       'reset variables',
     );
     s.deliver({ name: 'getit' });
-    const fresh = g.pump(0n).reports[0]!;
+    const fresh = operationalReports(g.pump(0n).reports)[0]!;
     expect(
       'result' in old && 'result' in fresh && old.result!.equals(fresh.result!),
     ).toBe(false);
@@ -486,11 +496,11 @@ describe('review regressions', () => {
     );
     s.deliver({ name: 'named' });
     s.deliver({ name: 'same' });
-    let r = g.pump(0n).reports[1]!;
+    let r = operationalReports(g.pump(0n).reports)[1]!;
     expect('result' in r && r.result!.toString()).toBe('true');
     s.extend('on fresh\n  return 1\nend fresh');
     s.deliver({ name: 'same' });
-    r = g.pump(0n).reports[0]!;
+    r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('true');
   });
 
@@ -501,7 +511,7 @@ describe('review regressions', () => {
       'function plus x\n  return x + 1\nend plus\non getfn\n  return [plus, (given x: x + 1)]\nend getfn',
     );
     s.deliver({ name: 'getfn' });
-    const r = g.pump(0n).reports[0]!;
+    const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe(
       '[<function s:plus>, <function s+1:5:18>]',
     );

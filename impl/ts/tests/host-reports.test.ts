@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -39,7 +40,10 @@ describe('call failed reports', () => {
       grants: { store: db.grant('all', undefined) },
     }).deliver({ name: 'go' });
     const { reports } = g.pump(now);
-    expect(kinds(reports)).toEqual(['call failed', 'run end']);
+    expect(kinds(operationalReports(reports))).toEqual([
+      'call failed',
+      'run end',
+    ]);
     const [failed] = failures(reports);
     expect(failed).toMatchObject({
       kind: 'call failed',
@@ -53,10 +57,14 @@ describe('call failed reports', () => {
     const id = failed!.kind === 'call failed' ? failed!.call : '';
     expect(lines).toContain(`call-failed ${id} op=store.get`);
     // The Script sees only `host error`, with no Host detail.
-    expect(reports[1]).toMatchObject({ kind: 'run end', outcome: 'completed' });
-    expect(
-      reports[1]!.kind === 'run end' && reports[1]!.result?.toString(),
-    ).toBe('"host error"');
+    expect(operationalReports(reports)[1]).toMatchObject({
+      kind: 'run end',
+      outcome: 'completed',
+    });
+    const end = operationalReports(reports)[1]!;
+    expect(end.kind === 'run end' && end.result?.toString()).toBe(
+      '"host error"',
+    );
   });
 
   test('a result that breaks its Shape is reported as the Host fault it is', () => {
@@ -75,12 +83,17 @@ describe('call failed reports', () => {
       grants: { db: db.grant('all', undefined) },
     }).deliver({ name: 'go' });
     const { reports } = g.pump(now);
-    expect(kinds(reports)).toEqual(['call failed', 'run end']);
+    expect(kinds(operationalReports(reports))).toEqual([
+      'call failed',
+      'run end',
+    ]);
     expect(failures(reports)[0]).toMatchObject({
       script: 's',
       operation: { capability: 'db', operation: 'count' },
     });
-    expect(reports[1]).toMatchObject({ outcome: 'errored' });
+    expect(operationalReports(reports)[1]).toMatchObject({
+      outcome: 'errored',
+    });
   });
 
   test("a suspending call's undeclared failure is reported by the Pump that resumes it", () => {
@@ -101,10 +114,13 @@ describe('call failed reports', () => {
       source: 'on go\n  ask web to fetch and wait\nend go',
       grants: { web: http.grant('all', undefined) },
     }).deliver({ name: 'go' });
-    expect(failures(g.pump(now).reports)).toEqual([]);
+    expect(failures(operationalReports(g.pump(now).reports))).toEqual([]);
     pending!.fail(new ScriptError('teapot', 'short and stout'));
     const { reports } = g.pump(now);
-    expect(kinds(reports)).toEqual(['call failed', 'run end']);
+    expect(kinds(operationalReports(reports))).toEqual([
+      'call failed',
+      'run end',
+    ]);
     const [failed] = failures(reports);
     expect(failed).toMatchObject({
       call: pending!.id,
@@ -132,7 +148,7 @@ describe('call failed reports', () => {
       source: 'on go\n  ask db to get\nend go',
       grants: { db: db.grant('all', undefined) },
     }).deliver({ name: 'go' });
-    expect(kinds(g.pump(now).reports)).toEqual(['run end']);
+    expect(kinds(operationalReports(g.pump(now).reports))).toEqual(['run end']);
   });
 });
 
@@ -171,7 +187,7 @@ describe('run end reports', () => {
       source:
         'on go\n  try\n    put 1 / 0 into x\n  finally\n    try\n      throw {code: "inner"}\n    catch e\n    end try\n  end try\nend go',
     }).deliver({ name: 'go' });
-    const [end] = g.pump(now).reports;
+    const [end] = operationalReports(g.pump(now).reports);
     expect(end).toMatchObject({ kind: 'run end', outcome: 'errored' });
     if (end?.kind !== 'run end') {
       throw new Error('no run end');
@@ -195,7 +211,7 @@ describe('run end reports', () => {
       source:
         'on go\n  put 0 into n\n  repeat forever\n    add 1 to n\n  end repeat\nend go',
     }).deliver({ name: 'go', limits: { fuelPerRun: 50 } });
-    const [end] = g.pump(now).reports;
+    const [end] = operationalReports(g.pump(now).reports);
     expect(end).toMatchObject({
       kind: 'run end',
       outcome: 'limit fault',
@@ -212,7 +228,7 @@ describe('run end reports', () => {
     g.load({ name: 's', source: 'on go\n  return 1\nend go' }).deliver({
       name: 'go',
     });
-    const [end] = g.pump(now).reports;
+    const [end] = operationalReports(g.pump(now).reports);
     expect(end).not.toHaveProperty('error');
     expect(end).not.toHaveProperty('at');
   });
@@ -225,7 +241,9 @@ describe('unhandled reports', () => {
     const hall = g.object(room, 'hall', null);
     g.load({ name: 's', source: 'on other\nend other', owner: hall });
     g.deliver(hall, { name: 'knock' });
-    const report = g.pump(now).reports.find(r => r.kind === 'unhandled');
+    const report = operationalReports(g.pump(now).reports).find(
+      r => r.kind === 'unhandled',
+    );
     expect(report).toMatchObject({ kind: 'unhandled' });
     expect(report?.kind === 'unhandled' && report.target).toBe(hall);
   });
@@ -235,7 +253,9 @@ describe('unhandled reports', () => {
     g.load({ name: 's', source: 'on other\nend other' }).deliver({
       name: 'knock',
     });
-    const report = g.pump(now).reports.find(r => r.kind === 'unhandled');
+    const report = operationalReports(g.pump(now).reports).find(
+      r => r.kind === 'unhandled',
+    );
     expect(report).toMatchObject({ kind: 'unhandled' });
     expect(report).not.toHaveProperty('target');
   });

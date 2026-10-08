@@ -10,7 +10,7 @@ import (
 // runEnds returns a Pump's run end reports, in order.
 func runEnds(r PumpResult) []*RunEnd {
 	var out []*RunEnd
-	for _, report := range r.Reports {
+	for _, report := range operationalReports(r.Reports) {
 		if end, ok := report.(*RunEnd); ok {
 			out = append(out, end)
 		}

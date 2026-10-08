@@ -36,6 +36,9 @@ type saveHeader struct {
 func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreResult, err error) {
 	var g *Group
 	defer func() {
+		if err != nil {
+			result.Reports = nil
+		}
 		if err != nil && o.Trace != nil {
 			code := InvalidSave
 			if host, ok := err.(*HostError); ok {
@@ -219,7 +222,17 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	if e := codec.Unmarshal([]byte(envelope.Payload), &data); e != nil {
 		return nil, result, invalid(e.Error())
 	}
+	if e := validateSavedAccounting(data); e != nil {
+		return nil, result, invalid(e.Error())
+	}
 	g.clock = data.Clock
+	g.accounting = data.Accounting
+	for _, row := range g.accounting.Runs {
+		row.Reported = false
+	}
+	for _, row := range g.accounting.Roots {
+		row.Reported = ""
+	}
 	g.nextDelivery = data.Delivery
 	g.nextBroadcast = data.Broadcast
 	g.nextTimer = data.Timer
@@ -249,7 +262,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	}
 	var deliveryData func(savedDelivery) (delivery, error)
 	deliveryData = func(row savedDelivery) (delivery, error) {
-		d := delivery{id: row.ID, broadcast: row.Broadcast, script: g.script(row.Script), message: row.Message, cancel: row.Cancel, kind: row.Kind, fields: row.Fields, reason: row.Reason, from: row.From, during: row.During, reply: row.Reply, function: row.Function, target: obj(row.Target), after: obj(row.After), parent: obj(row.Parent), object: obj(row.Object), path: row.Path}
+		d := delivery{ancestry: row.Ancestry, id: row.ID, broadcast: row.Broadcast, script: g.script(row.Script), message: row.Message, cancel: row.Cancel, kind: row.Kind, fields: row.Fields, reason: row.Reason, from: row.From, during: row.During, reply: row.Reply, function: row.Function, target: obj(row.Target), after: obj(row.After), parent: obj(row.Parent), object: obj(row.Object), path: row.Path}
 		if row.Decision >= 0 {
 			if row.Decision >= len(decisions) {
 				return d, invalid("unknown Decision")
@@ -331,6 +344,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 						}
 					}
 				}
+				g.accountEnd(&execution{id: row.ID, run: row.Run, delivery: d}, "discarded", "variables-only restore", &result.Reports)
 				g.deferDiscardedDecision(d, row.ID)
 				continue
 			}
@@ -399,6 +413,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 					if d.id != "" {
 						result.DroppedMessages = append(result.DroppedMessages, d.id)
 					}
+					g.accountDrop(d)
 					g.deferDiscardedDecision(d, "")
 				} else {
 					s.queue = append(s.queue, workItem{delivery: d})
@@ -441,12 +456,22 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 			if d.id != "" {
 				result.DroppedMessages = append(result.DroppedMessages, d.id)
 			}
+			g.accountDrop(d)
 			g.deferDiscardedDecision(d, "")
 		} else {
 			g.inputs = append(g.inputs, d)
 			if d.settlement != nil && d.settlement.restore != nil {
 				delete(g.unsettled, d.reply)
 			}
+		}
+	}
+	if mismatch {
+		for _, row := range data.Unrouted {
+			d, e := deliveryData(row)
+			if e != nil {
+				return nil, result, e
+			}
+			g.accountDrop(d)
 		}
 	}
 	if !mismatch {
@@ -508,6 +533,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	}
 	g.options.OnReady = o.OnReady
 	g.options.Trace = o.Trace
+	g.flushAccounting(&result.Reports)
 	g.record("restore", true, nil, restoreFields)
 	return g, result, nil
 }

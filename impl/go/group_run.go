@@ -169,6 +169,14 @@ func (g *Group) fireTimers() {
 
 func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	result := PumpResult{State: Idle}
+	for _, d := range inputs {
+		if d.id != "" {
+			g.ancestry(d)
+		}
+		for _, child := range d.children {
+			g.ancestry(child)
+		}
+	}
 	used := map[*Script]int64{}
 	budget := map[*Script]int64{}
 	skipped := map[*Script]bool{}
@@ -472,6 +480,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 						continue
 					}
 					s.start(d)
+					g.accountStart(s, s.active, &result.Reports)
 					if observationSpent && s.active.run.Status == machine.Running {
 						s.active.run.Status = machine.Preempted
 					}
@@ -675,6 +684,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				g.stopEffectGroup(&result.Reports, &settlements, seal)
 				continue
 			}
+			g.accountEnd(x, "terminal", "", &result.Reports)
 			result.Reports = append(result.Reports, report)
 			reason := map[Outcome]string{Errored: "errored", LimitFault: "limit fault", Cancelled: "cancelled", UnhandledOutcome: "unhandled", Dropped: "dropped", EffectFailureOutcome: "effect failed"}[report.Outcome]
 			if r.Passed {
@@ -830,7 +840,7 @@ func (g *Group) queueError(s *Script, x *execution) {
 	})
 	s.queue = append(s.queue, workItem{delivery: delivery{
 		script: s, target: s.owner, message: Message{Name: "error", Args: []Value{{x.run.Error}}},
-		from: x.id, during: &during,
+		from: x.id, during: &during, ancestry: RunAncestry{RootDelivery: x.delivery.ancestry.RootDelivery, ParentRun: x.id},
 	}})
 }
 func argsDisplay(args []Value) string {

@@ -38,10 +38,10 @@ func TestLimitFaultsNeverEnterCatchFinallyOrErrorHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || len(r.Reports) != 1 {
+			if err != nil || len(operationalReports(r.Reports)) != 1 {
 				t.Fatal(r, err)
 			}
-			end := r.Reports[0].(*RunEnd)
+			end := operationalReports(r.Reports)[0].(*RunEnd)
 			_, failed := p.Result()
 			if end.Outcome != LimitFault || end.Limit != tc.name || end.Error != nil || failed == nil || failed.Data.Get("reason").String() != `"limit fault"` || entered != 0 {
 				t.Fatal(end, failed, entered)
@@ -93,7 +93,7 @@ func TestRunawayScriptFaultPreservesOtherScriptsAndCommittedSegments(t *testing.
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, report := range r.Reports {
+		for _, report := range operationalReports(r.Reports) {
 			if end, ok := report.(*RunEnd); ok && end.Outcome == LimitFault {
 				faults++
 				if end.Script != "runaway" || end.Limit != "fuel" {

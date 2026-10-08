@@ -68,7 +68,7 @@ func joinPump(t *testing.T, g *Group, second int64, opts PumpOptions) PumpResult
 }
 func joinEnd(t *testing.T, r PumpResult, script string) *RunEnd {
 	t.Helper()
-	for _, report := range r.Reports {
+	for _, report := range operationalReports(r.Reports) {
 		if end, ok := report.(*RunEnd); ok && end.Script == script {
 			return end
 		}
@@ -285,14 +285,14 @@ end ping`, Limits{})
 	s.Deliver(Message{Name: "go"})
 	joinPump(t, g, 0, PumpOptions{})
 	first := joinPump(t, g, 1, PumpOptions{})
-	if len(first.Reports) != 1 || first.Reports[0].(*RunEnd).Result.String() != "7" || !first.NextDeadline.Equal(time.Unix(2, 0)) {
+	if len(operationalReports(first.Reports)) != 1 || operationalReports(first.Reports)[0].(*RunEnd).Result.String() != "7" || !first.NextDeadline.Equal(time.Unix(2, 0)) {
 		t.Fatal(first)
 	}
 	last := joinPump(t, g, 2, PumpOptions{})
-	if len(last.Reports) != 2 {
+	if len(operationalReports(last.Reports)) != 2 {
 		t.Fatal(last)
 	}
-	end := last.Reports[1].(*RunEnd)
+	end := operationalReports(last.Reports)[1].(*RunEnd)
 	if end.Handler != "go" || end.Outcome != Completed || end.Result.String() != "[7, 9]" {
 		t.Fatal(end)
 	}
@@ -348,7 +348,7 @@ end go`, Limits{})
 	}
 	for i := 0; i < 30; i++ {
 		r := joinPump(t, g, 0, PumpOptions{FuelSlice: 40})
-		for _, report := range r.Reports {
+		for _, report := range operationalReports(r.Reports) {
 			if end, ok := report.(*RunEnd); ok && end.Script == "a" {
 				if end.Outcome != Completed || end.Result.String() != "[7, 9]" {
 					t.Fatal(end)
@@ -385,10 +385,10 @@ end go`, Limits{})
 		t.Fatal(cancelled)
 	}
 	late := joinPump(t, g, 2, PumpOptions{})
-	if len(late.Reports) != 2 {
+	if len(operationalReports(late.Reports)) != 2 {
 		t.Fatal(late)
 	}
-	for _, report := range late.Reports {
+	for _, report := range operationalReports(late.Reports) {
 		if report.(*RunEnd).Script == "a" {
 			t.Fatal(report)
 		}

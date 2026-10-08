@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   newGroup,
@@ -135,7 +136,7 @@ describe('Script counters', () => {
     s.deliver({ name: 'go' });
     g.pump(0n);
     s.cancelRun('s/r1');
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { outcome: 'cancelled', cleanupFailed: { limit: 'cleanup' } },
     ]);
     expect(s.counters()).toMatchObject({
@@ -337,7 +338,7 @@ describe('Script counters', () => {
       limits: { allocPerRun: 50 },
     });
     s.deliver({ name: 'grow' });
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { outcome: 'limit fault', limit: 'alloc' },
     ]);
     expect(s.counters()).toMatchObject({
@@ -412,7 +413,9 @@ describe('Script counters', () => {
       grants: { api: cap.grant('all', undefined) },
     });
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'completed' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'completed' },
+    ]);
     expect(s.counters().runs).toBe(1);
   });
 });

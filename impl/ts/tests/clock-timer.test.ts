@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import { DeferredCaseError, replay } from '../tools/trace-case';
 import {
@@ -58,10 +59,14 @@ test('clock.now returns each Pump Clock through an ordinary Grant and costs its 
     },
   });
   s.deliver({ name: 'go' });
-  const first = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const first = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(first.result?.asInstant()).toBe(now);
   s.deliver({ name: 'go' });
-  const later = g.pump(now + 1n).reports.find(r => r.kind === 'run end')!;
+  const later = operationalReports(g.pump(now + 1n).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(later.result?.asInstant()).toBe(now + 1n);
   const cheap = newGroup({ name: 'cheap' });
   cheap
@@ -73,7 +78,9 @@ test('clock.now returns each Pump Clock through an ordinary Grant and costs its 
       },
     })
     .deliver({ name: 'go' });
-  const base = cheap.pump(now).reports.find(r => r.kind === 'run end')!;
+  const base = operationalReports(cheap.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(first.fuel - base.fuel).toBe(7);
   expect(first.alloc - base.alloc).toBe(2);
   expect(lines.filter(line => line.startsWith('call '))).toEqual([
@@ -216,7 +223,9 @@ test('timer forwards Script-scoped names, binding, Clock and unchanged Values to
       grants: { timers: timers.grant('all', binding) },
     }).deliver({ name: 'go', args: [instant(now)] });
   }
-  const reports = g.pump(now).reports.filter(r => r.kind === 'run end');
+  const reports = operationalReports(g.pump(now).reports).filter(
+    r => r.kind === 'run end',
+  );
   expect(reports.map(r => r.outcome)).toEqual(['completed', 'completed']);
   expect(
     seen.map(s => [
@@ -261,7 +270,9 @@ test('a dynamic timer Shape mismatch never reaches the Host or charges its cost'
     grants: { timer: timers.grant('all', undefined) },
   });
   s.deliver({ name: 'go', args: [num(1)] });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(calls).toBe(0);
   expect(report.error?.code).toBe('wrong kind');
   expect(report.error?.data.get('operation').toString()).toBe('"cancel"');
@@ -302,7 +313,9 @@ test('timer Host failures remain host error and no custom Script codes are decla
     source: 'on go\n  tell timer to cancel "wake"\nend go',
     grants: { timer: timers.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.error?.code).toBe('host error');
   expect(timers.operations.get('cancel')!.errors).toEqual([]);
 });
@@ -354,7 +367,9 @@ test('Clock Library needs and trimmed Grants survive Restore with new timer Host
     timer: ['cancel'],
   });
   copy.script('s')!.deliver({ name: 'go' });
-  const report = copy.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(copy.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.result?.asInstant()).toBe(now);
   expect(cancelled).toEqual(['s:wake']);
 });

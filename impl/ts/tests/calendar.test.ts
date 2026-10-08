@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   calendarCapability,
@@ -47,7 +48,9 @@ const run = (body: string, host = impl) => {
       cal: calendarCapability(host, costs).grant('all', 'Europe/London'),
     },
   }).deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   return {
     g,
     lines,
@@ -275,9 +278,10 @@ test('Calendar pays declared costs before the Host and rolls back on insufficien
       ).grant('all', 'UTC'),
     },
   }).deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'limit fault',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('limit fault');
   expect(called).toBe(false);
   expect(new Map(g.inspect().scripts[0]!.vars).get('touched')!.toString()).toBe(
     '0',
@@ -306,9 +310,10 @@ test('ordinary Capabilities cannot impersonate Calendar catalogue failures', () 
     source: 'on go\nask calendar to today\nend',
     grants: { calendar: calendar.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.error?.code).toBe(
-    'host error',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .error?.code,
+  ).toBe('host error');
 });
 
 test('Calendar calls from a Library retain their refinements and grants across Restore', () => {
@@ -348,6 +353,7 @@ test('Calendar calls from a Library retain their refinements and grants across R
   expect(copy.fingerprint()).toEqual(g.fingerprint());
   copy.script('s')!.deliver({ name: 'go' });
   expect(
-    copy.pump(now).reports.find(r => r.kind === 'run end')!.error?.code,
+    operationalReports(copy.pump(now).reports).find(r => r.kind === 'run end')!
+      .error?.code,
   ).toBe('host error');
 });

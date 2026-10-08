@@ -323,7 +323,7 @@ func TestCalendarFactoryResultRefinementsAndCatalogueFailures(t *testing.T) {
 				t.Fatal(end)
 			}
 			hostFailure := false
-			for _, report := range result.Reports {
+			for _, report := range operationalReports(result.Reports) {
 				if failed, ok := report.(*CallFailed); ok {
 					hostFailure = true
 					if failed.Operation.Capability != "calendar" || failed.Operation.Operation != tc.op {

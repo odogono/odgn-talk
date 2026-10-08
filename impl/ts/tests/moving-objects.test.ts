@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   defineObjectKind,
@@ -71,7 +72,7 @@ describe('moving Host Object messages', () => {
     const { group, leaf, newObject } = setup();
     const request = group.request(leaf, { name: 'ping', args: [num(1)] });
     group.setParent(leaf, newObject);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     expect((await request.result).toString()).toBe(
       '["next", <object room "leaf">]',
     );
@@ -106,7 +107,7 @@ describe('moving Host Object messages', () => {
       '> set-parent object=<object room "leaf"> parent=nothing',
     );
     expect(result.fuelUsed).toBe(0);
-    expect(result.reports).toEqual([
+    expect(operationalReports(result.reports)).toEqual([
       {
         kind: 'unhandled',
         delivery: request.id,
@@ -148,7 +149,7 @@ describe('moving Host Object messages', () => {
       limits: { fuelPerRun: 100 },
     });
     group.setParent(leaf, small);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(request.result, 'limit fault');
     expect(reports).toContainEqual(
       expect.objectContaining({
@@ -251,7 +252,9 @@ describe('wait for Host Object targets', () => {
     group
       .load({ name: 'watcher', source: waitSource('7') })
       .deliver({ name: 'watch' });
-    const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+    const report = operationalReports(group.pump(clock).reports).find(
+      r => r.kind === 'run end',
+    );
     expect(report?.kind === 'run end' && report.error?.code).toBe('wrong kind');
   });
 
@@ -361,7 +364,7 @@ describe('moving message lifecycle', () => {
     group.setParent(leaf, newObject);
     pumpUntil(group, state => hasMessage(state, 'next', 'ping'));
     abort.abort();
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(request.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({
@@ -381,7 +384,9 @@ describe('moving message lifecycle', () => {
     const request = group.request(leaf, { name: 'sleep' });
     group.pump(clock);
     group.setParent(leaf, newObject);
-    const reports = group.pump(clock + 1_000_000_000n).reports;
+    const reports = operationalReports(
+      group.pump(clock + 1_000_000_000n).reports,
+    );
     expect(await request.result).toBe(leaf.value);
     expect(reports).toContainEqual(
       expect.objectContaining({

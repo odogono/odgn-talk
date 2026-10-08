@@ -1,3 +1,4 @@
+import { operationalReports } from '../../tests/operational-reports';
 import { afterEach, expect, test } from 'bun:test';
 import {
   fstatSync,
@@ -56,7 +57,9 @@ const opened =
 const closed = `${opened}\nask output to close`;
 const fault = '\nrepeat forever\nend repeat';
 const preempt = (group: Group) => {
-  expect(group.pump(now, { fuelSlice: 50, fuelCap: 50 }).reports).toEqual([]);
+  expect(
+    operationalReports(group.pump(now, { fuelSlice: 50, fuelCap: 50 }).reports),
+  ).toEqual([]);
 };
 
 test('ordinary write followed by a Limit Fault closes the actual handle and keeps bytes', () => {

@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { functionValue } from '../src/values';
 import {
@@ -39,7 +40,7 @@ const setup = (source: string, options: Partial<LoadOptions> = {}) => {
   });
   const home = group.load({ ...options, name: 'home', source });
   home.deliver({ name: 'exported' });
-  const reports = group.pump(clock).reports;
+  const reports = operationalReports(group.pump(clock).reports);
   const report = reports.find(r => r.kind === 'run end');
   if (!report || report.kind !== 'run end' || !report.result) {
     throw new Error('no exported Function Value');
@@ -67,7 +68,7 @@ describe('Function Value calls', () => {
     const { group, fn, lines } = setup(named);
     const requested = group.call(fn, []);
     expect(lines.some(line => line.startsWith('> call-value '))).toBe(false);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     expect((await requested.result).toString()).toBe('5');
     expect(reports).toContainEqual(
       expect.objectContaining({
@@ -94,7 +95,7 @@ describe('Function Value calls', () => {
   test('a foreign call is a mailbox Run and replies to its suspended caller', async () => {
     const { group, fn, lines } = setup(named);
     const requested = caller(group, fn);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     expect((await requested.result).toString()).toBe('7');
     expect(
       reports.filter(r => r.kind === 'run end').map(r => r.script),
@@ -108,7 +109,7 @@ describe('Function Value calls', () => {
   test('a foreign call without and wait raises would suspend', async () => {
     const { group, fn } = setup(named);
     const requested = caller(group, fn, '');
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
     expect(report?.kind === 'run end' && report.error?.code).toBe(
@@ -128,7 +129,7 @@ describe('Function Value calls', () => {
     const { group, home, fn, lines } = setup(named);
     const requested = group.call(fn, [num(1)]);
     home.reload(named, 'carry variables');
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'function gone');
     expect(reports.filter(r => r.kind === 'run end')).toEqual([]);
     expect(lines).toContain(`note ${requested.id} kind=function-gone`);
@@ -196,7 +197,7 @@ describe('Function call lifecycle', () => {
     ).toThrow();
     const requested = group.call(fn, [], { limits: { fuelPerRun: 4 } });
     expect(() => group.call(fn, [])).toThrow(MailboxFull);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'limit fault');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'limit fault', fn, limit: 'fuel' }),
@@ -211,7 +212,7 @@ describe('Function call lifecycle', () => {
       source: 'on go f\n f(1, 2) and wait\nend go',
     });
     const requested = script.request({ name: 'go', args: [fn] });
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     expect(reports).toContainEqual(
       expect.objectContaining({ error: expect.anything(), script: 'caller' }),
@@ -226,7 +227,7 @@ describe('Function call lifecycle', () => {
   test('Host arity errors do not enter the function body', async () => {
     const { group, fn } = setup(named);
     const requested = group.call(fn, [num(1), num(2)]);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
     expect(report?.kind === 'run end' && report.error?.code).toBe(
@@ -240,7 +241,7 @@ describe('Function call lifecycle', () => {
       'on exported\n return given n: 1 / 0\nend exported',
     );
     const requested = caller(group, fn);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     const report = reports.find(
       r => r.kind === 'run end' && r.script === 'caller',
@@ -257,7 +258,7 @@ describe('Function call lifecycle', () => {
   test('a foreign receiver faults on its own limits and rolls back its Segment', async () => {
     const { group, fn } = setup(named, { limits: { fuelPerRun: 10 } });
     const requested = caller(group, fn);
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     expect(reports).toContainEqual(
       expect.objectContaining({ script: 'home', outcome: 'limit fault', fn }),
@@ -273,7 +274,9 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     await expectSendFailed(requested.result, 'cancelled');
     expect(lines).toContain('abandon caller/r1.c1');
-    const reports = group.pump(clock + 1_000_000_000n).reports;
+    const reports = operationalReports(
+      group.pump(clock + 1_000_000_000n).reports,
+    );
     expect(reports).toContainEqual(
       expect.objectContaining({ script: 'home', outcome: 'completed' }),
     );
@@ -289,7 +292,7 @@ describe('Function call lifecycle', () => {
     });
     const requested = script.request({ name: 'go', args: [fn] });
     group.pump(clock);
-    const reports = group.pump(clock + 10_000_000n).reports;
+    const reports = operationalReports(group.pump(clock + 10_000_000n).reports);
     await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
     expect(report?.kind === 'run end' && report.error?.code).toBe('timeout');
@@ -306,7 +309,7 @@ describe('Function call lifecycle', () => {
     const requested = group.call(fn, [num(1)], { signal: controller.signal });
     group.pump(clock);
     controller.abort();
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'cancelled', fn }),
@@ -322,7 +325,7 @@ describe('Function call lifecycle', () => {
     const controller = new AbortController();
     const requested = group.call(fn, [], { signal: controller.signal });
     controller.abort();
-    const reports = group.pump(clock).reports;
+    const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
       expect.objectContaining({ outcome: 'cancelled', fn, fuel: 0 }),
@@ -361,7 +364,9 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     const restored = restore(group.save(), restoreOptions([]));
     expect(restored.result.pending).toEqual([]);
-    const reports = restored.group.pump(clock + 1_000_000_000n).reports;
+    const reports = operationalReports(
+      restored.group.pump(clock + 1_000_000_000n).reports,
+    );
     expect(
       reports
         .filter(r => r.kind === 'run end')
@@ -400,7 +405,9 @@ describe('Function call lifecycle', () => {
       source: 'use times from shelf\non exported\n return times\nend exported',
     });
     home.deliver({ name: 'exported' });
-    const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+    const report = operationalReports(group.pump(clock).reports).find(
+      r => r.kind === 'run end',
+    );
     const fn = report?.kind === 'run end' ? report.result! : undefined!;
     const requested = group.call(fn, []);
     group.pump(clock);
@@ -426,7 +433,7 @@ test('a Host arity failure is outside the function body and spends no execution 
     'on exported\n return work\nend exported\nfunction work n\n try\n  return n\n catch problem\n  return 99\n end try\nend work',
   );
   const requested = group.call(fn, []);
-  const reports = group.pump(clock).reports;
+  const reports = operationalReports(group.pump(clock).reports);
   await expectSendFailed(requested.result, 'errored');
   const report = reports.find(r => r.kind === 'run end');
   expect(report?.kind === 'run end' && report.error?.code).toBe('wrong arity');
@@ -447,7 +454,9 @@ test('a full foreign mailbox refuses before assigning a call id', async () => {
     source: `${named}\non ping\nend ping`,
   });
   home.deliver({ name: 'exported' });
-  const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(clock).reports).find(
+    r => r.kind === 'run end',
+  );
   const fn = report?.kind === 'run end' ? report.result! : undefined!;
   home.deliver({ name: 'ping' });
   const requested = script.request({ name: 'go', args: [fn] });
@@ -466,7 +475,7 @@ test('queued Function Values and their captures count toward mailbox Persistent 
   );
   home.deliver({ name: 'ping' });
   const requested = group.call(fn, []);
-  const reports = group.pump(clock).reports;
+  const reports = operationalReports(group.pump(clock).reports);
   expect(reports).toContainEqual(
     expect.objectContaining({
       outcome: 'limit fault',
@@ -499,7 +508,9 @@ test('a Library Constant callback receives the importing Script as its Home Scri
       'use callback from callbacks\non exported\n return callback\nend exported',
   });
   home.deliver({ name: 'exported' });
-  const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(clock).reports).find(
+    r => r.kind === 'run end',
+  );
   const fn = report?.kind === 'run end' ? report.result! : undefined!;
   expect(fn.homeScript()).toBe('home');
   const requested = group.call(fn, [num(3)]);
@@ -523,7 +534,9 @@ test('Library callback Constants and defaults remain separate in two importing G
         'use bundle, invoke from callbacks2\non exported\n return bundle\nend exported\non go\n return invoke(4)\nend go',
     });
     home.deliver({ name: 'exported' });
-    const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+    const report = operationalReports(group.pump(clock).reports).find(
+      r => r.kind === 'run end',
+    );
     const bundle = report?.kind === 'run end' ? report.result! : undefined!;
     return { group, home, fn: bundle.get('work') };
   });
@@ -615,7 +628,7 @@ describe('Function ownership at Host boundaries', () => {
             : 'on go\n ask stock to get\n return it\nend go',
       });
       const request = home.request({ name: 'go' });
-      const reports = group.pump(clock).reports;
+      const reports = operationalReports(group.pump(clock).reports);
       await expectSendFailed(request.result, 'errored');
       const report = reports.find(r => r.kind === 'run end');
       expect(report?.kind === 'run end' && report.error?.code).toBe(
@@ -704,7 +717,9 @@ describe('Function ownership at Host boundaries', () => {
       }),
     ).toThrow(expect.objectContaining({ code: 'wrong group' }));
     restored.group.settle(id, { answer: num(9) });
-    expect(restored.group.pump(clock).reports).toContainEqual(
+    expect(
+      operationalReports(restored.group.pump(clock).reports),
+    ).toContainEqual(
       expect.objectContaining({ kind: 'run end', outcome: 'completed' }),
     );
   });
@@ -716,11 +731,13 @@ test('Host Call MaxWait overrides apply to foreign callbacks', async () => {
   );
   const remote = group.load({ name: 'remote', source: sleeping });
   remote.deliver({ name: 'exported' });
-  const report = group.pump(clock).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(clock).reports).find(
+    r => r.kind === 'run end',
+  );
   const callback = report?.kind === 'run end' ? report.result! : undefined!;
   const request = group.call(fn, [callback], { limits: { maxWaitMs: 10 } });
   group.pump(clock);
-  const reports = group.pump(clock + 10_000_000n).reports;
+  const reports = operationalReports(group.pump(clock + 10_000_000n).reports);
   expect(reports).toContainEqual(
     expect.objectContaining({
       kind: 'run end',
@@ -777,7 +794,7 @@ for (const reissue of [false, true]) {
         group.pump(clock);
       }
       await new Promise(resolve => setTimeout(resolve, 0));
-      const reports = group.pump(clock).reports;
+      const reports = operationalReports(group.pump(clock).reports);
       const report = reports.find(r => r.kind === 'run end');
       expect(report?.kind === 'run end' && report.error?.code).toBe(
         'host error',

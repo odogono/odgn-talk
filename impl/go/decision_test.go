@@ -30,14 +30,14 @@ end go
 		t.Fatal("Decision settled before Pump")
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err)
 	}
-	d := r.Reports[0].(*Decided)
+	d := operationalReports(r.Reports)[0].(*Decided)
 	if d.Verdict != Vetoed || len(d.Vetoes) != 1 || d.Vetoes[0].Reason.String() != `"blocked"` || d.Vetoes[0].Run != "s/r1" {
 		t.Fatal(d)
 	}
-	if end := r.Reports[1].(*RunEnd); end.Outcome != Completed || !end.Result.Equal(Nothing) {
+	if end := operationalReports(r.Reports)[1].(*RunEnd); end.Outcome != Completed || !end.Result.Equal(Nothing) {
 		t.Fatal(end)
 	}
 	select {
@@ -81,16 +81,16 @@ end go
 	<-ready
 	now := time.Unix(0, 0)
 	r, err := g.Pump(now, PumpOptions{FuelSlice: 5})
-	if err != nil || r.State != Sliced || len(r.Reports) != 0 || future.Decided() != nil {
+	if err != nil || r.State != Sliced || len(operationalReports(r.Reports)) != 0 || future.Decided() != nil {
 		t.Fatal(r, err)
 	}
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*Decided).Verdict != Allowed || len(g.Inspect().Scripts[0].Runs) != 1 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Decided).Verdict != Allowed || len(g.Inspect().Scripts[0].Runs) != 1 {
 		t.Fatal(r, err)
 	}
 	cancel()
 	r, err = g.Pump(now.Add(time.Second), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Completed || g.Inspect().Scripts[0].Vars[0].Val.String() != "2" {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Completed || g.Inspect().Scripts[0].Vars[0].Val.String() != "2" {
 		t.Fatal(r, err)
 	}
 	select {
@@ -120,7 +120,7 @@ func TestDecisionFailuresRemainUndecided(t *testing.T) {
 				t.Fatal(err)
 			}
 			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || len(r.Reports) != 2 || r.Reports[0].(*RunEnd).Outcome != tc.outcome {
+			if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != tc.outcome {
 				t.Fatal(r, err)
 			}
 			d := future.Decided()
@@ -142,7 +142,7 @@ func TestDecisionOrdinaryClauseAllowsBeforeLaterError(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || r.Reports[0].(*Decided).Verdict != Allowed || r.Reports[1].(*RunEnd).Outcome != Errored || future.Decided().Verdict != Allowed {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[0].(*Decided).Verdict != Allowed || operationalReports(r.Reports)[1].(*RunEnd).Outcome != Errored || future.Decided().Verdict != Allowed {
 		t.Fatal(r, err)
 	}
 }
@@ -158,7 +158,7 @@ func TestDecisionOrdinaryClauseCannotAllowUnpaidDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || r.Reports[0].(*RunEnd).Fuel != 0 || future.Decided().Verdict != Undecided {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[0].(*RunEnd).Fuel != 0 || future.Decided().Verdict != Undecided {
 		t.Fatal(r, err)
 	}
 }
@@ -199,7 +199,7 @@ end go
 				t.Fatal("cancel was not queued")
 			}
 			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || len(r.Reports) != 2 || r.Reports[0].(*RunEnd).Outcome != Cancelled {
+			if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
 				t.Fatal(r, err)
 			}
 			if d := future.Decided(); d == nil || d.Verdict != Undecided || d.Undecided[0].Outcome != Cancelled {
@@ -235,7 +235,7 @@ func TestDecisionDroppingIsUndecidedAndReplacementPreservesSealedVerdict(t *test
 				if second.Decided().Verdict != Undecided || second.Decided().Undecided[0].Outcome != Dropped {
 					t.Fatal(second.Decided())
 				}
-			} else if second.Decided().Verdict != Allowed || r.Reports[1].(*RunEnd).Outcome != Cancelled {
+			} else if second.Decided().Verdict != Allowed || operationalReports(r.Reports)[1].(*RunEnd).Outcome != Cancelled {
 				t.Fatal(r)
 			}
 		})

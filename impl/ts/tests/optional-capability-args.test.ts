@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   compileLibrary,
@@ -58,9 +59,10 @@ test('immediate calls omit a trailing Optional suffix without padding Host argum
       'script variable counts = []\non go\n  ask api to count 1\n  put it after counts\n  ask api to count 1, "zone"\n  put it after counts\n  ask api to count 1, nothing, 3\n  put it after counts\nend',
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'completed',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('completed');
   expect(variable(g, 's', 'counts').toString()).toBe('[1, 2, 3]');
   expect(received.map(args => args.map(v => v.toString()))).toEqual([
     ['1'],
@@ -129,9 +131,10 @@ test('only directly Optional trailing positions can be omitted and supplied lite
     grants,
   });
   s.deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'completed',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('completed');
 });
 
 test('all-Optional fire-and-forget Operations accept zero arguments and charge the ordinary call cost', () => {
@@ -154,7 +157,9 @@ test('all-Optional fire-and-forget Operations accept zero arguments and charge t
       'on go\n  tell api to note\n  tell api to note nothing\n  tell api to note "hello"\nend',
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  const expensive = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const expensive = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(expensive.outcome).toBe('completed');
   expect(received.map(args => args.map(v => v.toString()))).toEqual([
     [],
@@ -179,7 +184,9 @@ test('all-Optional fire-and-forget Operations accept zero arguments and charge t
       },
     })
     .deliver({ name: 'go' });
-  const base = cheap.pump(now).reports.find(r => r.kind === 'run end')!;
+  const base = operationalReports(cheap.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(expensive.fuel - base.fuel).toBe(33);
   expect(expensive.alloc - base.alloc).toBe(9);
 });
@@ -205,9 +212,10 @@ test('say keeps exactly one source argument even when a custom write declaration
   g.load({ name: 's', source: 'on go\n  say 1\nend', grants }).deliver({
     name: 'go',
   });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'completed',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('completed');
 });
 
 test('supplied dynamic Optional values are checked before charging or reaching the Host', () => {
@@ -228,7 +236,9 @@ test('supplied dynamic Optional values are checked before charging or reaching t
     source: 'on go value\n  tell api to check 1, value\nend',
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go', args: [num(2)] });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(reached).toBe(false);
   expect(report.error?.code).toBe('wrong kind');
   expect(report.error?.data.get('argument').toString()).toBe('2');
@@ -257,9 +267,10 @@ test('an omitted Optional argument still pays declared Fuel before a Host call a
     limits: { fuelPerRun: 40 },
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'limit fault',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('limit fault');
   expect(reached).toBe(false);
   expect(variable(g, 's', 'touched').toString()).toBe('0');
 });
@@ -324,7 +335,9 @@ test('Join members can call the same Operation with omitted, Nothing and supplie
   ]);
   received.forEach((r, i) => r.call.answer(text(String(i))));
   expect(
-    g.pump(now + 1n).reports.find(r => r.kind === 'run end')!.outcome,
+    operationalReports(g.pump(now + 1n).reports).find(
+      r => r.kind === 'run end',
+    )!.outcome,
   ).toBe('completed');
   expect(variable(g, 's', 'seen').toString()).toBe('["0", "1", "2"]');
 });
@@ -353,9 +366,8 @@ test('Promise-based suspending Operations receive only supplied Optional argumen
   await Promise.resolve();
   expect(received).toEqual([[]]);
   expect(
-    g
-      .pump(now + 1n)
-      .reports.find(r => r.kind === 'run end')!
+    operationalReports(g.pump(now + 1n).reports)
+      .find(r => r.kind === 'run end')!
       .result?.toString(),
   ).toBe('0');
 });
@@ -399,9 +411,8 @@ test('Library calls validate omitted Optional arguments on compilation and each 
     grants: { api: api.grant('all', undefined) },
   }).deliver({ name: 'go' });
   expect(
-    g
-      .pump(now)
-      .reports.find(r => r.kind === 'run end')!
+    operationalReports(g.pump(now).reports)
+      .find(r => r.kind === 'run end')!
       .result?.toString(),
   ).toBe('0');
   const strict = defineCapability('api', {
@@ -464,9 +475,8 @@ test('Reload, Extend and Library replacement reuse the same Optional arity check
   );
   s.deliver({ name: 'go' });
   expect(
-    g
-      .pump(now)
-      .reports.find(r => r.kind === 'run end')!
+    operationalReports(g.pump(now).reports)
+      .find(r => r.kind === 'run end')!
       .result?.toString(),
   ).toBe('0');
   s.reload('on go\n  ask api to read\n  return it\nend', 'carry variables');
@@ -474,9 +484,8 @@ test('Reload, Extend and Library replacement reuse the same Optional arity check
   s.deliver({ name: 'go' });
   s.deliver({ name: 'extra' });
   expect(
-    g
-      .pump(now + 1n)
-      .reports.filter(r => r.kind === 'run end')
+    operationalReports(g.pump(now + 1n).reports)
+      .filter(r => r.kind === 'run end')
       .map(r => r.result?.toString()),
   ).toEqual(['0', '1']);
   expect(

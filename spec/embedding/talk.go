@@ -1085,8 +1085,7 @@ const (
 func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
 
 type RestoreResult struct {
-	// Pending #370: add Reports []Report with the accounting implementation.
-	// The exact staged amendment is in chapter 9, Run accounting.
+	Reports       []Report // accounting baseline, including saved work discarded on restore
 	VariablesOnly bool
 	Pending       []PendingCall // each must be settled before the first Pump
 	DiscardedRuns []RunID

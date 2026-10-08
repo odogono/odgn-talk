@@ -21,7 +21,7 @@ func TestSendWaitRetainsCallThenReplyWithoutExtraCharge(t *testing.T) {
 	a.Deliver(Message{Name: "go"})
 	now := time.Unix(0, 0)
 	first, err := g.Pump(now, PumpOptions{FuelCap: 28})
-	if err != nil || len(first.Reports) != 0 || first.FuelUsed != 28 {
+	if err != nil || len(operationalReports(first.Reports)) != 0 || first.FuelUsed != 28 {
 		t.Fatalf("%+v %v", first, err)
 	}
 	view := g.Inspect().Scripts[0].Runs
@@ -32,17 +32,17 @@ func TestSendWaitRetainsCallThenReplyWithoutExtraCharge(t *testing.T) {
 		t.Fatalf("pending call state %d, want224", got)
 	}
 	second, err := g.Pump(now, PumpOptions{FuelCap: 7})
-	if err != nil || len(second.Reports) != 1 {
+	if err != nil || len(operationalReports(second.Reports)) != 1 {
 		t.Fatalf("%+v %v", second, err)
 	}
 	if got := a.Counters().PersistentState; got != 192 {
 		t.Fatalf("ready reply state %d, want192", got)
 	}
 	last, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(last.Reports) != 1 {
+	if err != nil || len(operationalReports(last.Reports)) != 1 {
 		t.Fatalf("%+v %v", last, err)
 	}
-	end := last.Reports[0].(*RunEnd)
+	end := operationalReports(last.Reports)[0].(*RunEnd)
 	if end.Outcome != Completed || end.Result.String() != "7" || end.Fuel != 32 || end.Alloc != 48 {
 		t.Fatal(end)
 	}
@@ -75,7 +75,7 @@ end go`})
 		t.Fatalf("%+v %v", first, err)
 	}
 	second, err := g.Pump(time.Unix(1, 0), PumpOptions{})
-	if err != nil || len(second.Reports) != 1 {
+	if err != nil || len(operationalReports(second.Reports)) != 1 {
 		t.Fatalf("%+v %v", second, err)
 	}
 	failure := g.Inspect().Scripts[0].Vars[0].Val
@@ -83,7 +83,7 @@ end go`})
 		t.Fatal(failure)
 	}
 	last, err := g.Pump(time.Unix(2, 0), PumpOptions{})
-	if err != nil || len(last.Reports) != 1 || last.Reports[0].(*RunEnd).Result.String() != "9" {
+	if err != nil || len(operationalReports(last.Reports)) != 1 || operationalReports(last.Reports)[0].(*RunEnd).Result.String() != "9" {
 		t.Fatalf("%+v %v", last, err)
 	}
 	records := strings.Join(trace, "\n")
@@ -128,7 +128,7 @@ end go`})
 		t.Fatal("cancellation not queued")
 	}
 	r, err := g.Pump(time.Unix(1, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Cancelled {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if _, failure := pending.Result(); failure == nil || failure.Data.Get("reason").String() != `"cancelled"` {
@@ -138,7 +138,7 @@ end go`})
 		t.Fatal(got)
 	}
 	r, err = g.Pump(time.Unix(2, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Result.String() != "9" {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Result.String() != "9" {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if strings.Count(strings.Join(trace, "\n"), "abandon a/r1.c1") != 1 {
@@ -174,11 +174,11 @@ end query`})
 		t.Fatal(err)
 	}
 	r, err := g.Pump(now, PumpOptions{FuelCap: 1})
-	if err != nil || len(r.Reports) != 0 || r.FuelUsed != 4 || r.State != Sliced {
+	if err != nil || len(operationalReports(r.Reports)) != 0 || r.FuelUsed != 4 || r.State != Sliced {
 		t.Fatalf("%+v %v", r, err)
 	}
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Result.String() != `"errored"` {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Result.String() != `"errored"` {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
@@ -199,7 +199,7 @@ end ping`})
 	}
 	s.Deliver(Message{Name: "go"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 3 || r.Reports[2].(*RunEnd).Result.String() != "8" {
+	if err != nil || len(operationalReports(r.Reports)) != 3 || operationalReports(r.Reports)[2].(*RunEnd).Result.String() != "8" {
 		t.Fatalf("%+v %v", r, err)
 	}
 	records := strings.Join(trace, "\n")
@@ -223,11 +223,11 @@ func TestSendWaitPendingStateFaultAbandonsOnlyTheReply(t *testing.T) {
 	}
 	a.Deliver(Message{Name: "go"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || !r.NextDeadline.IsZero() {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || !r.NextDeadline.IsZero() {
 		t.Fatalf("%+v %v", r, err)
 	}
-	sender := r.Reports[0].(*RunEnd)
-	if sender.Outcome != LimitFault || sender.Limit != "persistent" || sender.Fuel != 28 || sender.Alloc != 48 || r.Reports[1].(*RunEnd).Result.String() != "7" {
+	sender := operationalReports(r.Reports)[0].(*RunEnd)
+	if sender.Outcome != LimitFault || sender.Limit != "persistent" || sender.Fuel != 28 || sender.Alloc != 48 || operationalReports(r.Reports)[1].(*RunEnd).Result.String() != "7" {
 		t.Fatal(r)
 	}
 	if strings.Count(strings.Join(trace, "\n"), "abandon a/r1.c1") != 1 {
@@ -249,7 +249,7 @@ func TestSendWaitBudgetFaultDoesNotRegisterOrSend(t *testing.T) {
 		}
 		a.Deliver(Message{Name: "go"})
 		r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-		if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != LimitFault || r.FuelUsed != 6 || !r.NextDeadline.IsZero() {
+		if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != LimitFault || r.FuelUsed != 6 || !r.NextDeadline.IsZero() {
 			t.Fatalf("%+v %v", r, err)
 		}
 		records := strings.Join(trace, "\n")
@@ -293,7 +293,7 @@ end go`})
 				t.Fatal(err)
 			}
 			found := false
-			for _, report := range r.Reports {
+			for _, report := range operationalReports(r.Reports) {
 				if end, ok := report.(*RunEnd); ok && end.Script == "a" {
 					if end.Outcome != Completed || end.Result.String() != `"`+tc.reason+`"` {
 						t.Fatal(end)
@@ -330,10 +330,10 @@ end go`})
 	}
 	b.Deliver(Message{Name: "ping"})
 	r, err := g.Pump(time.Unix(1, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 {
 		t.Fatalf("%+v %v", r, err)
 	}
-	if got := r.Reports[1].(*RunEnd); got.Script != "a" || got.Outcome != Completed || got.Result.String() != `"cancelled"` {
+	if got := operationalReports(r.Reports)[1].(*RunEnd); got.Script != "a" || got.Outcome != Completed || got.Result.String() != `"cancelled"` {
 		t.Fatal(got)
 	}
 }
@@ -363,7 +363,7 @@ end go`})
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || r.Reports[1].(*RunEnd).Result.String() != "8" || r.Reports[1].(*RunEnd).Alloc != 96 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[1].(*RunEnd).Result.String() != "8" || operationalReports(r.Reports)[1].(*RunEnd).Alloc != 96 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	records := strings.Join(trace, "\n")

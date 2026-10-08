@@ -170,6 +170,8 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 		replacements = append(replacements, replacement{s, state})
 	}
 	var reports []Report
+	g.accountingDiscardReason = "library replacement"
+	defer func() { g.accountingDiscardReason = "" }()
 	// Complete every external cleanup before publishing any replacement.
 	for _, r := range replacements {
 		for _, x := range r.s.runs {
@@ -183,6 +185,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 				for _, settle := range settlements {
 					settle()
 				}
+				g.flushAccounting(&reports)
 				return reports, &HostError{EffectStateUnknown, "replacement cleanup failed"}
 			}
 		}
@@ -192,6 +195,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 		rr, e := r.s.applyReload(r.state, r.s.source)
 		reports = append(reports, rr...)
 		if e != nil {
+			g.flushAccounting(&reports)
 			return reports, e
 		}
 		r.s.extensions = extensions
@@ -202,5 +206,6 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 		}
 	}
 	committed = true
+	g.flushAccounting(&reports)
 	return reports, nil
 }

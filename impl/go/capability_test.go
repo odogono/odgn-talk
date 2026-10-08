@@ -94,7 +94,7 @@ func TestCapabilityFailuresAndPrechargeChecks(t *testing.T) {
 				t.Fatal(e)
 			}
 			var end *RunEnd
-			for _, report := range r.Reports {
+			for _, report := range operationalReports(r.Reports) {
 				if x, ok := report.(*RunEnd); ok {
 					end = x
 					break
@@ -136,7 +136,7 @@ func TestCapabilityDeclaredAllocationIsAtomic(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			end := r.Reports[0].(*RunEnd)
+			end := operationalReports(r.Reports)[0].(*RunEnd)
 			if effects != 0 || r.FuelUsed != 0 || end.Alloc != 0 || end.Limit != "alloc" {
 				t.Fatalf("effects %d %+v %+v", effects, r, end)
 			}
@@ -190,7 +190,7 @@ func TestCallChargeAndResultConversionBoundaries(t *testing.T) {
 			}
 			var end *RunEnd
 			var failure *CallFailed
-			for _, report := range r.Reports {
+			for _, report := range operationalReports(r.Reports) {
 				switch x := report.(type) {
 				case *RunEnd:
 					end = x
@@ -302,7 +302,7 @@ func TestGrantTrimmingRevocationAndQueuedHostInputs(t *testing.T) {
 		t.Fatal(e)
 	}
 	var end *RunEnd
-	for _, report := range r.Reports {
+	for _, report := range operationalReports(r.Reports) {
 		if x, ok := report.(*RunEnd); ok {
 			end = x
 			break

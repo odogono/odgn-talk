@@ -301,17 +301,17 @@ func TestLocaleFactoryResultRefinementsAndHostFailures(t *testing.T) {
 				t.Fatal(end)
 			}
 			if !tc.valid {
-				if end.Error.Data.Get("capability").String() != `"loc"` || len(result.Reports) < 2 {
+				if end.Error.Data.Get("capability").String() != `"loc"` || len(operationalReports(result.Reports)) < 2 {
 					t.Fatal(result)
 				}
 				found := false
-				for _, report := range result.Reports {
+				for _, report := range operationalReports(result.Reports) {
 					if r, ok := report.(*CallFailed); ok {
 						found = r.Operation.Capability == "locale" && r.Operation.Operation == tc.op
 					}
 				}
 				if !found {
-					t.Fatal(result.Reports)
+					t.Fatal(operationalReports(result.Reports))
 				}
 			}
 		})

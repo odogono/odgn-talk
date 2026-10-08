@@ -64,6 +64,7 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 		}
 		d.from = RunID(d.reply)
 	}
+	d.ancestry = g.ancestry(d)
 	g.writeRaises(x, x.raisesWritten)
 	if d.script == nil {
 		g.unhandled(d, reports)

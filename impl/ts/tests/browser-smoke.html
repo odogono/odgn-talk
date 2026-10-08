@@ -35,7 +35,7 @@
     refused = false;
     try { talk.encodeJson(talk.list(talk.bytes(new Uint8Array()))); } catch (error) { refused = error instanceof talk.ScriptError && error.code === "not encodable" && error.data.get("path").toString() === "[1]"; }
     assert(refused, "Plain JSON unsupported kind path");
-    assert(talk.coreVersions.language === "1.0-rc.2" && talk.coreVersions.costModel === "0" && talk.coreVersions.unicode === "18.0.0" && talk.coreVersions.saveFormat === "2", "Core versions");
+    assert(talk.coreVersions.language === "1.0-rc.2" && talk.coreVersions.costModel === "0" && talk.coreVersions.unicode === "18.0.0" && talk.coreVersions.saveFormat === "3", "Core versions");
     const source = '\ufeff-- 😀 comment\r\non t\r\n put ["e\u0301", -- list\r\n 2] into xs\r\nend t -- eof';
     const parsed = talk.parseSource(source);
     assert(parsed.error === null && talk.syntaxText(parsed.tree) === source, "Lossless Core parser");

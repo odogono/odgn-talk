@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { costModel, languageVersion } from '../src/generated/machine';
 import { unicodeVersion } from '../src/generated/unicode';
@@ -45,7 +46,9 @@ const libraryCodec = (
       fuelCap: 10_000_000,
       fuelSlice: 10_000_000,
     });
-    const report = pumped.reports.find(r => r.kind === 'run end');
+    const report = operationalReports(pumped.reports).find(
+      r => r.kind === 'run end',
+    );
     if (report?.kind === 'run end') {
       if (report.error) {
         throw report.error;
@@ -249,7 +252,9 @@ describe('Host JSON boundary', () => {
           source: `on go\n  return ${expression}\nend go`,
         })
         .deliver({ name: 'go' });
-      const report = group.pump(now).reports.find(r => r.kind === 'run end');
+      const report = operationalReports(group.pump(now).reports).find(
+        r => r.kind === 'run end',
+      );
       expect(report?.kind === 'run end' && report.outcome).toBe('completed');
       if (report?.kind !== 'run end') {
         throw new Error('Missing value');

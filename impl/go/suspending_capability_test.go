@@ -60,7 +60,7 @@ func TestSuspendingOperationQueuesAnAnswerDuringStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, e := p.Result()
-	if e != nil || !v.Equal(Int(9)) || len(second.Reports) != 1 || ready != 2 || starts != 1 {
+	if e != nil || !v.Equal(Int(9)) || len(operationalReports(second.Reports)) != 1 || ready != 2 || starts != 1 {
 		t.Fatalf("%v %v %+v ready=%d", v, e, second, ready)
 	}
 	if call.Charge(1) == nil {
@@ -173,7 +173,7 @@ func TestSuspendingOperationFailuresAndResumeLimits(t *testing.T) {
 					t.Fatalf("%+v", end)
 				}
 				got := false
-				for _, report := range r.Reports {
+				for _, report := range operationalReports(r.Reports) {
 					if _, ok := report.(*CallFailed); ok {
 						got = true
 					}
@@ -296,7 +296,7 @@ end seed`, Limits{})
 				(*calls)[0].Answer(Int(1))
 			}
 			second := joinPump(t, g, 1, PumpOptions{FuelCap: 1})
-			if len(second.Reports) != 0 || len(*calls) != 1 || g.Inspect().Scripts[0].Runs[0].Status != Preempted {
+			if len(operationalReports(second.Reports)) != 0 || len(*calls) != 1 || g.Inspect().Scripts[0].Runs[0].Status != Preempted {
 				t.Fatal(second)
 			}
 			third := joinPump(t, g, 1, PumpOptions{})
@@ -309,7 +309,7 @@ end seed`, Limits{})
 					t.Fatal(end)
 				}
 			} else {
-				if len(third.Reports) != 0 {
+				if len(operationalReports(third.Reports)) != 0 {
 					t.Fatal(third)
 				}
 				(*calls)[1].Answer(Int(2))
@@ -355,7 +355,7 @@ func TestCapabilityReadyAnswerRetentionAndCap(t *testing.T) {
 		t.Fatal(s.Counters())
 	}
 	r := joinPump(t, g, 1, PumpOptions{FuelCap: 1})
-	if r.FuelUsed != 6 || r.State != Sliced || len(r.Reports) != 0 || g.Inspect().Scripts[0].Runs[0].Status != Preempted {
+	if r.FuelUsed != 6 || r.State != Sliced || len(operationalReports(r.Reports)) != 0 || g.Inspect().Scripts[0].Runs[0].Status != Preempted {
 		t.Fatal(r)
 	}
 	end := joinEnd(t, joinPump(t, g, 1, PumpOptions{}), "s")
@@ -393,6 +393,7 @@ func TestReloadChecksBeforeDiscardAndCarriesCommittedState(t *testing.T) {
 		t.Fatal("rejected Reload changed live call")
 	}
 	reports, e := s.Reload("script variable stage=0\non go\nreturn stage\nend", CarryVariables)
+	reports = operationalReports(reports)
 	if e != nil || len(reports) != 1 || reports[0].(*Stop).PendingCalls[0] != (*calls)[0].ID() || (*calls)[0].Context().Err() == nil || g.Inspect().Scripts[0].Vars[0].Val.String() != "1" {
 		t.Fatal(reports, e)
 	}
@@ -535,6 +536,7 @@ func TestReloadRecordsDiscardBeforeDecisionSettlement(t *testing.T) {
 	}
 	joinPump(t, g, 0, PumpOptions{FuelCap: 1})
 	reports, e := s.Reload("on go\nend go", ResetVariables)
+	reports = operationalReports(reports)
 	if e != nil {
 		t.Fatal(e)
 	}

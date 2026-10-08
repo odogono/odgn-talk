@@ -137,10 +137,10 @@ func TestPatternCompositionCostModelZero(t *testing.T) {
 	}
 	// clause 4 + load 1 + make-pattern (20 + 2 * program 5) + return 2.
 	// The result allocates 16 + 8 * program 5 bytes, with no other allocation.
-	if len(report.Reports) != 1 {
+	if len(operationalReports(report.Reports)) != 1 {
 		t.Fatalf("unexpected reports: %+v", report)
 	}
-	end, ok := report.Reports[0].(*RunEnd)
+	end, ok := operationalReports(report.Reports)[0].(*RunEnd)
 	if !ok || report.FuelUsed != 37 || end.Alloc != 56 {
 		t.Fatalf("unexpected compilation charge: %+v", report)
 	}

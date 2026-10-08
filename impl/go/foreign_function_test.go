@@ -105,7 +105,7 @@ func TestHostFunctionCallDefaultsAndWrongArity(t *testing.T) {
 	if failure == nil || failure.Data.Get("reason").String() != `"errored"` || failure.Data.Get("error").Get("code").String() != `"wrong arity"` {
 		t.Fatal(failure, result)
 	}
-	for _, r := range result.Reports {
+	for _, r := range operationalReports(result.Reports) {
 		if end, ok := r.(*RunEnd); ok && end.Outcome == Errored {
 			if end.Fuel != 0 || end.Alloc != 0 {
 				t.Fatal(end)
@@ -216,7 +216,7 @@ func TestForeignFunctionUsesHomeBudgetsAndCallerDepth(t *testing.T) {
 	if failure == nil || failure.Data.Get("error").Get("reason").String() != `"limit fault"` {
 		t.Fatal(failure, result)
 	}
-	for _, r := range result.Reports {
+	for _, r := range operationalReports(result.Reports) {
 		if end, ok := r.(*RunEnd); ok && end.Script == "home" {
 			if end.Outcome != LimitFault || end.Limit != "fuel" || end.Fuel > 30 {
 				t.Fatal(end)
@@ -250,8 +250,8 @@ func TestHostFunctionCallStaleAndGroupValidation(t *testing.T) {
 	if failure == nil || failure.Data.String() != `{reason: "function gone"}` || result.FuelUsed != 0 {
 		t.Fatal(failure, result)
 	}
-	if len(result.Reports) != 0 {
-		t.Fatal(result.Reports)
+	if len(operationalReports(result.Reports)) != 0 {
+		t.Fatal(operationalReports(result.Reports))
 	}
 }
 
@@ -374,10 +374,10 @@ func TestHostFunctionCancellationBeforeRunReleasesMailbox(t *testing.T) {
 	if home.Counters().Runs != 1 {
 		t.Fatal(home.Counters())
 	}
-	if len(result.Reports) != 1 {
-		t.Fatal(result.Reports)
+	if len(operationalReports(result.Reports)) != 1 {
+		t.Fatal(operationalReports(result.Reports))
 	}
-	end := result.Reports[0].(*RunEnd)
+	end := operationalReports(result.Reports)[0].(*RunEnd)
 	if end.Delivery != id || end.Run != "" || end.Outcome != Cancelled {
 		t.Fatal(end)
 	}

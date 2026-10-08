@@ -23,10 +23,10 @@ func TestBroadcastSelectsRecipientsAtDrain(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
-	end := r.Reports[0].(*RunEnd)
+	end := operationalReports(r.Reports)[0].(*RunEnd)
 	if end.Broadcast != id || end.Script != "late" || end.Delivery != "d1" || s.Counters().Runs != 1 || g.Script("uninterested").Counters().Runs != 0 {
 		t.Fatal(end)
 	}
@@ -80,7 +80,7 @@ func TestBroadcastDecisionCancellationRemovesEveryQueuedRecipient(t *testing.T) 
 	<-ready
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	answer := d.Decided()
-	if err != nil || r.FuelUsed != 0 || len(r.Reports) != 3 || answer == nil || answer.Broadcast != id || answer.Verdict != Undecided || len(answer.Undecided) != 2 {
+	if err != nil || r.FuelUsed != 0 || len(operationalReports(r.Reports)) != 3 || answer == nil || answer.Broadcast != id || answer.Verdict != Undecided || len(answer.Undecided) != 2 {
 		t.Fatal(r, answer, err)
 	}
 	for i, name := range []string{"a", "b"} {
@@ -128,7 +128,7 @@ func TestBroadcastCancellationPreservesSealedRecipientRun(t *testing.T) {
 		t.Fatal(answer, g.Inspect())
 	}
 	r, err := g.Pump(now.Add(time.Second), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Script != "sealed" || r.Reports[0].(*RunEnd).Outcome != Completed {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Script != "sealed" || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Completed {
 		t.Fatal(r, err)
 	}
 }
@@ -149,7 +149,7 @@ func TestBroadcastAcceptedPastMailboxCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || s.Counters().Runs != 2 || r.Reports[1].(*RunEnd).Broadcast != "b1" {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || s.Counters().Runs != 2 || operationalReports(r.Reports)[1].(*RunEnd).Broadcast != "b1" {
 		t.Fatal(r, err)
 	}
 }
@@ -169,7 +169,7 @@ func TestBroadcastOverridesUseDefaultAdmissionAndTighterRecipientLimit(t *testin
 	}
 	limits.FuelPerRun = 1000000
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || d.Decided() == nil || d.Decided().Verdict != Undecided || d.Decided().Undecided[0].Outcome != LimitFault || r.Reports[0].(*RunEnd).Fuel > 5 {
+	if err != nil || d.Decided() == nil || d.Decided().Verdict != Undecided || d.Decided().Undecided[0].Outcome != LimitFault || operationalReports(r.Reports)[0].(*RunEnd).Fuel > 5 {
 		t.Fatal(r, err, d.Decided())
 	}
 }
@@ -217,7 +217,7 @@ func TestBroadcastDecisionEmptySettlesAtPump(t *testing.T) {
 		t.Fatal(id, future, err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
 	d := future.Decided()
@@ -242,7 +242,7 @@ func TestBroadcastTargetsRecipientOwnerWithoutClimbing(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || !g.Inspect().Scripts[1].Vars[0].Val.Equal(child.Value()) || g.Script("parent").Counters().Runs != 0 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || !g.Inspect().Scripts[1].Vars[0].Val.Equal(child.Value()) || g.Script("parent").Counters().Runs != 0 {
 		t.Fatal(r, err, g.Inspect())
 	}
 }
@@ -333,7 +333,7 @@ func TestBroadcastCopiesInputsAndValidatesGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || !r.Reports[0].(*RunEnd).Result.Equal(Int(7)) {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || !operationalReports(r.Reports)[0].(*RunEnd).Result.Equal(Int(7)) {
 		t.Fatal(r, err)
 	}
 }
@@ -364,7 +364,7 @@ func TestBroadcastDuringPumpWaitsForNextDrain(t *testing.T) {
 		t.Fatal("Broadcast drained during Pump")
 	}
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Broadcast != "b1" {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Broadcast != "b1" {
 		t.Fatal(r, err)
 	}
 }
@@ -396,7 +396,7 @@ func TestConcurrentBroadcastAdmission(t *testing.T) {
 		seen[id] = true
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 20 || s.Counters().Runs != 20 {
+	if err != nil || len(operationalReports(r.Reports)) != 20 || s.Counters().Runs != 20 {
 		t.Fatal(r, err)
 	}
 }

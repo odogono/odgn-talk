@@ -93,10 +93,19 @@ func TestRestorePreemptedOpenJoin(t *testing.T) {
 				t.Fatal(err)
 			}
 			ends := []*RunEnd{}
-			for _, report := range pumped.Reports {
+			for _, report := range operationalReports(pumped.Reports) {
 				if end, ok := report.(*RunEnd); ok {
 					ends = append(ends, end)
 				}
+			}
+			var accounting *RunAccounting
+			for _, report := range pumped.Reports {
+				if r, ok := report.(*RunAccounting); ok {
+					accounting = r
+				}
+			}
+			if accounting == nil || accounting.State != "terminal" || len(ends) != 1 || accounting.Fuel != ends[0].Fuel {
+				t.Fatal("lost restored Fuel", accounting, ends)
 			}
 			if len(ends) != 1 {
 				t.Fatalf("Run ends %d", len(ends))
@@ -404,8 +413,8 @@ func TestSettleDuringSaveBeforeFirstRestoredPump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pumped.Reports) != 1 || pumped.Reports[0].(*RunEnd).Result.String() != "42" {
-		t.Fatal(pumped.Reports)
+	if len(operationalReports(pumped.Reports)) != 1 || operationalReports(pumped.Reports)[0].(*RunEnd).Result.String() != "42" {
+		t.Fatal(operationalReports(pumped.Reports))
 	}
 }
 
@@ -532,8 +541,8 @@ func TestReissueFuelFaultSkipsSiblingHostCalls(t *testing.T) {
 			if starts != 1 {
 				t.Fatalf("started %d Host calls after reissue fault", starts)
 			}
-			if len(pumped.Reports) != 1 || pumped.Reports[0].(*RunEnd).Outcome != LimitFault {
-				t.Fatal(pumped.Reports)
+			if len(operationalReports(pumped.Reports)) != 1 || operationalReports(pumped.Reports)[0].(*RunEnd).Outcome != LimitFault {
+				t.Fatal(operationalReports(pumped.Reports))
 			}
 		})
 	}

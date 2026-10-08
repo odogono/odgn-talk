@@ -28,7 +28,7 @@ end go`, Limits{AllocPerRun: tc.budget})
 			joinLoad(t, g, "c", "on ping n\n return n\nend ping", Limits{})
 			a.Deliver(Message{Name: "go"})
 			r := joinPump(t, g, 0, PumpOptions{})
-			if len(r.Reports) != 3 || joinEnd(t, r, "b").Result.String() != "7" || joinEnd(t, r, "c").Result.String() != "9" || !r.NextDeadline.IsZero() {
+			if len(operationalReports(r.Reports)) != 3 || joinEnd(t, r, "b").Result.String() != "7" || joinEnd(t, r, "c").Result.String() != "9" || !r.NextDeadline.IsZero() {
 				t.Fatal(r)
 			}
 			end := joinEnd(t, r, "a")
@@ -74,7 +74,7 @@ end query`, Limits{})
 	joinPump(t, g, 0, PumpOptions{})
 	joinPump(t, g, 0, PumpOptions{FuelCap: 15})
 	unwind := joinPump(t, g, 0, PumpOptions{FuelCap: 1})
-	if len(unwind.Reports) != 0 || unwind.FuelUsed != 4 || unwind.State != Sliced || g.Inspect().Scripts[0].Vars[0].Val.String() != "false" {
+	if len(operationalReports(unwind.Reports)) != 0 || unwind.FuelUsed != 4 || unwind.State != Sliced || g.Inspect().Scripts[0].Vars[0].Val.String() != "false" {
 		t.Fatal(unwind)
 	}
 	runs := g.Inspect().Scripts[0].Runs

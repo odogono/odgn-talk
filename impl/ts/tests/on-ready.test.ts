@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -29,7 +30,7 @@ const setup = () => {
       'on go\n  return 7\nend go\non choose, deciding\nend choose\non exported\n  return given x: x\nend exported',
   });
   script.deliver({ name: 'exported' });
-  const report = group.pump(clock).reports[0]!;
+  const report = operationalReports(group.pump(clock).reports)[0]!;
   if (report.kind !== 'run end' || !report.result) {
     throw new Error('No exported Function Value');
   }
@@ -49,7 +50,7 @@ test('every queued Delivery notifies the Host before returning', () => {
   script.deliver({ name: 'go' });
   expect(ready).toBe(2);
 
-  expect(group.pump(clock).reports).toHaveLength(2);
+  expect(operationalReports(group.pump(clock).reports)).toHaveLength(2);
   expect(ready).toBe(2);
 });
 
@@ -185,7 +186,7 @@ test.each(['answer', 'fail'] as const)(
         : call.fail(new ScriptError('unavailable', 'Try later'));
     respond();
     expect(state.ready()).toBe(1);
-    expect(state.group.pump(clock).reports).toContainEqual(
+    expect(operationalReports(state.group.pump(clock).reports)).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
         outcome: reply === 'answer' ? 'completed' : 'errored',
@@ -308,7 +309,7 @@ test.each(['answer', 'fail'] as const)(
       'ready',
       'ready',
     ]);
-    expect(group.pump(clock).reports).toContainEqual(
+    expect(operationalReports(group.pump(clock).reports)).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
         handler: 'later',

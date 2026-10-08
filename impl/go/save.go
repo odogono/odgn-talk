@@ -33,6 +33,7 @@ const (
 )
 
 type RestoreResult struct {
+	Reports         []Report
 	VariablesOnly   bool
 	Pending         []PendingCall
 	DiscardedRuns   []RunID
@@ -111,6 +112,7 @@ func (s savedOperation) operation() Operation {
 }
 
 type savedGroup struct {
+	Accounting                      accountingState
 	Family, Format                  string
 	Versions                        Versions
 	Name, Fingerprint               string
@@ -179,6 +181,7 @@ type savedWork struct {
 	Delivery savedDelivery
 }
 type savedDelivery struct {
+	Ancestry                      RunAncestry
 	ID                            DeliveryID
 	Broadcast                     BroadcastID
 	Script                        string
@@ -271,7 +274,7 @@ func (g *Group) Save() ([]byte, error) {
 		}
 	}
 	g.mu.Lock()
-	data := savedGroup{Family: "northtalk-go", Format: CoreVersions().SaveFormat, Versions: CoreVersions(), Name: g.options.Name, Fingerprint: fmt.Sprintf("%x", g.fingerprint()), Save: g.nextSave, Clock: g.clock, Delivery: g.nextDelivery, Broadcast: g.nextBroadcast, Timer: g.nextTimer, Libraries: map[string][32]byte{}}
+	data := savedGroup{Accounting: g.accounting, Family: "northtalk-go", Format: CoreVersions().SaveFormat, Versions: CoreVersions(), Name: g.options.Name, Fingerprint: fmt.Sprintf("%x", g.fingerprint()), Save: g.nextSave, Clock: g.clock, Delivery: g.nextDelivery, Broadcast: g.nextBroadcast, Timer: g.nextTimer, Libraries: map[string][32]byte{}}
 	refs := map[any]string{g: "group"}
 	for _, s := range g.scripts {
 		refs[s.state] = "script/" + s.name
@@ -309,7 +312,7 @@ func (g *Group) Save() ([]byte, error) {
 	}
 	var deliveryData func(delivery) savedDelivery
 	deliveryData = func(d delivery) savedDelivery {
-		row := savedDelivery{ID: d.id, Broadcast: d.broadcast, Message: d.message, Decision: decision(d.decision), Cancel: d.cancel, Kind: d.kind, Fields: d.fields, Reason: d.reason, From: d.from, During: d.during, Reply: d.reply, Function: d.function, Target: objectRef(d.target), After: objectRef(d.after), Parent: objectRef(d.parent), Object: objectRef(d.object), Path: d.path}
+		row := savedDelivery{Ancestry: d.ancestry, ID: d.id, Broadcast: d.broadcast, Message: d.message, Decision: decision(d.decision), Cancel: d.cancel, Kind: d.kind, Fields: d.fields, Reason: d.reason, From: d.from, During: d.during, Reply: d.reply, Function: d.function, Target: objectRef(d.target), After: objectRef(d.after), Parent: objectRef(d.parent), Object: objectRef(d.object), Path: d.path}
 		if d.script != nil {
 			row.Script = d.script.name
 		}
