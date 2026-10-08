@@ -765,8 +765,9 @@ export const displayText = (s: string): string => {
   flush();
   return pieces.length ? pieces.join(' & ') : '""';
 };
+// A Word key is bare, except `offer`, which source reserves as a key (chapter 2).
 const displayKey = (key: string): string => {
-  if (/^[A-Z_a-z]\w*$/.test(key)) {
+  if (key !== 'offer' && /^[A-Z_a-z]\w*$/.test(key)) {
     return key;
   }
   const display = displayText(key);

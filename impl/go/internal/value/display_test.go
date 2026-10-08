@@ -19,6 +19,13 @@ func TestDisplayRoundTrips(t *testing.T) {
 	}
 }
 
+func TestDisplayQuotesOfferKey(t *testing.T) {
+	v, e := ParseDisplay(`{"offer": 1, if: true}`, nil)
+	if e != nil || v.Display() != `{"offer": 1, if: true}` {
+		t.Fatal(v.Display(), e)
+	}
+}
+
 func TestFunctionDisplayPlaces(t *testing.T) {
 	for _, tt := range []struct{ home, code, want string }{
 		{"weather", "12:3", "<function weather:12:3>"},
