@@ -467,6 +467,14 @@ for (const name of [
   });
 }
 
+test('Session extension Lambdas display their source unit and captures across save/restore', () => {
+  const dir = resolve(
+    import.meta.dir,
+    '../../../corpus/sessions/extension-lambdas',
+  );
+  expect(runTranscriptCase(dir).divergence).toBeUndefined();
+});
+
 test('tell blocks replay exactly with and without save/restore', () => {
   const root = resolve(import.meta.dir, '../../../corpus/tell-block');
   const cases = readdirSync(root).filter(name =>
