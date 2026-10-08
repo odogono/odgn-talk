@@ -69,3 +69,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0065: Run accounting is returned to every Host](0065-run-accounting-is-returned-to-every-host.md)
 - [0066: Fuel measurements follow spawned Runs](0066-fuel-measurements-follow-spawned-runs.md)
 - [0067: Inspection is replayable ordinary execution](0067-inspection-is-replayable-ordinary-execution.md)
+- [0068: A Run in its first Segment can be rewound to its Delivery](0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)
