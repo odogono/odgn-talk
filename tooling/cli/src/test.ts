@@ -38,6 +38,7 @@ import { readManifest, type HostManifest } from '@odgn/northtalk-tooling/lint';
 import { differs, replayFile } from './replay';
 
 // The Test Library, supplied by the runner as a Host-supplied Library.
+// Its errors name the Test Script's call, as the stdlib's do.
 const TEST_LIBRARY = `function assert condition, message = "expected true"
   if condition is not true then throw {code: "assertion failed", message: message}
   return nothing
@@ -424,8 +425,9 @@ class TestRun {
           ['code', text(r.error.code)],
           ...fields.filter(([k]) => k !== 'at'),
         ]);
+        const at = errorAt(r.error.data) ?? r.at;
         this.problems.push({
-          ...(r.at ? { at: this.location(r.at) } : {}),
+          ...(at ? { at: this.location(at) } : {}),
           text: `${who} errored: ${error.toString()}${
             r.error.message ? `\n  ${r.error.message}` : ''
           }`,
@@ -452,8 +454,8 @@ class TestRun {
     }
   }
 
-  // A source position in a Script's file. Inside the Test Library, or any
-  // other Library, it's the Test Handler's own.
+  // A source position in a Script's file. Inside a Host's Library, it's the
+  // Test Handler's own.
   private location(at: { col: number; line: number; unit: string }): Location {
     const file = this.files.get(at.unit);
     return file
@@ -483,6 +485,7 @@ class TestRun {
               { name: src.name, version: LIBRARY_VERSION, source: src.source },
               out,
               declarations,
+              { atCaller: src.name === 'test' },
             ),
           );
         } catch (error) {
@@ -677,6 +680,23 @@ const mockedOperation = (
     );
   }
   return key;
+};
+
+// An error's `at`, which names its Script's call into the Test Library or the
+// stdlib, where its raise is inside them (ADR 0037).
+const errorAt = (error: Value) => {
+  const at = error.kind === 'map' ? error.get('at') : nothing;
+  if (at.kind !== 'map') {
+    return undefined;
+  }
+  const [unit, line, col] = [at.get('unit'), at.get('line'), at.get('column')];
+  return unit.kind === 'text' && line.kind === 'number' && col.kind === 'number'
+    ? {
+        unit: unit.asText()!,
+        line: Number(line.toString()),
+        col: Number(col.toString()),
+      }
+    : undefined;
 };
 
 // An error map as a Host function fails with it, its code and message apart.
