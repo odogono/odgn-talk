@@ -1,0 +1,5 @@
+# Fuel measurements follow spawned Runs
+
+A Fuel Measurement follows the Entry's Run and every Run it transitively spawns, including detached sends and error Handlers. It finishes only when the family has neither live Runs nor queued descendant messages; cancellation, faults and discarded work keep the Fuel already spent. Later timer Deliveries and pre-existing Runs merely awakened by a message are not descendants. This is a precise measure of work, not wall-clock time or every downstream consequence. Settled in [#370](https://github.com/odogono/odgn-talk/issues/370).
+
+We chose this over Entry-only Fuel, which hides dispatched work, and whole-Pump Fuel, which includes unrelated background work. Counting all consequences would require attribution across Host boundaries and shared existing Runs; there is no unique answer for those. Detached descendants may never end, so `:fuel` can show an exact pending total indefinitely. Saves retain measurement state and restore rewinds it with the Group. [The Session rules](../../spec/session-observation.md#fuel-measurements) define reporting and interruption.

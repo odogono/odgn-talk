@@ -1,5 +1,8 @@
 # NorthTalk tooling
 
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is specified but not implemented here. Marked declaration-doc attachment/shared hover, the new observation commands, object-crossing replay and their prompt handling remain unavailable. Existing comment preservation does not implement doc attachment.
+
+
 `@odgn/northtalk-tooling` is the browser-safe TypeScript tooling stack over
 `@odgn/northtalk`. It imports only the Core; file, stdio and process handling
 belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity

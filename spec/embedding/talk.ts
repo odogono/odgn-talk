@@ -603,7 +603,44 @@ export interface EffectFailure {
   detail?: string; // Host-only, not covered by parity
 }
 
+/** Ordinary Host Delivery ancestry; retained across forwarding and saves. */
+export interface RunAncestry {
+  rootDelivery: string;
+  parentRun?: string; // absent for a root Run
+  parentCall?: string; // present when spawned through a call
+}
+export interface RunStarted extends RunAncestry {
+  kind: "run started";
+  script: string;
+  run: string;
+  delivery?: string;
+  selector?: string; // absent for a Function Value invocation
+  fn?: Value; // present instead of selector for a Function Value invocation
+  args: Value[];
+}
+export interface RunDiscarded extends RunAncestry {
+  kind: "run discarded";
+  script: string;
+  run: string;
+  reason: string; // stop, reload, library replacement, or variables-only restore
+}
+export interface RunAccounting extends RunAncestry {
+  kind: "run accounting";
+  script: string;
+  run: string;
+  fuel: number; // lifetime cumulative, including observation/cleanup charges
+  state: "live" | "terminal" | "discarded";
+}
+export interface CausalWork {
+  kind: "causal work";
+  rootDelivery: string;
+  liveRuns: number;
+  queuedMessages: number;
+  discardedMessages: number; // cumulative lifecycle discards, not normal consumption
+}
+
 export type Report =
+  | RunStarted | RunDiscarded | RunAccounting | CausalWork
   | {
       kind: "run end";
       script: string;
@@ -648,6 +685,7 @@ export interface RestoreOptions extends GroupOptions {
 }
 export interface PendingCall { id: string; script: string; grant: string; operation: OperationRef; args: Value[] }
 export interface RestoreResult {
+  reports: Report[]; // accounting baseline, including saved work discarded on restore
   variablesOnly: boolean;
   pending: PendingCall[]; // unsettled at the first Pump fails as `call lost`
   discardedRuns: string[];

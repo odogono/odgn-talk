@@ -22,7 +22,7 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 9. [Embedding](09-embedding.md), with the interface declarations [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts)
 10. [Save and restore](10-save-and-restore.md)
 11. [The Trace and conformance](11-the-trace-and-conformance.md), with the display form
-12. [Sessions and tooling](12-sessions-and-tooling.md)
+12. [Sessions and tooling](12-sessions-and-tooling.md), including [Session observation and declaration documentation](session-observation.md)
 
 ## Appendices
 

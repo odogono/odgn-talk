@@ -22,6 +22,12 @@ Catch dispatch can be saved at any instruction boundary, including ordinary catc
 - **Unobservable:** saving charges nothing and changes only the Trace save id counter. A successful save appears in the Trace only as a `save` record; a refused attempt writes `save` then `refused code="effects pending"`, allocating an attempt id but no restorable snapshot ([chapter 11](11-the-trace-and-conformance.md)).
 - **The bytes:** the same complete Group state, including its Trace save id counter, gives the same bytes on the same Core version. Consecutive saves advance that counter and therefore differ; saving never changes Script state or scheduling.
 
+### Accounting and Session observations
+
+A save preserves [Run accounting](09-embedding.md#run-accounting) ancestry on live Runs and queued messages, root discard counts, creation/admission order and accounting observations not yet returned. A Restore returns its specified accounting baseline, including exact saved Fuel for Runs discarded by VariablesOnly. It does not re-emit already-returned dispatch events or reset Fuel.
+
+A Session Host saves its observation state alongside the Group: filters, latched trace pairs, Fuel Measurements, retained defining-source documentation and its implicit Entry counter. [The Session restore rules](session-observation.md#save-and-restore) replace that state on restore and keep abandoned future totals separate. Captured object identities use the Host resolver; saving does not snapshot arbitrary native getter state.
+
 ### What a save holds
 
 A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-model.md#the-machines-state), as plain data:

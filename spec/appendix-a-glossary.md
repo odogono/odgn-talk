@@ -226,6 +226,14 @@ _Avoid_: current run, active run
 A `:`-prefixed instruction to the REPL or Playground itself, such as `:limits` or `:clock`, that is not part of the language and cannot be issued by a Script.
 _Avoid_: meta-command, directive, magic command
 
+**Declaration Documentation**:
+The plain-text documentation attached to a named declaration, shared by session inspection, name discovery and editor hover. Each Handler Clause has its own documentation, and a Function Value keeps the documentation of its defining source.
+_Avoid_: docstring, prose metadata
+
+**Fuel Measurement**:
+The Fuel spent by an Entry's Run and all Runs it transitively spawns, including detached work. It remains pending while any of those Runs or their queued messages remain, and excludes later Host Deliveries and pre-existing Runs awakened by the work.
+_Avoid_: timing, elapsed time, Pump cost
+
 **Host Manifest**:
 A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive and the Host Objects it may meet. Tooling reads it. The Core never does.
 _Avoid_: type definitions, SDK, d.ts, host profile

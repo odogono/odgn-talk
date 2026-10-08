@@ -820,10 +820,10 @@ type Inspection struct {
 
 type ScriptView struct {
 	DisabledGrants []string // disabled named Grants, in code-point order; empty when none
-	Name    string
-	Vars    []Pair        // its Script Variables, in declaration order
-	Runs    []RunView     // every Run that hasn't ended, in the order they started
-	Mailbox []MessageView // in mailbox order
+	Name           string
+	Vars           []Pair        // its Script Variables, in declaration order
+	Runs           []RunView     // every Run that hasn't ended, in the order they started
+	Mailbox        []MessageView // in mailbox order
 }
 
 type RunView struct {
@@ -899,10 +899,50 @@ type Counters struct {
 // ---------------------------------------------------------------------------
 
 // Report is one of *RunEnd, *Stop, *Unhandled, *CallFailed, *EffectFailure or *Decided. Hosts switch
-// on its type.
+// on its type. Accounting also adds *RunStarted, *RunDiscarded,
+// *RunAccounting and *CausalWork.
 type Report interface{ isReport() }
 
 type RunID string
+
+// RunAncestry is ordinary Host Delivery ancestry, retained across saves.
+type RunAncestry struct {
+	RootDelivery DeliveryID
+	ParentRun    RunID  // empty for a root Run
+	ParentCall   CallID // empty unless spawned through a call
+}
+
+type RunStarted struct {
+	RunAncestry
+	Script   string
+	Run      RunID
+	Delivery DeliveryID
+	Selector string // empty for a Function Value invocation
+	Function *Value // present instead of Selector for a Function Value invocation
+	Args     []Value
+}
+
+type RunDiscarded struct {
+	RunAncestry
+	Script string
+	Run    RunID
+	Reason string // stop, reload, library replacement, or variables-only restore
+}
+
+type RunAccounting struct {
+	RunAncestry
+	Script string
+	Run    RunID
+	Fuel   int64  // lifetime cumulative, including observation/cleanup charges
+	State  string // "live", "terminal" or "discarded"
+}
+
+type CausalWork struct {
+	RootDelivery      DeliveryID
+	LiveRuns          int64
+	QueuedMessages    int64
+	DiscardedMessages int64 // cumulative lifecycle discards
+}
 
 type Outcome int
 
@@ -1045,6 +1085,7 @@ const (
 func (c *Core) Restore(save []byte, o RestoreOptions) (*Group, RestoreResult, error)
 
 type RestoreResult struct {
+	Reports       []Report // accounting baseline, including saved work discarded on restore
 	VariablesOnly bool
 	Pending       []PendingCall // each must be settled before the first Pump
 	DiscardedRuns []RunID

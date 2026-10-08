@@ -16,6 +16,9 @@ Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec 
 
 ## The Session Host
 
+**Specified, not implemented:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core does not yet implement those commands, the public accounting reports or `RestoreResult.reports`, exact causal Fuel, retained documentation, or the associated save state. Existing Session/Trace cases continue to cover the previous surface. The specification's embedding declarations intentionally lead the implementation; the API comparison exposes that gap.
+
+
 `@odgn/northtalk/session` exports `SessionHost`, chapter 12's Session Host. It does no I/O of its own: its environment supplies the Clock and takes the Trace, and each call returns the lines the session printed.
 
 - **Entries:** a Session recognises a Handler Selector by its first word. `parseEntry(source, isHandler)` decides an Entry on its first token, and says whether a failed parse ran out of source, so a REPL can read more lines. `input()` keeps the session source, extends the Session Script with new declarations and with an implicit `entry<n>` Handler for each statement or expression, and reloads it, carrying Script Variables over, for a redefinition. Diagnostics and errors are shown in the Entry's own lines. `incomplete(source)` lets tooling line prompts use the same current Handler recognition, including labelled calls continued inside brackets.
