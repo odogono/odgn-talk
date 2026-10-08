@@ -16,7 +16,13 @@
       "smoke": {
         "n": 10,
         "expect": "55"
-      }
+      },
+      "slices": [
+        10,
+        100,
+        1000,
+        10000
+      ]
     },
     {
       "name": "core/calls",
@@ -254,6 +260,107 @@
       "smoke": {
         "n": 8,
         "expect": "24"
+      }
+    },
+    {
+      "name": "messaging/sends",
+      "n": 1500,
+      "expect": "1125750",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "partner",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "messaging/parents",
+      "n": 1500,
+      "expect": "1125750",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "parents",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "messaging/joins",
+      "n": 300,
+      "expect": "361200",
+      "smoke": {
+        "n": 2,
+        "expect": "24"
+      },
+      "host": "partner",
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "messaging/suspend",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "lifecycle/load-small",
+      "n": 1,
+      "expect": "1",
+      "smoke": {
+        "n": 1,
+        "expect": "1"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "lifecycle/load-large",
+      "n": 1,
+      "expect": "1291",
+      "smoke": {
+        "n": 1,
+        "expect": "1291"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "lifecycle/restore",
+      "n": 500,
+      "expect": "125250",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      },
+      "host": "restore",
+      "outlier": false,
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
+      }
+    },
+    {
+      "name": "lifecycle/rollback",
+      "n": 1000,
+      "expect": "0",
+      "smoke": {
+        "n": 4,
+        "expect": "0"
+      },
+      "skip": {
+        "peers": "NorthTalk embedding API; no peer counterpart."
       }
     }
   ]

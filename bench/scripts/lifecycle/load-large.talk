@@ -1,0 +1,767 @@
+-- A large Script whose Load time is the measurement: 40 functions that each
+-- use loops, Maps, Lists, text and a try. Its Run calls each one once.
+
+function step1 x
+  put {id: x, label: "item 1 of " & x, tags: [x, x + 1]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 1 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 1"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step1
+
+function step2 x
+  put {id: x, label: "item 2 of " & x, tags: [x, x + 2]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 2 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 2"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step2
+
+function step3 x
+  put {id: x, label: "item 3 of " & x, tags: [x, x + 3]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 3 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 3"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step3
+
+function step4 x
+  put {id: x, label: "item 4 of " & x, tags: [x, x + 4]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 4 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 4"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step4
+
+function step5 x
+  put {id: x, label: "item 5 of " & x, tags: [x, x + 5]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 5 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 5"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step5
+
+function step6 x
+  put {id: x, label: "item 6 of " & x, tags: [x, x + 6]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 6 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 6"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step6
+
+function step7 x
+  put {id: x, label: "item 7 of " & x, tags: [x, x + 7]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 7 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 7"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step7
+
+function step8 x
+  put {id: x, label: "item 8 of " & x, tags: [x, x + 8]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 8 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 8"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step8
+
+function step9 x
+  put {id: x, label: "item 9 of " & x, tags: [x, x + 9]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 9 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 9"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step9
+
+function step10 x
+  put {id: x, label: "item 10 of " & x, tags: [x, x + 10]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 10 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 10"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step10
+
+function step11 x
+  put {id: x, label: "item 11 of " & x, tags: [x, x + 11]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 11 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 11"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step11
+
+function step12 x
+  put {id: x, label: "item 12 of " & x, tags: [x, x + 12]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 12 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 12"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step12
+
+function step13 x
+  put {id: x, label: "item 13 of " & x, tags: [x, x + 13]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 13 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 13"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step13
+
+function step14 x
+  put {id: x, label: "item 14 of " & x, tags: [x, x + 14]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 14 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 14"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step14
+
+function step15 x
+  put {id: x, label: "item 15 of " & x, tags: [x, x + 15]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 15 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 15"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step15
+
+function step16 x
+  put {id: x, label: "item 16 of " & x, tags: [x, x + 16]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 16 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 16"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step16
+
+function step17 x
+  put {id: x, label: "item 17 of " & x, tags: [x, x + 17]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 17 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 17"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step17
+
+function step18 x
+  put {id: x, label: "item 18 of " & x, tags: [x, x + 18]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 18 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 18"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step18
+
+function step19 x
+  put {id: x, label: "item 19 of " & x, tags: [x, x + 19]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 19 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 19"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step19
+
+function step20 x
+  put {id: x, label: "item 20 of " & x, tags: [x, x + 20]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 20 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 20"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step20
+
+function step21 x
+  put {id: x, label: "item 21 of " & x, tags: [x, x + 21]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 21 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 21"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step21
+
+function step22 x
+  put {id: x, label: "item 22 of " & x, tags: [x, x + 22]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 22 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 22"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step22
+
+function step23 x
+  put {id: x, label: "item 23 of " & x, tags: [x, x + 23]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 23 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 23"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step23
+
+function step24 x
+  put {id: x, label: "item 24 of " & x, tags: [x, x + 24]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 24 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 24"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step24
+
+function step25 x
+  put {id: x, label: "item 25 of " & x, tags: [x, x + 25]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 25 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 25"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step25
+
+function step26 x
+  put {id: x, label: "item 26 of " & x, tags: [x, x + 26]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 26 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 26"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step26
+
+function step27 x
+  put {id: x, label: "item 27 of " & x, tags: [x, x + 27]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 27 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 27"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step27
+
+function step28 x
+  put {id: x, label: "item 28 of " & x, tags: [x, x + 28]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 28 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 28"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step28
+
+function step29 x
+  put {id: x, label: "item 29 of " & x, tags: [x, x + 29]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 29 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 29"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step29
+
+function step30 x
+  put {id: x, label: "item 30 of " & x, tags: [x, x + 30]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 30 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 30"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step30
+
+function step31 x
+  put {id: x, label: "item 31 of " & x, tags: [x, x + 31]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 31 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 31"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step31
+
+function step32 x
+  put {id: x, label: "item 32 of " & x, tags: [x, x + 32]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 32 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 32"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step32
+
+function step33 x
+  put {id: x, label: "item 33 of " & x, tags: [x, x + 33]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 33 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 33"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step33
+
+function step34 x
+  put {id: x, label: "item 34 of " & x, tags: [x, x + 34]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 34 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 34"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step34
+
+function step35 x
+  put {id: x, label: "item 35 of " & x, tags: [x, x + 35]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 35 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 35"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step35
+
+function step36 x
+  put {id: x, label: "item 36 of " & x, tags: [x, x + 36]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 36 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 36"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step36
+
+function step37 x
+  put {id: x, label: "item 37 of " & x, tags: [x, x + 37]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 37 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 37"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step37
+
+function step38 x
+  put {id: x, label: "item 38 of " & x, tags: [x, x + 38]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 38 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 38"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step38
+
+function step39 x
+  put {id: x, label: "item 39 of " & x, tags: [x, x + 39]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 39 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 39"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step39
+
+function step40 x
+  put {id: x, label: "item 40 of " & x, tags: [x, x + 40]} into record
+  put 0 into total
+  repeat for each t in record's tags
+    if t > 40 then
+      add t to total
+    else
+      subtract 1 from total
+    end if
+  end repeat
+  try
+    if total < 0 then throw {code: "negative 40"}
+  catch {code: c}
+    add the length of c to total
+  end try
+  return total + the length of record's label
+end step40
+
+on run n
+  put 0 into total
+  add step1(n) to total
+  add step2(n) to total
+  add step3(n) to total
+  add step4(n) to total
+  add step5(n) to total
+  add step6(n) to total
+  add step7(n) to total
+  add step8(n) to total
+  add step9(n) to total
+  add step10(n) to total
+  add step11(n) to total
+  add step12(n) to total
+  add step13(n) to total
+  add step14(n) to total
+  add step15(n) to total
+  add step16(n) to total
+  add step17(n) to total
+  add step18(n) to total
+  add step19(n) to total
+  add step20(n) to total
+  add step21(n) to total
+  add step22(n) to total
+  add step23(n) to total
+  add step24(n) to total
+  add step25(n) to total
+  add step26(n) to total
+  add step27(n) to total
+  add step28(n) to total
+  add step29(n) to total
+  add step30(n) to total
+  add step31(n) to total
+  add step32(n) to total
+  add step33(n) to total
+  add step34(n) to total
+  add step35(n) to total
+  add step36(n) to total
+  add step37(n) to total
+  add step38(n) to total
+  add step39(n) to total
+  add step40(n) to total
+  return total
+end run

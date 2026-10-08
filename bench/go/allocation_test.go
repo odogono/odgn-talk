@@ -29,7 +29,7 @@ func TestCoreRunAllocationBudgets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			loaded, err := Load(northtalk.New(), bench.Name, source, bench.Host)
+			loaded, err := Load(northtalk.New(), bench, bench.Name, source)
 			if err != nil {
 				t.Fatal(err)
 			}

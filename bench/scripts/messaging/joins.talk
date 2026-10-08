@@ -1,0 +1,16 @@
+-- Joins of eight sends to another Script: starting each Join Member, and one
+-- suspend and resume for the whole Join.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    wait for all
+      repeat for each j in 1..8
+        send echo with i to partner and wait
+      end repeat
+    end wait
+    repeat for each answer in it
+      add answer to total
+    end repeat
+  end repeat
+  return total
+end run

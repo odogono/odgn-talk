@@ -1,0 +1,4 @@
+-- A small Script whose Load time is the measurement. Its Run is trivial.
+on run n
+  return n
+end run

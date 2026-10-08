@@ -21,10 +21,10 @@ for (const b of manifest().filter(
   let loads = 0;
   // A fresh name for each Load, so the compile cache never hits.
   const load = await measure(
-    () => new Loaded(`load${++loads}`, source, b.host),
+    () => new Loaded(b, `load${++loads}`, source),
     options,
   );
-  const loaded = new Loaded(b.name, source, b.host);
+  const loaded = new Loaded(b, b.name, source);
   const { n } = sizeOf(b, smoke);
   const run = await measure(() => loaded.run(n), options);
   measurements.push({

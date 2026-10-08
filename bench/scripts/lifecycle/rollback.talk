@@ -1,0 +1,22 @@
+-- A Run that appends N values and then recurses past the call depth limit.
+-- Its Limit Fault rolls the Segment back, so the values are gone again.
+script variable values = []
+
+function deeper k
+  return deeper(k + 1) + 1
+end deeper
+
+on fill n
+  repeat for each i in 1..n
+    put i after values
+  end repeat
+  return deeper(0)
+end fill
+
+on run n
+  try
+    send fill with n to me and wait
+  catch {code: "send failed", reason: "limit fault"}
+  end try
+  return the length of values
+end run

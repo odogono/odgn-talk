@@ -1,0 +1,5 @@
+-- The partner Script the `partner` Host loads beside a messaging Benchmark.
+-- It is not a Benchmark itself.
+on echo x
+  return x
+end echo
