@@ -685,7 +685,8 @@ export interface RestoreOptions extends GroupOptions {
 }
 export interface PendingCall { id: string; script: string; grant: string; operation: OperationRef; args: Value[] }
 export interface RestoreResult {
-  reports: Report[]; // accounting baseline, including saved work discarded on restore
+  // Pending #370: add reports: Report[] with the accounting implementation.
+  // The exact staged amendment is in chapter 9, Run accounting.
   variablesOnly: boolean;
   pending: PendingCall[]; // unsettled at the first Pump fails as `call lost`
   discardedRuns: string[];

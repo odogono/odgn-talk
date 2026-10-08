@@ -112,7 +112,7 @@ use `gofmt`. Their `--check` modes refuse missing or stale output without writin
 
 ## REPL and Session Transcripts
 
-**Specified, not implemented:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core does not yet implement those commands, the public accounting reports or `RestoreResult.reports`, exact causal Fuel, retained documentation, or the associated save state. Existing Session/Trace cases continue to cover the previous surface. The specification's embedding declarations intentionally lead the implementation; the API comparison exposes that gap.
+**Specified, not implemented:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core does not yet implement those commands, the public accounting reports or `RestoreResult.reports`, exact causal Fuel, retained documentation, or the associated save state. Existing Session/Trace cases continue to cover the previous surface. New accounting report types are specified ahead of implementation. The `RestoreResult` field extension is explicitly staged in chapter 9 until both Cores implement it; the active existing type remains checked against the runtime.
 
 
 From `impl/go/`, run the Go REPL or record/replay a Transcript:
