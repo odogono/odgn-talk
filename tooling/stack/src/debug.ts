@@ -1,6 +1,7 @@
 import {
   formatInstant,
   list,
+  type CarryOver,
   type CodeUnit,
   type Group,
   type PumpOptions,
@@ -12,6 +13,7 @@ import type {
   DebugPause,
   DebugSnapshot,
   DebugSource,
+  RepeatedEffect,
 } from '@odgn/northtalk/debug';
 import {
   replayTrace,
@@ -434,7 +436,47 @@ export class LiveDebugger {
   stepOut(): DebugResult {
     return this.result(this.controller.stepOut());
   }
+  /** The paused Run's effects that Fix and Continue would make happen again. */
+  repeatedEffects(): RepeatedEffect[] {
+    return this.pausedRun().repeated;
+  }
+  /**
+   * Fix and Continue (ADR 0068): rewind the paused Run, Reload its Script from
+   * source with the mailbox kept, and pause where its message runs again.
+   * unit is source's lowering, to rebind breakpoints.
+   */
+  fixAndContinue(
+    source: string,
+    carry: CarryOver,
+    unit: CodeUnit,
+  ): DebugResult {
+    const pause = this.controller.current!;
+    if (!this.pausedRun().rewindable) {
+      throw new Error(
+        `${pause.run} has passed a Suspension Point, so it can't be rewound`,
+      );
+    }
+    const script = this.group.script(pause.script)!;
+    script.rewindRun(pause.run);
+    const landed = this.controller.resume();
+    if (landed.state !== 'rewound') {
+      throw new Error(`The Rewind of ${pause.run} didn't land`);
+    }
+    script.reload(source, carry, { keepMailbox: true });
+    this.registerSource(unit, pause.script);
+    this.controller.pauseAtNextStart(pause.script);
+    return this.pump(this.clock());
+  }
 
+  private pausedRun(): DebugSnapshot['scripts'][number]['runs'][number] {
+    const pause = this.controller.current;
+    if (!pause) {
+      throw new Error('The Group is not debug-paused');
+    }
+    return this.snapshot()
+      .scripts.find(s => s.name === pause.script)!
+      .runs.find(r => r.id === pause.run)!;
+  }
   private result(result: PumpResult): DebugResult {
     const pause = this.controller.current;
     return pause ? { state: 'paused', pause } : result;

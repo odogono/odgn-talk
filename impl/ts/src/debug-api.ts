@@ -6,4 +6,5 @@ export type {
   DebugPause,
   DebugSnapshot,
   DebugSource,
+  RepeatedEffect,
 } from './debug';

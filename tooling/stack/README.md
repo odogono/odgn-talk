@@ -259,6 +259,15 @@ execute, and into/out follows waiting sends and foreign Function Values.
 Breakpoints in every Run remain active during steps. An intervening breakpoint
 replaces the pending step; start a new step from that pause if desired.
 
+`fixAndContinue(source, carry, unit)` is Fix and Continue (ADR 0068). It
+rewinds the paused Run, Reloads its Script from `source` with the mailbox kept,
+rebinds breakpoints to `unit` (the source's lowering), and pumps, pausing as a
+step at the first instruction of the Run that takes the message again. It throws
+if the paused Run has passed a Suspension Point. `repeatedEffects()` lists the
+paused Run's calls and sends that a Rewind leaves done, so they happen again;
+Segment-bound calls roll back and are left out. The Rewind's Trace line carries
+the pause's `pc`, so the Trace replays.
+
 `pauseOn({ error: true, limitFault: true })` replaces the fault settings. Errors,
 caught or uncaught, and Limit Faults pause before unwinding or rollback. `current`
 contains the Run, Script, code unit, Handler, instruction, source position and
