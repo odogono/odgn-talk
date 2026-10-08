@@ -1,0 +1,37 @@
+# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
+# effect-coordinator-shared: r, its alias and other, with another binding,
+# share the coordinator db. In d1 the first write enrolls r and runs one
+# begin; alias and other enroll with no hook, and one commit covers all three.
+# In d2 other enrolls first, so begin and commit name it.
+
+> load s identity=c0ef981f04d47562c0c607d5c54938196dfcba5782c2fd90d8076938a05885b0
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+call s/r1.c2 op=alias.write args=[] result=nothing
+call s/r1.c3 op=other.write args=[] result=nothing
+effect s/r1.s1 grant=r phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=49 alloc=24 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=49 alloc=24
+pumped state=idle fuel=49
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub-effect s.other phase=begin status=ok
+> stub-effect s.other phase=commit status=ok
+> deliver d2 to=s message=again
+> pump clock=2026-10-02T00:00:00Z
+effect s/r2.s1 grant=other phase=begin status=ok
+call s/r2.c1 op=other.write args=[] result=nothing
+call s/r2.c2 op=r.write args=[] result=nothing
+effect s/r2.s1 grant=other phase=commit status=ok
+seg s/r2 start delivery=d2 handler=again clause=1 fuel=43 alloc=32 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=again fuel=43 alloc=32
+pumped state=idle fuel=43
+> vars
+vars s count=3

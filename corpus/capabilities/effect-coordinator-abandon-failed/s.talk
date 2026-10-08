@@ -1,0 +1,15 @@
+script variable count = 0
+on go
+ask r to write
+ask alias to open
+put 2 into count
+end go
+
+on later
+ask r to write
+put 3 into count
+end later
+
+on again
+ask alias to write
+end again

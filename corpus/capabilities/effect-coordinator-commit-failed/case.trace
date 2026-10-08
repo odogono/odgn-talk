@@ -1,0 +1,24 @@
+# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
+# effect-coordinator-commit-failed: r and its alias share the coordinator db.
+# The one commit fails, so one rollback covers both Grants' writes and count
+# returns to its Segment base.
+
+> load s identity=501151251be69313be545b17782d3fdab6a51e8c2064ffcf496217578c85e2ec
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=failed
+> stub-effect s.r phase=rollback status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+call s/r1.c2 op=alias.write args=[] result=nothing
+effect s/r1.s1 grant=r phase=commit status=failed
+effect-failure s/r1 grant=r segment=s/r1.s1 phase=commit status=failed
+effect s/r1.s1 grant=r phase=rollback status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=36 alloc=16 state=16 end=effect-failed
+run s/r1 outcome=effect-failed delivery=d1 handler=go effect={grant: "r", segment: "s/r1.s1", phase: "commit", status: "failed"} fuel=36 alloc=16
+pumped state=idle fuel=36
+> vars
+vars s count=0

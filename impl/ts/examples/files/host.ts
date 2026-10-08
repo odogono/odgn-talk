@@ -96,7 +96,9 @@ export const createFileHost = (
   const reservations = new Map<string, object>();
   const files = new Set<File>();
   let disposed = false;
-  const participant = (context: SegmentContext<undefined>) => {
+  const participant = (
+    context: Owner & Pick<SegmentContext<undefined>, 'group'>,
+  ) => {
     const current = participants
       .get(context.group)
       ?.get(participantKey(context));

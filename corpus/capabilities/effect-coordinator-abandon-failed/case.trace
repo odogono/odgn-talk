@@ -1,0 +1,44 @@
+# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
+# effect-coordinator-abandon-failed: r and its alias share the coordinator db.
+# alias, the second enrolled Grant, leaves its file open and its abandonment
+# fails: the would-be commit becomes a rollback, and only alias is disabled.
+# In d2, r still begins and commits; in d3, alias is refused.
+
+> load s identity=e54383cd4b7eda0edddff46848e65f9a27bdba358aad00df6f322beb43b36108
+> stub resource.write value=nothing
+> stub resource.open value=nothing
+> stub resource.close error={}
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=rollback status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=r phase=begin status=ok
+call s/r1.c1 op=r.write args=[] result=nothing
+call s/r1.c2 op=alias.open args=[] result=nothing
+scope s/r1.c2 grant=alias name=file action=opened
+call s/r1.c3 op=alias.close args=[] error={} automatic=yes
+scope s/r1.c3 grant=alias name=file action=failed
+effect-failure s/r1 grant=alias segment=s/r1.s1 phase=abandon status=unknown scope=file
+effect s/r1.s1 grant=r phase=rollback status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=36 alloc=16 state=16 end=effect-failed
+run s/r1 outcome=effect-failed delivery=d1 handler=go effect={grant: "alias", segment: "s/r1.s1", phase: "abandon", status: "unknown", scope: "file"} fuel=36 alloc=16
+pumped state=idle fuel=36
+> stub resource.write value=nothing
+> stub-effect s.r phase=begin status=ok
+> stub-effect s.r phase=commit status=ok
+> deliver d2 to=s message=later
+> pump clock=2026-10-02T00:00:00Z
+effect s/r2.s1 grant=r phase=begin status=ok
+call s/r2.c1 op=r.write args=[] result=nothing
+effect s/r2.s1 grant=r phase=commit status=ok
+seg s/r2 start delivery=d2 handler=later clause=1 fuel=23 alloc=8 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=later fuel=23 alloc=8
+pumped state=idle fuel=23
+> deliver d3 to=s message=again
+> pump clock=2026-10-02T00:00:00Z
+raise s/r3 code="capability disabled" at=s:20 pos=14:1
+seg s/r3 start delivery=d3 handler=again clause=1 fuel=8 alloc=0 state=16 end=error
+run s/r3 outcome=errored delivery=d3 handler=again error={code: "capability disabled", capability: "alias", operation: "write", at: {unit: "s", handler: "again", line: 14, column: 1}} fuel=8 alloc=0
+pumped state=idle fuel=8
+> vars
+vars s count=3

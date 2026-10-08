@@ -1,0 +1,35 @@
+# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
+# effect-coordinator-conflict: alias and r share the coordinator db, other
+# maps to log, and lone, with no coordinator, is its own even though its
+# binding matches. In d1, alias enrolls first and r joins with no hook; other's
+# write conflicts, naming alias. In d2, lone's write conflicts the same way.
+
+> load s identity=cec6f4994833b1556d5e5d338897cc10463dcf9676bd8c1ca391b8c4345a0bc3
+> stub resource.write value=nothing
+> stub resource.write value=nothing
+> stub-effect s.alias phase=begin status=ok
+> stub-effect s.alias phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+effect s/r1.s1 grant=alias phase=begin status=ok
+call s/r1.c1 op=alias.write args=[] result=nothing
+call s/r1.c2 op=r.write args=[] result=nothing
+raise s/r1 code="segment participant conflict" at=s:8 pos=5:1
+effect s/r1.s1 grant=alias phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=34 alloc=16 state=16 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "other", operation: "write", participant: "alias", at: {unit: "s", handler: "go", line: 5, column: 1}} fuel=34 alloc=16
+pumped state=idle fuel=34
+> stub resource.write value=nothing
+> stub-effect s.alias phase=begin status=ok
+> stub-effect s.alias phase=commit status=ok
+> deliver d2 to=s message=again
+> pump clock=2026-10-02T00:00:00Z
+effect s/r2.s1 grant=alias phase=begin status=ok
+call s/r2.c1 op=alias.write args=[] result=nothing
+raise s/r2 code="segment participant conflict" at=s:15 pos=10:1
+effect s/r2.s1 grant=alias phase=commit status=ok
+seg s/r2 start delivery=d2 handler=again clause=1 fuel=21 alloc=8 state=16 end=error
+run s/r2 outcome=errored delivery=d2 handler=again error={code: "segment participant conflict", capability: "lone", operation: "write", participant: "alias", at: {unit: "s", handler: "again", line: 10, column: 1}} fuel=21 alloc=8
+pumped state=idle fuel=21
+> vars
+vars s count=0

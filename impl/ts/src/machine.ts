@@ -69,6 +69,8 @@ import {
   type ImmediateOp,
   type EffectResult,
   type SegmentContext,
+  type SegmentCoordinator,
+  type SegmentLifecycle,
   type Shape,
 } from './capabilities';
 import type { EffectFailure } from './group';
@@ -904,8 +906,13 @@ export class Run {
     op: ImmediateOp<unknown>;
   }[] = [];
 
-  private participant: { grant: Grant<unknown>; grantName: string } | null =
-    null;
+  // The Segment's Segment Coordinator and the Grants enrolled in it, in
+  // enrollment order. A Grant with no coordinator is its own (ADR 0069).
+  private participant: {
+    coordinator?: SegmentCoordinator;
+    enrolled: { grant: Grant<unknown>; grantName: string }[];
+    hooks: SegmentLifecycle<unknown>;
+  } | null = null;
   private participantAbandonment: EffectFailure | null = null;
   effectStateUnknown = false;
 
@@ -913,20 +920,42 @@ export class Run {
     return this.participant !== null;
   }
 
+  /** The participant's first enrolled Grant, which the Trace names. */
+  private get participantName(): string {
+    return this.participant!.enrolled[0]!.grantName;
+  }
+
+  private enrolled(grantName: string): boolean {
+    return !!this.participant?.enrolled.some(g => g.grantName === grantName);
+  }
+
+  /** Whether a Segment-bound call through this Grant joins the participant. */
+  private sharesParticipant(grantName: string, grant: Grant<unknown>) {
+    const participant = this.participant!;
+    return participant.coordinator
+      ? grant.coordinator === participant.coordinator
+      : participant.enrolled[0]!.grantName === grantName;
+  }
+
   private lifecycle(phase: 'begin' | 'commit' | 'rollback'): EffectResult {
     const participant = this.participant!;
+    const first = participant.enrolled[0]!;
     const context: SegmentContext<unknown> = {
       group: this.host!.group,
-      binding: participant.grant.binding,
+      binding: first.grant.binding,
       scriptName: this.script.name,
       runId: this.id,
-      grantName: participant.grantName,
+      grantName: first.grantName,
+      grants: participant.enrolled.map(g => ({
+        grantName: g.grantName,
+        binding: g.grant.binding,
+      })),
       segmentId: this.segmentId,
       now: this.host!.now,
     };
     let result: EffectResult;
     try {
-      const returned = participant.grant.capability.lifecycle![phase](context);
+      const returned = participant.hooks[phase](context);
       const status = returned?.status;
       const detail = returned?.detail;
       if (
@@ -941,7 +970,7 @@ export class Run {
     }
     this.records.push({
       kind: 'effect',
-      grant: participant.grantName,
+      grant: first.grantName,
       segment: this.segmentId,
       phase,
       status: result.status,
@@ -949,7 +978,7 @@ export class Run {
     if (result.status !== 'ok') {
       this.records.push({
         kind: 'effect-failure',
-        grant: participant.grantName,
+        grant: first.grantName,
         segment: this.segmentId,
         phase,
         status: result.status,
@@ -966,7 +995,7 @@ export class Run {
     return {
       script: this.script.name,
       run: this.id,
-      grant: this.participant!.grantName,
+      grant: this.participantName,
       segment: this.segmentId,
       phase,
       status: result.status as 'failed' | 'unknown',
@@ -1056,9 +1085,9 @@ export class Run {
   }
 
   /** Reserved Host cleanup, called by the Group before publishing termination. */
-  abandonScopes(grantName?: string) {
+  abandonScopes(only?: (grantName: string) => boolean) {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
-      if (grantName !== undefined && this.scopes[i]!.grantName !== grantName) {
+      if (only && !only(this.scopes[i]!.grantName)) {
         continue;
       }
       const scope = this.scopes.splice(i, 1)[0]!;
@@ -1170,7 +1199,7 @@ export class Run {
             detail: hostDetail(error),
           },
         );
-        if (this.participant?.grantName === scope.grantName) {
+        if (this.enrolled(scope.grantName)) {
           this.participantAbandonment ??= {
             script: this.script.name,
             run: this.id,
@@ -1797,7 +1826,7 @@ export class Run {
       }
     }
     if (this.participant) {
-      this.abandonScopes(this.participant.grantName);
+      this.abandonScopes(name => this.enrolled(name));
       this.rollbackParticipant();
     }
     this.cancellationAbandons = this.discard(betweenSegments);
@@ -3582,18 +3611,31 @@ export class Run {
       op.mode === 'immediate' &&
       op.segmentBound &&
       this.participant &&
-      this.participant.grantName !== grantName
+      !this.sharesParticipant(grantName, grant)
     ) {
       throw new ScriptError(
         'segment participant conflict',
-        [...named, ['participant', text(this.participant.grantName)]],
+        [...named, ['participant', text(this.participantName)]],
         true,
       );
     }
     const declared = op.cost.fuel;
     this.pay(key, { declared }, op.cost.alloc ?? 0);
+    if (
+      op.mode === 'immediate' &&
+      op.segmentBound &&
+      this.participant &&
+      !this.enrolled(grantName)
+    ) {
+      // A later Grant of the same coordinator joins with no hook.
+      this.participant.enrolled.push({ grantName, grant });
+    }
     if (op.mode === 'immediate' && op.segmentBound && !this.participant) {
-      this.participant = { grantName, grant };
+      this.participant = {
+        enrolled: [{ grantName, grant }],
+        hooks: grant.coordinator ?? grant.capability.lifecycle!,
+        ...(grant.coordinator ? { coordinator: grant.coordinator } : {}),
+      };
       const result = this.lifecycle('begin');
       if (result.status === 'failed') {
         this.participant = null;
