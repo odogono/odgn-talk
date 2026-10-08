@@ -1,6 +1,6 @@
 # Load diagnostics
 
-These 30 Trace Cases pin the diagnostic families the Go step 1 front end emits
+These 31 Trace Cases pin the diagnostic families the Go step 1 front end emits
 (#250). Each rejected `load` is followed by its diagnostics in source order.
 `> vars` then confirms that a refused load installed no Script. The TS Core
 blessed only these new cases; existing blessed expectations were not changed.
@@ -38,6 +38,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [not-constant](not-constant/bad.talk) | `not constant` at `2:14` | [Trace](not-constant/case.trace) |
 | [not-in-a-guard](not-in-a-guard/bad.talk) | `not in a guard` at `4:14` | [Trace](not-in-a-guard/case.trace) |
 | [not-in-a-join](not-in-a-join/bad.talk) | `empty join` at `2:1`, `not in a join` at `3:1` | [Trace](not-in-a-join/case.trace) |
+| [not-in-a-join-try](not-in-a-join-try/bad.talk) | `not in a join` at `4:1`, `5:1` and `7:1`; [a `try` around the Join](not-in-a-join-try/good.talk) loads | [Trace](not-in-a-join-try/case.trace) |
 | [not-in-a-lambda](not-in-a-lambda/bad.talk) | `not in a lambda` at `2:12` | [Trace](not-in-a-lambda/case.trace) |
 | [not-in-a-script](not-in-a-script/bad.talk) | `not in a script` at `1:1` | [Trace](not-in-a-script/case.trace) |
 | [nothing-to-fold](nothing-to-fold/bad.talk) | `nothing to fold` at `2:22` | [Trace](nothing-to-fold/case.trace) |

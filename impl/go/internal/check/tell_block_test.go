@@ -15,6 +15,7 @@ func TestTellBlockLines(t *testing.T) {
 	}{
 		{"function f\n tell feed\n  fetch 1 and wait\n end tell\nend f", "can't suspend here", 3, 3},
 		{"on fetchIt\n tell feed\n  fetch 1 and wait\n end tell\nend fetchIt\non go\n fetchIt\nend go", "missing and wait", 7, 2},
+		{"on t\n wait for all\n  try\n   tell feed\n    fetch 1 and wait\n   end tell\n  catch e\n  end try\n end wait\nend t", "not in a join", 5, 5},
 		{"on t\n wait for all\n  tell feed\n   fetch 1 and wait\n  end tell\n end wait\nend t", "", 0, 0},
 		{"on t\n tell feed\n end tell\nend t", "", 0, 0},
 	} {

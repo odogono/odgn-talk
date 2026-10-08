@@ -1,0 +1,22 @@
+# Pins `not in a join` for a member inside a `try` in a Join's body, and a
+# `try` around the whole Join (chapter 2; #423).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
+grants = { feed = { ops = ["fetch"] } }
+
+[[scripts]]
+name = "good"
+source = "good.talk"
+grants = { feed = { ops = ["fetch"] } }
