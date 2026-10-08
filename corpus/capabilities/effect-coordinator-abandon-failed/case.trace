@@ -1,4 +1,3 @@
-# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
 # effect-coordinator-abandon-failed: r and its alias share the coordinator db.
 # alias, the second enrolled Grant, leaves its file open and its abandonment
 # fails: the would-be commit becomes a rollback, and only alias is disabled.

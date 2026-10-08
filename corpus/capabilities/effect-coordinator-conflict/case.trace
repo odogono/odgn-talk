@@ -1,4 +1,3 @@
-# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
 # effect-coordinator-conflict: alias and r share the coordinator db, other
 # maps to log, and lone, with no coordinator, is its own even though its
 # binding matches. In d1, alias enrolls first and r joins with no hook; other's

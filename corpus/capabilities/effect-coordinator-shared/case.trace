@@ -1,4 +1,3 @@
-# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
 # effect-coordinator-shared: r, its alias and other, with another binding,
 # share the coordinator db. In d1 the first write enrolls r and runs one
 # begin; alias and other enroll with no hook, and one commit covers all three.

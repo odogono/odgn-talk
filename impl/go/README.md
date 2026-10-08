@@ -602,8 +602,8 @@ Rollback is attempted once, and Load and Reload cannot revive this Group.
 Successful commit finalizes before observing controls queued by its hook.
 
 The runner passes all 30 effect cases unchanged, including Save refusal at live
-participant boundaries and the four Unblessed `effect-coordinator-*` cases for
-ADR 0069, fatal Reload and Library replacement. A refused Save
+participant boundaries and the four `effect-coordinator-*` cases for
+ADR 0069 (first blessings approved on 2026-10-08), fatal Reload and Library replacement. A refused Save
 performs no cleanup, drains no inputs and changes no execution state or counters.
 Native tests also pin atomic replacement when a later Script's rollback fails.
 The maintainer approved the first blessings of the original 22 effect cases on
