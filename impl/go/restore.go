@@ -20,7 +20,7 @@ type saveHeader struct {
 	Save                              int64
 	Libraries                         map[string][32]byte
 	Objects                           []savedObject
-	Stale                             []string
+	Stale                             []savedStale
 	Scripts                           []struct {
 		Name, Source string
 		Extensions   []string
@@ -28,6 +28,7 @@ type saveHeader struct {
 		Grants       []savedGrant
 		Owner        *ObjectRef
 		Objects      map[string]ObjectRef
+		Docs         []string
 	}
 }
 
@@ -209,12 +210,17 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	for name, l := range g.libraries {
 		refs["library/"+name] = l.state
 	}
-	for index, name := range header.Stale {
-		refs["stale/"+strconv.Itoa(index)] = &machine.State{Unit: &lower.Unit{Name: name}, Group: g, Gone: true}
+	for index, stale := range header.Stale {
+		refs["stale/"+strconv.Itoa(index)] = &machine.State{Unit: lower.StaleUnit(stale.Name, stale.Docs), Group: g, Gone: true}
 	}
 	if mismatch {
+		// Saved Function Values outlive their code, but keep its documentation.
+		docs := map[string][]string{}
+		for _, s := range header.Scripts {
+			docs[s.Name] = s.Docs
+		}
 		for _, s := range g.scripts {
-			refs["script/"+s.name] = &machine.State{Unit: s.state.Unit, Group: g, Gone: true}
+			refs["script/"+s.name] = &machine.State{Unit: lower.StaleUnit(s.state.Unit.Name, docs[s.name]), Group: g, Gone: true}
 		}
 	}
 	codec := g.codec(nil, func(key string) (any, bool) { v, ok := refs[key]; return v, ok })

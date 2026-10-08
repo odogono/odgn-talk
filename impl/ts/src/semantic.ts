@@ -88,6 +88,8 @@ export type SemanticElement = SemanticNode | SemanticName | SemanticToken;
  */
 export const toldLines = new WeakSet<SemanticNode>();
 export type SemanticTree = {
+  /** Each top-level declaration's Declaration Documentation, in source order. */
+  docs?: readonly string[];
   /** The unit's Handlers that may suspend (chapter 5, Suspension Points). */
   maySuspend?: readonly string[];
   root: SemanticNode;

@@ -44,7 +44,7 @@ type compileKey struct {
 
 func New() *Core { return &Core{units: map[compileKey]*lower.Unit{}} }
 func CoreVersions() Versions {
-	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/3"}
+	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/4"}
 }
 func DefaultLimits() Limits {
 	var l Limits

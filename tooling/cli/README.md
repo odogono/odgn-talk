@@ -1,6 +1,6 @@
 # `northtalk`
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is specified but not implemented here. Marked declaration-doc attachment/shared hover, the new observation commands, object-crossing replay and their prompt handling remain unavailable. Existing comment preservation does not implement doc attachment.
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The REPL gets Declaration Documentation and its prompt handling from the Session Host: a leading `--|` block waits for its declaration, and one before anything else is refused. Shared hover, the new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 
 The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.

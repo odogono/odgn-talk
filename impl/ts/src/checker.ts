@@ -1,5 +1,6 @@
 import { checkConstructs } from './constructs';
 import { checkDecisions } from './decisions';
+import { declarationDocs } from './documentation';
 import { checkControl } from './control';
 import { checkEffects, type GrantDecls } from './effects';
 import { checkSuspension } from './suspension';
@@ -1138,6 +1139,7 @@ export const checkSyntax = (
     ok: diagnostics.length === 0,
     diagnostics,
     tree: {
+      docs: [...declarationDocs(syntax).values()],
       maySuspend: [...may].filter(([, m]) => m).map(([name]) => name),
       root,
       scopes: scopes.map(scope => ({

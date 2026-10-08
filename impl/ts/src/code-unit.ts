@@ -22,6 +22,8 @@ export type Body = {
   deciding?: boolean;
   /** For a function, each parameter's default definition, or null. */
   defaults: (number | null)[];
+  /** A top-level function's or Handler Clause's Declaration Documentation. */
+  doc?: string;
   /** Local slot bound by an error Handler’s `during` suffix. */
   duringSlot?: number;
   /** One past the body's last instruction. */

@@ -126,13 +126,19 @@ const content =
     2,
   )} as const;\n` +
   `export const builtins = ${JSON.stringify(
-    (stdlib.builtin as { call: string; group: string; name: string }[]).map(
-      ({ call, group, name }) => ({
-        name,
-        kind: group === 'constants' ? 'constant' : 'function',
-        ...(group === 'constants' ? {} : { contract: contract(call) }),
-      }),
-    ),
+    (
+      stdlib.builtin as {
+        call: string;
+        gives: string;
+        group: string;
+        name: string;
+      }[]
+    ).map(({ call, gives, group, name }) => ({
+      name,
+      kind: group === 'constants' ? 'constant' : 'function',
+      ...(group === 'constants' ? {} : { contract: contract(call) }),
+      gives,
+    })),
     null,
     2,
   )} as const;\n` +

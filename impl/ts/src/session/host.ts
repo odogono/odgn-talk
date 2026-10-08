@@ -35,6 +35,9 @@ import { defaultLimits } from '../machine';
 import { compileLibrary, type Library } from '../library';
 import { textForm, waitNs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
+import { declarationDocs, functionDoc, leadingDoc } from '../documentation';
+import { builtins } from '../generated/syntax';
+import { stdlibSources } from '../generated/stdlib';
 import type { SemanticElement } from '../semantic';
 import { localeCapability, type LocaleImpl } from '../locale-capability';
 import {
@@ -392,10 +395,96 @@ export class SessionHost {
     }
   }
 
-  /** Tooling's line prompt uses the same Entry classification as input(). */
+  /**
+   * Tooling's line prompt uses the same Entry classification as input(). A
+   * leading doc block waits for the declaration it documents.
+   */
   incomplete(source: string): boolean {
     const parsed = parseEntry(source, name => this.isHandler(name));
-    return Boolean(parsed.error && parsed.incomplete);
+    return parsed.error
+      ? parsed.incomplete
+      : leadingDoc(parsed.tree) === 'pending';
+  }
+
+  /**
+   * The Declaration Documentation of a current name or Handler Selector, as
+   * binding precedence resolves it: the session's own declarations and
+   * Imports, then the Built-ins. An Import resolves to its defining Library
+   * declaration. It executes nothing.
+   */
+  documentation(name: string): Doc[] {
+    const clauses: Doc[] = [];
+    for (const d of this.declarations) {
+      if (d.kind === 'use') {
+        const imported = d.uses!.find(u => u.local === name);
+        if (imported) {
+          return this.libraryDocumentation(d.library!, imported.name);
+        }
+      } else if (d.names[0] === name) {
+        const doc = sourceDoc(d.source);
+        if (d.kind !== 'handler') {
+          return [{ origin: 'session', declaration: d.kind, clause: 0, doc }];
+        }
+        clauses.push({
+          origin: 'session',
+          declaration: d.kind,
+          clause: clauses.length + 1,
+          doc,
+        });
+      }
+    }
+    if (clauses.length) {
+      return clauses;
+    }
+    const builtin = builtins.find(b => b.name === name);
+    return builtin
+      ? [
+          {
+            origin: 'builtin',
+            declaration: 'builtin',
+            clause: 0,
+            doc: builtin.gives,
+          },
+        ]
+      : [];
+  }
+
+  /**
+   * A public Library export's Declaration Documentation, from the Library's
+   * source, whether or not it is imported.
+   */
+  libraryDocumentation(library: string, name: string): Doc[] {
+    const source =
+      this.libraries.get(library)?.library.source ?? stdlibSources[library];
+    const tree = source === undefined ? null : checkSource(source).tree;
+    if (!tree) {
+      return [];
+    }
+    const out: Doc[] = [];
+    viewSource(tree.root).forEach((decl, at) => {
+      if (decl.k === 'use' || decl.k === 'variable' || decl.private) {
+        return;
+      }
+      if ((decl.k === 'constant' ? decl.name.text : decl.name) !== name) {
+        return;
+      }
+      out.push({
+        origin: library,
+        declaration: decl.k,
+        clause: decl.k === 'handler' ? out.length + 1 : 0,
+        doc: tree.docs?.[at] ?? '',
+      });
+    });
+    return out;
+  }
+
+  /**
+   * The Declaration Documentation of a Function Value's defining code, even
+   * when calling it would raise `function gone`. A Lambda's is empty; null
+   * means the value is not a Function Value.
+   */
+  functionDocumentation(value: Value): string | null {
+    return functionDoc(value);
   }
 
   /** An Entry or a Session Command. Returns the lines it printed. */
@@ -439,6 +528,9 @@ export class SessionHost {
     if (parsed.error) {
       const t = parsed.error.tok;
       return [`! ${parsed.error.code} at ${t.line}:${t.col}`];
+    }
+    if (!documentable(parsed.tree, parsed.kind)) {
+      return ['! bad arguments'];
     }
     if (parsed.kind === null) {
       return [];
@@ -1630,6 +1722,46 @@ export class SessionHost {
     this.state = { k: 'prompt' };
   }
 }
+
+/**
+ * One declaration's Declaration Documentation, as a name lookup finds it.
+ * Handler Clauses are separate, in declaration order, numbered from 1.
+ */
+export type Doc = {
+  /** A Handler Clause's number within its Selector, from 1; otherwise 0. */
+  clause: number;
+  declaration: 'function' | 'handler' | 'constant' | 'variable' | 'builtin';
+  doc: string;
+  /** `session`, `builtin` or the defining Library's name. */
+  origin: string;
+};
+
+// The documentation of the one declaration in a session source.
+const sourceDoc = (source: string): string => {
+  const tree = parseSource(source).tree;
+  return tree ? ([...declarationDocs(tree).values()][0] ?? '') : '';
+};
+
+// A leading doc block that documents nothing is refused: one followed by a
+// statement, an expression or an Import, or by no Entry at all.
+const documentable = (entry: SyntaxNode, kind: string | null): boolean => {
+  const doc = leadingDoc(entry);
+  if (doc === 'pending') {
+    return false;
+  }
+  if (doc === 'attached') {
+    return (
+      kind === 'declaration' &&
+      !entry.children.some(
+        c =>
+          c.kind === 'node' &&
+          c.rule === 'Declaration' &&
+          c.children.some(u => u.kind === 'node' && u.rule === 'Use'),
+      )
+    );
+  }
+  return true;
+};
 
 // An Entry's declaration, with the names it declares.
 const describe = (source: string): Declaration => {

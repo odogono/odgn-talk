@@ -1,0 +1,492 @@
+{
+  "about": "Proposed Declaration Documentation expectations shared by both Cores (#436, part of #370). Awaiting first-blessing review: agreement between the Cores is not approval. A doc row is [origin, declaration, clause, text]; a unit's docs list each top-level declaration in source order as [declaration, text].",
+  "units": [
+    {
+      "name": "attachment rules",
+      "source": "--| Adds one.\n--|\n--|   indented text\n--|no space\n--| **not** interpreted  \nfunction inc n\n  return n + 1\nend inc\n\n--| detached by a blank line\n\nconstant k = 1\n-- ordinary\n--| after ordinary\nscript variable v = 2\n--| first\n-- ordinary breaks\non m\nend m\n  --| indented marker\non m x\nend m\nuse join from text\n--| on an import\nuse split from text\nprivate function p -- trailing --| not a doc\nend p\nfunction q\nend q --| trailing\n--| last\nconstant z = 3\n--| a block at the end documents nothing\n",
+      "docs": [
+        [
+          "function",
+          "Adds one.\n\n  indented text\nno space\n**not** interpreted  "
+        ],
+        [
+          "constant",
+          ""
+        ],
+        [
+          "variable",
+          "after ordinary"
+        ],
+        [
+          "handler",
+          ""
+        ],
+        [
+          "handler",
+          "indented marker"
+        ],
+        [
+          "use",
+          ""
+        ],
+        [
+          "use",
+          ""
+        ],
+        [
+          "function",
+          ""
+        ],
+        [
+          "function",
+          ""
+        ],
+        [
+          "constant",
+          "last"
+        ]
+      ]
+    },
+    {
+      "name": "line breaks and byte order mark",
+      "source": "\ufeff--| bom\r\n--|  two spaces\r\nfunction b\r\nend b\r\n--| private\rprivate constant c = 1\r--|\non any message m\nend any message\n",
+      "docs": [
+        [
+          "function",
+          "bom\n two spaces"
+        ],
+        [
+          "constant",
+          "private"
+        ],
+        [
+          "handler",
+          ""
+        ]
+      ]
+    }
+  ],
+  "sessions": [
+    {
+      "name": "prompt, redefinition and save",
+      "steps": [
+        {
+          "incomplete": "--| Doubles.\n",
+          "expect": true
+        },
+        {
+          "incomplete": "--| Doubles.",
+          "expect": true
+        },
+        {
+          "incomplete": "--| Doubles.\nfunction double n\n",
+          "expect": true
+        },
+        {
+          "incomplete": "--| Doubles.\n\n",
+          "expect": false
+        },
+        {
+          "incomplete": "--| Doubles.\n-- plain\n",
+          "expect": false
+        },
+        {
+          "incomplete": "-- plain\n",
+          "expect": false
+        },
+        {
+          "input": "--| Doubles.\nput 1 into x",
+          "output": [
+            "! bad arguments"
+          ]
+        },
+        {
+          "input": "--| Doubles.\n2 + 2",
+          "output": [
+            "! bad arguments"
+          ]
+        },
+        {
+          "input": "--| Doubles.\nuse join from text",
+          "output": [
+            "! bad arguments"
+          ]
+        },
+        {
+          "input": "--| Doubles.",
+          "output": [
+            "! bad arguments"
+          ]
+        },
+        {
+          "input": ":export",
+          "output": []
+        },
+        {
+          "input": "--| Ignored.\n\nput 1 into x",
+          "output": []
+        },
+        {
+          "docs": "x",
+          "expect": [
+            [
+              "session",
+              "variable",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "input": "--| Doubles.\n--|   Twice.\nfunction double n\n  return n * 2\nend double",
+          "output": []
+        },
+        {
+          "docs": "double",
+          "expect": [
+            [
+              "session",
+              "function",
+              0,
+              "Doubles.\n  Twice."
+            ]
+          ]
+        },
+        {
+          "input": "put double into g",
+          "output": []
+        },
+        {
+          "input": "put given y: y into lambda",
+          "output": []
+        },
+        {
+          "functionDoc": "g",
+          "expect": "Doubles.\n  Twice."
+        },
+        {
+          "functionDoc": "lambda",
+          "expect": ""
+        },
+        {
+          "functionDoc": "x",
+          "expect": null
+        },
+        {
+          "input": ":save before",
+          "output": [
+            "saved before"
+          ]
+        },
+        {
+          "input": "function double n\n  return n + n\nend double",
+          "output": []
+        },
+        {
+          "docs": "double",
+          "expect": [
+            [
+              "session",
+              "function",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "functionDoc": "g",
+          "expect": "Doubles.\n  Twice."
+        },
+        {
+          "input": ":save stale",
+          "output": [
+            "saved stale"
+          ]
+        },
+        {
+          "input": ":restore stale",
+          "output": [
+            "restored stale"
+          ]
+        },
+        {
+          "functionDoc": "g",
+          "expect": "Doubles.\n  Twice."
+        },
+        {
+          "docs": "double",
+          "expect": [
+            [
+              "session",
+              "function",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "input": ":restore before",
+          "output": [
+            "restored before"
+          ]
+        },
+        {
+          "docs": "double",
+          "expect": [
+            [
+              "session",
+              "function",
+              0,
+              "Doubles.\n  Twice."
+            ]
+          ]
+        },
+        {
+          "input": "--| Count = items.\nscript variable n = 1",
+          "output": []
+        },
+        {
+          "docs": "n",
+          "expect": [
+            [
+              "session",
+              "variable",
+              0,
+              "Count = items."
+            ]
+          ]
+        },
+        {
+          "input": "--| Count, again = 2.\nscript variable n = 2",
+          "output": []
+        },
+        {
+          "docs": "n",
+          "expect": [
+            [
+              "session",
+              "variable",
+              0,
+              "Count, again = 2."
+            ]
+          ]
+        },
+        {
+          "input": "n",
+          "output": [
+            "2"
+          ]
+        },
+        {
+          "input": "script variable n = 3",
+          "output": []
+        },
+        {
+          "docs": "n",
+          "expect": [
+            [
+              "session",
+              "variable",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "input": "--| Greets.\non hello\n  say \"hi\"\nend hello",
+          "output": []
+        },
+        {
+          "docs": "hello",
+          "expect": [
+            [
+              "session",
+              "handler",
+              1,
+              "Greets."
+            ]
+          ]
+        },
+        {
+          "input": ":export",
+          "output": [
+            "script variable x",
+            "--| Doubles.",
+            "--|   Twice.",
+            "function double n",
+            "  return n * 2",
+            "end double",
+            "script variable g",
+            "script variable lambda",
+            "script variable n = 3",
+            "--| Greets.",
+            "on hello",
+            "  say \"hi\"",
+            "end hello"
+          ]
+        },
+        {
+          "docs": "min",
+          "expect": [
+            [
+              "builtin",
+              "builtin",
+              0,
+              "The least item of the list `xs` under `<`, the first of equal ones"
+            ]
+          ]
+        },
+        {
+          "docs": "nosuch",
+          "expect": []
+        }
+      ]
+    },
+    {
+      "name": "libraries and imports",
+      "steps": [
+        {
+          "input": ":library add geo\n--| Area of a square.\nfunction area r\n  return r * r\nend area\n\nfunction plain\n  return 1\nend plain\n\n--| Hidden.\nprivate function secret\n  return 2\nend secret\n--| Six.\nconstant six = 6\n--| One.\non ping x where x = 1\n  return 1\nend ping\n--| Other.\non ping x\n  return 2\nend ping",
+          "output": []
+        },
+        {
+          "library": [
+            "geo",
+            "area"
+          ],
+          "expect": [
+            [
+              "geo",
+              "function",
+              0,
+              "Area of a square."
+            ]
+          ]
+        },
+        {
+          "library": [
+            "geo",
+            "plain"
+          ],
+          "expect": [
+            [
+              "geo",
+              "function",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "library": [
+            "geo",
+            "secret"
+          ],
+          "expect": []
+        },
+        {
+          "library": [
+            "geo",
+            "six"
+          ],
+          "expect": [
+            [
+              "geo",
+              "constant",
+              0,
+              "Six."
+            ]
+          ]
+        },
+        {
+          "library": [
+            "geo",
+            "ping"
+          ],
+          "expect": [
+            [
+              "geo",
+              "handler",
+              1,
+              "One."
+            ],
+            [
+              "geo",
+              "handler",
+              2,
+              "Other."
+            ]
+          ]
+        },
+        {
+          "library": [
+            "text",
+            "join"
+          ],
+          "expect": [
+            [
+              "text",
+              "function",
+              0,
+              ""
+            ]
+          ]
+        },
+        {
+          "input": "use area from geo as size",
+          "output": []
+        },
+        {
+          "docs": "size",
+          "expect": [
+            [
+              "geo",
+              "function",
+              0,
+              "Area of a square."
+            ]
+          ]
+        },
+        {
+          "docs": "area",
+          "expect": []
+        },
+        {
+          "input": "put size into f",
+          "output": []
+        },
+        {
+          "functionDoc": "f",
+          "expect": "Area of a square."
+        },
+        {
+          "input": ":library replace geo\n--| New area.\nfunction area r\n  return 0\nend area\n\nfunction plain\n  return 1\nend plain\n\nconstant six = 6\n\non ping x\n  return 2\nend ping",
+          "output": []
+        },
+        {
+          "docs": "size",
+          "expect": [
+            [
+              "geo",
+              "function",
+              0,
+              "New area."
+            ]
+          ]
+        },
+        {
+          "functionDoc": "f",
+          "expect": "Area of a square."
+        },
+        {
+          "input": "put size into h",
+          "output": []
+        },
+        {
+          "functionDoc": "h",
+          "expect": "New area."
+        }
+      ]
+    }
+  ]
+}

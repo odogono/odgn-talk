@@ -244,7 +244,7 @@ class UnitLowering {
     return body;
   }
 
-  *lower(decls: Decl[]): Task {
+  *lower(decls: Decl[], docs?: readonly string[]): Task {
     // The tables of names, before any body is lowered.
     for (const decl of decls) {
       if (decl.k === 'use') {
@@ -264,9 +264,10 @@ class UnitLowering {
     const init = this.newBody('init', 'initialiser');
     const clauses = new Map<string, number>();
     const owners: [Function | Handler, Body][] = [];
-    for (const decl of decls) {
+    decls.forEach((decl, at) => {
       if (decl.k === 'function') {
         const body = this.newBody('function', decl.name);
+        body.doc = docs?.[at] ?? '';
         body.params = decl.params.map(param => param.name.text);
         this.functionOf.set(decl.binding, body.index);
         owners.push([decl, body]);
@@ -280,6 +281,7 @@ class UnitLowering {
           decl.name,
           clause,
         );
+        body.doc = docs?.[at] ?? '';
         body.deciding = decl.deciding;
         body.policy = decl.policy;
         body.params = decl.params.map(p =>
@@ -287,7 +289,7 @@ class UnitLowering {
         );
         owners.push([decl, body]);
       }
-    }
+    });
     // Each default is a Constant the initialiser computes (ADR 0035).
     for (const [decl, body] of owners) {
       if (decl.k === 'function') {
@@ -2350,7 +2352,7 @@ export const lowerTree = (
     tree.scopes,
     options.existingVariables,
   );
-  runTask(unit.lower(viewSource(tree.root)));
+  runTask(unit.lower(viewSource(tree.root), tree.docs));
   return unit.finish();
 };
 
