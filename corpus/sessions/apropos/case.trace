@@ -1,0 +1,14 @@
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> add-library geo identity=c5471fda9cfb0179ce0e45d7c47d1ca033b839fb8be5f261884c01aadedbcd64
+> extend session source="use area from geo as size" identity=85aea93f87a2b2de93ebd41c8ab1b6ffde58c53c50a097d5be7a197af84cb641
+> extend session source="use ping from geo" identity=81ecb1018bf922e56b2d38d1a762699a10a94d1e39ec2c455ed23762e74a4105
+> replace-library geo carry=yes source="--| New area." & newline & "function area r" & newline & "  return 0" & newline & "end area" & newline & newline & "function plain" & newline & "  return 1" & newline & "end plain" & newline & newline & "constant six = 6" & newline & newline & "on ping x" & newline & "  return 2" & newline & "end ping" & newline identity=6e7f9f256cb9cfb3d279445f247eb13b28fe671e8f6189715b17493effb6fc5c
+stopped session reason="reload"
+> extend session source="script variable max" & newline & "on entry1" & newline & "put 1 into max" & newline & "end entry1" & newline identity=a4782e0b29130bf49b677ca6e774782cb9fe219df2320c2b684014092ab0a792
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session max=1

@@ -692,6 +692,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "min(xs)",
     "gives": "The least item of the list `xs` under `<`, the first of equal ones"
   },
   {
@@ -701,6 +702,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "max(xs)",
     "gives": "The greatest item of the list `xs` under `<`, the first of equal ones"
   },
   {
@@ -710,6 +712,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "codePoint(c)",
     "gives": "The code point of `c`, a text of exactly one code point, as a number"
   },
   {
@@ -719,6 +722,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "fromCodePoint(n)",
     "gives": "The text of the code point `n`, normalised to NFC"
   },
   {
@@ -728,6 +732,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "upper(s)",
     "gives": "`s` under Unicode full default uppercase mapping, then NFC"
   },
   {
@@ -737,6 +742,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "lower(s)",
     "gives": "`s` under Unicode full default lowercase mapping, then NFC"
   },
   {
@@ -746,6 +752,7 @@ export const builtins = [
       "required": 2,
       "total": 2
     },
+    "call": "offset(needle, s)",
     "gives": "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none"
   },
   {
@@ -755,6 +762,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "isDisposed(o)",
     "gives": "Whether the Host Object `o` has been disposed"
   },
   {
@@ -764,6 +772,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "objectKind(o)",
     "gives": "The name of the Object Kind of the Host Object `o`, as text"
   },
   {
@@ -773,6 +782,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "rangeStart(r)",
     "gives": "The first end of the range `r`, as written"
   },
   {
@@ -782,6 +792,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "rangeEnd(r)",
     "gives": "The second end of the range `r`, as written"
   },
   {
@@ -791,6 +802,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "kindOf(x)",
     "gives": "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`"
   },
   {
@@ -800,6 +812,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "functionArity(f)",
     "gives": "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them"
   },
   {
@@ -809,6 +822,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "functionName(f)",
     "gives": "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda"
   },
   {
@@ -818,6 +832,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "abs(x)",
     "gives": "`x` without its sign"
   },
   {
@@ -827,6 +842,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "floor(x)",
     "gives": "The greatest integer at or below `x`"
   },
   {
@@ -836,6 +852,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "ceiling(x)",
     "gives": "The least integer at or above `x`"
   },
   {
@@ -845,6 +862,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "truncate(x)",
     "gives": "`x` with its fraction dropped, toward zero"
   },
   {
@@ -854,6 +872,7 @@ export const builtins = [
       "required": 1,
       "total": 3
     },
+    "call": "round(x, places = 0, mode = \"half up\")",
     "gives": "`x` rounded to `places` digits after the point, by `mode`"
   },
   {
@@ -863,6 +882,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "sqrt(x)",
     "gives": "The square root of `x`"
   },
   {
@@ -872,6 +892,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "exp(x)",
     "gives": "e to the power `x`"
   },
   {
@@ -881,6 +902,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "ln(x)",
     "gives": "The natural logarithm of `x`"
   },
   {
@@ -890,6 +912,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "log10(x)",
     "gives": "The base-10 logarithm of `x`"
   },
   {
@@ -899,6 +922,7 @@ export const builtins = [
       "required": 2,
       "total": 2
     },
+    "call": "power(x, y)",
     "gives": "`x` to the power `y`"
   },
   {
@@ -908,6 +932,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "sin(x)",
     "gives": "The sine of `x` radians"
   },
   {
@@ -917,6 +942,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "cos(x)",
     "gives": "The cosine of `x` radians"
   },
   {
@@ -926,6 +952,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "tan(x)",
     "gives": "The tangent of `x` radians"
   },
   {
@@ -935,6 +962,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "asin(x)",
     "gives": "The arcsine of `x`, in radians from -pi/2 to pi/2"
   },
   {
@@ -944,6 +972,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "acos(x)",
     "gives": "The arccosine of `x`, in radians from 0 to pi"
   },
   {
@@ -953,6 +982,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "atan(x)",
     "gives": "The arctangent of `x`, in radians between -pi/2 and pi/2"
   },
   {
@@ -962,6 +992,7 @@ export const builtins = [
       "required": 2,
       "total": 2
     },
+    "call": "atan2(y, x)",
     "gives": "The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi"
   },
   {
@@ -971,6 +1002,7 @@ export const builtins = [
       "required": 1,
       "total": 2
     },
+    "call": "fromFloat64(b, order = \"big\")",
     "gives": "The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal"
   },
   {
@@ -980,6 +1012,7 @@ export const builtins = [
       "required": 1,
       "total": 2
     },
+    "call": "fromFloat32(b, order = \"big\")",
     "gives": "The number an IEEE 754 binary32 float in the 4 Bytes `b` holds, as its shortest round-trip decimal"
   },
   {
@@ -989,6 +1022,7 @@ export const builtins = [
       "required": 1,
       "total": 2
     },
+    "call": "toFloat64(n, order = \"big\")",
     "gives": "The 8 Bytes of the binary64 float nearest `n`, ties to even"
   },
   {
@@ -998,6 +1032,7 @@ export const builtins = [
       "required": 1,
       "total": 2
     },
+    "call": "toFloat32(n, order = \"big\")",
     "gives": "The 4 Bytes of the binary32 float nearest `n`, ties to even"
   },
   {
@@ -1007,6 +1042,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "year(d)",
     "gives": "The year of the Civil Date `d`, from 1 to 9999"
   },
   {
@@ -1016,6 +1052,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "month(d)",
     "gives": "The month of `d`, from 1 to 12"
   },
   {
@@ -1025,6 +1062,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "day(d)",
     "gives": "The day of the month of `d`, from 1 to 31"
   },
   {
@@ -1034,6 +1072,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "hour(d)",
     "gives": "The hour of the date-time `d`, from 0 to 23"
   },
   {
@@ -1043,6 +1082,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "minute(d)",
     "gives": "The minute of the date-time `d`, from 0 to 59"
   },
   {
@@ -1052,6 +1092,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "second(d)",
     "gives": "The whole seconds of the date-time `d`, from 0 to 59"
   },
   {
@@ -1061,6 +1102,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "nanosecond(d)",
     "gives": "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999"
   },
   {
@@ -1070,6 +1112,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "weekday(d)",
     "gives": "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday"
   },
   {
@@ -1079,6 +1122,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "dayOfYear(d)",
     "gives": "The day of the year of `d`, from 1 to 366"
   },
   {
@@ -1088,6 +1132,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "isoWeek(d)",
     "gives": "The ISO 8601 week number of `d`, from 1 to 53"
   },
   {
@@ -1097,6 +1142,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "isoWeekYear(d)",
     "gives": "The ISO 8601 week-numbering year of `d`"
   },
   {
@@ -1106,6 +1152,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "hasTime(d)",
     "gives": "Whether the Civil Date `d` has a time of day"
   },
   {
@@ -1115,6 +1162,7 @@ export const builtins = [
       "required": 2,
       "total": 2
     },
+    "call": "toCivil(i, offset)",
     "gives": "The date-time on the wall clock at `offset` from UTC at the Instant `i`"
   },
   {
@@ -1124,26 +1172,31 @@ export const builtins = [
       "required": 2,
       "total": 2
     },
+    "call": "toInstant(c, offset)",
     "gives": "The Instant at which the wall clock at `offset` from UTC reads the date-time `c`"
   },
   {
     "name": "pi",
     "kind": "constant",
+    "call": "3.141592653589793238462643383279503",
     "gives": "pi, rounded half-even to 34 digits"
   },
   {
     "name": "newline",
     "kind": "constant",
+    "call": "U+000A",
     "gives": "A line feed, as text"
   },
   {
     "name": "tab",
     "kind": "constant",
+    "call": "U+0009",
     "gives": "A tab, as text"
   },
   {
     "name": "quote",
     "kind": "constant",
+    "call": "U+0022",
     "gives": "A double quote, as text"
   },
   {
@@ -1153,6 +1206,7 @@ export const builtins = [
       "required": 1,
       "total": 1
     },
+    "call": "offerAvailable(textName)",
     "gives": "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name"
   }
 ] as const;

@@ -1,0 +1,121 @@
+# `:apropos` lists current bindings, Built-ins even when shadowed, and the
+# public exports of every registered Library, imported or not, with the
+# targets `:describe` takes. It imports and executes nothing.
+> :clock virtual 2026-09-30T10:00:00Z
+> :library add geo
+| --| Area of a square.
+| function area r
+|   return r * r
+| end area
+|
+| function plain
+|   return 1
+| end plain
+|
+| --| Hidden.
+| private function secret
+|   return 2
+| end secret
+| --| Six.
+| constant six = 6
+| --| One.
+| on ping x where x = 1
+|   return 1
+| end ping
+| --| Other.
+| on ping x
+|   return 2
+| end ping
+> :apropos area
+name {target: {library: "geo", name: "area", origin: "library"}, origin: "geo", available: false, import: "use area from geo"}
+doc "Area of a square."
+> :apropos secret
+> :apropos PING
+name {target: {library: "geo", name: "ping", origin: "library"}, origin: "geo", available: false, import: "use ping from geo"}
+doc 1 "One."
+doc 2 "Other."
+> :describe {library: "geo", name: "ping", origin: "library"}
+describe {target: {library: "geo", name: "ping", origin: "library"}, origin: "geo", declaration: "handler", signature: "on ping x where x = 1", clause: 1}
+doc "One."
+describe {target: {library: "geo", name: "ping", origin: "library"}, origin: "geo", declaration: "handler", signature: "on ping x", clause: 2}
+doc "Other."
+> :describe {library: "geo", name: "six", origin: "library"}
+describe {target: {library: "geo", name: "six", origin: "library"}, origin: "geo", declaration: "constant", signature: "constant six"}
+doc "Six."
+> :describe {library: "geo", name: "secret", origin: "library"}
+! no such name
+> :describe {library: "geo", name: "nosuch", origin: "library"}
+! no such name
+> :describe {library: "nolib", name: "area", origin: "library"}
+! no such name
+> :describe {library: "text", name: "join", origin: "library"}
+describe {target: {library: "text", name: "join", origin: "library"}, origin: "text", declaration: "function", signature: "function join xs, separator = " & quote & quote}
+doc "The items of `xs`, each shown as `&` shows it, with `separator` between each pair"
+arity 1..2
+> :describe area
+! no such name
+> use area from geo as size
+> :apropos area
+name {target: {library: "geo", name: "area", origin: "library"}, origin: "geo", available: false, import: "use area from geo"}
+doc "Area of a square."
+> :apropos SIZE
+name {target: {name: "size", origin: "session"}, origin: "geo", available: true, import: nothing}
+doc "Area of a square."
+> :describe size
+describe {target: {name: "size", origin: "session"}, origin: "geo", declaration: "function", signature: "function area r"}
+doc "Area of a square."
+arity 1..1
+> :describe area
+! no such name
+> use ping from geo
+> :apropos "ping"
+name {target: {name: "ping", origin: "session"}, origin: "geo", available: true, import: nothing}
+doc 1 "One."
+doc 2 "Other."
+name {target: {library: "geo", name: "ping", origin: "library"}, origin: "geo", available: true, import: nothing}
+doc 1 "One."
+doc 2 "Other."
+> :describe ping
+describe {target: {name: "ping", origin: "session"}, origin: "geo", declaration: "handler", signature: "on ping x where x = 1", clause: 1}
+doc "One."
+describe {target: {name: "ping", origin: "session"}, origin: "geo", declaration: "handler", signature: "on ping x", clause: 2}
+doc "Other."
+> :library replace geo
+| --| New area.
+| function area r
+|   return 0
+| end area
+|
+| function plain
+|   return 1
+| end plain
+|
+| constant six = 6
+|
+| on ping x
+|   return 2
+| end ping
+> :describe size
+describe {target: {name: "size", origin: "session"}, origin: "geo", declaration: "function", signature: "function area r"}
+doc "New area."
+arity 1..1
+> :apropos ping
+name {target: {name: "ping", origin: "session"}, origin: "geo", available: true, import: nothing}
+doc 1 ""
+name {target: {library: "geo", name: "ping", origin: "library"}, origin: "geo", available: true, import: nothing}
+doc 1 ""
+> put 1 into max
+> :apropos MAX
+name {target: {name: "max", origin: "session"}, origin: "session", available: true, import: nothing}
+doc ""
+name {target: {name: "max", origin: "builtin"}, origin: "builtin", available: false, import: nothing}
+doc "The greatest item of the list `xs` under `<`, the first of equal ones"
+> :apropos "İ"
+> :apropos 3
+name {target: {name: "fromFloat32", origin: "builtin"}, origin: "builtin", available: true, import: nothing}
+doc "The number an IEEE 754 binary32 float in the 4 Bytes `b` holds, as its shortest round-trip decimal"
+name {target: {name: "toFloat32", origin: "builtin"}, origin: "builtin", available: true, import: nothing}
+doc "The 4 Bytes of the binary32 float nearest `n`, ties to even"
+> :apropos zzz
+> :apropos "a
+! bad arguments
