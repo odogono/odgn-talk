@@ -18,6 +18,12 @@ func TestDisplayRoundTrips(t *testing.T) {
 		}
 	}
 }
+func TestDisplayQuotesOfferKey(t *testing.T) {
+	v, e := ParseDisplay(`{"offer": 1, if: true}`, nil)
+	if e != nil || v.Display() != `{"offer": 1, if: true}` {
+		t.Fatal(v.Display(), e)
+	}
+}
 func TestPatternsReparseAndCanonicalize(t *testing.T) {
 	for _, tt := range []struct{ s, want string }{{`< "ID" , "-" , <0x04 digits> >`, `<"ID", "-", <4 digits>>`}, {`<4 digits lazily ignoring case as number>`, `<4 digits as number ignoring case lazily>`}, {`< <>, "x">`, `<"x">`}, {`<(quote & "x")>`, `<(quote & "x")>`}} {
 		v, e := ParsePattern(tt.s)
