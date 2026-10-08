@@ -481,7 +481,7 @@ MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 - **Ordinals** name a chunk only after `the`, and only when a chunk kind's singular follows (`the last word of s`). Otherwise the ordinal is a key.
 - **`the target`** is the object a message was sent to. `the target of x` is a key named `target`.
 - **Calls need a name:** `name(` with no space is the only call. A call's result can't be called again, so `times(3)(14)` is a syntax error at the second `(`.
-- **Lists and maps:** `...` spreads a list into a list literal. In a map literal, a Word or a Text followed by `:` is a key, Reserved Words included. A map literal has no computed keys.
+- **Lists and maps:** `...` spreads a list into a list literal. In a map literal, a Word other than `offer` or a Text followed by `:` is a key, other Reserved Words included. A map literal has no computed keys.
 - **The Match Search** is `every match of <p> in s`. Any other `every` is a Name.
 
 The chunk kinds:

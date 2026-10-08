@@ -7,6 +7,26 @@ import (
 	"time"
 )
 
+func TestOfferMapKeyEchoReadsBack(t *testing.T) {
+	h := New(Environment{})
+	for _, source := range []string{":clock virtual 2026-09-30T10:00:00Z", "put {} into m", "put 1 into the offer of m", "put true into the if of m"} {
+		if out := h.Input(source); len(out) != 0 {
+			t.Fatal(source, out)
+		}
+	}
+	out := h.Input("m")
+	if !reflect.DeepEqual(out, []string{`{"offer": 1, if: true}`}) {
+		t.Fatal("map echo", out)
+	}
+	echo := out[0]
+	if out := h.Input(echo); !reflect.DeepEqual(out, []string{echo}) {
+		t.Fatal("echo as source", out)
+	}
+	if out := h.Input("(" + echo + ") = m"); !reflect.DeepEqual(out, []string{"true"}) {
+		t.Fatal("echo equality", out)
+	}
+}
+
 func TestEntriesAndAtomicRedefinition(t *testing.T) {
 	h := New(Environment{})
 	for _, source := range []string{":clock virtual 2026-09-30T10:00:00Z", "put 3 into n", "function twice x\nreturn x * 2\nend twice"} {

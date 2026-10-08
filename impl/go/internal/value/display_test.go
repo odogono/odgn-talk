@@ -20,9 +20,17 @@ func TestDisplayRoundTrips(t *testing.T) {
 }
 
 func TestDisplayQuotesOfferKey(t *testing.T) {
-	v, e := ParseDisplay(`{"offer": 1, if: true}`, nil)
-	if e != nil || v.Display() != `{"offer": 1, if: true}` {
-		t.Fatal(v.Display(), e)
+	const display = `{"offer": 1, if: true}`
+	v, err := ParseDisplay(display, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Display(); got != display {
+		t.Fatalf("got %s, want %s", got, display)
+	}
+	again, err := ParseDisplay(v.Display(), nil)
+	if err != nil || !again.Equal(v) || again.Display() != display {
+		t.Fatal("map display round trip", again.Display(), err)
 	}
 }
 

@@ -50,9 +50,11 @@ test('an echoed map with an offer key reads back as an equal map', () => {
   const host = new SessionHost({ now: () => start });
   expect(host.input('put {} into m')).toEqual([]);
   expect(host.input('put 1 into the offer of m')).toEqual([]);
+  expect(host.input('put true into the if of m')).toEqual([]);
   const [echo] = host.input('m');
-  expect(echo).toBe('{"offer": 1}');
-  expect(host.input(`${echo} = m`)).toEqual(['true']);
+  expect(echo).toBe('{"offer": 1, if: true}');
+  expect(host.input(echo!)).toEqual([echo!]);
+  expect(host.input(`(${echo}) = m`)).toEqual(['true']);
 });
 
 const start = parseInstant('2026-09-30T10:00:00Z');
