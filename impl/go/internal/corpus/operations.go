@@ -8,6 +8,7 @@ import (
 )
 
 type operationReplay struct {
+	crossing     func(string)
 	values       *replayValues
 	calls        map[talk.CallID]*talk.Call
 	defs         map[string]*talk.CapabilityDef
@@ -101,6 +102,9 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				if len(out.stubs[key]) > 0 {
 					_, err := invoke(c, args)
 					return err
+				}
+				if out.crossing != nil {
+					out.crossing(string(c.ID()))
 				}
 				return nil
 			}
@@ -341,6 +345,9 @@ func (t replayTimer) Cancel(c *talk.Call, name string) error {
 	return err
 }
 func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk.Value, error) {
+	if o.crossing != nil {
+		o.crossing(string(c.ID()))
+	}
 	queue := o.stubs[key]
 	if len(queue) == 0 {
 		if mode == talk.FireAndForget {

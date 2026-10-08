@@ -21,8 +21,9 @@ func (g *Group) applyCancelRun(d delivery, reports *[]Report) {
 	}
 }
 
-// Stop and cancellation may be taken from inputs while a Pump is running. All
-// ordinary settlements and Deliveries remain in the next Pump's queue.
+// Stop and cancellation may be taken from inputs while a Pump is running.
+// Refused-input records land alongside them; ordinary settlements and Deliveries
+// remain in the next Pump's queue.
 func (g *Group) landControls(reports *[]Report, current *execution, stop func(delivery)) bool {
 	g.mu.Lock()
 	if !g.controlsQueued {
@@ -33,7 +34,7 @@ func (g *Group) landControls(reports *[]Report, current *execution, stop func(de
 	var landed []delivery
 	kept := g.inputs[:0]
 	for _, d := range g.inputs {
-		if d.kind == "cancel-run" || d.kind == "stop" || d.kind == "rewind-run" {
+		if d.kind == "cancel-run" || d.kind == "stop" || d.kind == "rewind-run" || d.kind == "refusal" {
 			landed = append(landed, d)
 		} else {
 			kept = append(kept, d)
@@ -43,7 +44,9 @@ func (g *Group) landControls(reports *[]Report, current *execution, stop func(de
 	g.inputs = kept
 	g.mu.Unlock()
 	for _, d := range landed {
-		if d.kind == "stop" {
+		if d.kind == "refusal" {
+			g.emit(d.refusal...)
+		} else if d.kind == "stop" {
 			g.record("stop", true, []string{d.script.name}, d.fields)
 			stop(d)
 		} else if d.kind == "rewind-run" {

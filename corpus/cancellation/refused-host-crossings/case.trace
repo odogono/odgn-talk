@@ -1,0 +1,27 @@
+# Unblessed: refusals from property and Capability crossings (#492); first blessing awaits human review.
+> load s identity=8b1b7fb91f6011975db8a0e5ec39588d12f1d2e281b52705880914ad35e7420c
+> stub api.check value=1
+> deliver d1 to=s message=go
+> pump clock=2026-10-02T00:00:00Z
+prop s/r1 object=<object item "a"> name=value op=get value="ok"
+> set-parent object=<object item "a"> parent=<object item "a">
+refused code="parent cycle"
+call s/r1.c1 op=api.check args=[] result=1
+> set-parent object=<object item "a"> parent=<object item "a">
+refused code="parent cycle"
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=31 alloc=100 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=["ok", 1] fuel=31 alloc=100
+pumped state=idle fuel=31
+# A second Pump exercises restoring and repeated property crossing keys.
+> stub api.check value=1
+> deliver d2 to=s message=go
+> pump clock=2026-10-02T00:00:01Z
+prop s/r2 object=<object item "a"> name=value op=get value="ok"
+> cancel-run s/r2
+> set-parent object=<object item "a"> parent=<object item "a">
+refused code="parent cycle"
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=8 alloc=0 state=0 end=cancel
+run s/r2 outcome=cancelled delivery=d2 handler=go fuel=8 alloc=0
+pumped state=idle fuel=8
+> vars
+vars s

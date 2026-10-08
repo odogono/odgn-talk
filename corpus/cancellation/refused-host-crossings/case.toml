@@ -1,0 +1,28 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "check"
+mode = "immediate"
+result = "number"
+
+[[objectKinds]]
+name = "item"
+[[objectKinds.props]]
+name = "value"
+readOnly = true
+
+[[objects]]
+kind = "item"
+id = "a"
+props = { value = '"ok"' }
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = "all" } }
+objects = { item = { kind = "item", id = "a" } }

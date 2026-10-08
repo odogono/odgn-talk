@@ -479,6 +479,7 @@ type ScriptState = {
   waiters: { running: Running; timers: Timer[] }[];
 };
 type InputAction =
+  | { code: string; k: 'refusal' }
   | { id: string; k: 'cancel-delivery' }
   | { id: string; k: 'cancel-run'; name: string }
   | { id: string; k: 'rewind-run'; name: string }
@@ -1411,14 +1412,12 @@ export class Group {
     );
     const pending = this.pendingCall(id);
     if (!this.restored || !this.unsettled.has(id) || !pending) {
-      this.trace(line);
-      this.trace(recordLine('refused', [], [['code', '"unknown call"']]));
+      this.recordRefusal(line, 'unknown call');
       throw new HostError('unknown call');
     }
     const operation = this.pendingOperations().find(p => p.id === id)!;
     if ('adopt' in settlement && !pending.running.run.callAdoptable(id)) {
-      this.trace(line);
-      this.trace(recordLine('refused', [], [['code', '"not adoptable"']]));
+      this.recordRefusal(line, 'not adoptable');
       throw new HostError('not adoptable');
     }
     this.checkFunctionGroups(
@@ -1633,6 +1632,11 @@ export class Group {
 
   private applyInput(action: InputAction) {
     switch (action.k) {
+      case 'refusal':
+        this.trace(
+          recordLine('refused', [], [['code', JSON.stringify(action.code)]]),
+        );
+        break;
       case 'revoke': {
         const s = this.scripts.find(s => s.name === action.name)!;
         if (s.grants.has(action.grant)) {
@@ -1973,6 +1977,17 @@ export class Group {
     s.queue.push(delivery);
     if (s.stopped) {
       this.dropStoppedMailbox(s);
+    }
+  }
+
+  // Refusal is immediate at the API; inside a Pump its records land at the
+  // crossing alongside urgent controls, in the order the Host made them.
+  private recordRefusal(line: string, code: string) {
+    if (this.pumping) {
+      this.inputs.push({ line, urgent: true, action: { k: 'refusal', code } });
+    } else {
+      this.trace(line);
+      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
     }
   }
 
@@ -3010,8 +3025,7 @@ export class Group {
   private checkFunctionGroups(values: readonly Value[], line?: string) {
     if (!functionsBelongTo(values, this.functionGroup)) {
       if (line) {
-        this.trace(line);
-        this.trace(recordLine('refused', [], [['code', '"wrong group"']]));
+        this.recordRefusal(line, 'wrong group');
       }
       throw new HostError('wrong group');
     }
@@ -3038,8 +3052,7 @@ export class Group {
     }
     // A Host Input refused at the call is written, with no ids, then `refused`.
     const refuse = (code: string, error: Error): never => {
-      this.trace(this.deliveryLine(record, null, toText, m, fn));
-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      this.recordRefusal(this.deliveryLine(record, null, toText, m, fn), code);
       throw error;
     };
     if (!fn && !validMessageSelector(m.name, m.args?.length ?? 0)) {
@@ -3172,8 +3185,10 @@ export class Group {
   private queueBroadcast(m: Message, id: string, decision?: Decision) {
     const record = decision ? 'decide-broadcast' : 'broadcast';
     if (!validMessageSelector(m.name, m.args?.length ?? 0)) {
-      this.trace(recordLine(record, [], messageFields(m), true));
-      this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
+      this.recordRefusal(
+        recordLine(record, [], messageFields(m), true),
+        'invalid value',
+      );
       throw new HostError(
         'invalid value',
         'Malformed message Selector or argument count',
@@ -3185,8 +3200,10 @@ export class Group {
     );
     for (const [name, value] of Object.entries(m.limits ?? {})) {
       if (!validOverride(name, value, defaultLimits[name as LimitName])) {
-        this.trace(recordLine(record, [], messageFields(m), true));
-        this.trace(recordLine('refused', [], [['code', '"invalid value"']]));
+        this.recordRefusal(
+          recordLine(record, [], messageFields(m), true),
+          'invalid value',
+        );
         throw new HostError(
           'invalid value',
           `A Broadcast override may only tighten ${name}`,
@@ -3369,7 +3386,7 @@ export class Group {
     const ref = fn.asFunction();
     if (!ref || ref.group !== this.functionGroup) {
       const code = ref ? 'wrong group' : 'invalid value';
-      this.trace(
+      this.recordRefusal(
         recordLine(
           'call-value',
           [],
@@ -3379,8 +3396,8 @@ export class Group {
           ],
           true,
         ),
+        code,
       );
-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw new HostError(code);
     }
     let settle!: Delivery['request'];
@@ -3443,8 +3460,7 @@ export class Group {
     );
     for (let x = up; x; x = x.parent) {
       if (x === child) {
-        this.trace(line);
-        this.trace(recordLine('refused', [], [['code', '"parent cycle"']]));
+        this.recordRefusal(line, 'parent cycle');
         throw new HostError(
           'parent cycle',
           `${o.value} would be its own ancestor`,

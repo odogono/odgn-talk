@@ -52,6 +52,7 @@ type Group struct {
 	deferredDecisions []*Decided
 	clock             time.Time
 	pumping           bool
+	runningPump       bool // refusals land at a crossing only during a Pump
 	effectUnknown     bool // sticky: an external participant's state is unresolved
 }
 type Script struct {
@@ -75,6 +76,7 @@ type Script struct {
 	debt       int64
 }
 type delivery struct {
+	refusal    []string
 	ancestry   RunAncestry
 	id         DeliveryID
 	broadcast  BroadcastID
@@ -536,11 +538,12 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	g.clock = now
 	g.settlementsOpen = false
 	g.pumping = true
+	g.runningPump = true
 	inputs := g.inputs
 	g.inputs = nil
 	g.controlsQueued = false
 	g.mu.Unlock()
-	defer func() { g.mu.Lock(); g.pumping = false; g.mu.Unlock() }()
+	defer func() { g.mu.Lock(); g.pumping = false; g.runningPump = false; g.mu.Unlock() }()
 	inputs = g.prepareBroadcasts(inputs)
 
 	accepted := inputs[:0]
@@ -751,5 +754,14 @@ func (g *Group) emit(lines ...string) {
 	}
 }
 func (g *Group) recordRefusal(name string, ids []string, fields map[string]string, code HostErrorCode) {
-	g.emit(coretrace.Format(name, true, ids, fields), coretrace.Format("refused", false, nil, map[string]string{"code": corevalue.DisplayText(string(code))}))
+	lines := []string{coretrace.Format(name, true, ids, fields), coretrace.Format("refused", false, nil, map[string]string{"code": corevalue.DisplayText(string(code))})}
+	g.mu.Lock()
+	if g.runningPump {
+		g.inputs = append(g.inputs, delivery{kind: "refusal", refusal: lines})
+		g.controlsQueued = true
+		g.mu.Unlock()
+		return
+	}
+	g.mu.Unlock()
+	g.emit(lines...)
 }

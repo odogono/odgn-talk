@@ -804,10 +804,11 @@ const driveReplay = function* (
   const sessionBindings = sessionObjects?.preload();
   configureDebug?.(group);
   const landedLines = new Set<number>();
-  // A Stop or CancelRun after a crossing is made from that Host function,
-  // rather than a second time by the outer replay loop (chapter 11).
+  // Urgent controls and refused inputs following a crossing are replayed from
+  // inside its Host function, rather than by the outer loop (chapter 11).
   const atCrossings = new Map<string, Parsed[][]>();
   const crossingLines = new Set<number>();
+  const crossingInputIndices = new Map<Parsed, number>();
   for (let i = 0; i < lines.length; i++) {
     if (!isCrossing(lines[i]!)) {
       continue;
@@ -836,7 +837,16 @@ const driveReplay = function* (
         j++;
         continue;
       }
+      let next = j + 1;
+      while (
+        next < lines.length &&
+        (!lines[next] || lines[next]!.startsWith('#'))
+      ) {
+        next++;
+      }
+      const refused = lines[next]?.startsWith('refused ');
       if (
+        !refused &&
         !line.startsWith('> stop ') &&
         !line.startsWith('> cancel-run ') &&
         !line.startsWith('> rewind-run ')
@@ -846,7 +856,9 @@ const driveReplay = function* (
       if (parseRecord(line).fields.has('pc')) {
         break;
       }
-      inputs.push(parseRecord(line));
+      const input = parseRecord(line);
+      crossingInputIndices.set(input, j);
+      inputs.push(input);
       crossingLines.add(j++);
     }
     const queue = atCrossings.get(key) ?? [];
@@ -855,12 +867,11 @@ const driveReplay = function* (
   }
   const crossing = (key: string) => {
     for (const r of atCrossings.get(key)?.shift() ?? []) {
-      if (r.name === 'stop') {
-        group
-          .script(r.ids[0]!)!
-          .stop(readDisplay(r.fields.get('reason')!).asText()!);
-      } else {
-        landRunInput(group, r);
+      // A Host callback cannot suspend replay; these inputs complete or refuse
+      // synchronously through the same handler as ordinary Host Inputs.
+      const step = applyInput(r, crossingInputIndices.get(r)!, 0).next();
+      if (!step.done) {
+        throw new Error('A crossing input suspended replay');
       }
     }
   };
@@ -1110,45 +1121,12 @@ const driveReplay = function* (
   const saved = new Map<string, Uint8Array>();
   const bound = new Map<string, Record<string, Grant<unknown>>>();
   const cancellations = new Map<string, AbortController>();
-  for (let cursor = 0; ; cursor++) {
-    if (cursor === order.length) {
-      if (!incremental) {
-        break;
-      }
-      const input = yield {
-        state: 'ready',
-        group,
-        callIds: [...calls.keys()],
-        saveIds: [...saved.keys()],
-      };
-      if (input === undefined) {
-        break;
-      }
-      if (!input.startsWith('> ')) {
-        throw new Error('Expected a concrete Host Input');
-      }
-      order.push(lines.length);
-      lines = [...lines, input];
-    }
-    const index = order[cursor]!;
+  const applyInput = function* (
+    r: Parsed,
+    index: number,
+    hostInputIndex: number,
+  ): Generator<ReplayEvent, void, string | undefined> {
     const line = lines[index]!;
-    if (crossingLines.has(index) || landedLines.has(index)) {
-      continue;
-    }
-    if (!line.startsWith('> ')) {
-      continue;
-    }
-    const r = parseRecord(line);
-    if (sessionObjects?.traceInput(r.name, r.ids)) {
-      continue;
-    }
-    for (const o of sessionObjects?.traceObjects() ?? []) {
-      made.set(`${o.kind.name} ${o.id}`, o);
-    }
-    const hostInputIndex = lines
-      .slice(0, index)
-      .filter(l => l.startsWith('> ')).length;
-    yield { state: 'input', hostInputIndex, group };
     try {
       switch (r.name) {
         case 'load': {
@@ -1740,7 +1718,7 @@ const driveReplay = function* (
         (error instanceof Error && error.name === 'MailboxFull') ||
         error instanceof HostError
       ) {
-        continue;
+        return;
       }
       if (error instanceof NotImplementedError) {
         throw new DeferredCaseError(error.message);
@@ -1750,6 +1728,47 @@ const driveReplay = function* (
     if (malformed) {
       throw malformed;
     }
+  };
+  for (let cursor = 0; ; cursor++) {
+    if (cursor === order.length) {
+      if (!incremental) {
+        break;
+      }
+      const input = yield {
+        state: 'ready',
+        group,
+        callIds: [...calls.keys()],
+        saveIds: [...saved.keys()],
+      };
+      if (input === undefined) {
+        break;
+      }
+      if (!input.startsWith('> ')) {
+        throw new Error('Expected a concrete Host Input');
+      }
+      order.push(lines.length);
+      lines = [...lines, input];
+    }
+    const index = order[cursor]!;
+    const line = lines[index]!;
+    if (crossingLines.has(index) || landedLines.has(index)) {
+      continue;
+    }
+    if (!line.startsWith('> ')) {
+      continue;
+    }
+    const r = parseRecord(line);
+    if (sessionObjects?.traceInput(r.name, r.ids)) {
+      continue;
+    }
+    for (const o of sessionObjects?.traceObjects() ?? []) {
+      made.set(`${o.kind.name} ${o.id}`, o);
+    }
+    const hostInputIndex = lines
+      .slice(0, index)
+      .filter(l => l.startsWith('> ')).length;
+    yield { state: 'input', hostInputIndex, group };
+    yield* applyInput(r, index, hostInputIndex);
   }
   sessionObjects?.finish();
   return trace;

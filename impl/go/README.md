@@ -464,7 +464,11 @@ state and reason. Fatal effect uncertainty stops the Group permanently.
 
 Stops issued during Pump land at its next Host crossing or end, like `CancelRun`.
 A crossing records its Host result, then the control input, before result
-conversion. An interrupted current Run ends its Stretch as `stop` before the
+conversion. A refused Host Input made during a crossing also writes its input
+and `refused` records there, in order with urgent controls; its API refusal remains
+immediate. Independent Trace replay issues these inputs inside the recorded
+property or Capability function, in ordinary and save/restore modes.
+An interrupted current Run ends its Stretch as `stop` before the
 Stop report, without a RunEnd or cleanup. Cancelling a crossing also skips
 conversion of the discarded result; cleanup crossings retain their own charges.
 

@@ -18,6 +18,7 @@ cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
+cancellation/refused-host-crossings
 capabilities/argument-shapes
 capabilities/calls
 capabilities/charge-faults
