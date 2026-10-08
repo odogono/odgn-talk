@@ -1384,7 +1384,13 @@ export const errorMessages = {
   "invalid key": "A Store key can't be empty text",
   "can't store": "A {kind} object can't be kept in a Store",
   "store full": "The Store's {limit} limit would be exceeded",
-  "store busy": "Another Segment is writing {key}"
+  "store busy": "Another Segment is writing {key}",
+  "sql": "The SQL failed: {reason}",
+  "constraint": "The change breaks a {kind} constraint",
+  "sqlite busy": "Another Segment is writing to the database",
+  "not read-only": "A query must not change the database",
+  "too many rows": "The statement gave more than {max} rows",
+  "unrepresentable": "The value in {column} can't be represented"
 };
 export const limitDefaults = {
   "fuelPerRun": 10000000,

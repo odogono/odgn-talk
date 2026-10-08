@@ -53,4 +53,5 @@ A Script that keeps records it needs to search, join or total has outgrown the S
   - A load-time validation hook, so literal SQL becomes a load diagnostic.
   - Metered Operations that charge for rows as they arrive.
   - `sqlite` in Sessions and the Playground.
+- **Amended 2026-10-08** ([#466](https://github.com/odogono/odgn-talk/issues/466)): the error raised for a `query` that could write is named `not read-only`, not `readonly`, so it can't be confused with the existing `read only`. Error codes may now contain hyphenated words.
 - Amends [ADR 0050](0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md): a Store that shares a coordinator with `sqlite` raises `store busy` while another Segment holds the database's write lock.

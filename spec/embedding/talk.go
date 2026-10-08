@@ -495,6 +495,61 @@ type StoreImpl interface {
 // StoreCapability maps every binding to impl as one Segment Coordinator.
 func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, error)
 
+// StoreCoordinator gives the Segment Coordinator StoreCapability maps impl to,
+// which a SqliteImpl gives for the database that keeps impl's Stores (ADR 0070).
+// Only a comparable impl has one coordinator across calls.
+func (c *Core) StoreCoordinator(impl StoreImpl) *SegmentLifecycle
+
+// sqlite is optional (chapter 7, ADR 0070). The binding names a database the
+// Host keeps; Tables, when non-nil, limits the tables a Grant may use, and
+// MaxRows caps the rows a call may give.
+type SqliteBinding struct {
+	Database string
+	Tables   []string
+	MaxRows  int64
+}
+
+// SqlValue is nil (NULL), int64 (INTEGER), float64 (REAL), string (TEXT) or
+// []byte (BLOB).
+type SqlValue = any
+
+// SqlParams binds List to `?` and `?NNN`, or, when Named is non-nil, Named to
+// `:name`, keyed without the colon.
+type SqlParams struct {
+	List  []SqlValue
+	Named map[string]SqlValue
+}
+
+type SqlRows struct {
+	Columns []string
+	Rows    [][]SqlValue // each in column order
+	Changes int64        // Change only
+}
+
+// The Core has checked the Shapes and max, converted params by the chapter 7
+// rules and charged max × perRow. It converts the result, raising `sql` for a
+// column named twice and `unrepresentable` for a double it can't hold or a
+// string that isn't valid UTF-8. Change, Begin, Commit and Rollback are
+// Segment-bound: they act inside the calling Segment's transaction, which the
+// coordinator publishes or discards. Begin, Commit and Rollback open, release
+// and roll back a savepoint. A failed call leaves the database as it was. Fail
+// with ScriptError `sql` {reason}, `constraint` {kind}, `sqlite busy`,
+// `not read-only` or `too many rows` {max} (chapter 9).
+type SqliteImpl interface {
+	// Coordinator is called once per Grant. The same database gives the same pointer.
+	Coordinator(database string) *SegmentLifecycle
+	Query(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
+	Change(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
+	Begin(c *Call) error
+	Commit(c *Call) error
+	Rollback(c *Call) error
+}
+
+// SqliteCapability is optional for Hosts. perRow is whole Fuel charged per row
+// of max; a bad one is HostError `invalid value`. Every binding must be a
+// SqliteBinding.
+func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*CapabilityDef, error)
+
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)
 // ---------------------------------------------------------------------------

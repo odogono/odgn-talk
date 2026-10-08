@@ -306,13 +306,15 @@ var Errors = ErrorsTable{
 				"field",
 				"value",
 			},
-			RaisedWhen: "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, or a Binary Pattern build value too large for its segment",
+			RaisedWhen: "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, a Binary Pattern build value too large for its segment, or a `sqlite` call's `max` that isn't a whole number up to its Grant's row cap",
 			Sources: []string{
 				"ADR 0011",
 				"ADR 0013",
 				"ADR 0023",
 				"ADR 0033",
+				"ADR 0070",
 				"#89",
+				"#466",
 			},
 			Message: "{value} is out of range for {field}",
 		},
@@ -543,12 +545,82 @@ var Errors = ErrorsTable{
 			Fields: []string{
 				"key",
 			},
-			RaisedWhen: "A `store` write names a key that another live Segment has reserved with an uncommitted write; the Host raises it before anything changes",
+			RaisedWhen: "A `store` write names a key that another live Segment has reserved with an uncommitted write, or, for a Store that shares a Segment Coordinator with `sqlite`, another Segment holds the database's write lock; the Host raises it before anything changes",
 			Sources: []string{
 				"ADR 0062",
+				"ADR 0070",
 				"#226",
+				"#466",
 			},
 			Message: "Another Segment is writing {key}",
+		},
+		ErrorsTableErrorEntry{
+			Code: "sql",
+			Fields: []string{
+				"reason",
+			},
+			RaisedWhen: "A `sqlite` statement can't run as given: SQLite rejects it, it is more than one statement, its placeholders don't match `params`, the Host's authorizer denies it, or its result names a column twice; `reason` is SQLite's or the Host's own text, which isn't portable between SQLite versions",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "The SQL failed: {reason}",
+		},
+		ErrorsTableErrorEntry{
+			Code: "constraint",
+			Fields: []string{
+				"kind",
+			},
+			RaisedWhen: "A `sqlite` statement breaks a constraint; `kind` is `unique`, `primary key`, `not null`, `check`, `foreign key`, `datatype`, `trigger` or `other`, and the Host raises it",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "The change breaks a {kind} constraint",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "sqlite busy",
+			Fields:     []string{},
+			RaisedWhen: "A `sqlite` write or `begin` needs the database's write lock while another Segment holds it; the Host raises it before anything changes",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "Another Segment is writing to the database",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "not read-only",
+			Fields:     []string{},
+			RaisedWhen: "The statement given to `sqlite`'s `query` could write; the Host raises it before the statement runs",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "A query must not change the database",
+		},
+		ErrorsTableErrorEntry{
+			Code: "too many rows",
+			Fields: []string{
+				"max",
+			},
+			RaisedWhen: "A `sqlite` statement gives more rows than the call's `max`; the Host raises it, leaving the database as it was before the call, and never truncates the result",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "The statement gave more than {max} rows",
+		},
+		ErrorsTableErrorEntry{
+			Code: "unrepresentable",
+			Fields: []string{
+				"column",
+			},
+			RaisedWhen: "A `sqlite` result holds a value Talk can't hold exactly: a NaN, an infinity, a `REAL` of magnitude 10^34 or more, or `TEXT` that isn't valid UTF-8; `column` is its column's name, and the Core raises it, except that a TS Host raises it for `TEXT`",
+			Sources: []string{
+				"ADR 0070",
+				"#466",
+			},
+			Message: "The value in {column} can't be represented",
 		},
 	},
 }

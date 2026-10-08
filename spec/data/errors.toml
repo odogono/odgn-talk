@@ -10,7 +10,8 @@
 # reserved       the keys a Host `Fail`'s `Data` may not use; the Core sets them
 #
 # [[error]]
-#   code         the code, lowercase words separated by spaces
+#   code         the code, lowercase words separated by spaces; a word may be
+#                hyphenated
 #   fields       the code-specific keys, besides `code`, `message` and `at`,
 #                that every raise carries
 #   optional     optional: code-specific keys only some raises carry
@@ -162,8 +163,8 @@ message = "{value} is outside the domain of {function}"
 [[error]]
 code = "out of range"
 fields = ["field", "value"]
-raised_when = "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, or a Binary Pattern build value too large for its segment"
-sources = ["ADR 0011", "ADR 0013", "ADR 0023", "ADR 0033", "#89"]
+raised_when = "A value is outside the range its position allows: a date outside 0001–9999, a date field that isn't an in-range integer, a `character`, `word` or `byte` write past the end, any chunk write at index 0, before the start or over a reversed range, a negative `repeat` count, an empty `delimited by`, a Binary Pattern build value too large for its segment, or a `sqlite` call's `max` that isn't a whole number up to its Grant's row cap"
+sources = ["ADR 0011", "ADR 0013", "ADR 0023", "ADR 0033", "ADR 0070", "#89", "#466"]
 message = "{value} is out of range for {field}"
 
 [[error]]
@@ -287,6 +288,48 @@ message = "The Store's {limit} limit would be exceeded"
 [[error]]
 code = "store busy"
 fields = ["key"]
-raised_when = "A `store` write names a key that another live Segment has reserved with an uncommitted write; the Host raises it before anything changes"
-sources = ["ADR 0062", "#226"]
+raised_when = "A `store` write names a key that another live Segment has reserved with an uncommitted write, or, for a Store that shares a Segment Coordinator with `sqlite`, another Segment holds the database's write lock; the Host raises it before anything changes"
+sources = ["ADR 0062", "ADR 0070", "#226", "#466"]
 message = "Another Segment is writing {key}"
+
+[[error]]
+code = "sql"
+fields = ["reason"]
+raised_when = "A `sqlite` statement can't run as given: SQLite rejects it, it is more than one statement, its placeholders don't match `params`, the Host's authorizer denies it, or its result names a column twice; `reason` is SQLite's or the Host's own text, which isn't portable between SQLite versions"
+sources = ["ADR 0070", "#466"]
+message = "The SQL failed: {reason}"
+
+[[error]]
+code = "constraint"
+fields = ["kind"]
+raised_when = "A `sqlite` statement breaks a constraint; `kind` is `unique`, `primary key`, `not null`, `check`, `foreign key`, `datatype`, `trigger` or `other`, and the Host raises it"
+sources = ["ADR 0070", "#466"]
+message = "The change breaks a {kind} constraint"
+
+[[error]]
+code = "sqlite busy"
+fields = []
+raised_when = "A `sqlite` write or `begin` needs the database's write lock while another Segment holds it; the Host raises it before anything changes"
+sources = ["ADR 0070", "#466"]
+message = "Another Segment is writing to the database"
+
+[[error]]
+code = "not read-only"
+fields = []
+raised_when = "The statement given to `sqlite`'s `query` could write; the Host raises it before the statement runs"
+sources = ["ADR 0070", "#466"]
+message = "A query must not change the database"
+
+[[error]]
+code = "too many rows"
+fields = ["max"]
+raised_when = "A `sqlite` statement gives more rows than the call's `max`; the Host raises it, leaving the database as it was before the call, and never truncates the result"
+sources = ["ADR 0070", "#466"]
+message = "The statement gave more than {max} rows"
+
+[[error]]
+code = "unrepresentable"
+fields = ["column"]
+raised_when = "A `sqlite` result holds a value Talk can't hold exactly: a NaN, an infinity, a `REAL` of magnitude 10^34 or more, or `TEXT` that isn't valid UTF-8; `column` is its column's name, and the Core raises it, except that a TS Host raises it for `TEXT`"
+sources = ["ADR 0070", "#466"]
+message = "The value in {column} can't be represented"
