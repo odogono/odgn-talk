@@ -10,6 +10,52 @@ import (
 	"time"
 )
 
+func TestInspectionExpressionDiagnostics(t *testing.T) {
+	var trace []string
+	h := New(Environment{Now: func() time.Time { return time.Unix(0, 0) }, Trace: func(l string) { trace = append(trace, l) }})
+	h.Input("script variable calls = 0")
+	h.Input("function once\nadd 1 to calls\nreturn 1\nend once")
+	source := h.Source()
+	before := append([]string(nil), trace...)
+	for _, test := range []struct {
+		input, diagnostic string
+	}{
+		{":inspect given x => x", "! unexpected token at 1:9"},
+		{":inspect [\n  1,\n  )]", "! unexpected token at 3:3"},
+		{":inspect once() + )", "! unexpected token at 1:10"},
+		{":inspect 1 + @", "! bad character at 1:5"},
+		{":inspect \"unfinished", "! unterminated text at 1:1"},
+		{":inspect 1 +", "! unexpected token at 1:4"},
+		{":inspect put once() into calls", "! bad arguments"},
+		{":inspect constant wrong = once()", "! bad arguments"},
+		{":inspect once() 2", "! bad arguments"},
+		{":inspect once()\n2", "! bad arguments"},
+		{":inspect once() -- trailing comment\n\n2", "! bad arguments"},
+	} {
+		if out := h.Input(test.input); !reflect.DeepEqual(out, []string{test.diagnostic}) {
+			t.Errorf("%q: got %v, want %s", test.input, out, test.diagnostic)
+		}
+	}
+	if h.Source() != source || !reflect.DeepEqual(trace, before) {
+		t.Fatal("refused inspection changed source or executed", h.Source(), trace)
+	}
+	if out := h.Input("calls"); !reflect.DeepEqual(out, []string{"0"}) {
+		t.Fatal(out)
+	}
+}
+
+func TestInspectionAnonymousLambda(t *testing.T) {
+	h := New(Environment{Now: func() time.Time { return time.Unix(0, 0) }})
+	want := []string{
+		`value {kind: "function", value: <function session+1:2:8>}`,
+		`function {name: nothing, arity: 1..1, home: "session"}`,
+		`doc ""`,
+	}
+	if out := h.Input(":inspect given x: x"); !reflect.DeepEqual(out, want) {
+		t.Fatal(out)
+	}
+}
+
 func TestPassiveInspectionAndReaderHygiene(t *testing.T) {
 	var trace []string
 	h := New(Environment{Now: func() time.Time { return time.Unix(0, 0) }, Trace: func(l string) { trace = append(trace, l) }, Objects: func(c *Objects) map[string]*talk.Object {

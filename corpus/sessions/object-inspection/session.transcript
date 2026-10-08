@@ -120,8 +120,14 @@ value {kind: "map", value: {z: 1, a: 2}}
 size 2
 field "a" = 2
 field "z" = 1
+> :inspect given x: x
+@ 1970-01-01T00:00:00Z
+% {"exposure":79,"handle":"f4","path":["result"],"type":"function"}
+value {kind: "function", value: <function session+12:2:8>}
+function {name: nothing, arity: 1..1, home: "session"}
+doc ""
 > :inspect given x => x
-! bad arguments
+! unexpected token at 1:9
 > :inspect "é"
 @ 1970-01-01T00:00:00Z
 value {kind: "text", value: "é"}

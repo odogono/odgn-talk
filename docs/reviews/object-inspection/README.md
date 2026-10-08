@@ -33,3 +33,11 @@ Known adjacent limitations are tracked in the affected guides: Go independent Tr
 - Build and CLI Node runtime checks pass after the rebase; the browser smoke test passed at the implementation checkpoint. Go vet and focused Session/driver/corpus race tests pass.
 
 First-blessing review is the remaining approval step for the two proposed files above. No approval has been inferred from these checks.
+
+## Diagnostic and Lambda correction (#493)
+
+On 2026-10-08, #493 corrects the proposed expectations from #485: `:inspect given x: x` now executes a real Lambda and records its Function exposure, `name: nothing`, arity and empty documentation. A separate `:inspect given x => x` pins `! unexpected token at 1:9` at the expression's position. The added execution advances subsequent Entry and Run numbers in the canonical Trace.
+
+Both Session Hosts preserve parse diagnostics and distinguish trailing input after a complete Entry, which still gives `! bad arguments`. Native regressions cover multiline positions, lexical and incomplete-expression errors, statement/declaration/trailing-input refusal, and no source or execution effects for rejected syntax. Both also pin the anonymous Lambda rows.
+
+`bun run corpus:bless sessions/object-inspection` passes with TS and Go agreement, including standalone Transcript replay and both independent Trace replay modes. The two existing `Unblessed` headers remain; first-blessing approval is still pending for the exact expectation files listed above.

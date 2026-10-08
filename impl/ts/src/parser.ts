@@ -25,6 +25,9 @@ type Node = {
 };
 
 export class ParseError extends Error {
+  /** A complete Session Entry was followed by additional input. */
+  trailingEntry = false;
+
   constructor(
     readonly tok: Token,
     readonly code: SyntaxErrorCode,
@@ -655,6 +658,7 @@ class Parser {
   // names one of the Session Script's Handlers, or is `say`.
   *entry(isHandler: (name: string) => boolean): ParseTask<EntryKind | null> {
     const frame = this.enter('Entry');
+    let complete = false;
     try {
       this.skipNL();
       const t = this.peek(0);
@@ -676,12 +680,15 @@ class Parser {
       ) {
         kind = 'statement';
         yield this.statement();
+        complete = true;
         this.endOfStatement();
       } else {
         kind = 'expression';
         yield this.expr();
+        complete = true;
         this.endOfStatement();
       }
+      complete = true;
       this.skipNL();
       const end = this.peek(0);
       if (end.t !== 'eof') {
@@ -689,6 +696,11 @@ class Parser {
       }
       this.next(); // EOF owns any trailing trivia.
       return kind;
+    } catch (error) {
+      if (error instanceof ParseError) {
+        error.trailingEntry = complete;
+      }
+      throw error;
     } finally {
       this.leave(frame);
     }

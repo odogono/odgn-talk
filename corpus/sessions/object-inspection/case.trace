@@ -131,20 +131,26 @@ pumped state=idle fuel=0
 seg session/r12 start delivery=d12 handler=entry9 clause=1 fuel=14 alloc=98 state=0 end=return
 run session/r12 outcome=completed delivery=d12 handler=entry9 value={z: 1, a: 2} fuel=14 alloc=98
 pumped state=idle fuel=14
-> extend session source="on entry10" & newline & "return " & quote & "é" & quote & newline & "end entry10" & newline identity=88c5199ca104b19ba800568f083af3f01758675f640f63fa3c96b452f862dbcd
+> extend session source="on entry10" & newline & "return given x: x" & newline & "end entry10" & newline identity=ade86c69d337d41b327cf8c5aba979419af948ce329ddda2216ea9650c244537
 > request d13 to=session message=entry10
 > pump clock=1970-01-01T00:00:00Z
-seg session/r13 start delivery=d13 handler=entry10 clause=1 fuel=7 alloc=0 state=0 end=return
-run session/r13 outcome=completed delivery=d13 handler=entry10 value="é" fuel=7 alloc=0
+seg session/r13 start delivery=d13 handler=entry10 clause=1 fuel=10 alloc=32 state=0 end=return
+run session/r13 outcome=completed delivery=d13 handler=entry10 value=<function session+12:2:8> fuel=10 alloc=32
+pumped state=idle fuel=10
+> extend session source="on entry11" & newline & "return " & quote & "é" & quote & newline & "end entry11" & newline identity=626cecb36c39d4033bc7d23606e2b3e2aa6546f73c0ee6e59eee10fcd1268a02
+> request d14 to=session message=entry11
+> pump clock=1970-01-01T00:00:00Z
+seg session/r14 start delivery=d14 handler=entry11 clause=1 fuel=7 alloc=0 state=0 end=return
+run session/r14 outcome=completed delivery=d14 handler=entry11 value="é" fuel=7 alloc=0
 pumped state=idle fuel=7
 > vars
 vars session
-> extend session source="on entry11" & newline & "say " & quote & "%output" & quote & newline & "end entry11" & newline identity=4dda059bb465b19add82a7b9238b95d4cab65461208c44652b8d1fce9fbe263a
-> request d14 to=session message=entry11
+> extend session source="on entry12" & newline & "say " & quote & "%output" & quote & newline & "end entry12" & newline identity=c4337b7f7d0eead02cf25bea4089bc4875b97b30360b2cd16d7903254eb9da02
+> request d15 to=session message=entry12
 > pump clock=1970-01-01T00:00:00Z
-call session/r14.c1 op=console.write args=["%output"]
-seg session/r14 start delivery=d14 handler=entry11 clause=1 fuel=18 alloc=0 state=0 end=return
-run session/r14 outcome=completed delivery=d14 handler=entry11 fuel=18 alloc=0
+call session/r15.c1 op=console.write args=["%output"]
+seg session/r15 start delivery=d15 handler=entry12 clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r15 outcome=completed delivery=d15 handler=entry12 fuel=18 alloc=0
 pumped state=idle fuel=18
 > vars
 vars session

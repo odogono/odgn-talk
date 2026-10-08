@@ -14,6 +14,52 @@ import { shape } from '../src/capabilities';
 import { dec, text, map, nothing } from '../src/values';
 import type { SessionObjects } from '../src/session/objects';
 
+test('inspection reports expression diagnostics at their own positions without executing', () => {
+  const trace: string[] = [];
+  const host = new SessionHost({ now: () => 0n, trace: l => trace.push(l) });
+  host.input('script variable calls = 0');
+  host.input('function once\nadd 1 to calls\nreturn 1\nend once');
+  const source = host.source;
+  const before = [...trace];
+  for (const { input, diagnostic } of [
+    { input: ':inspect given x => x', diagnostic: '! unexpected token at 1:9' },
+    {
+      input: ':inspect [\n  1,\n  )]',
+      diagnostic: '! unexpected token at 3:3',
+    },
+    { input: ':inspect once() + )', diagnostic: '! unexpected token at 1:10' },
+    { input: ':inspect 1 + @', diagnostic: '! bad character at 1:5' },
+    {
+      input: ':inspect "unfinished',
+      diagnostic: '! unterminated text at 1:1',
+    },
+    { input: ':inspect 1 +', diagnostic: '! unexpected token at 1:4' },
+  ]) {
+    expect(host.input(input)).toEqual([diagnostic]);
+  }
+  for (const input of [
+    ':inspect put once() into calls',
+    ':inspect constant wrong = once()',
+    ':inspect once() 2',
+    ':inspect once()\n2',
+    ':inspect once() -- trailing comment\n\n2',
+  ]) {
+    expect(host.input(input)).toEqual(['! bad arguments']);
+  }
+  expect(host.source).toBe(source);
+  expect(trace).toEqual(before);
+  expect(host.input('calls')).toEqual(['0']);
+});
+
+test('inspection renders an anonymous Lambda with no name or documentation', () => {
+  const host = new SessionHost({ now: () => 0n });
+  expect(host.input(':inspect given x: x')).toEqual([
+    'value {kind: "function", value: <function session+1:2:8>}',
+    'function {name: nothing, arity: 1..1, home: "session"}',
+    'doc ""',
+  ]);
+});
+
 test('describe shares passive Object metadata and records its single snapshot exposures', () => {
   const items: TranscriptItem[] = [];
   const trace: string[] = [];
@@ -179,6 +225,7 @@ test('object callbacks, queued actions, nested functions and resolver outcomes r
     ':inspect root',
     ':inspect the child of root',
     ':inspect {z: 1, a: 2}',
+    ':inspect given x: x',
     ':inspect given x => x',
     ':inspect "é"',
     ':inspect 1\n2',
