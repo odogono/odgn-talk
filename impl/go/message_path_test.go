@@ -54,12 +54,12 @@ func TestMessagePathUnownedObjectCostsNoFuel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.FuelUsed != 0 || len(result.Reports) != 1 {
+	if result.FuelUsed != 0 || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result)
 	}
-	u, ok := result.Reports[0].(*Unhandled)
+	u, ok := operationalReports(result.Reports)[0].(*Unhandled)
 	if !ok || u.Delivery != id || u.Target != o {
-		t.Fatal(result.Reports)
+		t.Fatal(operationalReports(result.Reports))
 	}
 	select {
 	case <-p.Done():
@@ -85,12 +85,12 @@ func TestMessagePathParentChangesRejectCyclesInInputOrder(t *testing.T) {
 		t.Fatal(err)
 	} // unknown until the queue drains
 	result, err := g.Pump(time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), PumpOptions{})
-	if err != nil || len(result.Reports) != 1 {
+	if err != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err)
 	}
-	e, ok := result.Reports[0].(*HostError)
+	e, ok := operationalReports(result.Reports)[0].(*HostError)
 	if !ok || e.Code != ParentCycle {
-		t.Fatal(result.Reports)
+		t.Fatal(operationalReports(result.Reports))
 	}
 	hostCode(t, g.SetParent(b, a), ParentCycle)
 	hostCode(t, g.SetParent(a, a), ParentCycle)
@@ -227,20 +227,20 @@ func TestMessagePathOwnerDisposalStopsRunAndSkipsQueuedTarget(t *testing.T) {
 		t.Fatal(answer, failure, result)
 	}
 	stops := 0
-	for _, r := range result.Reports {
+	for _, r := range operationalReports(result.Reports) {
 		if s, ok := r.(*Stop); ok && s.Reason == "owner disposed" {
 			stops++
 		}
 	}
 	if stops != 1 {
-		t.Fatal(result.Reports)
+		t.Fatal(operationalReports(result.Reports))
 	}
 	hostCode(t, g.SetParent(a, nil), InvalidValue)
 	if err := g.Dispose(a); err != nil {
 		t.Fatal(err)
 	}
 	again, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(again.Reports) != 0 {
+	if err != nil || len(operationalReports(again.Reports)) != 0 {
 		t.Fatal(again, err)
 	}
 }
@@ -310,7 +310,7 @@ drainReady:
 	if failure == nil || failure.Data.String() != `{reason: "cancelled"}` {
 		t.Fatal(failure, result)
 	}
-	for _, report := range result.Reports {
+	for _, report := range operationalReports(result.Reports) {
 		if end, ok := report.(*RunEnd); ok && end.Delivery == id && (end.Run != "" || end.Script != "next" || end.Outcome != Cancelled) {
 			t.Fatal(end)
 		}
@@ -350,7 +350,7 @@ func TestMessagePathClimbFullEndsRequestWithTarget(t *testing.T) {
 		t.Fatal(failure, result)
 	}
 	unhandled := 0
-	for _, report := range result.Reports {
+	for _, report := range operationalReports(result.Reports) {
 		if u, ok := report.(*Unhandled); ok {
 			unhandled++
 			if u.Target != a {
@@ -359,7 +359,7 @@ func TestMessagePathClimbFullEndsRequestWithTarget(t *testing.T) {
 		}
 	}
 	if unhandled != 1 {
-		t.Fatal(result.Reports)
+		t.Fatal(operationalReports(result.Reports))
 	}
 }
 
@@ -410,7 +410,7 @@ func TestMessagePathReceivingLimitsCapHostOverride(t *testing.T) {
 				t.Fatal(failure, result)
 			}
 			faults := 0
-			for _, report := range result.Reports {
+			for _, report := range operationalReports(result.Reports) {
 				if end, ok := report.(*RunEnd); ok && end.Script == "next" {
 					if end.Outcome != LimitFault || end.Fuel > 10 {
 						t.Fatal(end)
@@ -419,7 +419,7 @@ func TestMessagePathReceivingLimitsCapHostOverride(t *testing.T) {
 				}
 			}
 			if faults != 1 {
-				t.Fatal(result.Reports)
+				t.Fatal(operationalReports(result.Reports))
 			}
 		})
 	}
@@ -476,7 +476,7 @@ func TestMessagePathDisposedOwnerRemainsStopped(t *testing.T) {
 		if failure == nil || failure.Data.String() != `{reason: "stopped"}` {
 			t.Fatal(failure, result)
 		}
-		for _, r := range result.Reports {
+		for _, r := range operationalReports(result.Reports) {
 			if _, ok := r.(*RunEnd); ok {
 				t.Fatal("disposed owner ran", r)
 			}
@@ -499,7 +499,7 @@ func TestMessagePathInternalErrorKeepsOwnerTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range result.Reports {
+	for _, r := range operationalReports(result.Reports) {
 		if end, ok := r.(*RunEnd); ok && end.Handler == "error" {
 			if !end.Result.Equal(o.Value()) {
 				t.Fatal(end.Result)
@@ -572,7 +572,7 @@ func TestMessagePathScriptSendToStoppedReceiver(t *testing.T) {
 	if failure == nil {
 		t.Fatal(result)
 	}
-	for _, r := range result.Reports {
+	for _, r := range operationalReports(result.Reports) {
 		if end, ok := r.(*RunEnd); ok && end.Script == "receiver" {
 			t.Fatal(end)
 		}

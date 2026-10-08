@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   localeCapability,
@@ -50,7 +51,9 @@ const run = (body: string, host = impl, binding = 'en-GB') => {
     source: `script variable seen = nothing\non go\n${body}\nput it into seen\nend`,
     grants: { loc: localeCapability(host, costs).grant('all', binding) },
   }).deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   return {
     g,
     lines,
@@ -426,9 +429,10 @@ test('Locale pays declared and Host costs, and rolls back on Fuel exhaustion', (
       ).grant('all', 'en'),
     },
   }).deliver({ name: 'go' });
-  expect(g.pump(now).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'limit fault',
-  );
+  expect(
+    operationalReports(g.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('limit fault');
   expect(called).toBe(false);
   expect(new Map(g.inspect().scripts[0]!.vars).get('touched')!.toString()).toBe(
     '0',
@@ -481,7 +485,8 @@ test('Locale Library needs and result checks survive Restore', () => {
   expect(copy.fingerprint()).toEqual(g.fingerprint());
   copy.script('s')!.deliver({ name: 'go' });
   expect(
-    copy.pump(now).reports.find(r => r.kind === 'run end')!.error?.code,
+    operationalReports(copy.pump(now).reports).find(r => r.kind === 'run end')!
+      .error?.code,
   ).toBe('host error');
 });
 

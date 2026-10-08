@@ -316,7 +316,7 @@ func TestSegmentParticipantRollbackAfterExplicitCloseAndPreemption(t *testing.T)
 		t.Fatal(r, err, staged, published, closes, rollbacks)
 	}
 	r, err = g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != LimitFault || staged != 0 || published != 0 || closes != 1 || rollbacks != 1 || !g.Inspect().Scripts[0].Vars[0].Val.Equal(Int(0)) {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != LimitFault || staged != 0 || published != 0 || closes != 1 || rollbacks != 1 || !g.Inspect().Scripts[0].Vars[0].Val.Equal(Int(0)) {
 		t.Fatal(r, err, staged, published, closes, rollbacks, g.Inspect())
 	}
 }

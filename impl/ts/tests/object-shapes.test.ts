@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import { mismatch } from '../src/capabilities';
 import { canonicalJSON, operationData, shapeData } from '../src/manifest';
@@ -138,9 +139,10 @@ test('literal object arguments are refused at load and Library compilation, whil
     grants,
     objects: { named: a },
   }).deliver({ name: 'go', args: [a.value] });
-  expect(g.pump(0n).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'completed',
-  );
+  expect(
+    operationalReports(g.pump(0n).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('completed');
 });
 
 test.each(['immediate', 'suspending', 'fire-and-forget'] as const)(
@@ -172,7 +174,9 @@ test.each(['immediate', 'suspending', 'fire-and-forget'] as const)(
       source: `on go x\n  ${statement}\nend`,
       grants: { api: api.grant('all', undefined) },
     }).deliver({ name: 'go', args: [map([['doors', list(b.value)]])] });
-    const report = g.pump(0n).reports.find(r => r.kind === 'run end')!;
+    const report = operationalReports(g.pump(0n).reports).find(
+      r => r.kind === 'run end',
+    )!;
     expect(reached).toBe(false);
     expect(report.error?.code).toBe('wrong kind');
     expect(report.error?.data.get('expected').asText()).toBe('shape-door');
@@ -213,13 +217,17 @@ test.each(['immediate', 'suspending'] as const)(
         pending.at(-1)!.answer(value);
         pumped = g.pump(0n);
       }
-      const report = pumped.reports.find(r => r.kind === 'run end')!;
+      const report = operationalReports(pumped.reports).find(
+        r => r.kind === 'run end',
+      )!;
       if (value === a.value) {
         expect(report.result?.equals(a.value)).toBe(true);
       } else {
         expect(report.error?.code).toBe('host error');
         expect(
-          pumped.reports.find(r => r.kind === 'call failed')!.detail,
+          operationalReports(pumped.reports).find(
+            r => r.kind === 'call failed',
+          )!.detail,
         ).toContain(`expected shape-door, got ${value.kind}`);
       }
     }
@@ -254,29 +262,32 @@ test('object property Shapes check writes before Set and report invalid Get resu
       'on write x\n  set the door of holder to x\nend\non read\n  return the door of holder\nend',
   });
   script.deliver({ name: 'write', args: [a.value] });
-  expect(g.pump(0n).reports.find(r => r.kind === 'run end')!.outcome).toBe(
-    'completed',
-  );
+  expect(
+    operationalReports(g.pump(0n).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('completed');
   expect(sets).toBe(1);
   script.deliver({ name: 'write', args: [b.value] });
-  const badWrite = g.pump(0n).reports.find(r => r.kind === 'run end')!;
+  const badWrite = operationalReports(g.pump(0n).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(badWrite.error?.code).toBe('wrong kind');
   expect(badWrite.error?.data.get('expected').asText()).toBe('shape-door');
   expect(badWrite.error?.data.get('got').asText()).toBe('object');
   expect(sets).toBe(1);
   script.deliver({ name: 'read' });
   expect(
-    g
-      .pump(0n)
-      .reports.find(r => r.kind === 'run end')!
+    operationalReports(g.pump(0n).reports)
+      .find(r => r.kind === 'run end')!
       .result?.equals(a.value),
   ).toBe(true);
   stored = b.value;
   script.deliver({ name: 'read' });
   const pumped = g.pump(0n);
-  expect(pumped.reports.find(r => r.kind === 'run end')!.error?.code).toBe(
-    'host error',
-  );
+  expect(
+    operationalReports(pumped.reports).find(r => r.kind === 'run end')!.error
+      ?.code,
+  ).toBe('host error');
   expect(lines).toContain(
     'prop s/r4 object=<object shape-holder "h"> name=door op=get error={}',
   );
@@ -357,9 +368,8 @@ test('saved object declarations survive unbound restore and distinguish argument
   const answer = copy.settle('s/r1.c1', { adopt: true })!;
   answer.answer(result.pending[0]!.args[0]!);
   expect(
-    copy
-      .pump(0n)
-      .reports.find(r => r.kind === 'run end')!
+    operationalReports(copy.pump(0n).reports)
+      .find(r => r.kind === 'run end')!
       .result?.asObject()!.kind.name,
   ).toBe(door.name);
   const lines: string[] = [];

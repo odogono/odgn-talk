@@ -46,10 +46,10 @@ end decide
 	}
 	s.Stop("done")
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Stopped || r.FuelUsed != 0 || len(r.Reports) != 3 {
+	if err != nil || r.State != Stopped || r.FuelUsed != 0 || len(operationalReports(r.Reports)) != 3 {
 		t.Fatal(r, err)
 	}
-	stop := r.Reports[0].(*Stop)
+	stop := operationalReports(r.Reports)[0].(*Stop)
 	if stop.Reason != "done" || len(stop.DiscardedRuns) != 3 || len(stop.DroppedMessages) != 1 || stop.DroppedMessages[0] != "d4" {
 		t.Fatal(stop)
 	}
@@ -71,7 +71,7 @@ func TestStopIsStickyAndReloadClearsReason(t *testing.T) {
 	s.Stop("second")
 	now := time.Unix(0, 0)
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "first" {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "first" {
 		t.Fatal(r, err)
 	}
 	s.Stop("third")
@@ -81,7 +81,7 @@ func TestStopIsStickyAndReloadClearsReason(t *testing.T) {
 	}
 	r, err = g.Pump(now, PumpOptions{})
 	_, failure := p.Result()
-	if err != nil || r.FuelUsed != 0 || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "first" || failure == nil {
+	if err != nil || r.FuelUsed != 0 || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "first" || failure == nil {
 		t.Fatal(r, err, failure)
 	}
 	if _, err := s.Reload(source, ResetVariables); err != nil {
@@ -89,7 +89,7 @@ func TestStopIsStickyAndReloadClearsReason(t *testing.T) {
 	}
 	s.Stop("new")
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "new" || !strings.Contains(strings.Join(trace, "\n"), `> stop s reason="new"`) {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "new" || !strings.Contains(strings.Join(trace, "\n"), `> stop s reason="new"`) {
 		t.Fatal(r, err, trace)
 	}
 }
@@ -125,14 +125,27 @@ func TestStopAtCapabilityCrossingRollsBackAndSkipsConversion(t *testing.T) {
 				t.Fatal(err)
 			}
 			r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || r.State != Stopped || len(r.Reports) != 2 || d.Decided().Verdict != Undecided || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" {
+			if err != nil || r.State != Stopped || len(operationalReports(r.Reports)) != 2 || d.Decided().Verdict != Undecided || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" {
 				t.Fatal(r, err, d.Decided(), trace)
+			}
+			start, ok := r.Reports[0].(*RunStarted)
+			if !ok || start.Run != "s/r1" {
+				t.Fatal("missing same-Pump dispatch", r.Reports)
+			}
+			var final *RunAccounting
+			for _, report := range r.Reports {
+				if row, ok := report.(*RunAccounting); ok {
+					final = row
+				}
+			}
+			if final == nil || final.State != "discarded" || final.Fuel != s.Counters().FuelTotal {
+				t.Fatal("lost discarded Fuel", final, s.Counters())
 			}
 			if s.Counters().AllocTotal != 0 || !strings.Contains(strings.Join(trace, "\n"), "end=stop") {
 				t.Fatal(s.Counters(), trace)
 			}
-			if mode == Suspending && (call.Context().Err() == nil || len(r.Reports[0].(*Stop).PendingCalls) != 1) {
-				t.Fatal(call.Context().Err(), r.Reports[0])
+			if mode == Suspending && (call.Context().Err() == nil || len(operationalReports(r.Reports)[0].(*Stop).PendingCalls) != 1) {
+				t.Fatal(call.Context().Err(), operationalReports(r.Reports)[0])
 			}
 			if mode == Suspending {
 				if _, err := g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil {
@@ -167,7 +180,7 @@ func TestCancellationCleanupCrossingStillConvertsResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Cancelled || g.Inspect().Scripts[0].Vars[0].Val.String() != "7" || s.Counters().AllocTotal != 16 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled || g.Inspect().Scripts[0].Vars[0].Val.String() != "7" || s.Counters().AllocTotal != 16 {
 		t.Fatal(r, err, g.Inspect(), s.Counters())
 	}
 }
@@ -191,7 +204,7 @@ func TestStopAtPropertyCrossingEndsBeforeWrite(t *testing.T) {
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	_, failure := p.Result()
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "property" || failure == nil || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" || s.Counters().AllocTotal != 0 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "property" || failure == nil || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" || s.Counters().AllocTotal != 0 {
 		t.Fatal(r, err, failure, s.Counters())
 	}
 }
@@ -226,7 +239,7 @@ func TestStopAbandonsPendingOperationAndFailsScriptSender(t *testing.T) {
 	if err != nil || failure != nil || answer.String() != `"stopped"` || call.Context().Err() == nil {
 		t.Fatal(r, err, answer, failure)
 	}
-	stop := r.Reports[0].(*Stop)
+	stop := operationalReports(r.Reports)[0].(*Stop)
 	if len(stop.PendingCalls) != 1 || stop.PendingCalls[0] != call.ID() {
 		t.Fatal(stop)
 	}
@@ -249,7 +262,7 @@ func TestStopLandsAtPumpEndWithoutHostCrossing(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{FuelCap: 20})
-	if err != nil || r.State != Stopped || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "end" || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" {
+	if err != nil || r.State != Stopped || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "end" || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" {
 		t.Fatal(r, err, g.Inspect())
 	}
 }
@@ -273,11 +286,11 @@ func TestStopAtFailedHostChargeRemainsSticky(t *testing.T) {
 	}
 	now := time.Unix(0, 0)
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Stopped || len(r.Reports) != 1 {
+	if err != nil || r.State != Stopped || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
-	if stop, ok := r.Reports[0].(*Stop); !ok || stop.Reason != "requested" || len(stop.DiscardedRuns) != 1 {
-		t.Fatal(r.Reports)
+	if stop, ok := operationalReports(r.Reports)[0].(*Stop); !ok || stop.Reason != "requested" || len(stop.DiscardedRuns) != 1 {
+		t.Fatal(operationalReports(r.Reports))
 	}
 	_, p, err := s.Request(nil, Message{Name: "go"})
 	if err != nil {
@@ -285,7 +298,7 @@ func TestStopAtFailedHostChargeRemainsSticky(t *testing.T) {
 	}
 	r, err = g.Pump(now, PumpOptions{})
 	_, failure := p.Result()
-	if err != nil || r.State != Stopped || r.FuelUsed != 0 || failure == nil || len(r.Reports) != 1 || r.Reports[0].(*Stop).Reason != "requested" {
+	if err != nil || r.State != Stopped || r.FuelUsed != 0 || failure == nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*Stop).Reason != "requested" {
 		t.Fatal(r, err, failure)
 	}
 }
@@ -311,14 +324,14 @@ func TestStopQueuedAtPumpStartWaitsForPumpEnd(t *testing.T) {
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	answer, failure := p.Result()
-	if err != nil || r.State != Stopped || failure != nil || answer.String() != "7" || len(r.Reports) != 2 {
+	if err != nil || r.State != Stopped || failure != nil || answer.String() != "7" || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err, answer, failure, trace)
 	}
-	if end, ok := r.Reports[0].(*RunEnd); !ok || end.Outcome != Completed || end.Result.String() != "7" {
-		t.Fatal(r.Reports)
+	if end, ok := operationalReports(r.Reports)[0].(*RunEnd); !ok || end.Outcome != Completed || end.Result.String() != "7" {
+		t.Fatal(operationalReports(r.Reports))
 	}
-	if stop, ok := r.Reports[1].(*Stop); !ok || stop.Reason != "end" || len(stop.DiscardedRuns) != 0 || strings.Contains(strings.Join(trace, "\n"), "end=stop") {
-		t.Fatal(r.Reports, trace)
+	if stop, ok := operationalReports(r.Reports)[1].(*Stop); !ok || stop.Reason != "end" || len(stop.DiscardedRuns) != 0 || strings.Contains(strings.Join(trace, "\n"), "end=stop") {
+		t.Fatal(operationalReports(r.Reports), trace)
 	}
 }
 
@@ -339,7 +352,7 @@ func TestStopThenDisposeKeepsOriginalReasonAndBroadcastOmitsRecipient(t *testing
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || r.Reports[0].(*Stop).Reason != "first" || d.Decided().Verdict != Allowed || s.Counters().Runs != 0 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[0].(*Stop).Reason != "first" || d.Decided().Verdict != Allowed || s.Counters().Runs != 0 {
 		t.Fatal(r, err, d.Decided())
 	}
 	_, p, err := s.Request(nil, Message{Name: "go"})
@@ -348,7 +361,7 @@ func TestStopThenDisposeKeepsOriginalReasonAndBroadcastOmitsRecipient(t *testing
 	}
 	r, err = g.Pump(time.Unix(0, 0), PumpOptions{})
 	_, failure := p.Result()
-	if err != nil || failure == nil || r.Reports[0].(*Stop).Reason != "first" {
+	if err != nil || failure == nil || operationalReports(r.Reports)[0].(*Stop).Reason != "first" {
 		t.Fatal(r, err, failure)
 	}
 }

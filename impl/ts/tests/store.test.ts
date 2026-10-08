@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   add,
@@ -81,7 +82,9 @@ const run = (
     limits,
   });
   script.deliver({ name: 'go', args });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   return {
     group: g,
     lines,
@@ -233,7 +236,9 @@ test('Function Values are not encodable, and Host Objects are the Store’s to r
     grants: { s: storeCapability(stores, costs).grant('all', 'default') },
   });
   script.deliver({ name: 'go', args: [g.object(room, 'r1', null).value] });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.error?.code).toBe("can't store");
   expect(report.error?.data.get('kind').asText()).toBe('room');
   expect(report.error?.data.get('capability').asText()).toBe('s');
@@ -289,7 +294,9 @@ test('Store writes enlist the Grant, and a second writable Store conflicts', () 
     },
   });
   script.deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.error?.code).toBe('segment participant conflict');
   expect(report.error?.data.get('participant').asText()).toBe('a');
   // The reader saw the Segment's own write, and the commit kept it.
@@ -469,8 +476,12 @@ test('Segments of two Groups sharing one Store are kept apart', () => {
   const [first, second] = groups.map(g =>
     g.pump(now, { fuelSlice: 40, fuelCap: 40 }),
   );
-  expect(first!.reports.some(r => r.kind === 'run end')).toBe(false);
-  const busy = second!.reports.find(r => r.kind === 'run end');
+  expect(
+    operationalReports(first!.reports).some(r => r.kind === 'run end'),
+  ).toBe(false);
+  const busy = operationalReports(second!.reports).find(
+    r => r.kind === 'run end',
+  );
   expect(busy?.error?.code).toBe('store busy');
   groups[0]!.pump(now);
   expect(stores.entries('shared').map(([k, v]) => `${k}=${v}`)).toEqual([

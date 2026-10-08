@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   compileLibrary,
@@ -167,7 +168,7 @@ test('restoring a trimmed Grant ignores additional rebound Operations and their 
   expect(copy.script('s')!.grants()).toEqual({ io: ['read'] });
   expect(copy.fingerprint()).toEqual(g.fingerprint());
   copy.script('s')!.deliver({ name: 'go' });
-  const report = copy.pump(0n).reports[0]!;
+  const report = operationalReports(copy.pump(0n).reports)[0]!;
   expect('result' in report && report.result?.toString()).toBe('7');
 });
 
@@ -189,7 +190,9 @@ test('Revoke drains in order, affects one Script alias and leaves its fingerprin
   expect(lines.some(line => line.startsWith('> revoke'))).toBe(false);
   s.deliver({ name: 'go' });
   other.deliver({ name: 'go' });
-  const reports = g.pump(0n).reports.filter(r => r.kind === 'run end');
+  const reports = operationalReports(g.pump(0n).reports).filter(
+    r => r.kind === 'run end',
+  );
   expect(reports.map(r => r.outcome)).toEqual(['errored', 'completed']);
   expect(reports[0]!.error?.code).toBe('capability revoked');
   expect(reports[0]!.error?.data.get('capability').toString()).toBe('"io"');
@@ -226,10 +229,14 @@ test('Revoke queued by an Operation waits for the next Pump', () => {
     grants: { io: logger.grant('all', undefined) },
   });
   s.deliver({ name: 'go' });
-  expect(g.pump(0n).reports[0]).toMatchObject({ outcome: 'completed' });
+  expect(operationalReports(g.pump(0n).reports)[0]).toMatchObject({
+    outcome: 'completed',
+  });
   expect(fired).toBe(2);
   s.deliver({ name: 'go' });
-  expect(g.pump(1n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(g.pump(1n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   expect(fired).toBe(2);
 });
 
@@ -257,11 +264,15 @@ test('Revoke leaves an in-flight call and its signal live but blocks the next ca
   g.pump(0n);
   s.revoke('io');
   pending.answer(num(8));
-  const reports = g.pump(1n).reports.filter(r => r.kind === 'run end');
+  const reports = operationalReports(g.pump(1n).reports).filter(
+    r => r.kind === 'run end',
+  );
   expect(reports[0]!.result?.toString()).toBe('8');
   expect(pending.signal.aborted).toBe(false);
   s.deliver({ name: 'go' });
-  expect(g.pump(2n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(g.pump(2n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   expect(starts).toBe(1);
 });
 
@@ -285,14 +296,16 @@ test('Reload drops revoked Grants only when it succeeds and Extend rejects new r
   expect(g.fingerprint()).toEqual(fingerprint);
   expect(s.grants()).toEqual({ io: ['read', 'write'] });
   s.deliver({ name: 'go' });
-  expect(g.pump(1n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(g.pump(1n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   s.reload('on go\n  return 3\nend go', 'reset variables');
   expect(s.grants()).toEqual({});
   expect(codes(() => s.reload(source, 'reset variables'))).toEqual([
     'unknown operation',
   ]);
   s.deliver({ name: 'go' });
-  const report = g.pump(2n).reports[0]!;
+  const report = operationalReports(g.pump(2n).reports)[0]!;
   expect('result' in report && report.result?.toString()).toBe('3');
 });
 
@@ -358,11 +371,15 @@ test('queued and applied revocations survive Restore including existing extensio
   };
   const { group: copy } = restore(g.save(), options);
   copy.script('s')!.deliver({ name: 'later' });
-  expect(copy.pump(0n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(copy.pump(0n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   expect(copy.script('s')!.grants()).toEqual({ io: ['read'] });
   const { group: again } = restore(copy.save(), options);
   again.script('s')!.deliver({ name: 'later' });
-  expect(again.pump(1n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(again.pump(1n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   expect(
     codes(() => again.script('s')!.reload(source, 'reset variables')),
   ).toEqual(['unknown operation']);
@@ -371,7 +388,9 @@ test('queued and applied revocations survive Restore including existing extensio
     grants: () => undefined,
   });
   unbound.script('s')!.deliver({ name: 'later' });
-  expect(unbound.pump(1n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(unbound.pump(1n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
 });
 
 test('Grant inspection is a worker call and rejects Operation reentry', () => {
@@ -393,7 +412,9 @@ test('Grant inspection is a worker call and rejects Operation reentry', () => {
     source,
     grants: { io: io.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(g.pump(0n).reports[0]).toMatchObject({ outcome: 'completed' });
+  expect(operationalReports(g.pump(0n).reports)[0]).toMatchObject({
+    outcome: 'completed',
+  });
 });
 
 test('Grant inspection orders Host names by Unicode code point', () => {
@@ -448,7 +469,9 @@ test('Restore retains a __proto__ Grant alias and its revoked placeholder', () =
     });
     expect(Object.keys(copy.script('s')!.grants())).toEqual(['__proto__']);
     copy.script('s')!.deliver({ name: 'go' });
-    const report = copy.pump(0n).reports.find(r => r.kind === 'run end')!;
+    const report = operationalReports(copy.pump(0n).reports).find(
+      r => r.kind === 'run end',
+    )!;
     expect(report.outcome).toBe(offered ? 'completed' : 'errored');
     if (offered) {
       expect(report.result?.toString()).toBe('7');
@@ -492,20 +515,26 @@ test('Restore can reissue a revoked in-flight call only when the Host rebinds it
   };
   const { group: copy } = restore(saved, options);
   copy.settle('s/r1.c1', { reissue: true });
-  expect(copy.pump(2n).reports).toEqual([]);
+  expect(operationalReports(copy.pump(2n).reports)).toEqual([]);
   expect(calls.map(call => call.id)).toEqual(['s/r1.c1', 's/r1.c1']);
   calls[1]!.answer(num(9));
-  const report = copy.pump(3n).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(copy.pump(3n).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.result?.toString()).toBe('9');
   copy.script('s')!.deliver({ name: 'go' });
-  expect(copy.pump(4n).reports[0]).toMatchObject({ outcome: 'errored' });
+  expect(operationalReports(copy.pump(4n).reports)[0]).toMatchObject({
+    outcome: 'errored',
+  });
   expect(calls).toHaveLength(2);
   const { group: unbound } = restore(saved, {
     ...options,
     grants: () => undefined,
   });
   unbound.settle('s/r1.c1', { reissue: true });
-  const failed = unbound.pump(2n).reports.find(r => r.kind === 'run end')!;
+  const failed = operationalReports(unbound.pump(2n).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(failed.error?.code).toBe('capability revoked');
   expect(calls).toHaveLength(2);
 });

@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   consoleCapability,
@@ -110,7 +111,9 @@ test('write accepts every Value, including nested Functions, and preserves its r
       pane: consoleCapability(impl, costs).grant(['write'], binding),
     },
   }).deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.outcome).toBe('completed');
   expect(impl.values.map(v => v.kind)).toEqual([
     'text',
@@ -161,7 +164,9 @@ test('value Shapes admit Function Values while any data Shapes still refuse them
       values: values.grant('all', undefined),
     },
   }).deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(seen).toHaveLength(1);
   expect(report.error?.code).toBe('not encodable');
   expect(report.error?.data.get('path').toString()).toBe('[1, 1, "callback"]');
@@ -220,9 +225,9 @@ test('Console read uses its human-input timeout instead of a shorter Script MaxW
   g.pump(now);
   g.pump(now + 2_000_000n);
   expect(g.inspect().scripts[0]!.runs[0]!.status).toBe('suspended');
-  const report = g
-    .pump(now + 2_147_483_647_000_000n)
-    .reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(
+    g.pump(now + 2_147_483_647_000_000n).reports,
+  ).find(r => r.kind === 'run end')!;
   expect(report.error?.code).toBe('timeout');
 });
 
@@ -284,7 +289,9 @@ test('Console result Shape and undeclared failures become host error', () => {
     } else {
       calls[0]!.fail(new ScriptError('refused', 'no'));
     }
-    const report = g.pump(now + 1n).reports.find(r => r.kind === 'run end')!;
+    const report = operationalReports(g.pump(now + 1n).reports).find(
+      r => r.kind === 'run end',
+    )!;
     expect(report.error?.code).toBe('host error');
   }
 });
@@ -310,7 +317,9 @@ test('Console write pays its declared cost before reaching the Host or retaining
     },
   });
   s.deliver({ name: 'go' });
-  const report = g.pump(now).reports.find(r => r.kind === 'run end')!;
+  const report = operationalReports(g.pump(now).reports).find(
+    r => r.kind === 'run end',
+  )!;
   expect(report.outcome).toBe('limit fault');
   expect(written).toBe(false);
   expect(

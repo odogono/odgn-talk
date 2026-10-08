@@ -27,15 +27,15 @@ func TestReplacingRunMustPayCombinedDispatchCharge(t *testing.T) {
 			if budget == 5 {
 				wantFuel = 5
 			}
-			if end := r.Reports[0].(*RunEnd); end.Outcome != LimitFault || end.Fuel != wantFuel {
+			if end := operationalReports(r.Reports)[0].(*RunEnd); end.Outcome != LimitFault || end.Fuel != wantFuel {
 				t.Fatal(end)
 			}
 			if budget == 4 {
 				v := g.Inspect().Scripts[0]
-				if len(r.Reports) != 1 || len(v.Runs) != 1 || v.Runs[0].ID != "s/r1" || v.Runs[0].Status != Suspended {
+				if len(operationalReports(r.Reports)) != 1 || len(v.Runs) != 1 || v.Runs[0].ID != "s/r1" || v.Runs[0].Status != Suspended {
 					t.Fatal(r, v)
 				}
-			} else if len(r.Reports) != 2 || r.Reports[1].(*RunEnd).Outcome != Cancelled {
+			} else if len(operationalReports(r.Reports)) != 2 || operationalReports(r.Reports)[1].(*RunEnd).Outcome != Cancelled {
 				t.Fatal(r)
 			}
 		})
@@ -64,7 +64,7 @@ end mark
 	s.Deliver(Message{Name: "mark"})
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Idle || len(r.Reports) != 1 {
+	if err != nil || r.State != Idle || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
 	v := g.Inspect().Scripts[0]
@@ -76,7 +76,7 @@ end mark
 	}
 	for j, want := range []string{"[1, 99, 2]", "[1, 99, 2, 3]", "[1, 99, 2, 3]"} {
 		r, err = g.Pump(now.Add(time.Duration(j+1)*time.Second), PumpOptions{})
-		if err != nil || r.State != Idle || len(r.Reports) != 1 {
+		if err != nil || r.State != Idle || len(operationalReports(r.Reports)) != 1 {
 			t.Fatal(r, err)
 		}
 		if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != want {
@@ -108,7 +108,7 @@ end work
 		s.Deliver(Message{Name: "work", Args: []Value{Int(n)}})
 	}
 	r, err := g.Pump(time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Dropped {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Dropped {
 		t.Fatal(r, err)
 	}
 	v := g.Inspect().Scripts[0]
@@ -132,10 +132,10 @@ func TestDroppingRequestSettlesWithDroppedReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
-	end := r.Reports[0].(*RunEnd)
+	end := operationalReports(r.Reports)[0].(*RunEnd)
 	if end.Outcome != Dropped || end.Fuel != 4 || end.Alloc != 0 {
 		t.Fatal(end)
 	}
@@ -175,10 +175,10 @@ end work
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 2 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err)
 	}
-	for j, end := range r.Reports {
+	for j, end := range operationalReports(r.Reports) {
 		if e := end.(*RunEnd); e.Outcome != Cancelled || e.Run != RunID([]string{"s/r1", "s/r2"}[j]) {
 			t.Fatal(e)
 		}
@@ -203,7 +203,7 @@ end work
 	default:
 	}
 	r, err = g.Pump(now.Add(time.Second), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Completed {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Completed {
 		t.Fatal(r, err)
 	}
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != "[1, 2, 3, 10, 20, 30]" {
@@ -236,7 +236,7 @@ end work
 	g.Pump(now, PumpOptions{})
 	g.cancelDelivery(delivery{id: id, script: s, pending: p})
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Cancelled {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
 		t.Fatal(r, err)
 	}
 	v := g.Inspect().Scripts[0]
@@ -271,7 +271,7 @@ end work
 	s.Deliver(Message{Name: "work", Args: []Value{Int(1)}})
 	s.Deliver(Message{Name: "work", Args: []Value{Int(2)}})
 	r, err := g.Pump(time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Cancelled {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
 		t.Fatal(r, err)
 	}
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != "[1, 2, 10, 100]" {
@@ -302,10 +302,10 @@ end mark
 	g.Pump(now, PumpOptions{})
 	for j := 1; j <= 2; j++ {
 		r, err := g.Pump(now.Add(time.Duration(j)*time.Second), PumpOptions{})
-		if err != nil || len(r.Reports) != 1 {
+		if err != nil || len(operationalReports(r.Reports)) != 1 {
 			t.Fatal(r, err)
 		}
-		end := r.Reports[0].(*RunEnd)
+		end := operationalReports(r.Reports)[0].(*RunEnd)
 		if end.Outcome != LimitFault || end.Limit != "fuel" || end.Fuel != 30 {
 			t.Fatal(end)
 		}
@@ -340,10 +340,10 @@ end later
 	s.Deliver(Message{Name: "work", Args: []Value{Int(2)}})
 	s.Deliver(Message{Name: "later", Args: []Value{large}})
 	r, err := g.Pump(now, PumpOptions{FuelCap: 4})
-	if err != nil || len(r.Reports) != 1 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 {
 		t.Fatal(r, err)
 	}
-	end := r.Reports[0].(*RunEnd)
+	end := operationalReports(r.Reports)[0].(*RunEnd)
 	if end.Outcome != LimitFault || end.Limit != "persistent" || end.Fuel != 4 {
 		t.Fatal(end)
 	}

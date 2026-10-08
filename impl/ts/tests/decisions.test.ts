@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { defineObjectKind, newGroup, nothing, num, text } from '../src/index';
 
@@ -21,8 +22,11 @@ describe('Decisions', () => {
       undecided: [],
     });
     expect((await d.decided).vetoes[0]!.reason.toString()).toBe('"blocked"');
-    expect(pump.reports.map(r => r.kind)).toEqual(['decided', 'run end']);
-    expect(pump.reports[1]).toMatchObject({
+    expect(operationalReports(pump.reports).map(r => r.kind)).toEqual([
+      'decided',
+      'run end',
+    ]);
+    expect(operationalReports(pump.reports)[1]).toMatchObject({
       outcome: 'completed',
       result: nothing,
     });
@@ -43,11 +47,15 @@ describe('Decisions', () => {
       source: 'on move, deciding\n  wait 1 s\n  throw "later"\nend move',
     });
     const d = s.decide({ name: 'move' });
-    expect(group.pump(now, { fuelSlice: 1 }).reports).toEqual([]);
+    expect(
+      operationalReports(group.pump(now, { fuelSlice: 1 }).reports),
+    ).toEqual([]);
     const pump = group.pump(now);
-    expect(pump.reports).toHaveLength(1);
+    expect(operationalReports(pump.reports)).toHaveLength(1);
     expect(await d.decided).toMatchObject({ verdict: 'allowed' });
-    expect(group.pump(1_000_000_000n).reports[0]).toMatchObject({
+    expect(
+      operationalReports(group.pump(1_000_000_000n).reports)[0],
+    ).toMatchObject({
       outcome: 'errored',
     });
   });
@@ -203,7 +211,7 @@ describe('Decision error follow-up', () => {
     const d = s.decide({ name: 'move', args: [num(2)] });
     const pump = group.pump(now);
     expect(await d.decided).toMatchObject({ verdict: 'undecided' });
-    expect(pump.reports.map(r => r.kind)).toEqual([
+    expect(operationalReports(pump.reports).map(r => r.kind)).toEqual([
       'run end',
       'decided',
       'run end',
@@ -265,7 +273,9 @@ describe('Decision boundaries', () => {
       vetoes: [{ script: 'vetoer', run: 'vetoer/r1', reason: nothing }],
       undecided: [{ script: 'broken', run: 'broken/r1', outcome: 'errored' }],
     });
-    expect(pump.reports.filter(r => r.kind === 'unhandled')).toEqual([]);
+    expect(
+      operationalReports(pump.reports).filter(r => r.kind === 'unhandled'),
+    ).toEqual([]);
   });
   test('a Broadcast override caps each recipient without loosening its own limits', async () => {
     const group = newGroup({ name: 'g' });
@@ -351,7 +361,10 @@ describe('Decision refusals and follow-up errors', () => {
     });
     s.deliver({ name: 'move' });
     const pump = group.pump(now);
-    expect(pump.reports.map(r => r.kind)).toEqual(['run end', 'run end']);
+    expect(operationalReports(pump.reports).map(r => r.kind)).toEqual([
+      'run end',
+      'run end',
+    ]);
   });
 });
 

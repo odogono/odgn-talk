@@ -64,7 +64,7 @@ end go
 		t.Fatal(err)
 	}
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || future.Decided() == nil || future.Decided().Verdict != Allowed || len(r.Reports) != 3 || r.Reports[0].(*Decided).Verdict != Allowed {
+	if err != nil || future.Decided() == nil || future.Decided().Verdict != Allowed || len(operationalReports(r.Reports)) != 3 || operationalReports(r.Reports)[0].(*Decided).Verdict != Allowed {
 		t.Fatal(r, err, future.Decided())
 	}
 	joined := strings.Join(trace, "\n")
@@ -170,7 +170,7 @@ end go
 		}
 	}
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 3 || r.Reports[0].(*RunEnd).Outcome != Completed || r.Reports[1].(*RunEnd).Outcome != LimitFault || r.Reports[2].(*RunEnd).Outcome != LimitFault || len(g.Inspect().Scripts[0].Runs) != 0 {
+	if err != nil || len(operationalReports(r.Reports)) != 3 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Completed || operationalReports(r.Reports)[1].(*RunEnd).Outcome != LimitFault || operationalReports(r.Reports)[2].(*RunEnd).Outcome != LimitFault || len(g.Inspect().Scripts[0].Runs) != 0 {
 		t.Fatal(r, err)
 	}
 }
@@ -192,7 +192,7 @@ end broken
 	s.Deliver(Message{Name: "watch"})
 	s.Deliver(Message{Name: "broken"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 2 || g.Inspect().Scripts[0].Vars[0].Val.String() != `"division by zero"` {
+	if err != nil || len(operationalReports(r.Reports)) != 2 || g.Inspect().Scripts[0].Vars[0].Val.String() != `"division by zero"` {
 		t.Fatal(r, err)
 	}
 }
@@ -205,7 +205,7 @@ func TestWaitForInvalidFilterRaisesBeforeRegistration(t *testing.T) {
 	}
 	s.Deliver(Message{Name: "watch"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Error.Code != "wrong kind" || len(g.Inspect().Scripts[0].Runs) != 0 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "wrong kind" || len(g.Inspect().Scripts[0].Runs) != 0 {
 		t.Fatal(r, err)
 	}
 }
@@ -231,7 +231,7 @@ func TestOwnerlessPassCompletesRunThenAllowsAtEndOfPath(t *testing.T) {
 	}
 	_, future, _ := s.Decide(nil, Message{Name: "go"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 3 || r.Reports[0].(*RunEnd).Outcome != Completed || r.Reports[0].(*RunEnd).Fuel != 24 || r.Reports[1].(*Unhandled).Message.Name != "go" || future.Decided().Verdict != Allowed {
+	if err != nil || len(operationalReports(r.Reports)) != 3 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Completed || operationalReports(r.Reports)[0].(*RunEnd).Fuel != 24 || operationalReports(r.Reports)[1].(*Unhandled).Message.Name != "go" || future.Decided().Verdict != Allowed {
 		t.Fatal(r, err)
 	}
 }
@@ -244,7 +244,7 @@ func TestWaitForMissingNamedScriptRaisesObjectGone(t *testing.T) {
 	}
 	s.Deliver(Message{Name: "watch"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Error.Code != "object gone" {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "object gone" {
 		t.Fatal(r, err)
 	}
 }
@@ -330,7 +330,7 @@ func TestWaitForObservationAllocationFaultWaitsUntilResumption(t *testing.T) {
 		t.Fatal(r, err)
 	}
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Limit != "alloc" || r.Reports[0].(*RunEnd).Fuel != 21 || r.Reports[0].(*RunEnd).Alloc != 40 {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Limit != "alloc" || operationalReports(r.Reports)[0].(*RunEnd).Fuel != 21 || operationalReports(r.Reports)[0].(*RunEnd).Alloc != 40 {
 		t.Fatal(r, err)
 	}
 }

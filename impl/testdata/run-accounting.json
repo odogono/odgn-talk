@@ -1,0 +1,267 @@
+[
+  {
+    "name": "same-call terminal",
+    "source": "on go\n return 3\nend go",
+    "pumps": [
+      0
+    ],
+    "expected": [
+      [
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "delivery": "d1",
+          "selector": "go",
+          "args": []
+        },
+        {
+          "kind": "run end",
+          "run": "s/r1"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "fuel": 7,
+          "state": "terminal"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 0,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ]
+    ]
+  },
+  {
+    "name": "call ancestry and creation order",
+    "source": "on go\n send child to s and wait\n return it\nend go\non child\n return 4\nend child",
+    "pumps": [
+      0
+    ],
+    "expected": [
+      [
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "delivery": "d1",
+          "selector": "go",
+          "args": []
+        },
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "parentRun": "s/r1",
+          "parentCall": "s/r1.c1",
+          "script": "s",
+          "run": "s/r2",
+          "selector": "child",
+          "args": []
+        },
+        {
+          "kind": "run end",
+          "run": "s/r2"
+        },
+        {
+          "kind": "run end",
+          "run": "s/r1"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "fuel": 30,
+          "state": "terminal"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "parentRun": "s/r1",
+          "parentCall": "s/r1.c1",
+          "script": "s",
+          "run": "s/r2",
+          "fuel": 7,
+          "state": "terminal"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 0,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ]
+    ]
+  },
+  {
+    "name": "detached error handler",
+    "source": "on go\n send child to s\nend go\non child\n return 1 / 0\nend child\non error e\n wait 1 s\nend error",
+    "pumps": [
+      0,
+      1000000000
+    ],
+    "expected": [
+      [
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "delivery": "d1",
+          "selector": "go",
+          "args": []
+        },
+        {
+          "kind": "run end",
+          "run": "s/r1"
+        },
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "parentRun": "s/r1",
+          "script": "s",
+          "run": "s/r2",
+          "selector": "child",
+          "args": []
+        },
+        {
+          "kind": "run end",
+          "run": "s/r2"
+        },
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "parentRun": "s/r2",
+          "script": "s",
+          "run": "s/r3",
+          "selector": "error",
+          "args": [
+            "{code: \"division by zero\", message: \"Division by zero\", at: {unit: \"s\", handler: \"child\", line: 5, column: 11}}"
+          ]
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "fuel": 29,
+          "state": "terminal"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "parentRun": "s/r1",
+          "script": "s",
+          "run": "s/r2",
+          "fuel": 13,
+          "state": "terminal"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "parentRun": "s/r2",
+          "script": "s",
+          "run": "s/r3",
+          "fuel": 15,
+          "state": "live"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 1,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ],
+      [
+        {
+          "kind": "run end",
+          "run": "s/r3"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "parentRun": "s/r2",
+          "script": "s",
+          "run": "s/r3",
+          "fuel": 18,
+          "state": "terminal"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 0,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ]
+    ]
+  },
+  {
+    "name": "live and terminal cumulative Fuel",
+    "source": "on go\n wait 1 s\n return 3\nend go",
+    "pumps": [
+      0,
+      0,
+      1000000000
+    ],
+    "expected": [
+      [
+        {
+          "kind": "run started",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "delivery": "d1",
+          "selector": "go",
+          "args": []
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "fuel": 15,
+          "state": "live"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 1,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ],
+      [],
+      [
+        {
+          "kind": "run end",
+          "run": "s/r1"
+        },
+        {
+          "kind": "run accounting",
+          "rootDelivery": "d1",
+          "script": "s",
+          "run": "s/r1",
+          "fuel": 18,
+          "state": "terminal"
+        },
+        {
+          "kind": "causal work",
+          "rootDelivery": "d1",
+          "liveRuns": 0,
+          "queuedMessages": 0,
+          "discardedMessages": 0
+        }
+      ]
+    ]
+  }
+]

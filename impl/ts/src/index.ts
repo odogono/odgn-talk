@@ -194,3 +194,11 @@ export { grammar, units } from './generated/syntax';
 export { stdlibSources } from './generated/stdlib';
 
 export { validMessageSelector } from './selectors';
+
+export type {
+  RunAncestry,
+  RunStarted,
+  RunDiscarded,
+  RunAccounting,
+  CausalWork,
+} from './run-accounting';

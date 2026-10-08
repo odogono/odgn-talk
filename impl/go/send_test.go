@@ -29,10 +29,10 @@ end ping`})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Reports) != 3 {
+	if len(operationalReports(result.Reports)) != 3 {
 		t.Fatalf("want sender and two receiver Runs: %+v", result)
 	}
-	sender := result.Reports[0].(*RunEnd)
+	sender := operationalReports(result.Reports)[0].(*RunEnd)
 	if sender.Outcome != Completed || sender.Fuel != 55 || sender.Alloc != 96 {
 		t.Fatal(sender)
 	}
@@ -63,7 +63,7 @@ end ping`})
 	}
 	s.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != `[[9, nothing], "ping"]` {
@@ -87,14 +87,14 @@ func TestSelfSendCountsMailboxAtPersistentBoundaries(t *testing.T) {
 			}
 			s.Deliver(Message{Name: "go"})
 			result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || len(result.Reports) != 2 {
+			if err != nil || len(operationalReports(result.Reports)) != 2 {
 				t.Fatalf("%+v %v", result, err)
 			}
-			sender := result.Reports[0].(*RunEnd)
+			sender := operationalReports(result.Reports)[0].(*RunEnd)
 			if sender.Outcome != LimitFault || sender.Limit != "persistent" {
 				t.Fatal(sender)
 			}
-			if result.Reports[1].(*RunEnd).Outcome != Completed {
+			if operationalReports(result.Reports)[1].(*RunEnd).Outcome != Completed {
 				t.Fatal("sent message did not survive sender fault", result)
 			}
 		})
@@ -114,10 +114,10 @@ func TestSendBudgetFaultDoesNotDeliver(t *testing.T) {
 		}
 		a.Deliver(Message{Name: "go"})
 		result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-		if err != nil || len(result.Reports) != 1 {
+		if err != nil || len(operationalReports(result.Reports)) != 1 {
 			t.Fatalf("%+v %v", result, err)
 		}
-		end := result.Reports[0].(*RunEnd)
+		end := operationalReports(result.Reports)[0].(*RunEnd)
 		if end.Outcome != LimitFault || end.Fuel != 6 || end.Alloc != 0 {
 			t.Fatal(end)
 		}
@@ -148,10 +148,10 @@ end go`})
 	a.Deliver(Message{Name: "go"})
 	b.Deliver(Message{Name: "ping", Args: []Value{Int(0)}})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v", result, err)
 	}
-	end := result.Reports[0].(*RunEnd)
+	end := operationalReports(result.Reports)[0].(*RunEnd)
 	if end.Outcome != Completed || end.Alloc != 48 {
 		t.Fatal(end)
 	}
@@ -186,10 +186,10 @@ func TestNamedReceiverSurvivesPreemptionWithoutValueSize(t *testing.T) {
 		t.Fatal("receiver ran before send")
 	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if result.Reports[1].(*RunEnd).Result.String() != "7" {
+	if operationalReports(result.Reports)[1].(*RunEnd).Result.String() != "7" {
 		t.Fatal(result)
 	}
 }
@@ -206,10 +206,10 @@ func TestCommittedSendSurvivesSenderError(t *testing.T) {
 	}
 	a.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if result.Reports[0].(*RunEnd).Outcome != Errored || result.Reports[1].(*RunEnd).Result.String() != "7" {
+	if operationalReports(result.Reports)[0].(*RunEnd).Outcome != Errored || operationalReports(result.Reports)[1].(*RunEnd).Result.String() != "7" {
 		t.Fatal(result)
 	}
 }
@@ -260,14 +260,14 @@ func TestSendCountsHostReservationsAcceptedDuringPump(t *testing.T) {
 	})
 	a.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || inputError != nil || len(result.Reports) != 2 {
+	if err != nil || inputError != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v %v", result, err, inputError)
 	}
-	if result.Reports[0].(*RunEnd).Error.Code != "mailbox full" || result.Reports[1].(*RunEnd).Result.String() != "7" {
+	if operationalReports(result.Reports)[0].(*RunEnd).Error.Code != "mailbox full" || operationalReports(result.Reports)[1].(*RunEnd).Result.String() != "7" {
 		t.Fatal(result)
 	}
 	result, err = g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 1 || result.Reports[0].(*RunEnd).Result.String() != "99" {
+	if err != nil || len(operationalReports(result.Reports)) != 1 || operationalReports(result.Reports)[0].(*RunEnd).Result.String() != "99" {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if _, err = b.Deliver(Message{Name: "ping"}); err != nil {
@@ -287,13 +287,13 @@ func TestSentRunUsesReceiverLimits(t *testing.T) {
 	}
 	a.Deliver(Message{Name: "go", Limits: &LimitOverride{FuelPerRun: 40}})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if result.Reports[0].(*RunEnd).Outcome != Completed {
+	if operationalReports(result.Reports)[0].(*RunEnd).Outcome != Completed {
 		t.Fatal(result)
 	}
-	receiver := result.Reports[1].(*RunEnd)
+	receiver := operationalReports(result.Reports)[1].(*RunEnd)
 	if receiver.Outcome != LimitFault || receiver.Limit != "fuel" || receiver.Fuel != 5 {
 		t.Fatal(receiver)
 	}
@@ -341,7 +341,7 @@ end cleanup`})
 		t.Fatal("cancellation not queued")
 	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 3 {
+	if err != nil || len(operationalReports(result.Reports)) != 3 {
 		t.Fatalf("%+v %v", result, err)
 	}
 	_, failure := pending.Result()

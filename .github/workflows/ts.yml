@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'impl/ts/**'
+      - 'impl/testdata/**'
       - 'tooling/**'
       - 'tools/**'
       - 'spec/**'
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - 'impl/ts/**'
+      - 'impl/testdata/**'
       - 'tooling/**'
       - 'tools/**'
       - 'spec/**'

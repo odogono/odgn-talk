@@ -27,7 +27,7 @@ func TestCapturedLambdaChargesValuesAndAttributesEnclosingHandler(t *testing.T) 
 	if failure.Data.Get("error").Get("at").Get("handler").String() != `"go"` {
 		t.Errorf("handler = %q; want enclosing go", failure.Data.Get("error").Get("at").Get("handler").String())
 	}
-	if result.Reports[0].(*RunEnd).Alloc != 48 {
-		t.Errorf("capture allocation = %d; want 32 + size(2) = 48", result.Reports[0].(*RunEnd).Alloc)
+	if operationalReports(result.Reports)[0].(*RunEnd).Alloc != 48 {
+		t.Errorf("capture allocation = %d; want 32 + size(2) = 48", operationalReports(result.Reports)[0].(*RunEnd).Alloc)
 	}
 }

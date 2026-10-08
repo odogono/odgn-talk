@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import { newGroup, num, restore } from '../src/index';
 import { compileSource } from '../src/lowering';
@@ -420,7 +421,9 @@ test('step into and out follow a foreign Function Value into its Home Script', (
     source: 'function f n\n return n * 2\nend f\non exported\n return f\nend',
   });
   home.deliver({ name: 'exported' });
-  const report = group.pump(0n).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(0n).reports).find(
+    r => r.kind === 'run end',
+  );
   if (!report || report.kind !== 'run end' || !report.result) {
     throw new Error('No Function Value');
   }
@@ -450,7 +453,9 @@ test('a Host Function call with wrong arity breaks before its entry Error', () =
     source: 'function f n\n return n\nend f\non exported\n return f\nend',
   });
   home.deliver({ name: 'exported' });
-  const report = group.pump(0n).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(0n).reports).find(
+    r => r.kind === 'run end',
+  );
   if (!report || report.kind !== 'run end' || !report.result) {
     throw new Error('No Function Value');
   }
@@ -460,7 +465,7 @@ test('a Host Function call with wrong arity breaks before its entry Error', () =
   group.pump(0n);
   expect(debug.current?.error?.get('code').asText()).toBe('wrong arity');
   expect(debug.snapshot().scripts[0]!.runs[0]!.frames.length).toBe(1);
-  expect(debug.resume().reports).toContainEqual(
+  expect(operationalReports(debug.resume().reports)).toContainEqual(
     expect.objectContaining({ outcome: 'errored', fuel: 0 }),
   );
 });

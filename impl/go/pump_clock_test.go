@@ -40,7 +40,7 @@ func TestPumpRefusesOutOfRangeClockWithoutConsumingInputs(t *testing.T) {
 			if !errors.As(err, &host) || host.Code != InvalidValue {
 				t.Fatalf("Pump = %+v, %v; want invalid value", result, err)
 			}
-			if result.FuelUsed != 0 || len(result.Reports) != 0 {
+			if result.FuelUsed != 0 || len(operationalReports(result.Reports)) != 0 {
 				t.Fatal(result)
 			}
 			select {
@@ -53,7 +53,7 @@ func TestPumpRefusesOutOfRangeClockWithoutConsumingInputs(t *testing.T) {
 			}
 			// The refusal must neither advance the Clock nor take the queued Request.
 			result, err = g.Pump(time.Date(2026, 1, 1, 0, 0, 0, 123456789, time.UTC), PumpOptions{})
-			if err != nil || len(result.Reports) != 1 {
+			if err != nil || len(operationalReports(result.Reports)) != 1 {
 				t.Fatalf("next Pump = %+v, %v", result, err)
 			}
 			value, failure := p.Result()

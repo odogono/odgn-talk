@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   compileLibrary,
@@ -158,7 +159,9 @@ describe('Library needs', () => {
         grants: { io: cap.grant(['read'], binding) },
       }).deliver({ name: 'go' });
     }
-    const reports = g.pump(0n).reports.filter(r => r.kind === 'run end');
+    const reports = operationalReports(g.pump(0n).reports).filter(
+      r => r.kind === 'run end',
+    );
     expect(reports.map(r => 'result' in r && r.result!.toString())).toEqual([
       '3',
       '8',
@@ -225,7 +228,7 @@ test('Library replacement rejects new transitive needs atomically', () => {
   ).toBe('missing grant');
   expect(g.fingerprint()).toEqual(fingerprint);
   g.script('s')!.deliver({ name: 'go' });
-  const report = g.pump(0n).reports[0]!;
+  const report = operationalReports(g.pump(0n).reports)[0]!;
   expect('result' in report && report.result!.toString()).toBe('"old"');
 });
 
@@ -262,9 +265,9 @@ test('suspending Library Handlers use the caller Call and settle in its Run', ()
     source: 'use hold from helper\non go\n  hold and wait\n  return it\nend go',
     grants: { io: capability.grant('all', undefined) },
   }).deliver({ name: 'go' });
-  expect(g.pump(0n).reports).toEqual([]);
+  expect(operationalReports(g.pump(0n).reports)).toEqual([]);
   answer!(num(7));
-  const report = g.pump(1n).reports[0]!;
+  const report = operationalReports(g.pump(1n).reports)[0]!;
   expect('result' in report && report.result!.toString()).toBe('7');
 });
 
@@ -405,7 +408,7 @@ test('dependent recompilation retains declarations for its own Capability calls'
     'carry variables',
   );
   g.script('s')!.deliver({ name: 'go' });
-  const report = g.pump(0n).reports[0]!;
+  const report = operationalReports(g.pump(0n).reports)[0]!;
   expect('result' in report && report.result!.toString()).toBe('2');
   expect(writes).toEqual(['"x"']);
 });
@@ -436,7 +439,7 @@ test('restore keeps a Library import valid when its saved Grant is rebound as re
   });
   expect(result.variablesOnly).toBe(false);
   copy.script('s')!.deliver({ name: 'go' });
-  const report = copy.pump(0n).reports[0]!;
+  const report = operationalReports(copy.pump(0n).reports)[0]!;
   expect(report).toMatchObject({ outcome: 'errored' });
   expect('error' in report && report.error!.code).toBe('capability revoked');
 });

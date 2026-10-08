@@ -39,7 +39,7 @@ func TestRequestExecutionAndWorkerRefusals(t *testing.T) {
 	if scriptError != nil || !v.Equal(Int(5)) {
 		t.Fatalf("%v %v", v, scriptError)
 	}
-	if result.FuelUsed != 15 || len(result.Reports) != 1 {
+	if result.FuelUsed != 15 || len(operationalReports(result.Reports)) != 1 {
 		t.Fatalf("%+v", result)
 	}
 	if _, e = g.Pump(now.Add(-time.Second), PumpOptions{}); e == nil {
@@ -120,7 +120,7 @@ func TestTraceInputsDrainInOrderAndPendingCancellation(t *testing.T) {
 	if se == nil || se.Code != "send failed" || se.Data.Get("reason").String() != `"cancelled"` {
 		t.Fatal(se)
 	}
-	if len(result.Reports) != 1 || result.Reports[0].(*RunEnd).Delivery != id || result.Reports[0].(*RunEnd).Outcome != Cancelled {
+	if len(operationalReports(result.Reports)) != 1 || operationalReports(result.Reports)[0].(*RunEnd).Delivery != id || operationalReports(result.Reports)[0].(*RunEnd).Outcome != Cancelled {
 		t.Fatal(result)
 	}
 	if trace[1][:9] != "> request" || trace[2] != "> cancel-delivery d1" || trace[3][:6] != "> pump" {
@@ -251,7 +251,7 @@ func TestCancellationCleanupAndNestedFaultLocation(t *testing.T) {
 		t.Fatal(e)
 	}
 	<-p.Done()
-	r := result.Reports[0].(*RunEnd)
+	r := operationalReports(result.Reports)[0].(*RunEnd)
 	if r.Outcome != Cancelled || r.CleanupFailed == nil || r.CleanupFailed.Limit != "cleanup" || r.Limit != "" || r.Error != nil {
 		t.Fatalf("%+v", r)
 	}
@@ -266,7 +266,7 @@ func TestCancellationCleanupAndNestedFaultLocation(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r = result.Reports[0].(*RunEnd)
+	r = operationalReports(result.Reports)[0].(*RunEnd)
 	if r.Outcome != LimitFault || r.At.Handler != "makeList" {
 		t.Fatalf("%+v", r)
 	}

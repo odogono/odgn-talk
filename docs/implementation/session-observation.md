@@ -4,13 +4,13 @@ Design agreed for [#370](https://github.com/odogono/odgn-talk/issues/370). This 
 
 ## Required base and delivery state
 
-- **Required base:** specification commit `f56430488cb9425e3f1c0b7a4a63c85f451d45bc` on `docs/grill-issue-370`, based on `927f0e8121114db24a89aaa70e503bc8980b738b`. Use [PR #430](https://github.com/odogono/odgn-talk/pull/430), including its subsequent declaration-staging correction, as the implementation base; the initial specification commit alone predates that correction. The specification is committed; no uncommitted source files need to be carried to another checkout.
+- **Required base:** merged specification PR #430, commit `8957d3e7e3a8018176eea6185269f0276a54683e`, or a descendant. No uncommitted specification files need to be carried.
 - **Specification files:** `CONTEXT.md`; `docs/adr/0065-run-accounting-is-returned-to-every-host.md`, `0066-fuel-measurements-follow-spawned-runs.md`, `0067-inspection-is-replayable-ordinary-execution.md`, `0045-the-session-host-follows-its-runs-through-the-trace.md` and `README.md` in that directory; `spec/session-observation.md`, `spec/session/inspect-reader.talk`; `spec/09-embedding.md`, `spec/10-save-and-restore.md`, `spec/11-the-trace-and-conformance.md`, `spec/12-sessions-and-tooling.md`, `spec/README.md`, `spec/appendix-a-glossary.md`; `spec/embedding/talk.go`, `spec/embedding/talk.ts`; `spec/data/session.toml`, `spec/data/trace.ebnf`.
 - **Companion files:** this handoff; current limitations in `impl/ts/README.md`, `impl/go/README.md`, `tooling/stack/README.md`, `tooling/cli/README.md`, `tooling/playground/README.md`; `changelog/unreleased/session-observation-spec.md`.
-- **Implemented in:** specification and data/declaration updates only. No runtime or tooling behavior is implemented by this change. Current support is described beside each affected feature in the guides above.
-- **Deferred Data Files and declarations:** command/Transcript Data Files are updated. The exact `RestoreResult` amendment is staged in chapter 9: add `Reports []Report` in `spec/embedding/talk.go`, `reports: Report[]` in `spec/embedding/talk.ts`, and the worker reply field when both Core implementations can return the specified baseline. No new grammar production, Built-in, machine instruction, cost, error catalogue entry or canonical Trace record is required. `corpus.toml` is unchanged: object setup lives in the standalone Transcript, not a second corpus-only setup.
+- **Implemented in:** #430 supplies the normative contract. The accounting implementation adds public reports and saved ancestry in both Cores, including the real `RestoreResult.reports` baseline; Session Commands and tooling remain pending.
+- **Data Files and declarations:** command/Transcript Data Files are updated. `RestoreResult.Reports`/`reports` is now active in the Go/TS declarations with runtime support. The specified worker reply includes `reports`. No new grammar production, Built-in, machine instruction, cost, error catalogue entry or canonical Trace record is required. `corpus.toml` is unchanged.
 - **Remaining work:** all unchecked acceptance below, including both implementations of the normative inspection-Handler template and its first expectations. Keep this block synchronized with implementation PRs/commits and issue #370; do not close the issue when only the specification lands.
-- **Approval still needed:** no new expectations exist in this change. Implementation must enumerate every new or changed `session.transcript`/`case.trace` and public-report fixture with review links before first blessing. Agreement between Cores is not reviewer approval.
+- **Approval still needed:** [the proposed public-report fixture](../../impl/testdata/run-accounting.json) requires first-blessing review. Its successful execution on both Cores is verification, not approval. No `session.transcript` or `case.trace` expectations changed. Future command fixtures must also be listed with review links before first blessing.
 
 ## Implementation boundaries
 
@@ -60,7 +60,7 @@ For this specification change, run `bun run spec:gen`, `bun run check`, `bun run
 
 For runtime acceptance, additionally run affected Group/save/restore/property tests, direct public-accounting parity tests, CLI/Playground/LSP/formatter tests and all new corpus cases in both replay modes. Passing the old corpus does not prove these new features exist.
 
-The Go API comparison must pass for the existing interface. The pending `RestoreResult.Reports` field is documented as a staged amendment and must be activated with its implementation. Missing new report declarations may only be logged by that checker, so its result must be read alongside this checklist rather than treated as complete coverage.
+The Go API comparison must pass for the active interface, including `RestoreResult.Reports` and the accounting report types. API declaration agreement alone does not establish runtime behavior; use the direct report tests.
 
 ### Evidence from the specification worktree (2026-10-08)
 
@@ -73,3 +73,11 @@ The Go API comparison must pass for the existing interface. The pending `Restore
 - Initial `go -C impl/go test ./internal/apicheck -run TestEmbeddingAPI -v` failed because this spec-only change prematurely added `RestoreResult.Reports` to the active declaration. The correction stages that existing-type amendment in chapter 9 and restores the active Go/TS shape; the same unchanged API comparison now passes. It still logs five new accounting types and four pre-existing missing declarations, which are not runtime support. No check was weakened and no runtime stubs were added.
 - The normative inspection reader template loads and executes on both existing Cores: a map property produces the same success row, and a wrong-kind read produces the same projected error row. This is a source-template smoke check, not implementation of `:inspect` or object replay.
 - No new behavior expectations were generated or blessed. These results verify the documentation change and existing behavior, not implementation of the new contract.
+
+### Accounting implementation evidence (2026-10-08)
+
+- Direct Go/TS tests and the shared proposed public-report fixture cover same-call dispatch/end, call ancestry, detached error Handlers, cumulative Fuel and unchanged boundaries. Additional tests cover observation-only Fuel, queued descendants, full/variables-only/rejected restore, cancellation, same-Pump discard, Library replacement and restored-call Reissue.
+- Both complete Core suites pass; Go also passes `go vet ./...` and `go test -race ./...`. TS: 3,453 tests. Tooling: 1,763 tests.
+- The complete Go corpus, TS corpus tests, browser bundle smoke test, workspace typecheck, lint, formatting, `bun run check`, `spec:check` and `go:check` pass. Canonical Trace expectations are unchanged.
+- Private save formats advance to Go `go/3` and TS `3` because saved ancestry and accounting order are required. Older snapshots are rejected; no automatic migration is provided.
+- Release acceptance above remains open pending first-blessing review and the remaining command/tooling cases; this evidence does not approve the proposed fixture.

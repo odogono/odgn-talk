@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -34,7 +35,7 @@ test('an immediate Operation checks declared allocation together with call Fuel'
   expect(lines.some(line => line.startsWith('call s/r1.'))).toBe(false);
   // Chapter 8: instruction Fuel/allocation, including the first clause charge,
   // are checked together. An unpaid instruction consumes neither budget.
-  expect(result.reports).toMatchObject([
+  expect(operationalReports(result.reports)).toMatchObject([
     {
       kind: 'run end',
       outcome: 'limit fault',

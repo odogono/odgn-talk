@@ -41,7 +41,7 @@ func operationFailureRun(t *testing.T, completion string, failure *ScriptError, 
 	}
 	result := joinPump(t, g, 0, PumpOptions{})
 	if completion == "fail" {
-		if call == nil || len(result.Reports) != 0 {
+		if call == nil || len(operationalReports(result.Reports)) != 0 {
 			t.Fatal("call did not suspend", result)
 		}
 		call.Fail(failure)
@@ -84,7 +84,7 @@ func TestOperationMalformedFailureData(t *testing.T) {
 					t.Fatalf("malformed Data did not become host error: %+v", end)
 				}
 				failures := 0
-				for _, report := range result.Reports {
+				for _, report := range operationalReports(result.Reports) {
 					if f, ok := report.(*CallFailed); ok {
 						failures++
 						if f.Call != "s/r1.c1" || f.Script != "s" || f.Operation != (OperationRef{"service", "fetch"}) || f.Detail == "" {
@@ -93,7 +93,7 @@ func TestOperationMalformedFailureData(t *testing.T) {
 					}
 				}
 				if failures != 1 || strings.Contains(end.Error.Data.String(), "private Host detail") {
-					t.Fatal(result.Reports)
+					t.Fatal(operationalReports(result.Reports))
 				}
 				if !strings.Contains(strings.Join(trace, "\n"), "call-failed s/r1.c1 op=api.fetch") {
 					t.Fatal(trace)
@@ -142,8 +142,8 @@ func TestOperationValidFailureData(t *testing.T) {
 				if end.Outcome != Errored || end.Error == nil || end.Error.Code != "fetch failed" || end.Error.Data.Get("capability").String() != `"api"` || end.Error.Data.Get("operation").String() != `"fetch"` {
 					t.Fatal(end)
 				}
-				if strings.Contains(strings.Join(trace, "\n"), "call-failed ") || len(result.Reports) != 1 {
-					t.Fatal(result.Reports, trace)
+				if strings.Contains(strings.Join(trace, "\n"), "call-failed ") || len(operationalReports(result.Reports)) != 1 {
+					t.Fatal(operationalReports(result.Reports), trace)
 				}
 				if test.name == "map" && !end.Error.Data.Get("payload").Equal(mustPublicText("reason")) {
 					t.Fatal(end.Error)
@@ -172,8 +172,8 @@ func TestOperationFailureConversionLimits(t *testing.T) {
 				if end.Outcome != LimitFault || end.Limit != test.name || end.Fuel != 14 || end.Alloc != 0 {
 					t.Fatal(end)
 				}
-				if len(result.Reports) != 1 || strings.Contains(strings.Join(trace, "\n"), "call-failed ") {
-					t.Fatal(result.Reports, trace)
+				if len(operationalReports(result.Reports)) != 1 || strings.Contains(strings.Join(trace, "\n"), "call-failed ") {
+					t.Fatal(operationalReports(result.Reports), trace)
 				}
 			})
 		}

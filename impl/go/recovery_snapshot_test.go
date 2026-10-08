@@ -69,6 +69,8 @@ func TestRecoverySnapshotEveryBoundary(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
+					a.Reports = operationalReports(a.Reports)
+					b.Reports = operationalReports(b.Reports)
 					if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
 						t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 					}
@@ -255,6 +257,8 @@ func TestCancelledRecoverySnapshotEveryCleanupBoundary(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				a.Reports = operationalReports(a.Reports)
+				b.Reports = operationalReports(b.Reports)
 				if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
 					t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 				}
@@ -332,6 +336,8 @@ func TestLibraryRecoverySnapshotEveryBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		a.Reports = operationalReports(a.Reports)
+		b.Reports = operationalReports(b.Reports)
 		if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
 			t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 		}

@@ -52,12 +52,12 @@ func TestQueuedZeroOverridesSurviveSaveRestore(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if len(result.Reports) != 1 {
+			if len(operationalReports(result.Reports)) != 1 {
 				t.Fatal(result)
 			}
-			end, ok := result.Reports[0].(*RunEnd)
+			end, ok := operationalReports(result.Reports)[0].(*RunEnd)
 			if !ok || end.Outcome != tc.outcome || end.Limit != tc.limit {
-				t.Fatal(result.Reports)
+				t.Fatal(operationalReports(result.Reports))
 			}
 			if tc.name == "wait" && end.Error.Code != "timeout" {
 				t.Fatal(end.Error)

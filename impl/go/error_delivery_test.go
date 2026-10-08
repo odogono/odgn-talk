@@ -39,17 +39,17 @@ end error
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Reports) != 3 {
+	if len(operationalReports(result.Reports)) != 3 {
 		t.Fatalf("want failed, next and error Runs: %+v", result)
 	}
 	for j, handler := range []string{"fail", "next", "error"} {
-		report := result.Reports[j].(*RunEnd)
+		report := operationalReports(result.Reports)[j].(*RunEnd)
 		if report.Handler != handler || report.Run != RunID([]string{"s/r1", "s/r2", "s/r3"}[j]) {
 			t.Fatalf("%+v", report)
 		}
 	}
-	failed := result.Reports[0].(*RunEnd)
-	handled := result.Reports[2].(*RunEnd)
+	failed := operationalReports(result.Reports)[0].(*RunEnd)
+	handled := operationalReports(result.Reports)[2].(*RunEnd)
 	if failed.Outcome != Errored || failed.Delivery != id || handled.Outcome != Completed || handled.Delivery != "" {
 		t.Fatalf("%+v %+v", failed, handled)
 	}
@@ -93,7 +93,7 @@ end error
 		t.Fatal(err)
 	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 2 {
+	if err != nil || len(operationalReports(result.Reports)) != 2 {
 		t.Fatal(result, err)
 	}
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != `["mine", {name: "fail", args: [7]}]` {
@@ -120,10 +120,10 @@ func TestErrorMessagesDoNotChainOrReportInternalUnhandled(t *testing.T) {
 			}
 			s.Deliver(Message{Name: "fail"})
 			result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || result.State != Idle || len(result.Reports) != tc.runs {
+			if err != nil || result.State != Idle || len(operationalReports(result.Reports)) != tc.runs {
 				t.Fatal(result, err)
 			}
-			if r := result.Reports[tc.runs-1].(*RunEnd); r.Outcome != tc.outcome {
+			if r := operationalReports(result.Reports)[tc.runs-1].(*RunEnd); r.Outcome != tc.outcome {
 				t.Fatalf("%+v", r)
 			}
 			if strings.Contains(strings.Join(trace, "\n"), "\nunhandled ") {
@@ -143,7 +143,7 @@ func TestErrorMessagesDoNotChainOrReportInternalUnhandled(t *testing.T) {
 			if tc.name == "recursive" {
 				expected = 1
 			}
-			if len(result.Reports) != expected {
+			if len(operationalReports(result.Reports)) != expected {
 				t.Fatal(result)
 			}
 			select {
@@ -181,14 +181,14 @@ end error
 		}
 	})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || deliveryError != nil || len(result.Reports) != 1 {
+	if err != nil || deliveryError != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err, deliveryError)
 	}
 	if !strings.Contains(strings.Join(trace, "\n"), "note s/r1 kind=error-dropped") {
 		t.Fatal(trace)
 	}
 	result, err = g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 1 || result.Reports[0].(*RunEnd).Handler != "next" {
+	if err != nil || len(operationalReports(result.Reports)) != 1 || operationalReports(result.Reports)[0].(*RunEnd).Handler != "next" {
 		t.Fatal(result, err)
 	}
 	if _, err = s.Deliver(Message{Name: "next"}); err != nil {
@@ -205,7 +205,7 @@ func TestInternalErrorRetainsMailboxStateAndDispatchesAfterPreemption(t *testing
 	}
 	s.Deliver(Message{Name: "fail"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{FuelCap: 19})
-	if err != nil || len(result.Reports) != 1 || result.State != Sliced {
+	if err != nil || len(operationalReports(result.Reports)) != 1 || result.State != Sliced {
 		t.Fatal(result, err)
 	}
 	inspection := g.Inspect().Scripts[0]
@@ -221,7 +221,7 @@ func TestInternalErrorRetainsMailboxStateAndDispatchesAfterPreemption(t *testing
 		t.Fatal(result, err)
 	}
 	result, err = g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 1 || result.Reports[0].(*RunEnd).Outcome != Completed {
+	if err != nil || len(operationalReports(result.Reports)) != 1 || operationalReports(result.Reports)[0].(*RunEnd).Outcome != Completed {
 		t.Fatal(result, err)
 	}
 	if !strings.Contains(strings.Join(trace, "\n"), "preempt s/r2 start from=s/r1 handler=error clause=1 by=slice fuel=5 alloc=0") {
@@ -257,7 +257,7 @@ end error
 		t.Fatal(err)
 	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 1 {
+	if err != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err)
 	}
 	if v, se := p.Result(); se != nil || v.String() != `"fallback"` {
@@ -292,13 +292,13 @@ func TestUnknownMessageHasNoHandlerInRunReportOrTrace(t *testing.T) {
 	s.Deliver(Message{Name: "unknown"})
 	s.Deliver(Message{Name: "known"}) // wrong arity, but this Handler exists
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(result.Reports) != 4 {
+	if err != nil || len(operationalReports(result.Reports)) != 4 {
 		t.Fatal(result, err)
 	}
-	if r := result.Reports[0].(*RunEnd); r.Handler != "" || r.Outcome != UnhandledOutcome || r.Fuel != 0 {
+	if r := operationalReports(result.Reports)[0].(*RunEnd); r.Handler != "" || r.Outcome != UnhandledOutcome || r.Fuel != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r := result.Reports[2].(*RunEnd); r.Handler != "known" || r.Outcome != UnhandledOutcome {
+	if r := operationalReports(result.Reports)[2].(*RunEnd); r.Handler != "known" || r.Outcome != UnhandledOutcome {
 		t.Fatalf("%+v", r)
 	}
 	if strings.Contains(strings.Join(trace, "\n"), "handler=unknown") {
@@ -338,7 +338,7 @@ end error
 				t.Fatal(err)
 			}
 			result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-			if err != nil || len(result.Reports) != runs || result.Reports[runs-1].(*RunEnd).Outcome != Completed {
+			if err != nil || len(operationalReports(result.Reports)) != runs || operationalReports(result.Reports)[runs-1].(*RunEnd).Outcome != Completed {
 				t.Fatal(result, err)
 			}
 			if got := g.Inspect().Scripts[0].Vars[1].Val.String(); got != expected {

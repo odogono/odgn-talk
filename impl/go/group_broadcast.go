@@ -115,6 +115,7 @@ func (g *Group) prepareBroadcasts(inputs []delivery) []delivery {
 			}
 			g.nextDelivery++
 			child := delivery{id: DeliveryID(fmt.Sprintf("d%d", g.nextDelivery)), broadcast: d.broadcast, script: s, target: s.owner, message: d.message}
+			g.ancestry(child)
 			if b != nil {
 				child.decision = &Deciding{done: make(chan struct{}), broadcast: b, recipient: len(d.children)}
 				b.results = append(b.results, nil)

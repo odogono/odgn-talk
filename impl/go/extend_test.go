@@ -58,8 +58,8 @@ func TestExtendLinksNewLibrary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Result.String() != "7" {
-		t.Fatal(r.Reports)
+	if len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Result.String() != "7" {
+		t.Fatal(operationalReports(r.Reports))
 	}
 }
 func TestExtendRebindsFunctionInPreemptedRollbackBase(t *testing.T) {
@@ -76,8 +76,8 @@ func TestExtendRebindsFunctionInPreemptedRollbackBase(t *testing.T) {
 	g.Pump(time.Unix(0, 0), PumpOptions{})
 	s.Deliver(Message{Name: "go"})
 	r, _ := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Result.String() != "3" {
-		t.Fatal(r.Reports)
+	if len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Result.String() != "3" {
+		t.Fatal(operationalReports(r.Reports))
 	}
 }
 
@@ -127,8 +127,8 @@ func TestExtendDoesNotRecheckPriorBuiltinCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Reports) != 1 || result.Reports[0].(*RunEnd).Result.String() != "2" {
-		t.Fatal(result.Reports)
+	if len(operationalReports(result.Reports)) != 1 || operationalReports(result.Reports)[0].(*RunEnd).Result.String() != "2" {
+		t.Fatal(operationalReports(result.Reports))
 	}
 }
 
@@ -149,7 +149,7 @@ func TestExtensionFaultReportNamesCodeUnit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, report := range result.Reports {
+	for _, report := range operationalReports(result.Reports) {
 		if end, ok := report.(*RunEnd); ok && end.Outcome == LimitFault {
 			if end.At.Unit != "s+1" {
 				t.Fatalf("fault reported in %s, want s+1", end.At.Unit)

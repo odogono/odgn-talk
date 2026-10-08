@@ -22,9 +22,11 @@ import (
 var ErrMailboxFull error = errors.New("mailbox full")
 
 type Group struct {
-	traceMu    sync.Mutex
-	traceQueue []string
-	recording  bool
+	accounting              accountingState
+	accountingDiscardReason string
+	traceMu                 sync.Mutex
+	traceQueue              []string
+	recording               bool
 
 	mu                sync.Mutex
 	core              *Core
@@ -71,6 +73,7 @@ type Script struct {
 	debt       int64
 }
 type delivery struct {
+	ancestry   RunAncestry
 	id         DeliveryID
 	broadcast  BroadcastID
 	children   []delivery // selected when the Pump drains a Broadcast
@@ -565,7 +568,9 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		}
 	}
 	g.record("pump", true, nil, fields)
-	return g.runPump(o, accepted)
+	result, err := g.runPump(o, accepted)
+	g.flushAccounting(&result.Reports)
+	return result, err
 }
 
 func (r *RunEnd) isReport() {}

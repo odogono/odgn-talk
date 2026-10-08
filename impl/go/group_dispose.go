@@ -84,6 +84,9 @@ func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, set
 		// Stretch. No further Script execution is allowed once uncertainty lands.
 		return
 	}
+	for _, x := range runs {
+		g.accountEnd(x, "discarded", "stop", reports)
+	}
 	dropped := []delivery{}
 	for _, item := range queue {
 		if item.run != nil {
@@ -102,6 +105,7 @@ func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, set
 		if d.id != "" {
 			stop.DroppedMessages = append(stop.DroppedMessages, d.id)
 		}
+		g.accountDrop(d)
 		dropped = append(dropped, d)
 	}
 	fields := map[string]string{"reason": corevalue.DisplayText(stop.Reason)}

@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -101,7 +102,9 @@ const start = (
   return { group, script, host, lines, source, grant };
 };
 const errorCode = (group: Group) => {
-  const report = group.pump(now).reports.find(r => r.kind === 'run end');
+  const report = operationalReports(group.pump(now).reports).find(
+    r => r.kind === 'run end',
+  );
   return report?.kind === 'run end' ? report.error?.code : undefined;
 };
 
@@ -133,7 +136,7 @@ describe('Capability Scopes', () => {
     (body, code, fuel) => {
       const { group } = start(body);
       const result = group.pump(now);
-      expect(result.reports).toContainEqual(
+      expect(operationalReports(result.reports)).toContainEqual(
         expect.objectContaining({ error: expect.objectContaining({ code }) }),
       );
       // Dispatch and popped-frame unwind still cost 4 each. Acquisition costs
@@ -152,7 +155,7 @@ describe('Capability Scopes', () => {
     });
     script.deliver({ name: 'go' });
     const result = group.pump(now);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({
         error: expect.objectContaining({ code: 'scope open' }),
       }),
@@ -168,9 +171,9 @@ describe('Capability Scopes', () => {
     const result = group.pump(now, { fuelSlice: 4, fuelCap: 4 });
     expect(result.state).toBe('sliced');
     expect(result.fuelUsed).toBe(4);
-    expect(result.reports).toEqual([]);
+    expect(operationalReports(result.reports)).toEqual([]);
     expect(host.calls).toEqual([]);
-    expect(group.pump(now).reports).toContainEqual(
+    expect(operationalReports(group.pump(now).reports)).toContainEqual(
       expect.objectContaining({ outcome: 'completed', result: dec('1') }),
     );
   });
@@ -180,7 +183,7 @@ describe('Capability Scopes', () => {
     });
     const result = group.pump(now);
     expect(result.fuelUsed).toBe(8);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({
         error: expect.objectContaining({ code: 'scope not open' }),
       }),
@@ -192,14 +195,14 @@ describe('Capability Scopes', () => {
     });
     const result = group.pump(now);
     expect(result.fuelUsed).toBe(0);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({ outcome: 'limit fault', limit: 'fuel' }),
     );
     expect(host.calls).toEqual([]);
   });
   test('a guarded waiting send allocates no message', () => {
     const { group } = start('ask r to openfile\nsend ping to me and wait');
-    expect(group.pump(now).reports).toContainEqual(
+    expect(operationalReports(group.pump(now).reports)).toContainEqual(
       expect.objectContaining({
         error: expect.objectContaining({ code: 'scope open' }),
         // Only the successful opener's Nothing result is converted.
@@ -216,7 +219,7 @@ describe('Capability Scopes', () => {
     expect(result.state).toBe('sliced');
     expect(result.fuelUsed).toBe(4);
     expect(host.calls).toEqual([]);
-    expect(group.pump(now).reports).toContainEqual(
+    expect(operationalReports(group.pump(now).reports)).toContainEqual(
       expect.objectContaining({ outcome: 'completed', result: dec('1') }),
     );
   });
@@ -233,7 +236,7 @@ describe('Capability Scopes', () => {
     script.deliver({ name: 'go' });
     const result = group.pump(now);
     expect(result.fuelUsed).toBe(17);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({ outcome: 'limit fault', limit: 'depth' }),
     );
     expect(host.calls.map(c => c.op)).toEqual(['openfile', 'closefile']);
@@ -312,7 +315,7 @@ describe('Capability Scopes', () => {
       }),
       { limits: { allocPerRun: 500 } },
     );
-    expect(group.pump(now).reports).toContainEqual(
+    expect(operationalReports(group.pump(now).reports)).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
         outcome: 'limit fault',
@@ -371,7 +374,7 @@ describe('Capability Scopes', () => {
         host,
       );
       const result = group.pump(now);
-      expect(result.reports).toContainEqual(
+      expect(operationalReports(result.reports)).toContainEqual(
         expect.objectContaining({ kind: 'run end', outcome: 'cancelled' }),
       );
       expect(host.calls.map(c => [c.op, c.call.automatic])).toEqual(
@@ -419,7 +422,7 @@ describe('Capability Scopes', () => {
       limits: { allocPerRun: 500 },
     });
     script.deliver({ name: 'go' });
-    expect(group.pump(now).reports).toContainEqual(
+    expect(operationalReports(group.pump(now).reports)).toContainEqual(
       expect.objectContaining({ outcome: 'limit fault', limit: 'alloc' }),
     );
     expect(host.calls.map(c => c.op)).toEqual(['openfile', 'closefile']);
@@ -474,7 +477,7 @@ describe('Capability Scopes', () => {
     );
     const result = group.pump(now);
     expect(
-      result.reports.some(
+      operationalReports(result.reports).some(
         r => r.kind === 'run end' && r.outcome === 'limit fault',
       ),
     ).toBe(true);
@@ -521,7 +524,7 @@ describe('Capability Scopes', () => {
       'closelock',
       'closefile',
     ]);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({
         kind: 'effect failure',
         grant: 'r',
@@ -544,7 +547,7 @@ describe('Capability Scopes', () => {
       }),
     );
     const result = group.pump(now);
-    expect(result.reports).toContainEqual(
+    expect(operationalReports(result.reports)).toContainEqual(
       expect.objectContaining({
         kind: 'effect failure',
         status: 'failed',
@@ -841,7 +844,9 @@ describe('Capability Scopes', () => {
       }),
     );
     const result = group.pump(now);
-    expect(result.reports.some(r => r.kind === 'effect failure')).toBe(true);
+    expect(
+      operationalReports(result.reports).some(r => r.kind === 'effect failure'),
+    ).toBe(true);
     expect(group.inspect().scripts[0]!.disabledGrants).toEqual(['r']);
   });
 });

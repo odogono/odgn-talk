@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -125,7 +126,7 @@ test('one participant shares Operations and commits with Script Variables', () =
   const { group, host } = start(
     'put 2 into count\nask db to change\nask db to change',
   );
-  expect(group.pump(now).reports).toContainEqual(
+  expect(operationalReports(group.pump(now).reports)).toContainEqual(
     expect.objectContaining({ outcome: 'completed' }),
   );
   expect(host.events).toEqual([
@@ -141,7 +142,7 @@ test('aliases conflict before their Host effects; ordinary errors commit', () =>
   const result = group.pump(now);
   // 4 dispatch + 12 first call + 1 store into `it` + 4 unwind.
   expect(result.fuelUsed).toBe(21);
-  expect(result.reports).toContainEqual(
+  expect(operationalReports(result.reports)).toContainEqual(
     expect.objectContaining({
       outcome: 'errored',
       error: expect.objectContaining({ code: 'segment participant conflict' }),
@@ -165,7 +166,7 @@ test('definite non-commit rolls back and ends with uncatchable effect failed', (
     'put 1 into count\nask db to change',
     transactionalHost({ status: 'failed' }),
   );
-  expect(group.pump(now).reports).toContainEqual(
+  expect(operationalReports(group.pump(now).reports)).toContainEqual(
     expect.objectContaining({
       outcome: 'effect failed',
       effect: expect.objectContaining({ phase: 'commit', grant: 'db' }),
@@ -191,7 +192,7 @@ test('actual suspension commits and resumes in a new Segment', () => {
 const count = (group: Group) =>
   group.inspect().scripts[0]!.vars[0]![1].toString();
 const runEnd = (group: Group) =>
-  group.pump(now).reports.find(r => r.kind === 'run end');
+  operationalReports(group.pump(now).reports).find(r => r.kind === 'run end');
 
 test.each([
   ['return 3', 'completed'],
@@ -309,7 +310,7 @@ test.each(['begin', 'commit', 'rollback'] as const)(
       { fuelPerRun: 70 },
     );
     group.load({ name: 'other', source: 'on go\nreturn 1\nend go' });
-    const reports = group.pump(now).reports;
+    const reports = operationalReports(group.pump(now).reports);
     expect(reports.filter(r => r.kind === 'stop').map(r => r.script)).toEqual([
       's',
       'other',
@@ -393,7 +394,7 @@ test('Stop queued by commit lands after finalization and successful outcome publ
     },
   );
   const { group, lines } = start('ask db to change\nput 2 into count', host);
-  const reports = group.pump(now).reports;
+  const reports = operationalReports(group.pump(now).reports);
   expect(reports.find(r => r.kind === 'run end')).toMatchObject({
     outcome: 'completed',
   });
@@ -482,7 +483,7 @@ test('senders receive effect failed and no Script error Handler executes', () =>
     source: 'on go\nsend go to receiver and wait\nend go',
   });
   sender.deliver({ name: 'go' });
-  const reports = group.pump(now).reports;
+  const reports = operationalReports(group.pump(now).reports);
   const ended = reports.find(
     r => r.kind === 'run end' && r.script === 'sender',
   );

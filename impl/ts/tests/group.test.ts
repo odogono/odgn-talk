@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import {
@@ -87,7 +88,7 @@ describe('Deliveries and Pumps', () => {
       const s = g.load({ name: 's', source: 'on go\n return 1 / 0\nend go\n' });
       s.decide({ name: 'go', limits: { fuelPerRun: budget } });
       const result = g.pump(clock);
-      expect(result.reports).toMatchObject(
+      expect(operationalReports(result.reports)).toMatchObject(
         budget === 4
           ? [{ outcome: 'limit fault', fuel: 0 }, { verdict: 'undecided' }]
           : [{ verdict: 'allowed' }, { outcome: 'limit fault', fuel: 5 }],
@@ -106,7 +107,7 @@ describe('Deliveries and Pumps', () => {
       g.pump(clock);
       s.deliver({ name: 'work', limits: { fuelPerRun: budget } });
       const result = g.pump(clock);
-      expect(result.reports).toMatchObject([
+      expect(operationalReports(result.reports)).toMatchObject([
         { run: 's/r2', outcome: 'limit fault', fuel: budget === 4 ? 0 : 5 },
         ...(budget === 5 ? [{ run: 's/r1', outcome: 'cancelled' }] : []),
       ]);
@@ -140,7 +141,7 @@ describe('Deliveries and Pumps', () => {
       'vars a n=2',
     ]);
     expect(result.state).toBe('idle');
-    expect(result.reports).toMatchObject([
+    expect(operationalReports(result.reports)).toMatchObject([
       { kind: 'run end', run: 'a/r1', outcome: 'completed', fuel: 17 },
     ]);
   });
@@ -295,7 +296,7 @@ describe('the Fallback Handler', () => {
     a.deliver({ name: 'greet', args: [text('Bob')] });
     const reply = a.request({ name: 'dance', args: [num(1)] });
     const result = g.pump(clock);
-    expect(result.reports).toMatchObject([
+    expect(operationalReports(result.reports)).toMatchObject([
       { kind: 'run end', handler: 'greet', fallback: true },
       { kind: 'run end', handler: 'dance', fallback: true },
     ]);
@@ -335,7 +336,7 @@ describe('the Fallback Handler', () => {
     const a = g.load({ name: 'a', source: 'on go\nend go' });
     a.extend('on any message m\n  return the name of m\nend any message');
     a.deliver({ name: 'hop' });
-    expect(g.pump(clock).reports).toMatchObject([
+    expect(operationalReports(g.pump(clock).reports)).toMatchObject([
       { kind: 'run end', handler: 'hop', fallback: true, outcome: 'completed' },
     ]);
   });
@@ -357,7 +358,7 @@ describe('a runaway Script', () => {
     spin.deliver({ name: 'go', limits: { fuelPerRun: 500 } });
     steady.deliver({ name: 'tick' });
     steady.deliver({ name: 'tick' });
-    const first = g.pump(clock).reports;
+    const first = operationalReports(g.pump(clock).reports);
     expect(
       first.map(
         r =>
@@ -377,7 +378,7 @@ describe('a runaway Script', () => {
     // Both Scripts go on running normally.
     const read = spin.request({ name: 'read' });
     steady.deliver({ name: 'tick' });
-    const second = g.pump(later(1)).reports;
+    const second = operationalReports(g.pump(later(1)).reports);
     expect(
       second.map(
         r =>
@@ -408,7 +409,7 @@ describe('a Limit Fault', () => {
         'script variable seen = []\non go\n  put "started" after seen\n  try\n    repeat forever\n      put "loop" into last\n    end repeat\n  catch e\n    put "caught" after seen\n  finally\n    put "finally" after seen\n  end try\nend go',
     });
     s.deliver({ name: 'go', limits: { fuelPerRun: 300 } });
-    const [end] = g.pump(clock).reports;
+    const [end] = operationalReports(g.pump(clock).reports);
     expect(end).toMatchObject({ outcome: 'limit fault', limit: 'fuel' });
     expect(lines.some(l => l.startsWith('raise '))).toBe(false);
     expect(lines.find(l => l.startsWith('fault s/r1'))).toEndWith(

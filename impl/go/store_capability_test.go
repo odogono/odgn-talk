@@ -74,7 +74,7 @@ func storeRun(t *testing.T, body string, h *storeHost, costs Costs) (*RunEnd, []
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, report := range result.Reports {
+	for _, report := range operationalReports(result.Reports) {
 		if end, ok := report.(*RunEnd); ok {
 			return end, trace
 		}

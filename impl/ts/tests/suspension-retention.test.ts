@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -50,7 +51,7 @@ for (const filter of ['capture', 'object', 'both'] as const) {
         limits: { persistentState: limit },
       });
       s.deliver({ name: 'go' });
-      const reports = g.pump(0n).reports;
+      const reports = operationalReports(g.pump(0n).reports);
       expect(
         reports.some(r => r.kind === 'run end' && r.outcome === 'limit fault'),
       ).toBe(limit < retained);
@@ -113,7 +114,9 @@ for (const limit of [263, 264]) {
       source: 'on export\n return f\nend export\nfunction f\n return 7\nend f',
     });
     home.deliver({ name: 'export' });
-    const report = g.pump(0n).reports.find(r => r.kind === 'run end');
+    const report = operationalReports(g.pump(0n).reports).find(
+      r => r.kind === 'run end',
+    );
     if (report?.kind !== 'run end' || !report.result) {
       throw new Error('no exported Function Value');
     }

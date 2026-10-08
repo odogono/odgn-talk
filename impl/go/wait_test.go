@@ -29,7 +29,7 @@ end mark
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Idle || len(r.Reports) != 0 || !r.NextDeadline.Equal(now) {
+	if err != nil || r.State != Idle || len(operationalReports(r.Reports)) != 0 || !r.NextDeadline.Equal(now) {
 		t.Fatal(r, err)
 	}
 	view := g.Inspect().Scripts[0]
@@ -48,7 +48,7 @@ end mark
 		t.Fatal(err)
 	}
 	r, err = g.Pump(now, PumpOptions{FuelCap: 1})
-	if err != nil || r.State != Sliced || !r.NextDeadline.IsZero() || len(r.Reports) != 0 {
+	if err != nil || r.State != Sliced || !r.NextDeadline.IsZero() || len(operationalReports(r.Reports)) != 0 {
 		t.Fatal(r, err)
 	}
 	view = g.Inspect().Scripts[0]
@@ -59,7 +59,7 @@ end mark
 		t.Fatal(view)
 	}
 	r, err = g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Idle || !r.NextDeadline.IsZero() || len(r.Reports) != 3 {
+	if err != nil || r.State != Idle || !r.NextDeadline.IsZero() || len(operationalReports(r.Reports)) != 3 {
 		t.Fatal(r, err)
 	}
 	if got := g.Inspect().Scripts[0]; got.Vars[0].Val.String() != "[1, 2, 99, 11, 12]" || len(got.Runs) != 0 {
@@ -95,7 +95,7 @@ end mark
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	if r, err := g.Pump(now, PumpOptions{}); err != nil || len(r.Reports) != 0 {
+	if r, err := g.Pump(now, PumpOptions{}); err != nil || len(operationalReports(r.Reports)) != 0 {
 		t.Fatal(r, err)
 	}
 	select {
@@ -108,7 +108,7 @@ end mark
 	// Queue synchronously: context cancellation uses this same input path.
 	g.cancelDelivery(delivery{id: "d1", script: s, pending: pending})
 	r, err := g.Pump(now.Add(time.Second), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.Reports[0].(*RunEnd).Outcome != Cancelled || !r.NextDeadline.IsZero() {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
 	}
 	view := g.Inspect().Scripts[0]
@@ -152,10 +152,10 @@ end mark
 	s.Deliver(Message{Name: "mark"})
 	g.cancelDelivery(delivery{id: id, script: s, pending: p})
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || len(r.Reports) != 2 {
+	if err != nil || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err)
 	}
-	end := r.Reports[1].(*RunEnd)
+	end := operationalReports(r.Reports)[1].(*RunEnd)
 	if end.CleanupFailed == nil || end.CleanupFailed.Limit != "cleanup" {
 		t.Fatal(end)
 	}
@@ -206,10 +206,10 @@ func TestWaitFuelFaultDoesNotChargeOrInstallTimer(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(r.Reports) != 1 || r.FuelUsed != 5 || !r.NextDeadline.IsZero() {
+	if err != nil || len(operationalReports(r.Reports)) != 1 || r.FuelUsed != 5 || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
 	}
-	end := r.Reports[0].(*RunEnd)
+	end := operationalReports(r.Reports)[0].(*RunEnd)
 	if end.Outcome != LimitFault || end.Limit != "fuel" || end.At.Line != 2 {
 		t.Fatal(end)
 	}
@@ -234,7 +234,7 @@ func TestWaitBeyondNativeDeadlineRangeDefersWithoutOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || r.FuelUsed != 5 || len(r.Reports) != 0 || !r.NextDeadline.IsZero() {
+	if err != nil || r.FuelUsed != 5 || len(operationalReports(r.Reports)) != 0 || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
 	}
 	select {
@@ -258,7 +258,7 @@ func TestWaitSliceOverrunCarriesDebtAcrossTimerReadiness(t *testing.T) {
 	now := time.Unix(0, 0)
 	for j, fuel := range []int64{15, 0, 5} {
 		r, err := g.Pump(now, PumpOptions{FuelSlice: 6})
-		if err != nil || r.State != Sliced || r.FuelUsed != fuel || len(r.Reports) != 0 {
+		if err != nil || r.State != Sliced || r.FuelUsed != fuel || len(operationalReports(r.Reports)) != 0 {
 			t.Fatalf("Pump %d: %+v %v", j+1, r, err)
 		}
 		if j == 0 && !r.NextDeadline.Equal(now) || j > 0 && !r.NextDeadline.IsZero() {
@@ -266,10 +266,10 @@ func TestWaitSliceOverrunCarriesDebtAcrossTimerReadiness(t *testing.T) {
 		}
 	}
 	r, err := g.Pump(now, PumpOptions{})
-	if err != nil || r.State != Idle || r.FuelUsed != 5 || len(r.Reports) != 2 {
+	if err != nil || r.State != Idle || r.FuelUsed != 5 || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err)
 	}
-	if r.Reports[0].(*RunEnd).Run != "s/r2" || r.Reports[1].(*RunEnd).Run != "s/r1" || s.Counters().FuelTotal != 25 {
+	if operationalReports(r.Reports)[0].(*RunEnd).Run != "s/r2" || operationalReports(r.Reports)[1].(*RunEnd).Run != "s/r1" || s.Counters().FuelTotal != 25 {
 		t.Fatal(r)
 	}
 }

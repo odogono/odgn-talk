@@ -262,7 +262,7 @@ func TestConsoleFactoryFailuresBecomeHostErrors(t *testing.T) {
 				t.Fatal(end)
 			}
 			found := false
-			for _, r := range result.Reports {
+			for _, r := range operationalReports(result.Reports) {
 				if failed, ok := r.(*CallFailed); ok {
 					found = true
 					if failed.Operation.Capability != "console" {

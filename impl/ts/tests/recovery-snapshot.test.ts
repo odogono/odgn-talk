@@ -1,3 +1,4 @@
+import { operationalResult } from './operational-reports';
 import { expect, test } from 'bun:test';
 import cases from '../../../tools/machine/recovery-cases.json';
 import nested from '../../../tools/machine/recovery-nested-cases.json';
@@ -419,7 +420,9 @@ test('Library offers and same-Run callbacks save every boundary and keep attempt
     original.length = 0;
     resumed.length = 0;
     const a = g.pump(BigInt(step), { fuelSlice: 1 });
-    expect(copy.pump(BigInt(step), { fuelSlice: 1 })).toEqual(a);
+    expect(
+      operationalResult(copy.pump(BigInt(step), { fuelSlice: 1 })),
+    ).toEqual(operationalResult(a));
     expect(output(resumed)).toEqual(output(original));
     expect(copy.inspect()).toEqual(g.inspect());
     choices.push(

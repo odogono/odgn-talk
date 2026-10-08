@@ -45,7 +45,6 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
 
 [ADR 0065](../docs/adr/0065-run-accounting-is-returned-to-every-host.md) adds public accounting for every Host, not an opt-in debugger or Session callback. It is always returned by `Pump`, `Reload` and `ReplaceLibrary` in their `reports`, and by successful `Restore` in `RestoreResult.reports`. Stop is queued and reports through Pump. A refused operation creates no accounting records. The declarations in [`talk.go`](embedding/talk.go) and [`talk.ts`](embedding/talk.ts) are authoritative.
 
-**Declaration staging for #370:** this is the accepted accounting contract, with runtime implementation pending. The new report types are declared now, but extending the existing `RestoreResult` is staged until both Cores produce the baseline. Add `Reports []Report` in Go and `reports: Report[]` in TS as the first field of `RestoreResult`, and add the worker `restore` reply's `reports` field, in the same implementation change. The active `RestoreResult` declarations retain their current shape until then; the references to restore reports below describe that staged amendment. Do not add an always-empty field or relax the API comparison to claim accounting support.
 
 | Report | Fields beyond its discriminator | When |
 | --- | --- | --- |

@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import {
   defineCapability,
@@ -37,7 +38,9 @@ describe('Broadcast and cancellation', () => {
     g.load({ name: 'silent', source: 'on other\nend other' });
     g.load({ name: 'b', source: 'on go\nend go' });
     expect(
-      g.pump(0n).reports.map(r => ('broadcast' in r ? r.broadcast : null)),
+      operationalReports(g.pump(0n).reports).map(r =>
+        'broadcast' in r ? r.broadcast : null,
+      ),
     ).toEqual([id, id]);
     expect(trace.find(l => l.startsWith('> broadcast'))).toBe(
       '> broadcast b1 message=go recipients=[a:d1, b:d2]',
@@ -54,7 +57,7 @@ describe('Broadcast and cancellation', () => {
     const abort = new AbortController();
     const d = s.decide({ name: 'go' }, { signal: abort.signal });
     abort.abort();
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { kind: 'run end', outcome: 'cancelled', delivery: d.id, fuel: 0 },
       {
         kind: 'decided',
@@ -69,7 +72,7 @@ describe('Broadcast and cancellation', () => {
     expect(await sealed.decided).toMatchObject({ verdict: 'allowed' });
     const before = trace.length;
     sealedAbort.abort();
-    expect(g.pump(1_000_000_000n).reports).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
       { outcome: 'completed' },
     ]);
     expect(
@@ -88,7 +91,9 @@ describe('Broadcast and cancellation', () => {
     g.pump(0n, { fuelSlice: 20 });
     expect(vars(g)[0]).toEqual(['n', '9']);
     s.cancelRun('s/r1');
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(vars(g)).toEqual([
       ['n', '0'],
       ['clean', '[1, 2]'],
@@ -145,7 +150,7 @@ describe('Broadcast and cancellation', () => {
       g.pump(0n);
       s.cancelRun('s/r1');
       const p = g.pump(0n);
-      expect(p.reports).toMatchObject([
+      expect(operationalReports(p.reports)).toMatchObject([
         {
           outcome: 'cancelled',
           cleanupFailed:
@@ -174,7 +179,7 @@ describe('Broadcast and cancellation', () => {
     g.pump(0n);
     s.deliver({ name: 'go' });
     g.dispose(owner);
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       {
         kind: 'stop',
         reason: 'owner disposed',
@@ -200,7 +205,9 @@ describe('Queueing Policies', () => {
     s.deliver({ name: 'go' });
     g.pump(0n);
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'dropped', fuel: 4 }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'dropped', fuel: 4 },
+    ]);
     const d = s.decide({ name: 'go', limits: { fuelPerRun: 3 } });
     g.pump(0n);
     expect(await d.decided).toMatchObject({
@@ -249,7 +256,7 @@ describe('Queueing Policies', () => {
       verdict: 'undecided',
       undecided: [{ outcome: 'dropped' }],
     });
-    expect(p.reports).toContainEqual(
+    expect(operationalReports(p.reports)).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
         outcome: 'dropped',
@@ -267,7 +274,7 @@ describe('Queueing Policies', () => {
     });
     s.deliver({ name: 'go', args: [num(1)] });
     s.deliver({ name: 'go', args: [num(2)] });
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { outcome: 'cancelled', run: 's/r1' },
     ]);
     expect(vars(g)).toEqual([['got', '[1, 2, 10]']]);
@@ -287,7 +294,7 @@ describe('cancellation boundaries', () => {
     for (let i = 0; i < 3; i++) {
       s.deliver({ name: 'go' });
     }
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { outcome: 'limit fault', limit: 'persistent' },
       { outcome: 'limit fault', limit: 'persistent' },
       { outcome: 'dropped' },
@@ -324,9 +331,11 @@ describe('cancellation boundaries', () => {
     g.pump(0n);
     g.script('s')!.stop('first');
     const p = g.pump(0n);
-    expect(p.reports.filter(r => r.kind === 'stop').map(r => r.script)).toEqual(
-      ['s', 't', 'u'],
-    );
+    expect(
+      operationalReports(p.reports)
+        .filter(r => r.kind === 'stop')
+        .map(r => r.script),
+    ).toEqual(['s', 't', 'u']);
     expect(p.state).toBe('stopped');
     expect(
       trace.filter(l => l.startsWith('> stop')).map(l => l.split(' ')[2]),
@@ -355,7 +364,7 @@ describe('cancellation boundaries', () => {
     g.pump(0n);
     s.cancelRun('s/r1');
     s.stop('done');
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { kind: 'stop', pendingCalls: ['s/r1.c1'] },
     ]);
     expect(pending.signal.aborted).toBe(true);
@@ -405,9 +414,9 @@ describe('cancellation boundaries', () => {
       const p = g.pump(0n);
       expect(calls.map(c => c.signal.aborted)).toEqual([false, true]);
       if (stop) {
-        expect(p.reports.filter(r => r.kind === 'stop')).toMatchObject([
-          { kind: 'stop', pendingCalls: ['s/r1.c2'] },
-        ]);
+        expect(
+          operationalReports(p.reports).filter(r => r.kind === 'stop'),
+        ).toMatchObject([{ kind: 'stop', pendingCalls: ['s/r1.c2'] }]);
         expect(trace.find(l => l.startsWith('stopped '))).toContain(
           'abandoned=[s/r1.c2]',
         );
@@ -469,7 +478,9 @@ describe('cancellation boundaries', () => {
       source: 'on go\n  ask api to hold and wait\nend go',
     });
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(pending.signal.aborted).toBe(true);
     expect(trace).toContain('abandon s/r1.c1');
     expect(trace.some(l => l.includes('end=ask-wait'))).toBe(false);
@@ -486,7 +497,9 @@ describe('cancellation boundaries', () => {
     g.pump(0n);
     g.pump(0n, { fuelSlice: 1 });
     s.cancelRun('s/r1');
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(vars(g)).toEqual([['n', '9']]);
   });
 
@@ -505,12 +518,12 @@ describe('cancellation boundaries', () => {
     const request = front.request({ name: 'go' }, { signal: abort.signal });
     g.pump(0n);
     abort.abort();
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { script: 'front', outcome: 'cancelled' },
     ]);
     await expectSendFailed(request.result, 'cancelled');
     expect(trace).toContain('abandon front/r1.c1');
-    expect(g.pump(1_000_000_000n).reports).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
       { script: 'back', outcome: 'completed' },
     ]);
     expect(vars(g, 1)).toEqual([['n', '1']]);
@@ -539,7 +552,9 @@ describe('cancellation boundaries', () => {
     calls[0]!.answer(num(1));
     g.pump(0n);
     s.cancelRun('s/r1');
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(calls.map(c => c.signal.aborted)).toEqual([false, true, true]);
     expect(trace.filter(l => l.startsWith('abandon '))).toEqual([
       'abandon s/r1.c2',
@@ -576,7 +591,7 @@ describe('cancellation boundaries', () => {
     s.deliver({ name: 'go', args: [num(1)] });
     s.deliver({ name: 'go', args: [num(2)] });
     s.deliver({ name: 'call' });
-    expect(g.pump(0n).reports).toEqual([]);
+    expect(operationalReports(g.pump(0n).reports)).toEqual([]);
     g.pump(1_000_000_000n);
     expect(vars(g)).toEqual([['n', '8']]);
   });
@@ -600,7 +615,9 @@ describe('cancellation boundaries', () => {
         'script variable n = 0\non go\n  try\n    put 9 into n\n    ask api to cancel\n    put 99 into n\n  finally\n    add 1 to n\n  end try\nend go',
     });
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(vars(g)).toEqual([['n', '1']]);
     const crossing = trace.findIndex(l => l.startsWith('call '));
     expect(trace[crossing + 1]).toBe('> cancel-run s/r1');
@@ -630,7 +647,9 @@ describe('cancellation boundaries', () => {
       source: 'on go\n  ask api to cancel\nend go',
     });
     s.deliver({ name: 'go' });
-    expect(g.pump(0n).reports).toMatchObject([{ outcome: 'cancelled' }]);
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
+      { outcome: 'cancelled' },
+    ]);
     expect(trace.some(l => l.startsWith('fault '))).toBe(false);
   });
 
@@ -655,7 +674,10 @@ describe('cancellation boundaries', () => {
         'script variable n = 0\non go, deciding\n  try\n    put 9 into n\n    put the value of switcher into n\n  finally\n    put 99 into n\n  end try\nend go',
     });
     const d = s.decide({ name: 'go' });
-    expect(g.pump(0n).reports.map(r => r.kind)).toEqual(['stop', 'decided']);
+    expect(operationalReports(g.pump(0n).reports).map(r => r.kind)).toEqual([
+      'stop',
+      'decided',
+    ]);
     expect(await d.decided).toMatchObject({
       verdict: 'undecided',
       undecided: [{ outcome: 'cancelled', run: 's/r1' }],
@@ -688,7 +710,7 @@ describe('cancellation boundaries', () => {
       verdict: 'undecided',
       undecided: [{ script: 'b', run: 'b/r1', outcome: 'cancelled' }],
     });
-    expect(g.pump(1_000_000_000n).reports).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
       { outcome: 'completed', script: 'a' },
     ]);
     expect(vars(g)).toEqual([['n', '1']]);
@@ -745,7 +767,7 @@ describe('cancellation boundaries', () => {
     s.cancelRun('s/r1');
     expect(g.pump(0n, { fuelCap: 10 }).state).toBe('sliced');
     const p = g.pump(0n);
-    expect(p.reports).toMatchObject([
+    expect(operationalReports(p.reports)).toMatchObject([
       { outcome: 'cancelled', fuel: expect.any(Number) },
     ]);
     expect(vars(g)).toEqual([['n', '10']]);
@@ -789,7 +811,7 @@ describe('cancellation boundaries', () => {
     s.deliver({ name: 'go', args: [num(1)] });
     g.pump(0n);
     s.deliver({ name: 'go', args: [num(2)] });
-    expect(g.pump(0n).reports).toMatchObject([
+    expect(operationalReports(g.pump(0n).reports)).toMatchObject([
       { outcome: 'limit fault', limit: 'persistent' },
     ]);
     expect(g.inspect().scripts[0]!.runs.map(r => r.status)).toEqual([

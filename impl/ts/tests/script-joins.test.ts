@@ -1,3 +1,4 @@
+import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import { newGroup, parseInstant } from '../src/index';
 
@@ -78,7 +79,7 @@ for (const ending of ['end', 'end wait']) {
         if (failure === 'timeout') {
           result = g.pump(clock + 1_000_000_000n);
         }
-        const end = result.reports.find(
+        const end = operationalReports(result.reports).find(
           r => r.kind === 'run end' && r.script === 'a',
         );
         if (!end || end.kind !== 'run end' || !end.result) {

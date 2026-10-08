@@ -16,7 +16,7 @@ import { Run, coreRaised, loadScript } from './machine';
 import { checkSource } from './checker';
 import { lowerTree } from './lowering';
 
-export const saveFormatVersion = 2;
+export const saveFormatVersion = 3;
 
 type Atom = boolean | number | string | null | [string, (string | number)?];
 type Node = { data: unknown; kind: string };

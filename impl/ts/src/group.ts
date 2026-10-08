@@ -1,3 +1,18 @@
+import {
+  emptyAccounting,
+  accountRoot,
+  accountingTail,
+  type AccountingState,
+  type AccountingReport,
+  type RunAncestry,
+} from './run-accounting';
+export type {
+  RunAncestry,
+  RunStarted,
+  RunDiscarded,
+  RunAccounting,
+  CausalWork,
+} from './run-accounting';
 import { validMessageSelector } from './selectors';
 import {
   DebugController,
@@ -180,6 +195,7 @@ export type RestoreResult = {
   disposed: [string, string][];
   droppedMessages: string[];
   pending: PendingCall[];
+  reports: Report[];
   variablesOnly: boolean;
 };
 export type Settlement =
@@ -220,6 +236,7 @@ export type EffectFailure = {
   status: 'failed' | 'unknown';
 };
 export type Report =
+  | AccountingReport
   | ({ kind: 'effect failure' } & EffectFailure)
   | {
       alloc: number;
@@ -352,6 +369,7 @@ type Ballot = {
   };
 };
 type Delivery = {
+  ancestry?: RunAncestry;
   args: Value[];
   /** The object whose Owning Script holds it, which it climbs on from. */
   at: ObjectState | null;
@@ -600,6 +618,8 @@ export class Group {
   private readonly objects = new Map<string, ObjectState>();
   // The reports of the Pump draining the input queue.
   private drainReports: Report[] = [];
+  private accounting = emptyAccounting();
+  private discardReason = 'stop';
   private timers: Timer[] = [];
   private timerSeq = 0;
   private inputs: QueuedInput[] = [];
@@ -617,6 +637,112 @@ export class Group {
   private drainingTrace: string[] | null = null;
   private debugController: DebugController | null = null;
   private debugPump: Generator<DebugPause, PumpResult> | null = null;
+
+  private ancestry(d: Delivery): RunAncestry {
+    if (!d.ancestry) {
+      if (d.id) {
+        d.ancestry = { rootDelivery: d.id };
+      } else {
+        const parentRun = d.from!.replace(/\.c\d+$/, '');
+        const parent = this.accounting.runs.get(parentRun);
+        if (!parent) {
+          throw new Error(`missing accounting parent ${parentRun}`);
+        }
+        d.ancestry = {
+          rootDelivery: parent.report.rootDelivery,
+          parentRun,
+          ...(d.reply ? { parentCall: d.reply } : {}),
+        };
+      }
+    }
+    accountRoot(this.accounting, d.ancestry.rootDelivery);
+    return d.ancestry;
+  }
+
+  private accountStart(s: ScriptState, r: Running) {
+    const ancestry = this.ancestry(r.delivery);
+    this.accounting.runs.set(r.id, {
+      order: ++this.accounting.next,
+      report: {
+        kind: 'run accounting',
+        ...ancestry,
+        script: s.name,
+        run: r.id,
+        fuel: r.run.fuel,
+        state: 'live',
+      },
+    });
+    this.drainReports.push({
+      kind: 'run started',
+      ...ancestry,
+      script: s.name,
+      run: r.id,
+      ...(r.delivery.id ? { delivery: r.delivery.id } : {}),
+      ...(r.delivery.fn
+        ? { fn: r.delivery.fn }
+        : { selector: r.delivery.message }),
+      args: [...r.delivery.args],
+    });
+  }
+
+  private accountEnd(
+    r: Running,
+    state: 'terminal' | 'discarded',
+    reason?: string,
+  ) {
+    const row = this.accounting.runs.get(r.id)!;
+    if (row.report.state !== 'live') {
+      return;
+    }
+    row.report.fuel = r.run.fuel;
+    row.report.state = state;
+    if (state === 'discarded') {
+      this.drainReports.push({
+        kind: 'run discarded',
+        ...this.ancestry(r.delivery),
+        script: row.report.script,
+        run: r.id,
+        reason: reason!,
+      });
+    }
+  }
+
+  private accountDrop(d: Delivery) {
+    const a = this.ancestry(d);
+    this.accounting.roots.get(a.rootDelivery)!.discarded++;
+  }
+
+  private flushAccounting(reports: Report[]) {
+    const queued = new Map<string, number>();
+    const count = (d: Delivery) => {
+      const a = this.ancestry(d);
+      queued.set(a.rootDelivery, (queued.get(a.rootDelivery) ?? 0) + 1);
+    };
+    for (const s of this.scripts) {
+      for (const r of this.runsOf(s)) {
+        const row = this.accounting.runs.get(r.id);
+        if (row?.report.state === 'live') {
+          row.report.fuel = r.run.fuel;
+        }
+      }
+      for (const item of s.queue) {
+        if (!('run' in item)) {
+          count(item);
+        }
+      }
+    }
+    for (const input of this.inputs) {
+      if (input.action.k === 'delivery') {
+        count(input.action.delivery);
+      }
+      if (input.action.k === 'broadcast') {
+        for (const r of input.action.recipients ?? []) {
+          count(r.delivery);
+        }
+      }
+    }
+    reports.push(...accountingTail(this.accounting, queued));
+  }
 
   /** TS tooling only, outside the embedding interface and Trace parity. */
   debug(): DebugController {
@@ -797,6 +923,7 @@ export class Group {
         revoked: s.revoked,
         disabled: s.disabled,
       })),
+      accounting: this.accounting,
       inputs: this.inputs.map(input => ({
         action: input.action,
         urgent: input.urgent,
@@ -1074,7 +1201,9 @@ export class Group {
     }
     const refs = group.snapshotReferences();
     const state = restoreGraph(saved.graph, refs, mismatch) as SavedState;
+    validateSavedAccounting(state);
     const result: RestoreResult = {
+      reports: [],
       variablesOnly: mismatch,
       pending: [],
       disposed,
@@ -1082,6 +1211,14 @@ export class Group {
       droppedMessages: [],
       abandonedCalls: [],
     };
+    group.accounting = state.accounting;
+    group.drainReports = result.reports;
+    for (const row of group.accounting.runs.values()) {
+      delete row.reportedFuel;
+    }
+    for (const row of group.accounting.roots.values()) {
+      delete row.reported;
+    }
     group.discardedDecisions = state.discardedDecisions;
     group.deliveries = state.deliveries;
     group.broadcasts = state.broadcasts;
@@ -1110,11 +1247,13 @@ export class Group {
             .flatMap(d => (d.id ? [d.id] : [])),
         );
         for (const running of savedRuns(runtime)) {
+          group.accountEnd(running, 'discarded', 'variables-only restore');
           group.accumulateRunCosts(script, running.run);
           group.discardDecision(running.delivery, script.name, running.id);
         }
         for (const item of runtime.queue) {
           if (!('run' in item)) {
+            group.accountDrop(item);
             group.discardDecision(item, script.name);
           }
         }
@@ -1162,6 +1301,7 @@ export class Group {
             action.state?.name ??
             (typeof action.to === 'string' ? action.to : action.to.owner) ??
             '';
+          group.accountDrop(delivery);
           group.discardDecision(delivery, name);
         } else if (input.action.k === 'broadcast' && input.action.decision) {
           input.action.decision.discarded = true;
@@ -1193,6 +1333,7 @@ export class Group {
       );
       group.restored = true;
     }
+    group.flushAccounting(result.reports);
     emitting = true;
     o.trace?.(restoreLine(result));
     return { group, result };
@@ -1722,6 +1863,20 @@ export class Group {
         ],
       ),
     );
+    for (const r of runs) {
+      this.accountEnd(
+        r,
+        'discarded',
+        reason === 'reload'
+          ? this.discardReason === 'library replacement'
+            ? 'library replacement'
+            : 'reload'
+          : 'stop',
+      );
+    }
+    for (const d of messages) {
+      this.accountDrop(d);
+    }
     this.drainReports.push({
       kind: 'stop',
       script: s.name,
@@ -1747,6 +1902,7 @@ export class Group {
   }
 
   private acceptDelivery(s: ScriptState, delivery: Delivery) {
+    this.ancestry(delivery);
     s.queue.push(delivery);
     if (s.stopped) {
       this.dropStoppedMailbox(s);
@@ -2335,6 +2491,7 @@ export class Group {
         delete s.stopReason;
       }
     } finally {
+      this.flushAccounting(reports);
       this.drainReports = previous;
     }
     return reports;
@@ -2429,7 +2586,13 @@ export class Group {
           s.units.slice(1).map(u => u.source),
         ),
       }));
-    const reports = this.replaceScripts(replacements);
+    this.discardReason = 'library replacement';
+    let reports: Report[];
+    try {
+      reports = this.replaceScripts(replacements);
+    } finally {
+      this.discardReason = 'stop';
+    }
     if (this.effectStateUnknown) {
       return reports;
     }
@@ -2574,6 +2737,7 @@ export class Group {
         true,
       );
     }
+    this.ancestry(delivery);
     receiver.queue.push(delivery);
   }
 
@@ -2848,6 +3012,7 @@ export class Group {
     if (state) {
       state.incoming++;
     }
+    this.ancestry(delivery);
     this.queueInput({
       line: this.deliveryLine(record, delivery.id, toText, m, fn),
       action: { k: 'delivery', to, state: state ?? null, delivery },
@@ -2997,6 +3162,9 @@ export class Group {
           },
         };
       });
+    for (const recipient of action.recipients) {
+      this.ancestry(recipient.delivery);
+    }
     return recordLine(
       record,
       [id],
@@ -3508,6 +3676,7 @@ export class Group {
         ],
       ),
     );
+    this.flushAccounting(reports);
     return {
       state,
       ...(next === null ? {} : { nextDeadline: next }),
@@ -3596,6 +3765,7 @@ export class Group {
         run,
         resuming: false,
       };
+      this.accountStart(s, head);
       run.id = head.id;
       run.host = this.hostFor(s, run);
       if (delivery.during) {
@@ -4249,6 +4419,7 @@ export class Group {
       ...(delivery.id ? { delivery: delivery.id } : {}),
       ...(error ? { error } : {}),
     });
+    this.accountEnd(running, 'terminal');
     reports.push({
       kind: 'run end',
       script: s.name,
@@ -4307,6 +4478,10 @@ export class Group {
         s.queue.push({
           id: null,
           from: running.id,
+          ancestry: {
+            rootDelivery: this.ancestry(delivery).rootDelivery,
+            parentRun: running.id,
+          },
           at: s.owner,
           target: s.owner,
           message: 'error',
@@ -4656,6 +4831,7 @@ type SavedScriptState = Pick<
   variables: Value[];
 };
 type SavedState = {
+  accounting: AccountingState;
   broadcasts: number;
   deliveries: number;
   discardedDecisions: Decision[];
@@ -4665,6 +4841,62 @@ type SavedState = {
   scripts: SavedScriptState[];
   timers: Timer[];
   timerSeq: number;
+};
+const invalidAccounting = (): never => {
+  throw new HostError('invalid save', 'Invalid saved Run accounting');
+};
+const validateSavedAccounting = (state: SavedState) => {
+  const a = state.accounting;
+
+  if (
+    !a ||
+    Object.prototype.toString.call(a.runs) !== '[object Map]' ||
+    Object.prototype.toString.call(a.roots) !== '[object Map]' ||
+    !Number.isSafeInteger(a.next) ||
+    a.next < 0
+  ) {
+    invalidAccounting();
+  }
+  const orders = new Set<number>();
+  let count = 0;
+  for (const s of state.scripts) {
+    for (const r of savedRuns(s)) {
+      count++;
+      const row = a.runs.get(r.id);
+      if (
+        !row ||
+        row.report.run !== r.id ||
+        row.report.script !== s.name ||
+        row.report.state !== 'live' ||
+        row.report.fuel !== r.run.fuel ||
+        !a.roots.has(row.report.rootDelivery) ||
+        !Number.isSafeInteger(row.order) ||
+        row.order <= 0 ||
+        row.order > a.next ||
+        orders.has(row.order)
+      ) {
+        invalidAccounting();
+      }
+      orders.add(row!.order);
+    }
+  }
+  if (count !== a.runs.size) {
+    invalidAccounting();
+  }
+  for (const [id, row] of a.roots) {
+    const n = Number(id.slice(1));
+    if (
+      id !== `d${n}` ||
+      !Number.isSafeInteger(n) ||
+      n <= 0 ||
+      n > state.deliveries ||
+      !row ||
+      !Number.isSafeInteger(row.discarded) ||
+      row.discarded < 0
+    ) {
+      invalidAccounting();
+    }
+  }
 };
 const compareNames = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const compareCallIds = (a: string, b: string) => {

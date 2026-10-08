@@ -110,13 +110,13 @@ end go`})
 			}
 			if test.code == "host error" {
 				found := false
-				for _, report := range result.Reports {
+				for _, report := range operationalReports(result.Reports) {
 					if failure, ok := report.(*CallFailed); ok {
 						found = failure.Call == "" && failure.Operation == (OperationRef{Capability: "light", Operation: "label"}) && failure.Detail != ""
 					}
 				}
 				if !found {
-					t.Fatal("missing property failure detail", result.Reports)
+					t.Fatal("missing property failure detail", operationalReports(result.Reports))
 				}
 			}
 		})
