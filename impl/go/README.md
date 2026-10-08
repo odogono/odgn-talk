@@ -601,8 +601,9 @@ and any unsuccessful rollback, stop every Script as `effect state unknown`.
 Rollback is attempted once, and Load and Reload cannot revive this Group.
 Successful commit finalizes before observing controls queued by its hook.
 
-The runner passes all 26 effect cases unchanged, including Save refusal at live
-participant boundaries, fatal Reload and Library replacement. A refused Save
+The runner passes all 30 effect cases unchanged, including Save refusal at live
+participant boundaries and the four Unblessed `effect-coordinator-*` cases for
+ADR 0069, fatal Reload and Library replacement. A refused Save
 performs no cleanup, drains no inputs and changes no execution state or counters.
 Native tests also pin atomic replacement when a later Script's rollback fails.
 The maintainer approved the first blessings of the original 22 effect cases on
@@ -1072,7 +1073,7 @@ Counters cases are protected in ordinary and save/restore replay.
 it starts no Run and charges no Fuel. Its corrected input was approved on
 2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)); see the [Spec derivation](../../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 Tests separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
-limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
+limit/cancellation/Text Pattern cases, all 30 Segment-bound effect cases, and
 18 step-5 save/restore, Extend and replacement cases, and all twelve Session
 Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map

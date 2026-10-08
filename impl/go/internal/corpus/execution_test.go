@@ -164,8 +164,8 @@ func TestSegmentEffectStepFourAcceptance(t *testing.T) {
 			}
 		})
 	}
-	if count != 26 {
-		t.Fatalf("required effect set: %d cases, want 26", count)
+	if count != 30 {
+		t.Fatalf("required effect set: %d cases, want 30", count)
 	}
 }
 
