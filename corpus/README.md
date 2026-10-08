@@ -79,6 +79,13 @@ Before pushing, run `bun run corpus:check` and `go -C impl/go run ./cmd/corpus -
 | [`disassembly/`](disassembly/) | Disassembly Cases: the lowering of expressions, Containers, Destructuring, control flow and `try`, calls and Lambdas, messages and waiting, and `tell` blocks, which between them emit every instruction ([chapter 8](../spec/08-the-abstract-machine-and-the-cost-model.md#the-lowering)) |
 | [`sessions/`](sessions/) | Session Transcripts: Entries, echoes and `say`, implicit Script Variables, declarations and redefinitions, rejected Entries, background lines, a real Clock's `@` readings, deadline Pumps and `read` answers, mock Operations with their Stubs, answers and failures, a virtual Clock, redefinition while a Run is suspended, `:cancel`, `:runs`, `:mailbox`, `:vars`, `:limits`, `:save` and `:restore` with an adopted call, user Libraries and `:export`, `:trace`/`:untrace` rows and `:fuel` measurements (`observation`, Unblessed until its first blessing is reviewed for #438), `:describe` and `:apropos` (`describe` and `apropos`, awaiting first-blessing review for #437), `:inspect` and `%` object/Function crossing replay (`object-inspection`, [review pending](../docs/reviews/object-inspection/README.md) for #439), and refused Session Commands ([chapter 12](../spec/12-sessions-and-tooling.md#session-transcripts)) |
 
+The `cancellation/refused-host-crossings` case pins property and Capability
+refusals after their crossing records, including repeated getters after a
+between-Pump restore and cancellation/refusal ordering (#492). Both Cores replay
+it in both modes; its first blessing awaits human review. The two parent-cycle
+refusals in `sessions/object-inspection/case.trace` use the same corrected order;
+that case's first blessing remains pending for #485.
+
 ## Seed blessing
 
 The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).

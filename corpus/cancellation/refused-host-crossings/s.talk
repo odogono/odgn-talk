@@ -1,0 +1,5 @@
+on go
+  put the value of item into x
+  ask api to check
+  return [x, it]
+end go

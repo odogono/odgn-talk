@@ -25,6 +25,16 @@ Two cross-Core corrections needed by these recordings are tracked separately: Go
 
 Known adjacent limitations are tracked in the affected guides: Go independent Trace source-byte preservation ([#456](https://github.com/odogono/odgn-talk/issues/456)) and TS validation of queued parent changes at drain ([#457](https://github.com/odogono/odgn-talk/issues/457)). The proposed case uses composed source text and drains its successful parent changes before Save. These limitations are not silently represented as approved coverage.
 
+## Trace ordering correction for #492
+
+On 2026-10-08, both parent-cycle refusals in the proposed `case.trace` moved
+from before the failing getter's `prop` record to immediately after it, as
+[chapter 11](../../../spec/11-the-trace-and-conformance.md#what-is-recorded-and-when)
+requires. Both Cores reproduce this order from the Transcript and independently
+replay the corrected Trace in both modes. The Transcript output, crossing
+results and costs are unchanged. This correction is part of the still-pending
+first-blessing review in #485; execution agreement does not approve either file.
+
 ## Verification
 
 - After rebasing onto #451/#453, the full Go suite and all 5,269 TS/tooling tests pass; the Go corpus passing gate includes the new case.

@@ -10,7 +10,7 @@ import (
 type objectRef struct{ kind, id string }
 type objectReplay map[objectRef]*talk.Object
 
-func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *replayValues) (objectReplay, error) {
+func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *replayValues, crossing func(string)) (objectReplay, error) {
 	kinds := map[string]*talk.ObjectKind{}
 	rows, _ := setup["objectKinds"].([]any)
 	for _, raw := range rows {
@@ -32,9 +32,13 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *repla
 				}
 			}
 			name := p["name"].(string)
-			prop := talk.Prop{Name: name, Shape: shape, Get: func(o *talk.Object) (talk.Value, error) { return o.Native().(map[string]talk.Value)[name], nil }}
+			prop := talk.Prop{Name: name, Shape: shape, Get: func(o *talk.Object) (talk.Value, error) {
+				crossing(o.Value().String() + ":" + name + ":get")
+				return o.Native().(map[string]talk.Value)[name], nil
+			}}
 			if p["readOnly"] != true {
 				prop.Set = func(o *talk.Object, v talk.Value) error {
+					crossing(o.Value().String() + ":" + name + ":set")
 					values.receive(v)
 					o.Native().(map[string]talk.Value)[name] = v
 					return nil

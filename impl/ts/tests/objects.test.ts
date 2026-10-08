@@ -15,6 +15,36 @@ import {
 const room = defineObjectKind<null>({ name: 'room', props: {} });
 const now = parseInstant('2026-09-30T09:00:00Z');
 
+test('a getter refusal follows its crossing record', () => {
+  const lines: string[] = [];
+  const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+  const kind = defineObjectKind({
+    name: 'item',
+    props: {
+      value: {
+        get: object => {
+          expect(() => group.setParent(object, object)).toThrow(HostError);
+          return text('ok');
+        },
+      },
+    },
+  });
+  const object = group.object(kind, 'a', null);
+  const script = group.load({
+    name: 's',
+    objects: { item: object },
+    source: 'on go\nreturn the value of item\nend go',
+  });
+  script.deliver({ name: 'go' });
+  group.pump(now);
+  const at = lines.findIndex(line => line.startsWith('prop '));
+  expect(lines.slice(at, at + 3)).toEqual([
+    'prop s/r1 object=<object item "a"> name=value op=get value="ok"',
+    '> set-parent object=<object item "a"> parent=<object item "a">',
+    'refused code="parent cycle"',
+  ]);
+});
+
 describe('Host Objects', () => {
   test('a handle is made once per kind and id, and is equal only to itself', () => {
     const group = newGroup({ name: 'g' });

@@ -28,9 +28,9 @@ prop session/r4 object=<object InspectRoot "root"> name=callback op=get value={z
 call session/r4.c1 op=console.write args=["read {name: " & quote & "callback" & quote & ", value: {z: [<function session:plus>], a: 7}}"]
 prop session/r4 object=<object InspectRoot "root"> name=child op=get value=<object InspectChild "dynamic">
 call session/r4.c2 op=console.write args=["read {name: " & quote & "child" & quote & ", value: <object InspectChild " & quote & "dynamic" & quote & ">}"]
+prop session/r4 object=<object InspectRoot "root"> name=error op=get error={code: "getter refused", message: "private detail", detail: "safe"}
 > set-parent object=<object InspectRoot "root"> parent=<object InspectRoot "root">
 refused code="parent cycle"
-prop session/r4 object=<object InspectRoot "root"> name=error op=get error={code: "getter refused", message: "private detail", detail: "safe"}
 raise session/r4 code="getter refused" at=session+6:9 pos=4:37
 call session/r4.c3 op=console.write args=["read {name: " & quote & "error" & quote & ", error: {code: " & quote & "getter refused" & quote & ", detail: " & quote & "safe" & quote & ", capability: " & quote & "InspectRoot" & quote & ", operation: " & quote & "error" & quote & "}}"]
 prop session/r4 object=<object InspectRoot "root"> name=shape op=get error={}
@@ -90,9 +90,9 @@ raise session/r8 code="host error" at=session+8:9 pos=4:37
 call session/r8.c1 op=console.write args=["read {name: " & quote & "callback" & quote & ", error: {code: " & quote & "host error" & quote & ", capability: " & quote & "InspectRoot" & quote & ", operation: " & quote & "callback" & quote & "}}"]
 prop session/r8 object=<object InspectRoot "root"> name=child op=get value=<object InspectChild "dynamic">
 call session/r8.c2 op=console.write args=["read {name: " & quote & "child" & quote & ", value: <object InspectChild " & quote & "dynamic" & quote & ">}"]
+prop session/r8 object=<object InspectRoot "root"> name=error op=get error={code: "getter refused", message: "private detail", detail: "safe"}
 > set-parent object=<object InspectRoot "root"> parent=<object InspectRoot "root">
 refused code="parent cycle"
-prop session/r8 object=<object InspectRoot "root"> name=error op=get error={code: "getter refused", message: "private detail", detail: "safe"}
 raise session/r8 code="getter refused" at=session+8:9 pos=4:37
 call session/r8.c3 op=console.write args=["read {name: " & quote & "error" & quote & ", error: {code: " & quote & "getter refused" & quote & ", detail: " & quote & "safe" & quote & ", capability: " & quote & "InspectRoot" & quote & ", operation: " & quote & "error" & quote & "}}"]
 prop session/r8 object=<object InspectRoot "root"> name=shape op=get error={}

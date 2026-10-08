@@ -58,8 +58,8 @@ func (d *replayDelivery) cancelAndWait(ready <-chan struct{}) error {
 // Controls recorded inside a Pump are issued at their recorded Host crossing.
 type crossingReplay struct {
 	lines       *traceLines
-	controls    map[string][][]Record
-	apply       func(Record) error
+	inputs      map[string][][]int
+	applyInput  func(int) error
 	err         error
 	hidden      bool
 	hiddenLines []string
@@ -67,6 +67,31 @@ type crossingReplay struct {
 	adopted     map[string]bool
 	saveIDs     map[string]string
 	visibleSave int
+}
+
+// Replay controls and refusals while the corresponding Host function is active.
+func (r *crossingReplay) crossing(key string) {
+	queue := r.inputs[key]
+	if len(queue) == 0 {
+		return
+	}
+	r.inputs[key] = queue[1:]
+	for _, index := range queue[0] {
+		if err := r.applyInput(index); err != nil {
+			r.err = err
+		}
+	}
+}
+
+func crossingKey(r Record) string {
+	if r.Name == "call" {
+		return r.IDs[0]
+	}
+	fields := map[string]string{}
+	for _, f := range r.Fields {
+		fields[f.Key] = f.Raw
+	}
+	return fields["object"] + ":" + fields["name"] + ":" + fields["op"]
 }
 
 func (r *crossingReplay) Record(line string) {
@@ -101,22 +126,6 @@ func (r *crossingReplay) Record(line string) {
 		}
 	}
 	r.lines.Record(line)
-	parts := strings.SplitN(line, " ", 3)
-	if len(parts) < 2 || parts[0] != "call" && parts[0] != "prop" {
-		return
-	}
-	key := parts[0] + " " + parts[1]
-	queue := r.controls[key]
-	if len(queue) == 0 {
-		return
-	}
-	controls := queue[0]
-	r.controls[key] = queue[1:]
-	for _, control := range controls {
-		if err := r.apply(control); err != nil {
-			r.err = err
-		}
-	}
 }
 
 type executionBackend struct{}
@@ -280,10 +289,10 @@ type executionReplay struct {
 
 func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSource func(Setup) (string, error)) (*executionReplay, error) {
 	x := &executionReplay{records: records, roundTrip: roundTrip, readSource: readSource, inside: map[int]bool{}, deliveries: map[string]*replayDelivery{}, saves: map[string][]byte{}}
-	crossings := &crossingReplay{lines: &x.lines, controls: map[string][][]Record{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
+	crossings := &crossingReplay{lines: &x.lines, inputs: map[string][][]int{}, roundTrip: roundTrip, adopted: map[string]bool{}, saveIDs: map[string]string{}}
 	inPump, crossing := false, ""
 	for i, r := range records {
-		if r.Input && r.Name == "pump" {
+		if r.Input && r.Name == "pump" && !(i+1 < len(records) && records[i+1].Name == "refused") {
 			inPump = true
 			crossing = ""
 		}
@@ -291,18 +300,27 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 			inPump = false
 		}
 		if inPump && !r.Input && (r.Name == "call" || r.Name == "prop") && len(r.IDs) > 0 {
-			crossing = r.Name + " " + r.IDs[0]
-			crossings.controls[crossing] = append(crossings.controls[crossing], nil)
+			crossing = crossingKey(r)
+			crossings.inputs[crossing] = append(crossings.inputs[crossing], nil)
 		}
 		if items, ok := setup["sessionObjects"].([]session.Item); ok && len(items) > 0 {
+			continue
+		}
+		if inPump && r.Input && i+1 < len(records) && records[i+1].Name == "refused" {
+			if crossing == "" {
+				return nil, fmt.Errorf("refusal inside Pump has no Host crossing")
+			}
+			queue := crossings.inputs[crossing]
+			queue[len(queue)-1] = append(queue[len(queue)-1], i)
+			x.inside[i] = true
 			continue
 		}
 		if inPump && r.Input && (r.Name == "stop" || r.Name == "cancel-run" || r.Name == "rewind-run") {
 			if crossing == "" {
 				return nil, fmt.Errorf("%s inside Pump has no Host crossing", r.Name)
 			}
-			queue := crossings.controls[crossing]
-			queue[len(queue)-1] = append(queue[len(queue)-1], r)
+			queue := crossings.inputs[crossing]
+			queue[len(queue)-1] = append(queue[len(queue)-1], i)
 			x.inside[i] = true
 		}
 	}
@@ -336,7 +354,8 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		default:
 		}
 	}})
-	crossings.apply = x.control
+	crossings.applyInput = x.apply
+	operations.crossing = crossings.crossing
 	var objects objectReplay
 	if items, ok := setup["sessionObjects"].([]session.Item); ok && len(items) > 0 {
 		x.sessionObjects = session.NewObjectReplay(core, g, items)
@@ -347,7 +366,7 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		}
 		operations.values.objects = objects
 	} else {
-		objects, e = setupObjects(core, g, setup, operations.values)
+		objects, e = setupObjects(core, g, setup, operations.values, crossings.crossing)
 	}
 	if e != nil {
 		return nil, e
@@ -965,7 +984,7 @@ func (x *executionReplay) apply(i int) error {
 
 // Refused admissions are traced immediately; accepted inputs are traced only
 // when the Pump drains them. Queue the accepted inputs before retrying mailbox
-// refusals, while keeping their order and emitting the original Trace order.
+// inputs, while keeping their order and emitting the original Trace order.
 func replayInputOrder(records []Record) []int {
 	var order, refused []int
 	for i, r := range records {

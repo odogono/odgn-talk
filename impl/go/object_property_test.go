@@ -7,6 +7,36 @@ import (
 	"time"
 )
 
+func TestGetterRefusalFollowsCrossing(t *testing.T) {
+	core := New()
+	var g *Group
+	kind, err := core.DefineObjectKind(ObjectKindDef{Name: "item", Props: []Prop{{Name: "value", Shape: TextShape, Get: func(o *Object) (Value, error) {
+		hostCode(t, g.SetParent(o, o), ParentCycle)
+		return mustPublicText("ok"), nil
+	}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace lines
+	g = core.NewGroup(GroupOptions{Trace: &trace})
+	o, err := g.Object(kind, "a", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := g.Load(LoadOptions{Name: "s", Objects: map[string]*Object{"item": o}, Source: "on go\nreturn the value of item\nend go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Deliver(Message{Name: "go"})
+	if _, err := g.Pump(time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	want := "prop s/r1 object=<object item \"a\"> name=value op=get value=\"ok\"\n> set-parent object=<object item \"a\"> parent=<object item \"a\">\nrefused code=\"parent cycle\""
+	if !strings.Contains(strings.Join(trace, "\n"), want) {
+		t.Fatal(trace)
+	}
+}
+
 func TestObjectPropertiesReadWriteAndDispose(t *testing.T) {
 	core := New()
 	native := mustPublicText("off")
