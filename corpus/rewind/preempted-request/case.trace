@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # preempted-request: a Rewind queued between Pumps lands at the next drain,
 # on a Run a Fuel Slice preempted in its first Segment (ADR 0068). It has no
 # stretch to end, so only the input line shows it, and that Pump returns

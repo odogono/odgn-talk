@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # parked-queued: a Run a `, queued` clause parked right after dispatch is
 # still in its first Segment, so it can be rewound (ADR 0068). d2's Run parks
 # behind s/r1, which waits on `later`; the Rewind puts d2 back at the head of

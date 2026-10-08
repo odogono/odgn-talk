@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # not-rewindable: a Rewind that lands on a Run past its first Segment, or on
 # a Run that has ended, does nothing, and the Trace notes it (ADR 0068). The
 # Run resumed from `later`, so its second Segment is running when the Rewind

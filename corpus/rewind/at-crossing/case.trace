@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # at-crossing: a Rewind landing at a Host crossing in a Run's first Segment
 # (ADR 0068). The Run's Segment rolls back, so n is 0 again; its stretch ends
 # `rewind`, and the Pump returns `rewound` with d1 back at the head of the

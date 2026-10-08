@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # message-kinds: a rewound Run's message goes back as it left the mailbox,
 # whatever kind it is (ADR 0068). Each Rewind lands at board's `ping`.
 # - A climbed message: d1 passed from knight to board; it goes back to

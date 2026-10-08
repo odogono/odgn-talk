@@ -1,4 +1,3 @@
-# Unblessed: Rewind (#433); first blessing awaits human review.
 # effects: what a Rewind undoes and what it leaves done (ADR 0068). It lands
 # at `open`, with a scope open and the Segment-bound participant enlisted:
 # the scope is abandoned with its automatic `close`, and the participant rolls
