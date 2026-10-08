@@ -137,6 +137,7 @@ const content =
       name,
       kind: group === 'constants' ? 'constant' : 'function',
       ...(group === 'constants' ? {} : { contract: contract(call) }),
+      call,
       gives,
     })),
     null,

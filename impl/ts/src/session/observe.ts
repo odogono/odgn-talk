@@ -48,7 +48,7 @@ const fuelRow = (m: Measurement) => {
 };
 
 // A full Selector, as a static `send` could name a message.
-const selectorText = (s: string) =>
+export const selectorText = (s: string) =>
   validComputedMessageName(s, s.includes(':') ? s.split(':').length - 1 : 0);
 
 export class Observation {

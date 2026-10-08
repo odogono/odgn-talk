@@ -6,3 +6,8 @@ package docs
 // code, given a northtalk.Value, and false for any other value. A Lambda's is
 // empty, and a stale Function Value keeps its code's documentation.
 var Function func(value any) (string, bool)
+
+// FunctionHead gives a Function Value's name, empty for a Lambda, and the
+// argument counts it accepts, as functionName and functionArity read them.
+// False means the value is not a Function Value or its code is no longer held.
+var FunctionHead func(value any) (name string, required, total int, ok bool)

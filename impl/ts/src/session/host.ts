@@ -35,9 +35,15 @@ import { defaultLimits } from '../machine';
 import { compileLibrary, type Library } from '../library';
 import { textForm, waitNs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
-import { declarationDocs, functionDoc, leadingDoc } from '../documentation';
-import { builtins } from '../generated/syntax';
-import { stdlibSources } from '../generated/stdlib';
+import { functionDoc, leadingDoc } from '../documentation';
+import {
+  apropos,
+  builtinDeclared,
+  describe as describeName,
+  libraryDeclared,
+  sessionDeclared,
+  type Names,
+} from './describe';
 import type { SemanticElement } from '../semantic';
 import { localeCapability, type LocaleImpl } from '../locale-capability';
 import {
@@ -424,40 +430,8 @@ export class SessionHost {
    * declaration. It executes nothing.
    */
   documentation(name: string): Doc[] {
-    const clauses: Doc[] = [];
-    for (const d of this.declarations) {
-      if (d.kind === 'use') {
-        const imported = d.uses!.find(u => u.local === name);
-        if (imported) {
-          return this.libraryDocumentation(d.library!, imported.name);
-        }
-      } else if (d.names[0] === name) {
-        const doc = sourceDoc(d.source);
-        if (d.kind !== 'handler') {
-          return [{ origin: 'session', declaration: d.kind, clause: 0, doc }];
-        }
-        clauses.push({
-          origin: 'session',
-          declaration: d.kind,
-          clause: clauses.length + 1,
-          doc,
-        });
-      }
-    }
-    if (clauses.length) {
-      return clauses;
-    }
-    const builtin = builtins.find(b => b.name === name);
-    return builtin
-      ? [
-          {
-            origin: 'builtin',
-            declaration: 'builtin',
-            clause: 0,
-            doc: builtin.gives,
-          },
-        ]
-      : [];
+    const found = sessionDeclared(this.names, name);
+    return docsOf(found.length ? found : builtinDeclared(name));
   }
 
   /**
@@ -465,28 +439,24 @@ export class SessionHost {
    * source, whether or not it is imported.
    */
   libraryDocumentation(library: string, name: string): Doc[] {
-    const source =
-      this.libraries.get(library)?.library.source ?? stdlibSources[library];
-    const tree = source === undefined ? null : checkSource(source).tree;
-    if (!tree) {
-      return [];
-    }
-    const out: Doc[] = [];
-    viewSource(tree.root).forEach((decl, at) => {
-      if (decl.k === 'use' || decl.k === 'variable' || decl.private) {
-        return;
-      }
-      if ((decl.k === 'constant' ? decl.name.text : decl.name) !== name) {
-        return;
-      }
-      out.push({
-        origin: library,
-        declaration: decl.k,
-        clause: decl.k === 'handler' ? out.length + 1 : 0,
-        doc: tree.docs?.[at] ?? '',
-      });
-    });
-    return out;
+    return docsOf(libraryDeclared(this.names, library, name));
+  }
+
+  // What `:describe` and `:apropos` read. Only a Script Variable's value
+  // reads the Group, as the explicit vars Host Input.
+  private get names(): Names {
+    return {
+      declarations: this.declarations,
+      has: name => this.has(name),
+      refuse,
+      libraries: new Map(
+        [...this.libraries].map(([name, l]) => [name, l.library.source]),
+      ),
+      variable: name =>
+        this.group!.inspect()
+          .scripts.find(s => s.name === NAME)!
+          .vars.find(([n]) => n === name)?.[1],
+    };
   }
 
   /**
@@ -819,6 +789,13 @@ export class SessionHost {
         return this.observation.trace(name, rest) ?? refuse('bad arguments');
       case 'fuel':
         return this.fuel(rest);
+      case 'describe':
+      case 'apropos':
+        this.start();
+        return (name === 'describe' ? describeName : apropos)(
+          this.names,
+          rest.trim(),
+        );
       case 'runs':
       case 'mailbox':
       case 'vars':
@@ -1797,11 +1774,13 @@ export type Doc = {
   origin: string;
 };
 
-// The documentation of the one declaration in a session source.
-const sourceDoc = (source: string): string => {
-  const tree = parseSource(source).tree;
-  return tree ? ([...declarationDocs(tree).values()][0] ?? '') : '';
-};
+const docsOf = (found: readonly Doc[]): Doc[] =>
+  found.map(({ origin, declaration, clause, doc }) => ({
+    origin,
+    declaration,
+    clause,
+    doc,
+  }));
 
 // A leading doc block that documents nothing is refused: one followed by a
 // statement, an expression or an Import, or by no Entry at all.

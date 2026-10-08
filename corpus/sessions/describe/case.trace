@@ -1,0 +1,60 @@
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="script variable x" & newline & "on entry1" & newline & "--| A blank line detaches this block." & newline & newline & "put 1 into x" & newline & "end entry1" & newline identity=f2286e5a05a201527020a7c76a289fdfc389ed6adc2ce0cc489bd45de52188c0
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session x=1
+> extend session source="--| Doubles." & newline & "--|   Twice, or `by` times." & newline & "function double n, by = 2 -- not documentation" & newline & "  return n * by" & newline & "end double" identity=3ab9fbdaf5e370c1e9ed2604a98b114fe4b334248a85edf6958d8e64d5cc0e95
+> save s1
+> reload session carry=yes source="script variable x" & newline & "function double n" & newline & "  return n + n" & newline & "end double" & newline identity=1153421c6c66d64a0a5565829ddb25c528f9f23d3fb4ceeddf52afdbf6656f0a
+stopped session reason="reload"
+> restore from=s1 fingerprint=05c4d54e3c3d2862709a5e2ddf7cdf93d940d80de2f8916520c64ee3426e497f mode=full
+> extend session source="--| Count = items." & newline & "script variable n = 1" identity=6b565c3cac49041543d0671edf1d3c29e3ffc7550cd26dc18c9de16a493baca1
+> vars
+vars session x=1 n=1
+> extend session source="on entry2" & newline & "put  2 into n" & newline & "end entry2" & newline identity=b580f5b79e9474e27b198f2c6825ed9d9a1e0a4ba4a0b4622ca283cc0e2824d3
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=10 alloc=0 state=32 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session x=1 n=2
+> extend session source="on entry3" & newline & "put  3 into n" & newline & "end entry3" & newline identity=b60ab705e79b790abc3fc8ec6d838915ced418ba8fd466dc837f2f86f7028b4b
+> request d3 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=10 alloc=0 state=32 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session x=1 n=3
+> extend session source="--| Greets." & newline & "on hello" & newline & "  say " & quote & "hi" & quote & newline & "end hello" identity=6424a948f1b1de0c0bcd0b0e8ccb4a25c8b79abb47402b35d303caff221b4fd7
+> extend session source="--| Moves when `a` is positive." & newline & "on move a to b where a > 0 -- not documentation" & newline & "  say a + b" & newline & "end move" identity=e096a30598ca3fbd2b61bac52b76d3810d463184bd4a724aebbc417fbdcc303f
+> extend session source="--| Three, exactly." & newline & "constant three = 3" identity=336c9a9d0fc27f49b97d2cf35e71ab483fb16d753d6d38d532c8859af6931af4
+> extend session source="script variable m" & newline & "on entry4" & newline & "put {b: [1, 2], a: " & quote & "👍🏽!" & quote & ", c: <<0x0a>>} into m" & newline & "end entry4" & newline identity=2653adf8dafd120de3f9dd8ccc57d342aa43cb4f068ad6bd558a128fe40b05de
+> request d4 to=session message=entry4
+> pump clock=2026-09-30T10:00:00Z
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=30 alloc=278 state=229 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=30 alloc=278
+pumped state=idle fuel=30
+> vars
+vars session x=1 n=3 m={b: [1, 2], a: "👍🏽!", c: <<0x0A>>}
+> extend session source="script variable twice" & newline & "on entry5" & newline & "put given y: y * 2 into twice" & newline & "end entry5" & newline identity=1f3dfaadd42df6fb41b1f436a01f470b1897ee4f4a312393c4fbc3c61bc7f3b8
+> request d5 to=session message=entry5
+> pump clock=2026-09-30T10:00:00Z
+seg session/r5 start delivery=d5 handler=entry5 clause=1 fuel=13 alloc=32 state=261 end=return
+run session/r5 outcome=completed delivery=d5 handler=entry5 fuel=13 alloc=32
+pumped state=idle fuel=13
+> vars
+vars session x=1 n=3 m={b: [1, 2], a: "👍🏽!", c: <<0x0A>>} twice=<function session+10:3:5>
+> extend session source="script variable min" & newline & "on entry6" & newline & "put 0 into min" & newline & "end entry6" & newline identity=8d7399376e03717adb4c78ee969288713200c304088f608b6d3704b6ba6cd34d
+> request d6 to=session message=entry6
+> pump clock=2026-09-30T10:00:00Z
+seg session/r6 start delivery=d6 handler=entry6 clause=1 fuel=10 alloc=0 state=277 end=return
+run session/r6 outcome=completed delivery=d6 handler=entry6 fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session x=1 n=3 m={b: [1, 2], a: "👍🏽!", c: <<0x0A>>} twice=<function session+10:3:5> min=0

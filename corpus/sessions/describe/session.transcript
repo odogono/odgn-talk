@@ -1,0 +1,153 @@
+# `:describe` shows a declaration's signature, its `--|` Declaration
+# Documentation and passive value rows, executing nothing. Only a Script
+# Variable reads the Group, through one explicit `vars` Host Input.
+> :clock virtual 2026-09-30T10:00:00Z
+> --| Doubles.
+| put 1 into x
+! bad arguments
+> --| Doubles.
+| 2 + 2
+! bad arguments
+> --| Doubles.
+| use join from text
+! bad arguments
+> --| Doubles.
+! bad arguments
+> :export
+> --| A blank line detaches this block.
+|
+| put 1 into x
+> :describe x
+describe {target: {name: "x", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable x"}
+doc ""
+value {kind: "number", value: 1}
+> --| Doubles.
+| --|   Twice, or `by` times.
+| function double n, by = 2 -- not documentation
+|   return n * by
+| end double
+> :describe double
+describe {target: {name: "double", origin: "session"}, origin: "session", declaration: "function", signature: "function double n, by = 2"}
+doc "Doubles." & newline & "  Twice, or `by` times."
+arity 1..2
+> :save before
+saved before
+> function double n
+|   return n + n
+| end double
+> :describe double
+describe {target: {name: "double", origin: "session"}, origin: "session", declaration: "function", signature: "function double n"}
+doc ""
+arity 1..1
+> :restore before
+restored before
+> :describe double
+describe {target: {name: "double", origin: "session"}, origin: "session", declaration: "function", signature: "function double n, by = 2"}
+doc "Doubles." & newline & "  Twice, or `by` times."
+arity 1..2
+> --| Count = items.
+| script variable n = 1
+> :describe n
+describe {target: {name: "n", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable n"}
+doc "Count = items."
+value {kind: "number", value: 1}
+> --| Count, again = 2.
+| script variable n = 2
+> :describe n
+describe {target: {name: "n", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable n"}
+doc "Count, again = 2."
+value {kind: "number", value: 2}
+> script variable n = 3
+> :describe n
+describe {target: {name: "n", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable n"}
+doc ""
+value {kind: "number", value: 3}
+> --| Greets.
+| on hello
+|   say "hi"
+| end hello
+> :describe hello
+describe {target: {name: "hello", origin: "session"}, origin: "session", declaration: "handler", signature: "on hello", clause: 1}
+doc "Greets."
+> --| Moves when `a` is positive.
+| on move a to b where a > 0 -- not documentation
+|   say a + b
+| end move
+> :describe move:to:
+describe {target: {name: "move:to:", origin: "session"}, origin: "session", declaration: "handler", signature: "on move a to b where a > 0", clause: 1}
+doc "Moves when `a` is positive."
+> :describe {name: "move:to:", origin: "session"}
+describe {target: {name: "move:to:", origin: "session"}, origin: "session", declaration: "handler", signature: "on move a to b where a > 0", clause: 1}
+doc "Moves when `a` is positive."
+> :describe move a to b
+! bad arguments
+> --| Three, exactly.
+| constant three = 3
+> :describe three
+describe {target: {name: "three", origin: "session"}, origin: "session", declaration: "constant", signature: "constant three"}
+doc "Three, exactly."
+> put {b: [1, 2], a: "👍🏽!", c: <<0x0a>>} into m
+> :describe m
+describe {target: {name: "m", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable m"}
+doc ""
+value {kind: "map", value: {b: [1, 2], a: "👍🏽!", c: <<0x0A>>}}
+size 3
+field "a" = "👍🏽!"
+field "b" = [1, 2]
+field "c" = <<0x0A>>
+> put given y: y * 2 into twice
+> :describe twice
+describe {target: {name: "twice", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable twice"}
+doc ""
+value {kind: "function", value: <function session+10:3:5>}
+function {name: nothing, arity: 1..1, home: "session"}
+doc ""
+> :describe min
+describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(xs)"}
+doc "The least item of the list `xs` under `<`, the first of equal ones"
+> put 0 into min
+> :describe min
+describe {target: {name: "min", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable min"}
+doc ""
+value {kind: "number", value: 0}
+> :describe {name: "min", origin: "builtin"}
+describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(xs)"}
+doc "The least item of the list `xs` under `<`, the first of equal ones"
+> :describe {origin: "builtin", name: "max"}
+describe {target: {name: "max", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "max(xs)"}
+doc "The greatest item of the list `xs` under `<`, the first of equal ones"
+> :describe {name: "min", origin: "session", extra: "x"}
+! bad arguments
+> :describe {name: "min", origin: "elsewhere"}
+! bad arguments
+> :describe {name: 1, origin: "session"}
+! bad arguments
+> :describe {name: "nosuch", origin: "session"}
+! no such name
+> :describe nosuch
+! no such name
+> :describe entry1
+! no such name
+> :describe
+! bad arguments
+> :export
+script variable x
+--| Doubles.
+--|   Twice, or `by` times.
+function double n, by = 2 -- not documentation
+  return n * by
+end double
+script variable n = 3
+--| Greets.
+on hello
+  say "hi"
+end hello
+--| Moves when `a` is positive.
+on move a to b where a > 0 -- not documentation
+  say a + b
+end move
+--| Three, exactly.
+constant three = 3
+script variable m
+script variable twice
+script variable min

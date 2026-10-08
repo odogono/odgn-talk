@@ -798,4 +798,46 @@ describe('Session observation', () => {
     ]);
     expect(host.tick()).toEqual([]);
   });
+
+  // The Transcripts in corpus/sessions/describe and corpus/sessions/apropos hold
+  // the rows; these check what a Transcript's output can't show.
+  test('name lookup reads the Group only for a Script Variable', () => {
+    const trace: string[] = [];
+    const host = new SessionHost({
+      now: () => start,
+      trace: line => trace.push(line),
+    });
+    for (const entry of [
+      ':clock virtual 2026-09-30T10:00:00Z',
+      'put 1 into n',
+      'function f\nend f',
+      ':describe f',
+      ':describe min',
+      ':describe {library: "text", name: "join", origin: "library"}',
+      ':apropos',
+      ':apropos n',
+    ]) {
+      host.input(entry);
+    }
+    const snapshots = () => trace.filter(line => line === '> vars').length;
+    expect(snapshots()).toBe(0);
+    host.input(':describe n');
+    expect(snapshots()).toBe(1);
+  });
+
+  test('an empty apropos query lists every name', () => {
+    const host = new SessionHost({ now: () => start });
+    host.input('put 1 into max');
+    const all = host.input(':apropos');
+    expect(all.length).toBeGreaterThan(0);
+    expect(host.input(':apropos ""')).toEqual(all);
+    // A shadowed Built-in is listed after the binding that shadows it.
+    const at = all.indexOf(
+      'name {target: {name: "max", origin: "session"}, origin: "session", available: true, import: nothing}',
+    );
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(all[at + 2]).toBe(
+      'name {target: {name: "max", origin: "builtin"}, origin: "builtin", available: false, import: nothing}',
+    );
+  });
 });
