@@ -263,6 +263,7 @@ sessions/argument-labels
 sessions/basics
 sessions/cancel
 sessions/export-and-library
+sessions/extension-lambdas
 sessions/fenced-text
 sessions/inspection
 sessions/mocks

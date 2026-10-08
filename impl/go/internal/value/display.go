@@ -103,7 +103,13 @@ func (v Value) Display() string {
 	case Object:
 		return "<object " + v.Object.Kind + " " + DisplayText(v.Object.ID) + ">"
 	case Function:
-		s := "<function " + v.Function.Home + ":" + v.Function.Code
+		place := v.Function.Home + ":" + v.Function.Code
+		// An extension Lambda's Code is unit:line:column. Keep the unit in
+		// its identity, but display it without repeating the Home Script.
+		if strings.HasPrefix(v.Function.Code, v.Function.Home+"+") && strings.Count(v.Function.Code, ":") == 2 {
+			place = v.Function.Code
+		}
+		s := "<function " + place
 		if len(v.Function.Captures) > 0 {
 			s += " " + (Value{Kind: Map, Entries: v.Function.Captures}).Display()
 		}

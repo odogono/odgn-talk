@@ -649,8 +649,10 @@ Both factories use ordinary Grant trimming, Library needs and atomic charging.
 `write` and suspending `read` Operations. `write` forwards its Value to the Host,
 including Function Values nested in Containers, and leaves `it` unchanged.
 `say` calls `console.write` through the caller's Grant, including in Libraries.
-Function Value display names the Home Script, source unit where needed, and
-Lambda line/column; internal enclosing Handler names are not displayed.
+Function Value display uses a Lambda's source unit and line/column, including
+`<function session+N:L:C>` for a Session extension, with its captures when present.
+Library Lambdas retain the Home Script and Library name. Internal enclosing
+Handler names are not displayed.
 
 The Host starts `read` with a Call and answers it with text without the line
 break, including an empty line. Its fixed 2,147,483,647 ms timeout overrides
@@ -1038,7 +1040,7 @@ it starts no Run and charges no Fuel. Its corrected input was approved on
 2026-10-07 ([approval record](../../docs/reviews/milestone-one-blessings/README.md)); see the [Spec derivation](../../docs/reviews/delivery-cancellation/README.md#queued-request-cancellation-correction-364).
 Tests separately enforce the full 62-case step-1 set, eight reviewed step-2 cases, 32 step-4
 limit/cancellation/Text Pattern cases, all 26 Segment-bound effect cases, and
-18 step-5 save/restore, Extend and replacement cases, and all eleven Session
+18 step-5 save/restore, Extend and replacement cases, and all twelve Session
 Transcripts, so removing a required case cannot silently
 shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Four
@@ -1104,6 +1106,9 @@ case that no longer exists; an unlisted passing case is reported for addition.
 A plain run reports `SKIP` with a reason for unsupported facilities, and
 explicitly selecting an unsupported case fails.
 Session Transcripts reproduce their existing output and `case.trace` unchanged.
+The `sessions/extension-lambdas` regression covers extension Lambdas with and
+without captures, calls and display after Save/Restore; its first-blessing review
+is pending in the [review record](../../docs/reviews/extension-lambdas/README.md).
 The original nine first blessings were reviewed under [#131](https://github.com/odogono/odgn-talk/issues/131#issuecomment-5957819419);
 the later `fenced-text` Transcript was approved on 2026-10-05; see the
 [fenced-text approval record](../../docs/reviews/fenced-text-blessings/README.md).
