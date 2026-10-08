@@ -3878,10 +3878,14 @@ export class Run {
       record(map([]));
       return this.hostError(ctx, detail);
     }
-    const data =
-      Value.isValue(error.data) && error.data.kind === 'map'
-        ? error.data
-        : map([]);
+    if (
+      !Value.isValue(error.data) ||
+      (error.data.kind !== 'map' && error.data.kind !== 'nothing')
+    ) {
+      record(map([]));
+      return this.hostError(ctx, 'failure Data is neither a map nor Nothing');
+    }
+    const data = error.data.kind === 'map' ? error.data : map([]);
     const failed = map([
       ['code', text(error.code)],
       ...(error.message

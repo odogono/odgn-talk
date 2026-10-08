@@ -67,6 +67,7 @@ func TestOperationMalformedFailureData(t *testing.T) {
 			{"number", Int(123), true, false},
 			{"text", mustPublicText("private payload"), true, false},
 			{"list", List(Int(1)), true, false},
+			{"boolean", Bool(true), true, false},
 			{"foreign Object", foreign.Value(), true, false},
 			{"nested foreign Object", localeMap(t, KV("payload", foreign.Value())), true, false},
 			{"code collision", localeMap(t, KV("code", mustPublicText("replacement"))), true, false},

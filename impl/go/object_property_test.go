@@ -76,6 +76,12 @@ func TestObjectPropertyFailures(t *testing.T) {
 		{"catalogue error", "host error", func(*Object) (Value, error) { return Nothing, &ScriptError{Code: "object gone"} }},
 		{"invalid failure text", "host error", func(*Object) (Value, error) { return Nothing, &ScriptError{Code: "\xff"} }},
 		{"non-map failure Data", "host error", func(*Object) (Value, error) { return Nothing, &ScriptError{Code: "lamp broken", Data: Int(123)} }},
+		{"text failure Data", "host error", func(*Object) (Value, error) {
+			return Nothing, &ScriptError{Code: "lamp broken", Message: "Host secret", Data: mustPublicText("private payload")}
+		}},
+		{"list failure Data", "host error", func(*Object) (Value, error) {
+			return Nothing, &ScriptError{Code: "lamp broken", Data: List(Int(1))}
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			core := New()
@@ -109,13 +115,16 @@ end go`})
 				t.Fatal(trace)
 			}
 			if test.code == "host error" {
-				found := false
+				failures := 0
 				for _, report := range operationalReports(result.Reports) {
 					if failure, ok := report.(*CallFailed); ok {
-						found = failure.Call == "" && failure.Operation == (OperationRef{Capability: "light", Operation: "label"}) && failure.Detail != ""
+						failures++
+						if failure.Call != "" || failure.Script != "s" || failure.Operation != (OperationRef{Capability: "light", Operation: "label"}) || failure.Detail == "" {
+							t.Fatal(failure)
+						}
 					}
 				}
-				if !found {
+				if failures != 1 {
 					t.Fatal("missing property failure detail", operationalReports(result.Reports))
 				}
 			}

@@ -53,8 +53,9 @@ export declare class MailboxFull extends Error {}
 /**
  * An ordinary, catchable Error inside the Script (ADR 0017). A catalogue
  * code the Operation doesn't declare, a code outside a declared list, or a
- * data key that clashes with a reserved key (errors.toml) becomes
- * `host error` instead.
+ * data key that clashes with a reserved key (errors.toml), or data that is
+ * neither a map nor Nothing, becomes `host error` instead. The Host-side
+ * detail goes only in the `call failed` report.
  */
 export declare class ScriptError extends Error {
   constructor(code: string, message: string, data?: Value);

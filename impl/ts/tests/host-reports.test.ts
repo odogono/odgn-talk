@@ -5,6 +5,9 @@ import {
   defineObjectKind,
   newGroup,
   dec,
+  list,
+  map,
+  nothing,
   quantity,
   parseInstant,
   ScriptError,
@@ -21,6 +24,133 @@ const failures = (reports: Report[]) =>
 const kinds = (reports: Report[]) => reports.map(r => r.kind);
 
 describe('call failed reports', () => {
+  for (const completion of [
+    'immediate',
+    'fire',
+    'start',
+    'fail',
+    'get',
+    'set',
+  ]) {
+    for (const data of [
+      dec('123'),
+      text('private payload'),
+      list(dec('1')),
+      nothing,
+      map([]),
+      map([['reason', text('broken')]]),
+    ]) {
+      test(`${completion}: failure data ${data} is checked before raising the Host code`, () => {
+        const malformed = data.kind !== 'map' && data.kind !== 'nothing';
+        const failure = new ScriptError(
+          'lamp broken',
+          'private Host detail',
+          data,
+        );
+        const raise = () => {
+          throw failure;
+        };
+        let pending: Call<unknown> | undefined;
+        const operation =
+          completion === 'fire'
+            ? {
+                mode: 'fire-and-forget' as const,
+                cost: { fuel: 0 },
+                fire: raise,
+              }
+            : completion === 'start' || completion === 'fail'
+              ? {
+                  mode: 'suspending' as const,
+                  cost: { fuel: 0 },
+                  start: (call: Call<unknown>) => {
+                    if (completion === 'start') {
+                      raise();
+                    }
+                    pending = call;
+                  },
+                }
+              : { mode: 'immediate' as const, cost: { fuel: 0 }, do: raise };
+        const service = defineCapability('service', { fetch: operation });
+        const kind = defineObjectKind({
+          name: 'light',
+          props: { label: { get: raise, set: raise } },
+        });
+        const lines: string[] = [];
+        const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+        const object = group.object(kind, 'bulb', null);
+        const property = completion === 'get' || completion === 'set';
+        const statement =
+          completion === 'get'
+            ? 'return the label of bulb'
+            : completion === 'set'
+              ? 'set the label of bulb to "on"'
+              : completion === 'fire'
+                ? 'tell api to fetch'
+                : `ask api to fetch${completion === 'start' || completion === 'fail' ? ' and wait' : ''}`;
+        group
+          .load({
+            name: 's',
+            objects: { bulb: object },
+            grants: { api: service.grant('all', undefined) },
+            source: `on go\n try\n  ${statement}\n catch e\n  return e\n end try\nend go`,
+          })
+          .deliver({ name: 'go' });
+        let reports = group.pump(now).reports;
+        if (completion === 'fail') {
+          expect(operationalReports(reports)).toEqual([]);
+          pending!.fail(failure);
+          reports = group.pump(later(1)).reports;
+        }
+        expect(kinds(operationalReports(reports))).toEqual(
+          malformed ? ['call failed', 'run end'] : ['run end'],
+        );
+        if (malformed) {
+          expect(failures(reports)[0]).toMatchObject({
+            script: 's',
+            call: property ? '' : 's/r1.c1',
+            operation: {
+              capability: property ? 'light' : 'service',
+              operation: property ? 'label' : 'fetch',
+            },
+            detail: expect.any(String),
+          });
+          expect(failures(reports)[0]!.detail).not.toBe('');
+        }
+        const end = reports.find(r => r.kind === 'run end');
+        expect(end).toMatchObject({ outcome: 'completed' });
+        const result = end!.result!;
+        expect(result.get('code').toString()).toBe(
+          malformed ? '"host error"' : '"lamp broken"',
+        );
+        expect(result.get('capability').toString()).toBe(
+          property ? '"light"' : '"api"',
+        );
+        expect(result.get('operation').toString()).toBe(
+          property ? '"label"' : '"fetch"',
+        );
+        expect(result.get('at').get('line').toString()).toBe('3');
+        if (malformed) {
+          expect(result.toString()).not.toContain('private');
+          // Queued Fail inputs record the Host's supplied envelope; execution
+          // records must expose only the sanitized failure.
+          expect(
+            lines.filter(line => !line.startsWith('> fail ')).join('\n'),
+          ).not.toContain('private');
+        } else {
+          expect(result.get('message').toString()).toBe(
+            '"private Host detail"',
+          );
+          expect(result.get('reason').toString()).toBe(
+            data.kind === 'map' ? data.get('reason').toString() : 'nothing',
+          );
+        }
+        expect(lines.some(line => line.startsWith('call-failed'))).toBe(
+          malformed && !property,
+        );
+      });
+    }
+  }
+
   test('a throwing immediate Operation reports its Host detail, before the Run ends', () => {
     const db = defineCapability('db', {
       get: {
