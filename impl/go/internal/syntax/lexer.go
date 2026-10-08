@@ -15,10 +15,11 @@ import (
 type Position struct{ Line, Column int }
 
 type Error struct {
-	Incomplete bool // more input can complete an Entry at a Session prompt
-	Code       string
-	Pos        Position
-	Earlier    []TextHole
+	Incomplete    bool // more input can complete an Entry at a Session prompt
+	TrailingEntry bool // a complete Session Entry was followed by additional input
+	Code          string
+	Pos           Position
+	Earlier       []TextHole
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("%s at %d:%d", e.Code, e.Pos.Line, e.Pos.Column) }

@@ -11,9 +11,11 @@ func ParseEntry(source string, isHandler func(string) bool) (kind string, entry 
 		return "", nil, err
 	}
 	p := &parser{lexer: l, base: []int{0}}
+	complete := false
 	defer func() {
 		if v := recover(); v != nil {
 			if e, ok := v.(*Error); ok {
+				e.TrailingEntry = complete
 				kind, entry, err = "", nil, e
 			} else {
 				panic(v)
@@ -31,11 +33,14 @@ func ParseEntry(source string, isHandler func(string) bool) (kind string, entry 
 		kind, entry = "declaration", p.declaration()
 	} else if slices.Contains([]string{"if", "repeat", "match", "try", "wait", "add", "ask", "delete", "divide", "exit", "let", "multiply", "pass", "put", "replace", "return", "send", "set", "subtract", "tell", "throw", "veto"}, t.Raw) || t.Raw == "next" && p.second(Operand).Raw == "repeat" || isName(t) && (t.Raw == "say" || isHandler != nil && isHandler(t.Raw)) {
 		kind, entry = "statement", p.statement(false)
+		complete = true
 		p.nl()
 	} else {
 		kind, entry = "expression", p.expression()
+		complete = true
 		p.nl()
 	}
+	complete = true
 	for p.atOperand("\n") && p.peek(Operand).Kind != EOF {
 		p.take(Operand)
 	}

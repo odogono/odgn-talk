@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
@@ -15,7 +16,14 @@ var readerIdentifier = regexp.MustCompile(`\bentry0\w*`)
 
 func (h *Host) inspectExpression(source string) []string {
 	kind, node, err := syntax.ParseEntry(source, h.isHandler)
-	if err != nil || kind != "expression" || !documentable(source, kind, node) {
+	if err != nil {
+		var parseError *syntax.Error
+		if errors.As(err, &parseError) && parseError.TrailingEntry {
+			return refusal("bad arguments")
+		}
+		return h.refused(err, placement{}, 0)
+	}
+	if kind != "expression" || !documentable(source, kind, node) {
 		return refusal("bad arguments")
 	}
 	h.start()

@@ -1548,7 +1548,7 @@ export class SessionHost {
   private inspectExpression(source: string): string[] {
     const parsed = parseEntry(source, name => this.isHandler(name));
     if (parsed.error) {
-      if (!parsed.incomplete) {
+      if (parsed.error.trailingEntry) {
         return refuse('bad arguments');
       }
       return [
