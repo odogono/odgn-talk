@@ -1,5 +1,6 @@
 import {
   grammar,
+  builtins,
   units,
   Lexer,
   parseSource,
@@ -659,13 +660,23 @@ export const hover = (
   const name = nameAt(analysis, offset);
   const target = definition(all, analysis, offset);
   const home = target ? all.get(target.uri) : analysis;
-  const binding = name ? resolvedBinding(analysis, name) : null;
+  let binding = name ? resolvedBinding(analysis, name) : null;
   if (!name || !home) {
     return null;
   }
+  const key = targetKey(analysis, name);
+  // The defining export owns the documentation, including when hovering the
+  // remote name of an aliased Import (which has no local binding).
+  const defining = home.checked.tree.scopes[0]?.bindings.find(
+    b => key !== null && bindingKey(home, b) === key && !b.importedFrom,
+  );
+  binding ??= defining ?? null;
   const definitionName = binding?.importedFrom?.name ?? binding?.name;
   const loaded = home.loaded;
-  const index = loaded?.unit.definitions.indexOf(definitionName ?? '') ?? -1;
+  const index =
+    binding?.scope === 0
+      ? (loaded?.unit.definitions.indexOf(definitionName ?? '') ?? -1)
+      : -1;
   const value = index >= 0 ? loaded?.definitions[index] : undefined;
   let display = value?.toString();
   if (value?.kind === 'function') {
@@ -673,6 +684,41 @@ export const hover = (
   } else if (binding?.kind === 'function' || binding?.kind === 'handler') {
     // A Function Value in Library code acquires the importing Script's Home.
     display = `Home Script: ${analysis.document.library ?? analysis.document.uri}\n${binding.kind === 'handler' ? (handlerHead(home, definitionName ?? '') ?? messagePhrase(definitionName ?? '')) : `function ${definitionName}`}`;
+  }
+  let docs: string[] = [];
+  if (
+    binding?.kind === 'builtin function' ||
+    binding?.kind === 'builtin constant'
+  ) {
+    const builtin = builtins.find(b => b.name === binding.name);
+    display ??= `${binding.kind} ${binding.name}`;
+    docs = builtin ? [builtin.gives] : [];
+  } else if (defining) {
+    // SemanticTree.docs is the Core's extraction, in declaration order.
+    // Match binding identity rather than spelling so locals and parameters
+    // cannot inherit a top-level declaration's documentation.
+    const declarations = home.checked.tree.root.children.filter(
+      (c): c is SemanticNode => c.kind === 'node' && c.rule === 'Declaration',
+    );
+    docs = declarations.flatMap((d, i) =>
+      semanticElements(d).some(
+        e =>
+          e.kind === 'name' &&
+          e.role === 'declaration' &&
+          e.binding === defining,
+      )
+        ? [home.checked.tree.docs?.[i] ?? '']
+        : [],
+    );
+    display ??= `${defining.kind} ${defining.name}`;
+  }
+  const documented = docs.filter(doc => doc.length > 0);
+  if (documented.length) {
+    const documentation =
+      binding?.kind === 'handler' && docs.length > 1
+        ? docs.map((doc, i) => `Clause ${i + 1}:\n${doc}`).join('\n\n')
+        : docs.join('\n\n');
+    display = `${display ?? ''}\n\n${documentation}`;
   }
   return display
     ? {

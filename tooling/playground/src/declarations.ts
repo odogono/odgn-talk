@@ -3,6 +3,7 @@
 // one as an Entry; one the tab no longer has can only go by a Restart.
 import {
   parseSource,
+  declarationStart,
   syntaxSelector,
   type SyntaxNode,
   type Token,
@@ -16,7 +17,7 @@ export type TabDeclaration = {
 };
 
 const NAMED =
-  /^\s*(on|function|constant|script\s+variable)\s+([\p{L}_][\p{L}\p{N}_]*)/u;
+  /^\s*(?:private\s+)?(on|function|constant|script\s+variable)\s+([\p{L}_][\p{L}\p{N}_]*)/u;
 
 const keyOf = (source: string, declaration: SyntaxNode): string => {
   const handler = declaration.children.find(
@@ -53,7 +54,9 @@ export const splitDeclarations = (
         ? [
             {
               key: keyOf(text.slice(c.start, c.end), c),
-              source: text.slice(c.start, c.end).replace(/\s+$/u, ''),
+              source: text
+                .slice(declarationStart(parsed.tree!, c), c.end)
+                .replace(/\s+$/u, ''),
             },
           ]
         : [],

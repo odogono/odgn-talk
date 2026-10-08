@@ -817,10 +817,7 @@ readings.onchange = () => {
 const promptInput = $('prompt') as HTMLInputElement;
 const history: string[] = [];
 let historyAt = 0;
-$('prompt-form').onsubmit = async event => {
-  event.preventDefault();
-  const text = promptInput.value;
-  promptInput.value = '';
+const submitPrompt = async (text: string) => {
   if (text.trim()) {
     history.push(text);
   }
@@ -829,6 +826,39 @@ $('prompt-form').onsubmit = async event => {
   if (response.t === 'state' && response.state.prompt === 'continue') {
     $('pending').textContent +=
       `${$('pending').textContent ? '\n' : '> '}${$('pending').textContent ? '| ' : ''}${text}`;
+  }
+};
+$('prompt-form').onsubmit = event => {
+  event.preventDefault();
+  const text = promptInput.value;
+  promptInput.value = '';
+  void submitPrompt(text);
+};
+// A single-line input otherwise strips pasted line breaks. Submit completed
+// physical lines through the same prompt, leaving the last one for Enter.
+promptInput.onpaste = async event => {
+  const text = event.clipboardData?.getData('text/plain');
+  if (!text || !/[\r\n]/u.test(text)) {
+    return;
+  }
+  event.preventDefault();
+  const source =
+    promptInput.value.slice(0, promptInput.selectionStart ?? 0) +
+    text +
+    promptInput.value.slice(
+      promptInput.selectionEnd ?? promptInput.value.length,
+    );
+  const lines = source.split(/\r\n|\r|\n/u);
+  promptInput.value = lines.pop()!;
+  // Keep Enter from overtaking the completed lines while the worker replies.
+  promptInput.disabled = true;
+  try {
+    for (const line of lines) {
+      await submitPrompt(line);
+    }
+  } finally {
+    promptInput.disabled = false;
+    promptInput.focus();
   }
 };
 promptInput.onkeydown = event => {

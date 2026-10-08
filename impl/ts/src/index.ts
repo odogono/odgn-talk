@@ -190,8 +190,9 @@ export { localeCapability, type LocaleImpl } from './locale-capability';
 export { add, storeCapability, type StoreImpl } from './store-capability';
 
 /** Spec data for browser-safe tooling; these tables add no execution behavior. */
-export { grammar, units } from './generated/syntax';
+export { builtins, grammar, units } from './generated/syntax';
 export { stdlibSources } from './generated/stdlib';
+export { declarationStart } from './documentation';
 
 export { validMessageSelector } from './selectors';
 
