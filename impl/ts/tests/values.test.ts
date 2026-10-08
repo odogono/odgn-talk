@@ -142,6 +142,15 @@ test('container display and encoding round-trip without prototype or numeric-key
   expect(ordered.entries().map(([k]) => k)).toEqual(['2', '1', '__proto__']);
 });
 
+test('map display quotes offer and keeps other Word keys bare', () => {
+  const value = record({ offer: num(1), if: bool(true) });
+  const display = '{"offer": 1, if: true}';
+  expect(value.toString()).toBe(display);
+  const decoded = readDisplay(display);
+  expect(decoded.equals(value)).toBe(true);
+  expect(decoded.toString()).toBe(display);
+});
+
 test('decimal constructors preserve digits and refuse values that need rounding', () => {
   for (const [source, canonical] of [
     ['007', '7'],

@@ -84,7 +84,7 @@ func (v Value) Display() string {
 		pieces := make([]string, len(v.Entries))
 		for i, p := range v.Entries {
 			key := p.Key
-			if !Word(key) {
+			if key == "offer" || !Word(key) {
 				key = DisplayText(key)
 				if !strings.HasPrefix(key, `"`) {
 					key = `"" & ` + key

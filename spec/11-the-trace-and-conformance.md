@@ -41,7 +41,7 @@ Text literals have no escapes ([ADR 0029](../docs/adr/0029-text-literals-have-no
 ### Maps
 
 - **An entry** is its key, `: ` and its value.
-- **A key** that is a Word ([chapter 1](01-lexical-structure.md#tokens)), Reserved Words included, is written bare, as in `{sku: "A1", if: true}`. Any other key is written as text, as in `{"unit price": 2.50 GBP}`, and one whose text would start with `quote`, `newline`, `tab` or `fromCodePoint` starts with `"" & ` instead, so it never reads as a Word: `{"" & quote: 1}`.
+- **A key** that is a Word ([chapter 1](01-lexical-structure.md#tokens)) other than `offer`, other Reserved Words included, is written bare, as in `{sku: "A1", if: true}`. The key `offer` is written as text, as in `{"offer": 1, if: true}`, so it is also valid as a source map key ([chapter 2](02-grammar.md#recovery-offers-and-choices)). Any other key is written as text, as in `{"unit price": 2.50 GBP}`, and one whose text would start with `quote`, `newline`, `tab` or `fromCodePoint` starts with `"" & ` instead, so it never reads as a Word: `{"" & quote: 1}`.
 - **An empty map** is `{}`.
 
 ### Function Values
@@ -101,7 +101,8 @@ ListValue      ::= '[' ( Value ( ', ' Value )* )? ']'
 MapValue       ::= '{' ( MapEntry ( ', ' MapEntry )* )? '}'
 MapEntry       ::= MapKey ': ' Value
 MapKey         ::= Word | TextValue
-                   /* a Word exactly when the key is one; a TextValue key
+                   /* a Word exactly when the key is one other than `offer`;
+                      `offer` is written as TextValue; a TextValue key
                       starts with a quoted piece, `"" & ` if need be */
 Word           ::= [A-Za-z_] [A-Za-z0-9_]*
 RangeValue     ::= RangeEnd '..' RangeEnd

@@ -18,6 +18,21 @@ func TestDisplayRoundTrips(t *testing.T) {
 		}
 	}
 }
+func TestMapDisplayQuotesOffer(t *testing.T) {
+	const display = `{"offer": 1, if: true}`
+	v, err := ParseDisplay(display, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Display(); got != display {
+		t.Fatalf("got %s, want %s", got, display)
+	}
+	again, err := ParseDisplay(v.Display(), nil)
+	if err != nil || !again.Equal(v) || again.Display() != display {
+		t.Fatal("map display round trip", again.Display(), err)
+	}
+}
+
 func TestPatternsReparseAndCanonicalize(t *testing.T) {
 	for _, tt := range []struct{ s, want string }{{`< "ID" , "-" , <0x04 digits> >`, `<"ID", "-", <4 digits>>`}, {`<4 digits lazily ignoring case as number>`, `<4 digits as number ignoring case lazily>`}, {`< <>, "x">`, `<"x">`}, {`<(quote & "x")>`, `<(quote & "x")>`}} {
 		v, e := ParsePattern(tt.s)
