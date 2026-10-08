@@ -1,22 +1,26 @@
--- A Run that appends N values and then recurses past the call depth limit.
--- Its Limit Fault rolls the Segment back, so the values are gone again.
-script variable values = []
+-- N Runs that each change a Script Variable and then start a Join one member
+-- wider than MaxJoin. Each Limit Fault rolls its Segment back, so `count`
+-- ends at 0 again. The members are suspending Host calls, so the 16 that
+-- start before the fault leave no work in another Script.
+script variable count = 0
 
-function deeper k
-  return deeper(k + 1) + 1
-end deeper
-
-on fill n
-  repeat for each i in 1..n
-    put i after values
-  end repeat
-  return deeper(0)
+on fill
+  add 1 to count
+  wait for all
+    repeat for each i in 1..17
+      ask host to later i and wait
+    end repeat
+  end wait
 end fill
 
 on run n
-  try
-    send fill with n to me and wait
-  catch {code: "send failed", reason: "limit fault"}
-  end try
-  return the length of values
+  put 0 into faults
+  repeat for each i in 1..n
+    try
+      send fill to me and wait
+    catch {code: "send failed", reason: "limit fault"}
+      add 1 to faults
+    end try
+  end repeat
+  return faults + count
 end run

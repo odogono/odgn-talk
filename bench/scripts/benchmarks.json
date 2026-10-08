@@ -353,15 +353,16 @@
     },
     {
       "name": "lifecycle/rollback",
-      "n": 1000,
-      "expect": "0",
+      "n": 300,
+      "expect": "300",
       "smoke": {
-        "n": 4,
-        "expect": "0"
+        "n": 2,
+        "expect": "2"
       },
       "skip": {
         "peers": "NorthTalk embedding API; no peer counterpart."
-      }
+      },
+      "host": "suspending"
     }
   ]
 }
