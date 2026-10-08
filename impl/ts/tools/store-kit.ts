@@ -93,6 +93,7 @@ const contextOf = (step: Step): SegmentContext<string> => ({
   binding: step.store ?? 'default',
   segmentId: step.in,
   grantName: 'store',
+  grants: [{ grantName: 'store', binding: step.store ?? 'default' }],
   scriptName: 'kit',
   runId: step.in,
   now: 0n,

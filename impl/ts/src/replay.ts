@@ -31,6 +31,7 @@ import {
   type Shape,
   type ScopeDecl,
   type SegmentContext,
+  type SegmentCoordinator,
   type EffectResult,
   HostError,
   LoadError,
@@ -205,7 +206,12 @@ export type Setup = {
   scripts?: {
     grants?: Record<
       string,
-      { binding?: string; capability?: string; ops: string[] | 'all' }
+      {
+        binding?: string;
+        capability?: string;
+        coordinator?: string;
+        ops: string[] | 'all';
+      }
     >;
     grantsAsUsed?: boolean;
     limits?: Partial<Limits>;
@@ -358,7 +364,17 @@ const capabilitiesOf = (
     context: SegmentContext<unknown>,
     phase: 'begin' | 'commit' | 'rollback',
   ) => EffectResult,
+  coordinator: () => SegmentCoordinator,
 ): Map<string, ReturnType<typeof defineCapability>> => {
+  // A Capability one of whose Grants names a coordinator maps every binding
+  // to one; the others keep a plain lifecycle (ADR 0069).
+  const coordinated = new Set(
+    (setup.scripts ?? []).flatMap(script =>
+      Object.entries(script.grants ?? {})
+        .filter(([, g]) => g.coordinator !== undefined)
+        .map(([granted, g]) => g.capability ?? granted),
+    ),
+  );
   const byCapability = new Map<string, OperationSpec[]>();
   for (const op of setup.operations ?? []) {
     byCapability.set(op.capability, [
@@ -443,13 +459,15 @@ const capabilitiesOf = (
       defineCapability(
         name,
         operations,
-        ops.some(op => op.segmentBound)
-          ? {
-              begin: context => lifecycle(context, 'begin'),
-              commit: context => lifecycle(context, 'commit'),
-              rollback: context => lifecycle(context, 'rollback'),
-            }
-          : undefined,
+        coordinated.has(name)
+          ? { coordinator }
+          : ops.some(op => op.segmentBound)
+            ? {
+                begin: context => lifecycle(context, 'begin'),
+                commit: context => lifecycle(context, 'commit'),
+                rollback: context => lifecycle(context, 'rollback'),
+              }
+            : undefined,
       ),
     );
   }
@@ -1029,6 +1047,27 @@ const driveReplay = function* (
         : {}),
     };
   };
+  // Grants given one `coordinator` name share its Segment Coordinator, and a
+  // Grant with none gets its own. A mapping sees only the binding, so the
+  // runner names the coordinator while it creates each Grant.
+  const coordinators = new Map<string, SegmentCoordinator>();
+  let granting: string | undefined;
+  const coordinator = (): SegmentCoordinator => {
+    const named =
+      granting === undefined ? undefined : coordinators.get(granting);
+    if (named) {
+      return named;
+    }
+    const made: SegmentCoordinator = {
+      begin: context => lifecycle(context, 'begin'),
+      commit: context => lifecycle(context, 'commit'),
+      rollback: context => lifecycle(context, 'rollback'),
+    };
+    if (granting !== undefined) {
+      coordinators.set(granting, made);
+    }
+    return made;
+  };
   // Each suspending call in flight, which `answer` and `fail` lines settle.
   const calls = new Map<string, Call<unknown>>();
   const capabilities = capabilitiesOf(
@@ -1039,6 +1078,7 @@ const driveReplay = function* (
     receive,
     recordedCall,
     lifecycle,
+    coordinator,
   );
   const declarations = operationDeclarations(capabilities);
   const compiled = compileLibraries(readSource, setup, declarations);
@@ -1124,10 +1164,20 @@ const driveReplay = function* (
                 `the Standard Capability ${g.capability ?? granted}`,
               );
             }
-            grants[granted] = capability.grant(
-              g.ops,
-              g.binding ?? (capability.name === 'locale' ? 'und' : undefined),
-            );
+            if (g.coordinator !== undefined && !capability.coordinator) {
+              throw new Error(
+                `${capability.name} can't take a coordinator in case.toml`,
+              );
+            }
+            granting = g.coordinator;
+            try {
+              grants[granted] = capability.grant(
+                g.ops,
+                g.binding ?? (capability.name === 'locale' ? 'und' : undefined),
+              );
+            } finally {
+              granting = undefined;
+            }
           }
           bound.set(script.name, grants);
           group.load({

@@ -1,0 +1,13 @@
+script variable count = 0
+on go
+ask r to write
+ask alias to write
+ask other to write
+put 2 into count
+end go
+
+on again
+ask other to write
+ask r to write
+add 1 to count
+end again

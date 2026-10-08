@@ -1,0 +1,11 @@
+script variable count = 0
+on go
+ask alias to write
+ask r to write
+ask other to write
+end go
+
+on again
+ask alias to write
+ask lone to write
+end again

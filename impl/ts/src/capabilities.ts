@@ -262,12 +262,19 @@ export type ScopeDecl = { abandon: string; opens: string } | { closes: string };
 /** Synchronous, unmetered participant lifecycle work. */
 export type SegmentContext<B> = {
   readonly binding: B;
+  /** The first enrolled Grant. */
   readonly grantName: string;
+  /** Enrolled, in enrollment order; `begin` sees only the first. */
+  readonly grants: readonly SegmentGrant<B>[];
   readonly group: Group;
   readonly now: bigint;
   readonly runId: string;
   readonly scriptName: string;
   readonly segmentId: string;
+};
+export type SegmentGrant<B> = {
+  readonly binding: B;
+  readonly grantName: string;
 };
 export type EffectResult = {
   detail?: string;
@@ -277,6 +284,12 @@ export type SegmentLifecycle<B> = {
   begin(context: SegmentContext<B>): EffectResult;
   commit(context: SegmentContext<B>): EffectResult;
   rollback(context: SegmentContext<B>): EffectResult;
+};
+/** Compared by identity: Grants mapped to one coordinator share a Segment's participant (ADR 0069). */
+export type SegmentCoordinator = SegmentLifecycle<unknown>;
+/** Maps each binding to its coordinator once, when a Grant is created. */
+export type CoordinatedLifecycle<B> = {
+  coordinator(binding: B): SegmentCoordinator;
 };
 
 export type Cost = { alloc?: number; fuel: number };
@@ -330,8 +343,11 @@ export class LimitReached extends Error {
 }
 
 export type CapabilityDef<B> = {
+  /** Maps a Grant's binding to its Segment Coordinator. */
+  coordinator?(binding: B): SegmentCoordinator;
   /** A reusable template. Each load binds it to one Script. */
   grant(ops: readonly string[] | 'all', binding: B): Grant<B>;
+  /** A plain lifecycle, making each Grant its own coordinator. */
   readonly lifecycle?: SegmentLifecycle<B>;
   readonly name: string;
   /** Its Operations, ordered by name. */
@@ -340,36 +356,46 @@ export type CapabilityDef<B> = {
 export type Grant<B> = {
   readonly binding: B;
   readonly capability: CapabilityDef<B>;
+  /** Resolved at Grant creation; absent when the Grant is its own coordinator. */
+  readonly coordinator?: SegmentCoordinator;
   readonly ops: ReadonlySet<string>;
 };
 
 const refusedNames = new Set(['ask', 'tell', 'send', 'wait', 'end']);
 const scopeWord = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Z_a-z]\w*$/.test(value);
+const hasHooks = (lifecycle: unknown): lifecycle is SegmentLifecycle<never> =>
+  !!lifecycle &&
+  typeof lifecycle === 'object' &&
+  ['begin', 'commit', 'rollback'].every(
+    phase =>
+      typeof (lifecycle as Record<string, unknown>)[phase] === 'function',
+  );
 
 /** Define a Capability, once per process (chapter 9, Capabilities). */
 export const defineCapability = <B = void>(
   name: string,
   ops: Record<string, Operation<B>>,
-  lifecycle?: SegmentLifecycle<B>,
+  lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
 ): CapabilityDef<B> => {
   for (const op of Object.keys(ops)) {
     if (refusedNames.has(op)) {
       throw new HostError('invalid value', `${op} can't name an Operation`);
     }
   }
-  if (
-    lifecycle !== undefined &&
-    (!lifecycle ||
-      !['begin', 'commit', 'rollback'].every(
-        phase =>
-          typeof lifecycle[phase as keyof SegmentLifecycle<B>] === 'function',
-      ))
-  ) {
+  const coordinated =
+    !!lifecycle && typeof lifecycle === 'object' && 'coordinator' in lifecycle
+      ? lifecycle
+      : undefined;
+  if (coordinated && typeof coordinated.coordinator !== 'function') {
+    invalidValue('A coordinator mapping must be a function');
+  }
+  if (lifecycle !== undefined && !coordinated && !hasHooks(lifecycle)) {
     invalidValue(
       'A participant requires synchronous begin, commit and rollback hooks',
     );
   }
+  const hooks = coordinated ? undefined : (lifecycle as SegmentLifecycle<B>);
   const scopes = new Map<string, string>();
   const scopeEffects = new Map<string, boolean>();
   for (const [opName, op] of Object.entries(ops)) {
@@ -470,13 +496,18 @@ export const defineCapability = <B = void>(
   const def: CapabilityDef<B> = {
     name,
     operations,
-    ...(lifecycle
+    ...(hooks
       ? {
           lifecycle: Object.freeze({
-            begin: lifecycle.begin,
-            commit: lifecycle.commit,
-            rollback: lifecycle.rollback,
+            begin: hooks.begin,
+            commit: hooks.commit,
+            rollback: hooks.rollback,
           }),
+        }
+      : {}),
+    ...(coordinated
+      ? {
+          coordinator: (binding: B) => coordinated.coordinator(binding),
         }
       : {}),
     grant: (granted, binding) => {
@@ -502,7 +533,19 @@ export const defineCapability = <B = void>(
           );
         }
       }
-      return { capability: def, binding, ops: new Set(names) };
+      // Resolved once, so the mapping holds for the Grant's life (ADR 0069).
+      const coordinator = def.coordinator?.(binding);
+      if (def.coordinator && !hasHooks(coordinator)) {
+        invalidValue(
+          'A Segment Coordinator requires synchronous begin, commit and rollback hooks',
+        );
+      }
+      return {
+        capability: def,
+        binding,
+        ops: new Set(names),
+        ...(coordinator ? { coordinator } : {}),
+      };
     },
   };
   return def;

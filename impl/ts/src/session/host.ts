@@ -314,6 +314,7 @@ export class SessionHost {
           def.name === 'console' ||
           BUILT_IN.has(def.name) ||
           def.lifecycle ||
+          def.coordinator ||
           [...def.operations.values()].some(
             op => op.mode !== 'immediate' || op.scope || op.segmentBound,
           ),

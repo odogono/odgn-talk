@@ -34,6 +34,10 @@ capabilities/effect-close-preemption-fault
 capabilities/effect-commit-failed
 capabilities/effect-commit-unknown
 capabilities/effect-completion
+capabilities/effect-coordinator-abandon-failed
+capabilities/effect-coordinator-commit-failed
+capabilities/effect-coordinator-conflict
+capabilities/effect-coordinator-shared
 capabilities/effect-decision-failed
 capabilities/effect-decision-ok
 capabilities/effect-operation-error
