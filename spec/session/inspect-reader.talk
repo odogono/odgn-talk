@@ -1,0 +1,16 @@
+on entry0 entry0Object to entry0Names
+  repeat for each entry0Name in entry0Names
+    try
+      put {name: entry0Name, value: the (entry0Name) of entry0Object} into entry0Row
+    catch entry0Error
+      put {} into entry0Clean
+      repeat for each entry0Key in the keys of entry0Error
+        if entry0Key is not in ["message", "at"] then
+          put the (entry0Key) of entry0Error into the (entry0Key) of entry0Clean
+        end if
+      end repeat
+      put {name: entry0Name, error: entry0Clean} into entry0Row
+    end try
+    say "read " & entry0Row
+  end repeat
+end entry0

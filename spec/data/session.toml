@@ -96,6 +96,36 @@ usage = ":export [<directory>]"
 does = "Shows the Session Script's source, or writes it and each user Library to a directory as `.talk` files"
 
 [[command]]
+name = ":describe"
+usage = ":describe <target>"
+does = "Shows a named declaration and its documentation without executing it"
+
+[[command]]
+name = ":inspect"
+usage = ":inspect <expression>"
+does = "Evaluates once and describes the result, reading Host Object properties in a second ordinary Run"
+
+[[command]]
+name = ":apropos"
+usage = ":apropos [query]"
+does = "Lists matching available names and Library exports with their origins, describe targets and documentation"
+
+[[command]]
+name = ":trace"
+usage = ":trace [selector]"
+does = "Lists trace filters or adds a full Selector across the Group for future dispatched Runs"
+
+[[command]]
+name = ":untrace"
+usage = ":untrace [selector]"
+does = "Removes one trace filter or clears all; already traced Runs retain their terminal output"
+
+[[command]]
+name = ":fuel"
+usage = ":fuel [entry]"
+does = "Lists exact Fuel Measurements or measures an executable Entry and its spawned descendants"
+
+[[command]]
 name = ":help"
 usage = ":help [<command>]"
 does = "Shows help"

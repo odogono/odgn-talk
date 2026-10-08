@@ -366,6 +366,7 @@ test('test reports a failed assertion, a background error and an unhandled messa
   const { dir, manifest } = testDir(
     [
       'use assert, assertEqual from test',
+      'use pad from text',
       'on testEqual',
       '  send inc to counter and wait',
       '  assertEqual(it, 2)',
@@ -383,6 +384,9 @@ test('test reports a failed assertion, a background error and an unhandled messa
       'on testStuck',
       '  wait for never',
       'end testStuck',
+      'on testStdlib',
+      '  say pad("x", -1)',
+      'end testStdlib',
       '',
     ].join('\n'),
   );
@@ -390,21 +394,24 @@ test('test reports a failed assertion, a background error and an unhandled messa
   expect(code).toBe(1);
   const file = join(dir, 'counter.test.talk');
   expect(stdout).toContain(
-    `FAIL ${file}:2:1 testEqual\n  counterTest testEqual errored: {code: "assertion failed", expected: 2, actual: 1}\n`,
+    `FAIL ${file}:5:3 testEqual\n  counterTest testEqual errored: {code: "assertion failed", expected: 2, actual: 1}\n`,
   );
   expect(stdout).toContain(
-    `FAIL ${file}:6:1 testThrows\n  counterTest testThrows errored: {code: "assertion failed"}\n    nope\n  | about to fail\n`,
+    `FAIL ${file}:9:3 testThrows\n  counterTest testThrows errored: {code: "assertion failed"}\n    nope\n  | about to fail\n`,
   );
   expect(stdout).toContain(
     `FAIL ${join(dir, 'counter.talk')}:7:3 testBackground\n  counter boom errored: {code: "bad"}\n`,
   );
   expect(stdout).toContain(
-    `FAIL ${file}:13:1 testUnhandled\n  counter has no Handler for nope\n`,
+    `FAIL ${file}:14:1 testUnhandled\n  counter has no Handler for nope\n`,
   );
   expect(stdout).toContain(
-    `FAIL ${file}:16:1 testStuck\n  testStuck waits for something that never comes\n`,
+    `FAIL ${file}:17:1 testStuck\n  testStuck waits for something that never comes\n`,
   );
-  expect(stdout).toEndWith('0 passed, 5 failed\n');
+  expect(stdout).toContain(
+    `FAIL ${file}:21:7 testStdlib\n  counterTest testStdlib errored: {code: "out of domain", function: "pad", value: -1}\n`,
+  );
+  expect(stdout).toEndWith('0 passed, 6 failed\n');
   // --only picks tests by file and name.
   const only = run(['test', '--manifest', manifest, '--only', 'Equal', dir]);
   expect(only.stdout).toEndWith('0 passed, 1 failed\n');

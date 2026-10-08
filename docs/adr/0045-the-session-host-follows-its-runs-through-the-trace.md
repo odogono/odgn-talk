@@ -1,5 +1,7 @@
 # The Session Host follows its Runs through the Trace
 
+**Narrowed by [ADR 0065](0065-run-accounting-is-returned-to-every-host.md):** public accounting supplies exact Fuel and Run lifecycle observations. The original Trace-based console/suspension tracking remains valid; relying only on those records is no longer the complete Session Host contract.
+
 The Session Host has to know which Run each Entry's Delivery started, whether a `console` write or `read` came from the Foreground Run, and whether the Foreground Run waits only for a deadline. It learns all three from the records the Group is already writing to its Trace: each `seg` record's `run`, its `delivery` at a start, its `end` reason and its `until`, and each `call` record. It doesn't learn them from a Host API. `Inspect()` would give the answers, but it is the Host Input `vars` (chapter 9), so a Session Host that used it to decide what to print would add lines to the very Trace a Session Transcript's `case.trace` pins. Because the Trace is normative, the Go REPL can follow its Runs the same way and get the same answers, and the Cores need no new Host API for a session. Settled in #131.
 
 ## Considered Options

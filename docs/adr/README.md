@@ -66,4 +66,7 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0062: A Store key is reserved while a Segment holds an uncommitted write](0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)
 - [0063: A `tell` block calls several Operations of one Grant](0063-a-tell-block-calls-several-operations-of-one-grant.md)
 - [0064: A Fallback Handler receives the messages no clause matches](0064-a-fallback-handler-receives-messages-no-clause-matches.md)
-- [0065: A Run in its first Segment can be rewound to its Delivery](0065-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)
+- [0065: Run accounting is returned to every Host](0065-run-accounting-is-returned-to-every-host.md)
+- [0066: Fuel measurements follow spawned Runs](0066-fuel-measurements-follow-spawned-runs.md)
+- [0067: Inspection is replayable ordinary execution](0067-inspection-is-replayable-ordinary-execution.md)
+- [0068: A Run in its first Segment can be rewound to its Delivery](0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)

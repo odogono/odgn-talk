@@ -20,7 +20,7 @@ An author tests their own Scripts with `northtalk test`, which is Tooling (ADR 0
   - `test` is the Test Library's name, which a Host Manifest's Libraries may not reuse.
   - `harness` is the Harness's name, which a Host Manifest's Grants may not reuse.
   - Test Handler names follow camelCase, since `on test increments` would be the message `test` with a parameter.
-- **Locations:** an assertion raised inside the Test Library is reported at its Test Handler, since a Library's raise doesn't point back at its caller. A raise in a Script under test is reported where it happened.
+- **Locations:** an assertion raised inside the Test Library is reported at the call that entered it. The runner compiles the Test Library with a TS Core option, outside the Spec, that gives its raises an `at` naming the caller, as ADR 0037 does for the stdlib (#347). A raise in a Script under test is reported where it happened, and one in stdlib code at the Script's call.
 - **Time:**
   - The Clock only moves when the test is waiting with nothing else to run, or when it calls `advance`.
   - A test waiting on a deadline jumps straight to it.

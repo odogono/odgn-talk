@@ -5,9 +5,11 @@ _Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), 
 
 A REPL or Playground session is an ordinary Host running an ordinary Script Group. The Cores have no session concept ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)). This chapter states how that Host, the **Session Host**, turns Entries and Session Commands into Host Inputs, and what it prints. Its behaviour is normative, because a Session Transcript is a Conformance Corpus case, which must replay the same on the Go REPL and the TS REPL. The rest of the tooling is one TS stack, and nothing it produces is normative ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
+The normative [Session observation contract](session-observation.md) defines Declaration Documentation, `:describe`, `:inspect`, `:apropos`, dispatched-Run tracing, Fuel Measurements and object-crossing replay. These commands are part of Session Transcript parity, not the tooling-freedom exception in ADR 0028.
+
 ## The session
 
-- **One Group, one Script:** the Session Host makes a Group named `session` holding one Script, the Session Script, also named `session`. It owns no Host Object and binds no well-known objects, so `me` is Nothing, and a Script reaches it by name, as in `send ping to session`.
+- **One Group, one Script:** the Session Host makes a Group named `session` holding one Script, the Session Script, also named `session`. It owns no Host Object, so `me` is Nothing, and a Script reaches it by name, as in `send ping to session`. Its initial well-known object bindings are empty by default; a Host may supply the bindings recorded by the [object setup envelope](session-observation.md#object-crossings-in-session-transcripts).
 - **Starting:** the session starts at its first Entry, or its first Session Command other than `:grant` and `:mock`. The Session Host then loads the Session Script from empty source.
 - **Grants:** `console`, with both its Operations, and whatever `:grant` and `:mock` added before the session started. They are fixed from then on, since only loading binds Grants ([chapter 10](10-save-and-restore.md#extend-script)).
 - **Limits:** the default limit profile ([chapter 6](06-errors-and-limits.md#limits)). `:limits` tightens it for later Entries.
@@ -77,7 +79,7 @@ After it pumps, while the Entry's Run hasn't ended, the Session Host:
 - **under a real Clock,** if the Run waits only for a deadline (a `wait`, or a `wait for` or block `wait for` with no call pending), sleeps until the Pump's next deadline, and pumps again.
 - **otherwise returns the prompt,** and the Run goes on in the background. Under a virtual Clock, a deadline wait returns the prompt at once.
 
-- **Following Runs:** the Session Host learns which Run an Entry's Delivery started, which Run made each `console` call, and what the Foreground Run waits for, from the Trace's `seg` and `call` records, never from `Inspect()`, which is a Host Input ([ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md)).
+- **Following Runs:** public [Run accounting](09-embedding.md#run-accounting) identifies dispatch, ancestry, exact Fuel and terminal/discarded work. The Trace's `seg` and `call` observations still identify console callers and foreground suspension. The Session Host never inserts `Inspect()` merely to follow execution ([ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md), narrowed by [ADR 0065](../docs/adr/0065-run-accounting-is-returned-to-every-host.md)).
 - **Echo:** when an expression's Run completes, its value is printed in the display form, which tells `"5"` from `5`.
 - **In the background,** the Session Host pumps whenever the next deadline comes under a real Clock, and after every Entry and Session Command that queues a Host Input.
 - **Answers:** the Session Host pumps after answering a `read`, and after a built-in Capability's suspending call is answered.
@@ -85,7 +87,7 @@ After it pumps, while the Entry's Run hasn't ended, the Session Host:
 
 ### Output
 
-Everything a session prints is one of these lines. `<where>` is `<line>:<column>` in the Entry, or `<unit>:<line>:<column>` elsewhere.
+Ordinary execution prints the lines below; [observation commands](session-observation.md) add their specified rows. `<where>` is `<line>:<column>` in the Entry, or `<unit>:<line>:<column>` elsewhere.
 
 | Line | Printed for |
 | --- | --- |
@@ -99,7 +101,7 @@ Everything a session prints is one of these lines. `<where>` is `<line>:<column>
 | `! unhandled <message> <args>` | a message that reached the end of the Message Path, with its arguments as a list |
 | `! discarded <run>` | each Run a Reload or a restore discarded |
 | `call <call> <capability>.<operation> <args>` | each call of a mock Operation, with its arguments as a list |
-| `! <reason>` | a refused Session Command or Entry: a Host error's code, or `unknown command`, `bad arguments`, `session started`, `clock is real`, `no such run`, `no such call` or `no such save` |
+| `! <reason>` | a refused Session Command or Entry: a Host error's code, or `unknown command`, `bad arguments`, `session started`, `clock is real`, `no such run`, `no such call`, `no such save` or `no such name` |
 
 ## Session Commands
 
@@ -125,6 +127,12 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 | `:library` | `:library add <name> <path> \| :library replace <name> <path>` | Adds a user Library from a file, or replaces one, carrying Script Variables over |  |
 | `:store` | `:store [<store>] \| :store load <path> [<store>] \| :store save <path> [<store>] \| :store clear [<store>]` | Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store |  |
 | `:export` | `:export [<directory>]` | Shows the Session Script's source, or writes it and each user Library to a directory as `.talk` files |  |
+| `:describe` | `:describe <target>` | Shows a named declaration and its documentation without executing it |  |
+| `:inspect` | `:inspect <expression>` | Evaluates once and describes the result, reading Host Object properties in a second ordinary Run |  |
+| `:apropos` | `:apropos [query]` | Lists matching available names and Library exports with their origins, describe targets and documentation |  |
+| `:trace` | `:trace [selector]` | Lists trace filters or adds a full Selector across the Group for future dispatched Runs |  |
+| `:untrace` | `:untrace [selector]` | Removes one trace filter or clears all; already traced Runs retain their terminal output |  |
+| `:fuel` | `:fuel [entry]` | Lists exact Fuel Measurements or measures an executable Entry and its spawned descendants |  |
 | `:help` | `:help [<command>]` | Shows help | not recorded |
 | `:quit` | `:quit` | Ends the session | not recorded |
 
@@ -162,6 +170,12 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **`:export`** prints the session source, its `use` lines included. Given a directory, it writes the session source as `session.talk` and each user Library as `<name>.talk`, and prints `wrote <file>` for each, with the file's name in the directory.
 - **`:help` and `:quit`** aren't recorded, and what they print is outside parity.
 
+### Observation commands
+
+[Session observation](session-observation.md) fixes the command-specific input grammar, rows and failure behavior for `:describe`, `:inspect`, `:apropos`, `:trace`, `:untrace` and `:fuel`. All six commands and their output are recorded. `:inspect` and `:fuel` use expression/Entry completeness rather than treating every `:` line as immediately complete. Leading `--|` documentation blocks follow the same [prompt attachment rules](session-observation.md#declaration-documentation) in both REPLs and the Playground.
+
+The Session save also includes the [observation state](session-observation.md#save-and-restore). It is replaced, not merged, when restored. Snapshot reads performed by passive describe of a Script Variable are explicit `vars` Host Inputs; source metadata lookup and cached Fuel queries add none.
+
 ## Session Transcripts
 
 A Session Transcript records a session in a form a user can read and share: its Entries and Session Commands in order, with everything the session saw from outside, and what it printed ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). A REPL writes one as the session goes, and a Playground link can carry one. In the Corpus, it is a `session.transcript` file with a blessed `case.trace` beside it ([chapter 11](11-the-trace-and-conformance.md#session-transcripts)).
@@ -171,10 +185,13 @@ A Session Transcript records a session in a form a user can read and share: its 
 ```ebnf
 Transcript     ::= ( TranscriptLine #xA )*
 TranscriptLine ::= '> ' [^#xA]+ | '| ' [^#xA]* | '|' | '< ' [^#xA]* | '<'
-                 | '@ ' Instant | '~ ' Id ' ' Answer | '#' [^#xA]*
+                 | '@ ' Instant | '~ ' Id ' ' Answer | '%' ' ' CrossingJSON | '#' [^#xA]*
                  | "'" [^#xA]* | OutputLine
+CrossingJSON   ::= '{' [^#xA]* '}'
+                   /* one compact JSON object; record fields and canonical
+                      encoding are in session-observation.md */
 Answer         ::= Value | 'fail ' MapValue
-OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
+OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
                    /* an output line that is empty or starts with one of
                       these characters is written after a `'` */
 ```
@@ -186,8 +203,9 @@ OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
 - **`< `** starts a line the user typed for `console`'s `read`, and a `<` alone is an empty one.
 - **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
 - **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map: its `code`, its `message` and its other fields, or `{}` for a failure that isn't a Script error, which the Script sees as `host error`. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
+- **`% `** introduces the compact JSON [object crossing envelope](session-observation.md#object-crossings-in-session-transcripts), including declarations, initial bindings, property callbacks, external Host actions and resolver outcomes.
 - **`#`** starts a comment, which a REPL never writes.
-- **Every other line** is output. An output line that is empty, or that starts with `>`, `|`, `<`, `@`, `~`, `#` or `'`, is written after a `'`.
+- **Every other line** is output. An output line that is empty, or that starts with `>`, `|`, `<`, `@`, `~`, `%`, `#` or `'`, is written after a `'`.
 
 > **Example.**
 >
@@ -209,10 +227,10 @@ OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
 
 ### Replaying
 
-- **Replaying** gives each Entry and recorded Session Command, in order, to a fresh Session Host, with each `@` reading as that Pump's Clock reading, each `<` line as the answer to `read`, and each `~` line as the answer of its call, in place of the built-in Capability. It never writes a file: `:export` with a directory writes to a scratch one.
+- **Replaying** first restores the recorded object setup, consumes `%` crossings at their specified positions, and gives each Entry and recorded Session Command, in order, to a fresh Session Host, with each `@` reading as that Pump's Clock reading, each `<` line as the answer to `read`, and each `~` line as the answer of its call, in place of the built-in Capability. It never writes a file: `:export` with a directory writes to a scratch one.
 - **Both must match:** the printed lines must equal the Transcript's output lines, and the Group's Trace must equal `case.trace` ([chapter 11](11-the-trace-and-conformance.md#running-a-case)).
 - **Deterministic Host extensions:** a Host may register additional immediate Capabilities whose implementation uses only arguments and session-owned state. A Transcript replays these through the same implementation and declarations; they do not read external I/O and need no `~` answers. Each fresh session receives fresh extension state. Trace replay carries their Operation Declarations and uses the recorded call outcomes. This does not make them Standard Capabilities.
-- **In the Corpus,** a Transcript grants only `console` and mock Capabilities, since which Capabilities a REPL has built in, and what they cost, is each Host's own.
+- **In the Corpus,** a Transcript may include recorded object setup/crossings and grants only `console` and mock Capabilities, since which Capabilities a REPL has built in, and what they cost, is each Host's own.
 - **Bless** writes `case.trace` and fills in the output lines, only when every available REPL agrees, as for a Trace Case.
 
 ## Tooling
@@ -268,13 +286,14 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **No options:** one layout for every project.
 - **Line breaks are never added or removed,** since a line break ends a statement. The formatter changes only indentation, 2 spaces per block, spacing within a line, and runs of blank lines, keeping at most one outside fenced literal content.
 - **Comments and tokens:** it keeps every comment exactly, only re-indenting it, and never changes a token's spelling. Zero-argument choices print as `choose offer name`, omitting optional empty parentheses.
+- **Documentation attachment:** preserve the [marked-block attachment](session-observation.md#declaration-documentation), including the last separating blank line; formatting must not attach a previously detached block.
 - **Its invariants,** held by the tooling's tests: formatting is idempotent, and it never changes a unit's canonical disassembly, apart from the source positions it shows.
 
 ### The LSP
 
 - **Diagnostics:** the normative errors and the Lints.
 - **Completion:** Operations from the Grants, `catch` patterns from declared error codes, names from imports, message names from the Host Manifest, and Units and chunk words where the grammar allows them.
-- **Hover:** a Constant's value in the display form, an Operation's Declaration, and a Function Value's Home Script.
+- **Hover:** the declaration's [Declaration Documentation](session-observation.md#declaration-documentation), plus a Constant's value in the display form, an Operation's Declaration, and a Function Value's Home Script.
 - **Navigation:** go to definition and find references across imports, and rename.
 - **Recovery diagnostics:** use the grammar/checker rules and Advanced tags for offers, Recovery Catches and choices. A choice need not have a statically visible offer; dynamic availability alone is not a load error or LSP diagnostic. Beginner wording suggests a local catch with an explicitly supplied policy callback.
 - **Suspension marks:** a mark on every Suspension Point and every Handler or Lambda that may suspend. They add to the `wait` the source must already have, including a Join's `wait for all` head, and never replace it.

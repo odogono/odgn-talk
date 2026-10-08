@@ -1,5 +1,8 @@
 # `northtalk`
 
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is specified but not implemented here. Marked declaration-doc attachment/shared hover, the new observation commands, object-crossing replay and their prompt handling remain unavailable. Existing comment preservation does not implement doc attachment.
+
+
 The `northtalk` command: the TS REPL, replaying Session Transcripts, formatting source, Lints, the language server, and live debugging ([chapter 12](../../spec/12-sessions-and-tooling.md)). Sessions use [`@odgn/northtalk/session`](../../impl/ts/src/session/), which decides everything a session prints and records. Formatting and Lints use the shared tooling stack. Formatting uses [`@odgn/northtalk-tooling/format`](../stack/), which works on the Core's lossless syntax tree. The prompt, line editing, `:help`, `:quit`, formatting and the command line are outside parity.
 
 ```sh
@@ -82,7 +85,7 @@ bun run northtalk test --only testIncrements counter.test.talk
 - **The pass rule:** a test passes when its Run completes, no Run in the Group errors and no message goes unhandled. After the test Run ends, the Group runs on to idle without moving the Clock, so a background error still fails it.
 - **Output:**
   - stdout has `ok <file> <test>` for a pass.
-  - A failure prints `FAIL <file>:<line>:<col> <test>`, each problem indented, and the console output as `  | ` lines. The position is where the error was raised. For an assertion, or a failure with no position, it's the Test Handler's.
+  - A failure prints `FAIL <file>:<line>:<col> <test>`, each problem indented, and the console output as `  | ` lines. The position is where the error was raised. For an assertion, or an error raised in stdlib code, it's the call that raised it, and for a failure with no position, or one in a Host Manifest's Library, it's the Test Handler's.
   - A summary line ends the output.
   - `--only <text>` keeps the tests whose `<file> <test>` contains the text.
   - Exit codes: 0 when every test passes, 1 on any failure or when no tests are found, and 2 for invalid arguments, a missing path or an invalid manifest.
