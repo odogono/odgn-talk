@@ -1,4 +1,3 @@
-# Unblessed: Segment Coordinators (#459); first blessing awaits human review.
 # effect-coordinator-commit-failed: r and its alias share the coordinator db.
 # The one commit fails, so one rollback covers both Grants' writes and count
 # returns to its Segment base.
