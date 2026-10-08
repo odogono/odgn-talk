@@ -656,14 +656,21 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 ## Standard Capabilities
 
-A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console` and `store` ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
+A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)).
 
+<!-- generated: stdlib.capabilities -->
+
+The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store` and `sqlite`. `sqlite` is optional: a Host may choose not to offer it, but a Host that offers it follows every rule this chapter gives for it.
+
+<!-- end -->
+
+- **Optional for Hosts, not for Cores:** every Core defines every Standard Capability, and a Host offers an optional one by calling its factory ([chapter 9](09-embedding.md#capabilities)). A Script that calls one its Host doesn't offer has no Grant for it, so it fails to load like any other ungranted call.
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar`, `locale` and `store` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
+- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. Chapter 6 says how both kinds are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -814,12 +821,13 @@ A Standard Capability is a Capability whose Operation Declarations this chapter 
 - **What a Segment sees:** the committed Store, with the Segment's own uncommitted writes applied in call order. Every other Segment sees only the committed Store.
 - **Segment-bound:** `set`, `delete`, `increment` and `swap` are Segment-bound, so the first of them through a Grant enrolls that Grant in the Segment's participant ([the lifecycle contract](embedding/scoped-effects.md#segment-participant)). Their effects reach the committed Store only when the Segment commits, and a rollback discards them. A Grant of only `get` and `keys` never enrolls.
 - **One coordinator:** a Store implementation maps every Store it keeps to one Segment Coordinator, so writes to several of its Stores, or to one Store through several Grants, in one Segment enroll in one participant and commit together ([ADR 0069](../docs/adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)). Writing in the same Segment through a Segment-bound Grant the Host maps to another coordinator raises `segment participant conflict`.
+- **In a `sqlite` database:** a Host may keep its Stores in a database it offers through [`sqlite`](#sqlite), and map that database to the Store implementation's coordinator, so one Segment can write to both and commit them together ([ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)). The Store's commit then writes inside the Segment's database transaction. A Store write takes the database's write lock at its call, as `sqlite`'s `change` does, so a commit never finds the database busy, and fails with `store busy` while another Segment holds it. Every `sqlite` Grant is denied the Store's table, for reads too.
 - **`get key [, default]`** gives the value the Segment sees, or else `default` if one was given, or Nothing.
 - **`set key, value`** and **`delete key`** give Nothing. Deleting a missing key changes nothing.
 - **`keys [prefix]`** gives the keys the Segment sees whose code points begin with `prefix`'s, all of them without one, as a list of text in Unicode code-point order.
 - **`increment key [, by]`:** `by` is 1 if omitted or Nothing. The answer is the value the Segment sees plus `by`, under the `+` rules of [chapter 3](03-values.md#arithmetic), and a missing key gives `by` itself, so a Quantity can start a key. A value that isn't a number or a Quantity, or doesn't add to `by`, makes the Host fail with the error `+` would raise: `wrong kind`, `incompatible units` or `overflow`. Commit adds `by` to the value committed then, so increments from several Segments never lose a count. The call also fails if `by` wouldn't add to the committed value with every other live Segment's pending increments of the key applied, so a commit never meets those errors.
 - **`swap key, expected, new`** gives `true` and writes `new`, which deletes for Nothing, if the value the Segment sees equals `expected` under `=`. Otherwise it gives `false` and writes nothing. `expected` of Nothing means "only if missing".
-- **Reserved keys:** an uncommitted `set`, `delete` or `swap` that wrote reserves its key until its Segment ends, and an uncommitted `increment` reserves its key against every write but another `increment`. A write to a key another live Segment has reserved makes the Host fail with `store busy`, with `{key}`, before anything changes ([ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)). Reads are never refused. Only a Run preempted inside its Segment holds a reservation while another Script runs, so a Host without a Fuel Slice never raises it.
+- **Reserved keys:** an uncommitted `set`, `delete` or `swap` that wrote reserves its key until its Segment ends, and an uncommitted `increment` reserves its key against every write but another `increment`. A write to a key another live Segment has reserved makes the Host fail with `store busy`, with `{key}`, before anything changes ([ADR 0062](../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)). A Store kept in a `sqlite` database also fails a write with `store busy` while another Segment holds that database's write lock (below). Reads are never refused. Only a Run preempted inside its Segment holds a reservation while another Script runs, so a Host without a Fuel Slice never raises it.
 - **Quotas:** each Store has a total size, a key count and a largest value, which its Host sets. A key and its value count by their [logical sizes](08-the-abstract-machine-and-the-cost-model.md#logical-sizes). A write that would take the committed Store, with every live Segment's pending writes, past a quota makes the Host fail with `store full`, with `limit` one of `size`, `keys` and `value`. So a commit never exceeds a quota.
 - **Commit** applies the Segment's writes to every Store it wrote, at once, in call order, so a commit publishes all of them or none, and one that fails reports `failed` or `unknown` as any Segment-bound commit does. Reservations make a commit's result independent of other Segments' writes, so a Store fails a commit only when its own storage fails.
 - **Outside the Script:** Store contents never count toward Persistent State, and no save includes them ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)). Converting a value `get` gives is charged to the Run, as for any result ([chapter 9](09-embedding.md#capabilities)).
@@ -843,8 +851,62 @@ All six Operations are immediate: a Segment-bound Operation must be, and a read 
 > end claimPrize
 > ```
 
+### `sqlite`
+
+<!-- generated: stdlib.capability.sqlite -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `query sql, params [, max]` | immediate | The rows the read-only statement `sql` gives with `params` bound, as a list of maps from column name to value, in column order | `sql`, `not read-only`, `too many rows`, `unrepresentable`, `out of range` |
+| `change sql, params [, max]` | immediate | The map `{changes, rows}`: the rows the statement `sql` changed, and the rows it gave, such as those of a `RETURNING` clause; it commits with the Segment | `sql`, `constraint`, `sqlite busy`, `too many rows`, `unrepresentable`, `out of range` |
+| `begin` | immediate | Nothing; opens the scope `transaction`, which `rollback` abandons | `sqlite busy`, `scope already open`, `scope in join` |
+| `commit` | immediate | Nothing; closes the scope `transaction`, keeping its changes until the Segment commits | `scope not open` |
+| `rollback` | immediate | Nothing; closes the scope `transaction`, discarding its changes | `scope not open` |
+
+<!-- end -->
+
+`sqlite` runs SQL against a database the Host keeps, for a Script that keeps records it needs to search, join or total, which outgrow the Store's whole values under text keys ([ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)). It is optional: a Host need not offer it, and a Host that does follows every rule here. Its writes commit or roll back with the Segment that made them, as the Store's do.
+
+- **The database:** the Grant's binding names a database the Host keeps, never a path or a handle a Script can see. It may limit the tables the Grant can use, and it sets the most rows a call may give ([chapter 9](09-embedding.md#the-sqlite-factory)). Every Grant whose binding names the same database reaches the same contents, across Scripts and Groups.
+- **Dialect:** SQLite 3.45.0 or later. A Host may run a newer SQLite, and a portable Script keeps to what 3.45 accepts.
+- **Results may drift:** a newer SQLite can change what the same SQL gives. 3.53, for example, casts a `REAL` to text with 17 digits instead of 15. So raw SQL is portable only up to the Host's SQLite version. The value mapping below converts doubles itself and isn't affected, and a Trace replays exactly, since it records every result.
+- **Shapes:** `sql` is text, `params` a list or a map of data values, and `max` an Optional number. `begin`, `commit` and `rollback` take no arguments.
+- **One statement:** each call runs exactly one statement, and trailing statements raise `sql`.
+- **Parameters** are always bound, never spliced into the SQL. A list binds positionally, to `?` and `?NNN`, and a map binds by name, to `:name`, from keys written without the colon, so `{id: 3}` binds `:id`. The number of `params` must equal the number of placeholders. `@name` and `$name`, a statement that mixes positional and named placeholders, and a list given for named placeholders or a map for positional ones all raise `sql`.
+- **Values in:** Nothing binds as `NULL`. A number whose canonical text has no fraction digits (`3`, but not `3.0`) and that fits a signed 64-bit integer binds as `INTEGER`, and every other number as `REAL`, by the nearest double. Text binds as `TEXT`, Bytes as `BLOB`, and `true` and `false` as 1 and 0. Every other kind raises `wrong kind`, with `path` locating it inside `params`, and a Script converts it explicitly ([ADR 0003](../docs/adr/0003-no-implicit-coercion.md)).
+- **Values out:** `NULL` gives Nothing, `INTEGER` a number, `TEXT` NFC text and `BLOB` Bytes. `REAL` gives the shortest decimal that reads back as the same double, as [a float entering a Core](09-embedding.md#values-at-the-boundary) does. A NaN, an infinity, a `REAL` of magnitude 10^34 or more, and `TEXT` that isn't valid UTF-8 raise `unrepresentable`, with `column` its column's name. SQLite has no booleans, so a boolean comes back as 0 or 1.
+- **Rows:** a row is a map from column name to value, with its keys in the statement's column order. A result that names a column twice raises `sql`, so a Script names each column once, with `AS` where needed.
+- **`max`:** a call gives at most `max` rows. An omitted or Nothing `max` is the binding's row cap, and a `max` that isn't a whole number from 0 to that cap raises `out of range`, with `field: "max"`. A statement that gives more rows raises `too many rows`, with `max`. A result is never truncated.
+- **`query sql, params [, max]`** gives the list of rows. Its statement must be read-only, which SQLite checks before it runs, and a statement that could write raises `not read-only`. `query` is never Segment-bound, so a Grant of only `query` is read-only and never enrolls.
+- **`change sql, params [, max]`** gives `{changes, rows}`: `changes` is the number of rows the statement inserted, updated or deleted, and `rows` the rows it gave, such as a `RETURNING` clause's, or an empty list. There is no last inserted id, which would be meaningless for a multi-row insert, and `RETURNING` gives the ids instead. `change` accepts a statement that only reads, and still enrolls.
+- **Segment-bound:** `change`, `begin`, `commit` and `rollback` are Segment-bound, so the first of them through a Grant enrolls it in the Segment's participant ([the lifecycle contract](embedding/scoped-effects.md#segment-participant)). Their changes reach the database's committed state only when the Segment commits, and a rollback discards them. Without `begin`, a `change` commits or rolls back with its Segment.
+- **Transactions:** `begin` opens the Capability Scope `transaction`, whose abandonment is `rollback`, and `commit` and `rollback` close it ([ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md)). The scope is a savepoint inside the Segment's transaction: `commit` keeps its changes, but only until the Segment ends, and `rollback` discards them. An ordinary error with the scope open abandons it, discarding its changes, and then the Segment commits the rest. A Limit Fault, cancellation, Stop or [Rewind](09-embedding.md#threads-and-the-input-queue) rolls back everything, explicit `commit`s included. With the scope open, a `wait`, a suspending call or a Join raises `scope open` ([the lifecycle contract](embedding/scoped-effects.md#suspension-and-preemption)).
+- **Deferred constraints** are checked when the Segment commits, not at `commit`, so a deferred foreign key a Segment breaks fails the Segment's commit, and the Run ends `effect failed`. Every other constraint is checked at the statement, which raises `constraint`, with `kind` one of `unique`, `primary key`, `not null`, `check`, `foreign key`, `datatype` and `trigger`, or `other` for any other.
+- **One coordinator per database:** every Grant whose binding names one database, aliases included, maps to that database's Segment Coordinator ([ADR 0069](../docs/adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)). Writing to a second database, or to a Store kept elsewhere, in the same Segment raises `segment participant conflict`. A Segment can't commit several databases at once.
+- **Contention:** a Segment takes the database's write lock at its first `change` or `begin`, and holds it until the Segment ends. If another Segment holds it, the call raises `sqlite busy` before anything changes. Only a Run preempted inside its Segment holds the lock while another Script runs, so a Host without a Fuel Slice never raises it. A Script catches it and retries after a `wait`. Reads are never blocked: a Segment that holds the lock reads its own uncommitted changes, and every other Segment reads the last committed state.
+- **What the Host refuses:** statements that would step outside the Segment's transaction or the binding raise `sql`. These are `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`, `ATTACH`, `DETACH`, `VACUUM INTO`, `load_extension`, every `PRAGMA` but the read forms of `table_info`, `table_xinfo`, `index_list`, `index_info`, `index_xinfo`, `foreign_key_list` and `user_version`, and any use of a table outside the binding's limits ([chapter 9](09-embedding.md#the-sqlite-factory)).
+- **Cost:** each call charges its declared cost, and `query` and `change` also charge `max` times the Host's per-row Fuel cost, before the work, whatever the statement then gives. So a `change` that gives no rows is cheapest with `max` 0. Converting the rows a call gives is charged to the Run, as for any result ([chapter 9](09-embedding.md#capabilities)).
+- **Outside the Script:** database contents never count toward Persistent State, and no save includes them ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)). An open `transaction` or an enrolled participant makes a save fail with `effects pending` ([ADR 0049](../docs/adr/0049-live-host-effects-prevent-saving.md)).
+
+All five Operations are immediate: a Segment-bound Operation must be, and SQLite runs in the Host's own process.
+
+> **Example.**
+>
+> ```talk
+> on transfer fromId, toId, amount
+>   ask db to begin
+>   ask db to change "UPDATE accounts SET balance = balance - ? WHERE id = ?", [amount, fromId], 0
+>   if the changes of it is 0 then throw {code: "no account", id: fromId}
+>   ask db to change "UPDATE accounts SET balance = balance + ? WHERE id = ?", [amount, toId], 0
+>   ask db to commit
+> end transfer
+> ```
+>
+> The `throw` abandons the open `transaction`, which discards the debit, and the Segment commits nothing else.
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.
 - **Per-call costs** of Standard Capability Operations are set by each Host.
 - **Store contents** are each Host's own, like its zone and Locale data. The Trace records what each `store` call gave.
+- **`sqlite` results** are each Host's own SQLite's, which a newer version can change, as can the `reason` of an `sql` error. The Trace records what each `sqlite` call gave.

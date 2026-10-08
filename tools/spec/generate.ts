@@ -625,6 +625,11 @@ const stdlibCheck = (d: Data) => {
       fail(`the Standard Capability "${c}" has no Operations`);
     }
   }
+  for (const c of s.optional ?? []) {
+    if (!s.capabilities.includes(c)) {
+      fail(`"${c}" is optional but isn't a Standard Capability`);
+    }
+  }
 };
 
 // spec/stdlib/<library>.talk (ADR 0021): each stdlib Library's normative
@@ -1371,6 +1376,20 @@ const stdlibViews = (d: Data) => {
       ['Encoding', 'Bytes'],
       (s.encoding ?? []).map((e: any) => [code(`"${e.name}"`), e.bytes]),
     );
+  VIEWS['stdlib.capabilities'] = () => {
+    const names = (s.capabilities ?? []).map(code);
+    const optional = (s.optional ?? []).map(code);
+    const list = (xs: string[]) =>
+      xs.length < 2
+        ? xs.join('')
+        : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`;
+    return [
+      `The Standard Capabilities are ${list(names)}.`,
+      optional.length
+        ? ` ${list(optional)} ${optional.length === 1 ? 'is' : 'are'} optional: a Host may choose not to offer ${optional.length === 1 ? 'it' : 'them'}, but a Host that offers ${optional.length === 1 ? 'it' : 'one'} follows every rule this chapter gives for it.`
+        : '',
+    ].join('');
+  };
   for (const c of s.capabilities ?? []) {
     VIEWS[`stdlib.capability.${c}`] = () =>
       table(

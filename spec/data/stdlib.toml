@@ -11,6 +11,7 @@
 #
 # libraries      the stdlib Library names, which a Host may not register
 # capabilities   the Standard Capability names
+# optional       the Standard Capabilities a Host may choose not to offer
 #
 # [[builtin]]    a Built-in function or Constant; the properties are in grammar.toml
 #   name         its name
@@ -36,7 +37,8 @@
 #   errors       optional: the Error Codes it declares or the Core raises for it
 
 libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
-capabilities = ["clock", "calendar", "locale", "timer", "console", "store"]
+capabilities = ["clock", "calendar", "locale", "timer", "console", "store", "sqlite"]
+optional = ["sqlite"]
 
 # ---------------------------------------------------------------------------
 # Built-ins
@@ -1041,3 +1043,43 @@ mode = "immediate"
 call = "swap key, expected, new"
 gives = "`true`, after putting `new` under `key`, if the Segment sees `expected` there, and `false` otherwise"
 errors = ["invalid key", "can't store", "store full", "store busy"]
+
+[[operation]]
+capability = "sqlite"
+name = "query"
+mode = "immediate"
+call = "query sql, params [, max]"
+gives = "The rows the read-only statement `sql` gives with `params` bound, as a list of maps from column name to value, in column order"
+errors = ["sql", "not read-only", "too many rows", "unrepresentable", "out of range"]
+
+[[operation]]
+capability = "sqlite"
+name = "change"
+mode = "immediate"
+call = "change sql, params [, max]"
+gives = "The map `{changes, rows}`: the rows the statement `sql` changed, and the rows it gave, such as those of a `RETURNING` clause; it commits with the Segment"
+errors = ["sql", "constraint", "sqlite busy", "too many rows", "unrepresentable", "out of range"]
+
+[[operation]]
+capability = "sqlite"
+name = "begin"
+mode = "immediate"
+call = "begin"
+gives = "Nothing; opens the scope `transaction`, which `rollback` abandons"
+errors = ["sqlite busy", "scope already open", "scope in join"]
+
+[[operation]]
+capability = "sqlite"
+name = "commit"
+mode = "immediate"
+call = "commit"
+gives = "Nothing; closes the scope `transaction`, keeping its changes until the Segment commits"
+errors = ["scope not open"]
+
+[[operation]]
+capability = "sqlite"
+name = "rollback"
+mode = "immediate"
+call = "rollback"
+gives = "Nothing; closes the scope `transaction`, discarding its changes"
+errors = ["scope not open"]

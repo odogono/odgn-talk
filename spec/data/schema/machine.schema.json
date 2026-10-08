@@ -34,7 +34,7 @@
           "cost": { "type": "string", "minLength": 1 },
           "errors": {
             "type": "array",
-            "items": { "type": "string", "pattern": "^[a-z']+( [a-z']+)*$" },
+            "items": { "type": "string", "pattern": "^[a-z']+(-[a-z']+)*( [a-z']+(-[a-z']+)*)*$" },
             "uniqueItems": true
           },
           "does": { "type": "string", "minLength": 1 }

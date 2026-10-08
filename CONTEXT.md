@@ -33,7 +33,7 @@ A Host-granted permission to perform one kind of effect. Scripts have no ambient
 _Avoid_: permission, API access
 
 **Standard Capability**:
-A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console` and `store`.
+A Capability whose Operation Declarations the spec fixes, so every Host offers the same shapes, while each Host supplies the answers: `clock`, `calendar`, `locale`, `timer`, `console`, `store` and `sqlite`. `sqlite` is optional: a Host may choose not to offer it, but a Host that offers it follows every rule the spec gives for it.
 _Avoid_: built-in capability, system capability, core capability
 
 **Store**:

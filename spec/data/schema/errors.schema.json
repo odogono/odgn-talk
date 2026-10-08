@@ -21,7 +21,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "pattern": "^[a-z']+( [a-z']+)*$"
+            "pattern": "^[a-z']+(-[a-z']+)*( [a-z']+(-[a-z']+)*)*$"
           },
           "fields": {
             "type": "array",

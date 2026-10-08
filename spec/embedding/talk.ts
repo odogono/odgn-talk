@@ -326,6 +326,8 @@ export interface TimerImpl {
  * Segment's pending writes, which commit applies and rollback discards.
  * Throw ScriptError `can't store` {kind}, `store full` {limit} or `store busy`
  * {key}, and from increment the error `add` throws (chapter 7, ADR 0062).
+ * The implementation is its own Segment Coordinator, which a SqliteImpl gives
+ * for the database that keeps its Stores (ADR 0070).
  */
 export interface StoreImpl extends SegmentLifecycle<string> {
   get(call: Call<string>, key: string, fallback?: Value): Value;
@@ -334,6 +336,44 @@ export interface StoreImpl extends SegmentLifecycle<string> {
   keys(call: Call<string>, prefix?: string): Value;
   increment(call: Call<string>, key: string, by?: Value): Value;
   swap(call: Call<string>, key: string, expected: Value, replacement: Value): boolean;
+}
+/**
+ * sqlite is optional (chapter 7, ADR 0070). The binding names a database the
+ * Host keeps; tables, when present, limits the tables a Grant may use, and
+ * maxRows caps the rows a call may give.
+ */
+export interface SqliteBinding {
+  readonly database: string;
+  readonly tables?: readonly string[];
+  readonly maxRows: number;
+}
+/** NULL, INTEGER, REAL, TEXT and BLOB. */
+export type SqlValue = null | bigint | number | string | Uint8Array;
+/** A list binds `?` and `?NNN`; a Map binds `:name`, keyed without the colon. */
+export type SqlParams = readonly SqlValue[] | ReadonlyMap<string, SqlValue>;
+export interface SqlRows {
+  readonly columns: readonly string[];
+  readonly rows: readonly (readonly SqlValue[])[]; // each in column order
+}
+/**
+ * The Core has checked the Shapes and max, converted params by the chapter 7
+ * rules and charged max × perRow. It converts the result, raising `sql` for a
+ * column named twice and `unrepresentable` for a double it can't hold.
+ * change, begin, commit and rollback are Segment-bound: they act inside the
+ * calling Segment's transaction, which the coordinator publishes or discards.
+ * begin, commit and rollback open, release and roll back a savepoint. A failed
+ * call leaves the database as it was. Throw ScriptError `sql` {reason},
+ * `constraint` {kind}, `sqlite busy`, `not read-only`, `too many rows` {max},
+ * or `unrepresentable` {column} for TEXT that isn't valid UTF-8 (chapter 9).
+ */
+export interface SqliteImpl {
+  /** Called once per Grant. The same database gives the same coordinator. */
+  coordinator(database: string): SegmentCoordinator;
+  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows;
+  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows & { readonly changes: number };
+  begin(call: Call<SqliteBinding>): void;
+  commit(call: Call<SqliteBinding>): void;
+  rollback(call: Call<SqliteBinding>): void;
 }
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {
@@ -438,6 +478,8 @@ export interface Core {
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
   storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name; impl coordinates every binding
+  /** Optional for Hosts. perRow is whole Fuel charged per row of max; a bad one throws "invalid value". */
+  sqliteCapability(impl: SqliteImpl, costs: Costs, perRow: number): CapabilityDef<SqliteBinding>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

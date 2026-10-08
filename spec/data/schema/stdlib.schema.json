@@ -9,7 +9,7 @@
     "sentence": { "type": "string", "minLength": 1 },
     "errors": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^[a-z']+( [a-z']+)*$" },
+      "items": { "type": "string", "pattern": "^[a-z']+(-[a-z']+)*( [a-z']+(-[a-z']+)*)*$" },
       "minItems": 1,
       "uniqueItems": true
     }
@@ -22,6 +22,12 @@
       "uniqueItems": true
     },
     "capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/name" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "optional": {
       "type": "array",
       "items": { "$ref": "#/$defs/name" },
       "minItems": 1,
