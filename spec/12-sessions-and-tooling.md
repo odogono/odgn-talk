@@ -57,6 +57,7 @@ The Session Host keeps the **session source**: the Session Script's declarations
 - **Discarded Runs:** the Reload discards every Run, and the Session Host prints each one ([Output](#output)).
 - **A Reload that fails** leaves the session source and the Script as they were.
 - **`script variable x = e`** for an `x` the Script already has sets its initialiser in the session source, then runs `put e into x` as a statement Entry, with no Reload. With no initialiser, it runs `put nothing into x`.
+- **Migrating variables:** a Reload carries Script Variables as they are, so new Handlers may expect a different shape from the values they find. There is no migration hook ([#371](https://github.com/odogono/odgn-talk/issues/371)). The user enters a statement that converts the variable, right after the redefinition. Nothing runs in between, since the Reload discarded every Run and dropped the mailbox.
 
 ### Statements and expressions
 
@@ -309,7 +310,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **Recovery dispatch:** live and replay stepping follow the active policy/cleanup cursor, rather than the retained failed stack's deepest PC. Step over/out use the active owner path and helpers. Tooling-only frame views may add `role` (`retained` or `dispatch`); a dispatch activation includes an owning-frame reference and displays its actual shared owner locals. Ordinary frame views and chapter 9's Inspect schema are unchanged. Debugger callbacks stay outside saves, costs and Trace.
 - **The Clock:** live, the debugger's Host supplies Clock readings and subtracts paused time, so deadlines don't all fire on resume. In replay, the readings come from the Trace.
 - **Faults:** "break on error", caught or not, and "break on Limit Fault" pause before any rollback, so the state that caused it can be seen.
-- **No edits:** the debugger never writes Script state, and changing code is a Reload. **Fix and Continue** is a `RewindRun` of the paused Run followed by a Reload that keeps the mailbox, so the same message runs on the edited code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)). It is offered only while the paused Run hasn't passed a Suspension Point, and the debugger lists the Segment's effects that will happen again.
+- **No edits:** the debugger never writes Script state, and changing code is a Reload. **Fix and Continue** is a `RewindRun` of the paused Run followed by a Reload that keeps the mailbox, so the same message runs on the edited code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)). It is offered only while the paused Run hasn't passed a Suspension Point, and the debugger lists the Segment's effects that will happen again. The message runs again on the carried Script Variables, before any Entry the developer makes, so a change to their shape is migrated after it.
 - **Going back:** replay offers "run to Host Input *n*" and reverse steps, by replaying again from the start or from a save.
 - **Replaying a live Host's Trace,** the debugger answers every Host crossing from the Trace's own records ([chapter 11](11-the-trace-and-conformance.md#stubs)), and lands each early `Stop`, `CancelRun` or `RewindRun` at the instruction its `pc` names.
 

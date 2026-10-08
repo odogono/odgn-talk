@@ -147,6 +147,7 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 - **By name:** after the new initialiser runs, each Script Variable that the old code and the new code both declare takes its old value from the prospective post-rollback view. A stopped preempted Run's provisional writes are not carried into new code. A variables-only restore applies the same rule to discarded active Segments. One the new code doesn't declare is dropped, and one only the new code declares keeps its initial value.
 - **As they are:** a value is carried as it is, whatever its kind. A carried Function Value whose Home Script is the reloaded Script is stale.
 - **The cap:** the Script's Persistent State, measured with the carried values, must fit its cap ([chapter 6](06-errors-and-limits.md#limits)).
+- **Migrating:** the language has no migration hook ([#371](https://github.com/odogono/odgn-talk/issues/371)). A Host whose new code changes a variable's shape sends a Handler of the Script's own that converts it, right after a `Reload` without `keepMailbox`, and it is the first message the new code takes.
 
 ### Extend Script
 
