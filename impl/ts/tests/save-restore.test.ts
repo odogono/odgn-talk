@@ -556,6 +556,9 @@ test('checksummed malformed graphs and unsupported formats are invalid saves', (
     (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
       s.format = 1;
     },
+    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
+      s.format = 4;
+    },
   ]) {
     const outer = JSON.parse(new TextDecoder().decode(bytes));
     const saved = JSON.parse(outer.payload);

@@ -429,12 +429,16 @@ func TestRestoreRejectsMalformedFunctionAndQuantity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, what := range []string{"function code", "function body", "quantity unit"} {
+	for _, what := range []string{"function code", "function body", "function arity", "missing function arity", "quantity unit"} {
 		t.Run(what, func(t *testing.T) {
 			broken := rewriteSave(t, saved, func(data map[string]any) {
 				vars := data["Scripts"].([]any)[0].(map[string]any)["Variables"].([]any)
 				fn := vars[0].(map[string]any)["Function"].(map[string]any)
 				switch what {
+				case "function arity":
+					fn["Required"] = -1
+				case "missing function arity":
+					delete(fn, "Total")
 				case "function code":
 					fn["CodeState"] = map[string]any{"$ref": "group"}
 				case "function body":

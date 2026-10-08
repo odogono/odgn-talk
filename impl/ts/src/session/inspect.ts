@@ -1,6 +1,6 @@
 // Passive inspection renders held Values; only the ordinary reader Run calls getters.
 import { integerValue } from '../operations';
-import { arityOf, type Body } from '../code-unit';
+import { functionHead } from '../code-unit';
 import { functionDoc } from '../documentation';
 import { shapeData } from '../manifest';
 import { stateOf } from '../objects';
@@ -71,17 +71,16 @@ export const valueRows = (value: Value): string[] => {
   }
   if (value.kind === 'function') {
     const fn = value.asFunction()!;
-    const body = (fn.code as { body?: Body } | null)?.body;
-    const arity = body ? arityOf(body) : null;
+    const head = functionHead(fn.code);
     out.push(
       `function ${map([
-        ['name', !body || body.kind === 'lambda' ? nothing : text(body.name)],
+        ['name', head?.name == null ? nothing : text(head.name)],
         [
           'arity',
-          arity
+          head
             ? range(
-                integerValue(BigInt(arity.min)),
-                integerValue(BigInt(arity.max)),
+                integerValue(BigInt(head.min)),
+                integerValue(BigInt(head.max)),
               )
             : nothing,
         ],

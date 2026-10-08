@@ -99,21 +99,7 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 			}
 			return text(v.Function.Name), nil
 		}
-		state, ok := v.Function.Owner.(*State)
-		if !ok {
-			return domain(v)
-		}
-		if code, ok := v.Function.CodeState.(*State); ok {
-			state = code
-		}
-		body := state.Unit.Bodies[v.Function.Body]
-		required := 0
-		for _, p := range body.Checked.Node.Params {
-			if body.Checked.Kind != "function" || len(p.Children) == 0 {
-				required++
-			}
-		}
-		result, _ := value.NewRange(integer(int64(required)), integer(int64(len(body.Checked.Node.Params))))
+		result, _ := value.NewRange(integer(int64(v.Function.Required)), integer(int64(v.Function.Total)))
 		return result, nil
 	case "abs":
 		if v.Kind != value.Number && v.Kind != value.Quantity {

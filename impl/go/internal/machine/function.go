@@ -1,9 +1,19 @@
 package machine
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"slices"
 )
+
+func functionArity(body *lower.Body) (required, total int) {
+	for _, param := range body.Checked.Node.Params {
+		if body.Checked.Kind != "function" || len(param.Children) == 0 {
+			required++
+		}
+	}
+	return required, len(body.Checked.Node.Params)
+}
 
 func functionArguments(fn value.Value, args []value.Value) (*State, []value.Value, *value.Value) {
 	data := fn.Function
@@ -12,13 +22,8 @@ func functionArguments(fn value.Value, args []value.Value) (*State, []value.Valu
 		code = unit
 	}
 	body := code.Unit.Bodies[data.Body]
-	required := 0
-	for _, param := range body.Checked.Node.Params {
-		if body.Checked.Kind != "function" || len(param.Children) == 0 {
-			required++
-		}
-	}
-	if len(args) < required || len(args) > len(body.Checked.Node.Params) {
+	required, total := functionArity(body)
+	if len(args) < required || len(args) > total {
 		e := failure("wrong arity")
 		return code, nil, &e
 	}

@@ -109,7 +109,7 @@ export const functionDoc = (value: Value): string | null => {
   return fn ? codeDoc(fn.code) : null;
 };
 
-// Live code holds its body; stale code that a save dropped keeps only `doc`.
+// Live code holds its body; a save retains stale code's documentation and head.
 export const codeDoc = (code: unknown): string => {
   const c = code as { body?: { doc?: string }; doc?: string } | null;
   return c?.body?.doc ?? c?.doc ?? '';

@@ -9,5 +9,5 @@ var Function func(value any) (string, bool)
 
 // FunctionHead gives a Function Value's name, empty for a Lambda, and the
 // argument counts it accepts, as functionName and functionArity read them.
-// False means the value is not a Function Value or its code is no longer held.
+// False means the value is not a Function Value; stale values still answer.
 var FunctionHead func(value any) (name string, required, total int, ok bool)

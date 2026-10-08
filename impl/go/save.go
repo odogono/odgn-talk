@@ -132,6 +132,7 @@ type savedGroup struct {
 
 // savedStale is a unit only stale Function Values still use: its name, and
 // each body's Declaration Documentation, which outlives the code.
+// FunctionData retains each value's name and arity separately.
 type savedStale struct {
 	Name string
 	Docs []string `json:",omitempty"`
@@ -253,6 +254,9 @@ func (g *Group) codec(ref func(any) (string, bool), resolve func(string) (any, b
 		}
 		if !code.Gone && (code.Unit == nil || fn.Body < 0 || fn.Body >= len(code.Unit.Bodies)) {
 			return fmt.Errorf("invalid Function body")
+		}
+		if fn.Required < 0 || fn.Total < fn.Required {
+			return fmt.Errorf("invalid Function arity")
 		}
 		return nil
 	}, ValueType: reflect.TypeFor[Value](), UnwrapValue: func(v any) corevalue.Value { return v.(Value).inner }, WrapValue: func(v corevalue.Value) any { return Value{v} }, Object: func(kind, id string) (corevalue.Value, error) {

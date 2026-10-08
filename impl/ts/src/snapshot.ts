@@ -16,8 +16,9 @@ import { Run, coreRaised, loadScript } from './machine';
 import { checkSource } from './checker';
 import { lowerTree } from './lowering';
 import { codeDoc } from './documentation';
+import { functionHead } from './code-unit';
 
-export const saveFormatVersion = 4;
+export const saveFormatVersion = 5;
 
 type Atom = boolean | number | string | null | [string, (string | number)?];
 type Node = { data: unknown; kind: string };
@@ -34,6 +35,12 @@ export const reference = (refs: References, key: string, value: object) => {
   refs.byKey.set(key, value);
   refs.byObject.set(value, key);
 };
+
+const staleCode = (code: unknown) => ({
+  home: { live: false },
+  doc: codeDoc(code),
+  head: functionHead(code),
+});
 
 export const saveGraph = (root: unknown, refs: References): Graph => {
   const nodes: Node[] = [];
@@ -88,9 +95,11 @@ export const saveGraph = (root: unknown, refs: References): Graph => {
         const code = fn.code as { home: { live: boolean } };
         data = atom({
           ...fn,
+          // Keep the original head before variables-only restore can rebind
+          // body references to a changed Library's code.
           code: code.home.live
-            ? fn.code
-            : { home: { live: false }, doc: codeDoc(fn.code) },
+            ? { ...(fn.code as object), head: functionHead(fn.code) }
+            : staleCode(fn.code),
         });
       } else if (v.kind === 'list') {
         kind = 'list';
@@ -239,12 +248,23 @@ export const restoreGraph = (
       case 'function':
         child(n.data as Atom, v => {
           const fn = v as FunctionRef;
+          const head = functionHead(fn.code);
+          if (
+            !head ||
+            (head.name !== null && typeof head.name !== 'string') ||
+            !Number.isSafeInteger(head.min) ||
+            !Number.isSafeInteger(head.max) ||
+            head.min < 0 ||
+            head.max < head.min
+          ) {
+            invalid();
+          }
           finish(
             functionValue(
               variablesOnly
                 ? {
                     ...fn,
-                    code: { home: { live: false }, doc: codeDoc(fn.code) },
+                    code: staleCode(fn.code),
                   }
                 : fn,
             ),

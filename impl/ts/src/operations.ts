@@ -19,7 +19,7 @@ import {
   ArithmeticError,
   type Dec,
 } from './decimal';
-import { arityOf, type Body } from './code-unit';
+import { functionHead } from './code-unit';
 import { itemsOf } from './costs';
 import { BINARY32, BINARY64, readFloat, writeFloat } from './floats';
 import {
@@ -1929,12 +1929,11 @@ export const builtin = (
       if (x!.kind !== 'function') {
         throw wrongKind('function', x!);
       }
-      // A stale Function Value still holds its code, so both still answer.
-      const { body } = x!.asFunction()!.code as { body: Body };
+      const head = functionHead(x!.asFunction()!.code)!;
       if (name === 'functionName') {
-        return { result: body.kind === 'lambda' ? nothing : text(body.name) };
+        return { result: head.name === null ? nothing : text(head.name) };
       }
-      const { min, max } = arityOf(body);
+      const { min, max } = head;
       return {
         result: range(integerValue(BigInt(min)), integerValue(BigInt(max))),
       };

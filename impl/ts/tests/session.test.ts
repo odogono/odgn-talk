@@ -58,6 +58,41 @@ test('an echoed map with an offer key reads back as an equal map', () => {
 });
 
 const start = parseInstant('2026-09-30T10:00:00Z');
+
+test('stale Function Values keep their name and arity through Session restore', () => {
+  const host = new SessionHost({ now: () => start });
+  for (const source of [
+    '--| Original double.\nfunction double n, m = 1\n  return n * 2\nend double',
+    'put double into g',
+    'put given [x, y], z: x + y + z into pair',
+    'put given: 1 into zero',
+    'function double n\n  return n + n\nend double',
+  ]) {
+    expect(host.input(source)).toEqual([]);
+  }
+  expect(host.input('functionName(g)')).toEqual(['"double"']);
+  expect(host.input('functionArity(g)')).toEqual(['1..2']);
+  for (let i = 0; i < 2; i++) {
+    expect(host.input(':save s')).toEqual(['saved s']);
+    expect(host.input(':restore s')).toEqual(['restored s']);
+    expect(host.input('functionName(g)')).toEqual(['"double"']);
+    expect(host.input('functionArity(g)')).toEqual(['1..2']);
+    expect(host.input('[functionName(pair), functionArity(pair)]')).toEqual([
+      '[nothing, 2..2]',
+    ]);
+    expect(host.input('[functionName(zero), functionArity(zero)]')).toEqual([
+      '[nothing, 0..0]',
+    ]);
+    expect(host.input(':describe g')).toContain(
+      'function {name: "double", arity: 1..2, home: "session"}',
+    );
+    expect(host.input(':describe g')).toContain('doc "Original double."');
+    expect(
+      host.input('try\n  g(2)\ncatch e\n  say the code of e\nend try'),
+    ).toEqual(['function gone']);
+  }
+});
+
 const session = () => {
   const clock = { now: start };
   const trace: string[] = [];

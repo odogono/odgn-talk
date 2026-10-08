@@ -52,13 +52,15 @@ type ObjectData struct {
 	Disposed *atomic.Bool // Core lifecycle state; identity and encoding ignore it.
 }
 type FunctionData struct {
-	CodeState  any
-	Body       int
-	Owner      any
-	Group      any
-	Name       string
-	Home, Code string
-	Captures   []Pair
+	CodeState any
+	Body      int
+	Owner     any
+	Group     any
+	Name      string
+	// Arity is value metadata, retained even when a save drops stale code.
+	Required, Total int
+	Home, Code      string
+	Captures        []Pair
 }
 
 // IteratorData is private machine state retained by an internal value.
