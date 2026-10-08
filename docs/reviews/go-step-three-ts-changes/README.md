@@ -16,6 +16,10 @@ blessed on both Cores and carry no `Unblessed` marker; their approval is in the
 asks a separate question: **does each TS code change implement the Spec rule it
 cites?** Approving the Traces does not answer that.
 
+**Outcome:** the maintainer reviewed all six changes on 2026-10-08 and
+confirmed each against the Spec rule it cites, including the reading under
+#272. No Spec change is needed.
+
 Code links point to current `main`. The diffs are the `impl/ts/src` part of each
 merged PR (`gh pr diff <n>`).
 
@@ -55,8 +59,7 @@ The clause is never tried if its charge fails, so replacement can't happen yet.
 combined dispatch charge" (`group.test.ts`) and "a replacement paused before
 payment cancels its owner only after paying" (`debug.test.ts`).
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## #272: an ordinary Decision is allowed only after the complete first charge
 
@@ -83,14 +86,13 @@ its first instruction and the Decision is `Undecided`, with no Fuel spent. With
 **Reviewer note:** no sentence says what happens to an _ordinary_ clause's
 Decision when its dispatch charge fails. The change concludes that dispatch has
 not happened until the clause is paid for, so nothing has allowed the Decision
-and the fault leaves it undecided. Confirm that reading. If you disagree, the
-Spec needs a sentence, not just the code.
+and the fault leaves it undecided. The maintainer confirmed that reading, so
+the Spec stands as written.
 
 **Evidence:** `decisions/script-verdict-boundaries`; TS test "ordinary
 Decision dispatch must pay the complete first instruction" (`group.test.ts`).
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## #278: event tests pay no `clause` charge; Guard errors are recorded at observation
 
@@ -136,8 +138,7 @@ agreement alone, with the maintainer's approval. Go later verified all four
 [event-test charging record](../event-test-charging/README.md#complete-parity-verification).
 Nothing about that exception is still open.
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## #283: a Script send's reply wait is counted before suspension
 
@@ -171,8 +172,7 @@ at non-Script suspensions (`ask`, foreign calls, event captures) was fixed under
 [#281](https://github.com/odogono/odgn-talk/issues/281); see the
 [suspension retention record](../suspension-retention/README.md).
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## #288: Join retention and replies during preemption
 
@@ -212,8 +212,7 @@ The code is in [`machine.ts`](../../../impl/ts/src/machine.ts) and
 Join counts pending members at its closing end" and "a Script reply arriving
 before a preempted Join closes is retained" (`script-joins.test.ts`).
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## #291: declared Operation charges are atomic
 
@@ -241,8 +240,7 @@ costs 0 Fuel and 0 allocation, and makes no Host call.
 TS test "an immediate Operation checks declared allocation together with call
 Fuel" (`capability-costs.test.ts`).
 
-- [ ] Confirmed against the Spec
-- [ ] Disagree:
+- [x] Confirmed against the Spec
 
 ## Validation
 
