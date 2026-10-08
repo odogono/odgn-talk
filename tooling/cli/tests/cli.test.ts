@@ -249,6 +249,23 @@ test('lint recovers after syntax errors and returns a syntax failure separately 
   expect(result.stdout).toContain('[key-shadows-property]');
 });
 
+test('lint suggests list splicing only in beginner and never rejects nesting', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const file = join(dir, 'demo.talk');
+  writeFileSync(
+    file,
+    'on demo\nput [] into acc\nput [1, 2] after acc\nend demo',
+  );
+  const beginner = run(['lint', '--profile', 'beginner', file]);
+  expect(beginner.code).toBe(0);
+  expect(beginner.stdout).toContain(`${file}:3:1: hint [suggest-list-splice]`);
+  expect(beginner.stdout).toContain('append its items instead');
+  expect(beginner.stderr).toBe('');
+  const standard = run(['lint', file]);
+  expect(standard.code).toBe(0);
+  expect(standard.stdout).toBe('');
+});
+
 test('lint accepts multiple files and rejects invalid profile names and missing files', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
   const file = join(dir, 'demo.talk');

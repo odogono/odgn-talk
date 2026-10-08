@@ -558,6 +558,7 @@ export const lintSyntax = (
     options.manifest,
     emitAt,
     options.checkOptions?.unit,
+    Object.keys(options.checkOptions?.libraries ?? {}),
   );
   return lints.sort(
     (a, b) => a.span.start - b.span.start || a.id.localeCompare(b.id),

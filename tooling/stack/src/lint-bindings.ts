@@ -736,6 +736,154 @@ const lintCollecting = (block: SemanticNode, emit: Emit) => {
   }
 };
 
+// List nesting is valid, so this is optional beginner advice, not a bug claim.
+// Track only straight-line local values. Each body starts afresh; branches,
+// recovery and loop back edges do not inherit facts from another body.
+const lintListAppend = (
+  all: SemanticElement[],
+  parents: Map<SemanticElement, SemanticNode>,
+  suppliedLibraries: Set<string>,
+  emit: Emit,
+) => {
+  const listFunctions = new Set([
+    'zip',
+    'unique',
+    'reverse',
+    'flatten',
+    'sort',
+    'sortBy',
+    'sortWith',
+    'filter',
+    'map',
+    'partition',
+  ]);
+  // Script Variables can change across calls or suspension; only locals and
+  // immutable Constants carry evidence. Lambda Captures are read-only copies.
+  const constants = new Set<number>();
+  const isList = (expression: SemanticNode, known: Set<number>): boolean => {
+    if (
+      elements(expression, true).some(
+        e => e.kind === 'node' && e.rule === 'Error',
+      )
+    ) {
+      return false;
+    }
+    const value = unwrap(expression);
+    if (value.kind === 'name') {
+      return value.binding !== null && known.has(value.binding.id);
+    }
+    if (value.kind !== 'node') {
+      return false;
+    }
+    if (value.rule === 'List') {
+      return true;
+    }
+    if (value.rule === 'Call') {
+      const fn = first(value);
+      const imported = fn?.kind === 'name' && fn.binding?.importedFrom;
+      return !!(
+        imported &&
+        imported.library === 'list' &&
+        !suppliedLibraries.has('list') &&
+        listFunctions.has(imported.name)
+      );
+    }
+    return false;
+  };
+  for (const e of all) {
+    if (
+      e.kind === 'node' &&
+      e.rule === 'Declaration' &&
+      first(e)?.text === 'constant'
+    ) {
+      const name = child(e, 'Name');
+      const binding = name && first(name);
+      const expression = child(e, 'Expression');
+      if (
+        binding?.kind === 'name' &&
+        binding.binding?.kind === 'constant' &&
+        expression &&
+        isList(expression, constants)
+      ) {
+        constants.add(binding.binding.id);
+      }
+    }
+  }
+  // Direct evidence also works in inline `if` arms and Entry syntax, which
+  // need not have their own Block. The emitter deduplicates block advice.
+  for (const simple of all) {
+    if (
+      simple.kind !== 'node' ||
+      simple.rule !== 'SimpleStatement' ||
+      leaves(simple)
+        .map(t => t.text)
+        .join(' ') !== 'put after'
+    ) {
+      continue;
+    }
+    const expression = child(simple, 'Expression');
+    if (expression && isList(expression, constants)) {
+      emit('suggest-list-splice', first(simple)!.span);
+    }
+  }
+  const collectingTarget = (loop: SemanticNode | undefined) => {
+    const clause =
+      loop?.rule === 'Repeat' ? child(loop, 'Collecting') : undefined;
+    const name = clause && child(clause, 'Name');
+    const target = name && first(name);
+    return target?.kind === 'name' && target.binding?.kind === 'local'
+      ? target.binding.id
+      : undefined;
+  };
+  for (const block of all) {
+    if (block.kind !== 'node' || block.rule !== 'Block') {
+      continue;
+    }
+    let known = new Set(constants);
+    const collection = collectingTarget(parents.get(block));
+    if (collection !== undefined) {
+      known.add(collection);
+    }
+    for (const statement of nodes(block)) {
+      const simple = child(statement, 'SimpleStatement');
+      if (!simple) {
+        known = new Set(constants);
+        const target = collectingTarget(child(statement, 'Repeat'));
+        if (target !== undefined) {
+          known.add(target);
+        }
+        continue;
+      }
+      const operation = leaves(simple)
+        .map(t => t.text)
+        .join(' ');
+      const expression = child(simple, 'Expression');
+      const list = expression && isList(expression, known);
+      if (operation === 'put after' && list) {
+        emit('suggest-list-splice', first(simple)!.span);
+      }
+      // Invalidate every written binding, including a Container's root, and
+      // implicit outputs such as `it`. Aliases copy the current value evidence.
+      for (const e of elements(simple)) {
+        if (
+          e.kind === 'name' &&
+          e.binding &&
+          (e.role === 'write' || e.role === 'binding')
+        ) {
+          known.delete(e.binding.id);
+        }
+      }
+      if (operation === 'put into' && list) {
+        const container = child(simple, 'Container');
+        const target = container && unwrap(container);
+        if (target?.kind === 'name' && target.binding?.kind === 'local') {
+          known.add(target.binding.id);
+        }
+      }
+    }
+  }
+};
+
 // A `get` and a later `set` of the same Store key through the same Grant,
 // with the value flowing from one to the other, loses an update another
 // Script makes in between (ADR 0050). Within one Handler, in source order and
@@ -887,6 +1035,7 @@ export const lintBindings = (
   manifest: HostManifest | null | undefined,
   emit: Emit,
   unit: 'script' | 'library' = 'script',
+  suppliedLibraries: readonly string[] = [],
 ) => {
   const all = elements(tree.root, true);
   const parents = new Map<SemanticElement, SemanticNode>();
@@ -897,6 +1046,15 @@ export const lintBindings = (
       }
     }
   }
+  lintListAppend(
+    all,
+    parents,
+    new Set([
+      ...suppliedLibraries,
+      ...(manifest?.libraries ?? []).map(library => library.name),
+    ]),
+    emit,
+  );
   const patterns = patternIndex(all);
   const constantKeys = new Map<number, Set<string>>();
   for (const e of all) {

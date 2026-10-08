@@ -255,6 +255,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **A Lint** is advice about a Script that loads, and never rejects it. Each has a stable kebab-case id, and a level in each Lint Profile: `off`, `hint` or `warning`. There is no `error` level.
 - **Lint Profiles:** `beginner` and `standard`. The Host sets the default, such as a beginner Playground, and a user may override it.
 - **Explicit endings:** `prefer-explicit-end` flags each bare block-ending `end` at that token, suggesting the matching `end <name>` or `end <keyword>`. It is a warning in `beginner` and off in `standard`, using the existing suppression convention. It never prevents loading or execution. Bare endings are a style choice, not Advanced Constructs; beginner examples use explicit endings.
+- **List splicing:** `suggest-list-splice` hints in `beginner` and is off in `standard`. For `put xs after acc` with clear list evidence, it explains that `xs` becomes one element and suggests `put ...xs after acc` to append its items instead. Nesting is valid, so there is no automatic rewrite. The [tooling guide](../tooling/stack/README.md#lints) describes its conservative evidence and limits (#381).
 - **Suppressing:** `-- lint: ignore <id>` on the line before suppresses one Lint there. It is a comment, not syntax.
 - **The catalogue** is the tooling's `lints.toml`, with a wording template per Lint. It is published, but adding, removing or re-levelling a Lint is never a language change.
 

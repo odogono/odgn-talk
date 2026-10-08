@@ -16,6 +16,11 @@ export const fixtures: readonly {
   positive: string;
 }[] = [
   {
+    id: 'suggest-list-splice',
+    positive: script('put [] into acc\nput [1, 2] after acc'),
+    negative: script('put [] into acc\nput ...[1, 2] after acc'),
+  },
+  {
     id: 'suggest-collecting',
     positive: script(
       'put [] into acc\nrepeat for each n in [1, 2]\nput n * 2 after acc\nend repeat',
