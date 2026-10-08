@@ -1,0 +1,32 @@
+# First blessing approved by the maintainer on 2026-10-08 (#457).
+# Both changes pass admission; the second becomes a cycle at drain.
+> load root identity=0132ff40330ade79aba38e1100c7ad1e1ef26166d3543e216c81540f204e4509
+> set-parent object=<object room "a"> parent=<object room "b">
+> set-parent object=<object room "b"> parent=<object room "a">
+> set-parent object=<object room "c"> parent=<object room "b">
+> request d1 to=<object room "c"> message=ping
+> pump clock=2026-10-08T09:00:00Z
+refused code="parent cycle"
+seg root/r1 start delivery=d1 handler=ping clause=1 fuel=20 alloc=16 state=16 end=return
+run root/r1 outcome=completed delivery=d1 handler=ping value="c" fuel=20 alloc=16
+pumped state=idle fuel=20
+# Disposal before the parent input makes its child invalid at drain.
+> dispose object=<object room "c">
+> set-parent object=<object room "c"> parent=<object room "b">
+> request d2 to=<object room "a"> message=ping
+> pump clock=2026-10-08T09:00:01Z
+refused code="invalid value"
+seg root/r2 start delivery=d2 handler=ping clause=1 fuel=20 alloc=16 state=16 end=return
+run root/r2 outcome=completed delivery=d2 handler=ping value="a" fuel=20 alloc=16
+pumped state=idle fuel=20
+# Later valid inputs still execute, and b remains a root.
+> request d3 to=<object room "b"> message=ping
+> pump clock=2026-10-08T09:00:02Z
+seg root/r3 start delivery=d3 handler=ping clause=1 fuel=20 alloc=16 state=16 end=return
+run root/r3 outcome=completed delivery=d3 handler=ping value="b" fuel=20 alloc=16
+pumped state=idle fuel=20
+# The first refusal left b's original parent intact.
+> set-parent object=<object room "b"> parent=<object room "a">
+refused code="parent cycle"
+> vars
+vars root n=3

@@ -8,6 +8,7 @@ import {
   newGroup,
   parseInstant,
   readDisplay,
+  restore,
   ScriptError,
   text,
 } from '../src/index';
@@ -73,6 +74,94 @@ describe('Host Objects', () => {
     group.pump(now);
     expect(() => group.setParent(b, a)).toThrow(HostError);
     expect(lines.at(-1)).toBe('refused code="parent cycle"');
+  });
+
+  test('queued parent changes recheck cycles at drain and continue with later inputs', () => {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    const a = group.object(room, 'a', null);
+    const b = group.object(room, 'b', null);
+    const c = group.object(room, 'c', null);
+    group.setParent(a, b);
+    group.setParent(b, a);
+    group.setParent(c, b);
+    expect(lines).toEqual([]);
+    expect(group.pump(now).reports).toEqual([
+      {
+        kind: 'host error',
+        code: 'parent cycle',
+        detail: expect.any(String),
+      },
+    ]);
+    expect(lines.filter(line => line.startsWith('refused'))).toEqual([
+      'refused code="parent cycle"',
+    ]);
+    // The refused change leaves b a root; both accepted changes remain applied.
+    expect(() => group.setParent(b, a)).toThrow(
+      expect.objectContaining({ code: 'parent cycle' }),
+    );
+    expect(() => group.setParent(b, c)).toThrow(
+      expect.objectContaining({ code: 'parent cycle' }),
+    );
+    group.setParent(b, undefined);
+    expect(group.pump(now).reports).toEqual([]);
+  });
+
+  test('a queued parent change refuses a child disposed by an earlier input', () => {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    const a = group.object(room, 'a', null);
+    const b = group.object(room, 'b', null);
+    group.dispose(a);
+    group.setParent(a, b);
+    expect(group.pump(now).reports).toEqual([
+      {
+        kind: 'host error',
+        code: 'invalid value',
+        detail: expect.any(String),
+      },
+    ]);
+    expect(lines.filter(line => line.startsWith('refused'))).toEqual([
+      'refused code="invalid value"',
+    ]);
+    // A disposed child still has identity, but its refused parent stays unset.
+    group.setParent(b, a);
+    expect(group.pump(now).reports).toEqual([]);
+    expect(() => group.setParent(a, undefined)).toThrow(
+      expect.objectContaining({ code: 'invalid value' }),
+    );
+  });
+
+  test('a saved queued parent change rechecks a child unresolved by Restore', () => {
+    const original = newGroup({ name: 'g' });
+    const a = original.object(room, 'a', null);
+    const b = original.object(room, 'b', null);
+    original.setParent(a, b);
+    const lines: string[] = [];
+    const { group, result } = restore(original.save(), {
+      name: 'restored',
+      trace: line => lines.push(line),
+      libraries: [],
+      grants: () => undefined,
+      resolve: (_kind, id) => (id === 'b' ? { native: null } : undefined),
+      onMismatch: 'reject',
+    });
+    expect(result.disposed).toEqual([['room', 'a']]);
+    expect(group.pump(now).reports).toEqual([
+      {
+        kind: 'host error',
+        code: 'invalid value',
+        detail: expect.any(String),
+      },
+    ]);
+    expect(lines.filter(line => line.startsWith('refused'))).toEqual([
+      'refused code="invalid value"',
+    ]);
+    group.setParent(
+      group.objectById('room', 'b')!,
+      group.objectById('room', 'a'),
+    );
+    expect(group.pump(now).reports).toEqual([]);
   });
 
   test('an object has at most one Owning Script', () => {

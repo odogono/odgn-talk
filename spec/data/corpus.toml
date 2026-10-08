@@ -1211,7 +1211,7 @@ is = "the next deadline: the earliest timer the next Pump could fire, a `maxPend
 name = "refused"
 input = false
 ids = []
-is = "the Host Input before it was refused at the call, and changed nothing"
+is = "a Host Input was refused at the call or at drain, and changed nothing"
 
 [[record.key]]
 key = "code"

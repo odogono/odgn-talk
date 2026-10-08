@@ -837,7 +837,7 @@ Kind metadata at Load and Reload.
 ### Object Message Paths
 
 `SetParent` queues parent changes and rejects known cycles and disposed children.
-Changes that become invalid while queued report a HostError in the next Pump.
+Changes that become invalid while queued, including children unresolved by Restore, leave the parent unchanged, write `refused`, and report a `*HostError` in the next Pump. Later inputs still drain; the report code is covered by parity and its detail is Host-only.
 `ParentKinds` remains manifest metadata. Disposal preserves Object identity,
 stops its owning Script without finally cleanup, and routing skips to its parent.
 Later Script-addressed deliveries are accepted and dropped under the same Stop

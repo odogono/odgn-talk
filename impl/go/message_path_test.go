@@ -78,12 +78,16 @@ func TestMessagePathParentChangesRejectCyclesInInputOrder(t *testing.T) {
 	k := objectKindForTest(t, c, "room")
 	a, _ := g.Object(k, "a", nil)
 	b, _ := g.Object(k, "b", nil)
+	third, _ := g.Object(k, "c", nil)
 	if err := g.SetParent(a, b); err != nil {
 		t.Fatal(err)
 	}
 	if err := g.SetParent(b, a); err != nil {
 		t.Fatal(err)
 	} // unknown until the queue drains
+	if err := g.SetParent(third, b); err != nil {
+		t.Fatal(err)
+	}
 	result, err := g.Pump(time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), PumpOptions{})
 	if err != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err)
@@ -93,9 +97,65 @@ func TestMessagePathParentChangesRejectCyclesInInputOrder(t *testing.T) {
 		t.Fatal(operationalReports(result.Reports))
 	}
 	hostCode(t, g.SetParent(b, a), ParentCycle)
+	hostCode(t, g.SetParent(b, third), ParentCycle)
 	hostCode(t, g.SetParent(a, a), ParentCycle)
 	if err := g.SetParent(a, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMessagePathParentChangeRejectsDisposedChildAtDrain(t *testing.T) {
+	for _, restoreQueued := range []bool{false, true} {
+		name := "earlier disposal"
+		if restoreQueued {
+			name = "unresolved Restore child"
+		}
+		t.Run(name, func(t *testing.T) {
+			core := New()
+			g := core.NewGroup(GroupOptions{})
+			kind := objectKindForTest(t, core, "room")
+			a, _ := g.Object(kind, "a", nil)
+			b, _ := g.Object(kind, "b", nil)
+			if !restoreQueued {
+				if err := g.Dispose(a); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := g.SetParent(a, b); err != nil {
+				t.Fatal(err)
+			}
+			if restoreQueued {
+				saved, err := g.Save()
+				if err != nil {
+					t.Fatal(err)
+				}
+				g, _, err = core.Restore(saved, RestoreOptions{Resolve: func(kind, id string) (any, bool) {
+					return nil, id == "b"
+				}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				a, _ = g.ObjectByID("room", "a")
+				b, _ = g.ObjectByID("room", "b")
+			}
+			result, err := g.Pump(time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC), PumpOptions{})
+			if err != nil || len(result.Reports) != 1 {
+				t.Fatal(result, err)
+			}
+			refusal, ok := result.Reports[0].(*HostError)
+			if !ok || refusal.Code != InvalidValue {
+				t.Fatal(result.Reports)
+			}
+			// This remains acyclic only if the refused change left a's parent unset.
+			if err := g.SetParent(b, a); err != nil {
+				t.Fatal(err)
+			}
+			result, err = g.Pump(time.Date(2026, 10, 8, 9, 0, 1, 0, time.UTC), PumpOptions{})
+			if err != nil || len(result.Reports) != 0 {
+				t.Fatal(result, err)
+			}
+			hostCode(t, g.SetParent(a, nil), InvalidValue)
+		})
 	}
 }
 

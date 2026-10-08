@@ -1,0 +1,20 @@
+# Parent changes recheck current state in input order, including after Restore (#457).
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "a"
+[[objects]]
+kind = "room"
+id = "b"
+[[objects]]
+kind = "room"
+id = "c"
+[[scripts]]
+name = "root"
+source = "root.talk"
+owner = { kind = "room", id = "b" }

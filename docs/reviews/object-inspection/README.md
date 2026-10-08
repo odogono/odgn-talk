@@ -23,7 +23,7 @@ Native tests in both independent Trace backends preserve an external Function ca
 
 Two cross-Core corrections needed by these recordings are tracked separately: Go named extension displays and deferred Store startup in [#454](https://github.com/odogono/odgn-talk/issues/454), and TS property Host-failure reports/declared Function ending payloads in [#455](https://github.com/odogono/odgn-talk/issues/455). Core source identities, costs and canonical Trace records are otherwise unchanged.
 
-Known adjacent limitations are tracked in the affected guides: Go independent Trace source-byte preservation ([#456](https://github.com/odogono/odgn-talk/issues/456)) and TS validation of queued parent changes at drain ([#457](https://github.com/odogono/odgn-talk/issues/457)). The proposed case uses composed source text and drains its successful parent changes before Save. These limitations are not silently represented as approved coverage.
+At the original #439 review, adjacent limitations included Go independent Trace source-byte preservation ([#456](https://github.com/odogono/odgn-talk/issues/456)) and TS validation of queued parent changes at drain ([#457](https://github.com/odogono/odgn-talk/issues/457)). The latter is now supported as described in the TS guide, with direct API regressions in both Cores and the separate proposed `objects/queued-parent-refusals` Trace. The #439 case still uses composed source text and drains its successful parent changes before Save; its expectations do not provide this new coverage or first-blessing approval.
 
 ## Trace ordering correction for #492
 

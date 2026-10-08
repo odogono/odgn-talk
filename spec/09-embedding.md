@@ -144,7 +144,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 
 - **Object Kinds** are defined once per process, each with its properties. A property has a Shape, a `Get` and optionally a `Set`, each with a cost, and runs inside the Run like an immediate Operation: a value read is checked against the Shape and its conversion charged, and a failure raises as an Operation's does, with `capability` the Object Kind's name and `operation` the property's. A value set that breaks the Shape raises `wrong kind` before the `Set` runs. A property with no `Set` is read-only ([chapter 4](04-expressions-and-statements.md#put-let-and-set)).
 - **Handles:** `group.Object(kind, id, native)` makes a handle the first time a Host-owned thing crosses into the Group. The id is the Host's, stable, and unique within its kind in the Group ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)), and a reused one is `duplicate object id`. `group.ObjectByID(kind, id)` returns the handle with that Object Kind name and id, disposed or not, or none if the Group never made one. It is how a Host reaches the handles a [Restore](10-save-and-restore.md#restoring) made, and it fits `DecodeValue`'s resolver ([ADR 0058](../docs/adr/0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md)). The Core holds the kind and id, so a Script reads them with `objectKind(o)` and `the id of o` without calling the Host ([chapter 7](07-libraries-and-the-standard-library.md#values)).
-- **Parents:** the Core holds each object's parent, and the Host changes it with `SetParent`, queued as a Host Input. A cycle is `parent cycle` ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [chapter 5](05-handlers-messages-and-scheduling.md)).
+- **Parents:** the Core holds each object's parent, and the Host changes it with `SetParent`, queued as a Host Input. A cycle is `parent cycle`; changing a disposed child's parent is `invalid value`. Both checks run at admission and again at drain, against the state left by earlier queued inputs and Restore. A refusal known at admission is a Host error at the call. A change that becomes invalid while queued leaves the parent unchanged, writes `refused`, and adds a Host-error report to that Pump (`*HostError` in Go; `{kind: "host error", code, detail?}` in TS). The Pump continues draining later inputs. Parity covers the code; detail is Host-only and outside parity ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [chapter 5](05-handlers-messages-and-scheduling.md)).
 - **Disposing** an object is a queued Host Input. The object stays an ordinary value, with its id and its equality. Sending to it, or reading or setting a property of it, raises `object gone`, and disposing an owner stops its Owning Script within the same Host Input.
 - **Well-known objects** are bound to names at load, and an Owning Script to its object.
 
@@ -284,7 +284,7 @@ Automatic `op` requests have `automatic: true`, no `fuelLeft`, and a zero `charg
 
 ## Host error catalogue
 
-Host misuse is refused at the call that made it, as a `HostError` with one of these codes. Parity covers the code, not the detail text.
+Host misuse known at admission is refused at the call that made it, as a `HostError` with one of these codes. A queued parent change that becomes invalid is refused at drain and reports through Pump as described under Objects. Parity covers the code, not the detail text.
 
 <!-- generated: host-errors -->
 

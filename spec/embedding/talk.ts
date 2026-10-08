@@ -507,7 +507,7 @@ export interface Group {
   object<N>(kind: ObjectKind<N>, id: string, native: N): HostObject<N>;
   /** Any time, inside a Pump too. The handle with this Object Kind name and id, disposed or not, such as one Restore made. */
   objectById(kind: string, id: string): HostObject | undefined;
-  /** Queued. */
+  /** Queued. Refuses cycles and disposed children at the call when known; otherwise Pump reports a host error. */
   setParent(o: HostObject, parent: HostObject | undefined): void;
   dispose(o: HostObject): void;
   /** Queued. Returns the delivery id. Throws MailboxFull or HostError. */
@@ -655,6 +655,7 @@ export interface CausalWork {
 }
 
 export type Report =
+  | { kind: "host error"; code: HostErrorCode; detail?: string } // drain-time Host refusal; detail is outside parity
   | RunStarted | RunDiscarded | RunAccounting | CausalWork
   | {
       kind: "run end";
