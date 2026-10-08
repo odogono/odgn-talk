@@ -167,6 +167,14 @@ export const lintCatalogue = [
     "standard": "warning",
     "message": "Another Script can change {key} between this get and set. Use increment or swap to update it in one call.",
     "status": "implemented"
+  },
+  {
+    "id": "suggest-list-splice",
+    "flags": "`put xs after acc` when xs has clear list evidence, suggesting a splice",
+    "beginner": "hint",
+    "standard": "off",
+    "message": "This adds a list as one element. Consider ... before the list expression to append its items instead.",
+    "status": "implemented"
   }
 ] as const;
 export const longJoinBodyLines = 20;

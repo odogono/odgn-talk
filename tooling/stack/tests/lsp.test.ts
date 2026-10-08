@@ -231,6 +231,29 @@ test('hover honors detached blocks, lexical shadowing and Built-in catalogue doc
 });
 
 describe('language server', () => {
+  test('publishes list-splice hints in beginner without an automatic rewrite', () => {
+    const { sent, server, request } = setup(
+      'on demo\nput [] into acc\nput [1, 2] after acc\nend demo',
+    );
+    expect((sent.at(-1)!.params as Published).diagnostics).toMatchObject([
+      {
+        code: 'suggest-list-splice',
+        severity: 4,
+        range: { start: { line: 2, character: 0 } },
+      },
+    ]);
+    expect(
+      request('textDocument/codeAction', {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 3 },
+        },
+        context: { diagnostics: [] },
+      }),
+    ).toEqual([]);
+    server.configure({ profile: 'standard' });
+    expect((sent.at(-1)!.params as Published).diagnostics).toEqual([]);
+  });
   test('publishes the first syntax error, retained load diagnostics and configured Lints', () => {
     const { sent } = setup('on demo\n put + into x\n put absent into y\nend\n');
     const diagnostics = (sent.at(-1)!.params as Published).diagnostics;

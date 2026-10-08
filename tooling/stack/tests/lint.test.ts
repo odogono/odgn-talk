@@ -24,10 +24,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-one implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(21);
+test('ships twenty-two implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(22);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(21);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(22);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -555,6 +555,170 @@ test('collecting advice respects profiles, suppression, splices and shadowing', 
       ),
     ).toEqual([]);
   }
+});
+
+const spliceAdvice = (source: string) =>
+  lint(source, { profile: 'beginner' }).lints.filter(
+    l => l.id === 'suggest-list-splice',
+  );
+const appendScript = (body: string) =>
+  `on demo xs, f\nput [] into acc\n${body}\nend demo`;
+
+test('list-splice advice recognizes literals, local aliases and collecting targets', () => {
+  for (const source of [
+    appendScript('put ([1, 2]) after acc'),
+    appendScript('put [] after acc'),
+    appendScript('if true then put [1, 2] after acc'),
+    appendScript(
+      'put [1] into values\nput values into copy\nput copy after acc',
+    ),
+    appendScript(
+      'put [1] into values\nput given: values into read\nread()\nput values after acc',
+    ),
+    'constant values = [1]\n' + appendScript('put values after acc'),
+    appendScript(
+      'repeat 2 times collecting 1 into values\nend repeat\nput values after acc',
+    ),
+    appendScript(
+      'repeat 2 times collecting 1 into values\nput values after acc\nend repeat',
+    ),
+    appendScript(
+      'repeat 2 times\nput [1] into values\nput values after acc\nend repeat',
+    ),
+  ]) {
+    expect(checkSource(source).ok).toBe(true);
+    expect(spliceAdvice(source)).toHaveLength(1);
+  }
+});
+
+test('list-splice advice uses the imported list export identity and return kind', () => {
+  for (const [name, args] of [
+    ['zip', 'xs, xs'],
+    ['unique', 'xs'],
+    ['reverse', 'xs'],
+    ['flatten', 'xs'],
+    ['sort', 'xs'],
+    ['sortBy', 'xs, f'],
+    ['sortWith', 'xs, f'],
+    ['filter', 'xs, f'],
+    ['map', 'xs, f'],
+    ['partition', 'xs, f'],
+  ]) {
+    const source =
+      `use ${name} from list as makeList\n` +
+      appendScript(`put makeList(${args}) into values\nput values after acc`);
+    expect(checkSource(source).ok).toBe(true);
+    expect(spliceAdvice(source)).toHaveLength(1);
+  }
+  for (const [name, args] of [
+    ['sum', 'xs'],
+    ['average', 'xs'],
+    ['reduce', 'xs, f, 0'],
+    ['group', 'xs, f'],
+    ['any', 'xs, f'],
+    ['all', 'xs, f'],
+    ['find', 'xs, f'],
+    ['indexOf', 'xs, 1'],
+  ]) {
+    const source =
+      `use ${name} from list\n` +
+      appendScript(`put ${name}(${args}) after acc`);
+    expect(checkSource(source).ok).toBe(true);
+    expect(spliceAdvice(source)).toEqual([]);
+  }
+  const source =
+    'use reverse from list\n' + appendScript('put reverse(xs) after acc');
+  expect(spliceAdvice(source)).toHaveLength(1);
+  expect(
+    lint(source, {
+      profile: 'beginner',
+      checkOptions: { libraries: { list: { reverse: 'function' } } },
+    }).lints.filter(l => l.id === 'suggest-list-splice'),
+  ).toEqual([]);
+  expect(
+    lint(source, {
+      profile: 'beginner',
+      manifest: {
+        ...fixtureManifest,
+        libraries: [
+          {
+            name: 'list',
+            source: 'function reverse xs\nreturn 0\nend reverse',
+          },
+        ],
+      },
+    }).lints.filter(l => l.id === 'suggest-list-splice'),
+  ).toEqual([]);
+  expect(
+    spliceAdvice(
+      'function reverse xs\nreturn 0\nend reverse\n' +
+        appendScript('put reverse(xs) after acc'),
+    ),
+  ).toEqual([]);
+});
+
+test('list-splice advice drops uncertain values and respects control flow and Lambda scopes', () => {
+  for (const source of [
+    appendScript('put xs after acc'),
+    appendScript('put ...[1] after acc'),
+    appendScript('put 1 after acc'),
+    appendScript('put "text" after acc'),
+    appendScript('put [1] before acc'),
+    appendScript(
+      'put [1] into values\nput 0 into values\nput values after acc',
+    ),
+    appendScript(
+      'put [1] into values\nif true then put 0 into values\nput values after acc',
+    ),
+    appendScript('if true then put [1] into values\nput values after acc'),
+    appendScript(
+      'put [1] into values\nrepeat 2 times\nput values after acc\nput 0 into values\nend repeat',
+    ),
+    appendScript(
+      'repeat for each x in xs\nput xs after acc\nput x after acc\nend repeat',
+    ),
+    appendScript(
+      'put [1] into values\nput given values: values into f\nput f(0) after acc',
+    ),
+    appendScript(
+      'put [1] into values\nput given values\nput [] into localAcc\nput values after localAcc\nend given into g',
+    ),
+    appendScript('f(xs)\nput it after acc'),
+    appendScript(
+      'repeat 2 times collecting 1 into values\nend repeat\nput 0 into values\nput values after acc',
+    ),
+    'script variable values = [1]\n' + appendScript('put values after acc'),
+  ]) {
+    expect(checkSource(source).ok).toBe(true);
+    expect(spliceAdvice(source)).toEqual([]);
+  }
+});
+
+test('list-splice advice keeps positions, profiles, suppression and error recovery', () => {
+  const source = appendScript('  put [1, 2] after acc');
+  expect(
+    lint(source).lints.filter(l => l.id === 'suggest-list-splice'),
+  ).toEqual([]);
+  expect(spliceAdvice(source)).toMatchObject([
+    {
+      level: 'hint',
+      span: { start: source.indexOf('put [1'), line: 3, col: 3 },
+    },
+  ]);
+  expect(
+    spliceAdvice(
+      source.replace(
+        '  put [1',
+        '-- lint: ignore suggest-list-splice\n  put [1',
+      ),
+    ),
+  ).toEqual([]);
+  expect(spliceAdvice(source.replaceAll('\n', '\r\n'))).toMatchObject([
+    { span: { line: 3, col: 3 } },
+  ]);
+  const broken = appendScript('put [1, +] after acc\nput [2] after acc');
+  expect(lint(broken).diagnostics.length).toBeGreaterThan(0);
+  expect(spliceAdvice(broken)).toMatchObject([{ span: { line: 4, col: 1 } }]);
 });
 
 const race = (body: string, profile: 'beginner' | 'standard' = 'standard') =>
