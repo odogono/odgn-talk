@@ -29,25 +29,26 @@ type pending struct {
 	replacement *talk.Value
 	deltas      []talk.Value
 }
-type segment struct {
-	store string
-	keys  map[string]pending
-}
+
+// segment holds a live Segment's pending writes, by Store name and key.
+type segment map[string]map[string]pending
 
 // Stores holds named Stores, initially empty. Its methods serialize access
-// across Groups; callers must use lifecycle hooks around Segment writes.
+// across Groups; callers must use lifecycle hooks around Segment writes. It
+// is the Segment Coordinator of every Store it holds, so one Segment's
+// writes to several Stores commit together (ADR 0069).
 type Stores struct {
 	mu       sync.Mutex
 	quotas   Quotas
 	contents map[string]map[string]talk.Value
-	segments map[identity]*segment
+	segments map[identity]segment
 	order    []identity // live Segments in begin order, for sequential rounding
 }
 
 var _ talk.StoreImpl = (*Stores)(nil)
 
 func New(quotas Quotas) *Stores {
-	return &Stores{quotas: quotas, contents: map[string]map[string]talk.Value{}, segments: map[identity]*segment{}}
+	return &Stores{quotas: quotas, contents: map[string]map[string]talk.Value{}, segments: map[identity]segment{}}
 }
 func storeName(binding any) (string, error) {
 	name, ok := binding.(string)
@@ -70,6 +71,9 @@ func (s *Stores) forget(id identity) {
 	delete(s.segments, id)
 	s.order = slices.DeleteFunc(s.order, func(other identity) bool { return id == other })
 }
+
+// Begin starts the Segment with its first enrolled Store. Every Store it
+// writes later, through any Grant, joins it with no hook.
 func (s *Stores) Begin(c talk.SegmentContext) talk.EffectResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -82,7 +86,7 @@ func (s *Stores) Begin(c talk.SegmentContext) talk.EffectResult {
 		return talk.EffectResult{Status: talk.EffectFailed, Detail: "A Store Segment has already begun"}
 	}
 	s.committed(name)
-	s.segments[id] = &segment{store: name, keys: map[string]pending{}}
+	s.segments[id] = segment{name: {}}
 	s.order = append(s.order, id)
 	return talk.EffectResult{Status: talk.EffectOK}
 }
@@ -95,21 +99,27 @@ func (s *Stores) Commit(c talk.SegmentContext) talk.EffectResult {
 	if seg == nil {
 		return talk.EffectResult{Status: talk.EffectOK}
 	}
-	entries := s.committed(seg.store)
-	changes := map[string]talk.Value{}
-	for key, p := range seg.keys {
-		v, err := applied(entries[key], p)
-		if err != nil {
-			return talk.EffectResult{Status: talk.EffectFailed, Detail: err.Error()}
+	changes := map[string]map[string]talk.Value{}
+	for name, keys := range seg {
+		entries := s.committed(name)
+		changes[name] = map[string]talk.Value{}
+		for key, p := range keys {
+			v, err := applied(entries[key], p)
+			if err != nil {
+				return talk.EffectResult{Status: talk.EffectFailed, Detail: err.Error()}
+			}
+			changes[name][key] = v
 		}
-		changes[key] = v
 	}
-	// Nothing changes until every value has been computed.
-	for key, v := range changes {
-		if v.Kind() == talk.KindNothing {
-			delete(entries, key)
-		} else {
-			entries[key] = v
+	// No Store changes until every value of every Store has been computed.
+	for name, values := range changes {
+		entries := s.committed(name)
+		for key, v := range values {
+			if v.Kind() == talk.KindNothing {
+				delete(entries, key)
+			} else {
+				entries[key] = v
+			}
 		}
 	}
 	return talk.EffectResult{Status: talk.EffectOK}
@@ -120,12 +130,24 @@ func (s *Stores) Rollback(c talk.SegmentContext) talk.EffectResult {
 	s.forget(contextAt(c))
 	return talk.EffectResult{Status: talk.EffectOK}
 }
-func (s *Stores) own(c *talk.Call, name string) *segment {
+
+// own gives the calling Segment's pending writes to the Store, or nil.
+func (s *Stores) own(c *talk.Call, name string) map[string]pending {
+	return s.segments[at(c)][name]
+}
+
+// writes gives the calling Segment's pending writes to the Store, adding the
+// Store to the Segment at its first write, or nil outside a Segment.
+func (s *Stores) writes(c *talk.Call, name string) map[string]pending {
 	seg := s.segments[at(c)]
-	if seg != nil && seg.store == name {
-		return seg
+	if seg == nil {
+		return nil
 	}
-	return nil
+	if seg[name] == nil {
+		s.committed(name)
+		seg[name] = map[string]pending{}
+	}
+	return seg[name]
 }
 func applied(base talk.Value, p pending) (talk.Value, error) {
 	if p.replacement != nil {
@@ -146,8 +168,8 @@ func applied(base talk.Value, p pending) (talk.Value, error) {
 }
 func (s *Stores) seen(c *talk.Call, name, key string) (talk.Value, error) {
 	base := s.committed(name)[key]
-	if seg := s.own(c, name); seg != nil {
-		return applied(base, seg.keys[key])
+	if own := s.own(c, name); own != nil {
+		return applied(base, own[key])
 	}
 	return base, nil
 }
@@ -218,8 +240,8 @@ func storable(v talk.Value) error {
 }
 func (s *Stores) unreserved(c *talk.Call, name, key string, replacing bool) error {
 	for id, seg := range s.segments {
-		p, found := seg.keys[key]
-		if id != at(c) && seg.store == name && found && (replacing || p.replacement != nil) {
+		p, found := seg[name][key]
+		if id != at(c) && found && (replacing || p.replacement != nil) {
 			return failure("store busy", talk.KV("key", text(key)))
 		}
 	}
@@ -235,17 +257,14 @@ func (s *Stores) grows(c *talk.Call, name, key string, next pending, written tal
 		total += entrySize(k, v)
 	}
 	mine := map[string]pending{}
-	own := s.own(c, name)
-	if own != nil {
-		for k, p := range own.keys {
-			mine[k] = p
-		}
+	for k, p := range s.own(c, name) {
+		mine[k] = p
 	}
 	mine[key] = next
 	changes := []map[string]pending{mine}
-	for _, seg := range s.segments {
-		if seg.store == name && seg != own {
-			changes = append(changes, seg.keys)
+	for id, seg := range s.segments {
+		if id != at(c) && seg[name] != nil {
+			changes = append(changes, seg[name])
 		}
 	}
 	for _, writes := range changes {
@@ -280,7 +299,7 @@ func (s *Stores) grows(c *talk.Call, name, key string, next pending, written tal
 	return nil
 }
 func (s *Stores) write(c *talk.Call, name, key string, v talk.Value) error {
-	seg := s.own(c, name)
+	seg := s.writes(c, name)
 	if seg == nil {
 		return fmt.Errorf("A Store write outside its Segment")
 	}
@@ -291,7 +310,7 @@ func (s *Stores) write(c *talk.Call, name, key string, v talk.Value) error {
 	if err := s.grows(c, name, key, next, v); err != nil {
 		return err
 	}
-	seg.keys[key] = next
+	seg[key] = next
 	return nil
 }
 func (s *Stores) Get(c *talk.Call, key string, fallback talk.Value) (talk.Value, error) {
@@ -339,10 +358,8 @@ func (s *Stores) Keys(c *talk.Call, prefix string) (talk.Value, error) {
 	for key := range s.committed(name) {
 		keys[key] = true
 	}
-	if own := s.own(c, name); own != nil {
-		for key := range own.keys {
-			keys[key] = true
-		}
+	for key := range s.own(c, name) {
+		keys[key] = true
 	}
 	var names []string
 	for key := range keys {
@@ -396,7 +413,7 @@ func (s *Stores) Increment(c *talk.Call, key string, by talk.Value) (talk.Value,
 	if err != nil {
 		return talk.Nothing, err
 	}
-	seg := s.own(c, name)
+	seg := s.writes(c, name)
 	if seg == nil {
 		return talk.Nothing, fmt.Errorf("A Store write outside its Segment")
 	}
@@ -417,14 +434,13 @@ func (s *Stores) Increment(c *talk.Call, key string, by talk.Value) (talk.Value,
 	if err != nil {
 		return talk.Nothing, err
 	}
-	own := seg.keys[key]
+	own := seg[key]
 	next := pending{replacement: own.replacement, deltas: append(slices.Clone(own.deltas), by)}
 	if own.replacement == nil {
 		projected := s.committed(name)[key]
 		for _, id := range s.order {
-			other := s.segments[id]
-			if id != at(c) && other.store == name {
-				projected, err = applied(projected, pending{deltas: other.keys[key].deltas})
+			if other := s.segments[id][name]; id != at(c) && other != nil {
+				projected, err = applied(projected, pending{deltas: other[key].deltas})
 				if err != nil {
 					return talk.Nothing, err
 				}
@@ -441,7 +457,7 @@ func (s *Stores) Increment(c *talk.Call, key string, by talk.Value) (talk.Value,
 	if err := s.grows(c, name, key, next, written); err != nil {
 		return talk.Nothing, err
 	}
-	seg.keys[key] = next
+	seg[key] = next
 	return result, nil
 }
 
@@ -468,7 +484,7 @@ func (s *Stores) Replace(name string, entries []talk.Pair) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, seg := range s.segments {
-		if seg.store == name {
+		if seg[name] != nil {
 			return fmt.Errorf("A Segment is writing to the Store")
 		}
 	}

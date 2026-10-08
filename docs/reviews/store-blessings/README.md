@@ -31,5 +31,16 @@ This approval covers the Core's side of `store` only;
 the Store semantics behind each Stub are held to the
 [store test kit](../../../corpus/store-kit/) instead.
 
+## Changed for #461
+
+Every Store of one implementation now shares one Segment Coordinator
+([ADR 0069](../../adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md),
+[#461](https://github.com/odogono/odgn-talk/issues/461)). In
+`capabilities/standard-store-segments`, `other`'s write to a second Store now
+joins `st`'s participant and commits with it, instead of raising
+`segment participant conflict`, so the case gains one `store.set` Stub and its
+first Run completes. The Limit Fault Run is unchanged. The changed expectation
+is marked `Unblessed` until it is reviewed; this approval doesn't cover it.
+
 The expectation review follows
 [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).

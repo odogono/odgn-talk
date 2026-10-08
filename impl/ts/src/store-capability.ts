@@ -7,6 +7,7 @@ import {
   type Call,
   type CapabilityDef,
   type ImmediateOp,
+  type SegmentCoordinator,
   type SegmentLifecycle,
   type Shape,
 } from './capabilities';
@@ -19,8 +20,10 @@ import { bool, map, nothing, type Value } from './values';
 
 /**
  * The binding is the Store's name. `set`, `delete`, `increment` and `swap`
- * act on the calling Segment's pending writes, which `commit` applies and
- * `rollback` discards (chapter 7, ADR 0062).
+ * act on the calling Segment's pending writes, to every Store it writes,
+ * which `commit` applies together and `rollback` discards (chapter 7,
+ * ADR 0062). The implementation is the Segment Coordinator of every binding,
+ * so its hooks see each enrolled Store's Grant (ADR 0069).
  */
 export type StoreImpl = SegmentLifecycle<string> & {
   delete(call: Call<string>, key: string): void;
@@ -94,7 +97,7 @@ const errors = (...codes: string[]) => codes.map(code => ({ code }));
 const writes = ["can't store", 'store full', 'store busy'];
 const key = (args: readonly Value[]) => args[0]!.asText()!;
 
-/** The Store is the Host's; the Grant binding names it. */
+/** The Store is the Host's; the Grant binding names it, and `impl` coordinates every binding. */
 export const storeCapability = (
   impl: StoreImpl,
   costs: Costs,
@@ -171,10 +174,11 @@ export const storeCapability = (
         bool(impl.swap(call, key(args), args[1]!, args[2]!)),
     },
   };
+  // One coordinator for every binding, compared by identity, so writes to
+  // several of its Stores in one Segment share a participant (ADR 0069).
+  const coordinator = impl as SegmentCoordinator;
   const capability = defineCapability<string>('store', operations, {
-    begin: context => impl.begin(context),
-    commit: context => impl.commit(context),
-    rollback: context => impl.rollback(context),
+    coordinator: () => coordinator,
   });
   // Segment-bound declarations are copied, so the checks attach to the copies.
   for (const [name, op] of capability.operations) {

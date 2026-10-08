@@ -1009,7 +1009,7 @@ func TestRecoveryOffersAcceptance(t *testing.T) {
 
 func TestStoreFactoryAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	names := []string{"capabilities/standard-store", "capabilities/standard-store-errors", "capabilities/standard-store-segments", "capabilities/standard-store-validation"}
+	names := []string{"capabilities/standard-store", "capabilities/standard-store-coordinator", "capabilities/standard-store-errors", "capabilities/standard-store-segments", "capabilities/standard-store-validation"}
 	cases, err := Discover(root, names)
 	if err != nil {
 		t.Fatal(err)

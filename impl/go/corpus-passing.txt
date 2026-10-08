@@ -90,6 +90,7 @@ capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
 capabilities/standard-store
+capabilities/standard-store-coordinator
 capabilities/standard-store-errors
 capabilities/standard-store-segments
 capabilities/standard-store-validation

@@ -6,6 +6,7 @@ export {
   sessionQuotas,
   StoreContentsError,
   Stores,
+  StoreStateUnknownError,
   type StoreBackend,
   type StoreQuotas,
 } from './engine';

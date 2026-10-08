@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,17 +47,27 @@ func Run(root string, makeStore func(store.Quotas) talk.StoreImpl) (int, error) 
 			if err != nil {
 				return count, err
 			}
+			// Each begun Segment's enrolled Grants, in enrollment order, as
+			// the Core gives them to the hooks (ADR 0069).
+			enrolled := map[string][]talk.SegmentGrant{}
 			for i, raw := range steps {
 				step := raw.(corpus.Setup)
-				name, _ := step["store"].(string)
-				if name == "" {
-					name = "default"
-				}
-				c := calls[step["in"].(string)+" "+name]
+				in := step["in"].(string)
+				c := calls[in+" "+grantKey(step)]
 				phase := step["do"].(string)
+				grant := talk.SegmentGrant{GrantName: c.GrantName(), Binding: c.Binding()}
 				switch phase {
 				case "begin", "commit", "rollback":
-					context := talk.SegmentContext{Group: c.Group(), SegmentID: c.SegmentID(), Binding: c.Binding(), ScriptName: c.ScriptName(), RunID: c.RunID(), GrantName: c.GrantName(), Grants: []talk.SegmentGrant{{GrantName: c.GrantName(), Binding: c.Binding()}}}
+					grants := enrolled[in]
+					if phase == "begin" || grants == nil {
+						grants = []talk.SegmentGrant{grant}
+					}
+					if phase == "begin" {
+						enrolled[in] = grants
+					} else {
+						delete(enrolled, in)
+					}
+					context := talk.SegmentContext{Group: c.Group(), SegmentID: c.SegmentID(), Binding: grants[0].Binding, ScriptName: c.ScriptName(), RunID: c.RunID(), GrantName: grants[0].GrantName, Grants: grants}
 					var result talk.EffectResult
 					switch phase {
 					case "begin":
@@ -74,6 +85,9 @@ func Run(root string, makeStore func(store.Quotas) talk.StoreImpl) (int, error) 
 						return count, fmt.Errorf("%s: %s, step %d: expected status %s; got %s (%s)", filepath.Base(file), seq["name"], i+1, want, result.Status, result.Detail)
 					}
 				default:
+					if grants := enrolled[in]; grants != nil && segmentBound[phase] && !slices.ContainsFunc(grants, func(g talk.SegmentGrant) bool { return g.GrantName == grant.GrantName }) {
+						enrolled[in] = append(grants, grant)
+					}
 					args := talk.Nothing
 					if raw, ok := step["args"].(string); ok {
 						args, err = display(raw)
@@ -117,6 +131,21 @@ func Run(root string, makeStore func(store.Quotas) talk.StoreImpl) (int, error) 
 	}
 	return count, nil
 }
+
+var segmentBound = map[string]bool{"set": true, "delete": true, "increment": true, "swap": true}
+
+// grantKey names a step's Grant: its kit name, default store, and binding.
+func grantKey(step corpus.Setup) string {
+	grant, _ := step["grant"].(string)
+	if grant == "" {
+		grant = "store"
+	}
+	name, _ := step["store"].(string)
+	if name == "" {
+		name = "default"
+	}
+	return grant + " " + name
+}
 func display(source string) (talk.Value, error) {
 	v, err := value.ParseDisplay(source, nil)
 	if err != nil {
@@ -150,21 +179,18 @@ func operate(s talk.StoreImpl, c *talk.Call, op string, args talk.Value) (talk.V
 }
 
 // Calls are opaque: acquire real Calls through an unbound capture Capability.
-// One Run per kit Segment captures all Store bindings within the same Segment,
+// One Run per kit Segment captures every kit Grant within the same Segment,
 // then keeps only the ownership metadata the Store is entitled to read.
 func callsFor(steps []any) (map[string]*talk.Call, error) {
-	names, ids := []string{}, []string{}
-	seenNames, seenIDs := map[string]bool{}, map[string]bool{}
+	keys, ids := []string{}, []string{}
+	seenKeys, seenIDs := map[string]bool{}, map[string]bool{}
 	for _, raw := range steps {
 		s := raw.(corpus.Setup)
-		name, ok := s["store"].(string)
-		if !ok {
-			name = "default"
-		}
+		key := grantKey(s)
 		id := s["in"].(string)
-		if !seenNames[name] {
-			names = append(names, name)
-			seenNames[name] = true
+		if !seenKeys[key] {
+			keys = append(keys, key)
+			seenKeys[key] = true
 		}
 		if !seenIDs[id] {
 			ids = append(ids, id)
@@ -173,9 +199,10 @@ func callsFor(steps []any) (map[string]*talk.Call, error) {
 	}
 	calls := map[string]*talk.Call{}
 	core := talk.New()
-	def, err := core.DefineCapability("capture", talk.Operation{Name: "capture", Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}, Result: talk.NothingShape, Do: func(c *talk.Call, args []talk.Value) (talk.Value, error) {
+	def, err := core.DefineCapability("capture", talk.Operation{Name: "capture", Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.TextShape}, Result: talk.NothingShape, Do: func(c *talk.Call, args []talk.Value) (talk.Value, error) {
 		id, _ := args[0].AsText()
-		calls[id+" "+c.Binding().(string)] = c
+		key, _ := args[1].AsText()
+		calls[id+" "+key] = c
 		return talk.Nothing, nil
 	}})
 	if err != nil {
@@ -184,10 +211,10 @@ func callsFor(steps []any) (map[string]*talk.Call, error) {
 	grants := map[string]*talk.Grant{}
 	var source strings.Builder
 	source.WriteString("on capture label\n")
-	for i, name := range names {
+	for i, key := range keys {
 		grant := fmt.Sprintf("st%d", i)
-		grants[grant] = def.GrantAll(name)
-		fmt.Fprintf(&source, "ask %s to capture label\n", grant)
+		grants[grant] = def.GrantAll(key[strings.Index(key, " ")+1:])
+		fmt.Fprintf(&source, "ask %s to capture label, %q\n", grant, key)
 	}
 	source.WriteString("end capture\n")
 	group := core.NewGroup(talk.GroupOptions{})
