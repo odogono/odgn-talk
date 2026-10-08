@@ -1,6 +1,6 @@
 # NorthTalk Playground
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The Session Host attaches `--|` Declaration Documentation to Entries. Script-tab Apply still slices declarations without their leading doc blocks, so it drops them ([#440](https://github.com/odogono/odgn-talk/issues/440)). Shared hover, the new observation commands and object-crossing replay are still unavailable.
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The prompt and Script-tab Apply retain `--|` Declaration Documentation, and editor hover shares the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 
 The browser counterpart of the REPL, on the TS Core ([chapter 12](../../spec/12-sessions-and-tooling.md#the-playground)). A Playground session is an ordinary Session Host, so everything it prints and records is the same as the REPL's. The page itself is tooling, and none of it is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
@@ -21,13 +21,15 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
 
 ## What it does
 
+A leading `--|` block keeps the prompt open until its declaration is complete. Blank lines and ordinary comments break attachment; a block directly before an expression, statement or Import is refused. Cancel drops unsubmitted input without recording an Entry. Pasting multiple lines submits each completed physical line through the same prompt rules and leaves the final line for Enter.
+
 - **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Canvas, Debug, Replay and Setup. Preferences persist locally; narrow screens stack the panes.
 - **Run fresh** loads current tabs into a replacement session, then evaluates the visible Launch Entry. Invalid source or Libraries leave the old session intact. After loading succeeds, execution errors belong to the new session. An empty Launch Entry only loads.
 - **Evaluate** runs the Launch Entry against the currently loaded session, without applying pending edits. **Apply** retains the live workflow below.
 - **Syntax** follows the current editor text, not loaded code. Select a node to highlight source; selecting source reveals its node. Incomplete source remains inspectable.
 
 - **The Script tab is the session source** ([ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)):
-  - **Apply** (Ctrl/Cmd-S in the tab) enters each new or changed top-level declaration as an Entry. Handlers are compared by full Selector, so labelled and unlabelled heads with the same first word remain separate. A redefinition causes the Spec's Reload, which prints `! discarded` for each Run it discards.
+  - **Apply** (Ctrl/Cmd-S in the tab) enters each new or changed top-level declaration as an Entry. Handlers are compared by full Selector, so labelled and unlabelled heads with the same first word remain separate. Attached `--|` blocks travel with their declarations, and a documentation-only edit is a redefinition. A redefinition causes the Spec's Reload, which prints `! discarded` for each Run it discards.
   - A declaration entered at the prompt updates a clean tab. A tab with unapplied edits keeps them under a banner.
   - When the tab drops a declaration, Apply offers a **Restart**. A Restart makes a fresh session from the Grants, the Clock and limits, the Library tabs and the Script tab, and starts a new Transcript.
 - **Library tabs:** **+ Library** adds one. Saving it (Ctrl/Cmd-S) records `:library add` the first time and `:library replace` after that. Renaming or closing a saved Library needs a Restart to take it out of the session.

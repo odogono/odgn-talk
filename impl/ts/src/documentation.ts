@@ -24,8 +24,8 @@ const isLineBreak = (e: SyntaxElement | undefined): e is Token =>
 // break between declarations is a whole line, since a declaration owns the
 // line break that ends it, with any trailing comment. A blank line or
 // ordinary comment ends the block.
-const docBlock = (children: readonly SyntaxElement[], at: number): string[] => {
-  const lines: string[] = [];
+const docBlock = (children: readonly SyntaxElement[], at: number): Token[] => {
+  const lines: Token[] = [];
   for (let k = at - 1; k >= 0; k--) {
     const child = children[k];
     if (!isLineBreak(child)) {
@@ -35,7 +35,7 @@ const docBlock = (children: readonly SyntaxElement[], at: number): string[] => {
     if (text === null) {
       break;
     }
-    lines.push(text);
+    lines.push(child);
   }
   return lines.reverse();
 };
@@ -52,10 +52,26 @@ export const declarationDocs = (root: SyntaxNode): Map<SyntaxNode, string> => {
       const use = child.children.some(
         c => c.kind === 'node' && c.rule === 'Use',
       );
-      docs.set(child, use ? '' : docBlock(root.children, at).join('\n'));
+      docs.set(
+        child,
+        use ? '' : docBlock(root.children, at).map(docLine).join('\n'),
+      );
     }
   });
   return docs;
+};
+
+/**
+ * The source start of a top-level declaration including its attached marked
+ * comments. Tooling that submits it as an Entry keeps the exact block, even
+ * before an Import (which the Session Host refuses at the prompt).
+ */
+export const declarationStart = (
+  root: SyntaxNode,
+  declaration: SyntaxNode,
+): number => {
+  const first = docBlock(root.children, root.children.indexOf(declaration))[0];
+  return first ? (first.leadingTrivia[0]?.pos ?? first.pos) : declaration.start;
 };
 
 /** How an Entry's leading documentation block attaches. */

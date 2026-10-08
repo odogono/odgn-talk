@@ -1,6 +1,6 @@
 # NorthTalk tooling
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter keeps `--|` Declaration Documentation attached, which the Core extracts. Hover doesn't show it yet, and the new observation commands and object-crossing replay are still unavailable ([#440](https://github.com/odogono/odgn-talk/issues/440)).
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter preserves `--|` Declaration Documentation and hover uses the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 
 `@odgn/northtalk-tooling` is the browser-safe TypeScript tooling stack over
@@ -151,7 +151,7 @@ Manifest Library source supplies export contracts, suspension information and
 bindings; imported Library diagnostics and transitive Grant requirements are
 reported at the importing `use` line. Constants are evaluated by the Core's
 initializer and shown in the display form. Operations show their manifest
-Declaration; Function Values show their Home Script. Formatting delegates to
+Declaration; Function Values show their Home Script. Hover also shows Declaration Documentation for named functions, Constants, Script Variables and each Handler Clause in declaration order. Imports and aliases resolve to the defining Library's block; Built-ins use the catalogue's descriptive text. Locals and parameters do not inherit a same-spelled declaration's documentation. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
 
 Argument Labels participate through their full Selector: `move knight to "e4"`

@@ -68,6 +68,64 @@ const environment = () => {
 const greet = 'on greet name\n  say "hello " & name\n  say "bye"\nend greet';
 
 describe('The Script tab', () => {
+  test('Apply, Enter and pasted Entries retain the same documentation and redefinitions', () => {
+    const source =
+      '--| Adds one.\n--|\n--|  exact spaces  \nfunction inc n\n return n + 1\nend inc';
+    const applied = new PlaygroundSession(environment().env);
+    const entered = new PlaygroundSession(environment().env);
+    const pasted = new PlaygroundSession(environment().env);
+    expect(applied.apply(source)).toMatchObject({
+      kind: 'applied',
+      failed: [],
+    });
+    let pending = '';
+    for (const line of source.split('\n')) {
+      pending += `${pending ? '\n' : ''}${line}`;
+      if (!entered.incomplete(pending)) {
+        expect(entered.input(pending)).toEqual([]);
+        pending = '';
+      }
+    }
+    expect(pending).toBe('');
+    expect(pasted.input(source)).toEqual([]);
+    for (const s of [entered, pasted]) {
+      expect(s.host.source).toBe(applied.host.source);
+      expect(s.host.documentation('inc')).toEqual(
+        applied.host.documentation('inc'),
+      );
+      expect(s.input('inc(2)')).toEqual(['3']);
+    }
+    const recorded = applied.transcriptText;
+    applied.apply(source);
+    expect(applied.transcriptText).toBe(recorded);
+    expect(
+      applied.apply(source.replace('Adds one.', 'New docs.')),
+    ).toMatchObject({ failed: [] });
+    expect(applied.host.documentation('inc')[0]!.doc).toStartWith('New docs.');
+    expect(
+      applied.apply(source.slice(source.indexOf('function'))),
+    ).toMatchObject({ failed: [] });
+    expect(applied.host.documentation('inc')[0]!.doc).toBe('');
+    const replayed = PlaygroundSession.replay(
+      environment().env,
+      applied.transcriptText,
+    );
+    expect('session' in replayed).toBe(true);
+    if ('session' in replayed) {
+      expect(replayed.session.host.source).toBe(applied.host.source);
+    }
+  });
+
+  test('Apply refuses doc blocks before Imports as the prompt does', () => {
+    const s = new PlaygroundSession(environment().env);
+    const result = s.apply('--| unsupported\nuse pad from text');
+    expect(result).toMatchObject({
+      kind: 'applied',
+      failed: [{ lines: ['! bad arguments'] }],
+    });
+    expect(s.host.source).toBe('');
+  });
+
   test('applies new and changed declarations as Entries', () => {
     const s = new PlaygroundSession(environment().env);
     expect(s.apply(`constant k = 2\n\n${greet}\n`)).toEqual({

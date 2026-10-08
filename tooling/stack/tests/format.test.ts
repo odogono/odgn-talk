@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkSource } from '@odgn/northtalk';
+import { checkSource, compileSource, disassemble } from '@odgn/northtalk';
 import { formatSource } from '../src/format';
 
 test('indents blocks and normalises spaces without changing token spelling', () => {
@@ -185,6 +185,8 @@ test('keeps comments from empty offer argument lists when printing the bare form
 });
 
 const docs = (text: string) => checkSource(text).tree!.docs;
+const canonical = (text: string) =>
+  text.replaceAll(/^( {2}\d{4,} )\d+:\d+ /gm, '$1');
 
 test('keeps Declaration Documentation attached, unmoved and separated', () => {
   const source =
@@ -196,4 +198,42 @@ test('keeps Declaration Documentation attached, unmoved and separated', () => {
   expect(formatSource(formatted).source).toBe(formatted);
   expect(docs(formatted)).toEqual(docs(source));
   expect(docs(formatted)).toEqual(['Adds one.\n  indented', '', 'after plain']);
+});
+
+test('marked comments preserve documentation and executable disassembly across formatting', () => {
+  for (const newline of ['\n', '\r\n', '\r']) {
+    const source = [
+      '  --| Function.',
+      '--|',
+      '--|  spaces  ',
+      'function inc n',
+      'return n+1',
+      'end inc --| trailing',
+      '--| detached',
+      '',
+      'constant k=2',
+      '--| interrupted',
+      '-- ordinary',
+      'script variable v=3',
+      '--| Handler.',
+      'on go',
+      'say inc(k)',
+      'end go',
+      '',
+    ].join(newline);
+    const formatted = formatSource(source);
+    expect(formatted.error).toBeNull();
+    expect(formatSource(formatted.source)).toEqual(formatted);
+    expect(docs(formatted.source)).toEqual(docs(source));
+    expect(docs(formatted.source)).toEqual([
+      'Function.\n\n spaces  ',
+      '',
+      '',
+      'Handler.',
+    ]);
+    const before = compileSource(source, { name: 'docs' }).unit!;
+    const after = compileSource(formatted.source, { name: 'docs' }).unit!;
+    // Formatting changes source positions, not executable disassembly.
+    expect(canonical(disassemble(after))).toBe(canonical(disassemble(before)));
+  }
 });

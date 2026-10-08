@@ -17,6 +17,45 @@ const run = (args: string[], stdin = '') => {
   };
 };
 
+test('the REPL collects doc blocks with declarations and refuses unsupported attachments', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-docs-'));
+  const transcript = join(dir, 'session.transcript');
+  const exported = join(dir, 'session.talk');
+  const input = [
+    '--| Adds one.',
+    '--|',
+    '--|  spaces  ',
+    'function inc n',
+    ' return n + 1',
+    'end inc',
+    '--| invalid expression',
+    'inc(2)',
+    '--| unsupported',
+    'use pad from text',
+    '--| detached',
+    '',
+    'constant k = 2',
+    '--| variable docs',
+    'script variable v = 3',
+    'inc(k)',
+    `:export ${dir}`,
+    ':quit',
+    '',
+  ].join('\n');
+  expect(run(['--transcript', transcript], input)).toEqual({
+    code: 0,
+    stdout: '! bad arguments\n! bad arguments\n3\nwrote session.talk\n',
+    stderr: '',
+  });
+  expect(readFileSync(exported, 'utf8')).toBe(
+    '--| Adds one.\n--|\n--|  spaces  \nfunction inc n\n return n + 1\nend inc\n--| detached\n\nconstant k = 2\n--| variable docs\nscript variable v = 3\n',
+  );
+  expect(readFileSync(transcript, 'utf8')).toContain(
+    '> --| Adds one.\n| --|\n| --|  spaces  \n| function inc n',
+  );
+  expect(run(['replay', transcript]).code).toBe(0);
+});
+
 test('the REPL chooses a Library offer and replays the recorded session', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-recovery-'));
   const transcript = join(dir, 'session.transcript');

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { SessionHost } from '@odgn/northtalk/session';
 import {
   createLanguageServer,
   type RpcMessage,
@@ -118,6 +119,115 @@ const setup = (source: string, withManifest = true) => {
 };
 const at = (line: number, character: number) => ({
   position: { line, character },
+});
+
+test('hover uses Core documentation for declarations and ordered Handler Clauses', () => {
+  const source = [
+    '  --| Adds one.',
+    '\t--|',
+    '--|  preserve spaces  ',
+    'function inc n',
+    ' return n + 1',
+    'end inc',
+    '--| constant docs',
+    'constant k = 1',
+    '--| variable docs',
+    'script variable v = 2',
+    '--| first clause',
+    'on go x where x = 1',
+    'end go',
+    '--| second clause',
+    'on go x',
+    ' say inc(k)',
+    ' say v',
+    'end go',
+    '',
+  ].join('\n');
+  const host = new SessionHost({ now: () => 0n });
+  const { request } = setup(source);
+  const entries = [
+    source.slice(0, source.indexOf('--| constant docs')),
+    '--| constant docs\nconstant k = 1',
+    '--| variable docs\nscript variable v = 2',
+    '--| first clause\non go x where x = 1\nend go',
+    '--| second clause\non go x\n say inc(k)\n say v\nend go',
+  ];
+  for (const entry of entries) {
+    expect(host.input(entry)).toEqual([]);
+  }
+  for (const [name, line, col] of [
+    ['inc', 15, 6],
+    ['k', 15, 9],
+    ['v', 16, 5],
+    ['go', 14, 4],
+  ] as const) {
+    const value = request('textDocument/hover', at(line, col)).contents.value;
+    const docs = host.documentation(name);
+    for (const doc of docs) {
+      expect(value).toContain(doc.doc);
+    }
+    if (name === 'go') {
+      expect(value).toContain(
+        'Clause 1:\nfirst clause\n\nClause 2:\nsecond clause',
+      );
+    }
+  }
+});
+
+test('hover resolves aliases and remote Import names to updated Library documentation', () => {
+  const { server, request } = setup(
+    'use twice from maths as double\non go\n say double(2)\nend go',
+  );
+  const configure = (doc: string) =>
+    server.configure({
+      manifest: {
+        ...manifest,
+        libraries: [
+          {
+            ...manifest.libraries[0]!,
+            source: `${doc}\nfunction twice n\n return n * 2\nend twice\n`,
+          },
+        ],
+      },
+    });
+  configure('--| original');
+  for (const [line, col] of [
+    [0, 5],
+    [0, 25],
+    [2, 6],
+  ]) {
+    expect(
+      request('textDocument/hover', at(line!, col!)).contents.value,
+    ).toContain('original');
+  }
+  configure('--| replacement');
+  const replaced = request('textDocument/hover', at(2, 6)).contents.value;
+  expect(replaced).toContain('replacement');
+  expect(replaced).not.toContain('original');
+  configure('-- ordinary comment');
+  expect(request('textDocument/hover', at(2, 6)).contents.value).not.toContain(
+    'replacement',
+  );
+});
+
+test('hover honors detached blocks, lexical shadowing and Built-in catalogue documentation', () => {
+  const host = new SessionHost({ now: () => 0n });
+  const { request } = setup(
+    '--| detached\n\nconstant k = 1\n--| interrupted\n-- ordinary\nconstant c = 2\n--| authored min\nconstant min = 3\non go min\n say min\n say k\n say c\n say lower("A")\nend go',
+  );
+  expect(request('textDocument/hover', at(9, 6))).toBeNull();
+  expect(request('textDocument/hover', at(10, 5)).contents.value).not.toContain(
+    'detached',
+  );
+  expect(request('textDocument/hover', at(11, 5)).contents.value).not.toContain(
+    'interrupted',
+  );
+  expect(request('textDocument/hover', at(7, 11)).contents.value).toContain(
+    'authored min',
+  );
+  expect(request('textDocument/hover', at(12, 7)).contents.value).toContain(
+    host.documentation('lower')[0]!.doc,
+  );
 });
 
 describe('language server', () => {
