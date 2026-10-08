@@ -163,6 +163,8 @@ func (h *Host) Input(source string) []string {
 		kind, node, err := syntax.ParseEntry(source, h.isHandler)
 		if err != nil {
 			out = h.refused(err, placement{}, 0)
+		} else if !documentable(source, kind, node) {
+			out = []string{"! bad arguments"}
 		} else if kind == "declaration" {
 			out = h.declare(describe(s, node), node)
 		} else if kind != "" {
@@ -332,10 +334,23 @@ func libraryHandler(l *talk.Library, name string) bool {
 }
 
 // NeedsMore classifies continuation with the same names as actual submission.
+// A leading doc block waits for the declaration it documents.
 func (h *Host) NeedsMore(source string) bool {
 	_, _, err := syntax.ParseEntry(source, h.isHandler)
 	var e *syntax.Error
-	return errors.As(err, &e) && e.Incomplete
+	return errors.As(err, &e) && e.Incomplete || err == nil && syntax.LeadingDoc(source) == syntax.DocPending
+}
+
+// documentable refuses a leading doc block that documents nothing: one
+// followed by a statement, an expression or an Import, or by no Entry at all.
+func documentable(source, kind string, node *syntax.Node) bool {
+	switch syntax.LeadingDoc(source) {
+	case syntax.DocPending:
+		return false
+	case syntax.DocAttached:
+		return kind == "declaration" && node.Kind != "use"
+	}
+	return true
 }
 func (h *Host) has(name string) bool {
 	for _, d := range h.declarations {
@@ -403,9 +418,10 @@ func (h *Host) declare(d declaration, n *syntax.Node) []string {
 				if len(n.Children) > 0 {
 					// The initializer begins after the declaration's '=' token, preserving
 					// its exact source spelling, including multiline fenced literals.
-					eq := strings.Index(d.source, "=")
+					// The '=' follows the name, so a leading doc block can't hold it.
+					eq := n.NameToken.End + strings.Index(d.source[n.NameToken.End:], "=")
 					expr = d.source[eq+1:]
-					adjust.col = 4 - utf8.RuneCountInString(d.source[:eq+1])
+					adjust.col = 4 - utf8.RuneCountInString(d.source[strings.LastIndex(d.source[:eq], "\n")+1:eq+1])
 				}
 				loaded, out := h.runAt("put "+expr+" into "+d.names[0], false, nil, adjust)
 				if loaded {

@@ -127,7 +127,14 @@ type savedGroup struct {
 	Decisions                       []savedDecision
 	Broadcasts                      []savedBroadcast
 	Deferred                        []Decided
-	Stale                           []string
+	Stale                           []savedStale
+}
+
+// savedStale is a unit only stale Function Values still use: its name, and
+// each body's Declaration Documentation, which outlives the code.
+type savedStale struct {
+	Name string
+	Docs []string `json:",omitempty"`
 }
 type savedScript struct {
 	Name, Source           string
@@ -138,6 +145,7 @@ type savedScript struct {
 	Owner                  *ObjectRef
 	Objects                map[string]ObjectRef
 	VariableNames          []string
+	Docs                   []string `json:",omitempty"`
 	Variables, Definitions []corevalue.Value
 	Runs                   []savedExecution
 	Queue                  []savedWork
@@ -325,7 +333,7 @@ func (g *Group) Save() ([]byte, error) {
 		return row
 	}
 	for _, s := range g.scripts {
-		row := savedScript{Name: s.name, Source: s.source, Extensions: s.extensions, Identity: s.identity, Limits: s.limits, Owner: objectRef(s.owner), Objects: map[string]ObjectRef{}, VariableNames: s.state.Unit.Variables, Variables: s.state.Variables, Definitions: s.state.Definitions, Counters: s.counters, Stopped: s.stopped, StopReason: s.stopReason, Reserved: s.reserved, Debt: s.debt}
+		row := savedScript{Name: s.name, Source: s.source, Extensions: s.extensions, Identity: s.identity, Limits: s.limits, Owner: objectRef(s.owner), Objects: map[string]ObjectRef{}, VariableNames: s.state.Unit.Variables, Docs: s.state.Unit.Docs(), Variables: s.state.Variables, Definitions: s.state.Definitions, Counters: s.counters, Stopped: s.stopped, StopReason: s.stopReason, Reserved: s.reserved, Debt: s.debt}
 		for n, v := range s.state.Objects {
 			row.Objects[n] = ObjectRef{v.Object.Kind, v.Object.ID}
 		}
@@ -401,7 +409,7 @@ func (g *Group) Save() ([]byte, error) {
 		}
 		if state, ok := v.(*machine.State); ok {
 			key := "stale/" + strconv.Itoa(len(data.Stale))
-			data.Stale = append(data.Stale, state.Unit.Name)
+			data.Stale = append(data.Stale, savedStale{state.Unit.Name, state.Unit.Docs()})
 			refs[v] = key
 			return key, true
 		}

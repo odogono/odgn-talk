@@ -40,6 +40,8 @@ type unwind struct {
 }
 type Body struct {
 	CodeName string
+	// Doc is a top-level function's or Handler Clause's Declaration Documentation.
+	Doc string
 
 	Checked     *check.Body
 	Code        []Instruction
@@ -84,7 +86,46 @@ type Unit struct {
 	byNode                                     map[*syntax.Node]*Body
 	state                                      *builder
 	codeName                                   string
+	// staleDocs holds each body's documentation for a restored stale unit,
+	// which keeps no bodies.
+	staleDocs []string
 }
+
+// StaleUnit is a restored unit that kept only its name and each body's
+// Declaration Documentation, for Function Values whose code is gone.
+func StaleUnit(name string, docs []string) *Unit {
+	return &Unit{Name: name, staleDocs: docs}
+}
+
+// Doc is the Declaration Documentation of the unit's body at index, if any.
+func (u *Unit) Doc(index int) string {
+	if u.staleDocs != nil {
+		if index >= 0 && index < len(u.staleDocs) {
+			return u.staleDocs[index]
+		}
+		return ""
+	}
+	if index >= 0 && index < len(u.Bodies) {
+		return u.Bodies[index].Doc
+	}
+	return ""
+}
+
+// Docs lists Doc for each body index, or nil when every one is empty.
+func (u *Unit) Docs() []string {
+	n := max(len(u.Bodies), len(u.staleDocs))
+	docs := make([]string, n)
+	documented := false
+	for i := range docs {
+		docs[i] = u.Doc(i)
+		documented = documented || docs[i] != ""
+	}
+	if !documented {
+		return nil
+	}
+	return docs
+}
+
 type loop struct {
 	start, end *label
 	finally    int
@@ -226,7 +267,7 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	clauses := map[string]int{}
 	for _, n := range checked.Tree.Declarations {
 		if b := checked.Bodies[n]; b != nil {
-			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies)}
+			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies), Doc: checked.Tree.Documentation(n)}
 			// A Fallback's clauses are numbered as `any message`'s (ADR 0064).
 			if b.Kind == "handler" || b.Kind == "fallback" {
 				clauses[b.Name]++

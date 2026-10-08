@@ -691,7 +691,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The least item of the list `xs` under `<`, the first of equal ones"
   },
   {
     "name": "max",
@@ -699,7 +700,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The greatest item of the list `xs` under `<`, the first of equal ones"
   },
   {
     "name": "codePoint",
@@ -707,7 +709,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The code point of `c`, a text of exactly one code point, as a number"
   },
   {
     "name": "fromCodePoint",
@@ -715,7 +718,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The text of the code point `n`, normalised to NFC"
   },
   {
     "name": "upper",
@@ -723,7 +727,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "`s` under Unicode full default uppercase mapping, then NFC"
   },
   {
     "name": "lower",
@@ -731,7 +736,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "`s` under Unicode full default lowercase mapping, then NFC"
   },
   {
     "name": "offset",
@@ -739,7 +745,8 @@ export const builtins = [
     "contract": {
       "required": 2,
       "total": 2
-    }
+    },
+    "gives": "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none"
   },
   {
     "name": "isDisposed",
@@ -747,7 +754,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "Whether the Host Object `o` has been disposed"
   },
   {
     "name": "objectKind",
@@ -755,7 +763,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The name of the Object Kind of the Host Object `o`, as text"
   },
   {
     "name": "rangeStart",
@@ -763,7 +772,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The first end of the range `r`, as written"
   },
   {
     "name": "rangeEnd",
@@ -771,7 +781,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The second end of the range `r`, as written"
   },
   {
     "name": "kindOf",
@@ -779,7 +790,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`"
   },
   {
     "name": "functionArity",
@@ -787,7 +799,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them"
   },
   {
     "name": "functionName",
@@ -795,7 +808,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda"
   },
   {
     "name": "abs",
@@ -803,7 +817,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "`x` without its sign"
   },
   {
     "name": "floor",
@@ -811,7 +826,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The greatest integer at or below `x`"
   },
   {
     "name": "ceiling",
@@ -819,7 +835,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The least integer at or above `x`"
   },
   {
     "name": "truncate",
@@ -827,7 +844,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "`x` with its fraction dropped, toward zero"
   },
   {
     "name": "round",
@@ -835,7 +853,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 3
-    }
+    },
+    "gives": "`x` rounded to `places` digits after the point, by `mode`"
   },
   {
     "name": "sqrt",
@@ -843,7 +862,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The square root of `x`"
   },
   {
     "name": "exp",
@@ -851,7 +871,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "e to the power `x`"
   },
   {
     "name": "ln",
@@ -859,7 +880,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The natural logarithm of `x`"
   },
   {
     "name": "log10",
@@ -867,7 +889,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The base-10 logarithm of `x`"
   },
   {
     "name": "power",
@@ -875,7 +898,8 @@ export const builtins = [
     "contract": {
       "required": 2,
       "total": 2
-    }
+    },
+    "gives": "`x` to the power `y`"
   },
   {
     "name": "sin",
@@ -883,7 +907,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The sine of `x` radians"
   },
   {
     "name": "cos",
@@ -891,7 +916,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The cosine of `x` radians"
   },
   {
     "name": "tan",
@@ -899,7 +925,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The tangent of `x` radians"
   },
   {
     "name": "asin",
@@ -907,7 +934,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The arcsine of `x`, in radians from -pi/2 to pi/2"
   },
   {
     "name": "acos",
@@ -915,7 +943,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The arccosine of `x`, in radians from 0 to pi"
   },
   {
     "name": "atan",
@@ -923,7 +952,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The arctangent of `x`, in radians between -pi/2 and pi/2"
   },
   {
     "name": "atan2",
@@ -931,7 +961,8 @@ export const builtins = [
     "contract": {
       "required": 2,
       "total": 2
-    }
+    },
+    "gives": "The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi"
   },
   {
     "name": "fromFloat64",
@@ -939,7 +970,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 2
-    }
+    },
+    "gives": "The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal"
   },
   {
     "name": "fromFloat32",
@@ -947,7 +979,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 2
-    }
+    },
+    "gives": "The number an IEEE 754 binary32 float in the 4 Bytes `b` holds, as its shortest round-trip decimal"
   },
   {
     "name": "toFloat64",
@@ -955,7 +988,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 2
-    }
+    },
+    "gives": "The 8 Bytes of the binary64 float nearest `n`, ties to even"
   },
   {
     "name": "toFloat32",
@@ -963,7 +997,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 2
-    }
+    },
+    "gives": "The 4 Bytes of the binary32 float nearest `n`, ties to even"
   },
   {
     "name": "year",
@@ -971,7 +1006,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The year of the Civil Date `d`, from 1 to 9999"
   },
   {
     "name": "month",
@@ -979,7 +1015,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The month of `d`, from 1 to 12"
   },
   {
     "name": "day",
@@ -987,7 +1024,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The day of the month of `d`, from 1 to 31"
   },
   {
     "name": "hour",
@@ -995,7 +1033,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The hour of the date-time `d`, from 0 to 23"
   },
   {
     "name": "minute",
@@ -1003,7 +1042,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The minute of the date-time `d`, from 0 to 59"
   },
   {
     "name": "second",
@@ -1011,7 +1051,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The whole seconds of the date-time `d`, from 0 to 59"
   },
   {
     "name": "nanosecond",
@@ -1019,7 +1060,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999"
   },
   {
     "name": "weekday",
@@ -1027,7 +1069,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday"
   },
   {
     "name": "dayOfYear",
@@ -1035,7 +1078,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The day of the year of `d`, from 1 to 366"
   },
   {
     "name": "isoWeek",
@@ -1043,7 +1087,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The ISO 8601 week number of `d`, from 1 to 53"
   },
   {
     "name": "isoWeekYear",
@@ -1051,7 +1096,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "The ISO 8601 week-numbering year of `d`"
   },
   {
     "name": "hasTime",
@@ -1059,7 +1105,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "Whether the Civil Date `d` has a time of day"
   },
   {
     "name": "toCivil",
@@ -1067,7 +1114,8 @@ export const builtins = [
     "contract": {
       "required": 2,
       "total": 2
-    }
+    },
+    "gives": "The date-time on the wall clock at `offset` from UTC at the Instant `i`"
   },
   {
     "name": "toInstant",
@@ -1075,23 +1123,28 @@ export const builtins = [
     "contract": {
       "required": 2,
       "total": 2
-    }
+    },
+    "gives": "The Instant at which the wall clock at `offset` from UTC reads the date-time `c`"
   },
   {
     "name": "pi",
-    "kind": "constant"
+    "kind": "constant",
+    "gives": "pi, rounded half-even to 34 digits"
   },
   {
     "name": "newline",
-    "kind": "constant"
+    "kind": "constant",
+    "gives": "A line feed, as text"
   },
   {
     "name": "tab",
-    "kind": "constant"
+    "kind": "constant",
+    "gives": "A tab, as text"
   },
   {
     "name": "quote",
-    "kind": "constant"
+    "kind": "constant",
+    "gives": "A double quote, as text"
   },
   {
     "name": "offerAvailable",
@@ -1099,7 +1152,8 @@ export const builtins = [
     "contract": {
       "required": 1,
       "total": 1
-    }
+    },
+    "gives": "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name"
   }
 ] as const;
 export const libraryExports = [

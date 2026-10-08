@@ -1,6 +1,6 @@
 # NorthTalk tooling
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is specified but not implemented here. Marked declaration-doc attachment/shared hover, the new observation commands, object-crossing replay and their prompt handling remain unavailable. Existing comment preservation does not implement doc attachment.
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter keeps `--|` Declaration Documentation attached, which the Core extracts. Hover doesn't show it yet, and the new observation commands and object-crossing replay are still unavailable ([#440](https://github.com/odogono/odgn-talk/issues/440)).
 
 
 `@odgn/northtalk-tooling` is the browser-safe TypeScript tooling stack over

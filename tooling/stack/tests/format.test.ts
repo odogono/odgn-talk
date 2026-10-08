@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { checkSource } from '@odgn/northtalk';
 import { formatSource } from '../src/format';
 
 test('indents blocks and normalises spaces without changing token spelling', () => {
@@ -181,4 +182,18 @@ test('keeps comments from empty offer argument lists when printing the bare form
   expect(result.source).toContain('choose offer skip -- keep');
   expect(result.source).not.toContain('skip(');
   expect(formatSource(result.source)).toEqual(result);
+});
+
+const docs = (text: string) => checkSource(text).tree!.docs;
+
+test('keeps Declaration Documentation attached, unmoved and separated', () => {
+  const source =
+    '  --| Adds one.\n\t--|   indented\nfunction inc n\nreturn n + 1\nend inc\n--| detached\n\n\n\nconstant k = 1\n-- plain\n--| after plain\non go\n--| inside a body\nsay inc(k)\nend go\n';
+  const formatted = formatSource(source).source;
+  expect(formatted).toBe(
+    '--| Adds one.\n--|   indented\nfunction inc n\n  return n + 1\nend inc\n--| detached\n\nconstant k = 1\n-- plain\n--| after plain\non go\n  --| inside a body\n  say inc(k)\nend go\n',
+  );
+  expect(formatSource(formatted).source).toBe(formatted);
+  expect(docs(formatted)).toEqual(docs(source));
+  expect(docs(formatted)).toEqual(['Adds one.\n  indented', '', 'after plain']);
 });

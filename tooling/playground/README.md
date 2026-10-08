@@ -1,6 +1,6 @@
 # NorthTalk Playground
 
-**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is specified but not implemented here. Marked declaration-doc attachment/shared hover, the new observation commands, object-crossing replay and their prompt handling remain unavailable. Existing comment preservation does not implement doc attachment.
+**Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The Session Host attaches `--|` Declaration Documentation to Entries. Script-tab Apply still slices declarations without their leading doc blocks, so it drops them ([#440](https://github.com/odogono/odgn-talk/issues/440)). Shared hover, the new observation commands and object-crossing replay are still unavailable.
 
 
 The browser counterpart of the REPL, on the TS Core ([chapter 12](../../spec/12-sessions-and-tooling.md#the-playground)). A Playground session is an ordinary Session Host, so everything it prints and records is the same as the REPL's. The page itself is tooling, and none of it is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).

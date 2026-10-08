@@ -15,8 +15,9 @@ import { stateOf } from './objects';
 import { Run, coreRaised, loadScript } from './machine';
 import { checkSource } from './checker';
 import { lowerTree } from './lowering';
+import { codeDoc } from './documentation';
 
-export const saveFormatVersion = 3;
+export const saveFormatVersion = 4;
 
 type Atom = boolean | number | string | null | [string, (string | number)?];
 type Node = { data: unknown; kind: string };
@@ -87,7 +88,9 @@ export const saveGraph = (root: unknown, refs: References): Graph => {
         const code = fn.code as { home: { live: boolean } };
         data = atom({
           ...fn,
-          code: code.home.live ? fn.code : { home: { live: false } },
+          code: code.home.live
+            ? fn.code
+            : { home: { live: false }, doc: codeDoc(fn.code) },
         });
       } else if (v.kind === 'list') {
         kind = 'list';
@@ -238,7 +241,12 @@ export const restoreGraph = (
           const fn = v as FunctionRef;
           finish(
             functionValue(
-              variablesOnly ? { ...fn, code: { home: { live: false } } } : fn,
+              variablesOnly
+                ? {
+                    ...fn,
+                    code: { home: { live: false }, doc: codeDoc(fn.code) },
+                  }
+                : fn,
             ),
           );
         });

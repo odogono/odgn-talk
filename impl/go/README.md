@@ -112,7 +112,9 @@ use `gofmt`. Their `--check` modes refuse missing or stale output without writin
 
 ## REPL and Session Transcripts
 
-**Specified, not implemented:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core does not yet implement those commands, the public accounting reports or `RestoreResult.reports`, exact causal Fuel, retained documentation, or the associated save state. Existing Session/Trace cases continue to cover the previous surface. New accounting report types are specified ahead of implementation. The `RestoreResult` field extension is explicitly staged in chapter 9 until both Cores implement it; the active existing type remains checked against the runtime.
+**Partly implemented:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core implements the public Run accounting reports, `RestoreResult.reports` and Declaration Documentation ([#436](https://github.com/odogono/odgn-talk/issues/436)). The Session Commands and object-crossing envelopes are not implemented yet ([#370](https://github.com/odogono/odgn-talk/issues/370)).
+
+- **Declaration Documentation:** `--|` blocks attach to the next top-level declaration as the specification says. A leading block keeps an Entry `NeedsMore`, and the Host refuses a block that documents nothing with `! bad arguments`. The source a declaration was entered with keeps its block, through redefinition, export and reload. `Documentation(name)`, `LibraryDocumentation(library, name)` and `FunctionDocumentation(value)` return the documentation. Each Handler Clause has its own entry. An Import resolves to the declaration that defines it, and a Built-in uses its `stdlib.toml` description. A Function Value's documentation comes from the code that defined it, so a stale one keeps its documentation, including across save and restore. These lookups are only for tests and tooling until `:describe` and `:apropos` land ([#437](https://github.com/odogono/odgn-talk/issues/437)).
 
 
 From `impl/go/`, run the Go REPL or record/replay a Transcript:
@@ -334,7 +336,7 @@ Public Run accounting is returned by Pump, Reload, Library replacement and Resto
 Dispatch/discard events precede cumulative Fuel and causal queue counts; observation
 charges, detached sends and error Handlers are included without adding Trace records.
 
-`Group.Save` returns opaque `go/3` bytes for a Quiescent Group. It retains the
+`Group.Save` returns opaque `go/4` bytes for a Quiescent Group. It retains the
 Clock, sources and extensions, heap Values and closures, frames and rollback
 bases, dispatch contexts and activations, owner identities, pending transfers,
 cleanup progress and attempt counters, budgets and slice debt, ordered work and input queues, pending replies,
@@ -345,7 +347,8 @@ external effect state, refuse Save with `effects pending`.
 `Core.Restore` rebuilds code and checks the saved Group Fingerprint against
 current language/cost versions, Library identities, Grant declarations and
 limits. Saves are specific to the Go Core family and format; corrupt or
-unreadable bytes return `invalid save`. Formats `go/1` and `go/2` are no longer readable. Format `go/3` requires
+unreadable bytes return `invalid save`. Formats `go/1` to `go/3` are no longer readable. Format `go/4` keeps the
+Declaration Documentation of stale Function Values' code, and requires
 causal accounting state as well as transfer references to belong to surviving dispatch contexts,
 including after cancellation. Restore validates retained and active code/body/PC
 references, shared owner-local layouts, phases, action arguments, cleanup tables
