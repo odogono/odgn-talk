@@ -39,6 +39,7 @@ type Group struct {
 	orphanReplies     []delivery
 	stoppedSends      map[*Script]bool
 	controlsQueued    bool
+	rewound           bool // a Rewind landed in this Pump, which returns at once
 	nextDelivery      int64
 	nextBroadcast     int64
 	calls             map[CallID]*operationCall
@@ -113,6 +114,8 @@ type execution struct {
 	segment       int
 	calls         int64
 	stopReason    *string     // Stop landed at this Run's Host crossing
+	rewound       bool        // a Rewind landed at this Run's Host crossing
+	suspendedOnce bool        // it has passed a Suspension Point, so can't be rewound
 	scopes        []scopeSlot // surviving scopes in successful-opening order
 	participant   *segmentParticipant
 	effect        *EffectFailure
@@ -550,7 +553,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 		} else {
 			if d.kind == "stop" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)
-			} else if d.kind == "cancel-run" {
+			} else if d.kind == "cancel-run" || d.kind == "rewind-run" {
 				g.record(d.kind, true, []string{d.fields["run"]}, nil)
 			} else if d.kind == "revoke" {
 				g.record(d.kind, true, []string{d.script.name}, d.fields)

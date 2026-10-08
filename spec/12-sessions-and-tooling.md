@@ -309,9 +309,9 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **Recovery dispatch:** live and replay stepping follow the active policy/cleanup cursor, rather than the retained failed stack's deepest PC. Step over/out use the active owner path and helpers. Tooling-only frame views may add `role` (`retained` or `dispatch`); a dispatch activation includes an owning-frame reference and displays its actual shared owner locals. Ordinary frame views and chapter 9's Inspect schema are unchanged. Debugger callbacks stay outside saves, costs and Trace.
 - **The Clock:** live, the debugger's Host supplies Clock readings and subtracts paused time, so deadlines don't all fire on resume. In replay, the readings come from the Trace.
 - **Faults:** "break on error", caught or not, and "break on Limit Fault" pause before any rollback, so the state that caused it can be seen.
-- **No edits:** the debugger never writes Script state, and changing code is a Reload.
+- **No edits:** the debugger never writes Script state, and changing code is a Reload. **Fix and Continue** is a `RewindRun` of the paused Run followed by a Reload that keeps the mailbox, so the same message runs on the edited code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)). It is offered only while the paused Run hasn't passed a Suspension Point, and the debugger lists the Segment's effects that will happen again.
 - **Going back:** replay offers "run to Host Input *n*" and reverse steps, by replaying again from the start or from a save.
-- **Replaying a live Host's Trace,** the debugger answers every Host crossing from the Trace's own records ([chapter 11](11-the-trace-and-conformance.md#stubs)), and lands each early `Stop` or `CancelRun` at the instruction its `pc` names.
+- **Replaying a live Host's Trace,** the debugger answers every Host crossing from the Trace's own records ([chapter 11](11-the-trace-and-conformance.md#stubs)), and lands each early `Stop`, `CancelRun` or `RewindRun` at the instruction its `pc` names.
 
 ### The Host Manifest
 
@@ -340,4 +340,4 @@ The formatter preserves literal values, including all trailing whitespace and ad
 - **The tooling:** the formatter's output, the LSP's features, the debugger, the Lint catalogue and its wording, and the Advanced tags ([ADR 0027](../docs/adr/0027-layers-are-a-tooling-view-over-one-language.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 - **The REPL's own interface:** its prompt, line editing, colours, `:help` and `:quit`, and how it is told where to write a Transcript.
 - **Built-in Capabilities:** which ones a REPL or Playground offers to `:grant`, and their answers, which a Transcript records.
-- **The TS Core's tooling hooks,** for pausing and for landing an early `Stop` or `CancelRun` in replay ([TS implementation guide](../impl/ts/README.md#tooling-debug-hooks)).
+- **The TS Core's tooling hooks,** for pausing and for landing an early `Stop`, `CancelRun` or `RewindRun` in replay ([TS implementation guide](../impl/ts/README.md#tooling-debug-hooks)).

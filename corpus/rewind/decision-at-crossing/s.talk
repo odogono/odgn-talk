@@ -1,0 +1,3 @@
+on judge m, deciding
+  ask api to ping
+end judge

@@ -1,0 +1,5 @@
+script variable n = 0
+on tick, queued
+  add 1 to n
+  ask api to later and wait
+end tick

@@ -1,0 +1,8 @@
+script variable n = 0
+on work x
+  add 1 to n
+  repeat 10 times
+    add 0 to n
+  end repeat
+  return x * 2
+end work

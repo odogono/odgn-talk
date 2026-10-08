@@ -288,7 +288,7 @@ export type PumpResult = {
   /** The earliest deadline the next Pump could fire, if there is one. */
   nextDeadline?: bigint;
   reports: Report[];
-  state: 'idle' | 'sliced' | 'stopped';
+  state: 'idle' | 'sliced' | 'stopped' | 'rewound';
 };
 /** A snapshot of lifetime work and current retained state. */
 export type Counters = {
@@ -400,6 +400,8 @@ type Running = {
   parked?: boolean;
   /** Ready to resume from a Suspension Point, not a preemption. */
   resuming: boolean;
+  /** Rewound while it ran: its turn ends and its message goes back (ADR 0068). */
+  rewound?: boolean;
   run: Run;
   selected?: boolean;
 };
@@ -477,6 +479,7 @@ type ScriptState = {
 type InputAction =
   | { id: string; k: 'cancel-delivery' }
   | { id: string; k: 'cancel-run'; name: string }
+  | { id: string; k: 'rewind-run'; name: string }
   | { k: 'stop'; name: string; reason: string }
   | { grant: string; k: 'revoke'; name: string }
   | { fuel: number; id: string; k: 'answer'; value: Value }
@@ -589,8 +592,12 @@ export class Script {
     this.group.watchCancellation(delivery, o?.signal);
     return { id: delivery.id!, result };
   }
-  reload(source: string, carry: CarryOver): Report[] {
-    return this.group.reload(this.name, source, carry);
+  reload(
+    source: string,
+    carry: CarryOver,
+    o?: { keepMailbox?: boolean },
+  ): Report[] {
+    return this.group.reload(this.name, source, carry, o?.keepMailbox);
   }
   extend(source: string): void {
     this.group.extend(this.name, source);
@@ -600,6 +607,10 @@ export class Script {
   }
   cancelRun(runId: string): void {
     this.group.queueCancelRun(this.name, runId);
+  }
+  /** Queued, landing as cancelRun does (ADR 0068). */
+  rewindRun(runId: string): void {
+    this.group.queueRewindRun(this.name, runId);
   }
   /** Queued. In-flight calls are left to the Host. */
   revoke(grantName: string): void {
@@ -634,6 +645,8 @@ export class Group {
   private active: { records: number; running: Running; s: ScriptState } | null =
     null;
   private activeStop: (() => void) | null = null;
+  /** A Rewind landed in this Pump, which returns at once (ADR 0068). */
+  private rewound = false;
   private drainingTrace: string[] | null = null;
   private debugController: DebugController | null = null;
   private debugPump: Generator<DebugPause, PumpResult> | null = null;
@@ -1581,6 +1594,14 @@ export class Group {
     });
   }
 
+  queueRewindRun(name: string, id: string): void {
+    this.queueInput({
+      urgent: true,
+      line: recordLine('rewind-run', [id], [], true),
+      action: { k: 'rewind-run', name, id },
+    });
+  }
+
   queueStop(name: string, reason: string): void {
     reason = text(reason).asText()!;
     this.queueInput({
@@ -1622,6 +1643,18 @@ export class Group {
         const running = this.runsOf(s).find(r => r.id === action.id);
         if (running) {
           this.cancelRunning(s, running);
+        }
+        break;
+      }
+      case 'rewind-run': {
+        const s = this.scripts.find(s => s.name === action.name)!;
+        const running = this.runsOf(s).find(r => r.id === action.id);
+        if (running?.run.rewindable && !s.stopped) {
+          this.rewindRunning(s, running);
+        } else {
+          this.trace(
+            recordLine('note', [action.id], [['kind', 'not-rewindable']]),
+          );
         }
         break;
       }
@@ -1749,6 +1782,30 @@ export class Group {
     }
   }
 
+  /**
+   * Roll back a Run's first Segment, end it and put its message back at the
+   * head of the mailbox. The running Pump returns at once (ADR 0068).
+   */
+  private rewindRunning(s: ScriptState, running: Running) {
+    this.rewound = true;
+    // A parked Run is between Segments: other Runs may have committed since.
+    const pending = running.run.discard(running.parked);
+    this.finalizeEffects(running, true);
+    this.forgetWait(s, running);
+    this.accumulateRunCosts(s, running.run);
+    this.accountEnd(running, 'discarded', 'rewind');
+    this.debugController?.ended(running.run);
+    for (const id of pending) {
+      this.trace(recordLine('abandon', [id], []));
+    }
+    s.parked = s.parked.filter(r => r !== running);
+    s.queue = s.queue.filter(q => q !== running);
+    s.queue.unshift(running.delivery);
+    if (this.active?.running === running) {
+      running.rewound = true;
+    }
+  }
+
   private stoppedDelivery(s: ScriptState, delivery: Delivery, run?: string) {
     delivery.unsubscribe?.();
     this.seal(delivery, {
@@ -1762,7 +1819,7 @@ export class Group {
     this.answer(delivery, { kind: 'stopped' });
   }
 
-  private stopState(s: ScriptState, reason: string) {
+  private stopState(s: ScriptState, reason: string, keepMailbox = false) {
     if (s.stopped) {
       return;
     }
@@ -1770,7 +1827,9 @@ export class Group {
     s.loaded.live = false;
     s.stopReason = reason;
     const runs = this.runsOf(s);
-    const messages = s.queue.filter((q): q is Delivery => !('run' in q));
+    const mailbox = s.queue.filter((q): q is Delivery => !('run' in q));
+    // A Reload that keeps the mailbox drops none of it (ADR 0068).
+    const messages = keepMailbox ? [] : mailbox;
     const pendingCalls: string[] = [];
     for (const r of runs) {
       this.accumulateRunCosts(s, r.run);
@@ -1780,7 +1839,7 @@ export class Group {
       this.finalizeEffects(r, true);
       this.forgetWait(s, r);
     }
-    s.queue = [];
+    s.queue = keepMailbox ? mailbox : [];
     if (!this.effectStateUnknown && runs.some(r => r.run.effectStateUnknown)) {
       s.stopReason = 'effect state unknown';
       this.stopUnknownEffects(s, () =>
@@ -2257,7 +2316,12 @@ export class Group {
   }
 
   /** Worker. Check and initialise before discarding any old work. */
-  reload(name: string, source: string, carry: CarryOver): Report[] {
+  reload(
+    name: string,
+    source: string,
+    carry: CarryOver,
+    keepMailbox = false,
+  ): Report[] {
     this.worker();
     this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
@@ -2268,6 +2332,7 @@ export class Group {
         [name],
         [
           ['carry', carry === 'carry variables' ? 'yes' : 'no'],
+          ['mailbox', keepMailbox ? 'keep' : null],
           ['source', displayText(source)],
           ['identity', p.identity],
         ],
@@ -2275,7 +2340,7 @@ export class Group {
       ),
     );
     const replacement = this.replacement(s, source, carry);
-    return this.replaceScripts([{ s, ...replacement }]);
+    return this.replaceScripts([{ s, ...replacement }], keepMailbox);
   }
 
   private extension(
@@ -2467,13 +2532,14 @@ export class Group {
       s: ScriptState;
       units: SourceUnit[];
     }[],
+    keepMailbox = false,
   ): Report[] {
     const previous = this.drainReports;
     const reports: Report[] = [];
     this.drainReports = reports;
     try {
       for (const { s } of replacements) {
-        this.stopState(s, 'reload');
+        this.stopState(s, 'reload', keepMailbox);
       }
       // Cleanup has already happened. Return its reports even if it stopped
       // the Group; publishing replacement code would hide the failed effects.
@@ -2613,7 +2679,11 @@ export class Group {
         active.records = run.records.length;
         const cancelling = run.cancelling;
         this.landUrgentInputs();
-        return s.stopped || (!cancelling && run.cancelling);
+        return (
+          s.stopped ||
+          (!cancelling && run.cancelling) ||
+          !!this.active?.running.rewound
+        );
       },
       group,
       disableGrant: name => s.disabled.add(name),
@@ -3527,6 +3597,7 @@ export class Group {
     o: PumpOptions,
   ): Generator<DebugPause, PumpResult> {
     this.lastClock = now;
+    this.rewound = false;
     this.drainCharges.clear();
     const firstRestorePump = this.restored;
     this.restored = false;
@@ -3625,10 +3696,10 @@ export class Group {
     const preempt = (s: ScriptState) =>
       sliced(s) ? 'slice' : capped() ? 'cap' : null;
     let progress = true;
-    while (progress && !capped()) {
+    while (progress && !capped() && !this.rewound) {
       progress = false;
       for (const s of this.scripts) {
-        if (!s.queue.length || sliced(s) || capped()) {
+        if (!s.queue.length || sliced(s) || capped() || this.rewound) {
           continue;
         }
         progress = true;
@@ -3654,12 +3725,14 @@ export class Group {
         this.dropStoppedMailbox(s);
       }
     }
-    const state =
-      this.scripts.length && this.scripts.every(s => s.stopped)
+    const state = this.rewound
+      ? 'rewound'
+      : this.scripts.length && this.scripts.every(s => s.stopped)
         ? 'stopped'
         : this.scripts.some(s => s.queue.length)
           ? 'sliced'
           : 'idle';
+    this.rewound = false;
     this.timers = this.timers.filter(t => t.live);
     const next = this.timers.reduce<bigint | null>(
       (min, t) => (min === null || t.deadline < min ? t.deadline : min),
@@ -3852,7 +3925,13 @@ export class Group {
     charge(run.fuel - fuel0);
     let last = run.fuel;
     let by: 'slice' | 'cap' | null = null;
-    while (!run.done && !run.suspended && !running.parked && !s.stopped) {
+    while (
+      !run.done &&
+      !run.suspended &&
+      !running.parked &&
+      !s.stopped &&
+      !running.rewound
+    ) {
       // Selection/parking can fault without stepping an instruction. Finish
       // that deferred fault before a cap or slice may end this stretch.
       by = machineDebug.get(run)?.pending ? null : preempt();
@@ -3863,7 +3942,7 @@ export class Group {
       if (pause) {
         yield pause;
         this.landUrgentInputs();
-        if (run.done || run.suspended || s.stopped) {
+        if (run.done || run.suspended || s.stopped || running.rewound) {
           break;
         }
       }
@@ -3885,7 +3964,12 @@ export class Group {
         const cancelling = run.cancelling;
         yield faultPause;
         this.landUrgentInputs();
-        if (s.stopped || run.done || run.cancelling !== cancelling) {
+        if (
+          s.stopped ||
+          run.done ||
+          running.rewound ||
+          run.cancelling !== cancelling
+        ) {
           debug.pending = null;
           debug.fault = null;
           break;
@@ -4001,6 +4085,22 @@ export class Group {
       ['fuel', String(run.fuel - fuel0)],
       ['alloc', String(run.alloc - alloc0)],
     ];
+    if (running.rewound) {
+      this.trace(
+        recordLine(
+          'seg',
+          [running.id, how],
+          [
+            ...start,
+            ...stretch,
+            ['state', String(this.persistentState(s))],
+            ['end', 'rewind'],
+          ],
+        ),
+      );
+      observe('rewind');
+      return;
+    }
     if (s.stopped) {
       this.trace(
         recordLine(

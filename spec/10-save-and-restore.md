@@ -136,6 +136,8 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 3. **Stopping:** only now, the Script is stopped as Stop Script is ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)), with reason `reload`. Its running, parked and suspended Runs are discarded with no `finally`, the messages in its mailbox are dropped, and their senders get `send failed`, reason `stopped`. Pending calls and live scopes are abandoned, and the current participant is rolled back before replacement. Disabled Grants remain disabled. A fatal lifecycle failure stops the Group and prevents replacement; completed external cleanup is not undone. The `stop` report lists what was discarded.
 4. **Replacing:** the new code and Script Variables replace the old, all at once. Every Function Value whose Home Script is this Script becomes stale.
 
+- **Keeping the mailbox:** with `keepMailbox`, step 3 drops none of the mailbox's messages, and their senders go on waiting; the Script's Runs are still discarded. A message a Rewind put back is dispatched to the new code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)).
+
 `Reload` returns the reports for the Runs it discarded. Unlike Stop Script, it isn't sticky: the reloaded Script takes new messages at once.
 
 - **Replacing a Library** stop-and-reloads every Script that imports it, directly or through another Library, as one Reload each, all in one Host Input ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). If any of them fails to load, nothing changes.

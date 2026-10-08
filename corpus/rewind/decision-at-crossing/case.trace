@@ -1,0 +1,26 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# decision-at-crossing: a Decision's Verdict is sealed only at the end of its
+# first Segment (ADR 0031), so a Rewind at a crossing before then leaves it
+# open (ADR 0068): no `decided` record follows the rewound stretch. After a
+# Reload that keeps the mailbox, d1 runs again on code that vetoes it, and the
+# repeated `ping` is the Segment's final effect happening twice.
+
+> load s identity=146535621188f8f65c906d3e978027a64232472242d67f7119cf5c3b14eb2d4e
+> stub api.ping value=1
+> stub api.ping value=2
+> decide d1 to=s message=judge args=["no"]
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.ping args=[] result=1
+> rewind-run s/r1
+seg s/r1 start delivery=d1 handler=judge clause=1 fuel=14 alloc=0 state=50 end=rewind
+pumped state=rewound fuel=14
+> reload s carry=no mailbox=keep source="on judge m, deciding" & newline & "ask api to ping" & newline & "veto m" & newline & "end judge" identity=a2fca250839cf8fc3fc0dfa1a2fe83233abf4dc5be4ea09da42f8ce3b081b953
+stopped s reason="reload"
+> pump clock=2026-10-01T09:00:01Z
+call s/r2.c1 op=api.ping args=[] result=2
+seg s/r2 start delivery=d1 handler=judge clause=1 fuel=19 alloc=16 state=0 end=veto value="no"
+decided d1 verdict=vetoed vetoes=[{script: "s", run: "s/r2", reason: "no"}]
+run s/r2 outcome=completed delivery=d1 handler=judge fuel=19 alloc=16
+pumped state=idle fuel=19
+> vars
+vars s

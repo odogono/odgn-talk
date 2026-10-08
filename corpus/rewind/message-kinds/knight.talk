@@ -1,0 +1,5 @@
+script variable passed = 0
+on move x
+  add 1 to passed
+  pass move
+end move

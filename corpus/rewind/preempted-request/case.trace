@@ -1,0 +1,25 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# preempted-request: a Rewind queued between Pumps lands at the next drain,
+# on a Run a Fuel Slice preempted in its first Segment (ADR 0068). It has no
+# stretch to end, so only the input line shows it, and that Pump returns
+# `rewound` at once. The Request's asker keeps waiting on d1: the next Pump
+# dispatches d1 again, as s/r2, which answers it. n counts one Run, not two.
+
+> load s identity=61bef16f2e11e1984f1faa90421b26565cdc9ac289a4837c3a85618dcf361d24
+> request d1 to=s message=work args=[21]
+> pump clock=2026-10-01T09:00:00Z fuel-slice=10
+preempt s/r1 start delivery=d1 handler=work clause=1 by=slice fuel=12 alloc=16
+pumped state=sliced fuel=12
+> vars
+vars s n=0
+> rewind-run s/r1
+> pump clock=2026-10-01T09:00:01Z
+pumped state=rewound fuel=0
+> vars
+vars s n=0
+> pump clock=2026-10-01T09:00:02Z
+seg s/r2 start delivery=d1 handler=work clause=1 fuel=168 alloc=216 state=16 end=return
+run s/r2 outcome=completed delivery=d1 handler=work value=42 fuel=168 alloc=216
+pumped state=idle fuel=168
+> vars
+vars s n=1

@@ -165,6 +165,7 @@ type savedExecution struct {
 	Timers                []savedTimer
 	TimerOrder            int64
 	Parked, Deciding      bool
+	SuspendedOnce         bool
 	Segment               int
 	Calls                 int64
 	RaisesWritten         int
@@ -340,7 +341,7 @@ func (g *Group) Save() ([]byte, error) {
 			row.Grants = append(row.Grants, sg)
 		}
 		for _, x := range s.runs {
-			sx := savedExecution{Run: x.run, Delivery: deliveryData(x.delivery), ID: x.id, Handler: x.handler, Clause: x.clause, How: x.how, Deadline: x.deadline, TimerOrder: x.timerOrder, Parked: x.parked, Deciding: x.deciding, Segment: x.segment, Calls: x.calls, RaisesWritten: x.raisesWritten, OffersWritten: x.offersWritten, WaitCall: x.waitCall, AbandonCall: x.abandonCall}
+			sx := savedExecution{Run: x.run, Delivery: deliveryData(x.delivery), ID: x.id, Handler: x.handler, Clause: x.clause, How: x.how, Deadline: x.deadline, TimerOrder: x.timerOrder, Parked: x.parked, Deciding: x.deciding, SuspendedOnce: x.suspendedOnce, Segment: x.segment, Calls: x.calls, RaisesWritten: x.raisesWritten, OffersWritten: x.offersWritten, WaitCall: x.waitCall, AbandonCall: x.abandonCall}
 			for _, t := range x.memberTimers {
 				sx.Timers = append(sx.Timers, savedTimer{t.id, t.deadline, t.order, t.ms})
 			}

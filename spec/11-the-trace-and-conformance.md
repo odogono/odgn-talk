@@ -185,7 +185,7 @@ A record is written when what it records happens, so a Trace is in the order the
 - **Queued calls** are written when the Pump that drains them has read its Clock, in the order they were made, and just before that Pump's `pump` line. So a Delivery an author writes just before a `> pump` is where the Core writes it too, and a worker call or a refused input written between them moves before it.
 - **A queued call never drained,** because a worker call discarded it first, as a variables-only restore drops the saved input queue, is written just before that worker call's line, in the order the calls were made.
 - **A Host Input refused at the call,** with a Host error or `MailboxFull`, is written at the call, with none of the ids the Core would assign, and a `refused` record follows it. It changes nothing. The ids the Host supplies, such as a `settle`'s call id, are kept.
-- **Calls made inside a Pump,** from a Host function, land when that function returns: a queued call is drained by the next Pump, and a refused one, a `Stop` or a `CancelRun` is written right after the record of that crossing ([below](#stops-and-cancels-inside-a-pump)).
+- **Calls made inside a Pump,** from a Host function, land when that function returns: a queued call is drained by the next Pump, and a refused one, a `Stop`, a `CancelRun` or a `RewindRun` is written right after the record of that crossing ([below](#stops-and-cancels-inside-a-pump)).
 - **Inside a Pump,** the records follow in the order they happened, and the Pump ends with `pumped`. A Stretch of a Run is written as `seg` or `preempt` when it ends, so the `call`, `send`, `raise`, `guard-skip` and `note` records it made come before it, and a Run's `run` record comes after its last Stretch. A Run's first Stretch carries the start keys (`delivery`, `broadcast`, `from`, `handler`, `fallback`, `clause` and `fn`), whether it is a `seg` or a `preempt`.
 - **A Verdict** is written as `decided` right after the record of what settled it. A seal comes at the end of a Segment, so an allowed or vetoed Decision's `decided` follows the sealing `seg`, and comes before the Run's `run`. An undecided Verdict is settled by the Run's end, so its `decided` follows the `run` record, or the `stopped` record for a Run stopped before its seal. A Decision cancelled in the mailbox is settled as it is drained, after its `run` record with no id, and a Broadcast Decision with no recipients as it is drained. An allow at successful dispatch to a clause without `, deciding`, or by a matching `wait for`, is written at that dispatch, before the Handler body’s records and Stretch. A Broadcast Decision with recipients is settled by its last recipient to settle. An open Decision a variables-only restore discarded or dropped is settled in the first Pump, before any Stretch, in delivery id order.
 - **A reissued call,** settled with `how=reissue`, crosses to the Host again as the first Pump drains the `settle`: a `call` record under its saved call id, before any Stretch. It has `charged` only if the Host function draws with `Charge`, since the declared cost isn't charged again.
@@ -203,7 +203,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | Record | Ids | Keys | Says |
 | --- | --- | --- | --- |
 | `load` | `script` | `identity`\* | loads the Script that case.toml names, with its source, Grants, owner, well-known objects and limits |
-| `reload` | `script` | `carry`, `source`, `identity`\* | reloads the Script from the source given |
+| `reload` | `script` | `carry`, `mailbox`?, `source`, `identity`\* | reloads the Script from the source given |
 | `extend` | `script` | `source`, `identity`\* | extends the Script with an Entry |
 | `add-library` | `library` | `identity`\* | adds the Library that case.toml names |
 | `replace-library` | `library` | `carry`, `source`, `identity`\* | replaces the Library with the source given |
@@ -220,6 +220,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `settle` | `call` | `how`, `value`?, `error`? | settles a pending call after a restore |
 | `stub` | `operation` | `value`?, `error`?, `charge`? | queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, and any call's charge; the runner writes it, and the Core never sees it |
 | `cancel-run` | `run` | `pc`? | cancels a Run |
+| `rewind-run` | `run` | `pc`? | rewinds a Run still in its first Segment: its message goes back to the head of its Script's mailbox |
 | `stop` | `script` | `reason`, `pc`? | stops a Script |
 | `revoke` | `script` | `grant` | revokes one of the Script's Grants |
 | `set-parent` |  | `object`, `parent` | sets a Host Object's parent |
@@ -238,6 +239,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | --- | --- | --- | --- |
 | `load` | `identity` | `hex` | the Script's code identity |
 | `reload` | `carry` | `word` | whether Script Variables carry over: `yes`, `no` |
+| `reload` | `mailbox` | `word` | `keep` when the Script's mailbox is kept rather than dropped: `keep` |
 | `reload` | `source` | `value` | the new source, as text |
 | `reload` | `identity` | `hex` | the new source's code identity |
 | `extend` | `source` | `value` | the Entry's source, as text |
@@ -282,6 +284,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `stub` | `error` | `value` | an error to fail with instead, as for `fail`, or `{}` to fail with an error that isn't a Script error |
 | `stub` | `charge` | `count` | the Fuel the Host function draws with `Charge` |
 | `cancel-run` | `pc` | `count` | for one that landed early, the instruction it landed before |
+| `rewind-run` | `pc` | `count` | for one that landed early, the instruction it landed before |
 | `stop` | `reason` | `value` | the Host's reason, as text |
 | `stop` | `pc` | `count` | for one that landed early, the instruction it landed before |
 | `revoke` | `grant` | `id` | the granted name |
@@ -435,7 +438,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `counters` | `faults` | `count` | Runs ended with a Limit Fault |
 | `counters` | `state` | `count` | current Persistent State, in bytes |
 | `counters` | `mailbox` | `count` | messages currently in the mailbox, excluding Runs and undrained Host Inputs |
-| `pumped` | `state` | `word` | the Group's state: `idle`, `sliced`, `stopped` |
+| `pumped` | `state` | `word` | the Group's state: `idle`, `sliced`, `stopped`, `rewound` |
 | `pumped` | `fuel` | `count` | the Fuel the Pump used |
 | `pumped` | `next` | `instant` | the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one |
 | `refused` | `code` | `value` | the Host error's code, or `"mailbox full"`, as text |
@@ -495,6 +498,7 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 | `fault` | the Run had a Limit Fault |
 | `cancel` | the Run was cancelled |
 | `stop` | the Run was discarded by Stop Script, a Reload or disposing its Script's owner, in the middle of this Stretch; a Run discarded while suspended, parked or preempted has no Stretch to end, and only the `stopped` record lists it |
+| `rewind` | the Run was rewound in the middle of this Stretch; a Run rewound while parked or preempted has no Stretch to end |
 | `unhandled` | no Handler Clause matched |
 | `dropped` | a `, dropping` clause dropped the Run |
 | `park` | a `, queued` clause parked the Run |
@@ -521,12 +525,13 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 | `climb-full` | a message climbing its Message Path found the next mailbox full, and is reported as `unhandled`; the subject is the Run that passed it or ended `unhandled` |
 | `error-dropped` | an `error` message found its Script's mailbox full, and was dropped; the subject is the Run that errored |
 | `function-gone` | a Host call named a stale Function Value, and nothing ran; the subject is the Delivery |
+| `not-rewindable` | a Rewind landed on a Run that has passed a Suspension Point or ended, and did nothing; the subject is the Run |
 
 <!-- end -->
 
 ### Stops and cancels inside a Pump
 
-`Stop` and `CancelRun` made during a Pump land at the latest at the running Pump's next Host crossing, or at its end ([chapter 9](09-embedding.md#threads-and-the-input-queue)).
+`Stop`, `CancelRun` and `RewindRun` made during a Pump land at the latest at the running Pump's next Host crossing, or at its end ([chapter 9](09-embedding.md#threads-and-the-input-queue)).
 
 - **Where it lands** is where its line is written: after the `call` or `prop` record of the crossing it landed at, or before the `pumped` record if it landed at the Pump's end.
 - **An early landing,** between instructions elsewhere, adds `pc`, the instruction of the running Run it landed before. Only a native Core lands early, from a call made on another thread, and replay debugging lands it there through the TS Core's tooling hooks ([chapter 12](12-sessions-and-tooling.md#the-debugger)).
@@ -708,7 +713,7 @@ Session object setup and crossing actions come from the Transcript's [`%` envelo
 ## Outside parity
 
 - **Wording:** the `message` of a Core-raised error, and a Host error's or diagnostic's detail, none of which a Trace writes.
-- **Early landings** of `Stop` and `CancelRun`, which a Trace records so that a replay follows them ([chapter 5](05-handlers-messages-and-scheduling.md#outside-parity)).
+- **Early landings** of `Stop`, `CancelRun` and `RewindRun`, which a Trace records so that a replay follows them ([chapter 5](05-handlers-messages-and-scheduling.md#outside-parity)).
 - **The runners:** how each Core's corpus runner, bless tool and divergence report are built, beyond what this chapter fixes. Trace sinks that write files are helpers ([chapter 9](09-embedding.md#outside-parity)).
 - **Fuzzing:** the generator, the minimiser and the schedule.
 

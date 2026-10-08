@@ -408,7 +408,7 @@ cases.
 ## Group embedding
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
-`Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `Reload`, `Extend`,
+`Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `RewindRun`, `Reload`, `Extend`,
 `ReplaceLibrary`, `Save`, `Restore`, `Settle`, `Fingerprint` and `TraceSink` implement their handoff
 signatures. Core compilation caches are mutex-protected and Groups have separate
 live state. Load supports Scripts with named Capability Grants and an optional
@@ -850,7 +850,11 @@ remain cumulative over the Run. A suspension charges the wait before checking
 retained Persistent State. Cancelling a suspended Request removes its timer and
 queues finally cleanup in input order, preserving committed earlier Segments.
 `CancelRun` also queues cancellation and may land during a Pump at a Host crossing
-or Pump end; ordinary settlements still wait for the next Pump.
+or Pump end; ordinary settlements still wait for the next Pump. `RewindRun` lands
+the same way: a Run that hasn't passed a Suspension Point (its saved
+`SuspendedOnce` is false) is rolled back, discarded with reason `rewind`, and its
+message put back at the head of the mailbox, and the Pump returns `Rewound`.
+`Reload` with `ReloadOptions{KeepMailbox: true}` keeps that mailbox (ADR 0068).
 Faulted cleanup rolls back only its own Segment. Deadlines beyond `time.Time`'s
 representable range stop at the untouched wait boundary; durations beyond
 `time.Duration` are supported when their deadline fits `time.Time`.

@@ -1,0 +1,28 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# parked-queued: a Run a `, queued` clause parked right after dispatch is
+# still in its first Segment, so it can be rewound (ADR 0068). d2's Run parks
+# behind s/r1, which waits on `later`; the Rewind puts d2 back at the head of
+# the mailbox. It is ahead of s/r1's resumption, so it dispatches again as
+# s/r3 and parks, then runs once s/r1 ends. n counts s/r1 and s/r3 only.
+
+> load s identity=c0ec17a1763cdc141948003d3563f9bb1bc38e25c6a8bd41e1bf8c5c47622cca
+> deliver d1 to=s message=tick
+> deliver d2 to=s message=tick
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.later args=[]
+seg s/r1 start delivery=d1 handler=tick clause=1 fuel=24 alloc=16 state=296 end=ask-wait
+seg s/r2 start delivery=d2 handler=tick clause=1 fuel=4 alloc=0 state=456 end=park
+pumped state=idle fuel=28 next=2026-10-01T09:00:30Z
+> rewind-run s/r2
+> pump clock=2026-10-01T09:00:01Z
+pumped state=rewound fuel=0 next=2026-10-01T09:00:30Z
+> answer s/r1.c1 value=1
+> pump clock=2026-10-01T09:00:02Z
+seg s/r3 start delivery=d2 handler=tick clause=1 fuel=4 alloc=0 state=424 end=park
+seg s/r1 resume fuel=5 alloc=16 state=208 end=return
+run s/r1 outcome=completed delivery=d1 handler=tick fuel=29 alloc=32
+call s/r3.c1 op=api.later args=[]
+seg s/r3 resume fuel=20 alloc=16 state=264 end=ask-wait
+pumped state=idle fuel=29 next=2026-10-01T09:00:32Z
+> vars
+vars s n=2

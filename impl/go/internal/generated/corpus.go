@@ -104,6 +104,15 @@ var Corpus = CorpusTable{
 					},
 				},
 				CorpusTableRecordEntryKeyEntry{
+					Key:  "mailbox",
+					Type: "word",
+					Is:   "`keep` when the Script's mailbox is kept rather than dropped",
+					Words: []string{
+						"keep",
+					},
+					Optional: true,
+				},
+				CorpusTableRecordEntryKeyEntry{
 					Key:  "source",
 					Type: "value",
 					Is:   "the new source, as text",
@@ -509,6 +518,22 @@ var Corpus = CorpusTable{
 				"run",
 			},
 			Is: "cancels a Run",
+			Key: []CorpusTableRecordEntryKeyEntry{
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "pc",
+					Type:     "count",
+					Is:       "for one that landed early, the instruction it landed before",
+					Optional: true,
+				},
+			},
+		},
+		CorpusTableRecordEntry{
+			Name:  "rewind-run",
+			Input: true,
+			Ids: []string{
+				"run",
+			},
+			Is: "rewinds a Run still in its first Segment: its message goes back to the head of its Script's mailbox",
 			Key: []CorpusTableRecordEntryKeyEntry{
 				CorpusTableRecordEntryKeyEntry{
 					Key:      "pc",
@@ -1429,6 +1454,7 @@ var Corpus = CorpusTable{
 						"idle",
 						"sliced",
 						"stopped",
+						"rewound",
 					},
 				},
 				CorpusTableRecordEntryKeyEntry{
@@ -1686,6 +1712,10 @@ var Corpus = CorpusTable{
 			Is:   "the Run was discarded by Stop Script, a Reload or disposing its Script's owner, in the middle of this Stretch; a Run discarded while suspended, parked or preempted has no Stretch to end, and only the `stopped` record lists it",
 		},
 		CorpusTableEndEntry{
+			Word: "rewind",
+			Is:   "the Run was rewound in the middle of this Stretch; a Run rewound while parked or preempted has no Stretch to end",
+		},
+		CorpusTableEndEntry{
 			Word: "unhandled",
 			Is:   "no Handler Clause matched",
 		},
@@ -1754,6 +1784,10 @@ var Corpus = CorpusTable{
 		CorpusTableNoteEntry{
 			Word: "function-gone",
 			Is:   "a Host call named a stale Function Value, and nothing ran; the subject is the Delivery",
+		},
+		CorpusTableNoteEntry{
+			Word: "not-rewindable",
+			Is:   "a Rewind landed on a Run that has passed a Suspension Point or ended, and did nothing; the subject is the Run",
 		},
 	},
 	Setup: []CorpusTableSetupEntry{

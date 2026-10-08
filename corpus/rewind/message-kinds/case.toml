@@ -1,0 +1,37 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "ping"
+mode = "immediate"
+result = "number"
+
+[[objectKinds]]
+name = "board"
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "main"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "main" }
+grants = { api = { ops = ["ping"] } }
+
+[[scripts]]
+name = "knight"
+source = "knight.talk"
+owner = { kind = "piece", id = "knight" }

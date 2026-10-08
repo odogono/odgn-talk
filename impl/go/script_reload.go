@@ -18,6 +18,12 @@ const (
 	CarryVariables
 )
 
+// ReloadOptions: KeepMailbox keeps the mailbox, a rewound message included
+// (ADR 0068).
+type ReloadOptions struct {
+	KeepMailbox bool
+}
+
 type Stop struct {
 	Script          string
 	Reason          string
@@ -30,12 +36,16 @@ func (*Stop) isReport() {}
 
 // Reload validates and checks carried state before terminating old Runs and
 // rolling back their participants.
-func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
+func (s *Script) Reload(source string, carry CarryOver, o ...ReloadOptions) ([]Report, error) {
 	g := s.group
 	_, importIDs, _, _ := libraryOptions(g.libraries)
 	fields := map[string]string{"source": corevalue.DisplayText(source), "carry": "no", "identity": fmt.Sprintf("%x", codeIdentity("script", s.name, source, importIDs))}
 	if carry == CarryVariables {
 		fields["carry"] = "yes"
+	}
+	keepMailbox := len(o) > 0 && o[0].KeepMailbox
+	if keepMailbox {
+		fields["mailbox"] = "keep"
 	}
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("reload", []string{s.name}, fields, ReentrantCall)
@@ -53,7 +63,7 @@ func (s *Script) Reload(source string, carry CarryOver) ([]Report, error) {
 	if e != nil {
 		return nil, e
 	}
-	reports, err := s.applyReload(state, source)
+	reports, err := s.applyReload(state, source, keepMailbox)
 	g.flushAccounting(&reports)
 	return reports, err
 }
@@ -116,7 +126,7 @@ func (s *Script) prepareReload(source string, carry CarryOver) (*machine.State, 
 	return state, nil
 }
 
-func (s *Script) applyReload(state *machine.State, source string) ([]Report, error) {
+func (s *Script) applyReload(state *machine.State, source string, keepMailbox bool) ([]Report, error) {
 	g := s.group
 	_, importIDs, _, _ := libraryOptions(g.libraries)
 	wasStopped := s.stopped
@@ -171,6 +181,11 @@ func (s *Script) applyReload(state *machine.State, source string) ([]Report, err
 		if item.run != nil {
 			continue
 		}
+		// A Reload that keeps the mailbox drops none of it (ADR 0068).
+		if keepMailbox {
+			s.queue = append(s.queue, item)
+			continue
+		}
 		d := item.delivery
 		g.accountDrop(d)
 		g.release(s)
@@ -210,7 +225,7 @@ func (s *Script) applyReload(state *machine.State, source string) ([]Report, err
 		reports = append(reports, g.settleReloadDelivery(s, x.delivery, x.id)...)
 	}
 	for _, item := range queue {
-		if item.run == nil {
+		if item.run == nil && !keepMailbox {
 			reports = append(reports, g.settleReloadDelivery(s, item.delivery, "")...)
 		}
 	}

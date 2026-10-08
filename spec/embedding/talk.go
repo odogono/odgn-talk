@@ -16,7 +16,7 @@
 // Everything it does to a Group is a Host Input, recorded in the Trace. Calls
 // marked "any goroutine" append to the Group's input queue and return at once.
 // The next Pump drains the queue in call order, right after it takes its
-// Clock reading. Stop and CancelRun land at the latest at the running Pump's
+// Clock reading. Stop, CancelRun and RewindRun land at the latest at the running Pump's
 // next Host crossing (an Operation or property call) or its end; a native
 // Core may act on them sooner, between instructions. Calls marked "worker" must come from the one goroutine that
 // pumps the Group. Two worker calls made at once are undefined. A worker call
@@ -798,6 +798,7 @@ const (
 	Idle   GroupState = iota // nothing runnable until an input or a deadline
 	Sliced                   // a slice or the cap ran out with work left
 	Stopped
+	Rewound // a Rewind landed, and the Pump returned at once (ADR 0068)
 )
 
 // Save is a worker call between Pumps. Live scopes, an enlisted participant
@@ -862,18 +863,27 @@ func (s *Script) Grants() map[string][]string // worker; a fresh map of kept nam
 func (s *Script) Counters() Counters          // worker, between Pumps
 
 // Reload is stop-and-reload (ADR 0005), a worker call. It returns the
-// reports for the Runs it discarded.
-func (s *Script) Reload(source string, carry CarryOver) ([]Report, error)
+// reports for the Runs it discarded. KeepMailbox keeps the mailbox, a
+// rewound message included (ADR 0068).
+func (s *Script) Reload(source string, carry CarryOver, o ...ReloadOptions) ([]Report, error)
+
+type ReloadOptions struct {
+	KeepMailbox bool
+}
 
 // Extend is extend Script (ADR 0014), a worker call. It adds only new names.
 // A reused one is "name reused", and the Host reloads instead.
 func (s *Script) Extend(source string) error
 
-// Stop, CancelRun and Revoke are any-goroutine Host Inputs. Stop and
-// CancelRun land at the latest at the running Pump's next Host crossing or its
-// end. Everything else waits for the next Pump.
+// Stop, CancelRun, RewindRun and Revoke are any-goroutine Host Inputs. Stop,
+// CancelRun and RewindRun land at the latest at the running Pump's next Host
+// crossing or its end. Everything else waits for the next Pump.
 func (s *Script) Stop(reason string)
 func (s *Script) CancelRun(id RunID)
+
+// RewindRun puts a Run still in its first Segment back in the mailbox as its
+// message (ADR 0068).
+func (s *Script) RewindRun(id RunID)
 
 // Revoke makes later calls through the named Grant fail with `capability
 // revoked` until the next Reload, and load errors after it. In-flight calls
@@ -926,7 +936,7 @@ type RunDiscarded struct {
 	RunAncestry
 	Script string
 	Run    RunID
-	Reason string // stop, reload, library replacement, or variables-only restore
+	Reason string // stop, reload, library replacement, variables-only restore, or rewind
 }
 
 type RunAccounting struct {
