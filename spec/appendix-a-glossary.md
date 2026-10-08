@@ -196,6 +196,10 @@ _Avoid_: execution tree, runtime state
 
 **Restart**:
 In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
+
+**Fix and Continue**:
+In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them.
+_Avoid_: hot reload, hot swap, live edit
 _Avoid_: reset, reload, refresh
 
 **Shared Link**:
@@ -420,6 +424,10 @@ _Avoid_: turn, slice, tick
 
 **Stretch**:
 One uninterrupted piece of a Segment, from the Run's start, a resume or its continuation after a preemption, to the Segment's end or the next preemption. A Segment that is never preempted is a single Stretch; one preempted by a Fuel Slice spans several.
+
+**Rewind**:
+Ending a Run that hasn't yet passed a Suspension Point as if it had never started: its Segment is rolled back and its message goes back to the head of its Script's mailbox, to be dispatched again. Effects that a rollback can't undo stay done, and happen again on the redispatch.
+_Avoid_: restart, retry, rerun, restart frame
 _Avoid_: slice, burst, run (a Run is the whole handling of one message)
 
 ## Resources
