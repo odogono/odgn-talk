@@ -696,8 +696,10 @@ no Script error codes. Invalid read results and Host failures become `host error
 
 `Core.StoreCapability(StoreImpl, Costs)` supplies immediate `get`, `set`,
 `delete`, `keys`, `increment` and `swap`. The Grant binding names the Store.
-Writes enlist the Grant as the Segment participant and use the implementation's
-`Begin`, `Commit` and `Rollback` hooks. Shape checks precede empty-key checks;
+The implementation is one Segment Coordinator for every binding, the same
+pointer for every `StoreCapability` over one comparable implementation, so
+writes to several Stores, or to one Store through several Grants, enroll in one
+participant and use its `Begin`, `Commit` and `Rollback` hooks (ADR 0069). Shape checks precede empty-key checks;
 `invalid key` is uncharged and never calls the Host. Results must meet each
 Operation's Shape. Only declared Store catalogue failures with valid fields
 pass through; malformed failures become `host error`.
@@ -708,8 +710,8 @@ and catalogue fields as Script addition. `increment` accepts number and
 Quantity amounts at Load and at the Host crossing.
 
 [`store.New(store.Quotas{...})`](store/) supplies named in-memory Stores,
-starting empty. It keeps each live Segment's writes in call order, applies
-commits atomically, reserves keys against incompatible writes, and admits
+starting empty. It keeps each live Segment's writes to every Store it writes,
+in call order, applies a commit to all of them atomically, reserves keys against incompatible writes, and admits
 concurrent increments without losing counts. Ownership includes Group identity
 and Segment id. Quotas count logical key/value sizes and every Segment's
 nonnegative net growth, so another Segment's rollback cannot free capacity
@@ -1208,7 +1210,9 @@ recording expectations. Their first blessings were approved on 2026-10-05, with
 a later `objects/properties` correction approved on 2026-10-07 (see the
 [step-3 approval record](../../docs/reviews/step-three-blessings/README.md)), and required-case tests protect them in the Go gate.
 
-The four approved `capabilities/standard-store*` cases pass unchanged in ordinary
-and save/restore replay and are required in the Go passing gate. Their
-[first-blessing approval](../../docs/reviews/store-blessings/README.md) remains
-separate from the memory Store's 27 store-kit sequences.
+The `capabilities/standard-store*` cases pass in ordinary and save/restore
+replay and are required in the Go passing gate. Three keep their
+[first-blessing approval](../../docs/reviews/store-blessings/README.md);
+`standard-store-segments`, changed for #461, and the new
+`standard-store-coordinator` await review. That review remains separate from
+the memory Store's 32 store-kit sequences.

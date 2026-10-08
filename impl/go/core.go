@@ -32,6 +32,8 @@ type Core struct {
 	mu          sync.Mutex
 	units       map[compileKey]*lower.Unit
 	objectKinds map[string]*ObjectKind
+	// Each comparable StoreImpl's one Segment Coordinator (ADR 0069).
+	storeCoordinators map[StoreImpl]*SegmentLifecycle
 }
 
 type compileKey struct {

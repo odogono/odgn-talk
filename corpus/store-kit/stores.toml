@@ -1,0 +1,80 @@
+# Several Stores, and aliases of one Store, written in one Segment. A Store
+# implementation is one Segment Coordinator for every Store it keeps, so one
+# participant holds all of a Segment's writes (ADR 0069).
+quotas = { size = 1048576, keys = 1000, value = 65536 }
+
+[[sequence]]
+name = "writes to two Stores in one Segment commit together"
+steps = [
+  { in = "a", do = "begin", grant = "scores", store = "scores" },
+  { in = "a", do = "increment", grant = "scores", store = "scores", args = '["total", 5]', gives = '5' },
+  { in = "a", do = "set", grant = "progress", store = "progress", args = '["level", 2]' },
+  { in = "a", do = "get", grant = "progress", store = "progress", args = '["level"]', gives = '2' },
+  { in = "a", do = "keys", grant = "scores", store = "scores", gives = '["total"]' },
+  { in = "b", do = "get", store = "scores", args = '["total"]', gives = 'nothing' },
+  { in = "b", do = "get", store = "progress", args = '["level"]', gives = 'nothing' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", store = "scores", args = '["total"]', gives = '5' },
+  { in = "b", do = "get", store = "progress", args = '["level"]', gives = '2' },
+  { in = "b", do = "keys", store = "progress", gives = '["level"]' },
+]
+
+[[sequence]]
+name = "a rollback discards the writes to every Store"
+steps = [
+  { in = "a", do = "begin", grant = "scores", store = "scores" },
+  { in = "a", do = "set", grant = "scores", store = "scores", args = '["total", 1]' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "begin", grant = "scores", store = "scores" },
+  { in = "b", do = "increment", grant = "scores", store = "scores", args = '["total", 4]', gives = '5' },
+  { in = "b", do = "set", grant = "progress", store = "progress", args = '["level", 3]' },
+  { in = "b", do = "rollback" },
+  { in = "c", do = "get", store = "scores", args = '["total"]', gives = '1' },
+  { in = "c", do = "get", store = "progress", args = '["level"]', gives = 'nothing' },
+  { in = "c", do = "keys", store = "progress", gives = '[]' },
+]
+
+[[sequence]]
+name = "aliases of one Store share the Segment's writes, with no conflict"
+steps = [
+  { in = "a", do = "begin", grant = "st", store = "scores" },
+  { in = "a", do = "set", grant = "st", store = "scores", args = '["k", 1]' },
+  { in = "a", do = "increment", grant = "alias", store = "scores", args = '["k", 2]', gives = '3' },
+  { in = "a", do = "swap", grant = "alias", store = "scores", args = '["k", 3, 10]', gives = 'true' },
+  { in = "a", do = "get", grant = "st", store = "scores", args = '["k"]', gives = '10' },
+  { in = "a", do = "delete", grant = "st", store = "scores", args = '["j"]' },
+  { in = "b", do = "get", store = "scores", args = '["k"]', gives = 'nothing' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "get", store = "scores", args = '["k"]', gives = '10' },
+]
+
+[[sequence]]
+name = "a Segment reserves its keys in each Store it writes"
+steps = [
+  { in = "a", do = "begin", grant = "scores", store = "scores" },
+  { in = "a", do = "set", grant = "scores", store = "scores", args = '["k", 1]' },
+  { in = "a", do = "increment", grant = "progress", store = "progress", args = '["n"]', gives = '1' },
+  { in = "b", do = "begin", grant = "progress", store = "progress" },
+  { in = "b", do = "set", grant = "progress", store = "progress", args = '["k", 2]' },
+  { in = "b", do = "increment", grant = "progress", store = "progress", args = '["n"]', gives = '1' },
+  { in = "b", do = "set", grant = "scores", store = "scores", args = '["k", 2]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "set", grant = "progress", store = "progress", args = '["n", 0]', error = '{code: "store busy", key: "n"}' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "commit" },
+  { in = "c", do = "get", store = "scores", args = '["k"]', gives = '1' },
+  { in = "c", do = "get", store = "progress", args = '["k"]', gives = '2' },
+  { in = "c", do = "get", store = "progress", args = '["n"]', gives = '2' },
+]
+
+[[sequence]]
+name = "each Store a Segment writes keeps its own quotas"
+quotas = { size = 1048576, keys = 1, value = 65536 }
+steps = [
+  { in = "a", do = "begin", grant = "scores", store = "scores" },
+  { in = "a", do = "set", grant = "scores", store = "scores", args = '["k", 1]' },
+  { in = "a", do = "set", grant = "progress", store = "progress", args = '["k", 1]' },
+  { in = "a", do = "set", grant = "progress", store = "progress", args = '["j", 1]', error = '{code: "store full", limit: "keys"}' },
+  { in = "a", do = "commit" },
+  { in = "b", do = "keys", store = "scores", gives = '["k"]' },
+  { in = "b", do = "keys", store = "progress", gives = '["k"]' },
+]

@@ -1,8 +1,8 @@
 // A SQLite Store backend on `bun:sqlite`: each Store's keys are rows, their
-// values in the Value Encoding, and a commit is one transaction. The engine
-// keeps the reservations and quotas in this process, so the database file is
-// owned by one process, which takes an exclusive lock when it opens it
-// (ADR 0050, ADR 0062).
+// values in the Value Encoding, and a commit, to every Store a Segment wrote,
+// is one transaction. The engine keeps the reservations and quotas in this
+// process, so the database file is owned by one process, which takes an
+// exclusive lock when it opens it (ADR 0050, ADR 0062, ADR 0069).
 import { Database } from 'bun:sqlite';
 import { decodeValue, encodeValue, type Value } from '../../src/index';
 import {
@@ -26,12 +26,14 @@ export const sqliteBackend = (db: Database): StoreBackend => {
   );
   const remove = db.query('DELETE FROM store WHERE name = ? AND key = ?');
   const apply = db.transaction(
-    (name: string, changes: ReadonlyMap<string, Value>) => {
-      for (const [key, value] of changes) {
-        if (value.kind === 'nothing') {
-          remove.run(name, key);
-        } else {
-          upsert.run(name, key, encodeValue(value));
+    (changes: ReadonlyMap<string, ReadonlyMap<string, Value>>) => {
+      for (const [name, values] of changes) {
+        for (const [key, value] of values) {
+          if (value.kind === 'nothing') {
+            remove.run(name, key);
+          } else {
+            upsert.run(name, key, encodeValue(value));
+          }
         }
       }
     },
@@ -41,8 +43,8 @@ export const sqliteBackend = (db: Database): StoreBackend => {
       select
         .all(name)
         .map(({ key, value }) => [key, decodeValue(value)] as const),
-    save: (name, changes) => {
-      apply(name, changes);
+    save: changes => {
+      apply(changes);
     },
   };
 };

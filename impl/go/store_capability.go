@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	"reflect"
 	"slices"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
@@ -32,7 +33,10 @@ type StoreImpl interface {
 }
 
 // StoreCapability defines the six immediate store Operations. The Core checks
-// Shapes, empty keys, result kinds and declared catalogue failure fields.
+// Shapes, empty keys, result kinds and declared catalogue failure fields. It
+// maps every binding to impl as one Segment Coordinator, the same for every
+// StoreCapability over impl, so writes to several Stores, or one Store
+// through several Grants, in one Segment share its participant (ADR 0069).
 func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, error) {
 	if standardImplementationMissing(impl) {
 		return nil, &HostError{InvalidValue, "missing store implementation"}
@@ -71,7 +75,8 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 		ops[i].Cost = cost
 		ops[i].Mode = Immediate
 	}
-	def, err := c.DefineSegmentCapability("store", SegmentLifecycle{Begin: impl.Begin, Commit: impl.Commit, Rollback: impl.Rollback}, ops...)
+	coordinator := c.storeCoordinator(impl)
+	def, err := c.DefineCoordinatedCapability("store", func(any) *SegmentLifecycle { return coordinator }, ops...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +97,25 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 		def.checks[op.Name] = checks
 	}
 	return def, nil
+}
+
+// storeCoordinator gives impl's Segment Coordinator, compared by pointer. An
+// impl that can't be compared, such as a struct holding a map, gets a new one.
+func (c *Core) storeCoordinator(impl StoreImpl) *SegmentLifecycle {
+	coordinator := &SegmentLifecycle{Begin: impl.Begin, Commit: impl.Commit, Rollback: impl.Rollback}
+	if !reflect.ValueOf(impl).Comparable() {
+		return coordinator
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if known := c.storeCoordinators[impl]; known != nil {
+		return known
+	}
+	if c.storeCoordinators == nil {
+		c.storeCoordinators = map[StoreImpl]*SegmentLifecycle{}
+	}
+	c.storeCoordinators[impl] = coordinator
+	return coordinator
 }
 
 func storeFailure(code string, data corevalue.Value) bool {

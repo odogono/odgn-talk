@@ -1,8 +1,10 @@
 // A `store` implementation over any backend that keeps committed contents
 // (chapter 7, `store`; ADR 0050, ADR 0062). The engine holds each Store's
-// committed contents in memory, each live Segment's pending writes, and the
-// reservations and quota checks between them; the backend only loads a
-// Store once and applies each commit's changes at once.
+// committed contents in memory, each live Segment's pending writes to every
+// Store it writes, and the reservations and quota checks between them; the
+// backend only loads a Store once and applies each commit's changes, to all
+// of a Segment's Stores, at once. The engine is the Segment Coordinator of
+// every Store it keeps (ADR 0069).
 import type { Call, EffectResult, SegmentContext } from '../capabilities';
 import { sizeOf } from '../costs';
 import { quoteJSON, encodeValue } from '../encoding';
@@ -34,17 +36,25 @@ export type StoreBackend = {
   /** Every key and value of a Store, read once, when the Store is first used. */
   load(store: string): Iterable<readonly [string, Value]>;
   /**
-   * Applies one commit's changes to a Store at once: each key's new value,
-   * with Nothing deleting it. Throws, leaving the Store unchanged, if it can't.
+   * Applies one commit's changes to every Store it wrote at once: by Store
+   * name, each key's new value, with Nothing deleting it. Throws, leaving
+   * every Store unchanged, if it can't; throws `StoreStateUnknownError` if
+   * it can't tell whether some Stores changed.
    */
-  save(store: string, changes: ReadonlyMap<string, Value>): void;
+  save(changes: ReadonlyMap<string, ReadonlyMap<string, Value>>): void;
 };
+
+/** A backend's commit that may have changed some of its Stores. */
+export class StoreStateUnknownError extends Error {
+  override name = 'StoreStateUnknownError';
+}
 
 // What one Segment has written to one key: a `set`, `delete` or writing
 // `swap` replaces the key's value and reserves it, and increments add to
 // it, in call order.
 type Pending = { deltas: Value[]; set?: Value };
-type Segment = { keys: Map<string, Pending>; store: string };
+// A live Segment's pending writes, by Store name and key.
+type Segment = Map<string, Map<string, Pending>>;
 type Contents = { entries: Map<string, Value>; size: number };
 
 const absent = (v: Value | undefined): v is undefined =>
@@ -106,35 +116,52 @@ export class Stores implements StoreImpl {
 
   // ------------------------------------------------------------ lifecycle
 
+  // Every binding enrolled later in the Segment, through any Grant, joins
+  // it with no hook; its first write adds that Store.
   begin(context: SegmentContext<string>): EffectResult {
     const store = storeName(context.binding);
     this.committed(store);
-    this.segments.set(this.segmentKey(context), { store, keys: new Map() });
+    this.segments.set(this.segmentKey(context), new Map([[store, new Map()]]));
     return { status: 'ok' };
   }
 
   commit(context: SegmentContext<string>): EffectResult {
     const segment = this.segments.get(this.segmentKey(context));
     this.segments.delete(this.segmentKey(context));
-    if (!segment || segment.keys.size === 0) {
-      return { status: 'ok' };
-    }
-    const contents = this.committed(segment.store);
-    const changes = new Map<string, Value>();
+    const changes = new Map<string, Map<string, Value>>();
     try {
-      for (const [key, pending] of segment.keys) {
-        changes.set(
-          key,
-          applied(pending.set ?? contents.entries.get(key), pending.deltas) ??
-            nothing,
-        );
+      for (const [store, keys] of segment ?? []) {
+        const contents = this.committed(store);
+        const values = new Map<string, Value>();
+        for (const [key, pending] of keys) {
+          values.set(
+            key,
+            applied(pending.set ?? contents.entries.get(key), pending.deltas) ??
+              nothing,
+          );
+        }
+        if (values.size) {
+          changes.set(store, values);
+        }
       }
-      this.backend.save(segment.store, changes);
+      if (changes.size) {
+        this.backend.save(changes);
+      }
     } catch (error) {
+      if (error instanceof StoreStateUnknownError) {
+        // Read each Store again from the backend when it is next used.
+        for (const store of changes.keys()) {
+          this.contents.delete(store);
+        }
+        return { status: 'unknown', detail: error.message };
+      }
       return { status: 'failed', detail: (error as Error).message };
     }
-    for (const [key, value] of changes) {
-      this.put(contents, key, absent(value) ? undefined : value);
+    for (const [store, values] of changes) {
+      const contents = this.committed(store);
+      for (const [key, value] of values) {
+        this.put(contents, key, absent(value) ? undefined : value);
+      }
     }
     return { status: 'ok' };
   }
@@ -154,7 +181,7 @@ export class Stores implements StoreImpl {
     const store = storeName(call.binding);
     const own = this.own(call, store);
     const keys = new Set(this.committed(store).entries.keys());
-    for (const key of own?.keys.keys() ?? []) {
+    for (const key of own?.keys() ?? []) {
       keys.add(key);
     }
     return listValues(
@@ -203,21 +230,19 @@ export class Stores implements StoreImpl {
       ]);
     }
     const result = seen ? add(seen, delta) : delta;
-    const own = this.own(call, store)?.keys.get(key);
+    const own = this.own(call, store)?.get(key);
     if (own?.set === undefined) {
       // The committed value with every other live Segment's pending
       // increments, then this one's, so no commit order meets an error.
       let projected = this.committed(store).entries.get(key);
-      for (const [id, segment] of this.segments) {
-        if (segment.store === store && id !== this.segmentKey(call)) {
-          projected = applied(projected, segment.keys.get(key)?.deltas ?? []);
-        }
+      for (const keys of this.others(call, store)) {
+        projected = applied(projected, keys.get(key)?.deltas ?? []);
       }
       applied(projected, [...(own?.deltas ?? []), delta]);
     }
     const next: Pending = { ...own, deltas: [...(own?.deltas ?? []), delta] };
     this.grows(call, store, key, next, seen ? undefined : delta);
-    this.segment(call, store).keys.set(key, next);
+    this.segment(call, store).set(key, next);
     return result;
   }
 
@@ -232,7 +257,7 @@ export class Stores implements StoreImpl {
 
   /** Replaces a Store's contents, between Pumps. */
   replace(store: string, entries: readonly (readonly [string, Value])[]): void {
-    if ([...this.segments.values()].some(s => s.store === store)) {
+    if ([...this.segments.values()].some(s => s.has(store))) {
       throw new StoreContentsError('A Segment is writing to the Store');
     }
     const next: Contents = { entries: new Map(), size: 0 };
@@ -255,7 +280,7 @@ export class Stores implements StoreImpl {
     if (next.entries.size > this.quotas.keys || next.size > this.quotas.size) {
       throw new StoreContentsError('The contents are past the Store’s quotas');
     }
-    this.backend.save(store, this.changesTo(store, next));
+    this.backend.save(new Map([[store, this.changesTo(store, next)]]));
     this.contents.set(store, next);
   }
 
@@ -313,25 +338,41 @@ export class Stores implements StoreImpl {
     return `${group} ${at.segmentId}`;
   }
 
-  private own(call: Call<string>, store: string): Segment | undefined {
-    const segment = this.segments.get(this.segmentKey(call));
-    return segment?.store === store ? segment : undefined;
+  private own(
+    call: Call<string>,
+    store: string,
+  ): Map<string, Pending> | undefined {
+    return this.segments.get(this.segmentKey(call))?.get(store);
   }
 
-  private segment(call: Call<string>, store: string): Segment {
+  // Every other live Segment's pending writes to this Store.
+  private others(call: Call<string>, store: string): Map<string, Pending>[] {
+    const mine = this.segmentKey(call);
+    return [...this.segments]
+      .filter(([id, segment]) => id !== mine && segment.has(store))
+      .map(([, segment]) => segment.get(store)!);
+  }
+
+  private segment(call: Call<string>, store: string): Map<string, Pending> {
     const segment = this.segments.get(this.segmentKey(call));
-    if (!segment || segment.store !== store) {
+    if (!segment) {
       // The Core begins the participant before its first Segment-bound call.
       throw new Error('A Store write outside its Segment');
     }
-    return segment;
+    let keys = segment.get(store);
+    if (!keys) {
+      this.committed(store);
+      keys = new Map();
+      segment.set(store, keys);
+    }
+    return keys;
   }
 
   // The value the calling Segment sees, or undefined for a missing key.
   private seen(call: Call<string>, key: string): Value | undefined {
     const store = storeName(call.binding);
     const committed = this.committed(store).entries.get(key);
-    const pending = this.own(call, store)?.keys.get(key);
+    const pending = this.own(call, store)?.get(key);
     return pending
       ? applied(pending.set ?? committed, pending.deltas)
       : committed;
@@ -353,14 +394,9 @@ export class Stores implements StoreImpl {
     key: string,
     replacing: boolean,
   ) {
-    for (const [id, segment] of this.segments) {
-      const pending = segment.keys.get(key);
-      if (
-        id !== this.segmentKey(call) &&
-        segment.store === store &&
-        pending &&
-        (replacing || pending.set !== undefined)
-      ) {
+    for (const keys of this.others(call, store)) {
+      const pending = keys.get(key);
+      if (pending && (replacing || pending.set !== undefined)) {
         throw hostScriptError('store busy', [['key', text(key)]]);
       }
     }
@@ -371,7 +407,7 @@ export class Stores implements StoreImpl {
     this.unreserved(call, store, key, true);
     const next: Pending = { set: value, deltas: [] };
     this.grows(call, store, key, next, absent(value) ? undefined : value);
-    this.segment(call, store).keys.set(key, next);
+    this.segment(call, store).set(key, next);
   }
 
   // `store full` if the Store, with every live Segment's pending growth and
@@ -390,15 +426,11 @@ export class Stores implements StoreImpl {
       throw hostScriptError('store full', [['limit', text('value')]]);
     }
     const contents = this.committed(store);
-    const own = this.own(call, store);
-    const segments = [...this.segments.values()].filter(
-      s => s.store === store && s !== own,
-    );
-    const mine = new Map(own?.keys);
+    const mine = new Map(this.own(call, store));
     mine.set(key, next);
     let keys = contents.entries.size;
     let size = contents.size;
-    for (const pending of [...segments.map(s => s.keys), mine]) {
+    for (const pending of [...this.others(call, store), mine]) {
       let grownKeys = 0;
       let grownSize = 0;
       for (const [k, p] of pending) {

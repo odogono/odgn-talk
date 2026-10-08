@@ -4,6 +4,7 @@ import {
   add,
   bool,
   createCore,
+  defineCapability,
   defineObjectKind,
   HostError,
   LoadError,
@@ -13,9 +14,11 @@ import {
   parseInstant,
   readDisplay,
   ScriptError,
+  shape,
   storeCapability,
   text,
   type Costs,
+  type Grant,
   type Group,
   type Limits,
   type StoreImpl,
@@ -270,44 +273,132 @@ test('Store writes commit with the Segment and roll back with it', () => {
   ]);
 });
 
-test('Store writes enlist the Grant, and a second writable Store conflicts', () => {
-  const stores = memoryStores(sessionQuotas);
+// Delivers `go` to a Script with these Grants and gives its run's end and
+// its `effect` Trace lines.
+const deliver = (source: string, grants: Record<string, Grant<unknown>>) => {
   const lines: string[] = [];
   const g = newGroup({ name: 'g', trace: line => lines.push(line) });
-  const store = storeCapability(stores, costs);
   const script = g.load({
     name: 's',
-    source: [
-      'on go',
-      '  ask reader to get "k"',
-      '  ask a to set "k", 1',
-      '  ask reader to get "k"',
-      '  put it into seen',
-      '  ask b to set "k", 2',
-      'end',
-      'script variable seen = nothing',
-    ].join('\n'),
-    grants: {
-      reader: store.grant(['get', 'keys'], 'one'),
-      a: store.grant('all', 'one'),
-      b: store.grant('all', 'two'),
-    },
+    source: `${source}\nscript variable seen = nothing`,
+    grants,
+    limits: { fuelPerRun: 400 },
   });
   script.deliver({ name: 'go' });
   const report = operationalReports(g.pump(now).reports).find(
     r => r.kind === 'run end',
   )!;
-  expect(report.error?.code).toBe('segment participant conflict');
-  expect(report.error?.data.get('participant').asText()).toBe('a');
-  // The reader saw the Segment's own write, and the commit kept it.
-  expect(new Map(g.inspect().scripts[0]!.vars).get('seen')!.toString()).toBe(
-    '1',
+  return {
+    effects: lines.filter(l => l.startsWith('effect ')),
+    report,
+    seen: new Map(g.inspect().scripts[0]!.vars).get('seen')!.toString(),
+  };
+};
+const contents = (stores: Stores, name: string) =>
+  stores.entries(name).map(([k, v]) => `${k}=${v}`);
+
+test('Writes to two Stores, and through two aliases, share one participant', () => {
+  const stores = memoryStores(sessionQuotas);
+  const store = storeCapability(stores, costs);
+  const { report, effects, seen } = deliver(
+    [
+      'on go',
+      '  ask reader to get "k"',
+      '  ask scores to increment "total", 5',
+      '  ask progress to set "level", 2',
+      '  ask alias to increment "total", 1',
+      '  ask reader to get "total"',
+      '  put it into seen',
+      'end',
+    ].join('\n'),
+    {
+      reader: store.grant(['get', 'keys'], 'scores'),
+      scores: store.grant('all', 'scores'),
+      progress: store.grant('all', 'progress'),
+      // A second factory over the same Stores maps to the same coordinator.
+      alias: storeCapability(stores, costs).grant('all', 'scores'),
+    },
   );
-  expect(lines.filter(l => l.startsWith('effect '))).toEqual([
-    expect.stringContaining('grant=a phase=begin status=ok'),
-    expect.stringContaining('grant=a phase=commit status=ok'),
+  expect(report.outcome).toBe('completed');
+  // The reader sees the Segment's own writes through both aliases.
+  expect(seen).toBe('6');
+  expect(effects).toEqual([
+    expect.stringContaining('grant=scores phase=begin status=ok'),
+    expect.stringContaining('grant=scores phase=commit status=ok'),
   ]);
-  expect(stores.entries('one').map(([k, v]) => `${k}=${v}`)).toEqual(['k=1']);
+  expect(contents(stores, 'scores')).toEqual(['total=6']);
+  expect(contents(stores, 'progress')).toEqual(['level=2']);
+});
+
+test('a rollback, or a failed commit, leaves every Store a Segment wrote unchanged', () => {
+  let failing = false;
+  const saved: string[][] = [];
+  const stores = new Stores(
+    {
+      load: () => [],
+      save: changes => {
+        if (failing) {
+          throw new Error('disk full');
+        }
+        saved.push([...changes.keys()]);
+      },
+    },
+    sessionQuotas,
+  );
+  const store = storeCapability(stores, costs);
+  const grants = {
+    scores: store.grant('all', 'scores'),
+    progress: store.grant('all', 'progress'),
+  };
+  const writes =
+    '  ask scores to set "total", 1\n  ask progress to set "level", 1';
+  expect(deliver(`on go\n${writes}\nend`, grants).report.outcome).toBe(
+    'completed',
+  );
+  // One commit saves both Stores at once.
+  expect(saved).toEqual([['scores', 'progress']]);
+  const spin = 'repeat while true\nend repeat';
+  const faulted = deliver(
+    `on go\n${writes.replaceAll('1', '2')}\n${spin}\nend`,
+    grants,
+  );
+  expect(faulted.report.outcome).toBe('limit fault');
+  expect(faulted.effects).toEqual([
+    expect.stringContaining('grant=scores phase=begin status=ok'),
+    expect.stringContaining('grant=scores phase=rollback status=ok'),
+  ]);
+  failing = true;
+  const failed = deliver(`on go\n${writes.replaceAll('1', '3')}\nend`, grants);
+  expect(failed.report.outcome).toBe('effect failed');
+  expect(contents(stores, 'scores')).toEqual(['total=1']);
+  expect(contents(stores, 'progress')).toEqual(['level=1']);
+});
+
+test('a Store write conflicts with a participant of another coordinator', () => {
+  const stores = memoryStores(sessionQuotas);
+  const other = defineCapability(
+    'other',
+    {
+      write: {
+        mode: 'immediate',
+        result: shape.nothing,
+        cost: { fuel: 1 },
+        segmentBound: true,
+        do: () => nothing,
+      },
+    },
+    { begin: ok, commit: ok, rollback: ok },
+  );
+  const { report } = deliver(
+    'on go\n  ask o to write\n  ask s to set "k", 1\nend',
+    {
+      o: other.grant('all', undefined),
+      s: storeCapability(stores, costs).grant('all', 'one') as Grant<unknown>,
+    },
+  );
+  expect(report.error?.code).toBe('segment participant conflict');
+  expect(report.error?.data.get('participant').asText()).toBe('o');
+  expect(contents(stores, 'one')).toEqual([]);
 });
 
 test('the Core checks result kinds and declared failures', () => {
@@ -457,6 +548,45 @@ test('a Web Storage Store is one item per Store, read by the next page', () => {
   ).toBe('["a", "b"]');
   run('ask s to delete "a"\nask s to delete "b"', next, { name: 'scores' });
   expect([...storage.items]).toEqual([]);
+});
+
+const writes = (n: number) =>
+  `on go\n  ask a to set "k", ${n}\n  ask b to set "k", ${n}\nend`;
+
+test('a Web Storage commit to two Stores puts back what it set if one fails', () => {
+  const storage = fakeStorage();
+  const stores = webStorageStores(storage, sessionQuotas);
+  const store = storeCapability(stores, costs);
+  const grants = {
+    a: store.grant('all', 'a'),
+    b: store.grant('all', 'b'),
+  };
+  expect(deliver(writes(1), grants).report.outcome).toBe('completed');
+  const before = [...storage.items];
+  // The second Store's item can't be written: the first's is put back.
+  const setItem = storage.setItem;
+  storage.setItem = (key, value) => {
+    if (key.endsWith('.b')) {
+      throw new Error('quota exceeded');
+    }
+    setItem(key, value);
+  };
+  expect(deliver(writes(2), grants).report.outcome).toBe('effect failed');
+  expect([...storage.items]).toEqual(before);
+  expect(contents(stores, 'a')).toEqual(['k=1']);
+  // Nor can the first be put back: whether the commit happened is unknown.
+  storage.setItem = (key, value) => {
+    if (key.endsWith('.b') || value === '{"k":1}') {
+      throw new Error('quota exceeded');
+    }
+    setItem(key, value);
+  };
+  const unknown = deliver(writes(3), grants);
+  expect(unknown.effects).toContainEqual(
+    expect.stringContaining('phase=commit status=unknown'),
+  );
+  // The engine reads the Store again, as the backend left it.
+  expect(contents(stores, 'a')).toEqual(['k=3']);
 });
 
 test('Segments of two Groups sharing one Store are kept apart', () => {

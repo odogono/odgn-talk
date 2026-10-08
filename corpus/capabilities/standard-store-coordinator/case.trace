@@ -1,0 +1,40 @@
+# Unblessed: one Segment Coordinator for every Store (#461); first blessing awaits human review.
+# The worked example "Two Stores in one Segment" (spec/embedding/scoped-effects.md):
+# the store factory maps every binding to one coordinator, so in d1 the
+# increment enrolls scores and runs begin, the set enrolls progress with no
+# hook, and one commit covers both. In d2 alias, a second Grant of scores,
+# enrolls first; its commit fails, so one rollback covers all three Grants.
+> load s identity=c3fef516fdf44516ad773e6a34222d2e2a309d2d87abe82bdcf3eb82fe12680e
+> stub-effect s.scores phase=begin status=ok
+> stub store.increment value=10
+> stub store.set value=nothing
+> stub-effect s.scores phase=commit status=ok
+> deliver d1 to=s message=finishLevel args=[10, 1]
+> pump clock=2026-10-07T12:00:00Z
+effect s/r1.s1 grant=scores phase=begin status=ok
+call s/r1.c1 op=scores.increment args=["total", 10] result=10
+call s/r1.c2 op=progress.set args=["level", 1] result=nothing
+effect s/r1.s1 grant=scores phase=commit status=ok
+seg s/r1 start delivery=d1 handler=finishLevel clause=1 fuel=43 alloc=24 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=finishLevel fuel=43 alloc=24
+pumped state=idle fuel=43
+> stub-effect s.alias phase=begin status=ok
+> stub store.set value=nothing
+> stub store.delete value=nothing
+> stub store.increment value=11
+> stub-effect s.alias phase=commit status=failed
+> stub-effect s.alias phase=rollback status=ok
+> deliver d2 to=s message=again
+> pump clock=2026-10-07T12:00:00Z
+effect s/r2.s1 grant=alias phase=begin status=ok
+call s/r2.c1 op=alias.set args=["best", 3] result=nothing
+call s/r2.c2 op=progress.delete args=["level"] result=nothing
+call s/r2.c3 op=scores.increment args=["total"] result=11
+effect s/r2.s1 grant=alias phase=commit status=failed
+effect-failure s/r2 grant=alias segment=s/r2.s1 phase=commit status=failed
+effect s/r2.s1 grant=alias phase=rollback status=ok
+seg s/r2 start delivery=d2 handler=again clause=1 fuel=67 alloc=48 state=16 end=effect-failed
+run s/r2 outcome=effect-failed delivery=d2 handler=again effect={grant: "alias", segment: "s/r2.s1", phase: "commit", status: "failed"} fuel=67 alloc=48
+pumped state=idle fuel=67
+> vars
+vars s count=0

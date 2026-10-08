@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -156,19 +157,22 @@ func TestMemoryStoreObjectsAndFunctions(t *testing.T) {
 		}
 	}
 }
-func TestMemoryStoreReaderSharesOwnWritesAndSecondWriterConflicts(t *testing.T) {
-	core := talk.New()
-	stores := store.New(store.SessionQuotas())
-	def, err := core.StoreCapability(stores, costs())
-	if err != nil {
-		t.Fatal(err)
+
+type traced []string
+
+func (t *traced) Record(line string) {
+	if strings.HasPrefix(line, "effect ") {
+		*t = append(*t, line)
 	}
-	reader, err := def.Grant([]string{"get", "keys"}, "one")
-	if err != nil {
-		t.Fatal(err)
-	}
-	g := core.NewGroup(talk.GroupOptions{})
-	script, err := g.Load(talk.LoadOptions{Name: "s", Source: "script variable seen = nothing\non go\nask reader to get \"k\"\nask a to set \"k\", 1\nask reader to get \"k\"\nput it into seen\nask b to set \"k\", 2\nend go", Grants: map[string]*talk.Grant{"reader": reader, "a": def.GrantAll("one"), "b": def.GrantAll("two")}})
+}
+
+// deliver runs go once in a Script with these Grants, giving its end and its
+// effect Trace lines.
+func deliver(t *testing.T, core *talk.Core, source string, grants map[string]*talk.Grant) (*talk.RunEnd, *talk.Group, []string) {
+	t.Helper()
+	lines := &traced{}
+	g := core.NewGroup(talk.GroupOptions{Trace: lines})
+	script, err := g.Load(talk.LoadOptions{Name: "s", Source: "script variable seen = nothing\n" + source, Grants: grants, Limits: talk.Limits{FuelPerRun: 400}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,17 +180,68 @@ func TestMemoryStoreReaderSharesOwnWritesAndSecondWriterConflicts(t *testing.T) 
 		t.Fatal(err)
 	}
 	end := ended(t, g)
-	if end.Error == nil || end.Error.Code != "segment participant conflict" {
+	return end, g, *lines
+}
+func TestMemoryStoresShareOneParticipant(t *testing.T) {
+	core := talk.New()
+	stores := store.New(store.SessionQuotas())
+	def, err := core.StoreCapability(stores, costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A second factory over the same Stores maps to the same coordinator.
+	again, err := core.StoreCapability(stores, costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := def.Grant([]string{"get", "keys"}, "scores")
+	if err != nil {
+		t.Fatal(err)
+	}
+	grants := map[string]*talk.Grant{"reader": reader, "scores": def.GrantAll("scores"), "progress": def.GrantAll("progress"), "alias": again.GrantAll("scores")}
+	end, g, effects := deliver(t, core, "on go\nask reader to get \"k\"\nask scores to increment \"total\", 5\nask progress to set \"level\", 2\nask alias to increment \"total\", 1\nask reader to get \"total\"\nput it into seen\nend go", grants)
+	if end.Outcome != talk.Completed {
 		t.Fatal(end.Error)
 	}
-	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != "1" {
-		t.Fatal("Read-only alias missed the Segment's write", got)
+	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != "6" {
+		t.Fatal("Read-only alias missed the Segment's writes", got)
 	}
-	if got := entries(stores, "one"); !reflect.DeepEqual(got, []string{"k=1"}) {
+	if len(effects) != 2 || !strings.Contains(effects[0], "grant=scores phase=begin status=ok") || !strings.Contains(effects[1], "grant=scores phase=commit status=ok") {
+		t.Fatal(effects)
+	}
+	if got := entries(stores, "scores"); !reflect.DeepEqual(got, []string{"total=6"}) {
 		t.Fatal(got)
 	}
-	if len(stores.Entries("two")) != 0 {
-		t.Fatal("Second participant wrote")
+	if got := entries(stores, "progress"); !reflect.DeepEqual(got, []string{"level=2"}) {
+		t.Fatal(got)
+	}
+	// A Limit Fault rolls back the writes to both Stores.
+	end, _, effects = deliver(t, core, "on go\nask scores to set \"total\", 0\nask progress to set \"level\", 0\nrepeat while true\nend repeat\nend go", grants)
+	if end.Outcome != talk.LimitFault || len(effects) != 2 || !strings.Contains(effects[1], "grant=scores phase=rollback status=ok") {
+		t.Fatal(end.Outcome, effects)
+	}
+	if got := append(entries(stores, "scores"), entries(stores, "progress")...); !reflect.DeepEqual(got, []string{"total=6", "level=2"}) {
+		t.Fatal(got)
+	}
+}
+func TestMemoryStoreConflictsWithAnotherCoordinator(t *testing.T) {
+	core := talk.New()
+	stores := store.New(store.SessionQuotas())
+	def, err := core.StoreCapability(stores, costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }
+	other, err := core.DefineSegmentCapability("other", talk.SegmentLifecycle{Begin: ok, Commit: ok, Rollback: ok}, talk.Operation{Name: "write", Mode: talk.Immediate, Result: talk.NothingShape, SegmentBound: true, Do: func(*talk.Call, []talk.Value) (talk.Value, error) { return talk.Nothing, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	end, _, _ := deliver(t, core, "on go\nask o to write\nask s to set \"k\", 1\nend go", map[string]*talk.Grant{"o": other.GrantAll(nil), "s": def.GrantAll("one")})
+	if end.Error == nil || end.Error.Code != "segment participant conflict" || end.Error.Data.Get("participant").String() != `"o"` {
+		t.Fatal(end.Error)
+	}
+	if len(stores.Entries("one")) != 0 {
+		t.Fatal("Conflicting write reached the Store")
 	}
 }
 func TestMemoryStoreReplaceValidationAndAtomicity(t *testing.T) {

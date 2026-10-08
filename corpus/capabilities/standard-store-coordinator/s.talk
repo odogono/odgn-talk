@@ -1,0 +1,11 @@
+script variable count = 0
+on finishLevel points, level
+  ask scores to increment "total", points
+  ask progress to set "level", level
+end finishLevel
+on again
+  ask alias to set "best", 3
+  ask progress to delete "level"
+  ask scores to increment "total"
+  put count + 1 into count
+end again

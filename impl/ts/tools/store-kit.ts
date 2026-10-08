@@ -4,7 +4,7 @@
 // the sequence's quotas, runs each sequence.
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Call, SegmentContext } from '../src/capabilities';
+import type { Call, SegmentContext, SegmentGrant } from '../src/capabilities';
 import { ScriptError } from '../src/errors';
 import type { Group } from '../src/group';
 import { readDisplay } from '../src/readers';
@@ -26,6 +26,8 @@ type Step = {
   error?: string;
   /** The display form of what an Operation gives. */
   gives?: string;
+  /** The Grant's name, so two names with one binding are aliases. */
+  grant?: string;
   /** The Segment the call or lifecycle hook belongs to. */
   in: string;
   /** A lifecycle hook's status. */
@@ -69,16 +71,21 @@ const OPERATIONS = new Set([
   'swap',
 ]);
 const LIFECYCLE = new Set(['begin', 'commit', 'rollback']);
+const SEGMENT_BOUND = new Set(['set', 'delete', 'increment', 'swap']);
 
 // One Group for every step: Segment ids are unique within it.
 const group = {} as Group;
+const grantOf = (step: Step): SegmentGrant<string> => ({
+  grantName: step.grant ?? 'store',
+  binding: step.store ?? 'default',
+});
 // Only the binding, Group and Segment are a Store's to read.
 const callOf = (step: Step, n: number): Call<string> =>
   ({
     id: `kit.c${n}`,
     binding: step.store ?? 'default',
     segmentId: step.in,
-    grantName: 'store',
+    grantName: grantOf(step).grantName,
     scriptName: 'kit',
     runId: step.in,
     automatic: false,
@@ -89,11 +96,16 @@ const callOf = (step: Step, n: number): Call<string> =>
     charge: () => {},
     fail: () => {},
   }) satisfies Call<string>;
-const contextOf = (step: Step): SegmentContext<string> => ({
-  binding: step.store ?? 'default',
+// The hooks see the Segment's enrolled Grants, the first being the one
+// whose write began it, as the Core arranges (ADR 0069).
+const contextOf = (
+  step: Step,
+  grants: readonly SegmentGrant<string>[],
+): SegmentContext<string> => ({
+  binding: grants[0]!.binding,
   segmentId: step.in,
-  grantName: 'store',
-  grants: [{ grantName: 'store', binding: step.store ?? 'default' }],
+  grantName: grants[0]!.grantName,
+  grants,
   scriptName: 'kit',
   runId: step.in,
   now: 0n,
@@ -126,14 +138,38 @@ const operate = (
   throw new Error(`Unknown store Operation ${op}`);
 };
 
-/** What one step did, in the kit's terms, for comparing with what it expects. */
-const outcome = (store: StoreImpl, step: Step, n: number): Step => {
+/**
+ * What one step did, in the kit's terms, for comparing with what it expects.
+ * `enrolled` holds each begun Segment's Grants, in enrollment order.
+ */
+const outcome = (
+  store: StoreImpl,
+  step: Step,
+  n: number,
+  enrolled: Map<string, SegmentGrant<string>[]>,
+): Step => {
+  const grant = grantOf(step);
   if (LIFECYCLE.has(step.do)) {
     const phase = step.do as 'begin' | 'commit' | 'rollback';
-    return { ...step, status: store[phase](contextOf(step)).status };
+    const grants =
+      phase === 'begin' ? [grant] : (enrolled.get(step.in) ?? [grant]);
+    if (phase === 'begin') {
+      enrolled.set(step.in, grants);
+    } else {
+      enrolled.delete(step.in);
+    }
+    return { ...step, status: store[phase](contextOf(step, grants)).status };
   }
   if (!OPERATIONS.has(step.do)) {
     throw new Error(`Unknown step ${step.do}`);
+  }
+  const grants = enrolled.get(step.in);
+  if (
+    SEGMENT_BOUND.has(step.do) &&
+    grants &&
+    !grants.some(g => g.grantName === grant.grantName)
+  ) {
+    grants.push(grant);
   }
   const args = step.args ? readDisplay(step.args) : undefined;
   const values = args
@@ -179,9 +215,10 @@ export const runStoreKitSequence = (
   sequence: StoreKitSequence,
 ): StoreKitFailure | undefined => {
   const store = make(sequence.quotas);
+  const enrolled = new Map<string, SegmentGrant<string>[]>();
   for (const [i, step] of sequence.steps.entries()) {
     const expected = expectation(step);
-    const actual = expectation(outcome(store, step, i + 1));
+    const actual = expectation(outcome(store, step, i + 1, enrolled));
     if (actual !== expected) {
       return { step: i + 1, expected, actual };
     }

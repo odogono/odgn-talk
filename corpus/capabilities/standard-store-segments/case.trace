@@ -1,9 +1,12 @@
-# The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
-# A read-only Grant never enlists. A second writable Store in one Segment is
-# `segment participant conflict`, and a Limit Fault rolls the Store writes back.
+# Unblessed: the store Standard Capability (#226), changed for #461; re-blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
+# A read-only Grant never enlists. A second writable Store in one Segment
+# shares the first's participant, so one commit covers both (ADR 0069), and a
+# Limit Fault rolls the Store writes back.
 > load s identity=678585f2c9979ca1f94f9ccf5121157110386df1d51ae9eb63164fe2f8cc5bbe
 > stub store.get value=nothing
 > stub-effect s.st phase=begin status=ok
+> stub store.set value=nothing
 > stub store.set value=nothing
 > stub-effect s.st phase=commit status=ok
 > deliver d1 to=s message=go
@@ -11,11 +14,11 @@
 call s/r1.c1 op=reader.get args=["k"] result=nothing
 effect s/r1.s1 grant=st phase=begin status=ok
 call s/r1.c2 op=st.set args=["k", 1] result=nothing
-raise s/r1 code="segment participant conflict" at=s:17 pos=6:3
+call s/r1.c3 op=other.set args=["k", 2] result=nothing
 effect s/r1.s1 grant=st phase=commit status=ok
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=51 alloc=32 state=16 end=error
-run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "other", operation: "set", participant: "st", at: {unit: "s", handler: "go", line: 6, column: 3}} fuel=51 alloc=32
-pumped state=idle fuel=51
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=66 alloc=40 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=66 alloc=40
+pumped state=idle fuel=66
 > stub-effect s.st phase=begin status=ok
 > stub store.set value=nothing
 > stub-effect s.st phase=rollback status=ok
