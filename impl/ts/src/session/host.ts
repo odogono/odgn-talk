@@ -58,6 +58,7 @@ import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
 import { listValues, map, text, type Value } from '../values';
 import { viewSource } from '../view';
+import { Observation } from './observe';
 import { hostFailure, stubLine, Stubs, type Stub } from './stubs';
 import type { TranscriptItem } from './transcript';
 
@@ -188,6 +189,7 @@ type Saved = {
   lastSeg: Map<string, Extract<RunEvent, { k: 'seg' }>>;
   latest: { delivery: string; run?: string } | null;
   limits: LimitOverride;
+  observation: Observation;
   placements: Map<string, Placement>;
   stubs: Stubs;
   units: number;
@@ -275,6 +277,9 @@ export class SessionHost {
   // Every Session Store, by name: in memory, starting empty, and outside
   // every save (chapter 12, The Session Store).
   private readonly stores = memoryStores(sessionQuotas);
+  private observation = new Observation();
+  // The next Entry's Run is a Fuel Measurement.
+  private measuring = false;
 
   private readonly extensions: ReadonlyMap<string, CapabilityDef<unknown>>;
   constructor(private readonly env: SessionEnvironment) {
@@ -400,6 +405,12 @@ export class SessionHost {
    * leading doc block waits for the declaration it documents.
    */
   incomplete(source: string): boolean {
+    const fuel = /^\s*:fuel\s+(\S.*)$/su.exec(source);
+    if (fuel) {
+      source = fuel[1]!;
+    } else if (source.startsWith(':')) {
+      return false;
+    }
     const parsed = parseEntry(source, name => this.isHandler(name));
     return parsed.error
       ? parsed.incomplete
@@ -505,7 +516,9 @@ export class SessionHost {
       this.recording = null;
     }
   }
-  private printed(out: string[]): string[] {
+  // Ends a Host call: trace and Fuel rows follow its ordinary output.
+  private printed(lines: string[]): string[] {
+    const out = [...lines, ...this.observation.observed()];
     for (const text of out) {
       this.env.record?.({ k: 'output', text });
     }
@@ -801,6 +814,11 @@ export class SessionHost {
         return this.export(words(rest, rest.trim() ? 1 : 0)[0]);
       case 'store':
         return this.store(rest);
+      case 'trace':
+      case 'untrace':
+        return this.observation.trace(name, rest) ?? refuse('bad arguments');
+      case 'fuel':
+        return this.fuel(rest);
       case 'runs':
       case 'mailbox':
       case 'vars':
@@ -1125,6 +1143,35 @@ export class SessionHost {
     return this.pump();
   }
 
+  // `:fuel` lists every measurement, or measures one statement or expression.
+  private fuel(rest: string): string[] {
+    if (!rest.trim()) {
+      return this.observation.rows();
+    }
+    if (rest.startsWith(':')) {
+      refuse('bad arguments');
+    }
+    this.start();
+    const parsed = parseEntry(rest, name => this.isHandler(name));
+    if (parsed.error) {
+      const t = parsed.error.tok;
+      return [`! ${parsed.error.code} at ${t.line}:${t.col}`];
+    }
+    if (
+      !documentable(parsed.tree, parsed.kind) ||
+      (parsed.kind !== 'statement' && parsed.kind !== 'expression')
+    ) {
+      refuse('bad arguments');
+    }
+    this.measuring = true;
+    try {
+      return this.run(rest.replace(/\n+$/, ''), parsed.kind === 'expression')
+        .out;
+    } finally {
+      this.measuring = false;
+    }
+  }
+
   // ------------------------------------------------------------- saving
 
   private save(name: string): string[] {
@@ -1144,6 +1191,7 @@ export class SessionHost {
       lastClock: this.lastClock,
       deadline: this.deadline,
       stubs: this.stubs.clone(),
+      observation: this.observation.clone(),
     });
     return [`saved ${name}`];
   }
@@ -1189,6 +1237,10 @@ export class SessionHost {
     this.lastClock = saved.lastClock;
     this.deadline = saved.deadline;
     this.stubs = saved.stubs.clone();
+    // Work still pending in the replaced timeline is abandoned, not counted.
+    const abandoned = this.observation.pending();
+    this.observation = saved.observation.clone();
+    this.observation.observe(result.reports);
     this.foreground = null;
     this.state = { k: 'prompt' };
     this.writes.clear();
@@ -1210,6 +1262,7 @@ export class SessionHost {
     return [
       `restored ${name}`,
       ...result.discardedRuns.map(run => `! discarded ${run}`),
+      ...abandoned.map(entry => `fuel abandoned ${text(entry).toString()}`),
     ];
   }
 
@@ -1411,6 +1464,7 @@ export class SessionHost {
   }
 
   private discarded(reports: readonly Report[]): string[] {
+    this.observation.observe(reports);
     const out: string[] = [];
     for (const r of reports) {
       if (r.kind === 'effect failure') {
@@ -1502,6 +1556,9 @@ export class SessionHost {
     });
     this.foreground = { delivery: id };
     this.latest = { delivery: id };
+    if (this.measuring) {
+      this.observation.measure(n, id);
+    }
     if (expression) {
       this.expressions.add(id);
     }
@@ -1602,6 +1659,7 @@ export class SessionHost {
       }
     }
     const out: string[] = [];
+    const errors = new Map<string, string>();
     for (const report of reports) {
       if (report.kind === 'effect failure') {
         out.push(this.prefix(report.run) + effectFailureText(report));
@@ -1640,7 +1698,7 @@ export class SessionHost {
         );
       } else {
         this.lastSeg.delete(e.run);
-        const line = this.ended(e, ends.get(e.run));
+        const line = this.ended(e, ends.get(e.run), errors);
         if (line !== null) {
           out.push(this.prefix(e.run) + line);
         }
@@ -1649,12 +1707,14 @@ export class SessionHost {
         }
       }
     }
+    this.observation.observe(reports, errors);
     return out;
   }
 
   private ended(
     e: Extract<RunEvent, { k: 'run' }>,
     report: Extract<Report, { kind: 'run end' }> | undefined,
+    errors: Map<string, string>,
   ): string | null {
     switch (e.outcome) {
       case 'completed':
@@ -1665,6 +1725,7 @@ export class SessionHost {
         const error = map(
           e.error!.entries().filter(([k]) => k !== 'message' && k !== 'at'),
         );
+        errors.set(e.run, error.toString());
         return `! error ${error.toString()} at ${this.where(report?.at)}`;
       }
       case 'limit-fault':

@@ -117,6 +117,7 @@ func (h *Host) pump() []string {
 		}
 	}
 	var out []string
+	errors := map[string]string{}
 	for _, e := range h.events {
 		switch e.kind {
 		case "seg":
@@ -169,6 +170,7 @@ func (h *Host) pump() []string {
 					}
 				}
 				err.Entries = kept
+				errors[e.run] = err.Display()
 				text = "! error " + err.Display() + " at " + h.location(end)
 			case "limit-fault":
 				text = "! limit fault " + end.Limit + " at " + h.location(end)
@@ -183,6 +185,7 @@ func (h *Host) pump() []string {
 			delete(h.expressions, e.delivery)
 		}
 	}
+	h.observe(result.Reports, errors)
 	h.pruneCalls()
 	h.settleForeground()
 	return out

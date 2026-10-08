@@ -128,7 +128,8 @@ func RunREPL(ctx context.Context, input io.Reader, output io.Writer, options REP
 				if line.text == ":quit" {
 					return nil
 				}
-				if strings.HasPrefix(line.text, ":") {
+				// `:fuel` collects a multiline Entry like any other.
+				if strings.HasPrefix(line.text, ":") && !host.NeedsMore(line.text) {
 					if err := print(host.Input(line.text)); err != nil {
 						return err
 					}

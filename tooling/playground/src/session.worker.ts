@@ -212,7 +212,8 @@ const line = (text: string) => {
       );
       return;
     }
-    if (command) {
+    // `:fuel` collects a multiline Entry like any other.
+    if (command && !session.incomplete(text)) {
       session.input(text);
       return;
     }

@@ -26,3 +26,7 @@ func parityValue(v value.Value) value.Value {
 	}
 	return v
 }
+
+// Host displays a northtalk.Value as the Trace does, for the Session Host's
+// observation rows. The root package sets it in an init function.
+var Host func(value any) string

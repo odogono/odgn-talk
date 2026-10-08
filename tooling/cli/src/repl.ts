@@ -197,7 +197,8 @@ export const repl = ({
         settle();
         return;
       }
-      if (command) {
+      // `:fuel` collects a multiline Entry like any other.
+      if (command && !host.incomplete(line)) {
         submit(line);
         return;
       }
