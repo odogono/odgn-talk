@@ -1,5 +1,5 @@
 {
-  "commit": "5448dd9-dirty",
+  "commit": "76f36e2",
   "date": "2026-10-08",
   "machine": {
     "arch": "arm64",
@@ -12,33 +12,33 @@
     {
       "benchmark": "core/loop",
       "fuel": 48016,
-      "hostBytes": 552374.8571428572,
+      "hostBytes": 677459.3488372093,
       "load": {
-        "medianNs": 159854.5,
-        "minNs": 132417,
-        "samples": 3758
+        "medianNs": 166166,
+        "minNs": 137000,
+        "samples": 3622
       },
       "logicalAlloc": 64000,
       "run": {
-        "medianNs": 14474792,
-        "minNs": 13518125,
-        "samples": 45
+        "medianNs": 14780459,
+        "minNs": 13920333,
+        "samples": 39
       },
       "runner": "ts"
     },
     {
       "benchmark": "core/fib",
       "fuel": 46365,
-      "hostBytes": 237795.55555555556,
+      "hostBytes": 450787.55555555556,
       "load": {
-        "medianNs": 211500,
-        "minNs": 161375,
-        "samples": 3059
+        "medianNs": 213791.5,
+        "minNs": 163000,
+        "samples": 3072
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 9758791,
-        "minNs": 9096667,
+        "medianNs": 9695729,
+        "minNs": 9088792,
         "samples": 68
       },
       "runner": "ts"
@@ -46,33 +46,33 @@
     {
       "benchmark": "core/fib@slice=10",
       "fuel": 46365,
-      "hostBytes": 329008.4324324324,
+      "hostBytes": 970752,
       "load": {
-        "medianNs": 158250,
-        "minNs": 122167,
-        "samples": 4129
+        "medianNs": 164792,
+        "minNs": 128208,
+        "samples": 3959
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 18868208,
-        "minNs": 17694584,
-        "samples": 33
+        "medianNs": 19560020.5,
+        "minNs": 18402834,
+        "samples": 32
       },
       "runner": "ts"
     },
     {
       "benchmark": "core/fib@slice=100",
       "fuel": 46365,
-      "hostBytes": 256,
+      "hostBytes": 0,
       "load": {
-        "medianNs": 149417,
-        "minNs": 122542,
-        "samples": 4243
+        "medianNs": 153416,
+        "minNs": 129917,
+        "samples": 4286
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 10986979.5,
-        "minNs": 10265292,
+        "medianNs": 10928625,
+        "minNs": 10386583,
         "samples": 60
       },
       "runner": "ts"
@@ -80,16 +80,16 @@
     {
       "benchmark": "core/fib@slice=1000",
       "fuel": 46365,
-      "hostBytes": 1170.2857142857142,
+      "hostBytes": 0,
       "load": {
-        "medianNs": 144917,
-        "minNs": 122750,
-        "samples": 4540
+        "medianNs": 152333,
+        "minNs": 130625,
+        "samples": 4323
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 9983125,
-        "minNs": 9584375,
+        "medianNs": 9907250.5,
+        "minNs": 9540583,
         "samples": 66
       },
       "runner": "ts"
@@ -97,16 +97,16 @@
     {
       "benchmark": "core/fib@slice=10000",
       "fuel": 46365,
-      "hostBytes": 88428.71232876713,
+      "hostBytes": 7182.027397260274,
       "load": {
-        "medianNs": 141916.5,
-        "minNs": 117666,
-        "samples": 4586
+        "medianNs": 151270.5,
+        "minNs": 126417,
+        "samples": 4330
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 9563208,
-        "minNs": 9195500,
+        "medianNs": 9631208,
+        "minNs": 9197500,
         "samples": 69
       },
       "runner": "ts"
@@ -114,16 +114,16 @@
     {
       "benchmark": "core/calls",
       "fuel": 46018,
-      "hostBytes": 126520.88888888889,
+      "hostBytes": 172714.66666666666,
       "load": {
-        "medianNs": 202958,
-        "minNs": 178083,
-        "samples": 3219
+        "medianNs": 211542,
+        "minNs": 182875,
+        "samples": 3098
       },
       "logicalAlloc": 32072,
       "run": {
-        "medianNs": 9671687.5,
-        "minNs": 8946250,
+        "medianNs": 9619604.5,
+        "minNs": 8924791,
         "samples": 68
       },
       "runner": "ts"
@@ -131,16 +131,16 @@
     {
       "benchmark": "core/lambdas",
       "fuel": 58027,
-      "hostBytes": 882338.3414634146,
+      "hostBytes": 903118.0487804879,
       "load": {
-        "medianNs": 285625,
-        "minNs": 225416,
-        "samples": 2323
+        "medianNs": 287125,
+        "minNs": 243083,
+        "samples": 2293
       },
       "logicalAlloc": 64120,
       "run": {
-        "medianNs": 17288750,
-        "minNs": 16297375,
+        "medianNs": 17259000,
+        "minNs": 16546000,
         "samples": 37
       },
       "runner": "ts"
@@ -148,33 +148,33 @@
     {
       "benchmark": "numbers/add",
       "fuel": 26030,
-      "hostBytes": 493206.5882352941,
+      "hostBytes": 648858.4126984127,
       "load": {
-        "medianNs": 196083,
-        "minNs": 154250,
-        "samples": 3390
+        "medianNs": 196833,
+        "minNs": 147750,
+        "samples": 3394
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 10196333.5,
-        "minNs": 9726167,
-        "samples": 64
+        "medianNs": 10369125,
+        "minNs": 9838875,
+        "samples": 59
       },
       "runner": "ts"
     },
     {
       "benchmark": "numbers/multiply",
       "fuel": 18031,
-      "hostBytes": 544768,
+      "hostBytes": 868966.4,
       "load": {
-        "medianNs": 181875,
-        "minNs": 149333,
+        "medianNs": 181083,
+        "minNs": 151375,
         "samples": 3611
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 8677312.5,
-        "minNs": 8316459,
+        "medianNs": 8693562.5,
+        "minNs": 8299875,
         "samples": 76
       },
       "runner": "ts"
@@ -182,33 +182,33 @@
     {
       "benchmark": "numbers/divide",
       "fuel": 18031,
-      "hostBytes": 301182.4197530864,
+      "hostBytes": 571596.8,
       "load": {
-        "medianNs": 177667,
-        "minNs": 146917,
-        "samples": 3672
+        "medianNs": 178916.5,
+        "minNs": 151584,
+        "samples": 3662
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 8606333,
-        "minNs": 8170125,
-        "samples": 77
+        "medianNs": 8658333,
+        "minNs": 8216458,
+        "samples": 76
       },
       "runner": "ts"
     },
     {
       "benchmark": "numbers/quantity",
       "fuel": 14579,
-      "hostBytes": 836296.3478260869,
+      "hostBytes": 710210.7826086957,
       "load": {
-        "medianNs": 228000,
-        "minNs": 192333,
-        "samples": 2814
+        "medianNs": 227083.5,
+        "minNs": 194250,
+        "samples": 2858
       },
       "logicalAlloc": 40088,
       "run": {
-        "medianNs": 15147395.5,
-        "minNs": 14433166,
+        "medianNs": 15287958,
+        "minNs": 14539667,
         "samples": 42
       },
       "runner": "ts"
@@ -216,50 +216,50 @@
     {
       "benchmark": "text/build",
       "fuel": 28928,
-      "hostBytes": 518233.04347826086,
+      "hostBytes": 394035.2,
       "load": {
-        "medianNs": 163958.5,
-        "minNs": 114583,
-        "samples": 4068
+        "medianNs": 163375,
+        "minNs": 124583,
+        "samples": 4047
       },
       "logicalAlloc": 383838,
       "run": {
-        "medianNs": 4896604.5,
-        "minNs": 4719833,
-        "samples": 134
+        "medianNs": 4844729,
+        "minNs": 4565459,
+        "samples": 136
       },
       "runner": "ts"
     },
     {
       "benchmark": "text/iterate",
       "fuel": 30318,
-      "hostBytes": 543993.0810810811,
+      "hostBytes": 1000334.2222222222,
       "load": {
-        "medianNs": 193500,
-        "minNs": 161625,
-        "samples": 3403
+        "medianNs": 186375,
+        "minNs": 157292,
+        "samples": 3545
       },
       "logicalAlloc": 95272,
       "run": {
-        "medianNs": 9300937.5,
-        "minNs": 8749500,
-        "samples": 70
+        "medianNs": 9541625,
+        "minNs": 8873834,
+        "samples": 68
       },
       "runner": "ts"
     },
     {
       "benchmark": "text/index",
       "fuel": 26640,
-      "hostBytes": 402628.08510638296,
+      "hostBytes": 379620.7659574468,
       "load": {
-        "medianNs": 228646,
-        "minNs": 192792,
-        "samples": 2876
+        "medianNs": 220500,
+        "minNs": 187959,
+        "samples": 2992
       },
       "logicalAlloc": 51072,
       "run": {
-        "medianNs": 14938834,
-        "minNs": 14057167,
+        "medianNs": 14879542,
+        "minNs": 13954625,
         "samples": 43
       },
       "runner": "ts"
@@ -267,33 +267,33 @@
     {
       "benchmark": "text/patterns",
       "fuel": 13818,
-      "hostBytes": 513312.31067961163,
+      "hostBytes": 373298.1960784314,
       "load": {
-        "medianNs": 217000,
-        "minNs": 182500,
-        "samples": 2931
+        "medianNs": 204125,
+        "minNs": 174458,
+        "samples": 3207
       },
       "logicalAlloc": 231372,
       "run": {
-        "medianNs": 6438334,
-        "minNs": 6035584,
-        "samples": 99
+        "medianNs": 6552000,
+        "minNs": 6163166,
+        "samples": 98
       },
       "runner": "ts"
     },
     {
       "benchmark": "text/graphemes",
       "fuel": 43518,
-      "hostBytes": 562405.8775510204,
+      "hostBytes": 919175.8367346938,
       "load": {
-        "medianNs": 197542,
-        "minNs": 170083,
-        "samples": 3325
+        "medianNs": 193458,
+        "minNs": 168958,
+        "samples": 3393
       },
       "logicalAlloc": 147572,
       "run": {
-        "medianNs": 13792625,
-        "minNs": 12842125,
+        "medianNs": 13805292,
+        "minNs": 12780042,
         "samples": 45
       },
       "runner": "ts"
@@ -301,16 +301,16 @@
     {
       "benchmark": "collections/list-build",
       "fuel": 19091,
-      "hostBytes": 3154872.5581395347,
+      "hostBytes": 3548469.581395349,
       "load": {
-        "medianNs": 196041,
-        "minNs": 170542,
-        "samples": 3339
+        "medianNs": 189625,
+        "minNs": 169833,
+        "samples": 3462
       },
       "logicalAlloc": 3022112,
       "run": {
-        "medianNs": 16336666,
-        "minNs": 15883708,
+        "medianNs": 16497833,
+        "minNs": 16028958,
         "samples": 39
       },
       "runner": "ts"
@@ -318,16 +318,16 @@
     {
       "benchmark": "collections/map-build",
       "fuel": 14094,
-      "hostBytes": 2919712.8205128205,
+      "hostBytes": 3935940.923076923,
       "load": {
-        "medianNs": 258250,
-        "minNs": 225500,
-        "samples": 2545
+        "medianNs": 250792,
+        "minNs": 225166,
+        "samples": 2615
       },
       "logicalAlloc": 24920,
       "run": {
-        "medianNs": 17951333,
-        "minNs": 17306416,
+        "medianNs": 18293167,
+        "minNs": 17569959,
         "samples": 35
       },
       "runner": "ts"
@@ -335,50 +335,50 @@
     {
       "benchmark": "collections/list-update",
       "fuel": 28553,
-      "hostBytes": 45524.114285714284,
+      "hostBytes": 36951.14893617021,
       "load": {
-        "medianNs": 377500,
-        "minNs": 317375,
-        "samples": 1736
+        "medianNs": 363062.5,
+        "minNs": 318250,
+        "samples": 1830
       },
       "logicalAlloc": 24328,
       "run": {
-        "medianNs": 4629333.5,
-        "minNs": 4279000,
-        "samples": 136
+        "medianNs": 4623334,
+        "minNs": 4221584,
+        "samples": 137
       },
       "runner": "ts"
     },
     {
       "benchmark": "collections/map-update",
       "fuel": 8056,
-      "hostBytes": 9497.971014492754,
+      "hostBytes": 1375.2992700729926,
       "load": {
-        "medianNs": 378875,
-        "minNs": 323667,
-        "samples": 1767
+        "medianNs": 374354.5,
+        "minNs": 321292,
+        "samples": 1758
       },
       "logicalAlloc": 12432,
       "run": {
-        "medianNs": 2442625,
-        "minNs": 2263292,
-        "samples": 272
+        "medianNs": 2469145.5,
+        "minNs": 2286083,
+        "samples": 270
       },
       "runner": "ts"
     },
     {
       "benchmark": "collections/iterate",
       "fuel": 89459,
-      "hostBytes": 461902.76923076925,
+      "hostBytes": 101454.76923076923,
       "load": {
-        "medianNs": 441375,
-        "minNs": 387958,
-        "samples": 1437
+        "medianNs": 417292,
+        "minNs": 379292,
+        "samples": 1576
       },
       "logicalAlloc": 200319,
       "run": {
-        "medianNs": 28381833,
-        "minNs": 24295709,
+        "medianNs": 28315771,
+        "minNs": 24148334,
         "samples": 22
       },
       "runner": "ts"
@@ -386,50 +386,50 @@
     {
       "benchmark": "host/immediate",
       "fuel": 13518,
-      "hostBytes": 13580.320855614973,
+      "hostBytes": 346.75132275132273,
       "load": {
-        "medianNs": 210958,
-        "minNs": 181334,
-        "samples": 3134
+        "medianNs": 209084,
+        "minNs": 183875,
+        "samples": 3145
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 3700583,
-        "minNs": 3271500,
-        "samples": 183
+        "medianNs": 3645125,
+        "minNs": 3274875,
+        "samples": 185
       },
       "runner": "ts"
     },
     {
       "benchmark": "host/suspending",
       "fuel": 13518,
-      "hostBytes": 220141.3818181818,
+      "hostBytes": 142495.70642201835,
       "load": {
-        "medianNs": 214750,
-        "minNs": 162208,
-        "samples": 3114
+        "medianNs": 199042,
+        "minNs": 154833,
+        "samples": 3420
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 6335124.5,
-        "minNs": 5604000,
-        "samples": 106
+        "medianNs": 6328042,
+        "minNs": 5588875,
+        "samples": 105
       },
       "runner": "ts"
     },
     {
       "benchmark": "host/properties",
       "fuel": 9018,
-      "hostBytes": 210651.42857142858,
+      "hostBytes": 216704.6305418719,
       "load": {
-        "medianNs": 173458,
-        "minNs": 152666,
-        "samples": 3778
+        "medianNs": 172875,
+        "minNs": 154417,
+        "samples": 3845
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 3400625,
-        "minNs": 3115709,
+        "medianNs": 3394125,
+        "minNs": 3100958,
         "samples": 199
       },
       "runner": "ts"
@@ -437,16 +437,16 @@
     {
       "benchmark": "host/conversion",
       "fuel": 25018,
-      "hostBytes": 537196.6060606061,
+      "hostBytes": 159123.39393939395,
       "load": {
-        "medianNs": 324875,
-        "minNs": 292208,
-        "samples": 2024
+        "medianNs": 315937,
+        "minNs": 289042,
+        "samples": 2094
       },
       "logicalAlloc": 225572,
       "run": {
-        "medianNs": 10258583.5,
-        "minNs": 9876375,
+        "medianNs": 10330666.5,
+        "minNs": 9841166,
         "samples": 62
       },
       "runner": "ts"
@@ -454,16 +454,16 @@
     {
       "benchmark": "host/pump",
       "fuel": 7,
-      "hostBytes": 1676.5925925925926,
+      "hostBytes": 2105.777777777778,
       "load": {
-        "medianNs": 31603.515625,
-        "minNs": 28910.064697265625,
+        "medianNs": 30714.289306640625,
+        "minNs": 26988.616943359375,
         "samples": 12
       },
       "logicalAlloc": 0,
       "run": {
-        "medianNs": 6341.63427734375,
-        "minNs": 5654.032470703125,
+        "medianNs": 6318.03369140625,
+        "minNs": 5725.4130859375,
         "samples": 23
       },
       "runner": "ts"
@@ -471,16 +471,16 @@
     {
       "benchmark": "macro/transform",
       "fuel": 20664,
-      "hostBytes": 3215360,
+      "hostBytes": 1790634.6666666667,
       "load": {
-        "medianNs": 288770.5,
-        "minNs": 253625,
-        "samples": 2260
+        "medianNs": 287834,
+        "minNs": 250583,
+        "samples": 2311
       },
       "logicalAlloc": 6418202,
       "run": {
-        "medianNs": 14656479,
-        "minNs": 14197542,
+        "medianNs": 14665625,
+        "minNs": 14326959,
         "samples": 44
       },
       "runner": "ts"
@@ -488,17 +488,17 @@
     {
       "benchmark": "macro/report",
       "fuel": 86555,
-      "hostBytes": 1617282.8444444444,
+      "hostBytes": 3418557.217391304,
       "load": {
-        "medianNs": 208166,
-        "minNs": 174042,
-        "samples": 3152
+        "medianNs": 198208,
+        "minNs": 169958,
+        "samples": 3291
       },
       "logicalAlloc": 1291900,
       "run": {
-        "medianNs": 15718542,
-        "minNs": 15075709,
-        "samples": 41
+        "medianNs": 15061896.5,
+        "minNs": 14498250,
+        "samples": 42
       },
       "runner": "ts"
     },
@@ -507,14 +507,14 @@
       "fuel": 67042,
       "hostBytes": 1820.4444444444443,
       "load": {
-        "medianNs": 384084,
-        "minNs": 335333,
-        "samples": 1735
+        "medianNs": 362667,
+        "minNs": 311125,
+        "samples": 1826
       },
       "logicalAlloc": 80270,
       "run": {
-        "medianNs": 15218084,
-        "minNs": 14155458,
+        "medianNs": 15388208,
+        "minNs": 14541500,
         "samples": 41
       },
       "runner": "ts"
@@ -522,16 +522,16 @@
     {
       "benchmark": "messaging/sends",
       "fuel": 67518,
-      "hostBytes": 438139.87096774194,
+      "hostBytes": 238360.7741935484,
       "load": {
-        "medianNs": 264062.5,
-        "minNs": 228792,
-        "samples": 2528
+        "medianNs": 259459,
+        "minNs": 224125,
+        "samples": 2589
       },
       "logicalAlloc": 96072,
       "run": {
-        "medianNs": 22717959,
-        "minNs": 18696042,
+        "medianNs": 22618584,
+        "minNs": 18518208,
         "samples": 27
       },
       "runner": "ts"
@@ -539,16 +539,16 @@
     {
       "benchmark": "messaging/parents",
       "fuel": 67518,
-      "hostBytes": 78643.2,
+      "hostBytes": 4915.2,
       "load": {
-        "medianNs": 237000,
-        "minNs": 205833,
-        "samples": 2802
+        "medianNs": 229479.5,
+        "minNs": 202000,
+        "samples": 2900
       },
       "logicalAlloc": 96072,
       "run": {
-        "medianNs": 23214291,
-        "minNs": 22293041,
+        "medianNs": 23519729,
+        "minNs": 22323583,
         "samples": 26
       },
       "runner": "ts"
@@ -556,16 +556,16 @@
     {
       "benchmark": "messaging/joins",
       "fuel": 127218,
-      "hostBytes": 47591.619047619046,
+      "hostBytes": 1722906.9473684211,
       "load": {
-        "medianNs": 356937.5,
-        "minNs": 320583,
-        "samples": 1708
+        "medianNs": 334542,
+        "minNs": 296959,
+        "samples": 1974
       },
       "logicalAlloc": 244872,
       "run": {
-        "medianNs": 33880708,
-        "minNs": 31383250,
+        "medianNs": 33047583,
+        "minNs": 31479375,
         "samples": 17
       },
       "runner": "ts"
@@ -573,16 +573,16 @@
     {
       "benchmark": "messaging/suspend",
       "fuel": 48018,
-      "hostBytes": 776262.6206896552,
+      "hostBytes": 438413.2413793103,
       "load": {
-        "medianNs": 162437.5,
-        "minNs": 143708,
-        "samples": 4008
+        "medianNs": 158250,
+        "minNs": 139875,
+        "samples": 4159
       },
       "logicalAlloc": 32072,
       "run": {
-        "medianNs": 23465791,
-        "minNs": 22854417,
+        "medianNs": 23887500,
+        "minNs": 22820292,
         "samples": 25
       },
       "runner": "ts"
@@ -590,16 +590,16 @@
     {
       "benchmark": "lifecycle/load-small",
       "fuel": 7,
-      "hostBytes": 2486.72,
+      "hostBytes": 2228.48,
       "load": {
-        "medianNs": 50157.69445800781,
-        "minNs": 47622.18212890625,
+        "medianNs": 48414.82043457031,
+        "minNs": 44489.7255859375,
         "samples": 12
       },
       "logicalAlloc": 0,
       "run": {
-        "medianNs": 6674.824951171875,
-        "minNs": 5701.314208984375,
+        "medianNs": 6962.809326171875,
+        "minNs": 5543.609619140625,
         "samples": 21
       },
       "runner": "ts"
@@ -607,50 +607,50 @@
     {
       "benchmark": "lifecycle/load-large",
       "fuel": 4609,
-      "hostBytes": 48236.69273743017,
+      "hostBytes": 23863.652173913044,
       "load": {
-        "medianNs": 27140729.5,
-        "minNs": 25215458,
-        "samples": 20
+        "medianNs": 24787542,
+        "minNs": 23281666,
+        "samples": 23
       },
       "logicalAlloc": 16742,
       "run": {
-        "medianNs": 1252542,
-        "minNs": 1170583,
-        "samples": 533
+        "medianNs": 1225521,
+        "minNs": 1151583,
+        "samples": 548
       },
       "runner": "ts"
     },
     {
       "benchmark": "lifecycle/restore",
       "fuel": 8015,
-      "hostBytes": 67356.44444444444,
+      "hostBytes": 187999.45762711865,
       "load": {
-        "medianNs": 464000,
-        "minNs": 382667,
-        "samples": 1426
+        "medianNs": 414687,
+        "minNs": 357166,
+        "samples": 1608
       },
       "logicalAlloc": 8024,
       "run": {
-        "medianNs": 12966708,
-        "minNs": 12503333,
-        "samples": 50
+        "medianNs": 11662833,
+        "minNs": 11275125,
+        "samples": 55
       },
       "runner": "ts"
     },
     {
       "benchmark": "lifecycle/rollback",
       "fuel": 27049,
-      "hostBytes": 18797909.333333332,
+      "hostBytes": 13945514.666666666,
       "load": {
-        "medianNs": 417479,
-        "minNs": 354375,
-        "samples": 1556
+        "medianNs": 387750,
+        "minNs": 332334,
+        "samples": 1704
       },
       "logicalAlloc": 40120,
       "run": {
-        "medianNs": 60397604,
-        "minNs": 58902208,
+        "medianNs": 59897791.5,
+        "minNs": 59072666,
         "samples": 12
       },
       "runner": "ts"
@@ -658,17 +658,17 @@
     {
       "benchmark": "core/loop",
       "run": {
-        "medianNs": 19333,
-        "minNs": 17833,
-        "samples": 33486
+        "medianNs": 18083,
+        "minNs": 17333,
+        "samples": 35364
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "core/fib",
       "run": {
-        "medianNs": 41110.89074707031,
-        "minNs": 40999.552490234375,
+        "medianNs": 41467.376708984375,
+        "minNs": 41305.460693359375,
         "samples": 12
       },
       "runner": "quickjs"
@@ -676,8 +676,8 @@
     {
       "benchmark": "core/calls",
       "run": {
-        "medianNs": 47652.364013671875,
-        "minNs": 47226.470947265625,
+        "medianNs": 46719.61462402344,
+        "minNs": 46607.686279296875,
         "samples": 12
       },
       "runner": "quickjs"
@@ -685,8 +685,8 @@
     {
       "benchmark": "core/lambdas",
       "run": {
-        "medianNs": 50929.718017578125,
-        "minNs": 50679.25,
+        "medianNs": 50890.58935546875,
+        "minNs": 50600.311279296875,
         "samples": 12
       },
       "runner": "quickjs"
@@ -694,8 +694,8 @@
     {
       "benchmark": "numbers/add",
       "run": {
-        "medianNs": 20716.094970703125,
-        "minNs": 20137.2275390625,
+        "medianNs": 18729.3447265625,
+        "minNs": 18591.928955078125,
         "samples": 12
       },
       "runner": "quickjs"
@@ -703,8 +703,8 @@
     {
       "benchmark": "numbers/multiply",
       "run": {
-        "medianNs": 19855.997802734375,
-        "minNs": 19104.146240234375,
+        "medianNs": 19136.04736328125,
+        "minNs": 18992.889404296875,
         "samples": 12
       },
       "runner": "quickjs"
@@ -712,26 +712,26 @@
     {
       "benchmark": "numbers/divide",
       "run": {
-        "medianNs": 14919.026611328125,
-        "minNs": 14811.920166015625,
-        "samples": 12
+        "medianNs": 14354.1767578125,
+        "minNs": 14268.951416015625,
+        "samples": 9
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "numbers/quantity",
       "run": {
-        "medianNs": 6646.9014892578125,
-        "minNs": 6571.431396484375,
-        "samples": 22
+        "medianNs": 6387.044189453125,
+        "minNs": 6330.36279296875,
+        "samples": 23
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "text/build",
       "run": {
-        "medianNs": 20008.198974609375,
-        "minNs": 19815.510986328125,
+        "medianNs": 20329.294799804688,
+        "minNs": 20146.35205078125,
         "samples": 12
       },
       "runner": "quickjs"
@@ -739,35 +739,35 @@
     {
       "benchmark": "text/iterate",
       "run": {
-        "medianNs": 56583,
-        "minNs": 53166,
-        "samples": 12171
+        "medianNs": 54375,
+        "minNs": 51625,
+        "samples": 12577
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "text/index",
       "run": {
-        "medianNs": 38792,
-        "minNs": 37417,
-        "samples": 17568
+        "medianNs": 39299.128173828125,
+        "minNs": 38474.965576171875,
+        "samples": 12
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "text/patterns",
       "run": {
-        "medianNs": 202625,
-        "minNs": 199208,
-        "samples": 3439
+        "medianNs": 207708,
+        "minNs": 199500,
+        "samples": 3024
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "collections/list-build",
       "run": {
-        "medianNs": 23682.012084960938,
-        "minNs": 23576.772216796875,
+        "medianNs": 27287.679077148438,
+        "minNs": 23184.844970703125,
         "samples": 12
       },
       "runner": "quickjs"
@@ -775,8 +775,8 @@
     {
       "benchmark": "collections/map-build",
       "run": {
-        "medianNs": 30384.6181640625,
-        "minNs": 30344.004150390625,
+        "medianNs": 30960.734008789062,
+        "minNs": 30673.421142578125,
         "samples": 12
       },
       "runner": "quickjs"
@@ -784,8 +784,8 @@
     {
       "benchmark": "collections/list-update",
       "run": {
-        "medianNs": 17644.424560546875,
-        "minNs": 17407.63330078125,
+        "medianNs": 18371.724487304688,
+        "minNs": 17661.631103515625,
         "samples": 12
       },
       "runner": "quickjs"
@@ -793,8 +793,8 @@
     {
       "benchmark": "collections/map-update",
       "run": {
-        "medianNs": 18228.25634765625,
-        "minNs": 18195.058349609375,
+        "medianNs": 19572.774291992188,
+        "minNs": 18911.92626953125,
         "samples": 12
       },
       "runner": "quickjs"
@@ -802,17 +802,17 @@
     {
       "benchmark": "collections/iterate",
       "run": {
-        "medianNs": 127083,
-        "minNs": 124375,
-        "samples": 5463
+        "medianNs": 134458,
+        "minNs": 124250,
+        "samples": 5119
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "macro/transform",
       "run": {
-        "medianNs": 52617.2587890625,
-        "minNs": 52392.7001953125,
+        "medianNs": 52888.33117675781,
+        "minNs": 52575.30712890625,
         "samples": 12
       },
       "runner": "quickjs"
@@ -820,8 +820,8 @@
     {
       "benchmark": "macro/report",
       "run": {
-        "medianNs": 38178.23278808594,
-        "minNs": 37887.847900390625,
+        "medianNs": 39369.44567871094,
+        "minNs": 38920.4306640625,
         "samples": 12
       },
       "runner": "quickjs"
@@ -829,19 +829,19 @@
     {
       "benchmark": "macro/game-tick",
       "run": {
-        "medianNs": 41842.61572265625,
-        "minNs": 41544.453857421875,
+        "medianNs": 41195.25146484375,
+        "minNs": 40321.05517578125,
         "samples": 12
       },
       "runner": "quickjs"
     },
     {
       "benchmark": "core/loop",
-      "hostBytes": 1.0314465408805031,
+      "hostBytes": 1.1153846153846154,
       "run": {
-        "medianNs": 539.7491455078125,
-        "minNs": 505.218505859375,
-        "samples": 314
+        "medianNs": 548.1414794921875,
+        "minNs": 521.097900390625,
+        "samples": 308
       },
       "runner": "ts-native"
     },
@@ -849,29 +849,29 @@
       "benchmark": "core/fib",
       "hostBytes": 0,
       "run": {
-        "medianNs": 1878.4637451171875,
-        "minNs": 1871.297119140625,
+        "medianNs": 1876.0325927734375,
+        "minNs": 1869.242431640625,
         "samples": 88
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "core/calls",
-      "hostBytes": 0.07643312101910828,
+      "hostBytes": 0.12286689419795221,
       "run": {
-        "medianNs": 542.475341796875,
-        "minNs": 509.07373046875,
-        "samples": 310
+        "medianNs": 562.835693359375,
+        "minNs": 526.265380859375,
+        "samples": 289
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "core/lambdas",
-      "hostBytes": 2.212290502793296,
+      "hostBytes": 5.242937853107344,
       "run": {
-        "medianNs": 956.86328125,
-        "minNs": 924.723388671875,
-        "samples": 176
+        "medianNs": 960.5205078125,
+        "minNs": 938.527587890625,
+        "samples": 175
       },
       "runner": "ts-native"
     },
@@ -879,9 +879,9 @@
       "benchmark": "numbers/add",
       "hostBytes": 0,
       "run": {
-        "medianNs": 986.465576171875,
-        "minNs": 978.495361328125,
-        "samples": 170
+        "medianNs": 996.6429443359375,
+        "minNs": 978.57666015625,
+        "samples": 168
       },
       "runner": "ts-native"
     },
@@ -889,19 +889,19 @@
       "benchmark": "numbers/multiply",
       "hostBytes": 0,
       "run": {
-        "medianNs": 537.480712890625,
-        "minNs": 519.643310546875,
-        "samples": 314
+        "medianNs": 550.0589599609375,
+        "minNs": 520.609375,
+        "samples": 310
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "numbers/divide",
-      "hostBytes": 0.9937106918238994,
+      "hostBytes": 0.4401294498381877,
       "run": {
-        "medianNs": 534.4442138671875,
-        "minNs": 517.588134765625,
-        "samples": 314
+        "medianNs": 550.567626953125,
+        "minNs": 518.635986328125,
+        "samples": 305
       },
       "runner": "ts-native"
     },
@@ -909,137 +909,137 @@
       "benchmark": "numbers/quantity",
       "hostBytes": 0,
       "run": {
-        "medianNs": 315.71435546875,
-        "minNs": 305.9287109375,
-        "samples": 539
+        "medianNs": 315.500732421875,
+        "minNs": 313.191650390625,
+        "samples": 541
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "text/build",
-      "hostBytes": 0.496551724137931,
+      "hostBytes": 1.006993006993007,
       "run": {
-        "medianNs": 1192.0673828125,
-        "minNs": 1142.791748046875,
-        "samples": 142
+        "medianNs": 1193.715576171875,
+        "minNs": 1156.30078125,
+        "samples": 141
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "text/iterate",
-      "hostBytes": 0.4472049689440994,
+      "hostBytes": 0.04938271604938271,
       "run": {
-        "medianNs": 1074.371337890625,
-        "minNs": 1066.8232421875,
-        "samples": 157
+        "medianNs": 1062.4439697265625,
+        "minNs": 1054.1484375,
+        "samples": 158
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "text/index",
-      "hostBytes": 0.10646387832699619,
+      "hostBytes": 0,
       "run": {
-        "medianNs": 639.48583984375,
-        "minNs": 634.96923828125,
-        "samples": 259
+        "medianNs": 718.561767578125,
+        "minNs": 633.646484375,
+        "samples": 238
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "text/patterns",
-      "hostBytes": 63.27272727272727,
+      "hostBytes": 14.909090909090908,
       "run": {
-        "medianNs": 13733.9580078125,
-        "minNs": 13639.943359375,
+        "medianNs": 13710.1845703125,
+        "minNs": 13651.143310546875,
         "samples": 9
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "collections/list-build",
-      "hostBytes": 2.403755868544601,
+      "hostBytes": 1.150943396226415,
       "run": {
-        "medianNs": 797.73974609375,
-        "minNs": 776.814697265625,
-        "samples": 209
+        "medianNs": 804.6112060546875,
+        "minNs": 780.955078125,
+        "samples": 208
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "collections/map-build",
-      "hostBytes": 15.166666666666666,
+      "hostBytes": 70.77551020408163,
       "run": {
-        "medianNs": 3571.512939453125,
-        "minNs": 3503.2958984375,
-        "samples": 44
+        "medianNs": 3530.161376953125,
+        "minNs": 3437.0322265625,
+        "samples": 45
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "collections/list-update",
-      "hostBytes": 0.2857142857142857,
+      "hostBytes": 0.036036036036036036,
       "run": {
-        "medianNs": 727.7525634765625,
-        "minNs": 719.858642578125,
-        "samples": 220
+        "medianNs": 730.5908203125,
+        "minNs": 724.385498046875,
+        "samples": 218
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "collections/map-update",
-      "hostBytes": 0.06557377049180328,
+      "hostBytes": 0.09836065573770492,
       "run": {
-        "medianNs": 1406.3516845703125,
-        "minNs": 1388.742919921875,
+        "medianNs": 1412.043212890625,
+        "minNs": 1387.614013671875,
         "samples": 118
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "collections/iterate",
-      "hostBytes": 6,
+      "hostBytes": 1.391304347826087,
       "run": {
-        "medianNs": 7439.0054931640625,
-        "minNs": 7247.01953125,
-        "samples": 20
+        "medianNs": 7510.721923828125,
+        "minNs": 7373.78955078125,
+        "samples": 19
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "macro/transform",
-      "hostBytes": 1.85,
+      "hostBytes": 0.7428571428571429,
       "run": {
-        "medianNs": 2161.5244140625,
-        "minNs": 2118.988037109375,
-        "samples": 76
+        "medianNs": 2477.4830322265625,
+        "minNs": 2431.365966796875,
+        "samples": 66
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "macro/report",
-      "hostBytes": 3.933333333333333,
+      "hostBytes": 6.133333333333334,
       "run": {
-        "medianNs": 2787.078857421875,
-        "minNs": 2649.35302734375,
+        "medianNs": 2881.5408935546875,
+        "minNs": 2771.47412109375,
         "samples": 56
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "macro/game-tick",
-      "hostBytes": 0.02321083172147002,
+      "hostBytes": 0.03076923076923077,
       "run": {
-        "medianNs": 330.62744140625,
-        "minNs": 324.758056640625,
-        "samples": 513
+        "medianNs": 329.5390625,
+        "minNs": 323.974609375,
+        "samples": 516
       },
       "runner": "ts-native"
     },
     {
       "benchmark": "core/loop",
       "run": {
-        "medianNs": 7045.25244140625,
-        "minNs": 6995.859619140625,
+        "medianNs": 7067.6929931640625,
+        "minNs": 7023.37646484375,
         "samples": 20
       },
       "runner": "wasmoon"
@@ -1047,8 +1047,8 @@
     {
       "benchmark": "core/fib",
       "run": {
-        "medianNs": 25758.763671875,
-        "minNs": 25608.235595703125,
+        "medianNs": 26536.432983398438,
+        "minNs": 26334.65576171875,
         "samples": 12
       },
       "runner": "wasmoon"
@@ -1056,8 +1056,8 @@
     {
       "benchmark": "core/calls",
       "run": {
-        "medianNs": 23299.021484375,
-        "minNs": 23038.116455078125,
+        "medianNs": 22998.270629882812,
+        "minNs": 22574.47314453125,
         "samples": 12
       },
       "runner": "wasmoon"
@@ -1065,17 +1065,17 @@
     {
       "benchmark": "core/lambdas",
       "run": {
-        "medianNs": 28708,
-        "minNs": 26416,
-        "samples": 23006
+        "medianNs": 28916,
+        "minNs": 26834,
+        "samples": 22896
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "numbers/add",
       "run": {
-        "medianNs": 6974.1416015625,
-        "minNs": 6921.5087890625,
+        "medianNs": 7035.31884765625,
+        "minNs": 6928.904296875,
         "samples": 21
       },
       "runner": "wasmoon"
@@ -1083,17 +1083,17 @@
     {
       "benchmark": "numbers/multiply",
       "run": {
-        "medianNs": 6070.80078125,
-        "minNs": 5878.580810546875,
-        "samples": 25
+        "medianNs": 6140.24853515625,
+        "minNs": 6022.491455078125,
+        "samples": 24
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "numbers/divide",
       "run": {
-        "medianNs": 5692.5863037109375,
-        "minNs": 5498.40283203125,
+        "medianNs": 5718.963623046875,
+        "minNs": 5560.24169921875,
         "samples": 26
       },
       "runner": "wasmoon"
@@ -1101,8 +1101,8 @@
     {
       "benchmark": "numbers/quantity",
       "run": {
-        "medianNs": 4398.152587890625,
-        "minNs": 4298.380615234375,
+        "medianNs": 4415.212158203125,
+        "minNs": 4306.610107421875,
         "samples": 35
       },
       "runner": "wasmoon"
@@ -1110,62 +1110,62 @@
     {
       "benchmark": "text/build",
       "run": {
-        "medianNs": 40209,
-        "minNs": 36958,
-        "samples": 16738
+        "medianNs": 40125,
+        "minNs": 38375,
+        "samples": 16751
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "text/iterate",
       "run": {
-        "medianNs": 42750,
-        "minNs": 39542,
-        "samples": 15583
+        "medianNs": 42625,
+        "minNs": 39708,
+        "samples": 15796
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "text/index",
       "run": {
-        "medianNs": 31708,
-        "minNs": 30250,
-        "samples": 19567
+        "medianNs": 31542,
+        "minNs": 29417,
+        "samples": 21178
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "text/patterns",
       "run": {
-        "medianNs": 60916,
-        "minNs": 58541,
-        "samples": 11236
+        "medianNs": 60125,
+        "minNs": 57500,
+        "samples": 11345
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "collections/list-build",
       "run": {
-        "medianNs": 11209,
-        "minNs": 9916,
-        "samples": 54816
+        "medianNs": 10959,
+        "minNs": 10000,
+        "samples": 55474
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "collections/map-build",
       "run": {
-        "medianNs": 42458,
-        "minNs": 40458,
-        "samples": 15668
+        "medianNs": 41520.5,
+        "minNs": 39916,
+        "samples": 15938
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "collections/list-update",
       "run": {
-        "medianNs": 5859.7666015625,
-        "minNs": 5673.879150390625,
+        "medianNs": 5695.414306640625,
+        "minNs": 5556.33544921875,
         "samples": 26
       },
       "runner": "wasmoon"
@@ -1173,45 +1173,45 @@
     {
       "benchmark": "collections/map-update",
       "run": {
-        "medianNs": 3333,
-        "minNs": 3041,
-        "samples": 147826
+        "medianNs": 3415.374755859375,
+        "minNs": 3336.212158203125,
+        "samples": 45
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "collections/iterate",
       "run": {
-        "medianNs": 112667,
-        "minNs": 108834,
-        "samples": 6072
+        "medianNs": 122500,
+        "minNs": 116417,
+        "samples": 5595
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "macro/transform",
       "run": {
-        "medianNs": 32500,
-        "minNs": 25625,
-        "samples": 20692
+        "medianNs": 31667,
+        "minNs": 24833,
+        "samples": 21204
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "macro/report",
       "run": {
-        "medianNs": 40083,
-        "minNs": 34000,
-        "samples": 17743
+        "medianNs": 40416,
+        "minNs": 34583,
+        "samples": 17515
       },
       "runner": "wasmoon"
     },
     {
       "benchmark": "macro/game-tick",
       "run": {
-        "medianNs": 23296.417236328125,
-        "minNs": 23219.980712890625,
-        "samples": 12
+        "medianNs": 25333,
+        "minNs": 23625,
+        "samples": 25967
       },
       "runner": "wasmoon"
     },
@@ -1219,8 +1219,8 @@
       "benchmark": "core/loop",
       "hostBytes": 0,
       "run": {
-        "medianNs": 18276.392578125,
-        "minNs": 18231.302734375,
+        "medianNs": 18429.524780273438,
+        "minNs": 18353.45458984375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1229,8 +1229,8 @@
       "benchmark": "core/fib",
       "hostBytes": 0,
       "run": {
-        "medianNs": 24848.79541015625,
-        "minNs": 24823.28271484375,
+        "medianNs": 24835.26611328125,
+        "minNs": 24802.18505859375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1239,8 +1239,8 @@
       "benchmark": "core/calls",
       "hostBytes": 0,
       "run": {
-        "medianNs": 30908.75244140625,
-        "minNs": 30693.56298828125,
+        "medianNs": 30749.5830078125,
+        "minNs": 30689.9619140625,
         "samples": 10
       },
       "runner": "cpython"
@@ -1249,8 +1249,8 @@
       "benchmark": "core/lambdas",
       "hostBytes": 208,
       "run": {
-        "medianNs": 40400.40087890625,
-        "minNs": 39238.36279296875,
+        "medianNs": 40122.25341796875,
+        "minNs": 39861.77587890625,
         "samples": 10
       },
       "runner": "cpython"
@@ -1259,8 +1259,8 @@
       "benchmark": "numbers/add",
       "hostBytes": 0,
       "run": {
-        "medianNs": 19980.723022460938,
-        "minNs": 19858.04248046875,
+        "medianNs": 19847.966552734375,
+        "minNs": 19265.401123046875,
         "samples": 10
       },
       "runner": "cpython"
@@ -1269,8 +1269,8 @@
       "benchmark": "numbers/multiply",
       "hostBytes": 0,
       "run": {
-        "medianNs": 15416.936279296875,
-        "minNs": 15336.22216796875,
+        "medianNs": 15514.175415039062,
+        "minNs": 15392.02880859375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1279,8 +1279,8 @@
       "benchmark": "numbers/divide",
       "hostBytes": 0,
       "run": {
-        "medianNs": 15626.093505859375,
-        "minNs": 15581.207275390625,
+        "medianNs": 15649.668334960938,
+        "minNs": 15597.127197265625,
         "samples": 10
       },
       "runner": "cpython"
@@ -1289,8 +1289,8 @@
       "benchmark": "numbers/quantity",
       "hostBytes": 0,
       "run": {
-        "medianNs": 9713.007568359375,
-        "minNs": 9667.434692382812,
+        "medianNs": 9803.164184570312,
+        "minNs": 9758.865356445312,
         "samples": 10
       },
       "runner": "cpython"
@@ -1299,8 +1299,8 @@
       "benchmark": "text/build",
       "hostBytes": 1541,
       "run": {
-        "medianNs": 10232.424438476562,
-        "minNs": 10192.255615234375,
+        "medianNs": 10205.665649414062,
+        "minNs": 10150.497436523438,
         "samples": 10
       },
       "runner": "cpython"
@@ -1309,8 +1309,8 @@
       "benchmark": "text/iterate",
       "hostBytes": 48,
       "run": {
-        "medianNs": 18766.744018554688,
-        "minNs": 18624.81689453125,
+        "medianNs": 18562.56103515625,
+        "minNs": 18476.50146484375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1319,8 +1319,8 @@
       "benchmark": "text/index",
       "hostBytes": 0,
       "run": {
-        "medianNs": 16411.453125,
-        "minNs": 16326.324462890625,
+        "medianNs": 16572.402954101562,
+        "minNs": 16521.81005859375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1329,8 +1329,8 @@
       "benchmark": "text/patterns",
       "hostBytes": 1213,
       "run": {
-        "medianNs": 49210.5302734375,
-        "minNs": 48839.2333984375,
+        "medianNs": 47795.06396484375,
+        "minNs": 47395.99609375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1339,8 +1339,8 @@
       "benchmark": "collections/list-build",
       "hostBytes": 8832,
       "run": {
-        "medianNs": 7469.856262207031,
-        "minNs": 7454.89501953125,
+        "medianNs": 7583.88525390625,
+        "minNs": 7527.862548828125,
         "samples": 10
       },
       "runner": "cpython"
@@ -1349,8 +1349,8 @@
       "benchmark": "collections/map-build",
       "hostBytes": 19716,
       "run": {
-        "medianNs": 14632.710693359375,
-        "minNs": 14602.447509765625,
+        "medianNs": 14496.409057617188,
+        "minNs": 14277.50634765625,
         "samples": 10
       },
       "runner": "cpython"
@@ -1359,8 +1359,8 @@
       "benchmark": "collections/list-update",
       "hostBytes": 184,
       "run": {
-        "medianNs": 9213.56201171875,
-        "minNs": 9046.463012695312,
+        "medianNs": 9272.674560546875,
+        "minNs": 9190.048217773438,
         "samples": 10
       },
       "runner": "cpython"
@@ -1369,8 +1369,8 @@
       "benchmark": "collections/map-update",
       "hostBytes": 480,
       "run": {
-        "medianNs": 4151.85546875,
-        "minNs": 4141.685485839844,
+        "medianNs": 4102.148681640625,
+        "minNs": 4087.079345703125,
         "samples": 10
       },
       "runner": "cpython"
@@ -1379,8 +1379,8 @@
       "benchmark": "collections/iterate",
       "hostBytes": 2559,
       "run": {
-        "medianNs": 54390.78759765625,
-        "minNs": 54021.037109375,
+        "medianNs": 53855.67236328125,
+        "minNs": 53526.7333984375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1389,8 +1389,8 @@
       "benchmark": "macro/transform",
       "hostBytes": 49184,
       "run": {
-        "medianNs": 18670.201538085938,
-        "minNs": 18482.38134765625,
+        "medianNs": 18495.0458984375,
+        "minNs": 18405.792236328125,
         "samples": 10
       },
       "runner": "cpython"
@@ -1399,8 +1399,8 @@
       "benchmark": "macro/report",
       "hostBytes": 15119,
       "run": {
-        "medianNs": 19700.67333984375,
-        "minNs": 19613.128662109375,
+        "medianNs": 19612.121459960938,
+        "minNs": 19516.520263671875,
         "samples": 10
       },
       "runner": "cpython"
@@ -1409,8 +1409,8 @@
       "benchmark": "macro/game-tick",
       "hostBytes": 0,
       "run": {
-        "medianNs": 49505.65576171875,
-        "minNs": 49017.08984375,
+        "medianNs": 51666.60595703125,
+        "minNs": 51544.8818359375,
         "samples": 10
       },
       "runner": "cpython"
@@ -1419,16 +1419,16 @@
       "benchmark": "core/loop",
       "fuel": 48016,
       "hostAllocs": 79973,
-      "hostBytes": 2039268.5,
+      "hostBytes": 2039275.5,
       "load": {
-        "medianNs": 43651.5,
-        "minNs": 43094,
+        "medianNs": 43646,
+        "minNs": 43339,
         "samples": 10
       },
       "logicalAlloc": 64000,
       "run": {
-        "medianNs": 7507252,
-        "minNs": 7496568,
+        "medianNs": 7470569,
+        "minNs": 7453107,
         "samples": 10
       },
       "runner": "go"
@@ -1437,16 +1437,16 @@
       "benchmark": "core/fib",
       "fuel": 46365,
       "hostAllocs": 62250,
-      "hostBytes": 3607620,
+      "hostBytes": 3607619,
       "load": {
-        "medianNs": 51268,
-        "minNs": 50748,
+        "medianNs": 51325.5,
+        "minNs": 50159,
         "samples": 10
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 5228467,
-        "minNs": 5218068,
+        "medianNs": 5212351,
+        "minNs": 5205254,
         "samples": 10
       },
       "runner": "go"
@@ -1457,14 +1457,14 @@
       "hostAllocs": 189362,
       "hostBytes": 19221769.5,
       "load": {
-        "medianNs": 51464.5,
-        "minNs": 51169,
+        "medianNs": 51704,
+        "minNs": 50690,
         "samples": 10
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 10253308,
-        "minNs": 10224033,
+        "medianNs": 10178949.5,
+        "minNs": 10148415,
         "samples": 10
       },
       "runner": "go"
@@ -1473,16 +1473,16 @@
       "benchmark": "core/fib@slice=100",
       "fuel": 46365,
       "hostAllocs": 79185,
-      "hostBytes": 7195136.5,
+      "hostBytes": 7195136,
       "load": {
-        "medianNs": 51379,
-        "minNs": 50786,
+        "medianNs": 51281,
+        "minNs": 50712,
         "samples": 10
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 6116816.5,
-        "minNs": 6098249,
+        "medianNs": 6090461.5,
+        "minNs": 6073178,
         "samples": 10
       },
       "runner": "go"
@@ -1490,17 +1490,17 @@
     {
       "benchmark": "core/fib@slice=1000",
       "fuel": 46365,
-      "hostAllocs": 64316.5,
-      "hostBytes": 4157142.5,
+      "hostAllocs": 64316,
+      "hostBytes": 4157134,
       "load": {
-        "medianNs": 51157,
-        "minNs": 50566,
+        "medianNs": 51493.5,
+        "minNs": 50732,
         "samples": 10
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 5356987.5,
-        "minNs": 5342044,
+        "medianNs": 5331965,
+        "minNs": 5324648,
         "samples": 10
       },
       "runner": "go"
@@ -1509,16 +1509,16 @@
       "benchmark": "core/fib@slice=10000",
       "fuel": 46365,
       "hostAllocs": 62445,
-      "hostBytes": 3670755,
+      "hostBytes": 3670757,
       "load": {
-        "medianNs": 51715,
-        "minNs": 51131,
+        "medianNs": 51599.5,
+        "minNs": 50692,
         "samples": 10
       },
       "logicalAlloc": 47328,
       "run": {
-        "medianNs": 5237062,
-        "minNs": 5215259,
+        "medianNs": 5213592.5,
+        "minNs": 5197505,
         "samples": 10
       },
       "runner": "go"
@@ -1527,16 +1527,16 @@
       "benchmark": "core/calls",
       "fuel": 46018,
       "hostAllocs": 54019,
-      "hostBytes": 4254268,
+      "hostBytes": 4254269,
       "load": {
-        "medianNs": 52820.5,
-        "minNs": 52322,
+        "medianNs": 52581.5,
+        "minNs": 52074,
         "samples": 10
       },
       "logicalAlloc": 32072,
       "run": {
-        "medianNs": 5378491.5,
-        "minNs": 5365531,
+        "medianNs": 5355550,
+        "minNs": 5344033,
         "samples": 10
       },
       "runner": "go"
@@ -1545,16 +1545,16 @@
       "benchmark": "core/lambdas",
       "fuel": 58027,
       "hostAllocs": 84012,
-      "hostBytes": 6729901.5,
+      "hostBytes": 6729892,
       "load": {
-        "medianNs": 59752.5,
-        "minNs": 58865,
+        "medianNs": 58551,
+        "minNs": 58343,
         "samples": 10
       },
       "logicalAlloc": 64120,
       "run": {
-        "medianNs": 7763316,
-        "minNs": 7725847,
+        "medianNs": 7701413,
+        "minNs": 7691704,
         "samples": 10
       },
       "runner": "go"
@@ -1563,16 +1563,16 @@
       "benchmark": "numbers/add",
       "fuel": 26030,
       "hostAllocs": 46096,
-      "hostBytes": 1856149.5,
+      "hostBytes": 1856149,
       "load": {
-        "medianNs": 45904,
-        "minNs": 45546,
+        "medianNs": 45500,
+        "minNs": 44949,
         "samples": 10
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 4403540.5,
-        "minNs": 4285698,
+        "medianNs": 4285332.5,
+        "minNs": 4262875,
         "samples": 10
       },
       "runner": "go"
@@ -1581,16 +1581,16 @@
       "benchmark": "numbers/multiply",
       "fuel": 18031,
       "hostAllocs": 37088,
-      "hostBytes": 1211585.5,
+      "hostBytes": 1211585,
       "load": {
-        "medianNs": 47930,
-        "minNs": 47452,
+        "medianNs": 47389,
+        "minNs": 46966,
         "samples": 10
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 2963045,
-        "minNs": 2955093,
+        "medianNs": 2957126.5,
+        "minNs": 2951555,
         "samples": 10
       },
       "runner": "go"
@@ -1599,16 +1599,16 @@
       "benchmark": "numbers/divide",
       "fuel": 18031,
       "hostAllocs": 145726,
-      "hostBytes": 4218002,
+      "hostBytes": 4218006,
       "load": {
-        "medianNs": 47307,
-        "minNs": 47133,
+        "medianNs": 47073,
+        "minNs": 46276,
         "samples": 10
       },
       "logicalAlloc": 32104,
       "run": {
-        "medianNs": 4551524.5,
-        "minNs": 4541354,
+        "medianNs": 4530158,
+        "minNs": 4522651,
         "samples": 10
       },
       "runner": "go"
@@ -1617,16 +1617,16 @@
       "benchmark": "numbers/quantity",
       "fuel": 14579,
       "hostAllocs": 214416,
-      "hostBytes": 5658460,
+      "hostBytes": 5657672.5,
       "load": {
-        "medianNs": 58207.5,
-        "minNs": 57429,
+        "medianNs": 57617.5,
+        "minNs": 57380,
         "samples": 10
       },
       "logicalAlloc": 40088,
       "run": {
-        "medianNs": 5869869,
-        "minNs": 5840603,
+        "medianNs": 5846809.5,
+        "minNs": 5827262,
         "samples": 10
       },
       "runner": "go"
@@ -1635,16 +1635,16 @@
       "benchmark": "text/build",
       "fuel": 28928,
       "hostAllocs": 9048,
-      "hostBytes": 873883.5,
+      "hostBytes": 873883,
       "load": {
-        "medianNs": 42295.5,
-        "minNs": 41145,
+        "medianNs": 41969.5,
+        "minNs": 41121,
         "samples": 10
       },
       "logicalAlloc": 383838,
       "run": {
-        "medianNs": 1072581.5,
-        "minNs": 1068354,
+        "medianNs": 1062925,
+        "minNs": 1060769,
         "samples": 10
       },
       "runner": "go"
@@ -1653,16 +1653,16 @@
       "benchmark": "text/iterate",
       "fuel": 30318,
       "hostAllocs": 54622,
-      "hostBytes": 3676460.5,
+      "hostBytes": 3676458,
       "load": {
-        "medianNs": 48615,
-        "minNs": 48176,
+        "medianNs": 48700.5,
+        "minNs": 48298,
         "samples": 10
       },
       "logicalAlloc": 95272,
       "run": {
-        "medianNs": 5032863.5,
-        "minNs": 4887177,
+        "medianNs": 4908464,
+        "minNs": 4835639,
         "samples": 10
       },
       "runner": "go"
@@ -1671,16 +1671,16 @@
       "benchmark": "text/index",
       "fuel": 26640,
       "hostAllocs": 195185,
-      "hostBytes": 6526236,
+      "hostBytes": 6526239.5,
       "load": {
-        "medianNs": 53239,
-        "minNs": 52871,
+        "medianNs": 52983,
+        "minNs": 52289,
         "samples": 10
       },
       "logicalAlloc": 51072,
       "run": {
-        "medianNs": 6758468,
-        "minNs": 6727222,
+        "medianNs": 6736411,
+        "minNs": 6722054,
         "samples": 10
       },
       "runner": "go"
@@ -1689,16 +1689,16 @@
       "benchmark": "text/patterns",
       "fuel": 13818,
       "hostAllocs": 66597,
-      "hostBytes": 8030706,
+      "hostBytes": 8030712,
       "load": {
-        "medianNs": 49810.5,
-        "minNs": 48979,
+        "medianNs": 50071,
+        "minNs": 49444,
         "samples": 10
       },
       "logicalAlloc": 231372,
       "run": {
-        "medianNs": 4262386.5,
-        "minNs": 4246107,
+        "medianNs": 4206470.5,
+        "minNs": 4191445,
         "samples": 10
       },
       "runner": "go"
@@ -1707,16 +1707,16 @@
       "benchmark": "text/graphemes",
       "fuel": 43518,
       "hostAllocs": 83423,
-      "hostBytes": 5152771,
+      "hostBytes": 5152773.5,
       "load": {
-        "medianNs": 50761.5,
-        "minNs": 50515,
+        "medianNs": 51506.5,
+        "minNs": 50563,
         "samples": 10
       },
       "logicalAlloc": 147572,
       "run": {
-        "medianNs": 7467666.5,
-        "minNs": 7440866,
+        "medianNs": 7416807.5,
+        "minNs": 7388877,
         "samples": 10
       },
       "runner": "go"
@@ -1725,16 +1725,16 @@
       "benchmark": "collections/list-build",
       "fuel": 19091,
       "hostAllocs": 20583,
-      "hostBytes": 81442460.5,
+      "hostBytes": 81442459.5,
       "load": {
-        "medianNs": 47546,
-        "minNs": 47197,
+        "medianNs": 47511,
+        "minNs": 47013,
         "samples": 10
       },
       "logicalAlloc": 3022112,
       "run": {
-        "medianNs": 11403004.5,
-        "minNs": 11351704,
+        "medianNs": 11361077,
+        "minNs": 11299724,
         "samples": 10
       },
       "runner": "go"
@@ -1743,16 +1743,16 @@
       "benchmark": "collections/map-build",
       "fuel": 14094,
       "hostAllocs": 20497,
-      "hostBytes": 36561976.5,
+      "hostBytes": 36561972.5,
       "load": {
-        "medianNs": 60680.5,
-        "minNs": 59480,
+        "medianNs": 60896,
+        "minNs": 59857,
         "samples": 10
       },
       "logicalAlloc": 24920,
       "run": {
-        "medianNs": 7021547.5,
-        "minNs": 6991887,
+        "medianNs": 6939559.5,
+        "minNs": 6913574,
         "samples": 10
       },
       "runner": "go"
@@ -1760,17 +1760,17 @@
     {
       "benchmark": "collections/list-update",
       "fuel": 28553,
-      "hostAllocs": 76607,
-      "hostBytes": 14952506.5,
+      "hostAllocs": 76608,
+      "hostBytes": 14952509.5,
       "load": {
-        "medianNs": 67557.5,
-        "minNs": 66756,
+        "medianNs": 67372,
+        "minNs": 66547,
         "samples": 10
       },
       "logicalAlloc": 24328,
       "run": {
-        "medianNs": 6594553,
-        "minNs": 6571135,
+        "medianNs": 6547596.5,
+        "minNs": 6534273,
         "samples": 10
       },
       "runner": "go"
@@ -1779,16 +1779,16 @@
       "benchmark": "collections/map-update",
       "fuel": 8056,
       "hostAllocs": 11071,
-      "hostBytes": 3196543.5,
+      "hostBytes": 3196544.5,
       "load": {
-        "medianNs": 79844,
-        "minNs": 78309,
+        "medianNs": 79575,
+        "minNs": 77967,
         "samples": 10
       },
       "logicalAlloc": 12432,
       "run": {
-        "medianNs": 1624236,
-        "minNs": 1621235,
+        "medianNs": 1615465.5,
+        "minNs": 1611779,
         "samples": 10
       },
       "runner": "go"
@@ -1797,16 +1797,16 @@
       "benchmark": "collections/iterate",
       "fuel": 89459,
       "hostAllocs": 133765,
-      "hostBytes": 10220937.5,
+      "hostBytes": 10220916,
       "load": {
-        "medianNs": 89017.5,
-        "minNs": 88252,
+        "medianNs": 90447,
+        "minNs": 88381,
         "samples": 10
       },
       "logicalAlloc": 200319,
       "run": {
-        "medianNs": 16286307.5,
-        "minNs": 16270279,
+        "medianNs": 16211459.5,
+        "minNs": 16124718,
         "samples": 10
       },
       "runner": "go"
@@ -1817,14 +1817,14 @@
       "hostAllocs": 28241,
       "hostBytes": 1537022,
       "load": {
-        "medianNs": 45868,
-        "minNs": 45572,
+        "medianNs": 45829.5,
+        "minNs": 45430,
         "samples": 10
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 2011078.5,
-        "minNs": 2003388,
+        "medianNs": 1999996,
+        "minNs": 1988503,
         "samples": 10
       },
       "runner": "go"
@@ -1832,17 +1832,17 @@
     {
       "benchmark": "host/suspending",
       "fuel": 13518,
-      "hostAllocs": 71478,
-      "hostBytes": 6409218,
+      "hostAllocs": 71477.5,
+      "hostBytes": 6409023,
       "load": {
-        "medianNs": 45698.5,
-        "minNs": 45397,
+        "medianNs": 45461.5,
+        "minNs": 45321,
         "samples": 10
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 3947847.5,
-        "minNs": 3930763,
+        "medianNs": 4895307.5,
+        "minNs": 3893492,
         "samples": 10
       },
       "runner": "go"
@@ -1851,16 +1851,16 @@
       "benchmark": "host/properties",
       "fuel": 9018,
       "hostAllocs": 18421,
-      "hostBytes": 940231,
+      "hostBytes": 940229.5,
       "load": {
-        "medianNs": 41583.5,
-        "minNs": 41270,
+        "medianNs": 42682,
+        "minNs": 41375,
         "samples": 10
       },
       "logicalAlloc": 16072,
       "run": {
-        "medianNs": 1563627.5,
-        "minNs": 1546164,
+        "medianNs": 2018383,
+        "minNs": 1824486,
         "samples": 10
       },
       "runner": "go"
@@ -1868,17 +1868,17 @@
     {
       "benchmark": "host/conversion",
       "fuel": 25018,
-      "hostAllocs": 117148,
-      "hostBytes": 13766488.5,
+      "hostAllocs": 117145.5,
+      "hostBytes": 13765445.5,
       "load": {
-        "medianNs": 60552.5,
-        "minNs": 59743,
+        "medianNs": 60710.5,
+        "minNs": 59710,
         "samples": 10
       },
       "logicalAlloc": 225572,
       "run": {
-        "medianNs": 6723465,
-        "minNs": 6566609,
+        "medianNs": 9191983,
+        "minNs": 8326478,
         "samples": 10
       },
       "runner": "go"
@@ -1887,16 +1887,16 @@
       "benchmark": "host/pump",
       "fuel": 7,
       "hostAllocs": 69,
-      "hostBytes": 12808,
+      "hostBytes": 12807,
       "load": {
-        "medianNs": 13610,
-        "minNs": 13526,
+        "medianNs": 13483,
+        "minNs": 13358,
         "samples": 10
       },
       "logicalAlloc": 0,
       "run": {
-        "medianNs": 3886,
-        "minNs": 3868,
+        "medianNs": 5417.5,
+        "minNs": 4956,
         "samples": 10
       },
       "runner": "go"
@@ -1904,17 +1904,17 @@
     {
       "benchmark": "macro/transform",
       "fuel": 20664,
-      "hostAllocs": 207984.5,
-      "hostBytes": 67125867.5,
+      "hostAllocs": 207984,
+      "hostBytes": 67125849,
       "load": {
-        "medianNs": 74216.5,
-        "minNs": 73190,
+        "medianNs": 74566,
+        "minNs": 73138,
         "samples": 10
       },
       "logicalAlloc": 6418202,
       "run": {
-        "medianNs": 37263224,
-        "minNs": 35351151,
+        "medianNs": 21095660.5,
+        "minNs": 20949718,
         "samples": 10
       },
       "runner": "go"
@@ -1923,16 +1923,16 @@
       "benchmark": "macro/report",
       "fuel": 86555,
       "hostAllocs": 16384,
-      "hostBytes": 1905441,
+      "hostBytes": 1905448.5,
       "load": {
-        "medianNs": 55653.5,
-        "minNs": 55033,
+        "medianNs": 55349.5,
+        "minNs": 54959,
         "samples": 10
       },
       "logicalAlloc": 1291900,
       "run": {
-        "medianNs": 2385114,
-        "minNs": 2295854,
+        "medianNs": 1980422.5,
+        "minNs": 1960572,
         "samples": 10
       },
       "runner": "go"
@@ -1941,16 +1941,16 @@
       "benchmark": "macro/game-tick",
       "fuel": 67042,
       "hostAllocs": 81910,
-      "hostBytes": 8236570,
+      "hostBytes": 8236606,
       "load": {
-        "medianNs": 86977.5,
-        "minNs": 86305,
+        "medianNs": 86719.5,
+        "minNs": 85611,
         "samples": 10
       },
       "logicalAlloc": 80270,
       "run": {
-        "medianNs": 11876431,
-        "minNs": 10300457,
+        "medianNs": 9312884,
+        "minNs": 9191499,
         "samples": 10
       },
       "runner": "go"
@@ -1958,17 +1958,17 @@
     {
       "benchmark": "messaging/sends",
       "fuel": 67518,
-      "hostAllocs": 238289.5,
-      "hostBytes": 33758968,
+      "hostAllocs": 238292,
+      "hostBytes": 33758899,
       "load": {
-        "medianNs": 62754.5,
-        "minNs": 62090,
+        "medianNs": 62151.5,
+        "minNs": 61719,
         "samples": 10
       },
       "logicalAlloc": 96072,
       "run": {
-        "medianNs": 18817406.5,
-        "minNs": 16258673,
+        "medianNs": 15457003.5,
+        "minNs": 14860072,
         "samples": 10
       },
       "runner": "go"
@@ -1976,17 +1976,17 @@
     {
       "benchmark": "messaging/parents",
       "fuel": 67518,
-      "hostAllocs": 277291,
-      "hostBytes": 32009136.5,
+      "hostAllocs": 277292,
+      "hostBytes": 32009618,
       "load": {
-        "medianNs": 53031,
-        "minNs": 52452,
+        "medianNs": 52983,
+        "minNs": 52753,
         "samples": 10
       },
       "logicalAlloc": 96072,
       "run": {
-        "medianNs": 18256888,
-        "minNs": 18046144,
+        "medianNs": 16678498.5,
+        "minNs": 16635192,
         "samples": 10
       },
       "runner": "go"
@@ -1994,17 +1994,17 @@
     {
       "benchmark": "messaging/joins",
       "fuel": 127218,
-      "hostAllocs": 344030,
-      "hostBytes": 51023999,
+      "hostAllocs": 344031.5,
+      "hostBytes": 51024413,
       "load": {
-        "medianNs": 79765,
-        "minNs": 79373,
+        "medianNs": 81581.5,
+        "minNs": 79587,
         "samples": 10
       },
       "logicalAlloc": 244872,
       "run": {
-        "medianNs": 28638111.5,
-        "minNs": 26786032,
+        "medianNs": 24699787.5,
+        "minNs": 24609563,
         "samples": 10
       },
       "runner": "go"
@@ -2013,16 +2013,16 @@
       "benchmark": "messaging/suspend",
       "fuel": 48018,
       "hostAllocs": 384047,
-      "hostBytes": 21150089.5,
+      "hostBytes": 21149391.5,
       "load": {
-        "medianNs": 41672,
-        "minNs": 41386,
+        "medianNs": 41826.5,
+        "minNs": 41444,
         "samples": 10
       },
       "logicalAlloc": 32072,
       "run": {
-        "medianNs": 16595891.5,
-        "minNs": 16295337,
+        "medianNs": 15294866,
+        "minNs": 15237623,
         "samples": 10
       },
       "runner": "go"
@@ -2033,14 +2033,14 @@
       "hostAllocs": 72,
       "hostBytes": 12859,
       "load": {
-        "medianNs": 17546.5,
-        "minNs": 17396,
+        "medianNs": 17887.5,
+        "minNs": 17382,
         "samples": 10
       },
       "logicalAlloc": 0,
       "run": {
-        "medianNs": 4203,
-        "minNs": 4178,
+        "medianNs": 4147.5,
+        "minNs": 4111,
         "samples": 10
       },
       "runner": "go"
@@ -2049,16 +2049,16 @@
       "benchmark": "lifecycle/load-large",
       "fuel": 4609,
       "hostAllocs": 7313,
-      "hostBytes": 481679,
+      "hostBytes": 481678.5,
       "load": {
-        "medianNs": 4324039,
-        "minNs": 4286058,
+        "medianNs": 4355481.5,
+        "minNs": 4294610,
         "samples": 10
       },
       "logicalAlloc": 16742,
       "run": {
-        "medianNs": 759649,
-        "minNs": 757609,
+        "medianNs": 758046,
+        "minNs": 755763,
         "samples": 10
       },
       "runner": "go"
@@ -2066,17 +2066,17 @@
     {
       "benchmark": "lifecycle/restore",
       "fuel": 8015,
-      "hostAllocs": 575678,
-      "hostBytes": 69583140.5,
+      "hostAllocs": 575675,
+      "hostBytes": 69583191.5,
       "load": {
-        "medianNs": 87318.5,
-        "minNs": 85566,
+        "medianNs": 87223,
+        "minNs": 85667,
         "samples": 10
       },
       "logicalAlloc": 8024,
       "run": {
-        "medianNs": 50317584.5,
-        "minNs": 50163790,
+        "medianNs": 50648176,
+        "minNs": 50578659,
         "samples": 10
       },
       "runner": "go"
@@ -2084,17 +2084,17 @@
     {
       "benchmark": "lifecycle/rollback",
       "fuel": 27049,
-      "hostAllocs": 57980.5,
-      "hostBytes": 346969220,
+      "hostAllocs": 57980,
+      "hostBytes": 346969224,
       "load": {
-        "medianNs": 86907.5,
-        "minNs": 85976,
+        "medianNs": 87056,
+        "minNs": 86170,
         "samples": 10
       },
       "logicalAlloc": 40120,
       "run": {
-        "medianNs": 40979184,
-        "minNs": 40593647,
+        "medianNs": 41990775.5,
+        "minNs": 41392321,
         "samples": 10
       },
       "runner": "go"
@@ -2104,8 +2104,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 499.9,
-        "minNs": 499,
+        "medianNs": 501.29999999999995,
+        "minNs": 500.5,
         "samples": 10
       },
       "runner": "go-native"
@@ -2115,8 +2115,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 1298,
-        "minNs": 1292,
+        "medianNs": 1304,
+        "minNs": 1290,
         "samples": 10
       },
       "runner": "go-native"
@@ -2126,7 +2126,7 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 487.79999999999995,
+        "medianNs": 488.25,
         "minNs": 487.4,
         "samples": 10
       },
@@ -2137,8 +2137,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 499.4,
-        "minNs": 498.1,
+        "medianNs": 501.05,
+        "minNs": 498.3,
         "samples": 10
       },
       "runner": "go-native"
@@ -2148,8 +2148,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 1158.5,
-        "minNs": 1155,
+        "medianNs": 1157,
+        "minNs": 1156,
         "samples": 10
       },
       "runner": "go-native"
@@ -2159,8 +2159,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 753.55,
-        "minNs": 751.8,
+        "medianNs": 753.3,
+        "minNs": 751.5,
         "samples": 10
       },
       "runner": "go-native"
@@ -2170,8 +2170,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 753.1500000000001,
-        "minNs": 752.3,
+        "medianNs": 757.3,
+        "minNs": 752.6,
         "samples": 10
       },
       "runner": "go-native"
@@ -2181,8 +2181,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 262.25,
-        "minNs": 261.7,
+        "medianNs": 259,
+        "minNs": 258.5,
         "samples": 10
       },
       "runner": "go-native"
@@ -2192,8 +2192,8 @@
       "hostAllocs": 500,
       "hostBytes": 396424,
       "run": {
-        "medianNs": 40454,
-        "minNs": 40138,
+        "medianNs": 54685,
+        "minNs": 37082,
         "samples": 10
       },
       "runner": "go-native"
@@ -2203,8 +2203,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 487.54999999999995,
-        "minNs": 486.5,
+        "medianNs": 530,
+        "minNs": 495.7,
         "samples": 10
       },
       "runner": "go-native"
@@ -2214,8 +2214,8 @@
       "hostAllocs": 0,
       "hostBytes": 0,
       "run": {
-        "medianNs": 399.85,
-        "minNs": 394.7,
+        "medianNs": 415.95000000000005,
+        "minNs": 402.6,
         "samples": 10
       },
       "runner": "go-native"
@@ -2223,10 +2223,10 @@
     {
       "benchmark": "text/patterns",
       "hostAllocs": 1201,
-      "hostBytes": 38610,
+      "hostBytes": 38620.5,
       "run": {
-        "medianNs": 59943.5,
-        "minNs": 59215,
+        "medianNs": 66025.5,
+        "minNs": 60139,
         "samples": 10
       },
       "runner": "go-native"
@@ -2236,8 +2236,8 @@
       "hostAllocs": 2,
       "hostBytes": 4104,
       "run": {
-        "medianNs": 617.45,
-        "minNs": 616,
+        "medianNs": 747.3,
+        "minNs": 710.4,
         "samples": 10
       },
       "runner": "go-native"
@@ -2247,8 +2247,8 @@
       "hostAllocs": 205,
       "hostBytes": 14264,
       "run": {
-        "medianNs": 5634.5,
-        "minNs": 5574,
+        "medianNs": 6469,
+        "minNs": 6075,
         "samples": 10
       },
       "runner": "go-native"
@@ -2258,8 +2258,8 @@
       "hostAllocs": 2,
       "hostBytes": 72,
       "run": {
-        "medianNs": 378.7,
-        "minNs": 377.9,
+        "medianNs": 423.9,
+        "minNs": 406.5,
         "samples": 10
       },
       "runner": "go-native"
@@ -2269,8 +2269,8 @@
       "hostAllocs": 5,
       "hostBytes": 520,
       "run": {
-        "medianNs": 2821.5,
-        "minNs": 2753,
+        "medianNs": 3136.5,
+        "minNs": 3011,
         "samples": 10
       },
       "runner": "go-native"
@@ -2280,8 +2280,8 @@
       "hostAllocs": 4,
       "hostBytes": 1840,
       "run": {
-        "medianNs": 17129,
-        "minNs": 16968,
+        "medianNs": 18446.5,
+        "minNs": 18086,
         "samples": 10
       },
       "runner": "go-native"
@@ -2291,8 +2291,8 @@
       "hostAllocs": 3,
       "hostBytes": 7560,
       "run": {
-        "medianNs": 686.25,
-        "minNs": 683.9,
+        "medianNs": 775.6,
+        "minNs": 768,
         "samples": 10
       },
       "runner": "go-native"
@@ -2302,8 +2302,8 @@
       "hostAllocs": 85,
       "hostBytes": 9057,
       "run": {
-        "medianNs": 9287.5,
-        "minNs": 9175,
+        "medianNs": 10245,
+        "minNs": 9622,
         "samples": 10
       },
       "runner": "go-native"
@@ -2313,8 +2313,8 @@
       "hostAllocs": 1,
       "hostBytes": 8,
       "run": {
-        "medianNs": 246.35,
-        "minNs": 243.4,
+        "medianNs": 251.3,
+        "minNs": 249.6,
         "samples": 10
       },
       "runner": "go-native"
@@ -2324,8 +2324,8 @@
       "hostAllocs": 180,
       "hostBytes": 45864,
       "run": {
-        "medianNs": 53299.5,
-        "minNs": 25840,
+        "medianNs": 26443,
+        "minNs": 26035,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2333,10 +2333,10 @@
     {
       "benchmark": "core/fib",
       "hostAllocs": 1,
-      "hostBytes": 63,
+      "hostBytes": 63.5,
       "run": {
-        "medianNs": 84271.5,
-        "minNs": 82373,
+        "medianNs": 71039,
+        "minNs": 69595,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2346,8 +2346,8 @@
       "hostAllocs": 180,
       "hostBytes": 45864,
       "run": {
-        "medianNs": 85916,
-        "minNs": 77366,
+        "medianNs": 72484.5,
+        "minNs": 72051,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2357,8 +2357,8 @@
       "hostAllocs": 244,
       "hostBytes": 61704,
       "run": {
-        "medianNs": 103772,
-        "minNs": 92122,
+        "medianNs": 87060,
+        "minNs": 85863,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2368,8 +2368,8 @@
       "hostAllocs": 177,
       "hostBytes": 44992,
       "run": {
-        "medianNs": 29826,
-        "minNs": 28167,
+        "medianNs": 26279.5,
+        "minNs": 26122,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2379,8 +2379,8 @@
       "hostAllocs": 118,
       "hostBytes": 29792,
       "run": {
-        "medianNs": 20035.5,
-        "minNs": 19774,
+        "medianNs": 18090.5,
+        "minNs": 18049,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2390,8 +2390,8 @@
       "hostAllocs": 115,
       "hostBytes": 28976,
       "run": {
-        "medianNs": 21640,
-        "minNs": 21507,
+        "medianNs": 19528,
+        "minNs": 19395,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2401,8 +2401,8 @@
       "hostAllocs": 67,
       "hostBytes": 16864,
       "run": {
-        "medianNs": 12656,
-        "minNs": 12274,
+        "medianNs": 11267,
+        "minNs": 11230,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2412,8 +2412,8 @@
       "hostAllocs": 1024,
       "hostBytes": 410416,
       "run": {
-        "medianNs": 62137.5,
-        "minNs": 53757,
+        "medianNs": 54081,
+        "minNs": 53811,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2423,8 +2423,8 @@
       "hostAllocs": 9847,
       "hostBytes": 191792,
       "run": {
-        "medianNs": 178695,
-        "minNs": 174158,
+        "medianNs": 166265,
+        "minNs": 165115,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2434,8 +2434,8 @@
       "hostAllocs": 1055,
       "hostBytes": 29984,
       "run": {
-        "medianNs": 112474.5,
-        "minNs": 111818,
+        "medianNs": 112393.5,
+        "minNs": 112120,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2443,10 +2443,10 @@
     {
       "benchmark": "text/patterns",
       "hostAllocs": 17736,
-      "hostBytes": 400168,
+      "hostBytes": 400169,
       "run": {
-        "medianNs": 400323,
-        "minNs": 349079,
+        "medianNs": 248504.5,
+        "minNs": 246893,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2456,8 +2456,8 @@
       "hostAllocs": 1045,
       "hostBytes": 36264,
       "run": {
-        "medianNs": 49680,
-        "minNs": 45441,
+        "medianNs": 37573.5,
+        "minNs": 37378,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2465,10 +2465,10 @@
     {
       "benchmark": "collections/map-build",
       "hostAllocs": 1291,
-      "hostBytes": 92677,
+      "hostBytes": 92676.5,
       "run": {
-        "medianNs": 88398.5,
-        "minNs": 83168,
+        "medianNs": 78990,
+        "minNs": 78508,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2478,8 +2478,8 @@
       "hostAllocs": 106,
       "hostBytes": 22952,
       "run": {
-        "medianNs": 28939.5,
-        "minNs": 28118,
+        "medianNs": 26045,
+        "minNs": 25702,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2489,8 +2489,8 @@
       "hostAllocs": 76,
       "hostBytes": 10416,
       "run": {
-        "medianNs": 19743,
-        "minNs": 18674,
+        "medianNs": 19145,
+        "minNs": 18949,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2500,8 +2500,8 @@
       "hostAllocs": 6741,
       "hostBytes": 111460,
       "run": {
-        "medianNs": 395814,
-        "minNs": 394067,
+        "medianNs": 395656.5,
+        "minNs": 393802,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2511,8 +2511,8 @@
       "hostAllocs": 4538,
       "hostBytes": 274456,
       "run": {
-        "medianNs": 119284,
-        "minNs": 118222,
+        "medianNs": 119767.5,
+        "minNs": 119154,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2522,8 +2522,8 @@
       "hostAllocs": 1290,
       "hostBytes": 33841,
       "run": {
-        "medianNs": 124118,
-        "minNs": 122551,
+        "medianNs": 127149,
+        "minNs": 124800,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2533,8 +2533,8 @@
       "hostAllocs": 128,
       "hostBytes": 29400,
       "run": {
-        "medianNs": 165153.5,
-        "minNs": 137070,
+        "medianNs": 128090.5,
+        "minNs": 127015,
         "samples": 10
       },
       "runner": "gopher-lua"
@@ -2544,8 +2544,8 @@
       "hostAllocs": 6,
       "hostBytes": 256,
       "run": {
-        "medianNs": 43264.5,
-        "minNs": 42333,
+        "medianNs": 38997.5,
+        "minNs": 38805,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2555,8 +2555,8 @@
       "hostAllocs": 1975,
       "hostBytes": 157904,
       "run": {
-        "medianNs": 148812,
-        "minNs": 145729,
+        "medianNs": 139586,
+        "minNs": 139232,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2566,8 +2566,8 @@
       "hostAllocs": 2006,
       "hostBytes": 128256,
       "run": {
-        "medianNs": 129897.5,
-        "minNs": 122505,
+        "medianNs": 110522,
+        "minNs": 109885,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2577,8 +2577,8 @@
       "hostAllocs": 2010,
       "hostBytes": 160408,
       "run": {
-        "medianNs": 156822.5,
-        "minNs": 155585,
+        "medianNs": 135750,
+        "minNs": 134991,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2588,8 +2588,8 @@
       "hostAllocs": 2010,
       "hostBytes": 16312,
       "run": {
-        "medianNs": 51095.5,
-        "minNs": 50570,
+        "medianNs": 44817,
+        "minNs": 44501,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2599,8 +2599,8 @@
       "hostAllocs": 2010,
       "hostBytes": 16312,
       "run": {
-        "medianNs": 59073,
-        "minNs": 53031,
+        "medianNs": 36626,
+        "minNs": 36403,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2610,8 +2610,8 @@
       "hostAllocs": 2010,
       "hostBytes": 16312,
       "run": {
-        "medianNs": 50548.5,
-        "minNs": 47341,
+        "medianNs": 38210.5,
+        "minNs": 38002,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2621,8 +2621,8 @@
       "hostAllocs": 1009,
       "hostBytes": 8304,
       "run": {
-        "medianNs": 33700.5,
-        "minNs": 29763,
+        "medianNs": 24931,
+        "minNs": 24575,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2632,8 +2632,8 @@
       "hostAllocs": 1006,
       "hostBytes": 404632,
       "run": {
-        "medianNs": 67020.5,
-        "minNs": 64252,
+        "medianNs": 50974.5,
+        "minNs": 50105,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2643,8 +2643,8 @@
       "hostAllocs": 3607,
       "hostBytes": 63472,
       "run": {
-        "medianNs": 122869,
-        "minNs": 114033,
+        "medianNs": 106731.5,
+        "minNs": 106608,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2654,8 +2654,8 @@
       "hostAllocs": 1006,
       "hostBytes": 16256,
       "run": {
-        "medianNs": 55185,
-        "minNs": 51091,
+        "medianNs": 48368,
+        "minNs": 47630,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2665,8 +2665,8 @@
       "hostAllocs": 4507,
       "hostBytes": 89088,
       "run": {
-        "medianNs": 201292.5,
-        "minNs": 187672,
+        "medianNs": 182314,
+        "minNs": 180689,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2676,8 +2676,8 @@
       "hostAllocs": 18,
       "hostBytes": 19152,
       "run": {
-        "medianNs": 18798.5,
-        "minNs": 18239,
+        "medianNs": 17496,
+        "minNs": 17387,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2687,8 +2687,8 @@
       "hostAllocs": 827,
       "hostBytes": 101811,
       "run": {
-        "medianNs": 38847,
-        "minNs": 38770,
+        "medianNs": 37113.5,
+        "minNs": 36997,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2698,8 +2698,8 @@
       "hostAllocs": 13,
       "hostBytes": 704,
       "run": {
-        "medianNs": 32336.5,
-        "minNs": 32057,
+        "medianNs": 31167.5,
+        "minNs": 30588,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2709,8 +2709,8 @@
       "hostAllocs": 11,
       "hostBytes": 1760,
       "run": {
-        "medianNs": 14389.5,
-        "minNs": 14201,
+        "medianNs": 13464,
+        "minNs": 13248,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2720,8 +2720,8 @@
       "hostAllocs": 783,
       "hostBytes": 276944,
       "run": {
-        "medianNs": 187464.5,
-        "minNs": 184302,
+        "medianNs": 172827.5,
+        "minNs": 172187,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2731,8 +2731,8 @@
       "hostAllocs": 328,
       "hostBytes": 172704,
       "run": {
-        "medianNs": 55791.5,
-        "minNs": 54846,
+        "medianNs": 52221,
+        "minNs": 52032,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2742,8 +2742,8 @@
       "hostAllocs": 3084,
       "hostBytes": 67808,
       "run": {
-        "medianNs": 61382.5,
-        "minNs": 60943,
+        "medianNs": 57453.5,
+        "minNs": 57207,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2753,8 +2753,8 @@
       "hostAllocs": 1007,
       "hostBytes": 96752,
       "run": {
-        "medianNs": 161429,
-        "minNs": 160819,
+        "medianNs": 149871.5,
+        "minNs": 149308,
         "samples": 10
       },
       "runner": "starlark-go"
@@ -2764,32 +2764,38 @@
   "outliers": [
     {
       "benchmark": "numbers/quantity",
-      "factor": 3.087880514080039,
-      "nsPerFuel": 1038.9872762192194,
+      "factor": 3.130227489603988,
+      "nsPerFuel": 1048.6287125317237,
       "runner": "ts"
     },
     {
       "benchmark": "collections/map-build",
-      "factor": 3.7854079849788316,
-      "nsPerFuel": 1273.6861785156805,
+      "factor": 3.8744386468203085,
+      "nsPerFuel": 1297.940045409394,
       "runner": "ts"
     },
     {
       "benchmark": "lifecycle/rollback",
-      "factor": 6.636189121022232,
-      "nsPerFuel": 2232.8960035491145,
+      "factor": 6.61018709538996,
+      "nsPerFuel": 2214.4179636955155,
       "runner": "ts"
     },
     {
+      "benchmark": "host/pump",
+      "factor": 3.8594253925129145,
+      "nsPerFuel": 773.9285714285714,
+      "runner": "go"
+    },
+    {
       "benchmark": "macro/transform",
-      "factor": 8.944094094670014,
-      "nsPerFuel": 1803.291908633372,
+      "factor": 5.090969607273158,
+      "nsPerFuel": 1020.8894938056524,
       "runner": "go"
     },
     {
       "benchmark": "lifecycle/rollback",
-      "factor": 7.514194249282075,
-      "nsPerFuel": 1514.9981145328848,
+      "factor": 7.741488115883315,
+      "nsPerFuel": 1552.3965950682095,
       "runner": "go"
     }
   ],
