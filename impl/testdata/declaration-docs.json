@@ -428,7 +428,7 @@
               "text",
               "function",
               0,
-              ""
+              "The items of `xs`, each shown as `&` shows it, with `separator` between each pair"
             ]
           ]
         },

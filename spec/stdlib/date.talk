@@ -4,10 +4,12 @@
 
 use join, padLeft from text
 
+--| The Unix epoch, as an Instant
 constant epoch = "1970-01-01T00:00:00Z" as instant
 
 -- Building -------------------------------------------------------------------
 
+--| The date-only Civil Date `y`-`m`-`d`
 function makeDate y, m, d
   needNumber(y)
   needNumber(m)
@@ -16,6 +18,7 @@ function makeDate y, m, d
   return (dateText(y, m, d)) as civil date
 end makeDate
 
+--| The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `ns` nanoseconds
 function makeDateTime y, m, d, h, mi, s = 0, ns = 0
   needNumber(y)
   needNumber(m)
@@ -31,6 +34,7 @@ function makeDateTime y, m, d, h, mi, s = 0, ns = 0
   return written as civil date
 end makeDateTime
 
+--| The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds
 function atTime d, h, mi, s = 0, ns = 0
   needCivil(d)
   needNumber(h)
@@ -41,17 +45,20 @@ function atTime d, h, mi, s = 0, ns = 0
   return makeDateTime(year(d), month(d), day(d), h, mi, s, ns)
 end atTime
 
+--| The date of the Civil Date `d`, without its time of day
 function dateOnly d
   needCivil(d)
   if not hasTime(d) then return d
   return makeDate(year(d), month(d), day(d))
 end dateOnly
 
+--| The number of days in the month of the Civil Date `d`
 function daysInMonth d
   needCivil(d)
   return monthLength(year(d), month(d))
 end daysInMonth
 
+--| Whether the integer `y` is a leap year in the proleptic Gregorian calendar
 function isLeapYear y
   needInteger(y)
   return y mod 4 = 0 and (y mod 100 <> 0 or y mod 400 = 0)
@@ -94,6 +101,7 @@ end two
 
 -- Templates ------------------------------------------------------------------
 
+--| The Civil Date `d` written by `template`
 function formatDate d, template
   needCivil(d)
   needText(template)
@@ -114,6 +122,7 @@ function formatDate d, template
   return join(parts)
 end formatDate
 
+--| The Civil Date the text `t` writes by `template`
 function parseDate t, template
   needText(t)
   needText(template)
@@ -256,6 +265,7 @@ end noMatch
 
 -- Durations ------------------------------------------------------------------
 
+--| The exact duration `d` as the map `{days, hours, minutes, seconds}`
 function splitDuration d
   if d is not a quantity then wrongKind("quantity", d)
   if not (d can be s) then
@@ -278,6 +288,7 @@ function splitDuration d
   return {days: days, hours: hours, minutes: minutes, seconds: seconds}
 end splitDuration
 
+--| The number of whole calendar months from the Civil Date `a` to `b`, negative if `b` is earlier
 function monthsBetween a, b
   needCivil(a)
   needCivil(b)

@@ -19,8 +19,8 @@ pumped state=idle fuel=18
 seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=17 alloc=39 state=30 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 value="hello 5" fuel=17 alloc=39
 pumped state=idle fuel=17
-> extend session source="use format from text" identity=cfd86053da2dae1da7e0faa92a6522915fdd9859d3dc6cefb9f45fa216698faa
-> extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=2229917e5797133e66dcc4370e655ef5c852fb6792347eaaf2bece8c4bf9df99
+> extend session source="use format from text" identity=96b1df57069c32e7fc0898aef631d44bd41d3bd807188e8605dda63a91b490cc
+> extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=a83aca9c73b330b4d548ce3bcf296642a680f774f4914108e9bfaa4074298dab
 > request d4 to=session message=entry4
 > pump clock=2026-10-04T09:00:00Z
 seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=1975 alloc=5417 state=30 end=return

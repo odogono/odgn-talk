@@ -2,6 +2,7 @@
 -- does exactly that (ADR 0021). It is normative Spec text: its private
 -- helpers, its Fuel and the order of its calls are fixed here.
 
+--| The map with the entries of `a` and then of `b`, where `b`'s value wins for a key in both
 function merge a, b
   needMap(a)
   needMap(b)
@@ -12,6 +13,7 @@ function merge a, b
   return merged
 end merge
 
+--| `m` without the entries whose keys are in the list `keys`
 function without m, keys
   needMap(m)
   needKeys(keys)
@@ -22,6 +24,7 @@ function without m, keys
   return kept
 end without
 
+--| `m` with only the entries whose keys are in the list `keys`, in `m`'s order
 function pick m, keys
   needMap(m)
   needKeys(keys)
@@ -32,6 +35,7 @@ function pick m, keys
   return picked
 end pick
 
+--| The list of pairs `[key, value]` of `m`, in order
 function entries m
   needMap(m)
   put [] into pairs
@@ -41,6 +45,7 @@ function entries m
   return pairs
 end entries
 
+--| The map with the entries of the list of pairs `pairs`, where a later pair wins for a repeated key
 function fromEntries pairs
   needList(pairs)
   repeat for each pair in pairs
@@ -55,6 +60,7 @@ function fromEntries pairs
   return built
 end fromEntries
 
+--| `m` with each value replaced by what `f` gives for it, keys and order kept
 function mapValues m, f
   needMap(m)
   needFunction(f)

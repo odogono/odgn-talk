@@ -2,17 +2,17 @@
 # Text keys retain spaces/punctuation; inserted placeholders are not reparsed.
 # Bare braces, dollar doubling, widths, fractional seconds and NFC are pinned.
 # Invalid templates retain their error fields and caller source positions.
-> load templates identity=975da0c6f12461c831f17c2297397290613ebec311da81636a4a80f1351a7408
+> load templates identity=5f9cf2cae34d3aa6c0b97158391483a1ebeec2d3d8f3b30d21b6aebb3909131a
 > deliver d1 to=templates message=go
 > deliver d2 to=templates message=invalid
 > pump clock=2026-10-04T09:00:00Z
 seg templates/r1 start delivery=d1 handler=go clause=1 fuel=40010 alloc=90395 state=401 end=return
 run templates/r1 outcome=completed delivery=d1 handler=go fuel=40010 alloc=90395
-raise templates/r2 code="out of domain" at=text:1313 pos=335:3
-raise templates/r2 code="out of domain" at=text:1313 pos=335:3
-raise templates/r2 code="out of domain" at=date:1345 pos=313:3
-raise templates/r2 code="out of domain" at=date:1345 pos=313:3
-raise templates/r2 code="can't convert" at=date:1141 pos=254:3
+raise templates/r2 code="out of domain" at=text:1313 pos=347:3
+raise templates/r2 code="out of domain" at=text:1313 pos=347:3
+raise templates/r2 code="out of domain" at=date:1345 pos=324:3
+raise templates/r2 code="out of domain" at=date:1345 pos=324:3
+raise templates/r2 code="can't convert" at=date:1141 pos=263:3
 seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=6973 alloc=17592 state=3148 end=return
 run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=6973 alloc=17592
 pumped state=idle fuel=46983
