@@ -212,6 +212,7 @@ load-diagnostics/not-a-value
 load-diagnostics/not-constant
 load-diagnostics/not-in-a-guard
 load-diagnostics/not-in-a-join
+load-diagnostics/not-in-a-join-try
 load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
 load-diagnostics/nothing-to-fold

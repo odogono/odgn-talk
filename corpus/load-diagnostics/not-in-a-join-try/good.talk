@@ -1,0 +1,12 @@
+on t
+try
+wait for all
+ask feed to fetch and wait
+send ping to me and wait
+tell feed
+fetch and wait
+end tell
+end wait
+catch e
+end try
+end t

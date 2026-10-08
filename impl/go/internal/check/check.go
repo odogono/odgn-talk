@@ -610,10 +610,12 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 type context struct {
 	loop, finally, join, lambda int
 	finallyLoop                 int
-	recovery                    bool
-	recoveryLoop                int
-	guard                       bool
-	body                        *Body
+	// joinTry is set inside a `try` within a Join's body.
+	joinTry      bool
+	recovery     bool
+	recoveryLoop int
+	guard        bool
+	body         *Body
 }
 
 func (u *Unit) validateBody(b *Body, ctx context) {
@@ -626,6 +628,7 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 		ctx.loop = 0
 		ctx.finally = 0
 		ctx.join = 0
+		ctx.joinTry = false
 		ctx.recovery = false
 	}
 	for _, p := range b.Node.Params {
@@ -769,6 +772,10 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
 		u.add("not in a join", n.Pos())
 	}
+	// A `try` goes around the whole Join, not around a member (chapter 5).
+	if ctx.joinTry && (n.Kind == "ask" || n.Kind == "send") && syntax.HasFlag(n, "and") {
+		u.add("not in a join", n.Pos())
+	}
 	if u.Options.Library && (slices.Contains([]string{"wait-for", "wait-any", "join", "send", "pass", "veto", "target"}, n.Kind) || n.Kind == "literal" && n.Text == "me") {
 		u.add("not in a library", n.Pos())
 	}
@@ -778,6 +785,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			u.add("not in recovery", n.Pos())
 		}
 	case "try":
+		if ctx.join > 0 {
+			ctx.joinTry = true
+		}
 		seen := map[string]bool{}
 		for _, branch := range n.Branches {
 			if branch.Kind == "offer" {
@@ -978,6 +988,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			u.add("empty join", n.Pos())
 		}
 		ctx.join++
+		ctx.joinTry = false
 	case "build":
 		u.bits(n)
 	case "command":
