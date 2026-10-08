@@ -693,6 +693,8 @@ EncodingLine   ::= Value ' => ' [^#xA]+ | '#' [^#xA]* | ''
 
 A Session Transcript is a case directory holding `case.toml` with `kind = "transcript"`, `session.transcript` and a blessed `case.trace`. The runner replays the Transcript through the Session Host of [chapter 12](12-sessions-and-tooling.md#session-transcripts), and both the Transcript's output lines and the Trace must match ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md)).
 
+Session object setup and crossing actions come from the Transcript's [`%` envelopes](session-observation.md#object-crossings-in-session-transcripts), not a second, potentially conflicting setup in `case.toml`. The Trace replay backend uses those same declarations and recorded actions when replaying `case.trace`; a standalone Transcript must also replay without the case directory. Public [Run accounting](09-embedding.md#run-accounting) is checked by direct API-report comparisons as well as Session Fuel/trace output cases; no new canonical Trace record is introduced.
+
 ## Conformance
 
 - **A conforming Core,** for a language version and a Cost Model version, passes every case of those versions: each Trace Case in both replays, each Disassembly Case, each Value Encoding case, and, through its REPL, each Session Transcript. It also passes the Unicode test data of [chapter 1](01-lexical-structure.md#unicode).

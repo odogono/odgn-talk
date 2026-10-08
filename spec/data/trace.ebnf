@@ -67,9 +67,12 @@ EncodingLine   ::= Value ' => ' [^#xA]+ | '#' [^#xA]* | ''
 
 Transcript     ::= ( TranscriptLine #xA )*
 TranscriptLine ::= '> ' [^#xA]+ | '| ' [^#xA]* | '|' | '< ' [^#xA]* | '<'
-                 | '@ ' Instant | '~ ' Id ' ' Answer | '#' [^#xA]*
+                 | '@ ' Instant | '~ ' Id ' ' Answer | '%' ' ' CrossingJSON | '#' [^#xA]*
                  | "'" [^#xA]* | OutputLine
+CrossingJSON   ::= '{' [^#xA]* '}'
+                   /* one compact JSON object; record fields and canonical
+                      encoding are in session-observation.md */
 Answer         ::= Value | 'fail ' MapValue
-OutputLine     ::= [^>|<@~#'#xA] [^#xA]*
+OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
                    /* an output line that is empty or starts with one of
                       these characters is written after a `'` */
