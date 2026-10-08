@@ -71,3 +71,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0067: Inspection is replayable ordinary execution](0067-inspection-is-replayable-ordinary-execution.md)
 - [0068: A Run in its first Segment can be rewound to its Delivery](0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)
 - [0069: Segment-bound Grants share a participant through a Segment Coordinator](0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)
+- [0070: `sqlite` is an optional Standard Capability with Segment-bound writes](0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)
