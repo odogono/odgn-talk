@@ -60,7 +60,10 @@ test('REPL input and recording agree with the shared fenced-text Session Transcr
   try {
     const path = join(directory, 'session.transcript');
     expect(run(input, ['--transcript', path])).toBe(expected);
-    expect(parseTranscript(readFileSync(path, 'utf8'))).toEqual(items);
+    expect(parseTranscript(readFileSync(path, 'utf8'))).toEqual([
+      { k: 'envelope', json: '{"objects":{},"type":"setup"}' },
+      ...items,
+    ]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

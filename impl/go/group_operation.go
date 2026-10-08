@@ -285,6 +285,9 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 	return result.inner, nil, false
 }
 func invokeOperation(op Operation, c *Call, args []Value) (v Value, err error) {
+	if c.group.sessionExpose != nil {
+		c.group.sessionExpose(List(args...))
+	}
 	defer func() {
 		if caught := recover(); caught != nil {
 			err = fmt.Errorf("Host panic: %v", caught)

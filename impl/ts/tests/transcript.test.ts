@@ -153,6 +153,7 @@ describe('Recording', () => {
     expect(text).toBe(
       [
         '> :mock db.get immediate',
+        '% {"objects":{},"type":"setup"}',
         '> :stub db.get 1',
         '> :library add lib',
         '| constant k = 7',

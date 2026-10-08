@@ -231,3 +231,40 @@ describe('Object Guard keys', () => {
     ).not.toThrow();
   });
 });
+
+test('property Host errors return Host-only detail without a fabricated Trace call', () => {
+  const trace: string[] = [];
+  const group = newGroup({
+    name: 'property-detail',
+    trace: l => trace.push(l),
+  });
+  const kind = defineObjectKind({
+    name: 'FailureDetail',
+    props: {
+      x: {
+        get: () => {
+          throw new Error('Host secret');
+        },
+      },
+    },
+  });
+  const object = group.object(kind, 'o', {});
+  const script = group.load({
+    name: 's',
+    objects: { object },
+    source:
+      'on go\ntry\nreturn the x of object\ncatch e\nreturn e\nend try\nend go',
+  });
+  script.deliver({ name: 'go' });
+  const reports = group.pump(now).reports;
+  expect(reports).toContainEqual(
+    expect.objectContaining({
+      kind: 'call failed',
+      call: '',
+      operation: { capability: 'FailureDetail', operation: 'x' },
+      detail: expect.stringContaining('Host secret'),
+    }),
+  );
+  expect(trace.join('\n')).not.toContain('Host secret');
+  expect(trace.some(l => l.startsWith('call-failed'))).toBe(false);
+});

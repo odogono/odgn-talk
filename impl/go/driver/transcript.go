@@ -72,6 +72,15 @@ func ParseTranscript(source string) ([]session.Item, error) {
 				return fail("a call and answer after ~")
 			}
 			items = append(items, session.Item{Kind: "answer", Call: call, Text: answer})
+		case '%':
+			source, ok := rest("%")
+			if !ok || source == "" {
+				return fail("an envelope after %")
+			}
+			if _, err := session.ParseEnvelope(source); err != nil {
+				return fail(err.Error())
+			}
+			items = append(items, session.Item{Kind: "envelope", Text: source})
 		case '#':
 			items = append(items, session.Item{Kind: "comment", Text: line})
 		case '\'':
@@ -107,10 +116,12 @@ func WriteTranscript(items []session.Item) string {
 			b.WriteString("@ " + formatInstant(i.At) + "\n")
 		case "answer":
 			b.WriteString("~ " + i.Call + " " + i.Text + "\n")
+		case "envelope":
+			b.WriteString("% " + i.Text + "\n")
 		case "comment":
 			b.WriteString(i.Text + "\n")
 		case "output":
-			if i.Text == "" || strings.ContainsRune(">|<@~#'", rune(i.Text[0])) {
+			if i.Text == "" || strings.ContainsRune(">|<@~%#'", rune(i.Text[0])) {
 				b.WriteByte('\'')
 			}
 			b.WriteString(i.Text + "\n")
@@ -127,11 +138,17 @@ func formatInstant(t time.Time) string {
 // input before it; an unused reading causes an independent deadline Pump.
 // The returned Items include the actual outputs and recorder behavior.
 func ReplayTranscript(recorded []session.Item, trace func(string)) (host *session.Host, items []session.Item, err error) {
-	var offered *time.Time
+	consumed := map[int]bool{}
+	type reading struct {
+		index int
+		at    time.Time
+	}
+	var readings []reading
+	clockStart := 0
 	// Invalid replay input is a driver error, not a language diagnostic.
 	defer func() {
 		if p := recover(); p != nil {
-			if e, ok := p.(replayError); ok {
+			if e, ok := p.(error); ok {
 				err = e
 			} else {
 				panic(p)
@@ -139,54 +156,65 @@ func ReplayTranscript(recorded []session.Item, trace func(string)) (host *sessio
 		}
 	}()
 	host = session.New(session.Environment{
+		ObjectTranscript: recorded,
 		Now: func() time.Time {
-			if offered == nil {
+			if len(readings) == 0 {
 				panic(replayError("Transcript has no @ reading for a Pump"))
 			}
-			at := *offered
-			offered = nil
-			return at
+			next := readings[0]
+			readings = readings[1:]
+			for n := clockStart; n < next.index; n++ {
+				if recorded[n].Kind == "envelope" {
+					host.ReplayObjectItem(n)
+				}
+			}
+			clockStart = next.index + 1
+			consumed[next.index] = true
+			return next.at
 		},
 		Record: func(i session.Item) { items = append(items, i) }, Trace: trace,
 		WriteFile:      func(string, string, string) error { return nil },
 		WriteStoreFile: func(string, string) error { return nil },
 	})
-	for n := 0; n < len(recorded); n++ {
-		item := recorded[n]
-		reading := func() {
-			offered = nil
-			if n+1 < len(recorded) && recorded[n+1].Kind == "clock" {
-				n++
-				at := recorded[n].At
-				offered = &at
+
+	prepare := func(n int) {
+		clockStart = n + 1
+		readings = nil
+		for i := n + 1; i < len(recorded); i++ {
+			item := recorded[i]
+			if item.Kind == "input" || item.Kind == "read" {
+				break
 			}
+			if item.Kind == "clock" {
+				readings = append(readings, reading{i, item.At})
+			}
+		}
+	}
+	for n, item := range recorded {
+		if consumed[n] {
+			continue
 		}
 		switch item.Kind {
 		case "input":
-			reading()
+			prepare(n)
 			host.Input(item.Text)
-			if offered != nil {
-				host.Tick()
-				offered = nil
-			}
 		case "read":
-			reading()
+			prepare(n)
 			host.Read(item.Text)
-			if offered != nil {
-				host.Tick()
-				offered = nil
-			}
 		case "clock":
-			at := item.At
-			offered = &at
+			clockStart = n
+			readings = []reading{{n, item.At}}
 			host.Tick()
-			offered = nil
+		case "envelope":
+			host.ReplayObjectItem(n)
 		case "comment":
 			items = append(items, item)
 		case "answer":
 			return host, items, fmt.Errorf("built-in answers are not offered by this Go Session Host")
 		}
 	}
+	host.FinishObjectReplay()
+
 	return
 }
 

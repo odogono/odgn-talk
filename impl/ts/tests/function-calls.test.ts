@@ -68,13 +68,17 @@ describe('Function Value calls', () => {
     const { group, fn, lines } = setup(named);
     const requested = group.call(fn, []);
     expect(lines.some(line => line.startsWith('> call-value '))).toBe(false);
-    const reports = operationalReports(group.pump(clock).reports);
+    const pumped = group.pump(clock);
+    const reports = operationalReports(pumped.reports);
+    expect(pumped.reports).toContainEqual(
+      expect.objectContaining({ kind: 'run started', fn, args: [] }),
+    );
+    expect(reports.find(r => r.kind === 'run end')).not.toHaveProperty('fn');
     expect((await requested.result).toString()).toBe('5');
     expect(reports).toContainEqual(
       expect.objectContaining({
         kind: 'run end',
         script: 'home',
-        fn,
         outcome: 'completed',
         fuel: 11,
       }),
@@ -200,7 +204,7 @@ describe('Function call lifecycle', () => {
     const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'limit fault');
     expect(reports).toContainEqual(
-      expect.objectContaining({ outcome: 'limit fault', fn, limit: 'fuel' }),
+      expect.objectContaining({ outcome: 'limit fault', limit: 'fuel' }),
     );
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('0');
   });
@@ -261,7 +265,7 @@ describe('Function call lifecycle', () => {
     const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'errored');
     expect(reports).toContainEqual(
-      expect.objectContaining({ script: 'home', outcome: 'limit fault', fn }),
+      expect.objectContaining({ script: 'home', outcome: 'limit fault' }),
     );
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('0');
   });
@@ -312,7 +316,7 @@ describe('Function call lifecycle', () => {
     const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
-      expect.objectContaining({ outcome: 'cancelled', fn }),
+      expect.objectContaining({ outcome: 'cancelled' }),
     );
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('true');
     expect(lines.some(line => line.startsWith('> cancel-delivery '))).toBe(
@@ -328,7 +332,7 @@ describe('Function call lifecycle', () => {
     const reports = operationalReports(group.pump(clock).reports);
     await expectSendFailed(requested.result, 'cancelled');
     expect(reports).toContainEqual(
-      expect.objectContaining({ outcome: 'cancelled', fn, fuel: 0 }),
+      expect.objectContaining({ outcome: 'cancelled', fuel: 0 }),
     );
     expect(lines).toContain(
       `run outcome=cancelled delivery=${requested.id} fn=${fn} fuel=0 alloc=0`,

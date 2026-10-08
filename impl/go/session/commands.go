@@ -122,20 +122,24 @@ func (h *Host) command(source string) []string {
 		return nil
 	}
 	switch name {
-	case "stub", "answer", "fail", "clock", "limits", "cancel", "save", "restore", "library", "export", "store", "describe", "apropos":
+	case "stub", "answer", "fail", "clock", "limits", "cancel", "save", "restore", "library", "export", "describe", "apropos":
 		h.start()
 	case "runs", "mailbox", "vars":
 		if len(words) > 0 {
 			return refusal("bad arguments")
 		}
 		h.start()
+	case "store":
+		return h.store(rest)
 	case "trace", "untrace":
 		return h.trace(name, rest)
+	case "inspect":
+		return h.inspectExpression(rest)
 	case "fuel":
 		return h.fuel(rest)
 	case "help":
 		h.recording = nil
-		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :trace :untrace :fuel :describe :apropos :help :quit"}
+		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :trace :untrace :fuel :describe :apropos :inspect :help :quit"}
 	case "quit":
 		h.recording = nil
 		return nil
@@ -399,7 +403,7 @@ func (h *Host) override() talk.LimitOverride {
 }
 func (h *Host) inspected(what string) []string {
 	var out []string
-	s := h.group.Inspect().Scripts[0]
+	s := h.Inspect().Scripts[0]
 	switch what {
 	case "vars":
 		for _, p := range s.Vars {

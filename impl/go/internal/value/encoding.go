@@ -167,19 +167,23 @@ func appendPath(path []Value, v Value) []Value {
 }
 
 type jsonReader struct {
-	text    string
-	at      int
-	tagged  bool
-	members bool
-	depth   int
-	resolve func(string, string) (Value, error)
+	text     string
+	at       int
+	tagged   bool
+	members  bool
+	depth    int
+	resolve  func(string, string) (Value, error)
+	function func(string) (Value, error)
 }
 
 func Decode(b []byte, tagged bool, resolve func(string, string) (Value, error)) (Value, error) {
+	return DecodeWithFunctions(b, tagged, resolve, nil)
+}
+func DecodeWithFunctions(b []byte, tagged bool, resolve func(string, string) (Value, error), function func(string) (Value, error)) (Value, error) {
 	if !utf8.Valid(b) {
 		return Value{}, fmt.Errorf("invalid UTF-8 JSON")
 	}
-	r := jsonReader{text: string(b), tagged: tagged, resolve: resolve}
+	r := jsonReader{text: string(b), tagged: tagged, resolve: resolve, function: function}
 	v, e := r.value()
 	if e != nil {
 		return Value{}, e
@@ -410,6 +414,11 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 	v := p.Val
 	bad := func() (Value, error) { return Value{}, fmt.Errorf("invalid %s tag", p.Key) }
 	switch p.Key {
+	case "$sessionFunction":
+		if v.Kind != Text || r.function == nil {
+			return bad()
+		}
+		return r.function(v.Text)
 	case "$dec":
 		if v.Kind != Text {
 			return bad()

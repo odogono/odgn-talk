@@ -131,7 +131,7 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 	if err := os.WriteFile(filepath.Join(dir, "session.talk"), nil, 0600); err != nil {
 		return nil, err
 	}
-	return Setup{"operations": operations, "standard": standard, "libraries": libraries, "scripts": []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}}, nil
+	return Setup{"sessionObjects": h.ObjectTranscript(), "operations": operations, "standard": standard, "libraries": libraries, "scripts": []any{Setup{"name": "session", "source": "session.talk", "grants": grants}}}, nil
 }
 
 // Session Store results belong to the Host, outside the Trace's Host Inputs.

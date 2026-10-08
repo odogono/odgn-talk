@@ -1,3 +1,5 @@
+import { SessionObjects } from './session/objects';
+import type { TranscriptItem } from './session/transcript';
 import { MOCK_ARGUMENTS, type SessionHost } from './session';
 // Browser-safe Trace replay shared by corpus tooling and the debugger.
 // Only the supplied source reader performs I/O. Replay events add no Trace lines.
@@ -214,6 +216,7 @@ export type Setup = {
     source: string;
     text?: string;
   }[];
+  sessionObjects?: readonly TranscriptItem[];
   standard?: {
     capability: string;
     costs: Record<string, { alloc?: number; fuel?: number }>;
@@ -776,6 +779,11 @@ const driveReplay = function* (
   const functions = new Map<string, Value>();
   const receive = (value: Value) => rememberFunctions(value, functions);
   let group = newGroup({ name: 'case', trace: writeTrace });
+  const sessionObjects = setup.sessionObjects?.length
+    ? new SessionObjects(() => {}, setup.sessionObjects)
+    : null;
+  sessionObjects?.attach(group);
+  const sessionBindings = sessionObjects?.preload();
   configureDebug?.(group);
   const landedLines = new Set<number>();
   // A Stop or CancelRun after a crossing is made from that Host function,
@@ -852,6 +860,10 @@ const driveReplay = function* (
     }
     return found;
   };
+  if (sessionObjects) {
+    atCrossings.clear();
+    crossingLines.clear();
+  }
   const propertyRecords = new Map<string, Parsed[]>();
   const propertyFailure = (record: Parsed): void => {
     if (!record.fields.has('error')) {
@@ -943,6 +955,9 @@ const driveReplay = function* (
         ]),
       ),
     );
+  }
+  for (const o of sessionObjects?.traceObjects() ?? []) {
+    made.set(`${o.kind.name} ${o.id}`, o);
   }
   const messageOf = (r: Parsed) => ({
     name: r.fields.get('message')!,
@@ -1084,6 +1099,12 @@ const driveReplay = function* (
       continue;
     }
     const r = parseRecord(line);
+    if (sessionObjects?.traceInput(r.name, r.ids)) {
+      continue;
+    }
+    for (const o of sessionObjects?.traceObjects() ?? []) {
+      made.set(`${o.kind.name} ${o.id}`, o);
+    }
     const hostInputIndex = lines
       .slice(0, index)
       .filter(l => l.startsWith('> ')).length;
@@ -1115,12 +1136,14 @@ const driveReplay = function* (
             name: script.name,
             source: script.text ?? readSource(script.source),
             limits: script.limits,
-            objects: Object.fromEntries(
-              Object.entries(script.objects ?? {}).map(([name, o]) => [
-                name,
-                objectOf(o),
-              ]),
-            ),
+            objects:
+              sessionBindings ??
+              Object.fromEntries(
+                Object.entries(script.objects ?? {}).map(([name, o]) => [
+                  name,
+                  objectOf(o),
+                ]),
+              ),
             ...(script.owner ? { owner: objectOf(script.owner) } : {}),
           });
           break;
@@ -1265,6 +1288,7 @@ const driveReplay = function* (
           group.script(r.ids[0]!)!.revoke(r.fields.get('grant')!);
           break;
         case 'save': {
+          sessionObjects?.saved(r.ids[0]!);
           const bytes = group.save();
           saved.set(parseRecord(trace.at(-1)!).ids[0]!, bytes);
           break;
@@ -1292,6 +1316,9 @@ const driveReplay = function* (
                 ? undefined
                 : bound.get(script)?.[name],
             resolve: (kind, id) => {
+              if (sessionObjects) {
+                return sessionObjects.resolve(kind, id);
+              }
               const handle = made.get(`${kind} ${id}`);
               return !handle || disposed.includes(handle.value.toString())
                 ? undefined
@@ -1308,6 +1335,9 @@ const driveReplay = function* (
             visibleSaves = Number(from.slice(1));
           }
           group = restored.group;
+          sessionObjects?.restored(r.fields.get('from'));
+          sessionObjects?.attach(group);
+          sessionObjects?.reports(restored.result.reports);
           configureDebug?.(group);
           registered = new Map(
             [...registered].filter(([name]) => !withheld.has(name)),
@@ -1444,6 +1474,7 @@ const driveReplay = function* (
           if (malformed) {
             throw malformed;
           }
+          sessionObjects?.reports(pumped.reports);
           yield { state: 'pumped', hostInputIndex, group, result: pumped };
           // Inputs made synchronously inside a Host callback cannot suspend that
           // callback. Expose their completed, safe Pump boundary for seeking.
@@ -1475,6 +1506,7 @@ const driveReplay = function* (
           }
           if (
             restoreBetweenPumps &&
+            !sessionObjects?.crossesHandles() &&
             lines.slice(index + 1).some(line => line.startsWith('> pump ')) &&
             // An explicit save/restore case already exercises this boundary;
             // hidden adoption must not become a visible queued settlement.
@@ -1555,6 +1587,7 @@ const driveReplay = function* (
               )
             ) {
               group = restored.group;
+              sessionObjects?.attach(group);
               configureDebug?.(group);
               for (const [key, handle] of made) {
                 made.set(key, group.objectById(handle.kind.name, handle.id)!);
@@ -1570,13 +1603,16 @@ const driveReplay = function* (
         case 'counters':
           group.script(r.ids[0]!)!.counters();
           break;
-        case 'vars':
-          for (const script of group.inspect().scripts) {
+        case 'vars': {
+          const view = group.inspect();
+          sessionObjects?.snapshot(view.scripts);
+          for (const script of view.scripts) {
             for (const [, value] of script.vars) {
               receive(value);
             }
           }
           break;
+        }
         case 'answer':
         case 'fail': {
           const call = calls.get(r.ids[0] ?? '');
@@ -1665,6 +1701,7 @@ const driveReplay = function* (
       throw malformed;
     }
   }
+  sessionObjects?.finish();
   return trace;
 };
 
@@ -1753,6 +1790,9 @@ export type ReplayEvent = { group: Group; hostInputIndex: number } & (
 export const sessionSetup = (host: SessionHost): Setup => {
   const { granted, mocks } = host.grants;
   return {
+    ...(host.objectTranscript.length
+      ? { sessionObjects: host.objectTranscript }
+      : {}),
     libraries: host.userLibraries.map(l => ({
       name: l.name,
       version: l.version,

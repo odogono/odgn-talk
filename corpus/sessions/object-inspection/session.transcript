@@ -1,0 +1,136 @@
+# Unblessed: proposed first expectations for #439; awaiting human review.
+% {"name":"InspectChild","parentKinds":[],"props":[{"getCost":{"alloc":0,"fuel":0},"name":"value","readOnly":true,"shape":"any"}],"type":"kind"}
+% {"name":"InspectRoot","parentKinds":[],"props":[{"getCost":{"alloc":0,"fuel":2},"name":"callback","readOnly":false,"setCost":{"alloc":0,"fuel":3},"shape":"value"},{"getCost":{"alloc":0,"fuel":0},"name":"child","readOnly":true,"shape":"any"},{"getCost":{"alloc":0,"fuel":0},"name":"error","readOnly":true,"shape":"any"},{"getCost":{"alloc":0,"fuel":0},"name":"shape","readOnly":true,"shape":"number"},{"getCost":{"alloc":0,"fuel":0},"name":"z","readOnly":true,"shape":"any"}],"type":"kind"}
+% {"object":{"id":"root","kind":"InspectRoot"},"type":"object"}
+% {"objects":{"root":{"id":"root","kind":"InspectRoot"}},"type":"setup"}
+> on notice
+| say "%notice"
+| end notice
+> --| Original.
+| function plus x = 1
+| return x + 1
+| end plus
+> :inspect plus
+@ 1970-01-01T00:00:00Z
+% {"exposure":2,"handle":"f1","path":["result"],"type":"function"}
+value {kind: "function", value: <function session:plus>}
+function {name: "plus", arity: 0..1, home: "session"}
+doc "Original."
+> set the callback of root to {z: [plus], a: 7}
+@ 1970-01-01T00:00:00Z
+% {"exposure":5,"handle":"f2","path":[0,"z",0],"type":"function"}
+% {"crossing":1,"object":{"id":"root","kind":"InspectRoot"},"operation":"set","property":"callback","type":"property-begin","value":{"z":[{"$sessionFunction":"f2"}],"a":7}}
+% {"crossing":1,"reply":{"ok":true},"type":"property-end"}
+> :inspect root
+@ 1970-01-01T00:00:00Z
+@ 1970-01-01T00:00:00Z
+% {"crossing":2,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"callback","type":"property-begin"}
+% {"crossing":2,"reply":{"value":{"z":[{"$sessionFunction":"f2"}],"a":7}},"type":"property-end"}
+% {"crossing":3,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"child","type":"property-begin"}
+% {"object":{"id":"dynamic","kind":"InspectChild"},"type":"object"}
+% {"crossing":3,"reply":{"value":{"$object":["InspectChild","dynamic"]}},"type":"property-end"}
+% {"crossing":4,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"error","type":"property-begin"}
+% {"reply":{"error":"parent cycle"},"request":{"kind":"set-parent","object":{"id":"root","kind":"InspectRoot"},"parent":{"id":"root","kind":"InspectRoot"}},"type":"input"}
+% {"reply":{"ok":{"delivery":"d5"}},"request":{"kind":"deliver","message":{"args":[],"name":"notice"},"to":{"script":"session"}},"type":"input"}
+% {"crossing":4,"reply":{"fail":{"code":"getter refused","data":{"detail":"safe"},"message":"private detail"}},"type":"property-end"}
+% {"crossing":5,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"shape","type":"property-begin"}
+% {"crossing":5,"reply":{"value":"wrong"},"type":"property-end"}
+% {"crossing":6,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"z","type":"property-begin"}
+% {"crossing":6,"reply":{"value":{"$map":[["z",2],["a",1],["$sessionFunction","ordinary"]]}},"type":"property-end"}
+value {kind: "object", value: <object InspectRoot "root">}
+object {kind: "InspectRoot", id: "root", disposed: false}
+property {name: "callback", shape: "value", readOnly: false, getCost: {fuel: 2, alloc: 0}, setCost: {fuel: 3, alloc: 0}}
+property {name: "child", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "error", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "shape", shape: "number", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "z", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+read {name: "callback", value: {z: [<function session:plus>], a: 7}}
+read {name: "child", value: <object InspectChild "dynamic">}
+read {name: "error", error: {code: "getter refused", detail: "safe", capability: "InspectRoot", operation: "error"}}
+read {name: "shape", error: {code: "host error", capability: "InspectRoot", operation: "shape"}}
+read {name: "z", value: {z: 2, a: 1, "$sessionFunction": "ordinary"}}
+% {"reply":{"ok":{"delivery":"d6"}},"request":{"args":[4],"fn":{"$sessionFunction":"f2"},"kind":"call"},"type":"input"}
+@ 1970-01-01T00:00:00Z
+% {"exposure":28,"handle":"f3","path":["fn"],"type":"function"}
+[session/r5] %notice
+% {"reply":{"ok":{}},"request":{"kind":"set-parent","object":{"id":"dynamic","kind":"InspectChild"},"parent":{"id":"root","kind":"InspectRoot"}},"type":"input"}
+% {"reply":{"ok":{}},"request":{"kind":"set-parent","object":{"id":"dynamic","kind":"InspectChild"},"parent":null},"type":"input"}
+@ 1970-01-01T00:00:00Z
+> :vars
+> :save s
+saved s
+> :inspect the child of root
+@ 1970-01-01T00:00:00Z
+% {"crossing":7,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"child","type":"property-begin"}
+% {"crossing":7,"reply":{"value":{"$object":["InspectChild","dynamic"]}},"type":"property-end"}
+@ 1970-01-01T00:00:00Z
+% {"crossing":8,"object":{"id":"dynamic","kind":"InspectChild"},"operation":"get","property":"value","type":"property-begin"}
+% {"crossing":8,"reply":{"value":9},"type":"property-end"}
+value {kind: "object", value: <object InspectChild "dynamic">}
+object {kind: "InspectChild", id: "dynamic", disposed: false}
+property {name: "value", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+read {name: "value", value: 9}
+% {"reply":{"ok":{}},"request":{"kind":"dispose","object":{"id":"dynamic","kind":"InspectChild"}},"type":"input"}
+@ 1970-01-01T00:00:00Z
+> :restore s
+% {"objects":[{"object":{"id":"dynamic","kind":"InspectChild"},"resolved":false},{"object":{"id":"root","kind":"InspectRoot"},"resolved":true}],"type":"resolve"}
+restored s
+> :inspect root
+@ 1970-01-01T00:00:00Z
+@ 1970-01-01T00:00:00Z
+% {"crossing":9,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"callback","type":"property-begin"}
+% {"crossing":9,"reply":{"hostError":true},"type":"property-end"}
+% {"crossing":10,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"child","type":"property-begin"}
+% {"crossing":10,"reply":{"value":{"$object":["InspectChild","dynamic"]}},"type":"property-end"}
+% {"crossing":11,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"error","type":"property-begin"}
+% {"reply":{"error":"parent cycle"},"request":{"kind":"set-parent","object":{"id":"root","kind":"InspectRoot"},"parent":{"id":"root","kind":"InspectRoot"}},"type":"input"}
+% {"reply":{"ok":{"delivery":"d9"}},"request":{"kind":"deliver","message":{"args":[],"name":"notice"},"to":{"script":"session"}},"type":"input"}
+% {"crossing":11,"reply":{"fail":{"code":"getter refused","data":{"detail":"safe"},"message":"private detail"}},"type":"property-end"}
+% {"crossing":12,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"shape","type":"property-begin"}
+% {"crossing":12,"reply":{"value":"wrong"},"type":"property-end"}
+% {"crossing":13,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"z","type":"property-begin"}
+% {"crossing":13,"reply":{"value":{"$map":[["z",2],["a",1],["$sessionFunction","ordinary"]]}},"type":"property-end"}
+value {kind: "object", value: <object InspectRoot "root">}
+object {kind: "InspectRoot", id: "root", disposed: false}
+property {name: "callback", shape: "value", readOnly: false, getCost: {fuel: 2, alloc: 0}, setCost: {fuel: 3, alloc: 0}}
+property {name: "child", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "error", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "shape", shape: "number", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+property {name: "z", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+read {name: "callback", error: {code: "host error", capability: "InspectRoot", operation: "callback"}}
+read {name: "child", value: <object InspectChild "dynamic">}
+read {name: "error", error: {code: "getter refused", detail: "safe", capability: "InspectRoot", operation: "error"}}
+read {name: "shape", error: {code: "host error", capability: "InspectRoot", operation: "shape"}}
+read {name: "z", value: {z: 2, a: 1, "$sessionFunction": "ordinary"}}
+> :inspect the child of root
+@ 1970-01-01T00:00:00Z
+% {"crossing":14,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"child","type":"property-begin"}
+% {"crossing":14,"reply":{"value":{"$object":["InspectChild","dynamic"]}},"type":"property-end"}
+@ 1970-01-01T00:00:00Z
+[session/r9] %notice
+value {kind: "object", value: <object InspectChild "dynamic">}
+object {kind: "InspectChild", id: "dynamic", disposed: true}
+property {name: "value", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}
+read {name: "value", error: {code: "object gone", object: <object InspectChild "dynamic">}}
+% {"reply":{"ok":{}},"request":{"kind":"dispose","object":{"id":"dynamic","kind":"InspectChild"}},"type":"input"}
+@ 1970-01-01T00:00:00Z
+> :inspect {z: 1, a: 2}
+@ 1970-01-01T00:00:00Z
+value {kind: "map", value: {z: 1, a: 2}}
+size 2
+field "a" = 2
+field "z" = 1
+> :inspect given x => x
+! bad arguments
+> :inspect "é"
+@ 1970-01-01T00:00:00Z
+value {kind: "text", value: "é"}
+size 1
+> :inspect 1
+| 2
+! bad arguments
+> :vars
+> say "%output"
+@ 1970-01-01T00:00:00Z
+'%output
+> :vars

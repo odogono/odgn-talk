@@ -113,7 +113,7 @@ func TestSessionStoreTranscriptParity(t *testing.T) {
 	input(t, h, "on best\n  ask s to get \"best\"\n  say it\nend best")
 	input(t, h, "best", "9")
 	// Same Transcript asserted by the TS Session Host tests.
-	expected := "> :grant s store\n> :store load\n| {\n|   \"best\": 9\n| }\nloaded 1 keys\n> on best\n|   ask s to get \"best\"\n|   say it\n| end best\n> best\n@ 2026-10-07T10:00:00Z\n9\n"
+	expected := "> :grant s store\n> :store load\n| {\n|   \"best\": 9\n| }\nloaded 1 keys\n% {\"objects\":{},\"type\":\"setup\"}\n> on best\n|   ask s to get \"best\"\n|   say it\n| end best\n> best\n@ 2026-10-07T10:00:00Z\n9\n"
 	recorded := driver.WriteTranscript(*items)
 	if recorded != expected {
 		t.Fatalf("got:\n%s\nwant:\n%s", recorded, expected)
