@@ -31,6 +31,17 @@ bun run corpus:bless text-model/chunk-write-padding # bless when TS and Go agree
 bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
 ```
 
+### Adding a case
+
+A new case passes CI only when all of these hold:
+
+- **Unblessed header:** each expectation file (`case.trace`, and `session.transcript` for a Session case) starts with `# Unblessed: <what> (#issue); first blessing awaits human review.`; a Disassembly case carries it in `case.toml`. The reviewer removes it at first-blessing approval.
+- **Ends with `> vars`:** a hand-written `case.trace` ends with `> vars` and a `vars` record per Script ([running a case](../spec/11-the-trace-and-conformance.md#running-a-case)); `corpus:check` rejects it otherwise.
+- **Passes on Go:** `--check-passing` fails on every case Go cannot run, listed or not, so a case written against the TS Core alone fails the Go job. Add each case to [`corpus-passing.txt`](../impl/go/corpus-passing.txt) when the gate reports `NEW PASS`; Session Transcripts must be listed.
+- **Blessed by agreement:** write expectations with `bun run corpus:bless <case> …`, not the TS runner's `--bless`.
+
+Before pushing, run `bun run corpus:check` and `go -C impl/go run ./cmd/corpus --check-passing`.
+
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ## Case navigation
