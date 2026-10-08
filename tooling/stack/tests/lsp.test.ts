@@ -16,7 +16,9 @@ type Results = {
   'textDocument/definition': Location;
   'textDocument/formatting': TextEdit[];
   'textDocument/hover': { contents: { value: string } };
+  'textDocument/implementation': Location[];
   'textDocument/inlayHint': { position: Position }[];
+  'textDocument/prepareCallHierarchy': { name: string }[];
   'textDocument/references': Location[];
   'textDocument/rename': { changes: Record<string, TextEdit[]> };
 };
@@ -538,4 +540,115 @@ test('LSP publishes recovery diagnostics and beginner advice without lexical off
     5,
   );
   expect(diagnostics.some(d => d.code === 'unknown name')).toBe(false);
+});
+
+const lines = (locations: Location[]) =>
+  locations.map(
+    l => `${l.uri === uri ? 'main' : 'other'}:${l.range.start.line}`,
+  );
+
+describe('senders and implementors of a message', () => {
+  const other = 'file:///workspace/other.talk';
+  const source = [
+    'on review x', // 0
+    '  send review with x to me', // 1
+    '  send notify to it', // 2
+    '  send (x) to it', // 3
+    '  greet x at 2', // 4
+    'end review', // 5
+    'on greet name at t', // 6
+    '  pass greet at', // 7
+    'end greet', // 8
+    'on any message m', // 9
+    '  pass any message', // 10
+    'end', // 11
+    '',
+  ].join('\n');
+  const otherSource = [
+    'on notify', // 0
+    '  send review with 1 to it', // 1
+    '  wait for review', // 2
+    'end notify', // 3
+    'on review y', // 4
+    'end review', // 5
+    '',
+  ].join('\n');
+  const workspace = () => {
+    const { server, request, sent } = setup(source);
+    server.configure({ sources: [{ uri: other, text: otherSource }] });
+    const call = (method: string, params: object) => {
+      server.handle({ jsonrpc: '2.0', id: 3, method, params });
+      return sent.at(-1)!.result as {
+        from?: { detail: string; name: string; uri: string };
+        fromRanges: unknown[];
+        to?: { detail: string; name: string };
+      }[];
+    };
+    return { request, call };
+  };
+
+  test('references on a message name are its senders across Scripts, whatever the receiver', () => {
+    const { request } = workspace();
+    expect(
+      lines(
+        request('textDocument/references', {
+          ...at(2, 8),
+          context: { includeDeclaration: false },
+        }),
+      ),
+    ).toEqual(['main:2']);
+    expect(
+      lines(
+        request('textDocument/references', {
+          ...at(1, 8),
+          context: { includeDeclaration: false },
+        }),
+      ),
+    ).toEqual(['main:1', 'other:1']);
+    expect(
+      lines(
+        request('textDocument/references', {
+          ...at(0, 4),
+          context: { includeDeclaration: true },
+        }),
+      ),
+    ).toEqual(['main:0', 'main:1', 'other:1', 'other:2', 'other:4']);
+    expect(
+      lines(
+        request('textDocument/references', {
+          ...at(6, 4),
+          context: { includeDeclaration: false },
+        }),
+      ),
+    ).toEqual(['main:4', 'main:7']);
+  });
+  test('implementation lists every Handler Clause and wait for event', () => {
+    const { request } = workspace();
+    const implementation = (position: ReturnType<typeof at>) =>
+      lines(request('textDocument/implementation', position));
+    expect(implementation(at(1, 8))).toEqual(['main:0', 'other:2', 'other:4']);
+    expect(implementation(at(2, 8))).toEqual(['other:0']);
+    expect(implementation(at(4, 3))).toEqual(['main:6']);
+  });
+  test('the call hierarchy follows a message from its senders, marking unknown names', () => {
+    const { request, call } = workspace();
+    const items = request('textDocument/prepareCallHierarchy', at(1, 8));
+    expect(items.map(i => i.name)).toEqual(['review x', 'review y']);
+    const incoming = call('callHierarchy/incomingCalls', { item: items[0] });
+    expect(
+      incoming.map(c => `${c.from!.name} (${c.from!.detail})`).sort(),
+    ).toEqual([
+      'any message m (unknown message name)',
+      'notify (other.talk)',
+      'review x (main.talk)',
+      'review x (unknown message name)',
+    ]);
+    const outgoing = call('callHierarchy/outgoingCalls', { item: items[0] });
+    expect(outgoing.map(c => `${c.to!.name} (${c.to!.detail})`)).toEqual([
+      'review x (main.talk)',
+      'notify (other.talk)',
+      '(…) (unknown message name)',
+      'greet name at t (main.talk)',
+    ]);
+  });
 });

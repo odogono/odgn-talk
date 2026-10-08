@@ -134,8 +134,9 @@ browser worker can post the messages directly. `server.exitCode` becomes 0 on
 `shutdown` followed by `exit`, or 1 on `exit` without shutdown.
 
 The server supports LSP 3.17 initialization, incremental document changes,
-versioned push diagnostics, completion, hover, definition, references, rename,
-inlay hints, formatting and Lint quick fixes. Positions are UTF-16, including
+versioned push diagnostics, completion, hover, definition, references,
+implementation, call hierarchy, rename, inlay hints, formatting and Lint quick
+fixes. Positions are UTF-16, including
 CRLF and supplementary Unicode characters; the Core's scalar columns stay
 internal. Suspension marks use `textDocument/inlayHint` with a `⏸` label on
 Suspension Points and on Handlers or Lambdas that may suspend, including Join
@@ -152,12 +153,28 @@ the formatter, and `prefer-explicit-end` has an insertion quick fix.
 
 Argument Labels participate through their full Selector: `move knight to "e4"`
 navigates to `on move piece to square`, separately from an unlabelled `move`.
-Static self sends resolve to local Handlers; other receivers' Message Paths
-are not inferred. Completion and hover show labelled source rather than
+Static self sends resolve to local Handlers for definition. Completion and hover show labelled source rather than
 colon-separated wire names. Manifest `messages[].name` contains the Selector,
 with no extra fields; the reader checks its parts and argument count and uses
 argument placeholders in completion. Between arguments, completion offers the
 next matching label. Legacy `send` completion offers only unlabelled messages.
+
+Messages have senders and implementors, as in Smalltalk's browser. On a message
+name in a Handler head, `send`, `pass`, `wait for` event or Command Call,
+references lists every `send`, `pass` and Command Call naming that Selector
+across the workspace's Scripts and Libraries, whatever the receiver, adding the
+Handler Clauses and `wait for` events when the declaration is included.
+Implementation lists those Handler Clauses and `wait for` events. The call
+hierarchy has an item per Handler Clause: incoming calls are the clauses and
+functions that send its Selector, and outgoing calls are the Selectors its
+clause sends. A computed `send` name or `pass any message` could send any
+Selector, so each is also an incoming call of every message, and an outgoing
+call, with the detail `unknown message name`.
+
+Results aren't narrowed by the Message Path. The Host sets parents at run time,
+and the Host Manifest doesn't say which Script owns which object, so a `send`
+to anything but `me` may reach any Script with a matching Handler, or its
+Fallback Handler.
 
 If an unknown Selector's final word is read as a label with no argument (such
 as `log error rest` or `say total count`), `likely-argument-label` advice points
