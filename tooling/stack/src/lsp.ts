@@ -7,6 +7,14 @@ import {
 } from './lsp/workspace';
 import { readManifest, type HostManifest } from './lsp/manifest';
 import {
+  implementors,
+  incomingCalls,
+  outgoingCalls,
+  prepareCallHierarchy,
+  selectorAt,
+  senders,
+} from './lsp/messages';
+import {
   codeActions,
   completion,
   definition,
@@ -146,6 +154,8 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
           hoverProvider: true,
           definitionProvider: true,
           referencesProvider: true,
+          implementationProvider: true,
+          callHierarchyProvider: true,
           renameProvider: { prepareProvider: true },
           inlayHintProvider: true,
           documentFormattingProvider: true,
@@ -243,11 +253,27 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
     if (method === 'textDocument/didSave') {
       return null;
     }
+    if (
+      method === 'callHierarchy/incomingCalls' ||
+      method === 'callHierarchy/outgoingCalls'
+    ) {
+      const data = record(record(params.item).data);
+      const item = {
+        selector: data.selector == null ? null : string(data.selector),
+        start: Number(data.start),
+        uri: string(data.uri),
+      };
+      return method === 'callHierarchy/incomingCalls'
+        ? incomingCalls(analyses, item)
+        : outgoingCalls(analyses, item);
+    }
     const supported = [
       'textDocument/completion',
       'textDocument/hover',
       'textDocument/definition',
       'textDocument/references',
+      'textDocument/implementation',
+      'textDocument/prepareCallHierarchy',
       'textDocument/rename',
       'textDocument/prepareRename',
       'textDocument/inlayHint',
@@ -279,13 +305,29 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
         return hover(analyses, analysis, offset, manifest);
       case 'textDocument/definition':
         return definition(analyses, analysis, offset);
-      case 'textDocument/references':
+      case 'textDocument/references': {
+        // A message name's references are its senders, whatever the receiver.
+        const selector = selectorAt(analysis, offset);
+        if (selector) {
+          return senders(
+            analyses,
+            selector,
+            record(params.context).includeDeclaration === true,
+          );
+        }
         return references(
           analyses,
           analysis,
           offset,
           record(params.context).includeDeclaration === true,
         );
+      }
+      case 'textDocument/implementation': {
+        const selector = selectorAt(analysis, offset);
+        return selector ? implementors(analyses, selector) : null;
+      }
+      case 'textDocument/prepareCallHierarchy':
+        return prepareCallHierarchy(analyses, analysis, offset);
       case 'textDocument/rename':
         return rename(analyses, analysis, offset, string(params.newName));
       case 'textDocument/prepareRename': {
