@@ -13,3 +13,4 @@ A Segment may enlist one named Grant through synchronous Host begin, commit and 
 - An uncaught ordinary error commits provisional effects when it preserves Script Variables. Cancellation rolls back the original Segment, then may commit a distinct cleanup Segment.
 - Commit must have a definite outcome. Definite non-commit ends the Run as `effect failed`; ambiguous commit or failed rollback stops the Group because the Core cannot establish consistency.
 - Staging a single file for publication is a valid participant; ordinary append and overwrite are not automatically reversible. This is execution atomicity, not crash recovery or atomicity with sends and unrelated immediate effects.
+- Amended by [ADR 0069](0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md): the participant is a Segment Coordinator that several Grants may share, so two Grants conflict only when the Host maps them to different coordinators.

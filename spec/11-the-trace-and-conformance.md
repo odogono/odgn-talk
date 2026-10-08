@@ -229,7 +229,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `restore` |  | `from`\*, `mismatch`?, `unbound`?, `withheld`?, `fingerprint`\*, `mode`\*, `pending`?\*, `disposed`?, `discarded`?\*, `dropped`?\*, `abandoned`?\* | restores a Group from a save |
 | `counters` | `script` |  | reads the Script's Counters without draining Host Inputs; writes one `counters` record |
 | `vars` |  |  | inspects the Group, which writes a `vars` record for each Script in it |
-| `stub-effect` | `grant` | `phase`, `status` | queues a synchronous lifecycle hook result for <script>.<granted name>; a runner input, not a queued Core input |
+| `stub-effect` | `grant` | `phase`, `status` | queues a synchronous lifecycle hook result for the participant whose first enrolled Grant is <script>.<granted name>; a runner input, not a queued Core input |
 
 <!-- end -->
 
@@ -445,7 +445,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `scope` | `grant` | `id` | the named Grant |
 | `scope` | `name` | `id` | the declared scope name |
 | `scope` | `action` | `word` | opened/closed on Host success, abandoned on automatic success, or failed on automatic abandonment failure: `opened`, `closed`, `abandoned`, `failed` |
-| `effect` | `grant` | `id` | the participating named Grant |
+| `effect` | `grant` | `id` | the participant's first enrolled named Grant |
 | `effect` | `phase` | `word` | the hook: `begin`, `commit`, `rollback` |
 | `effect` | `status` | `word` | the Host outcome; unknown includes malformed returns and exceptions: `ok`, `failed`, `unknown` |
 | `effect-failure` | `grant` | `id` | the affected named Grant |
@@ -608,7 +608,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[libraries]` | `source` | the file that holds its source | trace, disassembly |
 | `[scripts]` | `name` | a Script's name | trace, disassembly |
 | `[scripts]` | `source` | the file that holds its source | trace, disassembly |
-| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding) | trace, disassembly |
+| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding); optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own | trace, disassembly |
 | `[scripts]` | `grantsAsUsed` | `true` to keep only the granted Operations the Script uses | trace |
 | `[scripts]` | `owner` | the Host Object it owns, as `{kind, id}` | trace |
 | `[scripts]` | `objects` | its well-known objects, a table from name to `{kind, id}` | trace, disassembly |
@@ -616,7 +616,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[disassembly]` | `unit` | the Script or Library whose disassembly the case pins | disassembly |
 | `[disassembly]` | `expected` | the file that holds its expected canonical disassembly | disassembly |
 | `[operations]` | `scope` | optional {opens, abandon} or {closes}; immediate only, as specified in embedding/scoped-effects.md | trace, disassembly |
-| `[operations]` | `segmentBound` | optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks | trace, disassembly |
+| `[operations]` | `segmentBound` | optional boolean, false by default; true enrolls this named Grant in its Segment's participant and requires immediate mode; the case runner supplies all three lifecycle hooks | trace, disassembly |
 
 <!-- end -->
 
@@ -743,7 +743,8 @@ The following scenarios are required by [the lifecycle contract](embedding/scope
 | Revocation or disablement before cleanup | Ordinary calls rejected; reserved automatic cleanup still invokes original binding without Fuel |
 | Failed abandonment with other scopes remaining | Failure reported, Grant disabled, remaining cleanup attempted; no automatic retry |
 | Disabled Grant through Reload, replacement and both restore policies | Disablement survives; calls fail capability-disabled; fresh Script load is the recovery boundary |
-| Participant begin definite failure, ordinary Operation error, second Grant | Begin failure invokes no Operation; Operation error leaves participant enlisted; second participant has no Host work |
+| Participant begin definite failure, ordinary Operation error, Grant on another coordinator | Begin failure invokes no Operation; Operation error leaves participant enlisted; the conflicting call has no Host work and names the first enrolled Grant |
+| Two Grants sharing a `coordinator`, aliases included | One `begin` at the first Segment-bound call; the second Grant enrolls with no hook; one `commit` or `rollback` covers both; failed abandonment on either prevents commit and disables only that Grant |
 | Return/pass/veto/error and suspension boundaries | Commit follows all Script charges and state checks, before reply, forwarding, Verdict or suspension publication |
 | Explicit scope commit then later Limit Fault | Plain scoped effects stay final; Segment-bound effects roll back |
 | Failed participating abandonment before commit | Prevent commit, roll back Script Variables/participant and end effect-failed; unrelated abandonment failure does not veto commit |

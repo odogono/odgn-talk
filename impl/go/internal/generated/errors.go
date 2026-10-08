@@ -469,11 +469,12 @@ var Errors = ErrorsTable{
 				"operation",
 				"participant",
 			},
-			RaisedWhen: "A Segment-bound Operation tries to enlist a different named Grant from the current participant",
+			RaisedWhen: "A Segment-bound Operation's Grant maps to a different Segment Coordinator from the current participant's",
 			Sources: []string{
 				"#219",
 				"ADR 0047",
 				"ADR 0048",
+				"ADR 0069",
 			},
 			Message: "The Segment already participates through {participant}, so {capability} cannot join",
 		},

@@ -329,10 +329,16 @@ type SegmentContext struct {
 	Group      *Group // identity namespace, not just its name
 	ScriptName string
 	RunID      RunID
-	GrantName  string
+	GrantName  string // the first enrolled Grant
 	SegmentID  string
 	Binding    any
 	Now        time.Time
+	Grants     []SegmentGrant // enrolled, in enrollment order; Begin sees only the first
+}
+
+type SegmentGrant struct {
+	GrantName string
+	Binding   any
 }
 
 type EffectStatus string
@@ -486,6 +492,7 @@ type StoreImpl interface {
 	Swap(c *Call, key string, expected, replacement Value) (bool, error)
 }
 
+// StoreCapability maps every binding to impl as one Segment Coordinator.
 func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, error)
 
 // ---------------------------------------------------------------------------
@@ -583,7 +590,13 @@ func New() *Core
 func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error)
 
 // DefineSegmentCapability is DefineCapability with all three synchronous hooks.
+// Each Grant is its own Segment Coordinator.
 func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
+
+// DefineCoordinatedCapability maps each binding to its Segment Coordinator
+// once, when a Grant is created. Grants mapped to one pointer share a
+// Segment's participant.
+func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
 func (c *Core) DefineObjectKind(k ObjectKindDef) (*ObjectKind, error)
 
 type Versions struct {
