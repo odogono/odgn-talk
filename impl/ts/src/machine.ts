@@ -163,6 +163,11 @@ export class Code {
   readonly libraries = new Map<string, Code>();
   /** Whether it is a stdlib Library's, whose errors name the caller (ADR 0037). */
   stdlib = false;
+  /**
+   * Whether its errors name the caller, as a stdlib Library's do. A Host may
+   * ask this of any Library, outside the Spec, as `northtalk test` does.
+   */
+  atCaller = false;
 
   constructor(
     readonly unit: CodeUnit,
@@ -2836,10 +2841,11 @@ export class Run {
   }
 
   // An error's `at`: inside stdlib code, the call that entered the stdlib,
-  // in the nearest frame that isn't stdlib code (ADR 0037).
+  // in the nearest frame that isn't stdlib code (ADR 0037). A Library the
+  // Host compiled with `atCaller` counts as stdlib code here.
   private at(ins: Instruction): Value {
     let i = this.frames.length - 1;
-    while (i > 0 && this.frames[i]!.code.stdlib) {
+    while (i > 0 && this.frames[i]!.code.atCaller) {
       i--;
     }
     const frame = this.frames[i]!;

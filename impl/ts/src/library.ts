@@ -240,6 +240,15 @@ export const loadOrReject = <T>(name: string, load: () => T): T => {
   }
 };
 
+/** How a Host asks a Library to be compiled, outside the Spec. */
+export type LibraryOptions = {
+  /**
+   * An error raised in it gets an `at` naming the call that entered it, as
+   * for stdlib code (ADR 0037), rather than its own position.
+   */
+  atCaller?: boolean;
+};
+
 /**
  * Compile a Library, once per process for each code identity. `imports` holds
  * every Library its `use` lines name, other than the stdlib's, which are
@@ -249,7 +258,8 @@ export const compileLibrary = (
   src: LibrarySource,
   imports: readonly Library[] = [],
   declarations: GrantDecls = {},
-): Library => build(src, imports, false, declarations);
+  options: LibraryOptions = {},
+): Library => build(src, imports, false, declarations, options.atCaller);
 
 const stdlib = new Map<string, Library>();
 /** A stdlib Library, compiled from its normative source on first use. */
@@ -271,6 +281,7 @@ const build = (
   imports: readonly Library[],
   isStdlib: boolean,
   declarations: GrantDecls = {},
+  atCaller = false,
 ): Library => {
   const available = new Map(imports.map(l => [l.name, l]));
   const p = prepare(
@@ -284,7 +295,9 @@ const build = (
   if (p.diagnostics) {
     throw new LoadError(p.diagnostics);
   }
-  let entry = cache.get(p.identity);
+  // The same source compiled to name its caller is a separate code unit.
+  const key = atCaller && !isStdlib ? `${p.identity} at caller` : p.identity;
+  let entry = cache.get(key);
   if (!entry) {
     const tree = p.checked.tree!;
     entry = {
@@ -298,7 +311,8 @@ const build = (
       ),
     };
     entry.code.stdlib = isStdlib;
-    cache.set(p.identity, entry);
+    entry.code.atCaller = isStdlib || atCaller;
+    cache.set(key, entry);
   }
   const sites: CallSite[] = operationUses(p.checked.tree!.root).map(site => ({
     ...site,
@@ -404,6 +418,7 @@ export const replacementLibraries = (
         { name: old.name, source: old.source, version: old.version },
         [...libraries.values()],
         compiled.get(old)!.declarations,
+        { atCaller: compiled.get(old)!.code.atCaller },
       ),
     );
     rebuilt.add(old.name);

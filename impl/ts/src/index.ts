@@ -37,6 +37,7 @@ export {
   codeIdentity,
   compileLibrary,
   type Library,
+  type LibraryOptions,
   type LibrarySource,
   type OperationRef,
 } from './library';

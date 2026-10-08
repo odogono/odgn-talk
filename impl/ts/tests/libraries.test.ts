@@ -92,6 +92,32 @@ describe('calls into a Library', () => {
     );
   });
 
+  test('raise with `at` at the call, when the Host asks it to', () => {
+    const source = 'function boom\n  throw {code: "x"}\nend boom';
+    const h = compileLibrary(
+      { name: 'h', version: '1', source },
+      [],
+      {},
+      {
+        atCaller: true,
+      },
+    );
+    const r = run(
+      'use boom from h\nscript variable e\non go\n  try\n    boom()\n  catch err\n    put err into e\n  end try\nend go',
+      [h],
+    );
+    expect(r.lines).toContain('raise s/r1 code="x" at=h:4 pos=2:3');
+    expect(r.vars).toBe(
+      'vars s e={code: "x", at: {unit: "s", handler: "go", line: 5, column: 5}}',
+    );
+    // The same source compiled as usual still names its own position.
+    const plain = run(
+      'use boom from h\nscript variable e\non go\n  try\n    boom()\n  catch err\n    put err into e\n  end try\nend go',
+      [lib('h', source)],
+    );
+    expect(plain.vars).toContain('at: {unit: "h"');
+  });
+
   test('make Function Values whose Home Script is the caller', () => {
     const h = lib(
       'h',
