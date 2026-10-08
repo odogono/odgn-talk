@@ -84,7 +84,8 @@ func (v Value) Display() string {
 		pieces := make([]string, len(v.Entries))
 		for i, p := range v.Entries {
 			key := p.Key
-			if key == "offer" || !Word(key) {
+			// A Word key is bare, except offer, which source reserves as a key (chapter 2).
+			if !Word(key) || key == "offer" {
 				key = DisplayText(key)
 				if !strings.HasPrefix(key, `"`) {
 					key = `"" & ` + key

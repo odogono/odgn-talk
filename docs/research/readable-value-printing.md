@@ -4,7 +4,7 @@ Research for [#372](https://github.com/odogono/odgn-talk/issues/372), checked
 2026-10-08 against repository revision `927f0e8`. This is a design recommendation,
 not an accepted ADR or implemented behavior.
 
-**Follow-up:** [#426](https://github.com/odogono/odgn-talk/issues/426) implements
+**Follow-up:** [PR #427](https://github.com/odogono/odgn-talk/pull/427) implements
 the `offer` map-key display fix on both Cores. The probes and table below retain
 their findings at the research revision; the tooling source form remains a
 recommendation.
@@ -27,7 +27,7 @@ already makes the debugger and test runner tooling freedom. An ADR **is** needed
 if the REPL echo, Session Transcripts or the display form change. These are
 normative, and a change would re-bless the Corpus on both Cores. The cheapest
 normative fix is to quote an `offer` map key ([below](#the-gaps)), which
-chapter 2 already requires; it is implemented separately as the Spec fix in #426.
+chapter 2 already requires; it is implemented separately as the Spec fix in PR #427.
 
 ## What exists today
 
@@ -161,7 +161,7 @@ At the research revision, four constructs made the display form invalid as sourc
    `{"offer": 1}`, still reads through the display-form reader. Chapter 2 already
    says to quote it, so chapter 11 contradicts it. **Decided:** fix the display
    form on both Cores now, as a Spec fix rather than an ADR. **Resolved in
-   [#426](https://github.com/odogono/odgn-talk/issues/426):** both printers quote
+   [PR #427](https://github.com/odogono/odgn-talk/pull/427):** both printers quote
    `offer`, and chapter 11 and `trace.ebnf` specify that form. Other Word keys,
    including other Reserved Words, stay bare.
 2. **Map keys that aren't one quoted piece**, such as `{"" & quote & "x": 1}`.

@@ -101,8 +101,7 @@ ListValue      ::= '[' ( Value ( ', ' Value )* )? ']'
 MapValue       ::= '{' ( MapEntry ( ', ' MapEntry )* )? '}'
 MapEntry       ::= MapKey ': ' Value
 MapKey         ::= Word | TextValue
-                   /* a Word exactly when the key is one other than `offer`;
-                      `offer` is written as TextValue; a TextValue key
+                   /* a Word exactly when the key is one other than offer; a TextValue key
                       starts with a quoted piece, `"" & ` if need be */
 Word           ::= [A-Za-z_] [A-Za-z0-9_]*
 RangeValue     ::= RangeEnd '..' RangeEnd

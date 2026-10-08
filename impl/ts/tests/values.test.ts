@@ -60,6 +60,14 @@ test('display text splits hidden scalar values and keeps literal backslashes', (
   }
 });
 
+test('display quotes an offer map key, which source reserves', () => {
+  const value = record({ offer: num(1), if: bool(true) });
+  expect(value.toString()).toBe('{"offer": 1, if: true}');
+  const decoded = readDisplay(value.toString());
+  expect(decoded.equals(value)).toBe(true);
+  expect(decoded.toString()).toBe(value.toString());
+});
+
 test('Value Encoding uses only the specified string escapes', () => {
   expect(encodeValue(text('"\\\n\t\r\b\f\u0000\u001f/é\u2028'))).toBe(
     '"\\"\\\\\\u000a\\u0009\\u000d\\u0008\\u000c\\u0000\\u001f/é\u2028"',
@@ -140,15 +148,6 @@ test('container display and encoding round-trip without prototype or numeric-key
     () => undefined,
   );
   expect(ordered.entries().map(([k]) => k)).toEqual(['2', '1', '__proto__']);
-});
-
-test('map display quotes offer and keeps other Word keys bare', () => {
-  const value = record({ offer: num(1), if: bool(true) });
-  const display = '{"offer": 1, if: true}';
-  expect(value.toString()).toBe(display);
-  const decoded = readDisplay(display);
-  expect(decoded.equals(value)).toBe(true);
-  expect(decoded.toString()).toBe(display);
 });
 
 test('decimal constructors preserve digits and refuse values that need rounding', () => {

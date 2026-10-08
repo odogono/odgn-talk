@@ -18,7 +18,7 @@ func TestDisplayRoundTrips(t *testing.T) {
 		}
 	}
 }
-func TestMapDisplayQuotesOffer(t *testing.T) {
+func TestDisplayQuotesOfferKey(t *testing.T) {
 	const display = `{"offer": 1, if: true}`
 	v, err := ParseDisplay(display, nil)
 	if err != nil {
