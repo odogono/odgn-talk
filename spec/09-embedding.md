@@ -128,7 +128,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 - **Grants as used:** with `GrantsAsUsed`, a Script keeps only the granted Operations it and its Libraries use, including unused definitions, Lambda bodies, every imported Library's `needs` and implicit abandonment dependencies; `say` uses `console.write`. This trimming happens once at Load, after validation, and removes names whose kept set is empty. Reload, Extend and Library replacement cannot regain an Operation it discarded.
 - **Grant inspection:** the Script's `Grants` returns a fresh map of its kept names to Operation names, including disabled Grants and Grants that are revoked but not yet removed by Reload. Each Operation list is sorted in Unicode code-point order. Map-key enumeration follows the Host language: Go maps have no iteration order, and TS records enumerate integer-like names numerically before other names.
 - **Standard Capabilities:** `clock`, `calendar`, `locale`, `timer`, `console` and `store` have their declarations fixed by [chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities). Their factories take Host implementations, except for `clock`, and a cost map keyed by Operation name. Every Operation must have its own cost entry, with Fuel required and allocation zero if absent. Both components must be whole numbers from 0 through 9,007,199,254,740,991; a missing or invalid cost is a Host Error `invalid value`. Extra Operation names in the cost map are ignored. The factory copies each declared cost, so later changes to the map or its entries do not change the declaration. A `timer` implementation must supply both `schedule` and `cancel`, and a `console` implementation both `write` and `read`, a `calendar` implementation all six of its methods, a `locale` implementation all eight, and a `store` implementation all six Operations and all three lifecycle hooks; a missing method is also `invalid value`.
-- **The `store` factory:** its Grant's binding is the Store's name, as text. `set`, `delete`, `increment` and `swap` are declared Segment-bound, so the factory passes the implementation's `begin`, `commit` and `rollback` as the Capability's lifecycle ([the lifecycle contract](embedding/scoped-effects.md)). The factory takes no quotas: the implementation sets and enforces them, with the reservations [chapter 7](07-libraries-and-the-standard-library.md#store) requires. The Core checks `invalid key` and the result kinds; everything else about the Store is the implementation's obligation.
+- **The `store` factory:** its Grant's binding is the Store's name, as text. `set`, `delete`, `increment` and `swap` are declared Segment-bound, so the factory maps every binding to the implementation as one Segment Coordinator, whose `begin`, `commit` and `rollback` receive each enrolled Store's Grant name and binding ([the lifecycle contract](embedding/scoped-effects.md#segment-participant)). The factory takes no quotas: the implementation sets and enforces them, with the reservations [chapter 7](07-libraries-and-the-standard-library.md#store) requires. The Core checks `invalid key` and the result kinds; everything else about the Store is the implementation's obligation.
 - **The call:** a Host function gets a `Call`, which gives the call id, the Script's name, the Grant's binding, the Pump's Clock reading, and a context or signal that is cancelled when the call is abandoned. It never reads the Host's own time.
 - **Charging:**
   - The declared cost is charged before the Host function runs, and a Run that can't cover it has a Limit Fault at the call.
@@ -160,7 +160,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 
 [The lifecycle contract](embedding/scoped-effects.md) specifies declaration validation, Run/Grant ownership, automatic abandonment, participant hooks, failure handling, suspension guards and examples. Its rules apply to every Host interface, including the Message Layer. Lifecycle declarations are normative; executable Core support is separate implementation work.
 
-Ordinary immediate effects remain final. A scope guarantees an abandonment attempt for a still-open resource; it does not undo an explicit close or commit. Segment-bound Operations instead enlist one named Grant and defer its effects until the Segment's outcome is known. No Script syntax is added.
+Ordinary immediate effects remain final. A scope guarantees an abandonment attempt for a still-open resource; it does not undo an explicit close or commit. Segment-bound Operations instead enroll their Grants in the Segment's one participant, a Segment Coordinator, and defer their effects until the Segment's outcome is known. No Script syntax is added.
 
 ## Deliveries
 
@@ -243,11 +243,11 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
 | `hello` | `protocol` | `language`, `costModel`, `unicode`, `core`, `saveFormat` | `CoreVersions` |
-| `define-capability` | `name`, `ops`: Operation Declarations, optional `segmentLifecycle: true` advertising all three hooks | – | `DefineCapability` |
+| `define-capability` | `name`, `ops`: Operation Declarations, optional `segmentLifecycle: true` advertising all three hooks | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
-| `grant` | `capability`, `ops`: names, or `"all"` | `grant`: a handle | `Grant`, `GrantAll` |
+| `grant` | `capability`, `ops`: names, or `"all"`, optional `coordinator`: the name of its Segment Coordinator, shared by every Grant given that name | `grant`: a handle | `Grant`, `GrantAll` |
 | `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
@@ -263,7 +263,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `fail` | `call`, `error`: `{code, message, data (V)}` | – | `Fail` |
 | `pump` | `now`, `fuelSlice`, `fuelCap` | `state`, `nextDeadline`, `fuelUsed`, `reports`, `abandoned`, `trace` | `Pump` |
 | `op` (interim) | `call`, `script`, `run`, `segment`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, optional `scope`, `automatic`, and `fuelLeft` for Script calls only | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
-| `effect` (interim) | `script`, `run`, `segment`, `grant`, `phase`: `begin`, `commit` or `rollback`, `now` | `effect-result`: `{status: "ok" \| "failed" \| "unknown", detail?}` | Segment lifecycle hooks |
+| `effect` (interim) | `script`, `run`, `segment`, `grant`: the first enrolled, `grants`: every enrolled Grant name in enrollment order, optional `coordinator`, `phase`: `begin`, `commit` or `rollback`, `now` | `effect-result`: `{status: "ok" \| "failed" \| "unknown", detail?}` | Segment lifecycle hooks |
 | `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
 | `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |

@@ -1465,7 +1465,7 @@ kinds = ["trace", "disassembly"]
 [[setup]]
 table = "scripts"
 key = "grants"
-is = "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding)"
+is = "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding); optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own"
 kinds = ["trace", "disassembly"]
 
 [[setup]]
@@ -1508,7 +1508,7 @@ kinds = ["disassembly"]
 name = "stub-effect"
 input = true
 ids = ["grant"]
-is = "queues a synchronous lifecycle hook result for <script>.<granted name>; a runner input, not a queued Core input"
+is = "queues a synchronous lifecycle hook result for the participant whose first enrolled Grant is <script>.<granted name>; a runner input, not a queued Core input"
 
 [[record.key]]
 key = "phase"
@@ -1553,7 +1553,7 @@ is = "a synchronous participant hook and its result, including hooks outside a P
 [[record.key]]
 key = "grant"
 type = "id"
-is = "the participating named Grant"
+is = "the participant's first enrolled named Grant"
 
 [[record.key]]
 key = "phase"
@@ -1614,7 +1614,7 @@ kinds = ["trace", "disassembly"]
 [[setup]]
 table = "operations"
 key = "segmentBound"
-is = "optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks"
+is = "optional boolean, false by default; true enrolls this named Grant in its Segment's participant and requires immediate mode; the case runner supplies all three lifecycle hooks"
 kinds = ["trace", "disassembly"]
 
 [[record]]

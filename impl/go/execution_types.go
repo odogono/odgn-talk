@@ -202,6 +202,12 @@ type SegmentContext struct {
 	SegmentID  string
 	Binding    any
 	Now        time.Time
+	Grants     []SegmentGrant
+}
+
+type SegmentGrant struct {
+	GrantName string
+	Binding   any
 }
 
 type EffectResult struct {

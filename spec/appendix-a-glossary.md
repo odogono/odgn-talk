@@ -62,6 +62,10 @@ _Avoid_: transaction (for all scopes), lexical scope, using block
 An Operation whose Host effects belong to the calling Segment and remain provisional until that Segment commits or rolls back.
 _Avoid_: scoped Operation (for atomic effects), transactional Run
 
+**Segment Coordinator**:
+The Host object that begins, commits and rolls back the Segment-bound effects of every Grant whose binding the Host maps to it. All of a Segment's Segment-bound Operations must go through one Segment Coordinator, so that the Segment commits or rolls back as a whole.
+_Avoid_: participant (for the Host object), transaction manager, resource manager
+
 **Operation Declaration**:
 The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional Capability Scope and Segment-bound behavior. The same form serves Hosts, the Conformance Corpus and tooling.
 _Avoid_: signature, schema, spec (unqualified)

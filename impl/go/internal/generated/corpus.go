@@ -1489,7 +1489,7 @@ var Corpus = CorpusTable{
 			Ids: []string{
 				"grant",
 			},
-			Is: "queues a synchronous lifecycle hook result for <script>.<granted name>; a runner input, not a queued Core input",
+			Is: "queues a synchronous lifecycle hook result for the participant whose first enrolled Grant is <script>.<granted name>; a runner input, not a queued Core input",
 			Key: []CorpusTableRecordEntryKeyEntry{
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "phase",
@@ -1555,7 +1555,7 @@ var Corpus = CorpusTable{
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "grant",
 					Type: "id",
-					Is:   "the participating named Grant",
+					Is:   "the participant's first enrolled named Grant",
 				},
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "phase",
@@ -2013,7 +2013,7 @@ var Corpus = CorpusTable{
 		CorpusTableSetupEntry{
 			Table: "scripts",
 			Key:   "grants",
-			Is:    "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding)",
+			Is:    "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding); optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own",
 			Kinds: []string{
 				"trace",
 				"disassembly",
@@ -2080,7 +2080,7 @@ var Corpus = CorpusTable{
 		CorpusTableSetupEntry{
 			Table: "operations",
 			Key:   "segmentBound",
-			Is:    "optional boolean, false by default; true enlists this named Grant in its Segment and requires immediate mode; the case runner supplies all three lifecycle hooks",
+			Is:    "optional boolean, false by default; true enrolls this named Grant in its Segment's participant and requires immediate mode; the case runner supplies all three lifecycle hooks",
 			Kinds: []string{
 				"trace",
 				"disassembly",

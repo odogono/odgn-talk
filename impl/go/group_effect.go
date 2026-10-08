@@ -34,7 +34,7 @@ func (g *Group) effectHook(s *Script, x *execution, p *segmentParticipant, phase
 	} else if phase == "rollback" {
 		hook = lifecycle.Rollback
 	}
-	ctx := SegmentContext{Group: g, ScriptName: s.name, RunID: x.id, GrantName: p.name, SegmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), Binding: p.grant.binding, Now: g.clock}
+	ctx := SegmentContext{Group: g, ScriptName: s.name, RunID: x.id, GrantName: p.name, SegmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), Binding: p.grant.binding, Now: g.clock, Grants: []SegmentGrant{{GrantName: p.name, Binding: p.grant.binding}}}
 	result := invokeEffect(hook, ctx)
 	g.record("effect", false, []string{ctx.SegmentID}, map[string]string{"grant": p.name, "phase": phase, "status": string(result.Status)})
 	if result.Status == EffectOK {

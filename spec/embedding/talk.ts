@@ -193,10 +193,15 @@ export interface SegmentContext<B> {
   readonly group: Group; // identity namespace, not just its name
   readonly scriptName: string;
   readonly runId: string;
-  readonly grantName: string;
+  readonly grantName: string; // the first enrolled Grant
   readonly segmentId: string;
   readonly binding: B;
   readonly now: bigint;
+  readonly grants: readonly SegmentGrant<B>[]; // enrolled, in enrollment order; begin sees only the first
+}
+export interface SegmentGrant<B> {
+  readonly grantName: string;
+  readonly binding: B;
 }
 export interface EffectResult {
   status: "ok" | "failed" | "unknown";
@@ -206,6 +211,12 @@ export interface SegmentLifecycle<B> {
   begin(context: SegmentContext<B>): EffectResult;
   commit(context: SegmentContext<B>): EffectResult;
   rollback(context: SegmentContext<B>): EffectResult;
+}
+/** Compared by identity: Grants mapped to one coordinator share a Segment's participant. */
+export type SegmentCoordinator = SegmentLifecycle<unknown>;
+/** Maps each binding to its coordinator once, when a Grant is created. */
+export interface CoordinatedLifecycle<B> {
+  coordinator(binding: B): SegmentCoordinator;
 }
 
 export interface ImmediateOp<B> extends OpBase {
@@ -417,14 +428,15 @@ export interface Library {
 
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
-  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B>): CapabilityDef<B>;
+  /** A plain lifecycle makes each Grant its own coordinator. */
+  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>): CapabilityDef<B>;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   clockCapability(costs: Costs): CapabilityDef<void>;
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone
   localeCapability(impl: LocaleImpl, costs: Costs): CapabilityDef<string>;     // binding: default tag
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
-  storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name
+  storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name; impl coordinates every binding
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;
