@@ -56,7 +56,7 @@ func Run(root string, makeStore func(store.Quotas) talk.StoreImpl) (int, error) 
 				phase := step["do"].(string)
 				switch phase {
 				case "begin", "commit", "rollback":
-					context := talk.SegmentContext{Group: c.Group(), SegmentID: c.SegmentID(), Binding: c.Binding(), ScriptName: c.ScriptName(), RunID: c.RunID(), GrantName: c.GrantName()}
+					context := talk.SegmentContext{Group: c.Group(), SegmentID: c.SegmentID(), Binding: c.Binding(), ScriptName: c.ScriptName(), RunID: c.RunID(), GrantName: c.GrantName(), Grants: []talk.SegmentGrant{{GrantName: c.GrantName(), Binding: c.Binding()}}}
 					var result talk.EffectResult
 					switch phase {
 					case "begin":
