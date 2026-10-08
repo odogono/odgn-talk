@@ -1,5 +1,5 @@
 {
-  "about": "Proposed Declaration Documentation expectations shared by both Cores (#436, part of #370). Awaiting first-blessing review: agreement between the Cores is not approval. A doc row is [origin, declaration, clause, text]; a unit's docs list each top-level declaration in source order as [declaration, text].",
+  "about": "Declaration Documentation expectations shared by both Cores (#436, part of #370). First blessing approved on 2026-10-08 at d289156; see docs/implementation/session-observation.md. A doc row is [origin, declaration, clause, text]; a unit's docs list each top-level declaration in source order as [declaration, text].",
   "units": [
     {
       "name": "attachment rules",
