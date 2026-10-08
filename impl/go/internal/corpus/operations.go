@@ -18,11 +18,16 @@ type operationReplay struct {
 	// replay Host, rather than an unknown outcome.
 	strict    bool
 	malformed error
+	// coordinators holds each case `coordinator` name's Segment Coordinator;
+	// coordinator is the name of the Grant being created.
+	coordinators map[string]*talk.SegmentLifecycle
+	coordinator  string
 }
 
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
 	out.effectStubs = map[string][]map[string]Field{}
+	out.coordinators = map[string]*talk.SegmentLifecycle{}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
 	for _, raw := range rawOps {
@@ -208,7 +213,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			bound = bound || op.SegmentBound
 		}
 		if bound {
-			d, e = core.DefineSegmentCapability(name, talk.SegmentLifecycle{Begin: out.effect("begin"), Commit: out.effect("commit"), Rollback: out.effect("rollback")}, ops...)
+			d, e = core.DefineCoordinatedCapability(name, out.coordinate, ops...)
 		} else {
 			d, e = core.DefineCapability(name, ops...)
 		}
@@ -219,11 +224,26 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 	}
 	return out, nil
 }
+
+// coordinate maps a Grant to its case `coordinator`, or, without one, to a
+// coordinator of its own.
+func (o *operationReplay) coordinate(any) *talk.SegmentLifecycle {
+	if c := o.coordinators[o.coordinator]; c != nil {
+		return c
+	}
+	c := &talk.SegmentLifecycle{Begin: o.effect("begin"), Commit: o.effect("commit"), Rollback: o.effect("rollback")}
+	if o.coordinator != "" {
+		o.coordinators[o.coordinator] = c
+	}
+	return c
+}
+
 func (o *operationReplay) grants(setup Setup) (map[string]*talk.Grant, error) {
 	out := map[string]*talk.Grant{}
 	grants, _ := setup["grants"].(Setup)
 	for name, raw := range grants {
 		row := raw.(Setup)
+		o.coordinator, _ = row["coordinator"].(string)
 		defName := name
 		if n, ok := row["capability"].(string); ok {
 			defName = n

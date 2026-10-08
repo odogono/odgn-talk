@@ -79,8 +79,8 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return corevalue.Value{}, &err, false
 		}
 	}
-	if op.SegmentBound && x.participant != nil && x.participant.name != grantName {
-		fields := append(named, corevalue.Pair{Key: "participant", Val: mustText(x.participant.name)})
+	if op.SegmentBound && x.participant != nil && x.participant.coordinator != grant.coordinator {
+		fields := append(named, corevalue.Pair{Key: "participant", Val: mustText(x.participant.name())})
 		return fail("segment participant conflict", fields...)
 	}
 	fuel, _ := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel})
@@ -88,7 +88,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		return corevalue.Value{}, nil, false
 	}
 	g.writeRaises(x, x.raisesWritten)
-	if op.SegmentBound && x.participant == nil {
+	if op.SegmentBound {
 		if failure := g.enrollParticipant(s, x, grantName, grant, reports); failure != nil {
 			if failure.Status == EffectUnknown {
 				return corevalue.Value{}, nil, false

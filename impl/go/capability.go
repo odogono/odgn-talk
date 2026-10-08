@@ -55,29 +55,43 @@ type CapabilityDef struct {
 	ops       map[string]Operation
 	checks    map[string]operationChecks
 	lifecycle *SegmentLifecycle
+	// coordinate maps a binding to its Segment Coordinator at Grant creation.
+	coordinate func(binding any) *SegmentLifecycle
 }
 type Grant struct {
 	definition *CapabilityDef
 	operations map[string]bool
 	binding    any
-	revoked    bool
-	disabled   bool
+	// coordinator is compared by identity; nil until Load for a plain
+	// lifecycle, which gives each named Grant its own.
+	coordinator *SegmentLifecycle
+	revoked     bool
+	disabled    bool
 }
 
 func (d *CapabilityDef) Name() string { return d.name }
 func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error) {
-	return c.defineCapability(name, nil, ops...)
+	return c.defineCapability(name, nil, nil, ops...)
 }
 
 func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
 	if lifecycle.Begin == nil || lifecycle.Commit == nil || lifecycle.Rollback == nil {
 		return nil, &HostError{InvalidValue, "all Segment lifecycle hooks are required"}
 	}
-	return c.defineCapability(name, &lifecycle, ops...)
+	return c.defineCapability(name, &lifecycle, nil, ops...)
 }
 
-func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
-	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle}
+// DefineCoordinatedCapability resolves each Grant's Segment Coordinator once,
+// when the Grant is created; Grants mapped to one pointer share a participant.
+func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+	if coordinator == nil {
+		return nil, &HostError{InvalidValue, "a Segment Coordinator mapping is required"}
+	}
+	return c.defineCapability(name, nil, coordinator, ops...)
+}
+
+func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordinate func(any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+	d := &CapabilityDef{name: name, ops: map[string]Operation{}, lifecycle: lifecycle, coordinate: coordinate}
 	for _, op := range ops {
 		invalid := func(detail string) (*CapabilityDef, error) { return nil, &HostError{InvalidValue, detail} }
 		if op.Name == "" || slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op.Name) {
@@ -89,7 +103,7 @@ func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, ops ..
 		if op.Cost.Fuel < 0 || op.Cost.Alloc < 0 || op.Cost.Fuel > 9007199254740991 || op.Cost.Alloc > 9007199254740991 {
 			return invalid("invalid Operation cost")
 		}
-		if op.SegmentBound && (op.Mode != Immediate || lifecycle == nil) {
+		if op.SegmentBound && (op.Mode != Immediate || lifecycle == nil && coordinate == nil) {
 			return invalid("Segment-bound Operations require immediate mode and lifecycle hooks")
 		}
 		if op.Scope != nil {
@@ -207,7 +221,24 @@ func (d *CapabilityDef) Grant(ops []string, binding any) (*Grant, error) {
 			return nil, &HostError{InvalidValue, "Grant omits scope abandonment Operation"}
 		}
 	}
+	if d.coordinate != nil {
+		g.coordinator = d.coordinate(binding)
+		if g.coordinator == nil || g.coordinator.Begin == nil || g.coordinator.Commit == nil || g.coordinator.Rollback == nil {
+			return nil, &HostError{InvalidValue, "the binding has no Segment Coordinator with all three hooks"}
+		}
+	}
 	return g, nil
+}
+
+// named copies a Grant template for one granted name. A plain lifecycle
+// gives each named Grant, aliases included, its own coordinator.
+func (t *Grant) named() *Grant {
+	g := &Grant{definition: t.definition, operations: map[string]bool{}, binding: t.binding, coordinator: t.coordinator}
+	if g.coordinator == nil && t.definition.lifecycle != nil {
+		lifecycle := *t.definition.lifecycle
+		g.coordinator = &lifecycle
+	}
+	return g
 }
 func (d *CapabilityDef) GrantAll(binding any) *Grant {
 	names := make([]string, 0, len(d.ops))

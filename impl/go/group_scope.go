@@ -48,14 +48,16 @@ func (x *execution) updateOpenScope() {
 // Automatic calls use the saved implementation and binding, irrespective of
 // revocation or disablement. They finish before any Run outcome is published.
 func (g *Group) abandonScopes(s *Script, x *execution, reports *[]Report) *EffectFailure {
-	return g.abandonGrantScopes(s, x, "", reports)
+	return g.abandonGrantScopes(s, x, nil, reports)
 }
 
-func (g *Group) abandonGrantScopes(s *Script, x *execution, grantName string, reports *[]Report) *EffectFailure {
+// abandonGrantScopes abandons the scopes of the Grants p enrolls, or every
+// scope when p is nil.
+func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipant, reports *[]Report) *EffectFailure {
 	var participatingFailure *EffectFailure
 	for i := len(x.scopes) - 1; i >= 0; i-- {
 		slot := x.scopes[i]
-		if grantName != "" && slot.grantName != grantName {
+		if p != nil && !p.enrolled(slot.grantName) {
 			continue
 		}
 		x.scopes = slices.Delete(x.scopes, i, i+1)
@@ -86,7 +88,7 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, grantName string, re
 				detail = call.failureDetail
 			}
 			report := &EffectFailure{Script: s.name, Run: x.id, Grant: slot.grantName, Segment: call.segmentID, Phase: "abandon", Status: status, Scope: slot.name, Detail: detail}
-			if x.participant != nil && x.participant.name == slot.grantName && participatingFailure == nil {
+			if x.participant != nil && x.participant.enrolled(slot.grantName) && participatingFailure == nil {
 				participatingFailure = report
 			}
 			*reports = append(*reports, report)
