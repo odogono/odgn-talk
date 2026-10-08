@@ -18,6 +18,28 @@ func TestDisplayRoundTrips(t *testing.T) {
 		}
 	}
 }
+
+func TestFunctionDisplayPlaces(t *testing.T) {
+	for _, tt := range []struct{ home, code, want string }{
+		{"weather", "12:3", "<function weather:12:3>"},
+		{"weather", "tax", "<function weather:tax>"},
+		{"weather", "text:pad", "<function weather:text:pad>"},
+		{"orders", "list:14:7", "<function orders:list:14:7>"},
+		{"session", "session+3:1:9", "<function session+3:1:9>"},
+		{"weather", "weather+12:4:7", "<function weather+12:4:7>"},
+	} {
+		t.Run(tt.want, func(t *testing.T) {
+			v := Value{Kind: Function, Function: &FunctionData{Home: tt.home, Code: tt.code}}
+			if got := v.Display(); got != tt.want {
+				t.Fatalf("display = %s, want %s", got, tt.want)
+			}
+			parsed, err := ParseDisplay(tt.want, nil)
+			if err != nil || parsed.Display() != tt.want {
+				t.Fatalf("display round-trip failed: %v", err)
+			}
+		})
+	}
+}
 func TestPatternsReparseAndCanonicalize(t *testing.T) {
 	for _, tt := range []struct{ s, want string }{{`< "ID" , "-" , <0x04 digits> >`, `<"ID", "-", <4 digits>>`}, {`<4 digits lazily ignoring case as number>`, `<4 digits as number ignoring case lazily>`}, {`< <>, "x">`, `<"x">`}, {`<(quote & "x")>`, `<(quote & "x")>`}} {
 		v, e := ParsePattern(tt.s)

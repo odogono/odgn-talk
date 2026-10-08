@@ -1,0 +1,73 @@
+# Unblessed: first-blessing review pending for #424.
+# Go and TS agree on ordinary and save/restore replay; see docs/reviews/extension-lambdas/README.md.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="script variable double" & newline & "on entry1" & newline & "put given n: n * 2 into double" & newline & "end entry1" & newline identity=ca6d435676b934ddd478916e7aac3151572aeca1976feb217aa418b69abca7ab
+> request d1 to=session message=entry1
+> pump clock=2026-10-08T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=13 alloc=32 state=32 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=13 alloc=32
+pumped state=idle fuel=13
+> extend session source="on entry2" & newline & "return double" & newline & "end entry2" & newline identity=298a3929bc2eee997f2b2b14ee8896ca60ebcb136ac19bc99e6eb62f5d1b5e35
+> request d2 to=session message=entry2
+> pump clock=2026-10-08T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=7 alloc=0 state=32 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 value=<function session+1:3:5> fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="on entry3" & newline & "return double(4)" & newline & "end entry3" & newline identity=66a35f2168c0b90b41effc6170e0886114cf63fd8097c4817c94f28070aaa0df
+> request d3 to=session message=entry3
+> pump clock=2026-10-08T10:00:00Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=24 alloc=16 state=32 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value=8 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="script variable scale" & newline & "on entry4" & newline & "put given k: given n: n * k into scale" & newline & "end entry4" & newline identity=14af141516205bfc3c2561e5e82f71e03ef4ed82ca4aee1db6acb044a6839def
+> request d4 to=session message=entry4
+> pump clock=2026-10-08T10:00:00Z
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=13 alloc=32 state=64 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=13 alloc=32
+pumped state=idle fuel=13
+> extend session source="script variable triple" & newline & "on entry5" & newline & "put scale(3) into triple" & newline & "end entry5" & newline identity=175b59984134842ff7ca7377ff56f53d67dd13aaad14680fe86bc1793569f7c7
+> request d5 to=session message=entry5
+> pump clock=2026-10-08T10:00:00Z
+seg session/r5 start delivery=d5 handler=entry5 clause=1 fuel=27 alloc=48 state=112 end=return
+run session/r5 outcome=completed delivery=d5 handler=entry5 fuel=27 alloc=48
+pumped state=idle fuel=27
+> extend session source="on entry6" & newline & "return triple" & newline & "end entry6" & newline identity=49881bfc88f444f3a7c795d09f75e841bc3a0e1ef6266abd6bfb9a82f73569f0
+> request d6 to=session message=entry6
+> pump clock=2026-10-08T10:00:00Z
+seg session/r6 start delivery=d6 handler=entry6 clause=1 fuel=7 alloc=0 state=112 end=return
+run session/r6 outcome=completed delivery=d6 handler=entry6 value=<function session+4:3:14 {k: 3}> fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="on entry7" & newline & "return triple(4)" & newline & "end entry7" & newline identity=298d252b81858d0aaa0570fc84734d03a8433c9cbff9e3288e5cffb4d42dab60
+> request d7 to=session message=entry7
+> pump clock=2026-10-08T10:00:00Z
+seg session/r7 start delivery=d7 handler=entry7 clause=1 fuel=24 alloc=16 state=112 end=return
+run session/r7 outcome=completed delivery=d7 handler=entry7 value=12 fuel=24 alloc=16
+pumped state=idle fuel=24
+> save s1
+> restore from=s1 fingerprint=fd3f5f6c643a831f03de280968644e1a1fd9d2a323deb29b21ddd086d2a106d2 mode=full
+> extend session source="on entry8" & newline & "return double" & newline & "end entry8" & newline identity=b4ab42d98fb4d48d84a765dd0b85714609206533e42f8320c92760761b068e48
+> request d8 to=session message=entry8
+> pump clock=2026-10-08T10:00:00Z
+seg session/r8 start delivery=d8 handler=entry8 clause=1 fuel=7 alloc=0 state=112 end=return
+run session/r8 outcome=completed delivery=d8 handler=entry8 value=<function session+1:3:5> fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="on entry9" & newline & "return triple" & newline & "end entry9" & newline identity=c74fe894774845d2d024504d8032c7f375243561742756bfcc96466992b6b7a4
+> request d9 to=session message=entry9
+> pump clock=2026-10-08T10:00:00Z
+seg session/r9 start delivery=d9 handler=entry9 clause=1 fuel=7 alloc=0 state=112 end=return
+run session/r9 outcome=completed delivery=d9 handler=entry9 value=<function session+4:3:14 {k: 3}> fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="on entry10" & newline & "return double(5)" & newline & "end entry10" & newline identity=d68229aa3c41c0efc124b8a1f980603788cd6b58d0bbb5ca71f94e4addb773df
+> request d10 to=session message=entry10
+> pump clock=2026-10-08T10:00:00Z
+seg session/r10 start delivery=d10 handler=entry10 clause=1 fuel=24 alloc=16 state=112 end=return
+run session/r10 outcome=completed delivery=d10 handler=entry10 value=10 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="on entry11" & newline & "return triple(5)" & newline & "end entry11" & newline identity=2db0cffe774150b2b395e0f8401d09422d8ab0e5f82a224c22e6b4c0d1b9d129
+> request d11 to=session message=entry11
+> pump clock=2026-10-08T10:00:00Z
+seg session/r11 start delivery=d11 handler=entry11 clause=1 fuel=24 alloc=16 state=112 end=return
+run session/r11 outcome=completed delivery=d11 handler=entry11 value=15 fuel=24 alloc=16
+pumped state=idle fuel=24
+> vars
+vars session double=<function session+1:3:5> scale=<function session+4:3:5> triple=<function session+4:3:14 {k: 3}>
