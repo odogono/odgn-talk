@@ -1,0 +1,68 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# message-kinds: a rewound Run's message goes back as it left the mailbox,
+# whatever kind it is (ADR 0068). Each Rewind lands at board's `ping`.
+# - A climbed message: d1 passed from knight to board; it goes back to
+#   board's mailbox at the same place on its path, so knight doesn't see it
+#   again (passed = 1).
+# - An `error` message: board/r3's uncaught error queues one, and its Run is
+#   rewound; it is dispatched again to `on error`.
+# - A Host call of a Function Value: d4 runs tally in its Home Script, and is
+#   called again after the Rewind, answering d4 once.
+# Each rewound Segment's `add` rolls back, so n counts only the Runs that
+# completed: 1 + 10 + 100.
+
+> load board identity=38f0bb6ef43987ee870fc16601033b27e2788b8c8d37177b3693b0b47dbd3f7a
+> load knight identity=0194a4e226e2e7b9cfc4f252140bfaa2e5c7e5851558a44f1d8f0f6d4e359557
+> stub api.ping value=1
+> stub api.ping value=1
+> stub api.ping value=1
+> stub api.ping value=1
+> stub api.ping value=1
+> stub api.ping value=1
+> set-parent object=<object piece "knight"> parent=<object board "main">
+> deliver d1 to=<object piece "knight"> message=move args=["e4"]
+> pump clock=2026-10-01T09:00:00Z
+seg knight/r1 start delivery=d1 handler=move clause=1 fuel=34 alloc=16 state=16 end=pass
+run knight/r1 outcome=completed delivery=d1 handler=move fuel=34 alloc=16
+call board/r1.c1 op=api.ping args=[] result=1
+> rewind-run board/r1
+seg board/r1 start delivery=d1 handler=move clause=1 fuel=24 alloc=16 state=66 end=rewind
+pumped state=rewound fuel=58
+> pump clock=2026-10-01T09:00:01Z
+call board/r2.c1 op=api.ping args=[] result=1
+seg board/r2 start delivery=d1 handler=move clause=1 fuel=29 alloc=32 state=16 end=return
+run board/r2 outcome=completed delivery=d1 handler=move fuel=29 alloc=32
+pumped state=idle fuel=29
+> deliver d2 to=board message=boom
+> pump clock=2026-10-01T09:00:02Z
+raise board/r3 code="bad" at=board:16 pos=8:3
+seg board/r3 start delivery=d2 handler=boom clause=1 fuel=19 alloc=48 state=16 end=error
+run board/r3 outcome=errored delivery=d2 handler=boom error={code: "bad", at: {unit: "board", handler: "boom", line: 8, column: 3}} fuel=19 alloc=48
+call board/r4.c1 op=api.ping args=[] result=1
+> rewind-run board/r4
+seg board/r4 start from=board/r3 handler=error clause=1 fuel=24 alloc=16 state=343 end=rewind
+pumped state=rewound fuel=43
+> pump clock=2026-10-01T09:00:03Z
+call board/r5.c1 op=api.ping args=[] result=1
+seg board/r5 start from=board/r3 handler=error clause=1 fuel=29 alloc=32 state=16 end=return
+run board/r5 outcome=completed handler=error fuel=29 alloc=32
+pumped state=idle fuel=29
+> request d3 to=board message=exported
+> pump clock=2026-10-01T09:00:04Z
+seg board/r6 start delivery=d3 handler=exported clause=1 fuel=10 alloc=32 state=16 end=return
+run board/r6 outcome=completed delivery=d3 handler=exported value=<function board:tally> fuel=10 alloc=32
+pumped state=idle fuel=10
+> call-value d4 fn=<function board:tally>
+> pump clock=2026-10-01T09:00:05Z
+call board/r7.c1 op=api.ping args=[] result=1
+> rewind-run board/r7
+seg board/r7 start delivery=d4 fn=<function board:tally> fuel=20 alloc=16 state=80 end=rewind
+pumped state=rewound fuel=20
+> pump clock=2026-10-01T09:00:06Z
+call board/r8.c1 op=api.ping args=[] result=1
+seg board/r8 start delivery=d4 fn=<function board:tally> fuel=25 alloc=32 state=16 end=return
+run board/r8 outcome=completed delivery=d4 fn=<function board:tally> value=111 fuel=25 alloc=32
+pumped state=idle fuel=25
+> vars
+vars board n=111
+vars knight passed=1

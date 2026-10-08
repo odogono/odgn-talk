@@ -12,7 +12,7 @@
 // Threads: TS has one, but the input-queue rules of talk.go still hold.
 // Calls marked "queued" append to the Group's input queue and return at once.
 // The next Pump drains the queue in call order, right after it takes its
-// Clock reading. stop and cancelRun land at the latest at the running Pump's
+// Clock reading. stop, cancelRun and rewindRun land at the latest at the running Pump's
 // next Host crossing (an Operation or property call) or its end, and may land
 // sooner, between instructions. A worker call (load, reload, extend, addLibrary,
 // replaceLibrary, pump, save, inspect) made from inside the Group's own Pump,
@@ -473,7 +473,7 @@ export interface PumpOptions {
   fuelCap?: number;   // across the Group
 }
 export interface PumpResult {
-  state: "idle" | "sliced" | "stopped";
+  state: "idle" | "sliced" | "stopped" | "rewound"; // rewound: a Rewind landed, and the Pump returned at once
   nextDeadline?: bigint;
   fuelUsed: number;
   reports: Report[];
@@ -569,13 +569,15 @@ export interface Script {
   grants(): Record<string, string[]>;
   /** Worker. Fresh snapshot; chapter 9 defines lifetime totals and current state. */
   counters(): Counters;
-  /** Worker. Throws LoadError. */
-  reload(source: string, carry: CarryOver): Report[];
+  /** Worker. Throws LoadError. keepMailbox keeps the mailbox, a rewound message included (ADR 0068). */
+  reload(source: string, carry: CarryOver, o?: { keepMailbox?: boolean }): Report[];
   /** Worker. A reused name throws HostError "name reused". */
   extend(source: string): void;
-  /** Queued. stop and cancelRun land by the running Pump's next Host crossing. */
+  /** Queued. stop, cancelRun and rewindRun land by the running Pump's next Host crossing. */
   stop(reason: string): void;
   cancelRun(runId: string): void;
+  /** Puts a Run still in its first Segment back in the mailbox as its message (ADR 0068). */
+  rewindRun(runId: string): void;
   revoke(grantName: string): void;
   deliver(m: Message): string;
   request(m: Message, o?: { signal?: AbortSignal }): Requested;
@@ -622,7 +624,7 @@ export interface RunDiscarded extends RunAncestry {
   kind: "run discarded";
   script: string;
   run: string;
-  reason: string; // stop, reload, library replacement, or variables-only restore
+  reason: string; // stop, reload, library replacement, variables-only restore, or rewind
 }
 export interface RunAccounting extends RunAncestry {
   kind: "run accounting";

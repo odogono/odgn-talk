@@ -217,7 +217,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		}
 	}
 	land := func(current *execution) bool {
-		landed := g.landControls(&result.Reports, func(d delivery) {
+		landed := g.landControls(&result.Reports, current, func(d delivery) {
 			if current != nil && d.script.active == current {
 				if current.stopReason == nil {
 					reason := d.reason
@@ -293,6 +293,10 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 		}
 		if d.kind == "cancel-run" {
 			g.applyCancelRun(d, &result.Reports)
+			continue
+		}
+		if d.kind == "rewind-run" {
+			g.applyRewindRun(d, nil, &result.Reports)
 			continue
 		}
 		if d.settlement != nil {
@@ -430,9 +434,12 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	g.deferredDecisions = nil
 	g.fireTimers()
 
-	for {
+	for !g.rewound {
 		progress := false
 		for _, s := range g.scripts {
+			if g.rewound {
+				break
+			}
 			if s.stopped || skipped[s] || s.active == nil && len(s.queue) == 0 {
 				continue
 			}
@@ -602,6 +609,13 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				result.State = Sliced
 				continue
 			}
+			if x.rewound {
+				g.finalizeParticipant(s, x, &result.Reports)
+				g.rewindExecution(s, x, &result.Reports)
+				common["state"], common["end"] = fmt.Sprint(s.persistent()), "rewind"
+				g.record("seg", false, []string{string(x.id), x.how}, common)
+				continue
+			}
 			if r.Status == machine.Stopped {
 				s.state.Variables = r.Base
 				g.finalizeParticipant(s, x, &result.Reports)
@@ -626,6 +640,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				continue
 			}
 			if r.Status == machine.Suspended {
+				x.suspendedOnce = true
 				g.finalizeParticipant(s, x, &result.Reports)
 			}
 			if r.Status == machine.Suspended {
@@ -768,7 +783,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 	if allStopped {
 		result.State = Stopped
 	}
-	fields := map[string]string{"state": []string{"idle", "sliced", "stopped"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)}
+	if g.rewound {
+		result.State = Rewound
+		g.rewound = false
+	}
+	fields := map[string]string{"state": []string{"idle", "sliced", "stopped", "rewound"}[result.State], "fuel": fmt.Sprint(result.FuelUsed)}
 	var next *big.Int
 	for _, s := range g.scripts {
 		for _, x := range s.runs {

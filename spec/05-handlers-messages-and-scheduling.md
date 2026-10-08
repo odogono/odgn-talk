@@ -310,10 +310,10 @@ The Group is Quiescent when the Pump returns.
 
 ### Stop and cancel within a Pump
 
-- **Where they land:** `Stop` and `CancelRun` take effect at the latest at the running Pump's next Host crossing, an Operation or property call, or at its end ([chapter 9](09-embedding.md#threads-and-the-input-queue)). The Trace records where each one landed.
+- **Where they land:** `Stop`, `CancelRun` and `RewindRun` take effect at the latest at the running Pump's next Host crossing, an Operation or property call, or at its end ([chapter 9](09-embedding.md#threads-and-the-input-queue)). The Trace records where each one landed.
 - **Nothing to see:** since a cancelled or stopped Segment leaves no trace in Script state, the step where one lands isn't observable to Scripts ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
 
 ## Outside parity
 
 - **Yields:** the TS Core may yield to its event loop in the middle of a Pump. The yield is invisible to Scripts and isn't traced ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)).
-- **Early landing:** a native Core may act on `Stop` or `CancelRun` sooner than the next Host crossing, between instructions. The Trace records where it landed, so a replay follows it.
+- **Early landing:** a native Core may act on `Stop`, `CancelRun` or `RewindRun` sooner than the next Host crossing, between instructions. The Trace records where it landed, so a replay follows it.

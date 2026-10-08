@@ -1,0 +1,27 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# at-crossing: a Rewind landing at a Host crossing in a Run's first Segment
+# (ADR 0068). The Run's Segment rolls back, so n is 0 again; its stretch ends
+# `rewind`, and the Pump returns `rewound` with d1 back at the head of the
+# mailbox. A Reload that keeps the mailbox then runs d1 on the new code as a
+# new Run, s/r2, which calls ping again.
+
+> load s identity=b9614560ff32d780b36d5da4240229394336c105de55b032a7a9328b5a4a23ed
+> stub api.ping value=1
+> stub api.ping value=2
+> deliver d1 to=s message=go
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.ping args=[] result=1
+> rewind-run s/r1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=17 alloc=0 state=48 end=rewind
+pumped state=rewound fuel=17
+> vars
+vars s n=0
+> reload s carry=yes mailbox=keep source="script variable n = 0" & newline & "on go" & newline & "ask api to ping" & newline & "put it + 10 into n" & newline & "end go" identity=f9455ab7e9274630865f8b83d0eb590ab4505c5dbcd95c81c53d6c63fe5ba6ab
+stopped s reason="reload"
+> pump clock=2026-10-01T09:00:01Z
+call s/r2.c1 op=api.ping args=[] result=2
+seg s/r2 start delivery=d1 handler=go clause=1 fuel=27 alloc=32 state=16 end=return
+run s/r2 outcome=completed delivery=d1 handler=go fuel=27 alloc=32
+pumped state=idle fuel=27
+> vars
+vars s n=12

@@ -1024,6 +1024,18 @@ export class Run {
   get hasOpenScopes(): boolean {
     return this.scopes.length !== 0;
   }
+  /** Still in the Segment it started in, so it can be rewound (ADR 0068). */
+  get rewindable(): boolean {
+    return (
+      this.segment === 1 &&
+      !this.done &&
+      !this.cancelling &&
+      !this.suspended &&
+      !this.waitedOn &&
+      !this.resumption &&
+      !this.join
+    );
+  }
   get segmentId(): string {
     return `${this.id}.s${this.segment}`;
   }

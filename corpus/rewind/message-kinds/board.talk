@@ -1,0 +1,24 @@
+script variable n = 0
+on move x
+  add 1 to n
+  ask api to ping
+end move
+
+on boom
+  throw "bad"
+end boom
+
+on error e
+  add 10 to n
+  ask api to ping
+end error
+
+on exported
+  return tally
+end exported
+
+function tally
+  add 100 to n
+  ask api to ping
+  return n
+end tally

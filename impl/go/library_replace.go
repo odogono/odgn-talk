@@ -192,7 +192,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 	}
 	for _, r := range replacements {
 		extensions := r.s.extensions
-		rr, e := r.s.applyReload(r.state, r.s.source)
+		rr, e := r.s.applyReload(r.state, r.s.source, false)
 		reports = append(reports, rr...)
 		if e != nil {
 			g.flushAccounting(&reports)

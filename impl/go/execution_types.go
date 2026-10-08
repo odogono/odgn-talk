@@ -219,6 +219,7 @@ const (
 	Idle   GroupState = iota // nothing runnable until an input or a deadline
 	Sliced                   // a slice or the cap ran out with work left
 	Stopped
+	Rewound // a Rewind landed, and the Pump returned at once (ADR 0068)
 )
 
 const (

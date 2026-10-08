@@ -1,0 +1,29 @@
+# Unblessed: Rewind (#433); first blessing awaits human review.
+# not-rewindable: a Rewind that lands on a Run past its first Segment, or on
+# a Run that has ended, does nothing, and the Trace notes it (ADR 0068). The
+# Run resumed from `later`, so its second Segment is running when the Rewind
+# lands at `ping`; it goes on to complete, with n = 3. A second Rewind, queued
+# between Pumps, lands at the next drain on the ended Run and is noted too.
+# Neither took effect, so neither Pump returns `rewound`.
+
+> load s identity=d575f54c5ff725f10ddd4c30dfa3ef9e7c4ddbed900a911a2a6c4327b7689c7c
+> stub api.ping value=1
+> deliver d1 to=s message=go
+> pump clock=2026-10-01T09:00:00Z
+call s/r1.c1 op=api.later args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=17 alloc=0 state=240 end=ask-wait
+pumped state=idle fuel=17 next=2026-10-01T09:00:30Z
+> answer s/r1.c1 value=5
+> pump clock=2026-10-01T09:00:01Z
+call s/r1.c2 op=api.ping args=[] result=1
+> rewind-run s/r1
+note s/r1 kind=not-rewindable
+seg s/r1 resume fuel=23 alloc=32 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=40 alloc=32
+pumped state=idle fuel=23
+> rewind-run s/r1
+> pump clock=2026-10-01T09:00:02Z
+note s/r1 kind=not-rewindable
+pumped state=idle fuel=0
+> vars
+vars s n=3

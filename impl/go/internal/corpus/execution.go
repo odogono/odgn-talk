@@ -165,7 +165,7 @@ func (executionBackend) Support(c Case) string {
 				}
 			}
 		}
-		if r.Input && !strings.Contains("|add-library|load|reload|extend|save|restore|settle|replace-library|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
+		if r.Input && !strings.Contains("|add-library|load|reload|extend|save|restore|settle|replace-library|deliver|request|decide|broadcast|decide-broadcast|pump|vars|counters|stub|stub-effect|revoke|stop|cancel-run|rewind-run|cancel-delivery|answer|fail|dispose|set-parent|call-value|", "|"+r.Name+"|") {
 			return r.Name + " replay belongs to a later Go step"
 		}
 	}
@@ -288,7 +288,7 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 			crossing = r.Name + " " + r.IDs[0]
 			crossings.controls[crossing] = append(crossings.controls[crossing], nil)
 		}
-		if inPump && r.Input && (r.Name == "stop" || r.Name == "cancel-run") {
+		if inPump && r.Input && (r.Name == "stop" || r.Name == "cancel-run" || r.Name == "rewind-run") {
 			if crossing == "" {
 				return nil, fmt.Errorf("%s inside Pump has no Host crossing", r.Name)
 			}
@@ -350,7 +350,7 @@ func (x *executionReplay) close() {
 
 func (x *executionReplay) control(r Record) error {
 	name := r.IDs[0]
-	if r.Name == "cancel-run" {
+	if r.Name == "cancel-run" || r.Name == "rewind-run" {
 		name, _, _ = strings.Cut(name, "/r")
 	}
 	s := x.g.Script(name)
@@ -359,6 +359,10 @@ func (x *executionReplay) control(r Record) error {
 	}
 	if r.Name == "cancel-run" {
 		s.CancelRun(talk.RunID(r.IDs[0]))
+		return nil
+	}
+	if r.Name == "rewind-run" {
+		s.RewindRun(talk.RunID(r.IDs[0]))
 		return nil
 	}
 	for _, f := range r.Fields {
@@ -485,7 +489,7 @@ func (x *executionReplay) apply(i int) error {
 		x.lines = append(x.lines, r.Raw)
 		key := r.IDs[0] + "." + fields["phase"].Raw
 		operations.effectStubs[key] = append(operations.effectStubs[key], fields)
-	case "stop", "cancel-run":
+	case "stop", "cancel-run", "rewind-run":
 		if err := x.control(r); err != nil {
 			return err
 		}
@@ -658,7 +662,7 @@ func (x *executionReplay) apply(i int) error {
 		if fields["carry"].Raw == "yes" {
 			carry = talk.CarryVariables
 		}
-		_, e := s.Reload(fields["source"].Value.Text, carry)
+		_, e := s.Reload(fields["source"].Value.Text, carry, talk.ReloadOptions{KeepMailbox: fields["mailbox"].Raw == "keep"})
 		if e != nil {
 			if _, ok := e.(*talk.LoadError); !ok {
 				if _, ok := e.(*talk.HostError); !ok {

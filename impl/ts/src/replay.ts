@@ -712,6 +712,16 @@ const compileLibraries = (
 
 const isCrossing = (line: string) => /^(call|prop|effect) /.test(line);
 
+// Make a `cancel-run` or `rewind-run` line's call on its Run's Script.
+const landRunInput = (group: Group, r: Parsed) => {
+  const script = group.script(r.ids[0]!.split('/r')[0]!)!;
+  if (r.name === 'rewind-run') {
+    script.rewindRun(r.ids[0]!);
+  } else {
+    script.cancelRun(r.ids[0]!);
+  }
+};
+
 /** Replay a case's Host Inputs, giving the Trace the Core wrote. */
 const driveReplay = function* (
   readSource: (file: string) => string,
@@ -800,7 +810,11 @@ const driveReplay = function* (
         j++;
         continue;
       }
-      if (!line.startsWith('> stop ') && !line.startsWith('> cancel-run ')) {
+      if (
+        !line.startsWith('> stop ') &&
+        !line.startsWith('> cancel-run ') &&
+        !line.startsWith('> rewind-run ')
+      ) {
         break;
       }
       if (parseRecord(line).fields.has('pc')) {
@@ -820,7 +834,7 @@ const driveReplay = function* (
           .script(r.ids[0]!)!
           .stop(readDisplay(r.fields.get('reason')!).asText()!);
       } else {
-        group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
+        landRunInput(group, r);
       }
     }
   };
@@ -1131,6 +1145,7 @@ const driveReplay = function* (
               r.fields.get('carry') === 'yes'
                 ? 'carry variables'
                 : 'reset variables',
+              { keepMailbox: r.fields.get('mailbox') === 'keep' },
             );
           break;
         case 'extend':
@@ -1238,7 +1253,8 @@ const driveReplay = function* (
           break;
         }
         case 'cancel-run':
-          group.script(r.ids[0]!.split('/r')[0]!)!.cancelRun(r.ids[0]!);
+        case 'rewind-run':
+          landRunInput(group, r);
           break;
         case 'stop':
           group
@@ -1354,7 +1370,9 @@ const driveReplay = function* (
             }
             const input = parseRecord(line);
             if (
-              (input.name === 'stop' || input.name === 'cancel-run') &&
+              (input.name === 'stop' ||
+                input.name === 'cancel-run' ||
+                input.name === 'rewind-run') &&
               input.fields.has('pc')
             ) {
               const segment = lines
@@ -1405,9 +1423,7 @@ const driveReplay = function* (
                   .script(input.ids[0]!)!
                   .stop(value(input.fields.get('reason')!).asText()!);
               } else {
-                group
-                  .script(input.ids[0]!.split('/r')[0]!)!
-                  .cancelRun(input.ids[0]!);
+                landRunInput(group, input);
               }
               landedLines.add(landing.line);
               armLanding();

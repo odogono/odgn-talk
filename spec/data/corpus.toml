@@ -71,6 +71,13 @@ words = ["yes", "no"]
 is = "whether Script Variables carry over"
 
 [[record.key]]
+key = "mailbox"
+type = "word"
+words = ["keep"]
+optional = true
+is = "`keep` when the Script's mailbox is kept rather than dropped"
+
+[[record.key]]
 key = "source"
 type = "value"
 is = "the new source, as text"
@@ -408,6 +415,18 @@ name = "cancel-run"
 input = true
 ids = ["run"]
 is = "cancels a Run"
+
+[[record.key]]
+key = "pc"
+type = "count"
+optional = true
+is = "for one that landed early, the instruction it landed before"
+
+[[record]]
+name = "rewind-run"
+input = true
+ids = ["run"]
+is = "rewinds a Run still in its first Segment: its message goes back to the head of its Script's mailbox"
 
 [[record.key]]
 key = "pc"
@@ -1174,7 +1193,7 @@ is = "the end of a Pump"
 [[record.key]]
 key = "state"
 type = "word"
-words = ["idle", "sliced", "stopped"]
+words = ["idle", "sliced", "stopped", "rewound"]
 is = "the Group's state"
 
 [[record.key]]
@@ -1226,6 +1245,10 @@ is = "the Run was cancelled"
 [[end]]
 word = "stop"
 is = "the Run was discarded by Stop Script, a Reload or disposing its Script's owner, in the middle of this Stretch; a Run discarded while suspended, parked or preempted has no Stretch to end, and only the `stopped` record lists it"
+
+[[end]]
+word = "rewind"
+is = "the Run was rewound in the middle of this Stretch; a Run rewound while parked or preempted has no Stretch to end"
 
 [[end]]
 word = "unhandled"
@@ -1290,6 +1313,10 @@ is = "an `error` message found its Script's mailbox full, and was dropped; the s
 [[note]]
 word = "function-gone"
 is = "a Host call named a stale Function Value, and nothing ran; the subject is the Delivery"
+
+[[note]]
+word = "not-rewindable"
+is = "a Rewind landed on a Run that has passed a Suspension Point or ended, and did nothing; the subject is the Run"
 
 [[setup]]
 table = ""

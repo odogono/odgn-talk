@@ -1,0 +1,36 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "resource"
+name = "open"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { opens = "file", abandon = "close" }
+segmentBound = true
+
+[[operations]]
+capability = "resource"
+name = "close"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 1 }
+scope = { closes = "file" }
+segmentBound = true
+
+[[operations]]
+capability = "log"
+name = "write"
+mode = "fire-and-forget"
+args = []
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { r = { capability = "resource", ops = "all", binding = "shared" }, log = { capability = "log", ops = "all" } }

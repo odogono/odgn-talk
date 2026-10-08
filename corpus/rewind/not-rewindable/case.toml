@@ -1,0 +1,22 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "ping"
+mode = "immediate"
+result = "number"
+
+[[operations]]
+capability = "api"
+name = "later"
+mode = "suspending"
+result = "number"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["ping", "later"] } }

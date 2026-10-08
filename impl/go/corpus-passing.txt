@@ -247,6 +247,13 @@ reload/extension-state-cap
 reload/function-staleness
 reload/reload-carry-and-discard
 reload/replacement-transitive
+rewind/at-crossing
+rewind/decision-at-crossing
+rewind/effects
+rewind/message-kinds
+rewind/not-rewindable
+rewind/parked-queued
+rewind/preempted-request
 save-restore/overdue-waits-fire-in-deadline-order
 save-restore/preempted-join-keeps-pending-members
 save-restore/preempted-run-keeps-segment-base

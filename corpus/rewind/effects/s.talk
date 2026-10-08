@@ -1,0 +1,5 @@
+on go
+  tell log to write
+  ask r to open
+  ask r to close
+end go
