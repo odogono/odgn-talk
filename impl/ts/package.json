@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./session": "./src/session/index.ts",
     "./store": "./src/store/index.ts",
+    "./sqlite": "./src/sqlite/index.ts",
     "./replay": "./src/replay.ts",
     "./debug": "./src/debug-api.ts"
   },

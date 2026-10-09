@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { $ } from 'bun';
-import { Database } from 'bun:sqlite';
 import {
   newGroup,
   num,
@@ -11,9 +11,9 @@ import {
   readDisplay,
   storeCapability,
 } from '../../src/index';
-import { sessionQuotas, Stores } from '../../src/store/index';
+import { openSqliteDatabase, STORE_TABLE } from '../../src/sqlite/index';
+import { sessionQuotas } from '../../src/store/index';
 import { runStoreKitSequence, storeKitSequences } from '../../tools/store-kit';
-import { openSqliteStores, sqliteBackend } from './store';
 
 const costs = Object.fromEntries(
   ['get', 'set', 'delete', 'keys', 'increment', 'swap'].map(op => [
@@ -42,12 +42,11 @@ describe('the SQLite Store follows the store test kit', () => {
       try {
         expect(
           runStoreKitSequence(quotas => {
-            const { stores, close } = openSqliteStores(
-              join(directory, 'kit.sqlite'),
-              quotas,
-            );
-            opened.push(close);
-            return stores;
+            const db = openSqliteDatabase(join(directory, 'kit.sqlite'), {
+              stores: quotas,
+            });
+            opened.push(() => db.close());
+            return db.stores!;
           }, sequence),
         ).toBeUndefined();
       } finally {
@@ -61,15 +60,15 @@ describe('the SQLite Store follows the store test kit', () => {
 
 test('a Store outlives its database connection', () => {
   const path = join(scratch(), 'store.sqlite');
-  const first = openSqliteStores(path, sessionQuotas);
-  first.stores.replace('s', [
+  const first = openSqliteDatabase(path, { stores: sessionQuotas });
+  first.stores!.replace('s', [
     ['b', readDisplay('2.50 GBP')],
     ['a', readDisplay('{x: [1, "two"], when: 2026-10-07}')],
   ]);
   first.close();
-  const second = openSqliteStores(path, sessionQuotas);
+  const second = openSqliteDatabase(path, { stores: sessionQuotas });
   try {
-    expect(second.stores.entries('s').map(([k, v]) => `${k}=${v}`)).toEqual([
+    expect(second.stores!.entries('s').map(([k, v]) => `${k}=${v}`)).toEqual([
       'a={x: [1, "two"], when: 2026-10-07}',
       'b=2.50 GBP',
     ]);
@@ -80,13 +79,15 @@ test('a Store outlives its database connection', () => {
 
 test('only one connection holds the database', () => {
   const path = join(scratch(), 'store.sqlite');
-  const first = openSqliteStores(path, sessionQuotas);
+  const first = openSqliteDatabase(path, { stores: sessionQuotas });
   try {
-    expect(() => openSqliteStores(path, sessionQuotas)).toThrow();
+    expect(() => openSqliteDatabase(path, { stores: sessionQuotas })).toThrow(
+      `Another connection holds ${path}`,
+    );
   } finally {
     first.close();
   }
-  openSqliteStores(path, sessionQuotas).close();
+  openSqliteDatabase(path, { stores: sessionQuotas }).close();
 });
 
 test('the example counts its runs', async () => {
@@ -99,9 +100,11 @@ test('the example counts its runs', async () => {
 });
 
 test('a Segment writing two Stores commits them in one transaction', () => {
-  const db = new Database(join(scratch(), 'two.sqlite'), { strict: true });
+  const path = join(scratch(), 'two.sqlite');
+  const db = openSqliteDatabase(path, { stores: sessionQuotas });
+  const reader = new DatabaseSync(path, { readOnly: true });
   try {
-    const stores = new Stores(sqliteBackend(db), sessionQuotas);
+    const stores = db.stores!;
     const store = storeCapability(stores, costs);
     const group = newGroup({ name: 'g' });
     const script = group.load({
@@ -120,17 +123,18 @@ test('a Segment writing two Stores commits them in one transaction', () => {
         .reports.find(r => r.kind === 'run end');
     };
     const rows = () =>
-      db
-        .query<{ key: string; name: string; value: string }, []>(
-          'SELECT name, key, value FROM store ORDER BY name, key',
-        )
-        .all()
-        .map(({ name, key, value }) => `${name}.${key}=${value}`);
+      (
+        reader
+          .prepare(
+            `SELECT name, key, value FROM ${STORE_TABLE} ORDER BY name, key`,
+          )
+          .all() as { key: string; name: string; value: string }[]
+      ).map(({ name, key, value }) => `${name}.${key}=${value}`);
     expect(finish(10, 1)).toMatchObject({ outcome: 'completed' });
     expect(rows()).toEqual(['progress.level=1', 'scores.total=10']);
     // SQLite refuses the second Store's row, so neither Store changes.
-    db.run(
-      "CREATE TRIGGER refuse BEFORE UPDATE ON store WHEN NEW.name = 'progress' BEGIN SELECT RAISE(ABORT, 'refused'); END",
+    db.exec(
+      `CREATE TRIGGER refuse BEFORE UPDATE ON ${STORE_TABLE} WHEN NEW.name = 'progress' BEGIN SELECT RAISE(ABORT, 'refused'); END`,
     );
     expect(finish(5, 2)).toMatchObject({ outcome: 'effect failed' });
     expect(rows()).toEqual(['progress.level=1', 'scores.total=10']);
@@ -138,6 +142,7 @@ test('a Segment writing two Stores commits them in one transaction', () => {
       'total=10',
     ]);
   } finally {
+    reader.close();
     db.close();
   }
 });

@@ -2,7 +2,7 @@
 
 Statement and lifecycle sequences that every `sqlite` implementation must follow ([chapter 7](../../spec/07-libraries-and-the-standard-library.md#sqlite), [chapter 9's Host obligations](../../spec/09-embedding.md#sqlite-host-obligations), [ADR 0070](../../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)). Trace Cases cover the Core's side of `sqlite` through Stubs (`corpus/capabilities/standard-sqlite*`). The database is the Host's, so this kit holds each implementation to the Spec against a real SQLite instead. It is language-neutral data, so every Core's Hosts can reuse it.
 
-These aren't Trace Cases, and the corpus runners skip this directory. No runner exists yet: the TS Host (#468) and the Go Host (#469) each add one.
+These aren't Trace Cases, and the corpus runners skip this directory. The TS runner is [`impl/ts/tools/sqlite-kit.ts`](../../impl/ts/tools/sqlite-kit.ts), which runs the kit on the TS `node:sqlite` implementation under Bun, Node and Deno. The Go Host (#469) adds one for Go.
 
 ## Format
 

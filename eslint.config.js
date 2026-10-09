@@ -36,6 +36,8 @@ export default [
       'prefer-const': 'error',
     },
     settings: {
+      // The resolver's list of Node built-ins predates node:sqlite.
+      'import-x/core-modules': ['node:sqlite'],
       'import-x/resolver': {
         typescript: {
           noWarnOnMultipleProjects: true,

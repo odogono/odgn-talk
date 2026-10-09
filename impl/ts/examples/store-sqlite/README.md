@@ -1,6 +1,6 @@
 # SQLite Store
 
-A `store` implementation ([chapter 7](../../../../spec/07-libraries-and-the-standard-library.md#store)) for server Hosts, on `bun:sqlite`. From the repository root, using Bun 1.4.2:
+A `store` implementation ([chapter 7](../../../../spec/07-libraries-and-the-standard-library.md#store)) for server Hosts, kept in a `sqlite` database on `node:sqlite`. From the repository root, using Bun 1.4.2:
 
 ```sh
 bun install
@@ -12,10 +12,11 @@ bun test impl/ts/examples/store-sqlite
 
 ## How it keeps a Store
 
-[`store.ts`](store.ts) is a backend for the TS Core's Store engine, [`Stores`](../../src/store/engine.ts). The engine holds each Store's committed contents in memory, with every live Segment's pending writes, the key reservations of [ADR 0062](../../../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md) and the quota checks. The backend reads a Store's rows once, when the Store is first used, and applies each commit's changes in one SQLite transaction. The engine is one Segment Coordinator for every Store it keeps ([ADR 0069](../../../../docs/adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)), so a Segment that writes several Stores commits them all in that one transaction. A commit that SQLite refuses reports `failed`, and neither the database nor the engine's copy of any Store changes.
+`openSqliteDatabase(path, { stores })` from [`@odgn/northtalk/sqlite`](../../src/sqlite/) opens the database, and `db.stores` is the Store implementation. It uses the TS Core's Store engine, [`Stores`](../../src/store/engine.ts). The engine holds each Store's committed contents in memory, with every live Segment's pending writes, the key reservations of [ADR 0062](../../../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md) and the quota checks. The database reads a Store's rows once, when the Store is first used, and applies each commit's changes in one SQLite transaction. The database is one Segment Coordinator for every Store it keeps ([ADR 0069](../../../../docs/adr/0069-segment-bound-grants-share-a-participant-through-a-segment-coordinator.md)), so a Segment that writes several Stores commits them all in that one transaction. A commit that SQLite refuses reports `failed`, and neither the database nor the engine's copy of any Store changes.
 
 - **Rows:** one table, `store`, keyed by the Store's name and the key, with each value in [the Value Encoding](../../../../spec/09-embedding.md#json-and-the-value-encoding).
-- **One process:** reservations live in the process that holds the engine, so the database file must have no other writer. `openSqliteStores` takes SQLite's exclusive lock when it opens the file and holds it until `close`, so a second process, or a second connection, can't open it.
+- **One process:** reservations live in the process that holds the engine, so the database file must have no other writer. `openSqliteDatabase` takes an exclusive lock on a sidecar database, `<path>-lock`, and holds it until `close`, so a second process, or a second open in this one, fails.
+- **With `sqlite`:** a Host that also offers the database through `sqlite` passes it to `sqliteDatabases`. A Segment's Store writes and database changes then commit together, and a Store write takes the database's write lock at its call ([ADR 0070](../../../../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)). The [TS guide](../../README.md#the-group-and-trace-cases) describes it.
 - **Quotas** are the Host's: `main.ts` uses the Session Store's.
 - **Durability** is SQLite's, in WAL mode with its default synchronous setting.
 

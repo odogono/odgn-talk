@@ -30,5 +30,5 @@ Both Cores wrote these expectations through `bun run corpus:bless`: the TS runne
 ## Outside these cases
 
 - What the implementation sees, which no Trace shows (SQL values in `params`, `max`, the coordinator mapping and the factory's refusals), is pinned by `impl/ts/tests/sqlite-capability.test.ts` and `impl/go/sqlite_capability_test.go`.
-- The [sqlite test kit](../../../corpus/sqlite-kit/) holds implementations to chapter 9's Host obligations against a real database. It has no runner yet: the TS Host (#468) and the Go Host (#469) each add one. Its expectations are data for review alongside these cases.
+- The [sqlite test kit](../../../corpus/sqlite-kit/) holds implementations to chapter 9's Host obligations against a real database. The TS runner landed with the TS Host (#468), and the Go Host (#469) adds one for Go. Its expectations are data for review alongside these cases.
 - A Trace recorded from a live `sqlite` Host can't yet be replayed without Stubs, since its `call` records hold converted answers. The TS runner defers such a replay.

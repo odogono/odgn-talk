@@ -82,3 +82,15 @@ jobs:
         working-directory: tooling/vscode
       - run: bun run build
         working-directory: impl/ts
+      # The sqlite implementation is node:sqlite, so it must also pass the sqlite
+      # kit under Node and Deno. setAuthorizer needs Node 24.10 or later.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: bun test tests/sqlite-runtimes.test.ts
+        working-directory: impl/ts
+        env:
+          NORTHTALK_SQLITE_RUNTIMES: node,deno
