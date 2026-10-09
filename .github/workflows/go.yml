@@ -51,7 +51,10 @@ jobs:
         working-directory: impl/go
       # Includes the talk.go API check and the Unicode import-policy check.
       # Verbose output reports API names not implemented yet, as #132 requires.
-      - run: go test -race -v ./...
+      - run: go test -v ./...
+        working-directory: impl/go
+      # Skips the exhaustive single-goroutine replays, which the run above covers.
+      - run: go test -race ./...
         working-directory: impl/go
       # Every case, in ordinary and save/restore replay; a failure names its
       # first divergence and the command that reproduces it.

@@ -104,6 +104,7 @@ func TestTextPatternStepTwoAcceptance(t *testing.T) {
 // Step 4 pins the exhaustion instruction, resource charges and rollback state
 // through public embedding execution. Segment-bound effects have their own gate.
 func TestLimitsStepFourAcceptance(t *testing.T) {
+	skipUnderRace(t)
 	const root = "../../../../corpus"
 	cases, err := Discover(root, nil)
 	if err != nil {

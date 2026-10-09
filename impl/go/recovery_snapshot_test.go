@@ -37,9 +37,11 @@ func recoveryOutput(lines []string) []string {
 	return out
 }
 func TestRecoverySnapshotEveryBoundary(t *testing.T) {
+	skipUnderRace(t)
 	for _, fixture := range recoveryFixtures(t) {
 		for _, options := range []PumpOptions{{FuelSlice: 1}, {FuelSlice: 7, FuelCap: 3}} {
 			t.Run(fmt.Sprintf("%s/%+v", fixture.Name, options), func(t *testing.T) {
+				t.Parallel()
 				original, resumed := []string{}, []string{}
 				core := New()
 				g := core.NewGroup(GroupOptions{Name: "snapshot", Trace: traceFunc(func(l string) { original = append(original, l) })})
@@ -287,6 +289,7 @@ func TestCancelledRecoverySnapshotEveryCleanupBoundary(t *testing.T) {
 }
 
 func TestLibraryRecoverySnapshotEveryBoundary(t *testing.T) {
+	skipUnderRace(t)
 	read := func(file string) string {
 		data, err := os.ReadFile("../../corpus/recovery-offers/basic/" + file)
 		if err != nil {
