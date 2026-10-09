@@ -192,10 +192,18 @@ const decisionFacts = (root: SemanticNode) => {
     handler: string | null;
   }[] = [{ element: root, deciding: false, handler: null }];
   while (work.length) {
-    const { element, ...context } = work.pop()!;
-    let { deciding, handler } = context;
+    const current = work.pop()!;
+    const { element } = current;
+    let { deciding, handler } = current;
     if (element.kind !== 'node') {
-      leaves.set(`${element.span.line}:${element.span.col}`, element);
+      // Flow diagnostics point only at veto/pass statements, so other leaves
+      // need no position index (including those in ordinary Functions).
+      if (
+        element.kind === 'token' &&
+        (element.text === 'veto' || element.text === 'pass')
+      ) {
+        leaves.set(`${element.span.line}:${element.span.col}`, element);
+      }
       continue;
     }
     if (element.rule === 'Handler') {
@@ -250,6 +258,12 @@ export const checkDecisionCalls = (
     ...decisionFacts(unit.root),
     report: unit.report,
   }));
+  reportDecisionCalls(facts);
+};
+
+const reportDecisionCalls = (
+  facts: (ReturnType<typeof decisionFacts> & { report: Report })[],
+) => {
   const called = new Set(facts.flatMap(f => [...f.called]));
   for (const unit of facts) {
     for (const v of unit.vetoes) {
@@ -267,10 +281,21 @@ export const checkDecisions = (
   ) => boolean,
   report: Report,
 ): void => {
-  checkDecisionCalls([{ root, report }]);
-  const { leaves } = decisionFacts(root);
+  const facts = decisionFacts(root);
+  reportDecisionCalls([{ ...facts, report }]);
+  // Only deciding Handlers need a control-flow view. Ordinary Functions and
+  // Handlers still participate in the local-call checks above.
+  const { leaves } = facts;
   const leafAt = (p: Pos) => leaves.get(`${p.line}:${p.col}`)!;
-  for (const decl of viewSource(root)) {
+  const deciding = viewSource(
+    root,
+    declaration =>
+      declaration.rule === 'Handler' &&
+      declaration.children.some(
+        c => c.kind === 'token' && c.text === 'deciding',
+      ),
+  );
+  for (const decl of deciding) {
     if (decl.k !== 'handler' || !decl.deciding) {
       continue;
     }

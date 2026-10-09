@@ -18,6 +18,9 @@ The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pi
 
 The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements. The [first full results with wave 2](results/2026-10-08-darwin-arm64-apple-m5.md) cover all 38 workloads, including the four Fuel Slice sweep runs, on an Apple M5. Their [JSON](results/2026-10-08-darwin-arm64-apple-m5.json) records 216 measurements.
 
+The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
+three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
+
 ## Workloads
 
 The categories are `core`, `numbers`, `text`, `collections`, `messaging`, `host`, `lifecycle` and `macro`.
@@ -114,3 +117,15 @@ go tool pprof -top cpu.out
 ```
 
 `NORTHTALK_BENCH_SMOKE=1` runs at the smoke sizes. Several `-count` runs can be compared with `benchstat`.
+
+For the TS Core, profile the same runner Bun times. The filter is its first
+argument; each Load still uses a fresh Script name to bypass the compile cache:
+
+```sh
+mkdir -p .cache/profiles
+bun --cpu-prof --cpu-prof-dir=.cache/profiles bench/ts/src/measure-ts.ts lifecycle/load-large
+```
+
+Compare timings separately with `bun run bench --filter lifecycle/load --only ts
+--no-save`, without profiling. CPU profiles include the runner's warm-up and
+measurement overhead; timings remain advisory rather than a CI gate.

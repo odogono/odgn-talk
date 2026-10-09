@@ -224,6 +224,34 @@ describe('Core name resolution', () => {
     expect(reference.binding).toMatchObject({ name: 'x', kind: 'constant' });
   });
 
+  test("checking the same syntax again uses each call's binding context", () => {
+    const source = 'on t\n return external(1)\nend t';
+    const parsed = parseSource(source);
+    expect(parsed.error).toBeNull();
+    const syntax = parsed.tree!;
+    const first = checkSyntax(syntax, {
+      existing: {
+        external: { kind: 'function', contract: { required: 1, total: 1 } },
+      },
+    });
+    const second = checkSyntax(syntax, {
+      existing: {
+        external: { kind: 'function', contract: { required: 2, total: 2 } },
+      },
+    });
+    const third = checkSyntax(syntax);
+    expect(first.ok).toBe(true);
+    expect(second.diagnostics.map(d => d.code)).toEqual([
+      'wrong argument count',
+    ]);
+    expect(third.diagnostics.map(d => d.code)).toEqual(['unknown name']);
+    expect(
+      names(first.tree.root).find(name => name.text === 'external')!.binding
+        ?.contract,
+    ).toEqual({ required: 1, total: 1 });
+    expect(syntaxText(syntax)).toBe(source);
+  });
+
   test('syntax errors suppress all semantic diagnostics', () => {
     const result = checkSource('on t\n return absent\n @\nend t');
     expect(result.ok).toBe(false);
