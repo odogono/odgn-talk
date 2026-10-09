@@ -1,4 +1,3 @@
-# Unblessed: proposed first expectations for #439; awaiting human review.
 > load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
 > extend session source="on notice" & newline & "say " & quote & "%notice" & quote & newline & "end notice" identity=e7095da6f16425ba1bea5464a4e47febcda665c8e90b39d2d8576bd83a8a667e
 > extend session source="--| Original." & newline & "function plus x = 1" & newline & "return x + 1" & newline & "end plus" identity=3f8d13012012ff4fe49d689c98a7628b39d35ebf76e927ad3b36ff128fa89e8b

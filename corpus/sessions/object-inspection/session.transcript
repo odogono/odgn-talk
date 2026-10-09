@@ -1,4 +1,3 @@
-# Unblessed: proposed first expectations for #439; awaiting human review.
 % {"name":"InspectChild","parentKinds":[],"props":[{"getCost":{"alloc":0,"fuel":0},"name":"value","readOnly":true,"shape":"any"}],"type":"kind"}
 % {"name":"InspectRoot","parentKinds":[],"props":[{"getCost":{"alloc":0,"fuel":2},"name":"callback","readOnly":false,"setCost":{"alloc":0,"fuel":3},"shape":"value"},{"getCost":{"alloc":0,"fuel":0},"name":"child","readOnly":true,"shape":"any"},{"getCost":{"alloc":0,"fuel":0},"name":"error","readOnly":true,"shape":"any"},{"getCost":{"alloc":0,"fuel":0},"name":"shape","readOnly":true,"shape":"number"},{"getCost":{"alloc":0,"fuel":0},"name":"z","readOnly":true,"shape":"any"}],"type":"kind"}
 % {"object":{"id":"root","kind":"InspectRoot"},"type":"object"}
