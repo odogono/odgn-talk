@@ -370,3 +370,76 @@ describe('The Session Store', () => {
     expect('session' in replayed).toBe(true);
   });
 });
+
+describe('Running a selection', () => {
+  test('print it shows what the Entry printed, as the console does', () => {
+    const s = new PlaygroundSession(environment().env);
+    s.apply(greet);
+    const run = s.runSelection('1 + 2\n', 'print');
+    expect(run).toEqual({ selection: 0 });
+    expect(s.printedBy(0)).toEqual(['3']);
+    s.runSelection('greet "you"', 'do');
+    expect(s.printedBy(1)).toEqual(['hello you', 'bye']);
+    // A later Entry's lines are its own.
+    expect(s.printedBy(0)).toEqual(['3']);
+    expect(s.transcriptText).toContain('> 1 + 2\n@ 2026-09-30T10:00:00Z\n3\n');
+  });
+
+  test('lines that arrive later are the Run’s, without its prefix', () => {
+    const s = new PlaygroundSession(environment().env);
+    s.input(':mock http.fetch suspending');
+    s.input('on fetch\n  ask http to fetch and wait\n  say it\nend fetch');
+    const { selection } = s.runSelection('fetch and wait', 'print') as {
+      selection: number;
+    };
+    const run = s.host.latestRun;
+    expect(s.printedBy(selection)).toEqual([`call ${run}.c1 http.fetch []`]);
+    s.input('2 + 2');
+    s.input(`:answer ${run}.c1 "ok"`);
+    expect(s.printedBy(selection)).toEqual([
+      `call ${run}.c1 http.fetch []`,
+      'ok',
+    ]);
+    expect(s.transcriptText).toContain(`[${run}] ok`);
+  });
+
+  test('a declaration applies, and a Handler’s locals are not in scope', () => {
+    const s = new PlaygroundSession(environment().env);
+    expect(s.runSelection(greet, 'do')).toEqual({ selection: 0 });
+    expect(s.host.source).toContain('on greet name');
+    s.runSelection('  say "hello " & name\n', 'print');
+    expect(s.transcript).toContainEqual({
+      k: 'input',
+      source: 'say "hello " & name',
+    });
+    expect(s.printedBy(1)).toEqual([
+      expect.stringMatching(/^! /u) as unknown as string,
+    ]);
+  });
+
+  test('inspect it enters :inspect', () => {
+    const s = new PlaygroundSession(environment().env);
+    s.runSelection('[1, 2]', 'inspect');
+    expect(s.transcript).toContainEqual({
+      k: 'input',
+      source: ':inspect [1, 2]',
+    });
+    expect(s.printedBy(0).length).toBeGreaterThan(0);
+  });
+
+  test('refuses without an Entry what is not one', () => {
+    const s = new PlaygroundSession(environment().env);
+    expect(s.runSelection('  \n', 'do')).toHaveProperty('refused');
+    expect(s.runSelection(':clock', 'do')).toHaveProperty('refused');
+    expect(s.runSelection('if true then', 'print')).toEqual({
+      refused: 'The selection is not a complete Entry.',
+    });
+    expect(
+      s.runSelection('function one\n return 1\nend one', 'do', 'rows'),
+    ).toEqual({
+      refused: 'Save the rows tab to load its declarations.',
+    });
+    expect(s.transcript).toEqual([]);
+    expect(s.runSelection('1', 'do', 'rows')).toEqual({ selection: 0 });
+  });
+});

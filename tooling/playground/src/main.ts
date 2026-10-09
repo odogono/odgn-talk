@@ -17,7 +17,9 @@ import {
   offsetOf,
   onEdits,
   pausedAt,
+  printedAt,
   refreshHints,
+  selectionToRun,
 } from './editor';
 import { decodeLink, encodeLink, type Shared } from './link';
 import { LspClient } from './lsp-client';
@@ -30,7 +32,12 @@ import type {
   SessionState,
   ToSession,
 } from './protocol';
-import { SESSION_TAB, type Library, type PauseView } from './session';
+import {
+  SESSION_TAB,
+  type Library,
+  type PauseView,
+  type SelectionAction,
+} from './session';
 import {
   loadSaved,
   loadStoreSlots,
@@ -107,6 +114,9 @@ const currentTabs = () => ({
 const hooksFor = (uri: () => string) => ({
   selected: () => workbench.selected(),
   changed: (text: string) => {
+    if (printTarget?.tab.uri === uri()) {
+      printTarget = null;
+    }
     workbench.changed();
     lsp.change(uri(), text);
     if (tabs.find(t => t.uri === uri())?.kind === 'library') {
@@ -125,6 +135,7 @@ const hooksFor = (uri: () => string) => ({
         ? ['References:', ...lines.map(l => `  ${l}`)]
         : ['No references'],
     ),
+  run: (how: SelectionAction) => void runSelection(how),
   save: () => void saveActive(),
 });
 
@@ -422,6 +433,7 @@ const receive = (response: SessionResponse) => {
   switch (response.t) {
     case 'state':
     case 'applied':
+    case 'selected':
     case 'mismatch':
       render(response.state);
       break;
@@ -445,13 +457,21 @@ const render = (state: SessionState) => {
   if (generation !== state.generation) {
     generation = state.generation;
     consoleEl.replaceChildren();
+    printTarget = null;
   }
   if (JSON.stringify(sessionSetup) !== JSON.stringify(state.setup)) {
     sessionSetup = state.setup;
     scheduleAutosave();
   }
   renderCanvas(state.canvas, state.revision);
-  for (const id of ['fresh', 'apply', 'evaluate']) {
+  for (const id of [
+    'fresh',
+    'apply',
+    'evaluate',
+    'do-it',
+    'print-it',
+    'inspect-it',
+  ]) {
     ($(id) as HTMLButtonElement).disabled = state.prompt === 'paused';
   }
   for (const line of state.lines) {
@@ -478,6 +498,7 @@ const render = (state: SessionState) => {
     lsp.configure({ manifest: state.manifest });
   }
   renderPause(state.pause);
+  renderSelection(state.selection);
   for (const tab of tabs) {
     const lines = state.breakpoints
       .filter(
@@ -493,6 +514,61 @@ const render = (state: SessionState) => {
     }
   }
   renderTabs();
+};
+
+// ------------------------------------------------------------- selections
+
+// The latest print it: its tab, where its result shows, and its selection.
+let printTarget: { at: number; id: number; tab: Tab } | null = null;
+
+const dispatchTo = (tab: Tab, effects: ReturnType<typeof printedAt>) => {
+  if (tab === tabs[active]) {
+    view.dispatch({ effects });
+  } else {
+    tab.state = tab.state.update({ effects }).state;
+  }
+};
+
+// Do it, print it or inspect it (#336): the selection, or the cursor's line,
+// is an ordinary Entry, so the console and the Transcript show it as one.
+const runSelection = async (how: SelectionAction) => {
+  const tab = tabs[active]!;
+  const { source, end } = selectionToRun(view.state);
+  const response = await call({
+    t: 'selection',
+    how,
+    source,
+    tab: tab.kind === 'script' ? SESSION_TAB : tab.name,
+  });
+  if (response.t !== 'selected' || response.id === null) {
+    return;
+  }
+  if (how === 'print') {
+    if (printTarget && printTarget.tab !== tab) {
+      dispatchTo(printTarget.tab, printedAt(null));
+    }
+    printTarget = { tab, at: end, id: response.id };
+    renderSelection(response.state.selection);
+  } else if (how === 'inspect') {
+    workbench.selectInspector('inspect');
+  }
+};
+
+const renderSelection = (selection: SessionState['selection']) => {
+  if (selection?.how === 'inspect') {
+    $('inspect-source').textContent = selection.source;
+    $('inspect-view').textContent = selection.lines.join('\n');
+  }
+  if (
+    printTarget &&
+    selection?.how === 'print' &&
+    selection.id === printTarget.id
+  ) {
+    dispatchTo(
+      printTarget.tab,
+      printedAt({ lines: selection.lines, offset: printTarget.at }),
+    );
+  }
 };
 
 // The Script tab is the session source (ADR 0051): a clean tab follows the
@@ -725,6 +801,16 @@ end draw
 $('evaluate').onclick = () =>
   void call({ t: 'evaluate', launch: launch.value });
 $('apply').onclick = () => void apply();
+for (const [id, how] of [
+  ['do-it', 'do'],
+  ['print-it', 'print'],
+  ['inspect-it', 'inspect'],
+] as const) {
+  $(id).onclick = () => {
+    void runSelection(how);
+    view.focus();
+  };
+}
 $('restart').onclick = () => {
   if (
     confirm(

@@ -40,6 +40,7 @@ import {
 import { tags } from '@lezer/highlight';
 import type { LspClient } from './lsp-client';
 import { northtalk } from './language';
+import type { SelectionAction } from './session';
 
 // ------------------------------------------------------------- language
 
@@ -208,6 +209,72 @@ const hints = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 });
 
+// ------------------------------------------------------------- print it
+
+class PrintedWidget extends WidgetType {
+  constructor(private readonly lines: readonly string[]) {
+    super();
+  }
+  override eq(other: PrintedWidget) {
+    return other.lines.join('\n') === this.lines.join('\n');
+  }
+  override toDOM() {
+    const span = document.createElement('span');
+    const last = this.lines.at(-1);
+    span.className = last?.startsWith('! ') ? 'cm-printed bang' : 'cm-printed';
+    span.textContent = ` ${last ?? '…'}`;
+    span.title = this.lines.length
+      ? this.lines.join('\n')
+      : 'Nothing printed yet';
+    return span;
+  }
+}
+
+const setPrinted = StateEffect.define<{
+  lines: readonly string[];
+  offset: number;
+} | null>();
+// The latest print it, after its selection, until the text changes.
+const printed = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    if (tr.docChanged) {
+      value = Decoration.none;
+    }
+    for (const e of tr.effects) {
+      if (e.is(setPrinted)) {
+        value =
+          e.value === null || e.value.offset > tr.state.doc.length
+            ? Decoration.none
+            : Decoration.set([
+                Decoration.widget({
+                  widget: new PrintedWidget(e.value.lines),
+                  side: 1,
+                }).range(e.value.offset),
+              ]);
+      }
+    }
+    return value;
+  },
+  provide: f => EditorView.decorations.from(f),
+});
+/** Shows what a print it printed after `offset`, or clears it. */
+export const printedAt = (
+  at: { lines: readonly string[]; offset: number } | null,
+) => setPrinted.of(at);
+
+/** The selected text, or the cursor's line, and where it ends. */
+export const selectionToRun = (
+  state: EditorState,
+): { end: number; source: string } => {
+  const { from, to } = state.selection.main;
+  if (from !== to) {
+    return { source: state.sliceDoc(from, to), end: to };
+  }
+  const line = state.doc.lineAt(from);
+  return { source: line.text, end: line.to };
+};
+
 // ------------------------------------------------------------- the editor
 
 export type EditorHooks = {
@@ -217,6 +284,8 @@ export type EditorHooks = {
   /** Go to a location in another tab, by URI. */
   goTo(uri: string, line: number, character: number): void;
   references(lines: string[]): void;
+  /** Do it, print it or inspect it: run the selection against the session. */
+  run(how: SelectionAction): void;
   save(): void;
   selected?(): void;
 };
@@ -352,6 +421,19 @@ export const createEditorState = (
     { key: 'F12', run: definition },
     { key: 'Shift-F12', run: references },
     { key: 'F2', run: rename },
+    ...(
+      [
+        ['Mod-d', 'do'],
+        ['Mod-p', 'print'],
+        ['Mod-i', 'inspect'],
+      ] as const
+    ).map(([key, how]) => ({
+      key,
+      run: () => {
+        hooks.run(how);
+        return true;
+      },
+    })),
     {
       key: 'Mod-s',
       run: () => {
@@ -377,6 +459,7 @@ export const createEditorState = (
     breakpoints,
     pausedLine,
     hints,
+    printed,
     lintGutter(),
     history(),
     drawSelection(),

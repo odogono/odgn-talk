@@ -57,7 +57,11 @@ export const createWorkbench = (view: EditorView) => {
   applyTheme();
 
   const selectInspector = (name: string) => {
-    if (!['syntax', 'canvas', 'debugger', 'replay', 'grants'].includes(name)) {
+    if (
+      !['syntax', 'inspect', 'canvas', 'debugger', 'replay', 'grants'].includes(
+        name,
+      )
+    ) {
       name = 'syntax';
     }
     preferences.inspector = name;

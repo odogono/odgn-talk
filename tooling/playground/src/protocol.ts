@@ -12,6 +12,7 @@ import type {
   Faults,
   Library,
   PauseView,
+  SelectionAction,
   TabBreakpoint,
   Tabs,
 } from './session';
@@ -52,6 +53,13 @@ export type SessionState = {
   prompt: Prompt;
   revision: number;
   savedLibraries: Library[];
+  /** The latest print it or inspect it, with what its Entry has printed so far. */
+  selection: {
+    how: Exclude<SelectionAction, 'do'>;
+    id: number;
+    lines: string[];
+    source: string;
+  } | null;
   setup: string[];
   /** The session source, for keeping the Script tab in sync. */
   source: string;
@@ -70,6 +78,8 @@ export type SessionRequest =
   | { t: 'canvasExample' }
   | { launch: string; t: 'fresh'; tabs: Tabs }
   | { launch: string; t: 'evaluate' }
+  /** Do it, print it or inspect it: a tab's selection, run as an Entry. */
+  | { how: SelectionAction; source: string; t: 'selection'; tab: string }
   | { script: string; t: 'apply' }
   | { library: Library; t: 'saveLibrary' }
   | { t: 'restart'; tabs: Tabs }
@@ -100,6 +110,8 @@ export type SessionRequest =
 export type SessionResponse =
   | { state: SessionState; t: 'state' }
   | { result: ApplyResult; state: SessionState; t: 'applied' }
+  /** The selection's id in `state.selection`, or null if it was refused. */
+  | { id: number | null; state: SessionState; t: 'selected' }
   | {
       difference: { actual: string; expected: string; line: number };
       state: SessionState;

@@ -23,9 +23,14 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
 
 A leading `--|` block keeps the prompt open until its declaration is complete. Blank lines and ordinary comments break attachment; a block directly before an expression, statement or Import is refused. Cancel drops unsubmitted input without recording an Entry. Pasting multiple lines submits each completed physical line through the same prompt rules and leaves the final line for Enter.
 
-- **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Canvas, Debug, Replay and Setup. Preferences persist locally; narrow screens stack the panes.
+- **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Inspect, Canvas, Debug, Replay and Setup. Preferences persist locally; narrow screens stack the panes.
 - **Run fresh** loads current tabs into a replacement session, then evaluates the visible Launch Entry. Invalid source or Libraries leave the old session intact. After loading succeeds, execution errors belong to the new session. An empty Launch Entry only loads.
 - **Evaluate** runs the Launch Entry against the currently loaded session, without applying pending edits. **Apply** retains the live workflow below.
+- **Do it, Print it, Inspect it** (Ctrl/Cmd-D, -P, -I) run the editor's selection, or the cursor's line, against the live session as an ordinary Entry, so the console and the Session Transcript show it like one typed at the prompt. The selection's shared indentation is dropped.
+  - **Print it** shows beside the selection the last line its Entry printed: its value, or an error. The tooltip shows every line. Lines a Run prints later, once it goes on in the background, update it; editing the tab clears it.
+  - **Inspect it** enters `:inspect` with the selected expression and shows its rows in the **Inspect** inspector.
+  - A selected declaration in the Script tab is entered like one at the prompt, so it applies. A Library tab's declarations load only by saving the tab.
+  - A statement selected from inside a Handler doesn't have the Handler's locals, so the Session Host reports them as unknown names. An unfinished Entry or a Session Command is refused without an Entry.
 - **Syntax** follows the current editor text, not loaded code. Select a node to highlight source; selecting source reveals its node. Incomplete source remains inspectable.
 
 - **The Script tab is the session source** ([ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)):
