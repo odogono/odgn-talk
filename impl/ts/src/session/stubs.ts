@@ -59,6 +59,11 @@ export class Stubs {
     this.effects.set(key, [...(this.effects.get(key) ?? []), result]);
   }
 
+  /** Whether a Stub is queued for the Operation. */
+  queued(operation: string): boolean {
+    return (this.queues.get(operation)?.length ?? 0) > 0;
+  }
+
   takeEffect(grant: string, phase: string): EffectResult | undefined {
     return this.effects.get(`${grant}.${phase}`)?.shift();
   }

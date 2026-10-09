@@ -1,0 +1,10 @@
+script variable transfers = 0
+on transfer fromId, toId, amount
+  put transfers + 1 into transfers
+  ask db to change "INSERT INTO log (amount) VALUES (?)", [amount], 0
+  ask db to begin
+  ask db to change "UPDATE accounts SET balance = balance - ? WHERE id = ?", [amount, fromId], 0
+  if the changes of it is 0 then throw {code: "no account", id: fromId}
+  ask db to change "UPDATE accounts SET balance = balance + ? WHERE id = ?", [amount, toId], 0
+  ask db to commit
+end transfer

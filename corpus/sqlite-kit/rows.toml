@@ -1,0 +1,55 @@
+# max and too many rows (chapter 9, Row limit), calls that fail as a whole
+# (Atomic calls), and constraints by kind (Constraints).
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 3 } } }
+
+[[sequence]]
+name = "a call gives at most max rows, and never a truncated result"
+setup = ["CREATE TABLE t (v)", "INSERT INTO t (v) VALUES (1), (2), (3), (4)"]
+steps = [
+  { in = "a", do = "query", sql = "SELECT v FROM t WHERE v <= 2", max = 2, gives = '[{v: 1}, {v: 2}]' },
+  { in = "a", do = "query", sql = "SELECT v FROM t WHERE v <= 3", max = 2, error = '{code: "too many rows", max: 2}' },
+  { in = "a", do = "query", sql = "SELECT v FROM t WHERE v <= 3", gives = '[{v: 1}, {v: 2}, {v: 3}]' },
+  { in = "a", do = "query", sql = "SELECT v FROM t", error = '{code: "too many rows", max: 3}' },
+  { in = "a", do = "query", sql = "SELECT v FROM t", max = 0, error = '{code: "too many rows", max: 0}' },
+  { in = "a", do = "query", sql = "SELECT v FROM t WHERE v > 9", max = 0, gives = '[]' },
+]
+
+[[sequence]]
+name = "a change past max fails and leaves its changes undone"
+setup = ["CREATE TABLE t (id INTEGER PRIMARY KEY, v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (2), (3) RETURNING id", max = 1, error = '{code: "too many rows", max: 1}' },
+  { in = "a", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (2) RETURNING id", max = 1, gives = '{changes: 1, rows: [{id: 2}]}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t ORDER BY id", gives = '[{v: 1}, {v: 2}]' },
+]
+
+[[sequence]]
+name = "a broken constraint fails with its kind, and the statement is undone"
+setup = [
+  "CREATE TABLE p (id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT NOT NULL, age INTEGER CHECK (age >= 0))",
+  "CREATE TABLE c (id INTEGER PRIMARY KEY, p INTEGER REFERENCES p (id))",
+  "CREATE TABLE k (a, b, PRIMARY KEY (a, b))",
+  "CREATE TABLE s (n INTEGER) STRICT",
+  "CREATE TABLE g (v)",
+  "CREATE TRIGGER g_guard BEFORE INSERT ON g WHEN NEW.v < 0 BEGIN SELECT RAISE(ABORT, 'negative'); END",
+  "INSERT INTO p (id, code, name, age) VALUES (1, 'x', 'Ann', 30)",
+  "INSERT INTO k (a, b) VALUES (1, 1)",
+]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO p (code, name) VALUES ('y', 'Bo'), ('x', 'Cy')", max = 0, error = '{code: "constraint", kind: "unique"}' },
+  { in = "a", do = "change", sql = "INSERT INTO k (a, b) VALUES (1, 1)", max = 0, error = '{code: "constraint", kind: "primary key"}' },
+  { in = "a", do = "change", sql = "INSERT INTO p (code) VALUES ('z')", max = 0, error = '{code: "constraint", kind: "not null"}' },
+  { in = "a", do = "change", sql = "UPDATE p SET age = -1", max = 0, error = '{code: "constraint", kind: "check"}' },
+  { in = "a", do = "change", sql = "INSERT INTO c (p) VALUES (9)", max = 0, error = '{code: "constraint", kind: "foreign key"}' },
+  { in = "a", do = "change", sql = "INSERT INTO s (n) VALUES ('many')", max = 0, error = '{code: "constraint", kind: "datatype"}' },
+  { in = "a", do = "change", sql = "INSERT INTO g (v) VALUES (-1)", max = 0, error = '{code: "constraint", kind: "trigger"}' },
+  { in = "a", do = "query", sql = "SELECT count(*) AS n FROM p", gives = '[{n: 1}]' },
+  { in = "a", do = "change", sql = "INSERT INTO c (p) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT (SELECT count(*) FROM p) AS p, (SELECT count(*) FROM c) AS c, (SELECT count(*) FROM g) AS g", gives = '[{p: 1, c: 1, g: 0}]' },
+]

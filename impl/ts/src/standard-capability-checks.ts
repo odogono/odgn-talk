@@ -3,7 +3,12 @@
 import type { Value } from './values';
 
 type Checks = {
-  arguments?: (args: readonly Value[], binding: unknown) => void;
+  /** `named` is the call's `capability` and `operation` fields. */
+  arguments?: (
+    args: readonly Value[],
+    binding: unknown,
+    named: readonly (readonly [string, Value])[],
+  ) => void;
   error?: (code: string, data: Value) => boolean;
   result?: (value: Value, args: readonly Value[]) => boolean;
 };

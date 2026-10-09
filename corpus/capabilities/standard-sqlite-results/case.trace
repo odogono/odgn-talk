@@ -1,0 +1,177 @@
+# Unblessed: the Core's sqlite result checks (#467); first blessing awaits human review.
+# Each Stub stands for an implementation's answer. The Core checks its form
+# (host error), then its column names (sql), then each value row by row
+# (unrepresentable), and raises the first failure. The last few show Host
+# failures passed through, and one with a code query does not declare.
+> load s identity=68b277254f8e0ffafcff475faa8025b3b4afef013a2487022928206eeb1a1424
+> stub sqlite.query value={columns: ["a", "b"], rows: [[{real: "NaN"}, 1]]}
+> deliver d1 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r1.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "a"}
+raise s/r1 code="unrepresentable" at=s:4 pos=2:3
+seg s/r1 start delivery=d1 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=read error={code: "unrepresentable", column: "a", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "b"], rows: [[1, {real: "Infinity"}]]}
+> deliver d2 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r2.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "b"}
+raise s/r2 code="unrepresentable" at=s:4 pos=2:3
+seg s/r2 start delivery=d2 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=read error={code: "unrepresentable", column: "b", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "b"], rows: [[{real: "-Infinity"}, 1]]}
+> deliver d3 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r3.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "a"}
+raise s/r3 code="unrepresentable" at=s:4 pos=2:3
+seg s/r3 start delivery=d3 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=read error={code: "unrepresentable", column: "a", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "b"], rows: [[{real: "1e34"}, 1]]}
+> deliver d4 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r4.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "a"}
+raise s/r4 code="unrepresentable" at=s:4 pos=2:3
+seg s/r4 start delivery=d4 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=read error={code: "unrepresentable", column: "a", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "b"], rows: [[{real: "-9.999999999999999e33"}, {real: "1e-7"}]]}
+> deliver d5 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r5.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "a"}
+raise s/r5 code="unrepresentable" at=s:4 pos=2:3
+seg s/r5 start delivery=d5 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r5 outcome=errored delivery=d5 handler=read error={code: "unrepresentable", column: "a", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "a"], rows: [[{real: "NaN"}, 1]]}
+> deliver d6 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r6.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "sql", reason: "duplicate column a"}
+raise s/r6 code="sql" at=s:4 pos=2:3
+seg s/r6 start delivery=d6 handler=read clause=1 fuel=27 alloc=96 state=0 end=error
+run s/r6 outcome=errored delivery=d6 handler=read error={code: "sql", reason: "duplicate column a", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=27 alloc=96
+pumped state=idle fuel=27
+> stub sqlite.query value={columns: ["a", "b"], rows: [[1, {real: "NaN"}], [{real: "1e34"}, 1]]}
+> deliver d7 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r7.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "b"}
+raise s/r7 code="unrepresentable" at=s:4 pos=2:3
+seg s/r7 start delivery=d7 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r7 outcome=errored delivery=d7 handler=read error={code: "unrepresentable", column: "b", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query value={columns: ["a", "b"], rows: [[1]]}
+> deliver d8 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r8.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r8.c1 op=db.query
+raise s/r8 code="host error" at=s:4 pos=2:3
+seg s/r8 start delivery=d8 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r8 outcome=errored delivery=d8 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", "b"], rows: [[1, 2], [3, 4], [5, 6]]}
+> deliver d9 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r9.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r9.c1 op=db.query
+raise s/r9 code="host error" at=s:4 pos=2:3
+seg s/r9 start delivery=d9 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r9 outcome=errored delivery=d9 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", 1], rows: []}
+> deliver d10 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r10.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r10.c1 op=db.query
+raise s/r10 code="host error" at=s:4 pos=2:3
+seg s/r10 start delivery=d10 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r10 outcome=errored delivery=d10 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", "b"], rows: [[true, 1]]}
+> deliver d11 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r11.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r11.c1 op=db.query
+raise s/r11 code="host error" at=s:4 pos=2:3
+seg s/r11 start delivery=d11 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r11 outcome=errored delivery=d11 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", "b"], rows: [[[1], 1]]}
+> deliver d12 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r12.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r12.c1 op=db.query
+raise s/r12 code="host error" at=s:4 pos=2:3
+seg s/r12 start delivery=d12 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r12 outcome=errored delivery=d12 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", "b"]}
+> deliver d13 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r13.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r13.c1 op=db.query
+raise s/r13 code="host error" at=s:4 pos=2:3
+seg s/r13 start delivery=d13 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r13 outcome=errored delivery=d13 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query value={columns: ["a", "a"], rows: [[1]]}
+> deliver d14 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r14.c1 op=db.query args=["SELECT a, b FROM t", []] error={}
+call-failed s/r14.c1 op=db.query
+raise s/r14 code="host error" at=s:4 pos=2:3
+seg s/r14 start delivery=d14 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r14 outcome=errored delivery=d14 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query error={code: "sql", reason: "near SELEC: syntax error"}
+> deliver d15 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r15.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "sql", reason: "near SELEC: syntax error"}
+raise s/r15 code="sql" at=s:4 pos=2:3
+seg s/r15 start delivery=d15 handler=read clause=1 fuel=27 alloc=102 state=0 end=error
+run s/r15 outcome=errored delivery=d15 handler=read error={code: "sql", reason: "near SELEC: syntax error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=27 alloc=102
+pumped state=idle fuel=27
+> stub sqlite.query error={code: "not read-only"}
+> deliver d16 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r16.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "not read-only"}
+raise s/r16 code="not read-only" at=s:4 pos=2:3
+seg s/r16 start delivery=d16 handler=read clause=1 fuel=25 alloc=32 state=0 end=error
+run s/r16 outcome=errored delivery=d16 handler=read error={code: "not read-only", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=25 alloc=32
+pumped state=idle fuel=25
+> stub sqlite.query error={code: "too many rows", max: 2}
+> deliver d17 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r17.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "too many rows", max: 2}
+raise s/r17 code="too many rows" at=s:4 pos=2:3
+seg s/r17 start delivery=d17 handler=read clause=1 fuel=26 alloc=75 state=0 end=error
+run s/r17 outcome=errored delivery=d17 handler=read error={code: "too many rows", max: 2, capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=75
+pumped state=idle fuel=26
+> stub sqlite.query error={code: "unrepresentable", column: "b"}
+> deliver d18 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r18.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "unrepresentable", column: "b"}
+raise s/r18 code="unrepresentable" at=s:4 pos=2:3
+seg s/r18 start delivery=d18 handler=read clause=1 fuel=26 alloc=79 state=0 end=error
+run s/r18 outcome=errored delivery=d18 handler=read error={code: "unrepresentable", column: "b", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=26 alloc=79
+pumped state=idle fuel=26
+> stub sqlite.query error={code: "constraint", kind: "unique"}
+> deliver d19 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r19.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "constraint", kind: "unique"}
+call-failed s/r19.c1 op=db.query
+raise s/r19 code="host error" at=s:4 pos=2:3
+seg s/r19 start delivery=d19 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r19 outcome=errored delivery=d19 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> stub sqlite.query error={code: "sql"}
+> deliver d20 to=s message=read
+> pump clock=2026-10-09T12:00:00Z
+call s/r20.c1 op=db.query args=["SELECT a, b FROM t", []] error={code: "sql"}
+call-failed s/r20.c1 op=db.query
+raise s/r20 code="host error" at=s:4 pos=2:3
+seg s/r20 start delivery=d20 handler=read clause=1 fuel=24 alloc=16 state=0 end=error
+run s/r20 outcome=errored delivery=d20 handler=read error={code: "host error", capability: "db", operation: "query", at: {unit: "s", handler: "read", line: 2, column: 3}} fuel=24 alloc=16
+pumped state=idle fuel=24
+> vars
+vars s

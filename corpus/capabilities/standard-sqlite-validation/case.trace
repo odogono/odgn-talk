@@ -1,0 +1,62 @@
+# Unblessed: the Core's sqlite argument checks (#467); first blessing awaits human review.
+# After the Shape checks the Core checks max, a whole number from 0 to the
+# binding's cap of 10, then each parameter's kind, before it charges the call
+# or runs the implementation. A whole max written with zeros is accepted.
+> load s identity=7536c02f065d86e9f17e15d636e48710dd82b4e657063006e63e32bcc7378d8a
+> deliver d1 to=s message=read args=[[], -1]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r1 code="out of range" at=s:11 pos=5:3
+seg s/r1 start delivery=d1 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=read error={code: "out of range", field: "max", value: -1, at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d2 to=s message=read args=[[], 1.5]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r2 code="out of range" at=s:11 pos=5:3
+seg s/r2 start delivery=d2 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=read error={code: "out of range", field: "max", value: 1.5, at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d3 to=s message=read args=[[], 11]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r3 code="out of range" at=s:11 pos=5:3
+seg s/r3 start delivery=d3 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=read error={code: "out of range", field: "max", value: 11, at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d4 to=s message=read args=[[1, 2 m], 0]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r4 code="wrong kind" at=s:11 pos=5:3
+seg s/r4 start delivery=d4 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=read error={code: "wrong kind", expected: "nothing or number or text or bytes or boolean", got: "quantity", value: 2 m, capability: "db", operation: "query", argument: 2, path: [2], at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d5 to=s message=read args=[{a: 1, when: 2026-10-09}, 0]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r5 code="wrong kind" at=s:11 pos=5:3
+seg s/r5 start delivery=d5 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r5 outcome=errored delivery=d5 handler=read error={code: "wrong kind", expected: "nothing or number or text or bytes or boolean", got: "civil date", value: 2026-10-09, capability: "db", operation: "query", argument: 2, path: ["when"], at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d6 to=s message=read args=[[[1]], 11]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r6 code="out of range" at=s:11 pos=5:3
+seg s/r6 start delivery=d6 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r6 outcome=errored delivery=d6 handler=read error={code: "out of range", field: "max", value: 11, at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d7 to=s message=read args=["x", 0]
+> pump clock=2026-10-09T12:00:00Z
+raise s/r7 code="wrong kind" at=s:11 pos=5:3
+seg s/r7 start delivery=d7 handler=read clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r7 outcome=errored delivery=d7 handler=read error={code: "wrong kind", expected: "list or map", got: "text", value: "x", capability: "db", operation: "query", argument: 2, at: {unit: "s", handler: "read", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d8 to=s message=keep
+> pump clock=2026-10-09T12:00:00Z
+raise s/r8 code="not encodable" at=s:20 pos=8:3
+seg s/r8 start delivery=d8 handler=keep clause=1 fuel=18 alloc=88 state=0 end=error
+run s/r8 outcome=errored delivery=d8 handler=keep error={code: "not encodable", kind: "function", path: [2, 1], at: {unit: "s", handler: "keep", line: 8, column: 3}} fuel=18 alloc=88
+pumped state=idle fuel=18
+> stub sqlite.query value={columns: ["1"], rows: [[1]]}
+> deliver d9 to=s message=read args=[[nothing, 1, 1.5, "t", <<0x00>>, false], 2.00]
+> pump clock=2026-10-09T12:00:00Z
+call s/r9.c1 op=db.query args=["SELECT 1", [nothing, 1, 1.5, "t", <<0x00>>, false], 2.00] result=[{"1": 1}] charged=2
+seg s/r9 start delivery=d9 handler=read clause=1 fuel=29 alloc=81 state=0 end=return
+run s/r9 outcome=completed delivery=d9 handler=read fuel=29 alloc=81
+pumped state=idle fuel=29
+> vars
+vars s

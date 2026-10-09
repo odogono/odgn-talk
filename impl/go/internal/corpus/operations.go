@@ -132,6 +132,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"today", "now", "toCivil", "toInstant", "offset", "zone"}
 		case "store":
 			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
+		case "sqlite":
+			names = []string{"query", "change", "begin", "commit", "rollback"}
 		case "locale":
 			names = []string{"compare", "rank", "upper", "lower", "numberSymbols", "monthNames", "dayNames", "tag"}
 		}
@@ -179,6 +181,24 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"keys":      {Mode: talk.Immediate, Args: []talk.Shape{talk.Optional(talk.TextShape)}},
 				"increment": {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.Optional(talk.AnyShape)}},
 				"swap":      {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.AnyShape, talk.AnyShape}},
+			}
+		case "sqlite":
+			perRow := int64(0)
+			if raw, present := row["perRow"]; present {
+				n, ok := raw.(int64)
+				if !ok {
+					return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "invalid sqlite perRow"}
+				}
+				perRow = n
+			}
+			def, err = core.SqliteCapability(&replaySqlite{replay: out, databases: map[string]*talk.SegmentLifecycle{}}, costs, perRow)
+			statement := []talk.Shape{talk.TextShape, talk.AnyShape, talk.Optional(talk.NumberShape)}
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"query":    {Mode: talk.Immediate, Args: statement},
+				"change":   {Mode: talk.Immediate, Args: statement},
+				"begin":    {Mode: talk.Immediate},
+				"commit":   {Mode: talk.Immediate},
+				"rollback": {Mode: talk.Immediate},
 			}
 		case "locale":
 			def, err = core.LocaleCapability(replayLocale{out}, costs)
@@ -256,15 +276,23 @@ func (o *operationReplay) grants(setup Setup) (map[string]*talk.Grant, error) {
 		if d == nil {
 			return nil, fmt.Errorf("unknown Capability %s", defName)
 		}
+		binding := row["binding"]
+		if d.Name() == "sqlite" {
+			binding = sqliteBindingOf(binding)
+		}
 		if row["ops"] == "all" {
-			out[name] = d.GrantAll(row["binding"])
+			g := d.GrantAll(binding)
+			if g == nil {
+				return nil, &talk.HostError{Code: talk.InvalidValue, Detail: "the binding has no Segment Coordinator"}
+			}
+			out[name] = g
 			continue
 		}
 		var ops []string
 		for _, op := range row["ops"].([]any) {
 			ops = append(ops, op.(string))
 		}
-		g, e := d.Grant(ops, row["binding"])
+		g, e := d.Grant(ops, binding)
 		if e != nil {
 			return nil, e
 		}

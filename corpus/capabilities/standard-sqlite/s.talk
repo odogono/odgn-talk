@@ -1,0 +1,14 @@
+script variable people = []
+script variable added = nothing
+on list
+  ask reader to query "SELECT id, name, score, ratio, photo, active FROM people WHERE active = ?", [true]
+  put it into people
+end list
+on find id
+  ask db to query "SELECT name FROM people WHERE id = :id", {id: id}, 1
+  put the name of item 1 of it into added
+end find
+on insert names
+  ask db to change "INSERT INTO people (name) VALUES (?), (?) RETURNING id", names, nothing
+  put it into added
+end insert

@@ -1,0 +1,29 @@
+# Unblessed: sqlite row charges (#467); first blessing awaits human review.
+# A call charges max times perRow, 10, after its declared cost and before the
+# implementation runs. 5 rows fit the Run's 100 Fuel; 9 do not, so the call
+# has a Limit Fault and takes no Stub. An omitted max is the binding's cap,
+# whose charge is past every Fuel limit.
+> load s identity=51a43a242e630973683667ccd85741ca6f9282c1fe0d4e9b231ddb0a9ae81d4b
+> stub sqlite.query value={columns: ["n"], rows: [[1]]}
+> deliver d1 to=s message=read args=[5]
+> pump clock=2026-10-09T12:00:00Z
+call s/r1.c1 op=db.query args=["SELECT 1 AS n", [], 5] result=[{n: 1}] charged=50
+seg s/r1 start delivery=d1 handler=read clause=1 fuel=86 alloc=113 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=read fuel=86 alloc=113
+pumped state=idle fuel=86
+> deliver d2 to=s message=read args=[9]
+> pump clock=2026-10-09T12:00:00Z
+call s/r2.c1 op=db.query args=["SELECT 1 AS n", [], 9]
+fault s/r2 limit=fuel at=s:11 pos=4:3 rollback=[count]
+seg s/r2 start delivery=d2 handler=read clause=1 fuel=29 alloc=32 state=16 end=fault
+run s/r2 outcome=limit-fault delivery=d2 handler=read limit=fuel fuel=29 alloc=32
+pumped state=idle fuel=29
+> deliver d3 to=s message=read args=[nothing]
+> pump clock=2026-10-09T12:00:00Z
+call s/r3.c1 op=db.query args=["SELECT 1 AS n", [], nothing]
+fault s/r3 limit=fuel at=s:11 pos=4:3 rollback=[count]
+seg s/r3 start delivery=d3 handler=read clause=1 fuel=29 alloc=32 state=16 end=fault
+run s/r3 outcome=limit-fault delivery=d3 handler=read limit=fuel fuel=29 alloc=32
+pumped state=idle fuel=29
+> vars
+vars s count=1

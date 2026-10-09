@@ -1,0 +1,65 @@
+# Contention and reads (chapter 9, Contention and Reads). Interleaved Segments
+# stand for a Run preempted inside its Segment while it holds the write lock.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } }, alias = { capability = "sqlite", binding = { database = "app", maxRows = 10 } } }
+
+[[sequence]]
+name = "a change or begin while another Segment writes is sqlite busy, and changes nothing"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", hook = "begin" },
+  { in = "b", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, error = '{code: "sqlite busy"}' },
+  { in = "b", do = "begin", error = '{code: "sqlite busy"}' },
+  { in = "b", do = "change", grant = "alias", sql = "SELECT 1 AS one", error = '{code: "sqlite busy"}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", hook = "commit" },
+  { in = "c", do = "query", sql = "SELECT v FROM t ORDER BY v", gives = '[{v: 1}, {v: 2}]' },
+]
+
+[[sequence]]
+name = "reads are never blocked: the writer sees its changes, and others the committed state"
+setup = ["CREATE TABLE t (v)", "INSERT INTO t (v) VALUES (0)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "UPDATE t SET v = 1", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 0}]' },
+  { in = "a", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "a", do = "query", grant = "alias", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "c", hook = "begin" },
+  { in = "c", do = "change", sql = "UPDATE t SET v = 2", max = 0, error = '{code: "sqlite busy"}' },
+  { in = "c", do = "query", sql = "SELECT v FROM t", gives = '[{v: 0}]' },
+  { in = "c", hook = "commit" },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+]
+
+[[sequence]]
+name = "the begin hook takes no lock; the first change or begin does"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "b", hook = "begin" },
+  { in = "b", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, error = '{code: "sqlite busy"}' },
+  { in = "b", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", do = "commit" },
+  { in = "b", hook = "commit" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "c", do = "query", sql = "SELECT v FROM t ORDER BY v", gives = '[{v: 1}, {v: 2}]' },
+]
+
+[[sequence]]
+name = "a rollback releases the lock"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "rollback" },
+  { in = "b", hook = "begin" },
+  { in = "b", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", hook = "commit" },
+  { in = "c", do = "query", sql = "SELECT v FROM t", gives = '[{v: 2}]' },
+]

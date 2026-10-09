@@ -16,6 +16,7 @@ import {
   consoleCapability,
   calendarCapability,
   localeCapability,
+  sqliteCapability,
   storeCapability,
   timerCapability,
   defineObjectKind,
@@ -32,6 +33,8 @@ import {
   type ScopeDecl,
   type SegmentContext,
   type SegmentCoordinator,
+  type SqlRows,
+  type SqliteBinding,
   type EffectResult,
   HostError,
   LoadError,
@@ -207,7 +210,7 @@ export type Setup = {
     grants?: Record<
       string,
       {
-        binding?: string;
+        binding?: string | SqliteBinding;
         capability?: string;
         coordinator?: string;
         ops: string[] | 'all';
@@ -226,6 +229,7 @@ export type Setup = {
   standard?: {
     capability: string;
     costs: Record<string, { alloc?: number; fuel?: number }>;
+    perRow?: number;
   }[];
 };
 
@@ -660,11 +664,130 @@ const capabilitiesOf = (
           costs,
         ) as CapabilityDef<unknown>,
       );
+    } else if (capability === 'sqlite') {
+      // The runner keeps no database: each Stub stands for the
+      // implementation's answer, which the Core converts, and each database
+      // has one coordinator whose hooks take `stub-effect` lines.
+      const answer = (operation: string, call: Call<SqliteBinding>): Value => {
+        try {
+          // A recorded call holds the converted answer, not the
+          // implementation's, so only a Stub can stand for it.
+          if (recordedCall(call) && !stubs.queued(`sqlite.${operation}`)) {
+            throw new DeferredCaseError('replaying sqlite from a live Host');
+          }
+          return stubs.take(`sqlite.${operation}`, call, true);
+        } finally {
+          crossing(call.id);
+        }
+      };
+      const nothingStub = (operation: string, call: Call<SqliteBinding>) => {
+        if (answer(operation, call).kind !== 'nothing') {
+          throw new Error(`A sqlite.${operation} Stub must give nothing`);
+        }
+      };
+      const databases = new Map<string, SegmentCoordinator>();
+      out.set(
+        capability,
+        sqliteCapability(
+          {
+            coordinator: database => {
+              if (!databases.has(database)) {
+                databases.set(database, {
+                  begin: context => lifecycle(context, 'begin'),
+                  commit: context => lifecycle(context, 'commit'),
+                  rollback: context => lifecycle(context, 'rollback'),
+                });
+              }
+              return databases.get(database)!;
+            },
+            query: call => sqlRowsOf(answer('query', call)),
+            change: call =>
+              sqlRowsOf(answer('change', call)) as SqlRows & {
+                changes: number;
+              },
+            begin: call => nothingStub('begin', call),
+            commit: call => nothingStub('commit', call),
+            rollback: call => nothingStub('rollback', call),
+          },
+          costs,
+          standard.perRow ?? 0,
+        ) as CapabilityDef<unknown>,
+      );
     } else {
       throw new DeferredCaseError(`the Standard Capability ${capability}`);
     }
   }
   return out;
+};
+
+// What a `sqlite` Stub stands for (chapter 11, Stubs): the implementation's
+// `{columns, rows, changes}`, with each SQL value as `params` would bind it.
+// Anything else is passed on as a value no implementation may give, for the
+// Core to refuse.
+const notSql = Object.freeze({ notSql: true });
+const sqlOf = (v: Value): unknown => {
+  switch (v.kind) {
+    case 'nothing':
+      return null;
+    case 'text':
+      return v.asText()!;
+    case 'bytes':
+      return v.asBytes()!;
+    case 'number': {
+      const canonical = v.asDecimal()!.toString();
+      if (!canonical.includes('.')) {
+        const n = BigInt(canonical);
+        if (n >= -(2n ** 63n) && n < 2n ** 63n) {
+          return n;
+        }
+      }
+      return Number(canonical);
+    }
+    case 'map': {
+      const entries = v.entries();
+      const t =
+        entries.length === 1 && entries[0]![0] === 'real'
+          ? entries[0]![1].asText()
+          : undefined;
+      if (t === undefined) {
+        return notSql;
+      }
+      if (t === 'NaN' || t === 'Infinity' || t === '-Infinity') {
+        return Number(t);
+      }
+      if (!/^-?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?$/.test(t)) {
+        throw new Error(`A sqlite Stub's real must be decimal text: ${t}`);
+      }
+      return Number(t);
+    }
+    default:
+      return notSql;
+  }
+};
+const sqlListOf = (v: Value, item: (v: Value) => unknown): unknown =>
+  v.kind === 'list' ? valuesOf(v).map(item) : notSql;
+const sqlRowsOf = (stub: Value): SqlRows => {
+  if (stub.kind !== 'map') {
+    return notSql as unknown as SqlRows;
+  }
+  const entries = new Map(stub.entries());
+  const changes = entries.get('changes');
+  return {
+    columns: entries.has('columns')
+      ? sqlListOf(entries.get('columns')!, c => c.asText() ?? notSql)
+      : undefined,
+    rows: entries.has('rows')
+      ? sqlListOf(entries.get('rows')!, row => sqlListOf(row, sqlOf))
+      : undefined,
+    ...(changes
+      ? {
+          changes:
+            changes.kind === 'number'
+              ? Number(changes.asDecimal()!.toString())
+              : notSql,
+        }
+      : {}),
+  } as unknown as SqlRows;
 };
 
 const valuesOf = (list: Value): Value[] =>

@@ -54,7 +54,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 		}
 	}
 	if check := grant.definition.checks[opName].arguments; check != nil {
-		if err := check(args, grant.binding); err != nil {
+		if err := check(args, grant.binding, named); err != nil {
 			return corevalue.Value{}, err, false
 		}
 	}

@@ -1914,6 +1914,15 @@ var Corpus = CorpusTable{
 			},
 		},
 		CorpusTableSetupEntry{
+			Table: "standard",
+			Key:   "perRow",
+			Is:    "for `sqlite`, the per-row Fuel cost its factory takes, 0 if absent",
+			Kinds: []string{
+				"trace",
+				"disassembly",
+			},
+		},
+		CorpusTableSetupEntry{
 			Table: "objectKinds",
 			Key:   "name",
 			Is:    "an Object Kind's name",
@@ -2013,7 +2022,7 @@ var Corpus = CorpusTable{
 		CorpusTableSetupEntry{
 			Table: "scripts",
 			Key:   "grants",
-			Is:    "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding); optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own",
+			Is:    "its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `\"all\"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding), or for `sqlite` a table `{database, tables, maxRows}`; optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own",
 			Kinds: []string{
 				"trace",
 				"disassembly",

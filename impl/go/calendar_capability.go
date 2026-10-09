@@ -100,7 +100,7 @@ func calendarInstantOptions(args []Value) (word, zone string) {
 	}
 	return word, calendarText(args, 2)
 }
-func calendarInstantDomain(args []corevalue.Value, _ any) *corevalue.Value {
+func calendarInstantDomain(args []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
 	var bad corevalue.Value
 	if !args[0].Date.HasTime {
 		bad = args[0]
