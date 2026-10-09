@@ -3,7 +3,7 @@
 **Session observation:** the [Session observation contract](../../spec/session-observation.md) is implemented here; coordinated release review remains in #370. The prompt and Script-tab Apply retain `--|` Declaration Documentation, and editor hover shares the Core's extraction and Built-in catalogue. `:trace`, `:untrace` and `:fuel` work as in the Session Host, including a multiline `:fuel` Entry ([#438](https://github.com/odogono/odgn-talk/issues/438)). `:describe` and `:apropos` share the Session Host's passive metadata and name discovery ([#437](https://github.com/odogono/odgn-talk/issues/437)). `:inspect` and `%` object Transcript replay use the shared Session Host ([#439](https://github.com/odogono/odgn-talk/issues/439)); new recordings include empty setup even when there are no Host Objects.
 
 
-The browser counterpart of the REPL, on the TS Core ([chapter 12](../../spec/12-sessions-and-tooling.md#the-playground)). A Playground session is an ordinary Session Host, so everything it prints and records is the same as the REPL's. The page itself is tooling, and none of it is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+The browser counterpart of the REPL, on the TS Core ([chapter 12](../../spec/12-sessions-and-tooling.md#the-playground)). It is published at <https://opendoorgonorth.com/odgn-talk/>. A Playground session is an ordinary Session Host, so everything it prints and records is the same as the REPL's. The page itself is tooling, and none of it is normative ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ## Running it
 
@@ -18,6 +18,15 @@ bun run --cwd tooling/playground test     # the session, Apply and link tests
 ```
 
 `dist/` is static: `index.html`, `style.css`, `main.js` and the workers, `session.worker.js`, `lsp.worker.js` and `syntax.worker.js`. Any web server can host it, with no server-side code. Set `PORT` to serve on another port.
+
+## Publishing
+
+The [Playground workflow](../../.github/workflows/playground.yml) builds `dist/` on each push to `main` and publishes it to GitHub Pages, at <https://opendoorgonorth.com/odgn-talk/>. A Shared Link made there is that URL plus its `#v1.…` fragment.
+
+- **The sub-path:** Pages serves the page under `/odgn-talk/`. The page loads its styles, script and workers relative to itself, and Pages redirects `/odgn-talk` to `/odgn-talk/`, so nothing names the sub-path.
+- **Source maps** are published with the scripts. They add about 12 MB to the site, but a browser fetches them only when its developer tools are open, and they make errors reported from the published site readable.
+- **The domain:** the account's Pages site has the custom domain `opendoorgonorth.com`, so `odogono.github.io/odgn-talk/` redirects there.
+- **Repository setting:** Pages must use GitHub Actions as its source (Settings → Pages → Build and deployment).
 
 ## What it does
 
