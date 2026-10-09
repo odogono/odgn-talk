@@ -243,6 +243,12 @@ mustParse(
   'tools/grammar/timeout-block/sketch.talk',
 );
 broken(join(import.meta.dir, 'timeout-block/broken.talk'));
+// Whose Clauses (ADR 0074), staged the same way.
+mustParse(
+  readFileSync(join(import.meta.dir, 'whose/sketch.talk'), 'utf8'),
+  'tools/grammar/whose/sketch.talk',
+);
+broken(join(import.meta.dir, 'whose/broken.talk'));
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

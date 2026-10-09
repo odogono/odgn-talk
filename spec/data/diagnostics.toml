@@ -173,6 +173,12 @@ at = "the call's name, the Lambda's `given`, or the key's `the` or `'s`"
 sources = ["ADR 0025", "#115"]
 
 [[diagnostic]]
+code = "not in a whose"
+raised_when = "A Whose Clause's condition calls anything but a Built-in, a call through a name that shadows a Built-in included, or holds a Lambda"
+at = "the call's name, or the Lambda's `given`"
+sources = ["ADR 0074", "#525"]
+
+[[diagnostic]]
 code = "not in a join"
 raised_when = "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`"
 at = "its first token, or the member's"

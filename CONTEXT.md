@@ -358,6 +358,14 @@ _Avoid_: find all, global match, comprehension
 The `collecting e into v` that may end a `repeat` head, gathering one value from each finished pass into a new list in `v`, its target.
 _Avoid_: accumulator, collect clause, comprehension
 
+**Whose Clause**:
+The `whose c` that may end an ordinal Chunk Expression or an Every Head, keeping only the chunks for which `c` is `true`, with `it` as the chunk being tested. `every item of xs whose it > 3` gives a list, and `the first item of xs whose it > 3` gives one chunk or Nothing.
+_Avoid_: filter reference, comprehension, where clause
+
+**Every Head**:
+The `every item of xs` that starts a Whose Clause's list form. It is never written without `whose`.
+_Avoid_: every reference, every chunk
+
 **Beginner Surface**:
 Every construct of the language that isn't an Advanced Construct. A beginner never needs anything outside it to do something ordinary.
 _Avoid_: beginner mode, subset, level

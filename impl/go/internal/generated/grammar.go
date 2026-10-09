@@ -149,6 +149,7 @@ var Grammar = GrammarTable{
 		"matches",
 		"mod",
 		"times",
+		"whose",
 		"with",
 	},
 	Ordinals: []string{
@@ -348,6 +349,7 @@ var Grammar = GrammarTable{
 			Word: "every",
 			Positions: []string{
 				"operand position, before `match` (the Match Search)",
+				"at the start of an expression, before a chunk kind's singular or `code` (an Every Head)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -453,6 +455,12 @@ var Grammar = GrammarTable{
 			Word: "variable",
 			Positions: []string{
 				"after `script` at the start of a top-level declaration",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "whose",
+			Positions: []string{
+				"after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -672,6 +680,10 @@ var Grammar = GrammarTable{
 			Attaches: "the outermost Chunk Expression of an `of` chain",
 		},
 		GrammarTableModifierEntry{
+			Name:     "whose",
+			Attaches: "an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does",
+		},
+		GrammarTableModifierEntry{
 			Name:     "lazily",
 			Attaches: "a Text Pattern element",
 		},
@@ -734,8 +746,12 @@ var Grammar = GrammarTable{
 			Rule: "after a comma in a Handler head, `during` followed by a word is the modifier",
 		},
 		GrammarTableDecisionEntry{
+			Name: "every-chunk",
+			Rule: "at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head",
+		},
+		GrammarTableDecisionEntry{
 			Name: "every-match",
-			Rule: "`every` followed by `match` starts a Match Search; otherwise `every` is a name",
+			Rule: "`every` followed by `match` starts a Match Search; otherwise `every` is a name, unless `every-chunk` applies",
 		},
 		GrammarTableDecisionEntry{
 			Name: "ignoring-case",

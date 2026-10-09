@@ -1361,7 +1361,22 @@ export class Parser {
     if (this.atWord('given')) {
       return this.lambda();
     }
-    return this.or();
+    // A Whose Clause is a whole Expression, as a Lambda is (ADR 0074): an
+    // Every Head is decided at the start of one, and an ordinal Chunk
+    // Expression takes `whose` only when it is the whole operand.
+    const t = this.peek(0);
+    if (this.isWord(t, 'every')) {
+      const n = this.la2('every-chunk', 'operator');
+      if (this.isWord(n) && (SINGULAR.has(n.v) || n.v === 'code')) {
+        return this.at(t, this.everyHead());
+      }
+    }
+    const e = this.or();
+    if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
+      const op = this.next('operator');
+      return this.at(op, { k: 'Whose', of: e, cond: this.expr() });
+    }
+    return e;
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
@@ -1839,6 +1854,32 @@ export class Parser {
       return this.call(w);
     }
     return { k: 'Name', name: w };
+  }
+
+  // `every item of xs whose c`: an Every Head, which must have a Whose Clause
+  // (ADR 0074).
+  everyHead(): Node {
+    this.next();
+    let kind = this.next().v;
+    if (kind === 'code') {
+      this.expectWord('point');
+      kind = 'code point';
+    }
+    this.expectWord('of', 'operator');
+    // The head is the outermost Chunk Expression, so it takes the chain's
+    // `delimited by`, as `the items of x delimited by d` does.
+    const src = this.postfix(this.primary());
+    let delimiter: Node | undefined;
+    if (
+      this.atOperatorWord('delimited') &&
+      this.isWord(this.la2('delimited-by', 'operator'), 'by')
+    ) {
+      this.next('operator');
+      this.next();
+      delimiter = this.postfix(this.primary());
+    }
+    this.expectWord('whose', 'operator');
+    return { k: 'Whose', every: true, kind, src, delimiter, cond: this.expr() };
   }
 
   // `item 2 of x`, `characters 2..4 of w`

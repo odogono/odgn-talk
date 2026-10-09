@@ -396,6 +396,7 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 | `the (k) of x` | ⟦k⟧ ⟦x⟧ `get-key-computed` |
 | `the p of x`, for a Built-in property | ⟦x⟧ `property p`, or ⟦x⟧ ⟦d⟧ `property-delimited p` with `delimited by d` |
 | a Chunk Expression | [below](#chunk-expressions) |
+| a Whose Clause | [below](#whose-clauses) |
 | `[a, b, …]` | ⟦a⟧ ⟦b⟧ … `list n` |
 | a list with a `...` item | `list 0`, then for each item ⟦item⟧ `list-append`, or ⟦e⟧ `list-extend` for `...e` |
 | `{k1: a, k2: b, …}` | ⟦a⟧ ⟦b⟧ … `map` of the key list's constant and `n` |
@@ -420,6 +421,22 @@ A chain `k1 i1 of k2 i2 of … of x`, with an optional `delimited by d`, lowers 
 4. then, from the innermost level out, `chunk-get` of its kind, or `load t` `chunk-get-delimited item` for an `item` level with a delimiter.
 
 The temp is released at the end. A plural chunk word lowers as its singular.
+
+### Whose Clauses
+
+`every K of x whose c`, and `the o K of x whose c` for an ordinal `o`, lower to ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)):
+
+1. the result's start: `list 0` `store r` for `every`, and `const nothing` `store r` for an ordinal; then, for `second` to `tenth`, `const n` `store k`, where `n` is the ordinal's index,
+2. the walk: ⟦x⟧ `property P`, where `P` is the plural of `K`. With `delimited by d`, it is ⟦x⟧ ⟦d⟧ `property-delimited items` when `x` has no chunk level, and otherwise `x` lowered as a [Chunk Expression](#chunk-expressions) with `delimited by d`, keeping its delimiter temp, then that temp's `load` and `property-delimited items`,
+3. `iterate`, then L1: `next L2` `store t`, ⟦c⟧ `branch-false L1`,
+4. the match:
+   - for `every`: `load r` `load t` `list-append` `store r` `jump L1`
+   - for `last`: `load t` `store r` `jump L1`
+   - for `first`: `load t` `store r` `jump L2`
+   - for `second` to `tenth`: `load k` `const 1` `subtract` `store k` `load k` `const 0` `equal` `branch-false L1`, then `load t` `store r` `jump L2`
+5. L2: `pop` `load r`.
+
+Inside ⟦c⟧, `it` is `load t`. The temps are released at the end. A condition that isn't a boolean raises `wrong kind` at `branch-false`, and an ordinal Whose Clause stops at L2 without evaluating `c` on the chunks after its match.
 
 ### Calls, Lambdas and Function Values
 
@@ -673,6 +690,7 @@ Some rules emit instructions for constructs the list doesn't place. Their positi
 - **Builds:** a field's `bytes-field` or `bytes-sized`, and a run of bit fields' `bytes-bits`, are the first token of the field, or of the run's first field.
 - **Sends:** a spreading `send`'s `const` of its static name, `list 0`, `list-append`s and `list-extend`s are the `send`'s, while each item's own expression keeps its position.
 - **`tell` blocks:** a line's `ask`, `ask-wait`, `join-ask` or `tell`, and the `store 0` after an `ask`, are its Operation name, since the line has no `ask` or `tell` of its own.
+- **Whose Clauses:** the `property` or `property-delimited` of the walk, and an ordinal's `const n`, are the clause's chunk word. Its other instructions, outside ⟦x⟧, ⟦d⟧ and ⟦c⟧, are its `whose`.
 - **Loops:** `repeat for each`'s `store` of a plain name is its `repeat`. A collecting clause's `list 0`, `list-append`, and its target's `load` and `store`s, are its `collecting`.
 
 An error's `at` and the debugger's breakpoints both read it ([chapter 6](06-errors-and-limits.md#errors)). Inside the stdlib, `at` is the Script's call instead ([ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md)).

@@ -75,3 +75,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0071: A third Core serves embedding outside Go and TS, after the Message Layer is measured](0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md)
 - [0072: Fix and Continue is a Session Command](0072-fix-and-continue-is-a-session-command.md)
 - [0073: A Timeout Block sets one deadline for the waits written inside it](0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)
+- [0074: A `whose` clause picks the chunks whose condition holds](0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)
