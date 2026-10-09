@@ -1,10 +1,13 @@
 // Tooling fixtures, outside the Conformance Corpus (ADR 0028).
 import type { LintId, LintOptions } from '../src/lint';
 export const fixtureManifest = {
+  capabilities: new Map(),
   grants: new Map(),
   libraries: [],
   messages: ['demo'],
+  objectKinds: new Map(),
   objects: [],
+  objectsKinds: new Map(),
 };
 const script = (body: string) => `on demo\n${body}\nend demo`;
 const join = (lines: number) =>

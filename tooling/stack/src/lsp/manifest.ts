@@ -13,11 +13,21 @@ export type ManifestOperation = {
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
   name: string;
 };
+export type ManifestObjectKind = {
+  name: string;
+  props: Map<string, { readOnly: boolean; shape: Shape }>;
+};
 export type HostManifest = {
+  /** Each Grant's Capability, by Grant name. */
+  capabilities: Map<string, string>;
   grants: Map<string, Map<string, ManifestOperation>>;
   libraries: { name: string; source: string }[];
   messages: string[];
+  objectKinds: Map<string, ManifestObjectKind>;
+  /** The well-known objects' names. */
   objects: string[];
+  /** Each well-known object's kind, by name. */
+  objectsKinds: Map<string, string>;
 };
 const array = (value: unknown): unknown[] => {
   if (!Array.isArray(value)) {
@@ -89,14 +99,15 @@ export const readManifest = (value: unknown): HostManifest => {
   if (data.language !== coreVersions.language) {
     throw new Error(`Manifest language must be ${coreVersions.language}`);
   }
+  const capabilities = new Map<string, string>();
   const grants = new Map<string, Map<string, ManifestOperation>>();
   for (const value of array(data.grants)) {
     const grant = record(value);
     const name = string(grant.name);
-    string(grant.capability);
     if (grants.has(name)) {
       throw new Error(`Duplicate Grant ${name}`);
     }
+    capabilities.set(name, string(grant.capability));
     const operations = new Map<string, ManifestOperation>();
     for (const value of array(grant.operations)) {
       const op = record(value);
@@ -129,7 +140,31 @@ export const readManifest = (value: unknown): HostManifest => {
   if (new Set(libraries.map(l => l.name)).size !== libraries.length) {
     throw new Error('Duplicate Library');
   }
+  const objectKinds = new Map<string, ManifestObjectKind>();
+  for (const value of array(data.objectKinds ?? [])) {
+    const kind = record(value);
+    const name = string(kind.name);
+    if (objectKinds.has(name)) {
+      throw new Error(`Duplicate Object Kind ${name}`);
+    }
+    const props = new Map<string, { readOnly: boolean; shape: Shape }>();
+    for (const value of array(kind.props ?? [])) {
+      const prop = record(value);
+      props.set(string(prop.name), {
+        readOnly: prop.readOnly === true,
+        shape: shape(prop.shape ?? 'value'),
+      });
+    }
+    objectKinds.set(name, { name, props });
+  }
+  const objectsKinds = new Map(
+    array(data.objects).map(v => {
+      const object = record(v);
+      return [string(object.name), string(object.kind)] as const;
+    }),
+  );
   return {
+    capabilities,
     grants,
     libraries,
     messages: array(data.messages).map(v => {
@@ -140,7 +175,9 @@ export const readManifest = (value: unknown): HostManifest => {
       }
       return name;
     }),
-    objects: array(data.objects).map(v => string(record(v).name)),
+    objectKinds,
+    objects: [...objectsKinds.keys()],
+    objectsKinds,
   };
 };
 export const grantDeclarations = (manifest: HostManifest): GrantDecls =>
