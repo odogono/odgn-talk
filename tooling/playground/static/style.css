@@ -309,6 +309,8 @@ main { grid-template-columns: minmax(0, var(--editor-width)) 5px minmax(0, 1fr);
 .console-heading { display: flex; align-items: center; gap: 16px; padding: 4px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .console-heading button { border: 0; background: transparent; font-weight: 650; }
 .console-heading span { color: var(--muted); font-size: 12px; }
+.console-heading #copy-result { margin-left: auto; font-weight: normal; font-size: 12px; }
+button.copy { padding: 0 6px; font-size: 11px; }
 #console-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #console { padding: 12px 20px; line-height: 1.6; }
 #prompt-form { padding: 8px 20px; }

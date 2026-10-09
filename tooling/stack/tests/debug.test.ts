@@ -9,7 +9,7 @@ import {
   num,
 } from '@odgn/northtalk';
 import { replay } from '../../../impl/ts/tools/trace-case';
-import { LiveDebugger, renderDebugView } from '../src/debug';
+import { copyDebugVar, LiveDebugger, renderDebugView } from '../src/debug';
 import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';
 
 test('Recovery Offers use active stepping depth and shared owner frame views', () => {
@@ -38,6 +38,8 @@ test('source breakpoints pause the Group and inspection does not write Host Inpu
   const snapshot = debug.snapshot();
   expect(snapshot.scripts[0]!.vars[0]![1].equals(num(1))).toBe(true);
   expect(renderDebugView(snapshot, 'vars')).toEqual(['[s] n = 1']);
+  expect(copyDebugVar(snapshot, 'n')).toEqual(['[s] n = 1']);
+  expect(copyDebugVar(snapshot, 'missing')).toEqual([]);
   expect(renderDebugView(snapshot, 'runs')[0]).toMatch(
     /s\/r1 .* segment 1 fuel \d+/,
   );

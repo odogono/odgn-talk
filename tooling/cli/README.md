@@ -91,6 +91,7 @@ bun run northtalk test --only testIncrements counter.test.talk
 - **Output:**
   - stdout has `ok <file> <test>` for a pass.
   - A failure prints `FAIL <file>:<line>:<col> <test>`, each problem indented, and the console output as `  | ` lines. The position is where the error was raised. For an assertion, or an error raised in stdlib code, it's the call that raised it, and for a failure with no position, or one in a Host Manifest's Library, it's the Test Handler's.
+  - A failed assertion prints its `expected` and `actual` in source form, which reads back as an equal value, so `actual` can be pasted into `assertEqual` as `expected`. Text that isn't one quoted piece becomes a backtick literal, and a Civil Date becomes `("2026-09-27" as civil date)`. A Function Value or Host Object has no source form and keeps its display form.
   - A summary line ends the output.
   - `--only <text>` keeps the tests whose `<file> <test>` contains the text.
   - Exit codes: 0 when every test passes, 1 on any failure or when no tests are found, and 2 for invalid arguments, a missing path or an invalid manifest.
@@ -222,6 +223,7 @@ with `on go` starting at line 1:
 :runs
 :mailbox
 :vars
+:copy n
 :step
 :over
 :out
@@ -233,6 +235,9 @@ with `on go` starting at line 1:
 that it is unverified. `:clear` removes every breakpoint. `:run [message]`
 delivers a zero-argument message, defaulting to `go`. `:step`, `:over` and `:out`
 step by statement; `:continue` resumes. Inspection commands require a pause.
+`:copy <name>` prints a Script Variable in source form, which pastes into a
+Script or test as an equal value; a Function Value or Host Object is labelled as
+not readable as source.
 `:errors on|off` and `:limits on|off` toggle fault breaks. `:help` lists commands;
 `:quit` or EOF ends the debugger, including an unfinished paused Run.
 

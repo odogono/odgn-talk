@@ -498,6 +498,7 @@ const render = (state: SessionState) => {
     manifest = text;
     lsp.configure({ manifest: state.manifest });
   }
+  setCopy($('copy-result') as HTMLButtonElement, state.result);
   renderPause(state.pause);
   renderSelection(state.selection);
   for (const tab of tabs) {
@@ -559,6 +560,7 @@ const renderSelection = (selection: SessionState['selection']) => {
   if (selection?.how === 'inspect') {
     $('inspect-source').textContent = selection.source;
     $('inspect-view').textContent = selection.lines.join('\n');
+    setCopy($('copy-inspect') as HTMLButtonElement, selection.copy);
   }
   if (
     printTarget &&
@@ -623,27 +625,75 @@ const renderSetup = (state: SessionState) => {
     : 'Before the session starts. console is always granted.';
 };
 
-const pauseText = (
+// ------------------------------------------------------------- copy as source
+
+// Points a copy button at a value's source form (#479). An unreadable value
+// has none, and the button says why.
+const setCopy = (
+  button: HTMLButtonElement,
+  copy: string | null | undefined,
+) => {
+  button.disabled = typeof copy !== 'string';
+  button.title =
+    copy === null
+      ? 'It holds a Function Value or Host Object, so it has no source form.'
+      : 'Copy as source, to paste into a Script or test';
+  button.onclick =
+    typeof copy === 'string'
+      ? () =>
+          navigator.clipboard
+            .writeText(copy)
+            .catch(() => note('The clipboard refused the copy.', 'error'))
+      : null;
+};
+
+/** A line of a pause view, with a copy button when it shows a value. */
+type PauseRow = { copy?: string | null; text: string };
+
+const pauseRows = (
   pause: Omit<PauseView, 'tab'> & { tab?: PauseView['tab'] },
-) =>
-  [
+): PauseRow[] => [
+  ...[
     `paused: ${pause.reason} in ${pause.run} at ${pause.tab ? `${pause.tab.name}.talk:${pause.tab.line}` : `${pause.unit}:${pause.line}`}`,
     ...(pause.error ? [`error ${pause.error}`] : []),
     ...(pause.limit ? [`limit ${pause.limit}`] : []),
     '',
     'frames:',
-    ...pause.frames.flatMap(f => [
-      `  ${f.handler ?? '?'} at ${f.unit}:${f.line}${f.role ? ` (${f.role}${f.owner === undefined ? '' : `, owner frame ${f.owner + 1}`})` : ''}`,
-      ...f.locals.map(l => `    ${l}`),
-    ]),
+  ].map(text => ({ text })),
+  ...pause.frames.flatMap(f => [
+    {
+      text: `  ${f.handler ?? '?'} at ${f.unit}:${f.line}${f.role ? ` (${f.role}${f.owner === undefined ? '' : `, owner frame ${f.owner + 1}`})` : ''}`,
+    },
+    ...f.locals.map((l, i) => ({ text: `    ${l}`, copy: f.sources[i] })),
+  ]),
+  ...[
     '',
     'runs:',
     ...pause.views.runs.map(l => `  ${l}`),
     'mailbox:',
     ...pause.views.mailbox.map(l => `  ${l}`),
     'vars:',
-    ...pause.views.vars.map(l => `  ${l}`),
-  ].join('\n');
+  ].map(text => ({ text })),
+  ...pause.views.vars.map((l, i) => ({
+    text: `  ${l}`,
+    copy: pause.views.sources[i],
+  })),
+];
+
+const renderRows = (el: HTMLElement, rows: PauseRow[]) =>
+  el.replaceChildren(
+    ...rows.flatMap((row, i) => {
+      const end = i < rows.length - 1 ? '\n' : '';
+      if (row.copy === undefined) {
+        return [row.text + end];
+      }
+      const button = document.createElement('button');
+      button.className = 'copy';
+      button.textContent = 'copy';
+      setCopy(button, row.copy);
+      return [`${row.text} `, button, end];
+    }),
+  );
 
 const renderPause = (pause: PauseView | null) => {
   for (const id of ['debug-resume', 'debug-step', 'debug-over', 'debug-out']) {
@@ -652,7 +702,7 @@ const renderPause = (pause: PauseView | null) => {
   for (const id of ['apply', 'restart']) {
     ($(id) as HTMLButtonElement).disabled = Boolean(pause);
   }
-  $('pause-view').textContent = pause ? pauseText(pause) : '';
+  renderRows($('pause-view'), pause ? pauseRows(pause) : []);
   if (lastPause?.tab) {
     const tab = tabs.find(
       t =>
@@ -1126,10 +1176,12 @@ const showReplay = (response: SessionResponse) => {
   $('replay-need').hidden = true;
   const r: ReplayView = response.replay;
   renderCanvas(r.canvas, r.revision);
-  $('replay-view').textContent = [
-    `Host Input ${r.hostInputIndex} of ${r.hostInputCount} (${r.state})`,
-    ...(r.pause ? ['', pauseText(r.pause)] : []),
-  ].join('\n');
+  renderRows($('replay-view'), [
+    {
+      text: `Host Input ${r.hostInputIndex} of ${r.hostInputCount} (${r.state})`,
+    },
+    ...(r.pause ? [{ text: '' }, ...pauseRows(r.pause)] : []),
+  ]);
 };
 $('replay-load').onclick = async () => {
   if (needed) {

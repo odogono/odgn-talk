@@ -8,3 +8,4 @@ export type {
   DebugSource,
   RepeatedEffect,
 } from './debug';
+export { isReadable, sourceForm } from './values';

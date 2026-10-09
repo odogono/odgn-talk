@@ -57,7 +57,7 @@
           <button role="tab" id="tab-grants" aria-controls="grants" data-inspector="grants">Setup</button>
         </nav>
         <section id="syntax" role="tabpanel" aria-labelledby="tab-syntax"><p class="hint">Current source · select a node to explore its code</p><div id="syntax-tree"></div></section>
-        <section id="inspect" role="tabpanel" aria-labelledby="tab-inspect" hidden><p class="hint">Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).</p><p id="inspect-source"></p><pre id="inspect-view"></pre></section>
+        <section id="inspect" role="tabpanel" aria-labelledby="tab-inspect" hidden><p class="hint">Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).</p><p id="inspect-source"></p><button id="copy-inspect" disabled>Copy as source</button><pre id="inspect-view"></pre></section>
         <section id="canvas" role="tabpanel" aria-labelledby="tab-canvas" hidden><div class="canvas-heading"><span id="canvas-size">400 × 400</span><span>Static canvas</span></div><div class="canvas-stage"><canvas id="drawing" width="400" height="400" aria-label="Script drawing"></canvas></div><p class="hint">Draw from your script with <code>tell canvas</code>. <button id="canvas-example">Run drawing example</button></p></section>
         <details role="tabpanel" aria-labelledby="tab-grants" id="grants" open>
           <summary>Grants</summary>
@@ -128,7 +128,7 @@
       </section>
     </main>
     <div id="console-resize" class="resize horizontal" role="separator" aria-label="Console height" aria-orientation="horizontal" aria-valuemin="12" aria-valuemax="55" tabindex="0"></div>
-        <div id="console-pane"><div class="console-heading"><button id="console-toggle" aria-controls="console-body" aria-expanded="true">Console</button><span>Live session · :help for commands</span></div><div id="console-body">
+        <div id="console-pane"><div class="console-heading"><button id="console-toggle" aria-controls="console-body" aria-expanded="true">Console</button><span>Live session · :help for commands</span><button id="copy-result" disabled>Copy result as source</button></div><div id="console-body">
           <div id="console" aria-live="polite"></div>
           <div id="pending"></div>
           <form id="prompt-form" autocomplete="off">

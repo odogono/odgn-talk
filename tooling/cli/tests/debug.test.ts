@@ -71,6 +71,47 @@ test('debug CLI runs a Script, steps, inspects and resumes through piped command
   }
 });
 
+test('debug CLI copies a Script Variable in source form', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));
+  try {
+    const file = join(dir, 'demo.talk');
+    writeFileSync(
+      file,
+      [
+        'script variable day = nothing',
+        'script variable said = nothing',
+        'script variable f = nothing',
+        'on go',
+        ' put ["2026-09-27" as civil date] into day',
+        ' put {`"x`: quote & "hi"} into said',
+        ' put g into f',
+        ' return 1',
+        'end',
+        'function g n',
+        ' return n',
+        'end g',
+      ].join('\n'),
+    );
+    const result = Bun.spawnSync([process.execPath, main, 'debug', file], {
+      stdin: new TextEncoder().encode(
+        ':break 8\n:run go\n:copy day\n:copy said\n:copy f\n:copy nope\n:copy\n:continue\n:quit\n',
+      ),
+    });
+    expect(result.exitCode).toBe(0);
+    const out = result.stdout.toString();
+    expect(out).toContain('[demo] day = [("2026-09-27" as civil date)]');
+    expect(out).toContain('[demo] said = {`"x`: `"hi`}');
+    expect(out).toContain(
+      '[demo] f is not readable as source: <function demo:g>',
+    );
+    expect(result.stderr.toString()).toBe(
+      'No Script Variable is named nope\nUsage: :copy <name>\n',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('debug CLI validates usage and load diagnostics', () => {
   expect(Bun.spawnSync([process.execPath, main, 'debug']).exitCode).toBe(2);
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-debug-'));

@@ -4,11 +4,15 @@
 // debugger positions between tabs and loaded code units. It does no I/O.
 import { parseEntry } from '@odgn/northtalk';
 import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
-import type {
-  DebugController,
-  DebugFrame,
-  DebugInstruction,
-  DebugPause,
+import type { Value } from '@odgn/northtalk';
+import {
+  isReadable,
+  sourceForm,
+  type DebugController,
+  type DebugFrame,
+  type DebugInstruction,
+  type DebugPause,
+  type DebugSnapshot,
 } from '@odgn/northtalk/debug';
 import {
   replayTranscript,
@@ -56,6 +60,8 @@ export type PauseView = {
     /** Zero-based index in this displayed (innermost-first) frame list. */
     owner?: number;
     role?: DebugFrame['role'];
+    /** Each local's {@link copySource}, in `locals` order. */
+    sources: (string | null)[];
     unit: string;
   }[];
   limit?: string;
@@ -65,8 +71,25 @@ export type PauseView = {
   /** The tab and its line, or none for a prompt Entry's own code. */
   tab?: { line: number; name: string };
   unit: string;
-  views: { mailbox: string[]; runs: string[]; vars: string[] };
+  views: {
+    mailbox: string[];
+    runs: string[];
+    /** Each Script Variable's {@link copySource}, in `vars` order. */
+    sources: (string | null)[];
+    vars: string[];
+  };
 };
+
+/**
+ * A value as a copy action copies it: its source form, or null when it holds a
+ * Function Value or Host Object, so it has none (#479).
+ */
+export const copySource = (value: Value): string | null =>
+  isReadable(value) ? sourceForm(value) : null;
+
+/** Script Variables' {@link copySource}, in `renderDebugView` `vars` order. */
+export const varSources = (snapshot: DebugSnapshot): (string | null)[] =>
+  snapshot.scripts.flatMap(s => s.vars.map(([, value]) => copySource(value)));
 
 /** Frame views shared by the live and replay panels, innermost first. */
 export const frameViews = (
@@ -79,6 +102,7 @@ export const frameViews = (
     ...(f.role ? { role: f.role } : {}),
     ...(f.owner === undefined ? {} : { owner: frames.length - 1 - f.owner }),
     locals: f.locals.map(([name, value]) => `${name} = ${value.toString()}`),
+    sources: f.locals.map(([, value]) => copySource(value)),
   }));
 
 export type ApplyResult =
@@ -147,6 +171,7 @@ export class PlaygroundSession {
         ...storeFiles(env),
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => this.transcript.push(item),
+        result: (run, value) => this.echoed(run, value),
         trace: line => this.trace.push(line),
       });
   }
@@ -178,6 +203,7 @@ export class PlaygroundSession {
         ...storeFiles(env),
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => session!.transcript.push(item),
+        result: (run, value) => session!.echoed(run, value),
       },
     });
     const expected = writeTranscript(recorded).split('\n');
@@ -257,8 +283,37 @@ export class PlaygroundSession {
 
   // ------------------------------------------------------------- selections
 
-  // Each selection run so far: its input item in the Transcript, and its Run.
-  private readonly selections: { at: number; run?: string }[] = [];
+  // Each selection run so far: its input item in the Transcript, its Run
+  // while it goes on in the background, and the Run that echoes its value.
+  private readonly selections: { at: number; echo?: string; run?: string }[] =
+    [];
+  // The values the latest Runs echoed, oldest first, for copy actions.
+  private readonly results = new Map<string, Value>();
+  private latestResult: Value | null = null;
+
+  private echoed(run: string, value: Value) {
+    this.results.delete(run);
+    this.results.set(run, value);
+    if (this.results.size > 64) {
+      this.results.delete(this.results.keys().next().value!);
+    }
+    this.latestResult = value;
+  }
+
+  /**
+   * The latest echoed value's {@link copySource}, or undefined before any
+   * Entry has echoed one.
+   */
+  get latestCopy(): string | null | undefined {
+    return this.latestResult ? copySource(this.latestResult) : undefined;
+  }
+
+  /** A selection's echoed value's {@link copySource}, once it has one. */
+  copyOf(selection: number): string | null | undefined {
+    const echo = this.selections[selection]?.echo;
+    const value = echo ? this.results.get(echo) : undefined;
+    return value ? copySource(value) : undefined;
+  }
 
   /**
    * Runs a tab's selection against the live session as an ordinary Entry, or
@@ -298,9 +353,11 @@ export class PlaygroundSession {
       (item, i) => i >= from && item.k === 'input' && item.source === entry,
     );
     const run = this.host.latestRun;
+    const own = run !== before && run ? run : undefined;
     this.selections.push({
       at: at < 0 ? from : at,
-      ...(how !== 'inspect' && run !== before && run ? { run } : {}),
+      ...(own ? { echo: own } : {}),
+      ...(how !== 'inspect' && own ? { run: own } : {}),
     });
     return { selection: this.selections.length - 1 };
   }
@@ -621,6 +678,7 @@ export class PlaygroundSession {
         runs: renderDebugView(snapshot, 'runs'),
         mailbox: renderDebugView(snapshot, 'mailbox'),
         vars: renderDebugView(snapshot, 'vars'),
+        sources: varSources(snapshot),
       },
       frames: frameViews(run?.frames ?? []),
     };

@@ -6,8 +6,8 @@ not an accepted ADR or implemented behavior.
 
 **Follow-up:** [PR #427](https://github.com/odogono/odgn-talk/pull/427) implements
 the `offer` map-key display fix on both Cores. The probes and table below retain
-their findings at the research revision; the tooling source form remains a
-recommendation.
+their findings at the research revision. [#479](https://github.com/odogono/odgn-talk/issues/479)
+implements the tooling source form.
 
 ## Recommendation
 
