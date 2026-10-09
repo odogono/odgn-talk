@@ -106,6 +106,22 @@ func TestSetupRefusesMalformedTOML(t *testing.T) {
 	}
 }
 
+func TestTOMLReadsMultiLineLiteralStrings(t *testing.T) {
+	for source, want := range map[string]string{
+		"s = '''[\"x'); DROP TABLE t; --\"]'''": `["x'); DROP TABLE t; --"]`,
+		"s = '''\nraw \\n\nlines'''":            "raw \\n\nlines",
+		"s = '''quoted '''''":                   "quoted ''",
+	} {
+		got, err := ReadTOML(source)
+		if err != nil || got["s"] != want {
+			t.Errorf("%q gave %q, %v; want %q", source, got["s"], err, want)
+		}
+	}
+	if _, err := ReadTOML("s = '''open"); err == nil {
+		t.Error("accepted an unclosed literal")
+	}
+}
+
 type traceFixture struct{ actual []string }
 
 func (traceFixture) Support(Case) string { return "" }
