@@ -18,6 +18,8 @@ The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pi
 
 The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements. The [first full results with wave 2](results/2026-10-08-darwin-arm64-apple-m5.md) cover all 38 workloads, including the four Fuel Slice sweep runs, on an Apple M5. Their [JSON](results/2026-10-08-darwin-arm64-apple-m5.json) records 216 measurements.
 
+The [first results with AppleScript](results/2026-10-09-darwin-arm64-apple-m5.md) cover all 39 workloads on an Apple M5, with AppleScript on the 21 that the Peer Languages run. Their [JSON](results/2026-10-09-darwin-arm64-apple-m5.json) records 246 measurements.
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
