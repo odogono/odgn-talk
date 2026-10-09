@@ -7,11 +7,11 @@ import {
   parseInstant,
   storeCapability,
 } from '../../src/index';
+import { openSqliteDatabase } from '../../src/sqlite/index';
 import { sessionQuotas } from '../../src/store/index';
-import { openSqliteStores } from './store';
 
 const path = process.argv[2] ?? 'store.sqlite';
-const { stores, close } = openSqliteStores(path, sessionQuotas);
+const db = openSqliteDatabase(path, { stores: sessionQuotas });
 try {
   const costs = Object.fromEntries(
     ['get', 'set', 'delete', 'keys', 'increment', 'swap'].map(op => [
@@ -24,7 +24,7 @@ try {
     name: 'counter',
     source: readFileSync(new URL('count.talk', import.meta.url), 'utf8'),
     grants: {
-      visits: storeCapability(stores, costs).grant('all', 'visits'),
+      visits: storeCapability(db.stores!, costs).grant('all', 'visits'),
       console: consoleCapability(
         {
           write: (_call, value) => console.log(value.asText()),
@@ -37,5 +37,5 @@ try {
   script.deliver({ name: 'start' });
   group.pump(parseInstant(new Date().toISOString()));
 } finally {
-  close();
+  db.close();
 }

@@ -117,11 +117,15 @@ export class Stores implements StoreImpl {
   // ------------------------------------------------------------ lifecycle
 
   // Every binding enrolled later in the Segment, through any Grant, joins
-  // it with no hook; its first write adds that Store.
+  // it with no hook; its first write adds that Store. A coordinator shared
+  // with another Capability may begin it through that Capability's Grant.
   begin(context: SegmentContext<string>): EffectResult {
-    const store = storeName(context.binding);
-    this.committed(store);
-    this.segments.set(this.segmentKey(context), new Map([[store, new Map()]]));
+    const segment: Segment = new Map();
+    if (typeof context.binding === 'string') {
+      this.committed(context.binding);
+      segment.set(context.binding, new Map());
+    }
+    this.segments.set(this.segmentKey(context), segment);
     return { status: 'ok' };
   }
 
