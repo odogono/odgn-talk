@@ -2,6 +2,7 @@
 // session prints and records comes from the Session Host (chapter 12); this
 // module only decides which Entries and Session Commands to give it, and maps
 // debugger positions between tabs and loaded code units. It does no I/O.
+import { parseEntry } from '@odgn/northtalk';
 import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
 import type {
   DebugController,
@@ -92,6 +93,18 @@ export type ApplyResult =
       /** Declarations left when a debugger paused the session part way. */
       pending: number;
     };
+
+/** Do it, print it or inspect it: what running a selection shows. */
+export type SelectionAction = 'do' | 'print' | 'inspect';
+
+// A selection's lines without the indentation they all share.
+const dedent = (source: string): string => {
+  const lines = source.split('\n');
+  const indent = Math.min(
+    ...lines.filter(l => l.trim()).map(l => /^[ \t]*/u.exec(l)![0].length),
+  );
+  return lines.map(l => l.slice(Math.min(indent, l.length))).join('\n');
+};
 
 const SETUP = /^:(grant|mock)\b/u;
 const refusedOrDiagnostic = (lines: readonly string[]) =>
@@ -239,6 +252,82 @@ export class PlaygroundSession {
   tick(): string[] {
     const out = this.host.tick();
     this.settled();
+    return out;
+  }
+
+  // ------------------------------------------------------------- selections
+
+  // Each selection run so far: its input item in the Transcript, and its Run.
+  private readonly selections: { at: number; run?: string }[] = [];
+
+  /**
+   * Runs a tab's selection against the live session as an ordinary Entry, or
+   * as `:inspect` for inspect it. A declaration selected in the Script tab is
+   * entered like one at the prompt, so it applies; a Library tab's
+   * declarations load only by saving the tab. Returns the selection's number,
+   * for {@link printedBy}, or why it was refused without an Entry.
+   */
+  runSelection(
+    selected: string,
+    how: SelectionAction,
+    tab: string = SESSION_TAB,
+  ): { selection: number } | { refused: string } {
+    const source = dedent(selected.replace(/^\s*\n/u, '').replace(/\s+$/u, ''));
+    if (!source.trim()) {
+      return { refused: 'Select an expression, a statement or a declaration.' };
+    }
+    if (source.trimStart().startsWith(':')) {
+      return {
+        refused: 'A selection runs as an Entry, not a Session Command.',
+      };
+    }
+    if (this.incomplete(source)) {
+      return { refused: 'The selection is not a complete Entry.' };
+    }
+    const parsed = tab === SESSION_TAB ? null : parseEntry(source, () => false);
+    if (parsed && !parsed.error && parsed.kind === 'declaration') {
+      return {
+        refused: `Save the ${tab} tab to load its declarations.`,
+      };
+    }
+    const entry = how === 'inspect' ? `:inspect ${source}` : source;
+    const from = this.transcript.length;
+    const before = this.host.latestRun;
+    this.input(entry);
+    const at = this.transcript.findIndex(
+      (item, i) => i >= from && item.k === 'input' && item.source === entry,
+    );
+    const run = this.host.latestRun;
+    this.selections.push({
+      at: at < 0 ? from : at,
+      ...(how !== 'inspect' && run !== before && run ? { run } : {}),
+    });
+    return { selection: this.selections.length - 1 };
+  }
+
+  /**
+   * What a selection's Entry has printed so far: the lines that follow it
+   * while it keeps the prompt, and its Run's lines once that goes on in the
+   * background, without their `[<run>] `.
+   */
+  printedBy(selection: number): string[] {
+    const { at, run } = this.selections[selection]!;
+    const out: string[] = [];
+    let foreground = true;
+    for (const item of this.transcript.slice(at + 1)) {
+      if (item.k === 'input') {
+        foreground = false;
+      } else if (item.k === 'output') {
+        const background = /^\[([^\]]+)\] (.*)$/su.exec(item.text);
+        if (background) {
+          if (background[1] === run) {
+            out.push(background[2]!);
+          }
+        } else if (foreground) {
+          out.push(item.text);
+        }
+      }
+    }
     return out;
   }
 

@@ -340,6 +340,11 @@ export class SessionHost {
     return this.sessionSource(this.declarations);
   }
 
+  /** The latest Entry's Run, once it has started; its background lines carry `[<run>] `. */
+  get latestRun(): string | undefined {
+    return this.latest?.run;
+  }
+
   /** Whether the session has started, so its Grants are fixed. */
   get started(): boolean {
     return this.group !== null;

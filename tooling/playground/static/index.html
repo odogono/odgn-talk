@@ -30,6 +30,11 @@
       <button id="fresh" class="primary" title="Load a fresh session, then evaluate the launch expression">▶ Run fresh</button>
       <label for="launch">Launch</label><input id="launch" placeholder="Handler or expression" spellcheck="false" />
       <button id="evaluate" title="Evaluate against the loaded session without applying edits">Evaluate</button>
+      <span class="selection-actions">
+        <button id="do-it" title="Run the selection, or the cursor's line, against the live session (Ctrl/Cmd-D)">Do it</button>
+        <button id="print-it" title="Run the selection and show what it printed beside it (Ctrl/Cmd-P)">Print it</button>
+        <button id="inspect-it" title="Run :inspect on the selected expression and show it in the inspector (Ctrl/Cmd-I)">Inspect it</button>
+      </span>
       <span id="source-status" role="status">Unapplied edits</span>
     </div>
     <main id="workspace">
@@ -41,12 +46,14 @@
       <section id="side">
         <nav class="inspector-tabs" role="tablist" aria-label="Inspector">
           <button role="tab" id="tab-syntax" aria-controls="syntax" data-inspector="syntax">Syntax</button>
+          <button role="tab" id="tab-inspect" aria-controls="inspect" data-inspector="inspect">Inspect</button>
           <button role="tab" id="tab-canvas" aria-controls="canvas" data-inspector="canvas">Canvas</button>
           <button role="tab" id="tab-debugger" aria-controls="debugger" data-inspector="debugger">Debug</button>
           <button role="tab" id="tab-replay" aria-controls="replay" data-inspector="replay">Replay</button>
           <button role="tab" id="tab-grants" aria-controls="grants" data-inspector="grants">Setup</button>
         </nav>
         <section id="syntax" role="tabpanel" aria-labelledby="tab-syntax"><p class="hint">Current source · select a node to explore its code</p><div id="syntax-tree"></div></section>
+        <section id="inspect" role="tabpanel" aria-labelledby="tab-inspect" hidden><p class="hint">Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).</p><p id="inspect-source"></p><pre id="inspect-view"></pre></section>
         <section id="canvas" role="tabpanel" aria-labelledby="tab-canvas" hidden><div class="canvas-heading"><span id="canvas-size">400 × 400</span><span>Static canvas</span></div><div class="canvas-stage"><canvas id="drawing" width="400" height="400" aria-label="Script drawing"></canvas></div><p class="hint">Grant canvas in Setup, then draw from your script. <button id="canvas-example">Load drawing example</button></p></section>
         <details role="tabpanel" aria-labelledby="tab-grants" id="grants" open>
           <summary>Grants</summary>

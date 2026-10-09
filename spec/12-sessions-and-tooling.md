@@ -322,10 +322,11 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 ### The Playground
 
 - **Public name:** NorthTalk Playground.
-- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Canvas, live Debug, Replay and Setup.
+- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Inspect, Canvas, live Debug, Replay and Setup.
 - **Syntax** is a readable projection of the recovering parser tree of the current editor text, including errors. Source selection and tree selection are linked; it does not describe the last loaded session.
 - **Run fresh** prepares a replacement from the setup, current Library tabs and Script tab. Failed loading preserves the live session. Successful loading replaces it, starts a fresh Transcript, then evaluates the launch Entry if nonempty; an execution fault belongs to that new session.
 - **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.
+- **Do it, Print it and Inspect it** enter the editor's selection as an ordinary Entry, or as `:inspect` with it, against the live session. Print it shows what the Entry printed beside the selection; Inspect it shows the rows in the inspector.
 - **It ships** the LSP in a worker, the formatter, live debugging, and replay debugging of a pasted Trace.
 - **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`. A Session Script can choose a Library offer; the CLI and Playground run the same forms through the shared stack. The live and replay panels show retained/dispatch roles, shared owner locals and the owning frame.
 - **Sharing** carries Script and Library sources, the launch Entry, setup commands and optionally a Session Transcript, which replays on opening. Older links default to an empty launch Entry. Locally restored sources and setup do not execute automatically.

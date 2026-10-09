@@ -21,7 +21,12 @@ import type {
   SessionState,
   ToSession,
 } from './protocol';
-import { frameViews, PlaygroundSession, type Tabs } from './session';
+import {
+  frameViews,
+  PlaygroundSession,
+  type SelectionAction,
+  type Tabs,
+} from './session';
 
 const scope = self as unknown as {
   onmessage: ((event: MessageEvent<ToSession>) => void) | null;
@@ -59,6 +64,12 @@ let background: ReturnType<typeof setTimeout> | null = null;
 let replay: ReplayDebugger | null = null;
 let revision = 0;
 let generation = 0;
+// The latest print it or inspect it, by its number in the session.
+let selection: {
+  how: Exclude<SelectionAction, 'do'>;
+  id: number;
+  source: string;
+} | null = null;
 let replayCanvasNames: string[] = [];
 const canvasNames = () =>
   Object.entries(session.host.grants.granted)
@@ -119,6 +130,10 @@ const state = (): SessionState => {
     started: session.started,
     source: session.host.source,
     savedLibraries: session.savedLibraries,
+    selection: selection && {
+      ...selection,
+      lines: session.printedBy(selection.id),
+    },
     setup: session.setup,
     pause: session.pauseView(),
     breakpoints: session.breakpointStatus,
@@ -183,6 +198,7 @@ const replace = (next: PlaygroundSession) => {
   session = next;
   sent = 0;
   entry = [];
+  selection = null;
   settle();
 };
 
@@ -361,6 +377,38 @@ const handle = (request: SessionRequest): SessionResponse => {
         session.input(request.launch);
       }
       break;
+    case 'selection': {
+      if (session.paused || sleeping || entry.length) {
+        note(
+          'Finish or cancel the current Entry before running a selection.',
+          'warning',
+        );
+        break;
+      }
+      if (session.host.waiting.k === 'read') {
+        note('Answer the read at the < prompt first.', 'warning');
+        break;
+      }
+      const ran = session.runSelection(
+        request.source,
+        request.how,
+        request.tab,
+      );
+      if ('refused' in ran) {
+        note(ran.refused, 'warning');
+        settle();
+        return { t: 'selected', id: null, state: state() };
+      }
+      if (request.how !== 'do') {
+        selection = {
+          how: request.how,
+          id: ran.selection,
+          source: request.source.trim(),
+        };
+      }
+      settle();
+      return { t: 'selected', id: ran.selection, state: state() };
+    }
     case 'cancel':
       if (session.paused) {
         note('Continue the debugger first.', 'warning');
