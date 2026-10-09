@@ -410,10 +410,14 @@ describe('Mock Operations', () => {
     host.input('1');
     expect(host.input(':mock db.put immediate')).toEqual(['! session started']);
     expect(host.input(':grant again db')).toEqual(['! session started']);
-    expect(host.grants).toEqual({
-      granted: { db: 'db', store: 'db' },
-      mocks: [{ capability: 'db', operation: 'get', mode: 'immediate' }],
+    expect(host.setup.scripts![0]!.grants).toEqual({
+      console: { ops: 'all' },
+      db: { capability: 'db', ops: 'all' },
+      store: { capability: 'db', ops: 'all' },
     });
+    expect(host.setup.operations).toMatchObject([
+      { capability: 'db', name: 'get', mode: 'immediate' },
+    ]);
   });
 
   test('take up to eight arguments, and print each call', () => {
@@ -571,11 +575,12 @@ describe('Saves, Libraries and export', () => {
       },
     });
     expect(host.input(':library add maths lib.talk')).toEqual([]);
-    expect(host.userLibraries).toEqual([
+    expect(host.setup.libraries).toEqual([
       {
         name: 'maths',
         version: '1',
-        source: 'function twice x\n  return x * 2\nend twice\n',
+        source: '(inline)',
+        text: 'function twice x\n  return x * 2\nend twice\n',
       },
     ]);
     host.input('use twice from maths');
@@ -765,7 +770,7 @@ test('fatal cleanup reports keep the Session Source and user Library at their pr
         : 'function one\nreturn 2\nend one',
   });
   expect(second.input(':library add user old.talk')).toEqual([]);
-  const libraries = second.userLibraries;
+  const libraries = second.setup.libraries;
   const group = (
     second as unknown as { group: { replaceLibrary(): typeof reports } }
   ).group;
@@ -773,7 +778,7 @@ test('fatal cleanup reports keep the Session Source and user Library at their pr
   expect(second.input(':library replace user next.talk')).toContain(
     '! effect state unknown',
   );
-  expect(second.userLibraries).toEqual(libraries);
+  expect(second.setup.libraries).toEqual(libraries);
 });
 
 describe('Debugging a session', () => {
@@ -878,7 +883,10 @@ describe('Debugging a session', () => {
   test('exposes its Grants without starting', () => {
     const { host } = session();
     host.input(':grant c clock');
-    expect(Object.keys(host.sessionGrants).sort()).toEqual(['c', 'console']);
+    expect(Object.keys(host.setup.scripts![0]!.grants!).sort()).toEqual([
+      'c',
+      'console',
+    ]);
     expect(host.inspect()).toBeNull();
   });
 });

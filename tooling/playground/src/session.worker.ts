@@ -2,8 +2,7 @@ import { canvasCommands } from '@odgn/northtalk-tooling/canvas';
 // The session worker: the Playground Host. It owns the Session Host, its
 // timers and the replay debugger, and answers the page with the session's
 // state after every request and every Pump it makes at a deadline.
-import { exportManifest } from '@odgn/northtalk';
-import { sessionSetup, type Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@odgn/northtalk/setup';
 import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
 import {
   ReplayDebugger,
@@ -73,8 +72,8 @@ let selection: {
 } | null = null;
 let replayCanvasNames: string[] = [];
 const canvasNames = () =>
-  Object.entries(session.host.grants.granted)
-    .filter(([, c]) => c === 'canvas')
+  Object.entries(session.host.setup.scripts![0]!.grants!)
+    .filter(([name, g]) => (g.capability ?? name) === 'canvas')
     .map(([name]) => name);
 
 const note = (text: string, level: 'info' | 'warning' | 'error' = 'info') =>
@@ -142,13 +141,7 @@ const state = (): SessionState => {
     setup: session.setup,
     pause: session.pauseView(),
     breakpoints: session.breakpointStatus,
-    manifest: JSON.parse(
-      exportManifest({
-        kind: 'session',
-        version: '1',
-        grants: session.host.sessionGrants,
-      }),
-    ),
+    manifest: JSON.parse(session.host.exportManifest()),
   };
 };
 
@@ -347,7 +340,7 @@ const handle = (request: SessionRequest): SessionResponse => {
           session.input(command);
         }
         // Grant canvas by default, so drawing works without any Setup.
-        if (!session.host.grants.granted.canvas) {
+        if (!session.host.setup.scripts![0]!.grants!.canvas) {
           session.input(':grant canvas canvas');
         }
       }
@@ -499,12 +492,12 @@ const handle = (request: SessionRequest): SessionResponse => {
           ? [
               request.setup?.trim()
                 ? (JSON.parse(request.setup) as Setup)
-                : sessionSetup(session.host),
+                : session.host.setup,
               request.trace,
             ]
           : lastReplayed
             ? [lastReplayed.setup, lastReplayed.trace.join('\n')]
-            : [sessionSetup(session.host), session.trace.join('\n')];
+            : [session.host.setup, session.trace.join('\n')];
       replayCanvasNames = [
         ...new Set(
           (setup.scripts ?? []).flatMap(s =>

@@ -75,7 +75,6 @@ test('invalid drawing is rejected and omitted from rendered commands', () => {
 });
 
 test('every drawing operation survives Trace replay and reverse navigation', async () => {
-  const { sessionSetup } = await import('@odgn/northtalk/replay');
   const { ReplayDebugger } = await import('../src/debug');
   const trace: string[] = [];
   const host = new SessionHost({
@@ -102,7 +101,7 @@ test('every drawing operation survives Trace replay and reverse navigation', asy
   for (const op of operations) {
     expect(host.input(`ask canvas to ${op}`)).toEqual([]);
   }
-  const debug = new ReplayDebugger(sessionSetup(host), trace);
+  const debug = new ReplayDebugger(host.setup, trace);
   expect(debug.resume().state).toBe('ended');
   expect(canvasCommands(debug.trace, ['canvas'])).toEqual(
     canvasCommands(trace, ['canvas']),

@@ -8,7 +8,7 @@ import {
   writeTranscript,
   type TranscriptItem,
 } from '../src/session';
-import { sessionSetup, replayTrace } from '../src/replay';
+import { replayTrace } from '../src/replay';
 import { ScriptError } from '../src/errors';
 import { shape } from '../src/capabilities';
 import { dec, text, map, nothing } from '../src/values';
@@ -103,7 +103,7 @@ test('describe shares passive Object metadata and records its single snapshot ex
     writeTranscript(items),
   );
   for (const restoreBetweenPumps of [false, true]) {
-    const driver = replayTrace(() => '', sessionSetup(host), trace, {
+    const driver = replayTrace(() => '', host.setup, trace, {
       restoreBetweenPumps,
     });
     let result = driver.next();
@@ -271,7 +271,7 @@ test('object callbacks, queued actions, nested functions and resolver outcomes r
     'error: {code: "getter refused", detail: "safe", capability: "InspectRoot", operation: "error"}',
   );
   for (const restoreBetweenPumps of [false, true]) {
-    const driver = replayTrace(() => '', sessionSetup(host), trace, {
+    const driver = replayTrace(() => '', host.setup, trace, {
       restoreBetweenPumps,
     });
     let result = driver.next();
@@ -510,7 +510,7 @@ test('external Function calls accepted before Save remain queued across Restore 
     writeTranscript(items),
   );
   for (const restoreBetweenPumps of [false, true]) {
-    const driver = replayTrace(() => '', sessionSetup(host), trace, {
+    const driver = replayTrace(() => '', host.setup, trace, {
       restoreBetweenPumps,
     });
     let result = driver.next();

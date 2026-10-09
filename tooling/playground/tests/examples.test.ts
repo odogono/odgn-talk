@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { exportManifest, parseInstant } from '@odgn/northtalk';
+import { parseInstant } from '@odgn/northtalk';
 import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
 import { lint, readManifest } from '@odgn/northtalk-tooling/lint';
 import { EXAMPLES, type Example } from '../src/examples';
@@ -59,13 +59,7 @@ describe('Every example', () => {
       } else {
         expect(lines.length).toBeGreaterThan(0);
       }
-      const manifest = readManifest(
-        exportManifest({
-          kind: 'session',
-          version: '1',
-          grants: fresh.host.sessionGrants,
-        }),
-      );
+      const manifest = readManifest(fresh.host.exportManifest());
       for (const source of [
         example.script,
         ...(example.libraries ?? []).map(l => l.source),

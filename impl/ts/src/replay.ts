@@ -1,6 +1,12 @@
+import {
+  buildSetupGroup,
+  MissingCapabilityError,
+  shapeOf,
+  type Setup,
+  type OperationSpec,
+} from './setup';
+export type { Setup } from './setup';
 import { SessionObjects } from './session/objects';
-import type { TranscriptItem } from './session/transcript';
-import { MOCK_ARGUMENTS, type SessionHost } from './session';
 // Browser-safe Trace replay shared by corpus tooling and the debugger.
 // Only the supplied source reader performs I/O. Replay events add no Trace lines.
 import { readDisplayText } from './readers';
@@ -21,16 +27,10 @@ import {
   timerCapability,
   defineObjectKind,
   type HostObject,
-  shape,
   ScriptError,
   type Call,
-  type FieldShape,
-  type Grant,
-  type GrantDecls,
   type CapabilityDef,
   type Operation,
-  type Shape,
-  type ScopeDecl,
   type SegmentContext,
   type SegmentCoordinator,
   type SqlRows,
@@ -39,14 +39,12 @@ import {
   HostError,
   LoadError,
   type Library,
-  newGroup,
   restore,
   NotImplementedError,
   parseInstant,
   readDisplay,
   map,
   nothing,
-  type Limits,
   type Group,
   type Value,
 } from './index';
@@ -157,82 +155,6 @@ export const same = (expected: string, actual: string): boolean => {
   return [...e.fields.keys()].every(key => a.fields.has(key));
 };
 
-type ShapeSpec =
-  | string
-  | { quantity: string }
-  | { unitKind: string }
-  | { list: ShapeSpec }
-  | { object: string }
-  | { oneOf: ShapeSpec[] }
-  | { optional: ShapeSpec }
-  | {
-      map: { key: string; optional?: boolean; shape: ShapeSpec }[];
-      open?: boolean;
-    };
-type OperationSpec = {
-  args?: ShapeSpec[];
-  capability: string;
-  cost?: { alloc?: number; fuel?: number };
-  errors?: {
-    code: string;
-    fields?: { key: string; optional?: boolean; shape: ShapeSpec }[];
-  }[];
-  maxPending?: number;
-  mode: 'immediate' | 'suspending' | 'fire-and-forget';
-  name: string;
-  result?: ShapeSpec;
-  scope?: ScopeDecl;
-  segmentBound?: boolean;
-};
-type ObjectRefSpec = { id: string; kind: string };
-export type Setup = {
-  /** Each Library's source file, or with `text`, the source itself. */
-  libraries?: {
-    name: string;
-    source: string;
-    text?: string;
-    version: string;
-  }[];
-  objectKinds?: {
-    name: string;
-    parentKinds?: string[];
-    props?: {
-      getCost?: { alloc?: number; fuel: number };
-      name: string;
-      readOnly?: boolean;
-      setCost?: { alloc?: number; fuel: number };
-      shape?: ShapeSpec;
-    }[];
-  }[];
-  objects?: { id: string; kind: string; props?: Record<string, string> }[];
-  operations?: OperationSpec[];
-  scripts?: {
-    grants?: Record<
-      string,
-      {
-        binding?: string | SqliteBinding;
-        capability?: string;
-        coordinator?: string;
-        ops: string[] | 'all';
-      }
-    >;
-    grantsAsUsed?: boolean;
-    limits?: Partial<Limits>;
-    name: string;
-    objects?: Record<string, ObjectRefSpec>;
-    owner?: ObjectRefSpec;
-    /** Its source file, or with `text`, the source itself. */
-    source: string;
-    text?: string;
-  }[];
-  sessionObjects?: readonly TranscriptItem[];
-  standard?: {
-    capability: string;
-    costs: Record<string, { alloc?: number; fuel?: number }>;
-    perRow?: number;
-  }[];
-};
-
 const rememberFunctions = (value: Value, functions: Map<string, Value>) => {
   const work = [value];
   while (work.length) {
@@ -268,62 +190,6 @@ const read = (
     );
   }
 };
-const kinds: Record<string, Shape> = {
-  any: shape.any,
-  value: shape.value,
-  nothing: shape.nothing,
-  boolean: shape.bool,
-  number: shape.number,
-  text: shape.text,
-  bytes: shape.bytes,
-  instant: shape.instant,
-  'civil date': shape.civilDate,
-  range: shape.range,
-  pattern: shape.pattern,
-  function: shape.function,
-};
-// A Shape as case.toml writes it (chapter 11, The setup).
-const shapeOf = (s: ShapeSpec): Shape => {
-  if (typeof s === 'string') {
-    const k = kinds[s];
-    if (!k) {
-      throw new Error(`Unknown Shape ${s}`);
-    }
-    return k;
-  }
-  if ('quantity' in s) {
-    return shape.quantityOf(s.quantity);
-  }
-  if ('unitKind' in s) {
-    return shape.quantityKind(s.unitKind);
-  }
-  if ('object' in s) {
-    // Declarations name Object Kinds, including forward references in properties.
-    return { k: 'object', kind: s.object };
-  }
-  if ('list' in s) {
-    return shape.listOf(shapeOf(s.list));
-  }
-  if ('oneOf' in s) {
-    return shape.oneOf(...s.oneOf.map(shapeOf));
-  }
-  if ('optional' in s) {
-    return shape.optional(shapeOf(s.optional));
-  }
-  if ('map' in s) {
-    const fields: Record<string, FieldShape> = Object.fromEntries(
-      s.map.map(f => [
-        f.key,
-        f.optional
-          ? { shape: shapeOf(f.shape), optional: true as const }
-          : shapeOf(f.shape),
-      ]),
-    );
-    return s.open ? shape.openMap(fields) : shape.map(fields);
-  }
-  throw new DeferredCaseError('Host Objects');
-};
-
 const fireStub = (
   stubs: Stubs,
   key: string,
@@ -793,67 +659,6 @@ const sqlRowsOf = (stub: Value): SqlRows => {
 const valuesOf = (list: Value): Value[] =>
   Array.from({ length: list.length }, (_, i) => list.index(i + 1));
 
-const operationDeclarations = (
-  capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
-): GrantDecls => {
-  const declarations: Record<
-    string,
-    Record<string, { args: Shape[]; mode: OperationSpec['mode'] }>
-  > = Object.create(null);
-  for (const [name, capability] of capabilities) {
-    declarations[name] = Object.fromEntries(
-      [...capability.operations].map(([operation, op]) => [
-        operation,
-        { args: op.args ?? [], mode: op.mode },
-      ]),
-    );
-  }
-  return declarations;
-};
-
-// Every Library case.toml names, compiled once each Library it imports is, so
-// in any order; one that never compiles keeps its LoadError.
-const compileLibraries = (
-  readSource: (file: string) => string,
-  setup: Setup,
-  declarations: GrantDecls,
-): Map<string, Library | LoadError> => {
-  const out = new Map<string, Library | LoadError>();
-  let pending = setup.libraries ?? [];
-  while (pending.length) {
-    const failed: typeof pending = [];
-    for (const library of pending) {
-      try {
-        const done = [...out.values()].filter(
-          (l): l is Library => !(l instanceof LoadError),
-        );
-        out.set(
-          library.name,
-          compileLibrary(
-            {
-              ...library,
-              source: library.text ?? readSource(library.source),
-            },
-            done,
-            declarations,
-          ),
-        );
-      } catch (error) {
-        if (!(error instanceof LoadError)) {
-          throw error;
-        }
-        out.set(library.name, error);
-        failed.push(library);
-      }
-    }
-    if (failed.length === pending.length) {
-      break;
-    }
-    pending = failed;
-  }
-  return out;
-};
-
 const isCrossing = (line: string) => /^(call|prop|effect) /.test(line);
 
 // Make a `cancel-run` or `rewind-run` line's call on its Run's Script.
@@ -919,13 +724,10 @@ const driveReplay = function* (
   };
   const functions = new Map<string, Value>();
   const receive = (value: Value) => rememberFunctions(value, functions);
-  let group = newGroup({ name: 'case', trace: writeTrace });
+  let group: Group;
   const sessionObjects = setup.sessionObjects?.length
     ? new SessionObjects(() => {}, setup.sessionObjects)
     : null;
-  sessionObjects?.attach(group);
-  const sessionBindings = sessionObjects?.preload();
-  configureDebug?.(group);
   const landedLines = new Set<number>();
   // Urgent controls and refused inputs following a crossing are replayed from
   // inside its Host function, rather than by the outer loop (chapter 11).
@@ -1005,13 +807,6 @@ const driveReplay = function* (
   const resolveObject = (kind: string, id: string) => made.get(`${kind} ${id}`);
   const value = (text: string) =>
     read(text, resolveObject, display => functions.get(display));
-  const objectOf = (o: ObjectRefSpec): HostObject => {
-    const found = resolveObject(o.kind, o.id);
-    if (!found) {
-      throw new Error(`case.toml has no object ${o.kind} ${o.id}`);
-    }
-    return found;
-  };
   if (sessionObjects) {
     atCrossings.clear();
     crossingLines.clear();
@@ -1088,29 +883,6 @@ const driveReplay = function* (
       }),
     ]),
   );
-  for (const o of setup.objects ?? []) {
-    const kind = kinds.get(o.kind);
-    if (!kind) {
-      throw new Error(`case.toml has no Object Kind ${o.kind}`);
-    }
-    const handle = group.object(kind, o.id, null);
-    made.set(`${o.kind} ${o.id}`, handle);
-  }
-  for (const o of setup.objects ?? []) {
-    const handle = made.get(`${o.kind} ${o.id}`)!;
-    props.set(
-      `${handle.kind.name} ${handle.id}`,
-      new Map(
-        Object.entries(o.props ?? {}).map(([name, text]) => [
-          name,
-          value(text),
-        ]),
-      ),
-    );
-  }
-  for (const o of sessionObjects?.traceObjects() ?? []) {
-    made.set(`${o.kind.name} ${o.id}`, o);
-  }
   const messageOf = (r: Parsed) => ({
     name: r.fields.get('message')!,
     args: r.fields.has('args') ? valuesOf(value(r.fields.get('args')!)) : [],
@@ -1214,8 +986,48 @@ const driveReplay = function* (
     lifecycle,
     coordinator,
   );
-  const declarations = operationDeclarations(capabilities);
-  const compiled = compileLibraries(readSource, setup, declarations);
+  const built = buildSetupGroup(setup, capabilities, {
+    name: 'case',
+    trace: writeTrace,
+    readSource,
+    resolveObject,
+    withCoordinator: (name, make) => {
+      granting = name;
+      try {
+        return make();
+      } finally {
+        granting = undefined;
+      }
+    },
+  });
+  group = built.group;
+  sessionObjects?.attach(group);
+  const sessionBindings = sessionObjects?.preload();
+  configureDebug?.(group);
+  for (const o of setup.objects ?? []) {
+    const kind = kinds.get(o.kind);
+    if (!kind) {
+      throw new Error(`case.toml has no Object Kind ${o.kind}`);
+    }
+    const handle = group.object(kind, o.id, null);
+    made.set(`${o.kind} ${o.id}`, handle);
+  }
+  for (const o of setup.objects ?? []) {
+    const handle = made.get(`${o.kind} ${o.id}`)!;
+    props.set(
+      `${handle.kind.name} ${handle.id}`,
+      new Map(
+        Object.entries(o.props ?? {}).map(([name, text]) => [
+          name,
+          value(text),
+        ]),
+      ),
+    );
+  }
+  for (const o of sessionObjects?.traceObjects() ?? []) {
+    made.set(`${o.kind.name} ${o.id}`, o);
+  }
+  const { declarations, libraries: compiled, grants: bound } = built;
   // A mailbox refusal is written before the accepted inputs still waiting
   // for the Pump. Replay those first so the same depth check can refuse it.
   const order: number[] = [];
@@ -1242,7 +1054,6 @@ const driveReplay = function* (
   order.push(...refused);
   let registered = new Map<string, Library>();
   const saved = new Map<string, Uint8Array>();
-  const bound = new Map<string, Record<string, Grant<unknown>>>();
   const cancellations = new Map<string, AbortController>();
   const applyInput = function* (
     r: Parsed,
@@ -1253,50 +1064,14 @@ const driveReplay = function* (
     try {
       switch (r.name) {
         case 'load': {
-          const script = setup.scripts?.find(s => s.name === r.ids[0]);
-          if (!script) {
-            throw new Error(`case.toml has no Script ${r.ids[0]}`);
+          try {
+            built.load(group, r.ids[0]!, sessionBindings);
+          } catch (error) {
+            if (error instanceof MissingCapabilityError) {
+              throw new DeferredCaseError(error.message);
+            }
+            throw error;
           }
-          const grants: Record<string, Grant<unknown>> = Object.create(null);
-          for (const [granted, g] of Object.entries(script.grants ?? {})) {
-            const capability = capabilities.get(g.capability ?? granted);
-            if (!capability) {
-              throw new DeferredCaseError(
-                `the Standard Capability ${g.capability ?? granted}`,
-              );
-            }
-            if (g.coordinator !== undefined && !capability.coordinator) {
-              throw new Error(
-                `${capability.name} can't take a coordinator in case.toml`,
-              );
-            }
-            granting = g.coordinator;
-            try {
-              grants[granted] = capability.grant(
-                g.ops,
-                g.binding ?? (capability.name === 'locale' ? 'und' : undefined),
-              );
-            } finally {
-              granting = undefined;
-            }
-          }
-          bound.set(script.name, grants);
-          group.load({
-            grants,
-            grantsAsUsed: script.grantsAsUsed,
-            name: script.name,
-            source: script.text ?? readSource(script.source),
-            limits: script.limits,
-            objects:
-              sessionBindings ??
-              Object.fromEntries(
-                Object.entries(script.objects ?? {}).map(([name, o]) => [
-                  name,
-                  objectOf(o),
-                ]),
-              ),
-            ...(script.owner ? { owner: objectOf(script.owner) } : {}),
-          });
           break;
         }
         case 'add-library': {
@@ -1975,119 +1750,3 @@ export type ReplayEvent = { group: Group; hostInputIndex: number } & (
   | { pause: DebugPause; state: 'paused' }
   | { result: PumpResult; state: 'pumped' }
 );
-// The Session Host's Group, as a Trace Case sets it up: the Session Script
-// loaded from empty source, granted `console`, whose Operations cost nothing,
-// each mock Operation and built-in Capability, under every name it was
-// granted, and each user Library as it was added.
-export const sessionSetup = (host: SessionHost): Setup => {
-  const { granted, mocks } = host.grants;
-  return {
-    ...(host.objectTranscript.length
-      ? { sessionObjects: host.objectTranscript }
-      : {}),
-    libraries: host.userLibraries.map(l => ({
-      name: l.name,
-      version: l.version,
-      source: '(inline)',
-      text: l.source,
-    })),
-    operations: [
-      ...extensionOperations(host),
-      ...mocks.map(m => ({
-        capability: m.capability,
-        name: m.operation,
-        mode: m.mode,
-        args: Array.from({ length: MOCK_ARGUMENTS }, () => ({
-          optional: 'any',
-        })),
-        ...(m.mode === 'fire-and-forget' ? {} : { result: 'any' }),
-        cost: { fuel: 0 },
-      })),
-    ],
-    scripts: [
-      {
-        name: 'session',
-        source: '(empty)',
-        text: '',
-        grants: {
-          console: { ops: 'all' },
-          ...Object.fromEntries(
-            Object.entries(granted).map(([name, capability]) => [
-              name,
-              { capability, ops: 'all' as const },
-            ]),
-          ),
-        },
-      },
-    ],
-    standard: [
-      {
-        capability: 'console',
-        costs: { write: { fuel: 0 }, read: { fuel: 0 } },
-      },
-      ...(Object.values(granted).includes('clock')
-        ? [{ capability: 'clock', costs: { now: { fuel: 0 } } }]
-        : []),
-    ],
-  };
-};
-
-// Carry custom declarations into Trace replay; replay supplies recorded outcomes.
-const shapeSpec = (s: Shape): ShapeSpec => {
-  switch (s.k) {
-    case 'kind':
-      return s.kind;
-    case 'any':
-    case 'value':
-      return s.k;
-    case 'quantity':
-      return { quantity: s.unit };
-    case 'unitKind':
-      return { unitKind: s.kind };
-    case 'object':
-      return { object: s.kind };
-    case 'list':
-      return { list: shapeSpec(s.of) };
-    case 'oneOf':
-      return { oneOf: s.of.map(shapeSpec) };
-    case 'optional':
-      return { optional: shapeSpec(s.of) };
-    case 'map':
-      return {
-        map: s.fields.map(f => ({
-          key: f.key,
-          optional: f.optional,
-          shape: shapeSpec(f.shape),
-        })),
-        open: s.open,
-      };
-  }
-};
-const extensionOperations = (host: SessionHost): OperationSpec[] => {
-  const granted = new Set(Object.values(host.grants.granted));
-  return host.extensionCapabilities
-    .filter(c => granted.has(c.name))
-    .flatMap(c =>
-      [...c.operations].map(([name, op]) => ({
-        capability: c.name,
-        name,
-        mode: op.mode,
-        args: (op.args ?? []).map(shapeSpec),
-        cost: op.cost,
-        ...(op.result ? { result: shapeSpec(op.result) } : {}),
-        ...(op.errors
-          ? {
-              errors: op.errors.map(e => ({
-                code: e.code,
-                fields: Object.entries(e.fields ?? {}).map(([key, field]) => ({
-                  key,
-                  ...('shape' in field
-                    ? { optional: true, shape: shapeSpec(field.shape) }
-                    : { shape: shapeSpec(field) }),
-                })),
-              })),
-            }
-          : {}),
-      })),
-    );
-};

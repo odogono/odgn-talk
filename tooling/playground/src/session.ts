@@ -24,7 +24,7 @@ import {
   type SessionEnvironment,
   type TranscriptItem,
 } from '@odgn/northtalk/session';
-import { sessionSetup, type Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@odgn/northtalk/setup';
 import { renderDebugView } from '@odgn/northtalk-tooling/debug';
 import {
   planApply,
@@ -232,7 +232,7 @@ export class PlaygroundSession {
             expected: expected[i] ?? '(end of the Transcript)',
             actual: actual[i] ?? '(end of the Transcript)',
           },
-          setup: sessionSetup(host),
+          setup: host.setup,
           trace,
         };
       }

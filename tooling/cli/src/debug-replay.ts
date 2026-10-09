@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
-import { sessionSetup, type Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@odgn/northtalk/setup';
 import {
   ReplayDebugger,
   copyDebugVar,
@@ -37,14 +37,12 @@ export const debugTrace = async (
   ) as Setup & { kind?: string };
   const setup =
     parsed.kind === 'transcript'
-      ? sessionSetup(
-          replayTranscript(
-            parseTranscript(
-              readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
-            ),
-            { capabilities: canvasCapabilities },
-          ).host,
-        )
+      ? replayTranscript(
+          parseTranscript(
+            readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
+          ),
+          { capabilities: canvasCapabilities },
+        ).host.setup
       : parsed;
   const debug = new ReplayDebugger(setup, readFileSync(file, 'utf8'), path =>
     readFileSync(resolve(dir, path), 'utf8'),
