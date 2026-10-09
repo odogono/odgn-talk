@@ -1,3 +1,5 @@
 # A third native Core is deferred until both Cores conform
 
 The decision in [#122](https://github.com/odogono/odgn-talk/issues/122) about a third native Core with a C interface is deferred until the Go and TS Cores both pass the Conformance Corpus, as defined by [Appendix B's first milestone](../../spec/appendix-b-implementation-order.md#when-it-is-done). Proving the existing two-Core design comes before committing to another implementation and its continuing parity cost; its scope, implementation language and any additional portability constraints are revisited at that gate. The two-Core architecture in [ADR 0009](0009-twin-cores-held-to-bit-for-bit-parity.md) and the Go/TS implementation scope continue to govern the initial implementation, with the Message Layer serving Hosts outside Go and TS.
+
+Narrowed by [ADR 0071](0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md): the gate is met, a third Core serves only embedding outside Go and TS, and it waits until the Message Layer has been measured.

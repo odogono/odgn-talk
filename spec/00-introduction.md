@@ -1,6 +1,6 @@
 # 0. Introduction and conventions
 
-_Draws on:_ [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md), [ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md).
+_Draws on:_ [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md), [ADR 0039](../docs/adr/0039-the-language-name-stands-apart-from-its-publisher.md), [ADR 0071](../docs/adr/0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md).
 
 This is the Spec of NorthTalk, a HyperTalk-descended scripting language for running untrusted end-user Scripts in a sandbox inside Go servers, Bun servers and browsers. It states every rule of the language once, in its final form. Together with the Conformance Corpus, it is the authority on what the language does. There are two Cores, one in Go and one in TS. Neither is the reference, and both answer to the Spec and the corpus, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
@@ -41,6 +41,7 @@ Language `1.0-rc.2` breaks compatibility with earlier prereleases: reusable text
 - **Draws on:** a chapter's "Draws on" line lists every ADR its rules come from.
 - **Issues** are cited by number, as in [#72](https://github.com/odogono/odgn-talk/issues/72).
 - **Changing the Spec:** a decision gets a new ADR, and the same change edits the Spec. A narrowing is a new ADR that cites the one it narrows. A small fix can be a Spec-only change. ADRs 0001 to 0032 are left as they are ([ADR 0032](../docs/adr/0032-the-spec-holds-the-rules-over-data-files-and-adrs-hold-the-reasons.md)).
+- **No garbage collection:** every rule must be implementable without garbage collection, and without anything a language's runtime provides, such as exceptions, a scheduler or locale libraries, so that a third Core stays possible ([ADR 0071](../docs/adr/0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md)).
 
 ## Notations
 
