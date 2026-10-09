@@ -304,6 +304,7 @@ sessions/observation
 sessions/real-clock
 sessions/refusals
 sessions/save-restore
+sessions/store-bindings
 sessions/virtual-clock
 stdlib/calls
 stdlib/errors-name-the-call

@@ -22,3 +22,4 @@ export {
   type ReplayOptions,
   type TranscriptItem,
 } from './transcript';
+export type { Setup } from '../setup';

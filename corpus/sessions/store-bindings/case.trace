@@ -1,0 +1,38 @@
+# Unblessed: Session Store Grant bindings and replay (#538); first blessing awaits human review.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on score" & newline & "  ask scores to increment " & quote & "plays" & quote & ", 3" & newline & "  say it" & newline & "end score" identity=05aef0246cf85e497e3e33dd9f0229dfe04b524efb8c9989a04f9df69060855c
+> extend session source="on peek" & newline & "  ask same to get " & quote & "plays" & quote & newline & "  say it" & newline & "  ask other to get " & quote & "plays" & quote & newline & "  say it" & newline & "end peek" identity=5123b5bc1067c46f66c1425be97b058944585d4f55b03d579085a8fca3e3d228
+> extend session source="on entry1" & newline & "score" & newline & "end entry1" & newline identity=4fe22806e841c22f3620f25382f2589ca8b2c83d5716650823aaa5a437707948
+> request d1 to=session message=entry1
+> pump clock=2026-10-09T10:00:00Z
+effect session/r1.s1 grant=scores phase=begin status=ok
+call session/r1.c1 op=scores.increment args=["plays", 3] result=3
+call session/r1.c2 op=console.write args=[3]
+effect session/r1.s1 grant=scores phase=commit status=ok
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=52 alloc=16 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=52 alloc=16
+pumped state=idle fuel=52
+> save s1
+> extend session source="on entry2" & newline & "score" & newline & "end entry2" & newline identity=c6072eda5aecd52cd7144cfc1956f7861099ff3b97159570b0ce436a0be2464f
+> request d2 to=session message=entry2
+> pump clock=2026-10-09T10:00:01Z
+effect session/r2.s1 grant=scores phase=begin status=ok
+call session/r2.c1 op=scores.increment args=["plays", 3] result=6
+call session/r2.c2 op=console.write args=[6]
+effect session/r2.s1 grant=scores phase=commit status=ok
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=52 alloc=16 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=52 alloc=16
+pumped state=idle fuel=52
+> restore from=s1 fingerprint=338633553cce221fda923553ccc015abd0bcf3d9465f8a1edabe58101c4cdc1d mode=full
+> extend session source="on entry2" & newline & "peek" & newline & "end entry2" & newline identity=4389a804d4088ce89f6377cc27afe969e028c07414caa133c93cf2aa9b485e67
+> request d2 to=session message=entry2
+> pump clock=2026-10-09T10:00:02Z
+call session/r2.c1 op=same.get args=["plays"] result=6
+call session/r2.c2 op=console.write args=[6]
+call session/r2.c3 op=other.get args=["plays"] result=nothing
+call session/r2.c4 op=console.write args=[nothing]
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=75 alloc=24 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=75 alloc=24
+pumped state=idle fuel=75
+> vars
+vars session
