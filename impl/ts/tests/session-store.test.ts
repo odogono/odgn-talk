@@ -43,15 +43,14 @@ describe('The Session Store', () => {
     expect(host.input('peek')).toEqual(['3', '[]']);
     expect(host.input(':store')).toEqual(['"plays" = 3']);
     expect(host.input(':store elsewhere')).toEqual([]);
-    expect(host.sessionGrants.scores!.binding).toBe('default');
-    expect(host.sessionGrants.other!.binding).toBe('elsewhere');
-    // `increment` is 4 Fuel and `get` 2, with no declared allocation.
+    expect(host.setup.scripts![0]!.grants!.scores!.binding).toBe('default');
+    expect(host.setup.scripts![0]!.grants!.other!.binding).toBe('elsewhere');
     expect(
-      host.sessionGrants.scores!.capability.operations.get('increment')!.cost,
-    ).toEqual({ fuel: 4 });
-    expect(
-      host.sessionGrants.scores!.capability.operations.get('keys')!.cost,
-    ).toEqual({ fuel: 2 });
+      host.setup.standard?.find(s => s.capability === 'store')?.costs,
+    ).toMatchObject({
+      increment: { fuel: 4 },
+      keys: { fuel: 2 },
+    });
     expect(trace.some(l => l.includes('phase=commit status=ok'))).toBe(true);
   });
 

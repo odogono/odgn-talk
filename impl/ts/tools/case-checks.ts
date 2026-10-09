@@ -1,7 +1,7 @@
 // The checks of a Trace Case and a Session Transcript case, over a reader of
 // the case's files, so `corpus:run` under Bun and the Playground's browser
 // corpus page run exactly the same checks. No file or process access here.
-import { replayTrace, same, sessionSetup, type Setup } from '../src/replay';
+import { replayTrace, same, type Setup } from '../src/replay';
 import type { Group } from '../src/index';
 import {
   parseTranscript,
@@ -169,7 +169,7 @@ export const checkTranscriptCase = (
     return { lines: 0, divergence: replayed.divergence };
   }
   // The Trace replays without the Session Host that took it.
-  const traced = checkTraceCase(read, sessionSetup(replayed.host));
+  const traced = checkTraceCase(read, replayed.host.setup);
   if (traced.divergence) {
     return {
       lines: traced.lines,

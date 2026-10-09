@@ -2,8 +2,17 @@
 // Host Inputs on one Session Script, and prints what comes back. It does no
 // I/O of its own: its Environment supplies the Clock and takes the Trace.
 import {
+  buildSetupGroup,
+  capabilityOperations,
+  immutableSetup,
+  operationDeclarations,
+  shapeOf,
+  type Setup,
+  type OperationSpec,
+} from '../setup';
+import { exportManifest } from '../manifest';
+import {
   defineCapability,
-  shape,
   type Call,
   type CapabilityDef,
   type Grant,
@@ -19,7 +28,6 @@ import {
   type LoadDiagnostic,
 } from '../errors';
 import {
-  newGroup,
   observeRuns,
   observeValues,
   restore,
@@ -283,11 +291,24 @@ export class SessionHost {
   // The Script's code units: an extension is named after their count.
   private units = 1;
   private deadline: bigint | undefined;
-  private readonly mocks: Mock[] = [];
-  // Each Grant `:grant` and `:mock` made, by name, and the Capability it grants.
-  private readonly granted = new Map<string, string>();
-  // The binding of each Grant `:grant` gave one, by name.
-  private readonly bindings = new Map<string, string>();
+  private setup0 = immutableSetup({
+    scripts: [
+      {
+        name: NAME,
+        source: '(empty)',
+        text: '',
+        grants: { console: { ops: 'all' } },
+      },
+    ],
+    operations: [],
+    libraries: [],
+    standard: [
+      {
+        capability: 'console',
+        costs: { write: { fuel: 0 }, read: { fuel: 0 } },
+      },
+    ],
+  });
   private stubs = new Stubs();
   // Mock calls, whose `call` lines print at their `call` records.
   private mockCalls = new Map<string, { args: Value[]; operation: string }>();
@@ -302,11 +323,8 @@ export class SessionHost {
   // The Session Script's Grants by name, fixed when the session starts.
   private grantsByName: Record<string, Grant<unknown>> = {};
   private declarations0: Record<string, CapabilityDef<unknown>> = {};
-  // User Libraries, in the order added: each as added, and as it is now.
-  private readonly libraries = new Map<
-    string,
-    { added: string; library: Library }
-  >();
+  // Compiled user Libraries, in the order added; their initial sources live in Setup.
+  private readonly libraries = new Map<string, { library: Library }>();
   private readonly saves = new Map<string, Saved>();
   // Every Session Store, by name: in memory, starting empty, and outside
   // every save (chapter 12, The Session Store).
@@ -343,10 +361,6 @@ export class SessionHost {
     return this.state;
   }
 
-  get extensionCapabilities(): readonly CapabilityDef<unknown>[] {
-    return [...this.extensions.values()];
-  }
-
   /** The session source: its declarations, in the order entered. */
   get source(): string {
     return this.sessionSource(this.declarations);
@@ -372,17 +386,34 @@ export class SessionHost {
     return this.deadline;
   }
 
-  /** The mock Operations, and every Grant by name, the session started with. */
-  get grants(): { granted: Record<string, string>; mocks: readonly Mock[] } {
-    return { granted: Object.fromEntries(this.granted), mocks: this.mocks };
+  /** The immutable declaration of the live Group, also consumed by Trace replay. */
+  get setup(): Setup {
+    if (!this.objectSession?.items.length) {
+      return this.setup0;
+    }
+    return immutableSetup({
+      ...this.setup0,
+      sessionObjects: structuredClone(
+        this.recordedItems.slice(
+          0,
+          this.transcriptEnd ?? this.recordedItems.length,
+        ),
+      ),
+    });
   }
 
-  /**
-   * Each user-visible Grant by name, as the session starts or started with
-   * them, for building the Host Manifest. Starting nothing.
-   */
-  get sessionGrants(): Record<string, Grant<unknown>> {
-    return this.group ? { ...this.grantsByName } : this.capabilities().grants;
+  /** The Host Manifest derived from the Session Setup, without starting it. */
+  exportManifest(): string {
+    const built = buildSetupGroup(this.setup0, this.capabilities(), {
+      name: NAME,
+    });
+    // An empty declaration loads no code and invokes no Host functions.
+    built.load(built.group, NAME);
+    return exportManifest({
+      kind: 'session',
+      version: '1',
+      grants: built.grants.get(NAME)!,
+    });
   }
 
   /** Where each declaration of the session source is in the loaded code. */
@@ -634,15 +665,6 @@ export class SessionHost {
     this.start();
     this.objectSession!.drain(item);
   }
-  get objectTranscript(): readonly TranscriptItem[] {
-    if (!this.objectSession?.items.length) {
-      return [];
-    }
-    return this.recordedItems.slice(
-      0,
-      this.transcriptEnd ?? this.recordedItems.length,
-    );
-  }
   finishObjectReplay() {
     this.objectSession?.finish();
   }
@@ -658,17 +680,17 @@ export class SessionHost {
 
   // ------------------------------------------------------------- starting
 
-  private start() {
+  private start(setup = this.setup0) {
     if (this.group) {
       return;
     }
-    const group = newGroup({
+    const capabilities = this.capabilities(setup);
+    const built = buildSetupGroup(setup, capabilities, {
       name: NAME,
       trace: line => this.env.trace?.(line),
     });
+    const { group } = built;
     group[observeRuns](e => this.events.push(e));
-    const { capabilities, grants } = this.capabilities();
-    this.grantsByName = grants;
     this.declarations0 = Object.fromEntries(capabilities);
     this.group = group;
     this.objectSession = new SessionObjects(
@@ -683,19 +705,25 @@ export class SessionHost {
       ? this.objectSession.preload()
       : (this.env.objects?.(this.objectSession) ?? {});
     this.objectSession.initial(this.objectBindings);
-    this.script = group.load({
-      name: NAME,
-      source: '',
-      grants,
-      objects: this.objectBindings,
-    });
+    this.script = built.load(group, NAME, this.objectBindings);
+    this.grantsByName = built.grants.get(NAME)!;
   }
 
-  // The Capabilities the session grants, and its Grants by name.
-  private capabilities(): {
-    capabilities: Map<string, CapabilityDef<unknown>>;
-    grants: Record<string, Grant<unknown>>;
-  } {
+  // Live adapters for the Capabilities declared in the Session Setup.
+  private capabilities(
+    setup = this.setup0,
+  ): Map<string, CapabilityDef<unknown>> {
+    const costs = new Map(
+      setup.standard!.map(s => [
+        s.capability,
+        Object.fromEntries(
+          Object.entries(s.costs).map(([name, cost]) => [
+            name,
+            { ...cost, fuel: cost.fuel ?? 0 },
+          ]),
+        ),
+      ]),
+    );
     const console = consoleCapability(
       {
         write: (call, value) => {
@@ -705,13 +733,17 @@ export class SessionHost {
           this.reads.set(call.id, { call });
         },
       },
-      { write: { fuel: 0 }, read: { fuel: 0 } },
+      costs.get('console')!,
     );
     const capabilities = this.mockCapabilities();
     capabilities.set('console', console);
-    const granted = new Set(this.granted.values());
+    const granted = new Set(
+      Object.entries(setup.scripts![0]!.grants!).map(
+        ([name, g]) => g.capability ?? name,
+      ),
+    );
     if (granted.has('clock')) {
-      capabilities.set('clock', clockCapability({ now: { fuel: 0 } }));
+      capabilities.set('clock', clockCapability(costs.get('clock')!));
     }
     const { calendar, locale } = this.env.builtIns ?? {};
     if (granted.has('calendar') && calendar) {
@@ -719,7 +751,7 @@ export class SessionHost {
         'calendar',
         calendarCapability(
           this.answered(calendar, OPERATIONS.calendar!),
-          free(OPERATIONS.calendar!),
+          costs.get('calendar')!,
         ) as CapabilityDef<unknown>,
       );
     }
@@ -728,14 +760,17 @@ export class SessionHost {
         'locale',
         localeCapability(
           this.answered(locale, OPERATIONS.locale!),
-          free(OPERATIONS.locale!),
+          costs.get('locale')!,
         ) as CapabilityDef<unknown>,
       );
     }
     if (granted.has('store')) {
       capabilities.set(
         'store',
-        storeCapability(this.stores, STORE_COSTS) as CapabilityDef<unknown>,
+        storeCapability(
+          this.stores,
+          costs.get('store')!,
+        ) as CapabilityDef<unknown>,
       );
     }
     for (const name of granted) {
@@ -744,15 +779,7 @@ export class SessionHost {
         capabilities.set(name, extension);
       }
     }
-    const grants: Record<string, Grant<unknown>> = {
-      console: console.grant('all', undefined),
-    };
-    for (const [name, capability] of this.granted) {
-      grants[name] = capabilities
-        .get(capability)!
-        .grant('all', this.bindings.get(name) ?? DEFAULT_BINDING[capability]);
-    }
-    return { capabilities, grants };
+    return capabilities;
   }
 
   // A built-in Capability's Host functions, each answer recorded as the `~`
@@ -798,37 +825,29 @@ export class SessionHost {
 
   // What the Library compiler checks a Library's Capability calls against.
   private libraryDeclarations() {
-    return Object.fromEntries(
-      Object.entries(this.declarations0).map(([name, capability]) => [
-        name,
-        Object.fromEntries(
-          [...capability.operations].map(([operation, op]) => [
-            operation,
-            { args: op.args ?? [], mode: op.mode },
-          ]),
-        ),
-      ]),
-    );
+    return operationDeclarations(new Map(Object.entries(this.declarations0)));
   }
 
   // Each mocked Capability: its Operations take up to eight arguments, give
   // any result and cost nothing, and each call prints a `call` line.
   private mockCapabilities(): Map<string, CapabilityDef<unknown>> {
     const operations = new Map<string, Record<string, Operation<unknown>>>();
-    for (const { capability, operation, mode } of this.mocks) {
+    for (const spec of this.setup0.operations ?? []) {
+      if (this.extensions.has(spec.capability)) {
+        continue;
+      }
+      const { capability, name: operation, mode } = spec;
       const key = `${capability}.${operation}`;
       const base = {
-        args: Array.from({ length: MOCK_ARGUMENTS }, () =>
-          shape.optional(shape.any),
-        ),
-        cost: { fuel: 0 },
+        args: (spec.args ?? []).map(shapeOf),
+        cost: { ...spec.cost, fuel: spec.cost?.fuel ?? 0 },
       };
       const op: Operation<unknown> =
         mode === 'immediate'
           ? {
               ...base,
               mode,
-              result: shape.any,
+              result: shapeOf(spec.result!),
               do: (call, ...args) => {
                 this.mockCalls.set(call.id, { operation: key, args });
                 return this.stubs.take(key, call, true);
@@ -838,7 +857,7 @@ export class SessionHost {
             ? {
                 ...base,
                 mode,
-                result: shape.any,
+                result: shapeOf(spec.result!),
                 start: (call, ...args) => {
                   this.mockCalls.set(call.id, { operation: key, args });
                   this.pending.set(call.id, call);
@@ -948,18 +967,52 @@ export class SessionHost {
       name === 'console' ||
       !(
         this.builtIn(capability!) ||
-        this.mocks.some(m => m.capability === capability)
+        this.setup0.operations?.some(m => m.capability === capability)
       ) ||
       (binding !== undefined && !(capability! in DEFAULT_BINDING))
     ) {
       refuse('bad arguments');
     }
-    this.granted.set(name!, capability!);
-    if (binding === undefined) {
-      this.bindings.delete(name!);
-    } else {
-      this.bindings.set(name!, binding);
-    }
+    const script = this.setup0.scripts![0]!;
+    const standard = this.setup0.standard!;
+    const costs =
+      capability === 'clock'
+        ? { now: { fuel: 0 } }
+        : capability === 'store'
+          ? STORE_COSTS
+          : OPERATIONS[capability!]
+            ? free(OPERATIONS[capability!]!)
+            : undefined;
+    this.setup0 = immutableSetup({
+      ...this.setup0,
+      scripts: [
+        {
+          ...script,
+          grants: {
+            ...script.grants,
+            [name!]: {
+              capability,
+              ops: 'all',
+              ...((binding ?? DEFAULT_BINDING[capability!]) === undefined
+                ? {}
+                : { binding: binding ?? DEFAULT_BINDING[capability!] }),
+            },
+          },
+        },
+      ],
+      standard:
+        costs && !standard.some(s => s.capability === capability)
+          ? [...standard, { capability: capability!, costs }]
+          : standard,
+      operations:
+        this.extensions.has(capability!) &&
+        !this.setup0.operations!.some(op => op.capability === capability)
+          ? [
+              ...this.setup0.operations!,
+              ...capabilityOperations([this.extensions.get(capability!)!]),
+            ]
+          : this.setup0.operations,
+    });
     return [];
   }
 
@@ -989,25 +1042,44 @@ export class SessionHost {
     ) {
       refuse('bad arguments');
     }
-    const mock = { capability, operation, mode } as Mock;
-    const i = this.mocks.findIndex(
-      m => m.capability === capability && m.operation === operation,
+    const spec: OperationSpec = {
+      capability: capability!,
+      name: operation!,
+      mode: mode as Mock['mode'],
+      args: Array.from({ length: MOCK_ARGUMENTS }, () => ({ optional: 'any' })),
+      ...(mode === 'fire-and-forget' ? {} : { result: 'any' }),
+      cost: { fuel: 0 },
+    };
+    const operations = this.setup0.operations!;
+    const i = operations.findIndex(
+      m => m.capability === capability && m.name === operation,
     );
-    if (i < 0) {
-      this.mocks.push(mock);
-    } else {
-      this.mocks[i] = mock;
-    }
-    this.granted.set(capability!, capability!);
+    const script = this.setup0.scripts![0]!;
+    this.setup0 = immutableSetup({
+      ...this.setup0,
+      operations:
+        i < 0
+          ? [...operations, spec]
+          : operations.map((m, at) => (at === i ? spec : m)),
+      scripts: [
+        {
+          ...script,
+          grants: {
+            ...script.grants,
+            [capability!]: { capability, ops: 'all' },
+          },
+        },
+      ],
+    });
     return [];
   }
 
   private stub(rest: string): string[] {
     const [target = '', after = ''] = split(rest);
-    const mock = this.mocks.find(
-      m => `${m.capability}.${m.operation}` === target,
+    const mock = this.setup0.operations?.find(
+      m => `${m.capability}.${m.name}` === target,
     );
-    if (mock?.mode !== 'immediate') {
+    if (mock?.mode !== 'immediate' || this.extensions.has(mock.capability)) {
       refuse('bad arguments');
     }
     const [word, error] = split(after);
@@ -1535,7 +1607,21 @@ export class SessionHost {
       this.deadline = undefined;
       return this.discarded(reports);
     }
-    this.libraries.set(name!, { added: held?.added ?? source, library });
+    this.libraries.set(name!, { library });
+    if (how === 'add') {
+      this.setup0 = immutableSetup({
+        ...this.setup0,
+        libraries: [
+          ...this.setup0.libraries!,
+          {
+            name: name!,
+            version: LIBRARY_VERSION,
+            source: '(inline)',
+            text: source,
+          },
+        ],
+      });
+    }
     return this.discarded(reports);
   }
 
@@ -1603,15 +1689,6 @@ export class SessionHost {
     return this.stores
       .entries(form ?? 'default')
       .map(([key, value]) => `${text(key).toString()} = ${value.toString()}`);
-  }
-
-  /** Each user Library as `:library add` gave it, in the order added. */
-  get userLibraries(): { name: string; source: string; version: string }[] {
-    return [...this.libraries].map(([name, l]) => ({
-      name,
-      source: l.added,
-      version: LIBRARY_VERSION,
-    }));
   }
 
   private export(directory: string | undefined): string[] {

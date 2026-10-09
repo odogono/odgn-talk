@@ -1,0 +1,33 @@
+# Unblessed: Session Store Grant bindings and replay (#538); first blessing awaits human review.
+# Two aliases share games; the unbound Store uses default. Stores outlive :restore.
+> :grant scores store games
+> :grant same store games
+> :grant other store
+> on score
+|   ask scores to increment "plays", 3
+|   say it
+| end score
+> on peek
+|   ask same to get "plays"
+|   say it
+|   ask other to get "plays"
+|   say it
+| end peek
+> score
+@ 2026-10-09T10:00:00Z
+3
+> :save
+saved default
+> score
+@ 2026-10-09T10:00:01Z
+6
+> :restore
+restored default
+> peek
+@ 2026-10-09T10:00:02Z
+6
+nothing
+> :store games
+"plays" = 6
+> :store
+> :vars

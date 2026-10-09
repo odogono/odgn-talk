@@ -3,7 +3,6 @@
 // Case in both replays.
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { sessionSetup } from '../src/replay';
 import {
   checkTranscriptCase,
   linesOf,
@@ -33,7 +32,7 @@ export const runTranscriptCase = (
     blessed(linesOf(read('case.trace')), trace),
   );
   // The Trace replays without the Session Host that took it.
-  const replayed = runTraceCase(dir, sessionSetup(host));
+  const replayed = runTraceCase(dir, host.setup);
   if (replayed.divergence) {
     return {
       lines: replayed.lines,

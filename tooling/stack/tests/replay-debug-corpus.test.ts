@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
-import { sessionSetup, type Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@odgn/northtalk/setup';
 import { replay, same } from '../../../impl/ts/tools/trace-case';
 import { ReplayDebugger } from '../src/debug';
 
@@ -22,13 +22,11 @@ for (const path of [
   test(`replay debugger reproduces ${path} with fault breaks and source breakpoints`, () => {
     const actualSetup =
       setup.kind === 'transcript'
-        ? sessionSetup(
-            replayTranscript(
-              parseTranscript(
-                readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
-              ),
-            ).host,
-          )
+        ? replayTranscript(
+            parseTranscript(
+              readFileSync(resolve(dir, 'session.transcript'), 'utf8'),
+            ),
+          ).host.setup
         : setup;
     const lines = readFileSync(resolve(dir, 'case.trace'), 'utf8').split('\n');
     const debug = new ReplayDebugger(actualSetup, lines, file =>
