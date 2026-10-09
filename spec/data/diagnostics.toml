@@ -185,6 +185,18 @@ at = "its `wait`"
 sources = ["ADR 0026", "#115"]
 
 [[diagnostic]]
+code = "not in a timeout"
+raised_when = "A Timeout Block's body holds `name … and wait` or `f(x) and wait` outside a Lambda"
+at = "the call's first token"
+sources = ["ADR 0072", "#524"]
+
+[[diagnostic]]
+code = "empty timeout"
+raised_when = "A Timeout Block has no Suspension Point in its source outside a Lambda, which includes every Timeout Block in a Join's body"
+at = "its `with`"
+sources = ["ADR 0072", "#524"]
+
+[[diagnostic]]
 code = "leaves finally"
 raised_when = "A `return`, `veto` or `pass` is inside a `finally` block, or an `exit repeat` or `next repeat` inside one belongs to a loop outside it"
 at = "its first token"

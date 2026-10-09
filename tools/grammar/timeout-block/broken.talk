@@ -1,0 +1,46 @@
+-- Timeout Blocks (ADR 0072) that don't parse. The format is broken.talk's.
+-- case: no `of`
+-- expect: unexpected token at 2:16
+on t
+  with timeout 5 s
+    wait 1 s
+  end timeout
+end t
+-- case: no duration
+-- expect: unexpected token at 2:18
+on t
+  with timeout of
+    wait 1 s
+  end timeout
+end t
+-- case: a statement on the head's line (there is no one-line form)
+-- expect: unexpected token at 2:23
+on t
+  with timeout of 5 s wait 1 s
+end t
+-- case: never closed
+-- expect: unexpected token at 4:1
+on t
+  with timeout of 5 s
+    wait 1 s
+-- case: closed with another block's keyword
+-- expect: unexpected token at 4:7
+on t
+  with timeout of 5 s
+    wait 1 s
+  end wait
+end t
+-- case: in a one-line `if`, it is a Command Call `with` that stops at `of`
+-- expect: unexpected token at 2:30
+on t
+  if ready then with timeout of 5 s
+end t
+-- case: a Lambda closed with `end timeout`
+-- expect: unexpected token at 4:9
+on t
+  with timeout of 5 s
+    put given x
+    end timeout into f
+    wait 1 s
+  end timeout
+end t

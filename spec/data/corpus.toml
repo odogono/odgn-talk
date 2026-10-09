@@ -658,7 +658,7 @@ is = "why the stretch ended ([End reasons](#end-reasons))"
 key = "until"
 type = "instant"
 optional = true
-is = "the deadline it waits for, if it has one"
+is = "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in"
 
 [[record.key]]
 key = "n"
@@ -1205,7 +1205,7 @@ is = "the Fuel the Pump used"
 key = "next"
 type = "instant"
 optional = true
-is = "the next deadline: the earliest timer the next Pump could fire, a `maxPending` or `MaxWait` included, if there is one"
+is = "the next deadline: the earliest timer the next Pump could fire, a `maxPending`, `MaxWait` or Timeout Block deadline included, if there is one"
 
 [[record]]
 name = "refused"

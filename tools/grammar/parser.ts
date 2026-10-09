@@ -59,7 +59,15 @@ const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 const LABEL_RESERVED = new Set<string>(grammar.labels.reserved);
 const LABEL_EXCLUDED = new Set<string>(grammar.labels.excluded);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
-const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait', 'tell'];
+const BLOCK_KEYWORDS = [
+  'if',
+  'repeat',
+  'match',
+  'try',
+  'wait',
+  'tell',
+  'timeout',
+];
 const endSuffixExpected = (name: string, at: Token) =>
   `end of line or \`${name}\` after \`end\` (closing line ${at.line})`;
 // The operand-starting Reserved Words.
@@ -676,6 +684,12 @@ export class Parser {
     if (this.isWord(t, 'tell')) {
       return this.at(t, this.tell());
     }
+    if (
+      this.isWord(t, 'with') &&
+      this.isWord(this.la2('with-timeout'), 'timeout')
+    ) {
+      return this.at(t, this.timeoutBlock());
+    }
     return this.simpleStatement();
   }
 
@@ -956,6 +970,23 @@ export class Parser {
     this.next();
     this.endSuffix('tell', at);
     return { k: 'TellBlock', target, lines };
+  }
+
+  // `with timeout of d`, a block, then `end` or `end timeout` (ADR 0072).
+  timeoutBlock(): Node {
+    const at = this.next();
+    this.next();
+    this.expectWord('of');
+    const duration = this.expr();
+    const t = this.peek(0, 'operator');
+    if (t.t !== 'nl') {
+      this.fail(t, 'end of line after the duration of `with timeout of`');
+    }
+    this.endOfStatement();
+    const body = this.block(['end']);
+    this.expectWord('end');
+    this.endSuffix('timeout', at);
+    return { k: 'TimeoutBlock', duration, body };
   }
 
   // An Operation name, which may be any word, even a Reserved Word, then its

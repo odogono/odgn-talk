@@ -437,6 +437,13 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "timeout",
+			Positions: []string{
+				"after `with` at the start of a statement (a Timeout Block)",
+				"after a Timeout Block's `end`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "use",
 			Positions: []string{
 				"at the start of a top-level declaration",
@@ -454,6 +461,7 @@ var Grammar = GrammarTable{
 				"after the message name in `send`",
 				"after the Container in `replace`",
 				"after `begins` or `ends`",
+				"at the start of a statement, before `timeout` (a Timeout Block)",
 			},
 		},
 	},
@@ -776,6 +784,10 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "when-contains",
 			Rule: "after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name",
+		},
+		GrammarTableDecisionEntry{
+			Name: "with-timeout",
+			Rule: "at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call",
 		},
 	},
 	Advanced: []GrammarTableAdvancedEntry{

@@ -1,0 +1,66 @@
+-- Timeout Blocks (ADR 0072): one deadline for the waits written inside.
+
+-- A deadline for a whole Join.
+on compare stations
+  try
+    with timeout of 5 s
+      wait for all
+        repeat for each s in stations
+          send allReadings with s to me and wait
+        end repeat
+      end wait
+    end timeout
+    put it into perStation
+  catch {code: "timeout", deadline: true}
+    put nothing into perStation
+  end try
+end compare
+
+-- Several waits share one deadline, and blocks nest. A bare `end` closes one.
+on checkout order
+  with timeout of 2 min
+    ask payments to charge order and wait
+    put it into receipt
+    with timeout of the limit of order
+      wait for confirmed
+    end
+    wait 1 s
+    wait for shipped or 30 s
+  end timeout
+end checkout
+
+-- A Lambda's waits belong to the Lambda, which may hold its own block.
+on later
+  with timeout of 10 s
+    put given x
+      with timeout of 1 s
+        wait x
+      end timeout
+    end given into pause
+    send tick to me and wait
+  end timeout
+end later
+
+-- A block `wait for` inside, and a `try` inside that keeps going.
+on poll
+  with timeout of 1 min
+    repeat forever
+      try
+        ask sensor to read and wait
+        exit repeat
+      catch "timeout"
+        wait 5 s
+      end try
+    end repeat
+    wait for
+      when ready then say "ready"
+      after 10 s then say "late"
+    end wait
+  end timeout
+end poll
+
+-- `with` and `timeout` stay Names elsewhere.
+on with timeout
+  put timeout into with
+  send done with with to me
+end with

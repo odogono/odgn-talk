@@ -1,6 +1,6 @@
 # 5. Handlers, messages and scheduling
 
-_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md), [ADR 0057](../docs/adr/0057-a-send-may-compute-its-message-name.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md).
+_Draws on:_ [ADR 0004](../docs/adr/0004-scripts-are-actors.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0042](../docs/adr/0042-block-ending-suffixes-are-optional-and-explicitness-is-lint-advice.md), [ADR 0055](../docs/adr/0055-handlers-name-their-parameters-with-argument-labels-that-join-the-selector.md), [ADR 0057](../docs/adr/0057-a-send-may-compute-its-message-name.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [ADR 0072](../docs/adr/0072-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md).
 
 This chapter says how a message reaches a Handler, how Runs of one Script interleave, and how a Pump schedules the Scripts of a Group. The syntax of Handlers and of the statements here is in [chapter 2](02-grammar.md). What happens when something fails is in [chapter 6](06-errors-and-limits.md), and the Host calls that feed the scheduler are in [chapter 9](09-embedding.md).
 
@@ -146,6 +146,7 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **Never suspend:** functions, Handlers called function-style, Guards, dispatch and Built-ins. A call without `and wait` never suspends.
 - **`finally`** blocks may contain no Suspension Point, checked at load ([chapter 6](06-errors-and-limits.md#catching)).
 - **Waiting on an answer:** a suspending Operation call waits at most its Operation's `maxPending`, or else the Script's `MaxWait`. A `send … and wait`, and a call to a Function Value in another Script, wait at most `MaxWait`. When the time runs out, the call is abandoned and the Run raises `timeout` ([chapter 6](06-errors-and-limits.md#limits)).
+- **Inside a Timeout Block,** every Suspension Point also waits at most until the block's deadline, and the earlier deadline wins ([Timeout Blocks](#timeout-blocks)).
 
 ## Waiting
 
@@ -218,6 +219,40 @@ A Join, `wait for all … end` (optionally `end wait`), starts several calls fro
 > end compare
 > ```
 
+## Timeout Blocks
+
+A Timeout Block, `with timeout of d … end` (optionally `end timeout`), sets one deadline for every Suspension Point written inside it ([ADR 0072](../docs/adr/0072-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)).
+
+- **The deadline:** `d` is evaluated once, when the block is entered, and anything that isn't an exact duration Quantity raises `wrong kind` as for [`wait d`](#wait-for-a-time). The deadline is the Clock reading of the Pump in which the block is entered, plus `d`. Entering the block isn't a Suspension Point.
+- **What it bounds:** every Suspension Point in the block's source, outside the Lambdas written there: `wait d`, `wait for` in all its forms, `send … and wait`, `ask … and wait` and a Join's closing `end`. Each waits until the earlier of its own deadline and the block's. Of equal deadlines, the block's wins. `wait for`, which `MaxWait` never bounds, is bounded by the block.
+- **Nesting:** an inner block whose deadline is later than an enclosing block's gets the enclosing one, so the earliest deadline in force wins, and of equal deadlines, the outermost block's.
+- **When it runs out:** the deadline fires at the first Pump whose Clock reading is at or past it, in deadline order with the other timers ([A Pump](#a-pump)). What the Run waits on is abandoned as a call that times out is: a Capability call gets the cancellation signal on its `Call`, a `send … and wait`'s receiver keeps running and its reply is dropped, a `wait` or `wait for` stops waiting, and a Join abandons every member still pending, in start order. The Run then raises `timeout` with `deadline: true` at that Suspension Point ([chapter 6](06-errors-and-limits.md#errors-across-scripts)). A `wait for m or d` whose block runs out first raises, and doesn't leave Nothing in `it`.
+- **Already past:** a Suspension Point reached after the deadline has passed raises `timeout` at once. It starts nothing and doesn't suspend, so no Segment ends. A `catch` inside the block that keeps going meets the deadline again at its next wait.
+- **After the block:** its deadline no longer applies.
+- **Also in Libraries and Lambdas:** a Timeout Block may sit in a function's or Lambda's block, and in Library code, where only `wait d` can suspend. A Lambda's own waits are bounded only by blocks written inside the Lambda.
+- **Load errors:**
+  - A Command Call written `name … and wait`, or `f(x) and wait`, in the block's source outside a Lambda. Its waits are written elsewhere, so the block couldn't bound them. The fix is `send name … to me and wait`.
+  - A block with no Suspension Point in its source. A Join Member isn't one, so a Timeout Block can't sit in a Join's body.
+
+> **Example.**
+>
+> ```text
+> on compare stations
+>   try
+>     with timeout of 5 s
+>       wait for all
+>         repeat for each s in stations
+>           send allReadings with s to me and wait
+>         end repeat
+>       end wait
+>     end timeout
+>     put it into perStation
+>   catch {code: "timeout", deadline: true}
+>     put nothing into perStation
+>   end try
+> end compare
+> ```
+
 ## Queueing Policies
 
 A Handler Clause's Queueing Policy says what happens when a message dispatches to it while an earlier Run of the same clause hasn't ended. The policy belongs to the clause, not to the message, and dispatch picks the clause first ([ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md)).
@@ -286,7 +321,7 @@ A Pump does these steps, in order:
 
 1. **Reads the Clock:** it takes its one Clock reading. A reading earlier than the last Pump's is the Host error `clock backwards`.
 2. **Drains the input queue** in call order. A Delivery joins the back of its receiver's mailbox, even past its depth, since the depth was checked at the call ([chapter 9](09-embedding.md#deliveries)). An answer or a failure settles its call, which makes the waiting Run ready, unless it waits in a Join with members still pending.
-3. **Fires due timers:** every `wait`, `wait for` timeout, `after` branch, `maxPending` and `MaxWait` whose deadline is at or before the reading fires, in deadline order, and of equal deadlines, in the order they were set. Each makes its Run ready.
+3. **Fires due timers:** every `wait`, `wait for` timeout, `after` branch, `maxPending`, `MaxWait` and Timeout Block whose deadline is at or before the reading fires, in deadline order, and of equal deadlines, in the order they were set. Each makes its Run ready.
 4. **Runs turns** until no Script has work left, or every Script that has work has spent its Fuel Slice, or the Group's Fuel cap is spent.
 
 The Group is Quiescent when the Pump returns.

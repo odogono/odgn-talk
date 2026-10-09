@@ -22,7 +22,6 @@ These need a working Core, so they are written during [Appendix B](appendix-b-im
 None of these blocks an implementation. Each would be a language change.
 
 - **Normative error messages:** the wording of a Core-raised `message` is outside parity, so text a Script builds from one is outside parity too, and no case may depend on it ([chapter 11](11-the-trace-and-conformance.md#what-is-recorded-and-when)). Making [chapter 6](06-errors-and-limits.md#messages)'s templates normative would close that gap.
-- **A deadline for a whole Join,** beyond the waits of its members ([ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md)).
 - **More from `locale`:** formatting currency Quantities in a Locale, formatting a whole date in a Locale's own pattern, and title case ([ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md)).
 - **A Library's Operations:** whether a Library may declare the Operations it needs, so a Host can check them before any Import ([ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md)).
 

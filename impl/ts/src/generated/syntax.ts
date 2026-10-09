@@ -156,7 +156,8 @@ export const grammar = {
     "script-variable",
     "target",
     "wait-from",
-    "when-contains"
+    "when-contains",
+    "with-timeout"
   ],
   "text_patterns": {
     "keywords": [
@@ -667,6 +668,8 @@ export const diagnosticCodes = [
   "not in a guard",
   "not in a join",
   "empty join",
+  "not in a timeout",
+  "empty timeout",
   "leaves finally",
   "outside a loop",
   "veto outside a decision",
