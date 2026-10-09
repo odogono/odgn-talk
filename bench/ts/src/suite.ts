@@ -11,6 +11,9 @@ import {
   shape,
   num,
   parseInstant,
+  restore,
+  type Group,
+  type Report,
   type ScriptHandle,
   type LoadOptions,
 } from '@odgn/northtalk';
@@ -22,19 +25,47 @@ export type Size = { expect: string; n: number };
 
 /** One manifest entry. Its Script is `<name>.talk`, and its Handler `run` takes N. */
 export type Benchmark = Size & {
-  host?: 'immediate' | 'suspending' | 'properties' | 'conversion';
+  host?:
+    | 'immediate'
+    | 'suspending'
+    | 'properties'
+    | 'conversion'
+    | 'partner'
+    | 'parents'
+    | 'restore';
   name: string;
+  /** False keeps it out of the Cost Model outliers. */
+  outlier?: boolean;
+  /** Its Script, when that isn't its name: a sweep runs its base's. */
+  script?: string;
   /** Runners that can't run it yet, each with the reason. */
   skip?: Record<string, string>;
+  /** The Fuel Slice of each Pump of a sweep Benchmark. */
+  slice?: number;
+  /** The sweep's Fuel Slices: `manifest` adds a Benchmark for each. */
+  slices?: number[];
   smoke: Size;
 };
+
+/** Why the Peer Languages skip a Fuel Slice sweep. */
+export const sweepSkip =
+  'A Fuel Slice is a NorthTalk Pump option; no peer counterpart.';
 
 export const manifest = (): Benchmark[] =>
   (
     JSON.parse(readFileSync(join(scriptsDir, 'benchmarks.json'), 'utf8')) as {
       benchmarks: Benchmark[];
     }
-  ).benchmarks;
+  ).benchmarks.flatMap(({ slices, ...b }) => [
+    b,
+    ...(slices ?? []).map(slice => ({
+      ...b,
+      name: `${b.name}@slice=${slice}`,
+      script: b.name,
+      skip: { peers: sweepSkip, ...b.skip },
+      slice,
+    })),
+  ]);
 
 /** Whether a Benchmark is selected by a `--filter`: a substring of its name. */
 export const selected = (b: Benchmark, filter: string | undefined) =>
@@ -50,8 +81,10 @@ export const skipped = (b: Benchmark, runners: readonly string[]) =>
 export const sizeOf = (b: Benchmark, smoke: boolean): Size =>
   smoke ? b.smoke : b;
 
-export const sourceOf = (b: Benchmark) =>
-  readFileSync(join(scriptsDir, `${b.name}.talk`), 'utf8');
+const readScript = (name: string) =>
+  readFileSync(join(scriptsDir, `${name}.talk`), 'utf8');
+
+export const sourceOf = (b: Benchmark) => readScript(b.script ?? b.name);
 
 // Each limit's conformance minimum, which every Core supports, so that no
 // Benchmark trips one.
@@ -76,9 +109,37 @@ export type RunReport = {
 export class Loaded {
   private readonly group = newGroup({ name: 'bench' });
   private readonly script: ScriptHandle;
-  constructor(name: string, source: string, host?: Benchmark['host']) {
+  /** The `restore` Host: the N its rows were last filled for. */
+  private filled: number | undefined;
+  constructor(
+    private readonly b: Pick<Benchmark, 'host' | 'slice'>,
+    name: string,
+    source: string,
+  ) {
+    const { host } = b;
     const bindings: Partial<LoadOptions> = {};
-    if (host === 'properties') {
+    if (host === 'partner') {
+      this.group.load({
+        limits,
+        name: 'partner',
+        source: readScript('messaging/partner'),
+      });
+    } else if (host === 'parents') {
+      // leaf → branch → root, and only root has an Owning Script: the
+      // Benchmark's.
+      const kind = defineObjectKind({
+        name: 'BenchmarkNode',
+        parentKinds: ['BenchmarkNode'],
+        props: {},
+      });
+      const root = this.group.object(kind, 'root', undefined);
+      const branch = this.group.object(kind, 'branch', undefined);
+      const leaf = this.group.object(kind, 'leaf', undefined);
+      this.group.setParent(branch, root);
+      this.group.setParent(leaf, branch);
+      bindings.owner = root;
+      bindings.objects = { leaf };
+    } else if (host === 'properties') {
       const kind = defineObjectKind({
         name: 'BenchmarkMeter',
         props: {
@@ -90,7 +151,7 @@ export class Loaded {
         },
       });
       bindings.objects = { meter: this.group.object(kind, 'meter', undefined) };
-    } else if (host) {
+    } else if (host && host !== 'restore') {
       const capability = defineCapability('BenchmarkHost', {
         echo: {
           mode: 'immediate',
@@ -118,31 +179,73 @@ export class Loaded {
     }
     this.script = this.group.load({ limits, name, source, ...bindings });
   }
+  /**
+   * Deliver `run n` and pump until its Run ends and the Group is idle. Under
+   * the `restore` Host, the Run is on a Group restored from a save of the
+   * loaded one.
+   */
   run(n: number): RunReport {
-    this.script.deliver({ args: [num(n)], name: 'run' });
-    // Answers queued by Start are consumed by the next Pump. Bound the loop
-    // so an accidentally unanswerable workload fails instead of hanging.
-    for (let pumps = 0; pumps <= n + 1; pumps++) {
-      const end = this.group
-        .pump(clock)
-        .reports.find(report => report.kind === 'run end');
-      if (end) {
-        return {
-          alloc: end.alloc,
-          fuel: end.fuel,
-          outcome: end.outcome,
-          ...(end.result ? { result: String(end.result) } : {}),
-        };
-      }
+    if (this.b.host !== 'restore') {
+      return pump(this.group, this.script, 'run', n, this.b.slice);
     }
-    throw new Error('the Pump ended no Run');
+    if (this.filled !== n) {
+      pump(this.group, this.script, 'fill', n);
+      this.filled = n;
+    }
+    const { group } = restore(this.group.save(), {
+      grants: () => undefined,
+      libraries: [],
+      name: 'bench',
+      onMismatch: 'reject',
+      resolve: () => undefined,
+    });
+    return pump(group, group.script(this.script.name)!, 'run', n);
   }
 }
+
+/** What one Run reported, with the Fuel and allocation of every Run the
+ * Group's Pumps ended on its way. */
+const pump = (
+  group: Group,
+  script: ScriptHandle,
+  message: string,
+  n: number,
+  fuelSlice?: number,
+): RunReport => {
+  const delivery = script.deliver({ args: [num(n)], name: message });
+  let fuel = 0;
+  let alloc = 0;
+  let mine: Extract<Report, { kind: 'run end' }> | undefined;
+  for (;;) {
+    const result = group.pump(clock, fuelSlice ? { fuelSlice } : {});
+    fuel += result.fuelUsed;
+    for (const report of result.reports) {
+      if (report.kind === 'run end') {
+        alloc += report.alloc;
+        if (report.delivery === delivery) {
+          mine = report;
+        }
+      }
+    }
+    if (mine && result.state === 'idle' && result.nextDeadline === undefined) {
+      return {
+        alloc,
+        fuel,
+        outcome: mine.outcome,
+        ...(mine.result ? { result: String(mine.result) } : {}),
+      };
+    }
+    // A Pump that does no work can't end the Run: fail instead of hanging.
+    if (result.fuelUsed === 0 && result.reports.length === 0) {
+      throw new Error('the Pump ended no Run');
+    }
+  }
+};
 
 /** Run a Benchmark once and confirm it completes with its expected output. */
 export const check = (b: Benchmark, smoke: boolean): RunReport => {
   const size = sizeOf(b, smoke);
-  const report = new Loaded(b.name, sourceOf(b), b.host).run(size.n);
+  const report = new Loaded(b, b.name, sourceOf(b)).run(size.n);
   if (report.outcome !== 'completed') {
     throw new Error(`${b.name}: Run did not complete: ${report.outcome}`);
   }

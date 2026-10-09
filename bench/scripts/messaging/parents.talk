@@ -1,0 +1,14 @@
+-- Sends to a leaf Host Object that has no Owning Script, so each climbs the
+-- Message Path through its parents to this Script, which owns the root.
+on ping x
+  return x
+end ping
+
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    send ping with i to leaf and wait
+    add it to total
+  end repeat
+  return total
+end run

@@ -1,0 +1,10 @@
+-- A zero wait in every iteration: the Run suspends, and the next Pump
+-- resumes it, with no Host Operation involved.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    wait 0 s
+    add i to total
+  end repeat
+  return total
+end run

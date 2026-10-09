@@ -1,0 +1,26 @@
+-- N Runs that each change a Script Variable and then start a Join one member
+-- wider than MaxJoin. Each Limit Fault rolls its Segment back, so `count`
+-- ends at 0 again. The members are suspending Host calls, so the 16 that
+-- start before the fault leave no work in another Script.
+script variable count = 0
+
+on fill
+  add 1 to count
+  wait for all
+    repeat for each i in 1..17
+      ask host to later i and wait
+    end repeat
+  end wait
+end fill
+
+on run n
+  put 0 into faults
+  repeat for each i in 1..n
+    try
+      send fill to me and wait
+    catch {code: "send failed", reason: "limit fault"}
+      add 1 to faults
+    end try
+  end repeat
+  return faults + count
+end run

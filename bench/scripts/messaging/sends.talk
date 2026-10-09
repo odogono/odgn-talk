@@ -1,0 +1,10 @@
+-- Sends to another Script, each waiting for its reply: one send, one Run in
+-- the receiver, and one suspend and resume of the sender.
+on run n
+  put 0 into total
+  repeat for each i in 1..n
+    send echo with i to partner and wait
+    add it to total
+  end repeat
+  return total
+end run

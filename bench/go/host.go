@@ -2,10 +2,42 @@ package bench
 
 import northtalk "github.com/odogono/odgn-talk/impl/go"
 
-// bindHost installs only the bindings a Host boundary workload needs. The
-// same declared Shapes and costs are used on the TS Host.
+// bindHost installs only the bindings a Host boundary workload needs, and
+// the partner Script or Host Objects a messaging workload sends to. The TS
+// Host installs the same ones.
 func bindHost(core *northtalk.Core, group *northtalk.Group, options *northtalk.LoadOptions, host string) error {
-	if host == "" {
+	switch host {
+	case "", "restore":
+		return nil
+	case "partner":
+		source, err := readScript("messaging/partner")
+		if err != nil {
+			return err
+		}
+		_, err = group.Load(northtalk.LoadOptions{Name: "partner", Source: source, Limits: limits})
+		return err
+	case "parents":
+		// leaf → branch → root, and only root has an Owning Script: the
+		// Benchmark's.
+		kind, err := core.DefineObjectKind(northtalk.ObjectKindDef{Name: "BenchmarkNode", ParentKinds: []string{"BenchmarkNode"}})
+		if err != nil {
+			return err
+		}
+		var chain []*northtalk.Object
+		for _, id := range []string{"root", "branch", "leaf"} {
+			object, err := group.Object(kind, id, nil)
+			if err != nil {
+				return err
+			}
+			if len(chain) > 0 {
+				if err = group.SetParent(object, chain[len(chain)-1]); err != nil {
+					return err
+				}
+			}
+			chain = append(chain, object)
+		}
+		options.Owner = chain[0]
+		options.Objects = map[string]*northtalk.Object{"leaf": chain[2]}
 		return nil
 	}
 	if host == "properties" {

@@ -49,7 +49,7 @@ func TestEveryBenchmarkCanRepeatOnTheSameLoadedScript(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			loaded, err := Load(northtalk.New(), bench.Name, source, bench.Host)
+			loaded, err := Load(northtalk.New(), bench, bench.Name, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -91,7 +91,7 @@ func BenchmarkLoad(b *testing.B) {
 			i := 0
 			for b.Loop() {
 				i++
-				if _, e := Load(core, fmt.Sprintf("load%d", i), source, bench.Host); e != nil {
+				if _, e := Load(core, bench, fmt.Sprintf("load%d", i), source); e != nil {
 					b.Fatal(e)
 				}
 			}
@@ -109,7 +109,7 @@ func BenchmarkRun(b *testing.B) {
 				b.Fatal(e)
 			}
 			source, _ := bench.Source()
-			l, e := Load(northtalk.New(), bench.Name, source, bench.Host)
+			l, e := Load(northtalk.New(), bench, bench.Name, source)
 			if e != nil {
 				b.Fatal(e)
 			}
@@ -178,6 +178,36 @@ func BenchmarkPeer(b *testing.B) {
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestASweepAddsOneBenchmarkPerFuelSlice(t *testing.T) {
+	benchmarks, e := Manifest()
+	if e != nil {
+		t.Fatal(e)
+	}
+	byName := map[string]Benchmark{}
+	for _, b := range benchmarks {
+		byName[b.Name] = b
+	}
+	for _, base := range benchmarks {
+		for _, slice := range base.Slices {
+			swept, ok := byName[fmt.Sprintf("%s@slice=%d", base.Name, slice)]
+			if !ok || swept.Slice != slice || swept.Script() != base.Name || swept.Skip["peers"] != SweepSkip {
+				t.Fatalf("%s at slice %d: %+v", base.Name, slice, swept)
+			}
+			got, e := Check(swept, true)
+			if e != nil {
+				t.Fatal(e)
+			}
+			want, e := Check(base, true)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if got.Fuel != want.Fuel {
+				t.Fatalf("%s used %d Fuel, %s %d", swept.Name, got.Fuel, base.Name, want.Fuel)
+			}
 		}
 	}
 }

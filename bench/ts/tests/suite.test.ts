@@ -6,6 +6,7 @@ import {
   selected,
   skipped,
   sourceOf,
+  sweepSkip,
 } from '../src/suite';
 
 describe('the TS Core', () => {
@@ -14,7 +15,7 @@ describe('the TS Core', () => {
       expect(check(b, true).fuel).toBeGreaterThan(0);
     });
     test(`${b.name} can repeat on the same loaded Script`, () => {
-      const loaded = new Loaded(b.name, sourceOf(b), b.host);
+      const loaded = new Loaded(b, b.name, sourceOf(b));
       const first = loaded.run(b.smoke.n);
       expect(first.outcome).toBe('completed');
       expect(first.result).toBe(b.smoke.expect);
@@ -41,4 +42,16 @@ test('a Benchmark lists the runners that skip it', () => {
   expect(skipped(b, ['go', 'ts'])).toEqual([
     { benchmark: b.name, reason: 'not supported yet', runner: 'go' },
   ]);
+});
+
+test('a sweep adds one Benchmark per Fuel Slice, with the same Fuel', () => {
+  const all = manifest();
+  const swept = all.filter(b => b.slice !== undefined);
+  expect(swept.length).toBeGreaterThan(0);
+  for (const b of swept) {
+    const base = all.find(x => x.name === b.script)!;
+    expect(b.name).toBe(`${base.name}@slice=${b.slice}`);
+    expect(b.skip?.peers).toBe(sweepSkip);
+    expect(check(b, true).fuel).toBe(check(base, true).fuel);
+  }
 });

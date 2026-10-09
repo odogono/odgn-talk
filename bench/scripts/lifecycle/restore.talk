@@ -1,0 +1,18 @@
+-- The `restore` Host fills the rows once, then each Run saves the Group,
+-- restores it, and delivers `run` to the restored Script, which reads them.
+script variable rows = []
+
+on fill n
+  put [] into rows
+  repeat for each i in 1..n
+    put {id: i, name: "row " & i, tags: [i, i * 2]} after rows
+  end repeat
+end fill
+
+on run n
+  put 0 into total
+  repeat for each row in rows
+    add row's id to total
+  end repeat
+  return total
+end run

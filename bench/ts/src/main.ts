@@ -185,6 +185,12 @@ const peerVersions = (): Record<string, string> => {
 };
 
 const outlierFactor = Number(flags['outlier-factor']);
+// Benchmarks whose time is mostly outside Fuel-charged work, such as Save.
+const excluded = new Set(
+  manifest()
+    .filter(b => b.outlier === false)
+    .map(b => b.name),
+);
 const versions = coreVersions;
 const date = new Date().toISOString().slice(0, 10);
 const cpu = cpus()[0]?.model ?? 'unknown CPU';
@@ -200,7 +206,10 @@ const results: Results = {
   },
   measurements,
   outlierFactor,
-  outliers: outliers(measurements, outlierFactor),
+  outliers: outliers(
+    measurements.filter(m => !excluded.has(m.benchmark)),
+    outlierFactor,
+  ),
   parity: fuelParity(measurements),
   settings: {
     count: flags.smoke ? 1 : Number(flags.count),
