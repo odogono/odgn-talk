@@ -132,11 +132,11 @@ export type ReplayOptions = {
   /**
    * Where the Session Host turns once the Transcript runs out, so a
    * Playground can go on live from a replayed session: its Clock, its
-   * built-in Capabilities, and where later items are recorded.
+   * built-in Capabilities, and where later items and echoed values go.
    */
   live?: Pick<
     SessionEnvironment,
-    'builtIns' | 'capabilities' | 'now' | 'record'
+    'builtIns' | 'capabilities' | 'now' | 'record' | 'result'
   >;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
@@ -219,6 +219,11 @@ export const replayTranscript = (
       items.push(item);
       if (live) {
         options.live!.record?.(item);
+      }
+    },
+    result: (run, value) => {
+      if (live) {
+        options.live!.result?.(run, value);
       }
     },
     builtIns: {

@@ -26,6 +26,7 @@ import {
   PlaygroundSession,
   type SelectionAction,
   type Tabs,
+  varSources,
 } from './session';
 
 const scope = self as unknown as {
@@ -121,6 +122,8 @@ const state = (): SessionState => {
   ];
   sent = session.transcript.length;
   notes = [];
+  const result = session.latestCopy;
+  const copy = selection ? session.copyOf(selection.id) : undefined;
   return {
     lines,
     generation,
@@ -130,9 +133,11 @@ const state = (): SessionState => {
     started: session.started,
     source: session.host.source,
     savedLibraries: session.savedLibraries,
+    ...(result === undefined ? {} : { result }),
     selection: selection && {
       ...selection,
       lines: session.printedBy(selection.id),
+      ...(copy === undefined ? {} : { copy }),
     },
     setup: session.setup,
     pause: session.pauseView(),
@@ -266,6 +271,7 @@ const replayView = (result: ReplayResult | null): ReplayView => {
         runs: renderDebugView(snapshot, 'runs'),
         mailbox: renderDebugView(snapshot, 'mailbox'),
         vars: renderDebugView(snapshot, 'vars'),
+        sources: varSources(snapshot),
       },
       frames: frameViews(run?.frames ?? []),
     };

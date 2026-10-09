@@ -63,7 +63,7 @@ import {
 } from '../store/index';
 import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
-import { listValues, map, text, type Value } from '../values';
+import { listValues, map, nothing, text, type Value } from '../values';
 import { viewSource } from '../view';
 import { SessionObjects } from './objects';
 import type { HostObject } from '../objects';
@@ -99,6 +99,11 @@ export type SessionEnvironment = {
    */
   record?(item: TranscriptItem): void;
   resolveObject?(kind: string, id: string): { native: unknown } | undefined;
+  /**
+   * Receives the value an expression Entry or `:inspect` echoes, with its Run,
+   * for tooling that copies it. It changes nothing the session prints.
+   */
+  result?(run: string, value: Value): void;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
   /** Writes a file of `:export`, given a directory. */
@@ -1844,12 +1849,16 @@ export class SessionHost {
             if (value.kind === 'object') {
               this.reader = value;
             }
+            this.env.result?.(e.run, value);
             return valueRows(value).join('\n');
           }
         }
-        return e.delivery && this.expressions.has(e.delivery)
-          ? (report?.result?.toString() ?? 'nothing')
-          : null;
+        if (e.delivery && this.expressions.has(e.delivery)) {
+          const value = report?.result ?? nothing;
+          this.env.result?.(e.run, value);
+          return value.toString();
+        }
+        return null;
       case 'errored': {
         const error = map(
           e.error!.entries().filter(([k]) => k !== 'message' && k !== 'at'),

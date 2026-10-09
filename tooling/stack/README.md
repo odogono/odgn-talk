@@ -220,7 +220,7 @@ or Bun globals, and the browser smoke page's LSP fixtures.
 ## Live debugger
 
 `@odgn/northtalk-tooling/debug` exports `LiveDebugger`, source breakpoint and
-result types, and `renderDebugView`. It works in Bun, Node and browser workers;
+result types, `renderDebugView` and `copyDebugVar`. It works in Bun, Node and browser workers;
 the Host supplies the Group, its Grants and lifecycle, and epoch nanoseconds.
 
 ```ts
@@ -280,6 +280,9 @@ hook, without the `Inspect()` Host Input. Its detached views include Variables,
 mailboxes and Runs with Segment, lifetime Fuel, frames and locals.
 `renderDebugView(snapshot, 'runs' | 'mailbox' | 'vars')` prints Session-style rows
 prefixed with each Script's name, adding Segment and Fuel to Runs.
+`copyDebugVar(snapshot, name)` prints the same Variable rows in source form, for
+copying; `sourceForm` and `isReadable` from `@odgn/northtalk/debug` work on any
+value.
 
 `clock()` subtracts cumulative paused wall time from the Host's readings and
 clamps rounding regressions. `pump()` uses it by default. An explicit `pump(now,

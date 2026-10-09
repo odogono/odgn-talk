@@ -36,6 +36,7 @@ import {
   type Value,
   newGroup,
 } from '@odgn/northtalk';
+import { sourceForm } from '@odgn/northtalk/debug';
 import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
 import { readManifest, type HostManifest } from '@odgn/northtalk-tooling/lint';
 import { differs, replayFile } from './replay';
@@ -455,9 +456,14 @@ class TestRun {
           ...fields.filter(([k]) => k !== 'at'),
         ]);
         const at = errorAt(r.error.data) ?? r.at;
+        // A failed assertion's expected and actual can be pasted back as source.
+        const shown =
+          r.error.code === 'assertion failed'
+            ? sourceForm(error)
+            : error.toString();
         this.problems.push({
           ...(at ? { at: this.location(at) } : {}),
-          text: `${who} errored: ${error.toString()}${
+          text: `${who} errored: ${shown}${
             r.error.message ? `\n  ${r.error.message}` : ''
           }`,
         });

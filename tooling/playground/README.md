@@ -37,7 +37,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
 - **Evaluate** runs the Launch Entry against the currently loaded session, without applying pending edits. **Apply** retains the live workflow below.
 - **Do it, Print it, Inspect it** (Ctrl/Cmd-D, -P, -I) run the editor's selection, or the cursor's line, against the live session as an ordinary Entry, so the console and the Session Transcript show it like one typed at the prompt. The selection's shared indentation is dropped.
   - **Print it** shows beside the selection the last line its Entry printed: its value, or an error. The tooltip shows every line. Lines a Run prints later, once it goes on in the background, update it; editing the tab clears it.
-  - **Inspect it** enters `:inspect` with the selected expression and shows its rows in the **Inspect** inspector.
+  - **Inspect it** enters `:inspect` with the selected expression and shows its rows in the **Inspect** inspector. **Copy as source** there copies the value in source form.
   - A selected declaration in the Script tab is entered like one at the prompt, so it applies. A Library tab's declarations load only by saving the tab.
   - A statement selected from inside a Handler doesn't have the Handler's locals, so the Session Host reports them as unknown names. An unfinished Entry or a Session Command is refused without an Entry.
 - **Syntax** follows the current editor text, not loaded code. Select a node to highlight source; selecting source reveals its node. Incomplete source remains inspectable.
@@ -52,6 +52,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
   - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete, including labelled calls whose arguments continue inside brackets.
   - A `console` `read` is answered at the `<` prompt.
   - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
+  - **Copy result as source** copies the latest value an Entry echoed in source form, which pastes into a Script or test as an equal value: `("2026-09-27" as civil date)` rather than `2026-09-27`. A value holding a Function Value or Host Object has none, and the button says so.
   - The **@ ~** box shows the Clock readings and Capability answers the Transcript records.
 - **Grants:** before the session starts, the Grants panel issues `:grant` and `:mock`.
   - The built-in Capabilities are `clock` and the `Intl`-based `calendar` and `locale` shared with the REPL ([`builtins.ts`](../stack/src/builtins.ts)).
@@ -62,7 +63,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
   - **Lints** chooses the `beginner` (the default) or `standard` Lint Profile.
 - **Live debugging:** click the gutter to set a breakpoint in the Script tab or a saved Library tab.
   - A breakpoint pauses the whole session during any Run, and the tab shows the paused line. While paused, the prompt waits.
-  - Continue, Step, Over and Out work as chapter 12 describes. Recovery Offer dispatch follows the active policy/cleanup cursor. The panel labels retained and dispatch frames, identifies the shared owner by its displayed frame number, and shows the actual owner locals. It also shows the session's runs, mailbox and Script Variables.
+  - Continue, Step, Over and Out work as chapter 12 describes. Recovery Offer dispatch follows the active policy/cleanup cursor. The panel labels retained and dispatch frames, identifies the shared owner by its displayed frame number, and shows the actual owner locals. It also shows the session's runs, mailbox and Script Variables. Each local and Script Variable has a **copy** button for its source form.
   - The pause isn't a Host Input, so the Transcript and the Trace are as they would be without it, and the paused time doesn't count on the Clock.
   - A breakpoint in a tab with unapplied edits is shown faded until Apply or a save loads it.
 - **Replay debugging:** the Replay debugger replays a Trace on the TS Core.

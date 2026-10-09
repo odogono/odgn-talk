@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { compileSource, newGroup } from '@odgn/northtalk';
 import {
   LiveDebugger,
+  copyDebugVar,
   renderDebugView,
   type DebugResult,
   type SourceBreakpoint,
@@ -16,6 +17,7 @@ const help = `:break <line>[:<column>]  add a source breakpoint
 :continue                resume the paused Run
 :step / :over / :out      step by statement
 :runs / :mailbox / :vars  inspect the paused Group
+:copy <name>             print a Script Variable in source form
 :errors on|off           break on caught and uncaught Errors
 :limits on|off           break on Limit Faults
 :reload                  reload the file, carrying Script Variables; while
@@ -243,6 +245,15 @@ export const debugScript = async (
           )) {
             console.log(row);
           }
+        } else if (command === ':copy') {
+          if (args.length !== 1) {
+            throw new Error('Usage: :copy <name>');
+          }
+          const rows = copyDebugVar(debug.snapshot(), args[0]!);
+          if (!rows.length) {
+            throw new Error(`No Script Variable is named ${args[0]}`);
+          }
+          rows.forEach(row => console.log(row));
         } else if (command === ':reload' && debug.isPaused) {
           confirming = fixAndContinue();
         } else if (command === ':reload') {

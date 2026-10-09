@@ -7,6 +7,7 @@ import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
 import { sessionSetup, type Setup } from '@odgn/northtalk/replay';
 import {
   ReplayDebugger,
+  copyDebugVar,
   renderDebugView,
   type ReplayResult,
   type SourceBreakpoint,
@@ -19,6 +20,7 @@ const help = `:break <unit>:<line>[:<column>]  add a source breakpoint
 :back                          reverse one statement
 :input <n>                     run to zero-based Host Input n
 :runs / :mailbox / :vars        inspect the paused Group
+:copy <name>                   print a Script Variable in source form
 :errors on|off                 break on Errors
 :limits on|off                 break on Limit Faults
 :help / :quit`;
@@ -165,6 +167,15 @@ export const debugTrace = async (
           )) {
             console.log(row);
           }
+        } else if (command === ':copy') {
+          if (args.length !== 1) {
+            throw new Error('Usage: :copy <name>');
+          }
+          const rows = copyDebugVar(debug.snapshot(), args[0]!);
+          if (!rows.length) {
+            throw new Error(`No Script Variable is named ${args[0]}`);
+          }
+          rows.forEach(row => console.log(row));
         } else if (command) {
           throw new Error('Unknown replay command; :help lists commands');
         }

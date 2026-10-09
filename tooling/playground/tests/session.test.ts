@@ -427,6 +427,44 @@ describe('Running a selection', () => {
     expect(s.printedBy(0).length).toBeGreaterThan(0);
   });
 
+  test('a copy action copies an echoed value as source', () => {
+    const s = new PlaygroundSession(environment().env);
+    expect(s.latestCopy).toBeUndefined();
+    s.input('["2026-09-27" as civil date, quote & "x"]');
+    expect(s.latestCopy).toBe('[("2026-09-27" as civil date), `"x`]');
+    const { selection } = s.runSelection('{if: 1}', 'inspect') as {
+      selection: number;
+    };
+    expect(s.copyOf(selection)).toBe('{if: 1}');
+    s.input('function f n\n  return n\nend f');
+    s.input('[f]');
+    expect(s.latestCopy).toBeNull();
+    expect(s.copyOf(selection)).toBe('{if: 1}');
+  });
+
+  test('a debug pause copies variables and locals as source', () => {
+    const s = new PlaygroundSession(environment().env);
+    const script = [
+      'script variable day = ("2026-09-27" as civil date)',
+      'on go',
+      '  put quote & "x" into said',
+      '  return said',
+      'end go',
+    ].join('\n');
+    s.apply(script);
+    s.setBreakpoints(
+      [{ tab: SESSION_TAB, line: 4 }],
+      { error: false, limitFault: false },
+      { script, libraries: [] },
+    );
+    s.input('go');
+    const pause = s.pauseView()!;
+    const local = pause.frames[0]!.locals.indexOf('said = quote & "x"');
+    expect(pause.frames[0]!.sources[local]).toBe('`"x`');
+    const day = pause.views.vars.indexOf('[session] day = 2026-09-27');
+    expect(pause.views.sources[day]).toBe('("2026-09-27" as civil date)');
+  });
+
   test('refuses without an Entry what is not one', () => {
     const s = new PlaygroundSession(environment().env);
     expect(s.runSelection('  \n', 'do')).toHaveProperty('refused');

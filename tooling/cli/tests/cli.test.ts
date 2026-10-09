@@ -503,6 +503,31 @@ test('test reports a failed assertion, a background error and an unhandled messa
   });
 });
 
+// A Test Script whose failed assertEqual expects `expected`.
+const pasteTest = (expected: string) =>
+  [
+    'use assertEqual from test',
+    'on testPaste',
+    '  put {} into m',
+    '  put ("2026-09-27" as civil date) into the offer of m',
+    '  put [quote & "x", "a" & newline & "${"] into the if of m',
+    `  assertEqual(m, ${expected})`,
+    'end testPaste',
+    '',
+  ].join('\n');
+
+test('a failed assertEqual prints values that paste back as expected', () => {
+  const { dir, manifest } = testDir(pasteTest('nothing'));
+  const failed = run(['test', '--manifest', manifest, dir]);
+  expect(failed.code).toBe(1);
+  const actual = /, actual: (.*)}\n/.exec(failed.stdout)?.[1];
+  expect(actual).toBe(
+    '{"offer": ("2026-09-27" as civil date), if: [`"x`, `a\\n\\${`]}',
+  );
+  writeFileSync(join(dir, 'counter.test.talk'), pasteTest(actual!));
+  expect(run(['test', '--manifest', manifest, dir]).code).toBe(0);
+});
+
 test('test grants the Host Manifest as mocks the harness answers', () => {
   const { dir, manifest } = testDir(
     [

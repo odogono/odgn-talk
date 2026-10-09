@@ -7,13 +7,15 @@ import {
   type PumpOptions,
   type PumpResult,
 } from '@odgn/northtalk';
-import type {
-  DebugController,
-  DebugInstruction,
-  DebugPause,
-  DebugSnapshot,
-  DebugSource,
-  RepeatedEffect,
+import {
+  isReadable,
+  sourceForm,
+  type DebugController,
+  type DebugInstruction,
+  type DebugPause,
+  type DebugSnapshot,
+  type DebugSource,
+  type RepeatedEffect,
 } from '@odgn/northtalk/debug';
 import {
   replayTrace,
@@ -563,3 +565,18 @@ export const renderDebugView = (
         ].join(' '),
     );
   });
+
+/**
+ * Each Script's Variable `name` in source form, to paste into a Script or test.
+ * A Function Value or Host Object has none, so its row says so.
+ */
+export const copyDebugVar = (snapshot: DebugSnapshot, name: string): string[] =>
+  snapshot.scripts.flatMap(script =>
+    script.vars
+      .filter(([n]) => n === name)
+      .map(([, value]) =>
+        isReadable(value)
+          ? `[${script.name}] ${name} = ${sourceForm(value)}`
+          : `[${script.name}] ${name} is not readable as source: ${value.toString()}`,
+      ),
+  );

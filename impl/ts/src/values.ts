@@ -831,3 +831,112 @@ export const functionsBelongTo = (
   }
   return true;
 };
+
+/**
+ * Tooling's source form: the display form, with the substitutions that make it
+ * source that reads back as an equal value with the same display form. Nothing
+ * about it is normative (ADR 0028). An unreadable value keeps its display form.
+ */
+export const sourceForm = (value: Value): string => {
+  const pending: (Value | string)[] = [value];
+  const output: string[] = [];
+  while (pending.length) {
+    const next = pending.pop()!;
+    if (typeof next === 'string') {
+      output.push(next);
+      continue;
+    }
+    switch (next.kind) {
+      case 'text':
+        output.push(sourceText(next.asText()!));
+        break;
+      case 'civil date':
+        output.push(`(${displayText(next.toString())} as civil date)`);
+        break;
+      case 'instant':
+        output.push(`(${displayText(next.toString())} as instant)`);
+        break;
+      case 'list': {
+        output.push('[');
+        pending.push(']');
+        for (let i = next.length; i >= 1; i--) {
+          if (i < next.length) {
+            pending.push(', ');
+          }
+          pending.push(next.index(i));
+        }
+        break;
+      }
+      case 'range': {
+        const { from, to } = next.asRange()!;
+        pending.push(to, '..', from);
+        break;
+      }
+      case 'map': {
+        output.push('{');
+        pending.push('}');
+        const entries = next.entries();
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const [k, v] = entries[i]!;
+          if (i < entries.length - 1) {
+            pending.push(', ');
+          }
+          pending.push(v, `${sourceKey(k)}: `);
+        }
+        break;
+      }
+      default:
+        output.push(next.toString());
+    }
+  }
+  return output.join('');
+};
+/** A value is readable when it contains no Function Value or Host Object. */
+export const isReadable = (value: Value): boolean => {
+  const work = [value];
+  while (work.length) {
+    const next = work.pop()!;
+    if (next.kind === 'function' || next.kind === 'object') {
+      return false;
+    }
+    if (next.kind === 'list') {
+      for (let i = 1; i <= next.length; i++) {
+        work.push(next.index(i));
+      }
+    } else if (next.kind === 'map') {
+      work.push(...next.entries().map(([, v]) => v));
+    } else if (next.kind === 'range') {
+      const { from, to } = next.asRange()!;
+      work.push(from, to);
+    }
+  }
+  return true;
+};
+// One quoted piece stays as the display form shows it; other Text is one
+// hole-free backtick literal, valid wherever a literal is required.
+const sourceText = (s: string): string => {
+  const display = displayText(s);
+  return display === `"${s}"` ? display : backtickText(s);
+};
+const sourceKey = (key: string): string =>
+  key !== 'offer' && /^[A-Z_a-z]\w*$/.test(key) ? key : sourceText(key);
+const backtickText = (s: string): string => {
+  let out = '';
+  const chars = [...s];
+  chars.forEach((ch, i) => {
+    const cp = ch.codePointAt(0)!;
+    if (ch === '`' || ch === '\\' || (ch === '$' && chars[i + 1] === '{')) {
+      out += `\\${ch}`;
+    } else if (hiddenCodePoint(cp)) {
+      out +=
+        cp === 10
+          ? String.raw`\n`
+          : cp === 9
+            ? String.raw`\t`
+            : String.raw`\u{${cp.toString(16).toUpperCase()}}`;
+    } else {
+      out += ch;
+    }
+  });
+  return `\`${out}\``;
+};

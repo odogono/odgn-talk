@@ -51,10 +51,17 @@ export type SessionState = {
   manifest: unknown;
   pause: PauseView | null;
   prompt: Prompt;
+  /**
+   * The latest value an Entry echoed in source form, for copying; null when
+   * it is not readable as source. Absent until an Entry echoes one.
+   */
+  result?: string | null;
   revision: number;
   savedLibraries: Library[];
   /** The latest print it or inspect it, with what its Entry has printed so far. */
   selection: {
+    /** Its value in source form, as for {@link SessionState.result}. */
+    copy?: string | null;
     how: Exclude<SelectionAction, 'do'>;
     id: number;
     lines: string[];
