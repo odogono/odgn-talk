@@ -48,3 +48,8 @@ Store Host semantics live in [store/](store/), with the fixed Core factory in
 [store_capability.go](store_capability.go). The language-neutral runner lives in
 [internal/storekit/](internal/storekit/); run `go -C impl/go run ./cmd/storekit`
 or `go -C impl/go test ./store ./internal/storekit ./session` for Store changes.
+
+The optional `sqlite` factory lives in [sqlite_capability.go](sqlite_capability.go),
+with its corpus runner Stubs in [internal/corpus/sqlite.go](internal/corpus/sqlite.go);
+check it with `go -C impl/go test . ./internal/corpus -run Sqlite` and the
+`standard-sqlite*` Capability cases.

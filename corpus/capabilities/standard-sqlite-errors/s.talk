@@ -1,0 +1,15 @@
+script variable codes = []
+on write
+  try
+    ask db to change "INSERT INTO t (n) VALUES (?)", [1], 0
+  catch e
+    put the code of e after codes
+  end try
+end write
+on open
+  try
+    ask db to begin
+  catch e
+    put the code of e after codes
+  end try
+end open

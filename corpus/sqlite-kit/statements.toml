@@ -1,0 +1,60 @@
+# One statement per call, and parameters that are always bound (chapter 9,
+# One statement and Bound parameters). A refused statement runs nothing.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } } }
+
+[[sequence]]
+name = "trailing statements are refused, white space and comments are not"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", do = "query", sql = "SELECT 1 AS a; SELECT 2 AS b", error = '{code: "sql"}' },
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1); DROP TABLE t", max = 0, error = '{code: "sql"}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+  { in = "b", do = "query", sql = "SELECT 1 AS a;  -- done\n", gives = '[{a: 1}]' },
+  { in = "b", do = "query", sql = "SELECT 1 AS a /* done */ ;", gives = '[{a: 1}]' },
+]
+
+[[sequence]]
+name = "a list binds ? and ?NNN by position, and a map binds :name"
+steps = [
+  { in = "a", do = "query", sql = "SELECT ? AS x, ? AS y", params = '["a", "b"]', gives = '[{x: "a", y: "b"}]' },
+  { in = "a", do = "query", sql = "SELECT ?2 AS x, ?1 AS y", params = '["a", "b"]', gives = '[{x: "b", y: "a"}]' },
+  { in = "a", do = "query", sql = "SELECT :id AS id, :name AS name", params = '{name: "Ann", id: 3}', gives = '[{id: 3, name: "Ann"}]' },
+  { in = "a", do = "query", sql = "SELECT :id AS a, :id AS b", params = '{id: 3}', gives = '[{a: 3, b: 3}]' },
+]
+
+[[sequence]]
+name = "the parameter count must match, and placeholders must be one style"
+steps = [
+  { in = "a", do = "query", sql = "SELECT ? AS x", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT ? AS x", params = '[1, 2]', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT 1 AS x", params = '[1]', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT :a AS x", params = '{a: 1, b: 2}', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT @a AS x", params = '{a: 1}', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT $a AS x", params = '{a: 1}', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT ? AS x, :a AS y", params = '[1, 2]', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT ? AS x, :a AS y", params = '{a: 1}', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT ? AS x", params = '{a: 1}', error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT :a AS x", params = '[1]', error = '{code: "sql"}' },
+]
+
+[[sequence]]
+name = "a parameter is never spliced into the statement"
+setup = ["CREATE TABLE t (v TEXT)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (?)", params = '''["x'); DROP TABLE t; --"]''', max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '''[{v: "x'); DROP TABLE t; --"}]''' },
+]
+
+[[sequence]]
+name = "SQLite's own errors are sql"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", do = "query", sql = "SELEC 1", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT nope FROM t", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT v FROM missing", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "", error = '{code: "sql"}' },
+]

@@ -1,0 +1,40 @@
+# query is read-only, checked before its statement runs (chapter 9, Read-only
+# queries); change accepts any one statement and gives {changes, rows}.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } } }
+
+[[sequence]]
+name = "a query that could write is not read-only, and runs nothing"
+setup = ["CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)", "INSERT INTO t (v) VALUES ('x')"]
+steps = [
+  { in = "a", do = "query", sql = "INSERT INTO t (v) VALUES ('y')", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "INSERT INTO t (v) VALUES ('y') RETURNING id", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "UPDATE t SET v = 'z'", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "DELETE FROM t", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "WITH old AS (SELECT id FROM t) DELETE FROM t WHERE id IN old", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "CREATE TABLE u (v)", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "DROP TABLE t", error = '{code: "not read-only"}' },
+  { in = "a", do = "query", sql = "SELECT id, v FROM t", gives = '[{id: 1, v: "x"}]' },
+]
+
+[[sequence]]
+name = "a query never enrolls and needs no Segment hooks"
+setup = ["CREATE TABLE t (v)", "INSERT INTO t (v) VALUES (1), (2)"]
+steps = [
+  { in = "a", do = "query", sql = "SELECT sum(v) AS total FROM t", gives = '[{total: 3}]' },
+  { in = "b", do = "query", sql = "WITH n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 3) SELECT x FROM n", gives = '[{x: 1}, {x: 2}, {x: 3}]' },
+]
+
+[[sequence]]
+name = "change gives the rows changed and the rows its statement gives"
+setup = ["CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (?), (?), (?)", params = '["a", "b", "c"]', max = 0, gives = '{changes: 3, rows: []}' },
+  { in = "a", do = "change", sql = "UPDATE t SET v = upper(v) WHERE id > ? RETURNING id, v", params = '[1]', gives = '{changes: 2, rows: [{id: 2, v: "B"}, {id: 3, v: "C"}]}' },
+  { in = "a", do = "change", sql = "DELETE FROM t WHERE id = ?", params = '[9]', max = 0, gives = '{changes: 0, rows: []}' },
+  { in = "a", do = "change", sql = "SELECT count(*) AS n FROM t", gives = '{changes: 0, rows: [{n: 3}]}' },
+  { in = "a", do = "change", sql = "CREATE TABLE u (v)", max = 0, gives = '{changes: 0, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t ORDER BY id", gives = '[{v: "a"}, {v: "B"}, {v: "C"}]' },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM u", gives = '[{n: 0}]' },
+]

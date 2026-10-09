@@ -545,6 +545,10 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
 - **The runner's, not the Core's:** the Core never sees a `stub` line. The runner writes it into the Trace itself, where the case has it, and queues it for its Operation, named by Capability, whichever Grant the call goes through.
 - **Immediate calls** take the next Stub for their Operation, and return its `value`, or fail with its `error`. One that finds none fails, and the Script sees `host error`, with a `call-failed` record.
 - **Standard `clock.now`** reads the Pump's Clock, so the runner refuses a Stub for it as an invalid case. Standard `timer` calls use fire-and-forget Stubs; the runner stores no durable timers, and the case writes each timer Delivery as an ordinary Host Input. Standard `store` calls take immediate Stubs and their lifecycle hooks `stub-effect` lines, as any Segment-bound Grant's do; the runner keeps no Store, so a case states each answer, including `store busy` and `store full` failures.
+- **Standard `sqlite` calls** take immediate Stubs that stand for the implementation's answer, which the Core then converts as it converts any implementation's ([chapter 9](09-embedding.md#the-sqlite-factory)), so a case can pin the conversions and their refusals. The runner keeps no database: it gives one coordinator per binding `database`, whose hooks take `stub-effect` lines, and a case states each answer, including `sqlite busy` and `too many rows` failures.
+  - **`query` and `change`:** a Stub's `value` is a map `{columns, rows}`, with `changes` too for `change`: `columns` a list of the column names, `rows` a list of rows, each a list of SQL values, and `changes` a number.
+  - **SQL values:** Nothing stands for `NULL`. A number stands for an `INTEGER` if its canonical text has no fraction digits and it fits a signed 64-bit integer, and for a `REAL`, the nearest double, otherwise, as `params` bind. Text stands for `TEXT` and Bytes for a `BLOB`. A map `{real: t}` stands for the `REAL` that `t` names: `"NaN"`, `"Infinity"`, `"-Infinity"`, or decimal text the nearest double reads from, such as `"1e34"`. Any other value, at any place in the map, stands for a value of a type the implementation must not give, so the Core ends the call as `host error`.
+  - **`begin`, `commit` and `rollback`:** a Stub gives Nothing, or fails.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
 - **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` only.
 - **Suspending calls** are answered by later `answer` and `fail` lines. The runner's Host functions do nothing else.
@@ -598,6 +602,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[operations]` | `errors` | the declared error codes, each `{code, fields}`, where `fields` are `{key, shape, optional}` | trace, disassembly |
 | `[standard]` | `capability` | a Standard Capability the case uses | trace, disassembly |
 | `[standard]` | `costs` | the cost of each of its Operations, a table from Operation name to `{fuel, alloc}` | trace, disassembly |
+| `[standard]` | `perRow` | for `sqlite`, the per-row Fuel cost its factory takes, 0 if absent | trace, disassembly |
 | `[objectKinds]` | `name` | an Object Kind's name | trace, encoding |
 | `[objectKinds]` | `parentKinds` | the kinds its objects' parents may have | trace, encoding |
 | `[objectKinds]` | `props` | its properties, each `{name, shape, readOnly, getCost, setCost}` | trace |
@@ -609,7 +614,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[libraries]` | `source` | the file that holds its source | trace, disassembly |
 | `[scripts]` | `name` | a Script's name | trace, disassembly |
 | `[scripts]` | `source` | the file that holds its source | trace, disassembly |
-| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding); optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own | trace, disassembly |
+| `[scripts]` | `grants` | its Grants: a table from each granted name to `{capability, ops, binding}`, where `ops` is a list of Operation names or `"all"`, and `capability` may be left out when it is the granted name; optional `binding` is Host text for the Grant (Locale defaults to `und`, and other Capabilities to no binding), or for `sqlite` a table `{database, tables, maxRows}`; optional `coordinator` names its Segment Coordinator, shared by every Grant in the case given that name, and without one a Grant is its own | trace, disassembly |
 | `[scripts]` | `grantsAsUsed` | `true` to keep only the granted Operations the Script uses | trace |
 | `[scripts]` | `owner` | the Host Object it owns, as `{kind, id}` | trace |
 | `[scripts]` | `objects` | its well-known objects, a table from name to `{kind, id}` | trace, disassembly |

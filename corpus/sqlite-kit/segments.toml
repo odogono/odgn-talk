@@ -1,0 +1,123 @@
+# The Segment's transaction and Script transactions (chapter 9, The Segment's
+# transaction and Script transactions). A Limit Fault, cancellation, Stop or
+# Rewind is a rollback hook; an abandoned transaction scope is a rollback
+# Operation.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } } }
+
+[[sequence]]
+name = "a Segment's changes are its own until commit publishes them"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+]
+
+[[sequence]]
+name = "a rollback discards every change of the Segment"
+setup = ["CREATE TABLE t (v)", "INSERT INTO t (v) VALUES (0)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "change", sql = "DELETE FROM t WHERE v = 0", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "rollback" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 0}]' },
+]
+
+[[sequence]]
+name = "a Segment that only begins and commits changes nothing"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+]
+
+[[sequence]]
+name = "a Script transaction's commit keeps its changes until the Segment commits"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "commit" },
+  { in = "a", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+]
+
+[[sequence]]
+name = "a Script transaction's rollback discards only its own changes"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "rollback" },
+  { in = "a", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+  { in = "a", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (3)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "commit" },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t ORDER BY v", gives = '[{v: 1}, {v: 3}]' },
+]
+
+[[sequence]]
+name = "a Segment rollback after a Script transaction's commit discards it too"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "commit" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "rollback" },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+]
+
+[[sequence]]
+name = "a Script transaction that begins the Segment's changes takes the transaction"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "begin" },
+  { in = "a", do = "rollback" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM t", gives = '[{v: 1}]' },
+]
+
+[[sequence]]
+name = "a deferred constraint fails the Segment's commit, and nothing is published"
+setup = [
+  "CREATE TABLE p (id INTEGER PRIMARY KEY)",
+  "CREATE TABLE c (id INTEGER PRIMARY KEY, p INTEGER REFERENCES p (id) DEFERRABLE INITIALLY DEFERRED)",
+]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO c (p) VALUES (9)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "commit" },
+  { in = "a", hook = "commit", status = "failed" },
+  { in = "a", hook = "rollback" },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM c", gives = '[{n: 0}]' },
+]
+
+[[sequence]]
+name = "a deferred constraint mended before commit lets the Segment commit"
+setup = [
+  "CREATE TABLE p (id INTEGER PRIMARY KEY)",
+  "CREATE TABLE c (id INTEGER PRIMARY KEY, p INTEGER REFERENCES p (id) DEFERRABLE INITIALLY DEFERRED)",
+]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO c (p) VALUES (9)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "change", sql = "INSERT INTO p (id) VALUES (9)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT p FROM c", gives = '[{p: 9}]' },
+]

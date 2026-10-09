@@ -1,0 +1,25 @@
+# Unblessed: a sqlite Limit Fault after an explicit commit (#467); first blessing awaits human review.
+# The scope's commit only releases its savepoint, so a Limit Fault later in
+# the Segment rolls back everything, the committed scope included, with one
+# rollback hook and no abandonment call, since no scope is open.
+> load s identity=26137cf51e661efc6d8f18c11ea22f6677b42380c6f345bbb8474b0472f1feae
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.commit value=nothing
+> stub-effect s.db phase=rollback status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.begin args=[] result=nothing
+scope s/r1.c1 grant=db name=transaction action=opened
+call s/r1.c2 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []}
+call s/r1.c3 op=db.commit args=[] result=nothing
+scope s/r1.c3 grant=db name=transaction action=closed
+fault s/r1 limit=fuel at=s:18 pos=8:15 rollback=[count]
+effect s/r1.s1 grant=db phase=rollback status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=118 alloc=259 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=118 alloc=259
+pumped state=idle fuel=118
+> vars
+vars s count=0

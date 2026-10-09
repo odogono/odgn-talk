@@ -1,0 +1,14 @@
+script variable caught = nothing
+script variable waited = false
+on go
+  ask db to begin
+  try
+    wait 0 ms
+  catch e
+    put the code of e into caught
+  end try
+  ask db to change "INSERT INTO t (n) VALUES (?)", [1], 0
+  ask db to commit
+  wait 0 ms
+  put true into waited
+end go

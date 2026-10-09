@@ -1,0 +1,8 @@
+script variable count = 0
+on go
+  ask db to change "INSERT INTO t (n) VALUES (?)", [1], 0
+  ask alias to change "INSERT INTO t (n) VALUES (?)", [2], 0
+  ask other to query "SELECT count(*) AS n FROM log", [], 1
+  put the n of item 1 of it into count
+  ask other to change "INSERT INTO log (n) VALUES (?)", [3], 0
+end go

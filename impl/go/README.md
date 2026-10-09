@@ -790,6 +790,32 @@ separators/signs, ten nonempty digit texts and positive integer grouping fields.
 Invalid results and every Host failure become `host error`. All eight costs are
 required and copied; the implementation must be non-nil.
 
+### sqlite Standard Capability
+
+`Core.SqliteCapability(SqliteImpl, Costs, perRow)` supplies the optional
+`sqlite` Operations (ADR 0070): immediate `query sql, params [, max]` and
+Segment-bound `change`, plus `begin`, `commit` and `rollback`, which open and
+close the `transaction` scope. Each binding must be a `SqliteBinding`; the
+factory maps it to `impl.Coordinator(database)` when the Grant is created, so
+every Grant on one database shares a participant. A binding of another type, or
+with `MaxRows` outside 0 to 2^53−1, is refused there. After the Shape checks,
+uncharged argument checks give `out of range` for a `max` that isn't a whole
+number up to `MaxRows`, and `wrong kind` for `params` that isn't a list or map
+or holds a value outside nothing, number, text, bytes and boolean. The call then
+charges `max × perRow`, saturating at 2^53−1, before calling the Host with
+converted params: a whole number that fits int64 binds as INTEGER, any other as
+REAL, and a boolean as 1 or 0.
+
+The Core converts the result. A broken form, such as a short row, more rows than
+`max` or a negative `Changes`, is `host error`. A column named twice after NFC
+raises `sql`; a NaN, infinity, double of 10^34 or more, or invalid UTF-8 text
+raises `unrepresentable` with its `column`. Both are the call's error, with no
+message. A Go value that isn't a SqlValue is `host error`. Only declared catalogue
+failures with valid fields pass through. The corpus runner replays `sqlite.*`
+Stubs as the implementation's `{columns, rows[, changes]}`, with `{real: t}` for
+a double, and gives each `database` one coordinator that takes `stub-effect`
+lines.
+
 ### Host Object handles, properties and disposal
 
 `Core.DefineObjectKind(ObjectKindDef)` validates and copies a reusable declaration,

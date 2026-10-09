@@ -1,0 +1,12 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[standard]]
+capability = "sqlite"
+costs = { query = { fuel = 3 }, change = { fuel = 5 }, begin = { fuel = 2 }, commit = { fuel = 2 }, rollback = { fuel = 2 } }
+perRow = 0
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { db = { capability = "sqlite", ops = ["query"], binding = { database = "app", maxRows = 2 } } }

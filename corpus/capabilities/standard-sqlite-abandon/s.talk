@@ -1,0 +1,13 @@
+script variable count = 0
+on keep
+  ask db to begin
+  ask db to change "INSERT INTO t (n) VALUES (?)", [1], 0
+  put count + 1 into count
+end keep
+on undo
+  ask db to begin
+  ask db to change "INSERT INTO t (n) VALUES (?)", [2], 0
+  ask db to rollback
+  ask db to change "INSERT INTO t (n) VALUES (?)", [3], 0
+  put count + 1 into count
+end undo

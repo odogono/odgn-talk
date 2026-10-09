@@ -1,0 +1,48 @@
+# Unblessed: the sqlite transfer example (#467); first blessing awaits human review.
+# Chapter 7's worked example. In d1 both updates commit with the Segment. In
+# d2 the debit changes no row, so the throw abandons the open transaction,
+# whose rollback discards the scope, and the Segment commits the log insert.
+> load s identity=da32060eafdddf9be01318e0a01744ce12a38cde3e6edd0758ccb03eb59811d9
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.commit value=nothing
+> stub-effect s.db phase=commit status=ok
+> deliver d1 to=s message=transfer args=[1, 2, 10.50]
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.change args=["INSERT INTO log (amount) VALUES (?)", [10.50], 0] result={changes: 1, rows: []}
+call s/r1.c2 op=db.begin args=[] result=nothing
+scope s/r1.c2 grant=db name=transaction action=opened
+call s/r1.c3 op=db.change args=["UPDATE accounts SET balance = balance - ? WHERE id = ?", [10.50, 1], 0] result={changes: 1, rows: []}
+call s/r1.c4 op=db.change args=["UPDATE accounts SET balance = balance + ? WHERE id = ?", [10.50, 2], 0] result={changes: 1, rows: []}
+call s/r1.c5 op=db.commit args=[] result=nothing
+scope s/r1.c5 grant=db name=transaction action=closed
+effect s/r1.s1 grant=db phase=commit status=ok
+seg s/r1 start delivery=d1 handler=transfer clause=1 fuel=136 alloc=521 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=transfer fuel=136 alloc=521
+pumped state=idle fuel=136
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 0}
+> stub sqlite.rollback value=nothing
+> stub-effect s.db phase=commit status=ok
+> deliver d2 to=s message=transfer args=[9, 2, 5]
+> pump clock=2026-10-09T12:00:00Z
+effect s/r2.s1 grant=db phase=begin status=ok
+call s/r2.c1 op=db.change args=["INSERT INTO log (amount) VALUES (?)", [5], 0] result={changes: 1, rows: []}
+call s/r2.c2 op=db.begin args=[] result=nothing
+scope s/r2.c2 grant=db name=transaction action=opened
+call s/r2.c3 op=db.change args=["UPDATE accounts SET balance = balance - ? WHERE id = ?", [5, 9], 0] result={changes: 0, rows: []}
+raise s/r2 code="no account" at=s:31 pos=7:34
+call s/r2.c4 op=db.rollback args=[] result=nothing automatic=yes
+scope s/r2.c4 grant=db name=transaction action=abandoned
+effect s/r2.s1 grant=db phase=commit status=ok
+seg s/r2 start delivery=d2 handler=transfer clause=1 fuel=112 alloc=502 state=16 end=error
+run s/r2 outcome=errored delivery=d2 handler=transfer error={code: "no account", id: 9, at: {unit: "s", handler: "transfer", line: 7, column: 34}} fuel=112 alloc=502
+pumped state=idle fuel=112
+> vars
+vars s transfers=2

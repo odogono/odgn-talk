@@ -1,0 +1,10 @@
+script variable count = 0
+on go
+  put 1 into count
+  ask db to begin
+  ask db to change "INSERT INTO t (n) VALUES (?)", [1], 0
+  ask db to commit
+  repeat forever
+    put count + 1 into count
+  end repeat
+end go

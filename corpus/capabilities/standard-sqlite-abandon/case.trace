@@ -1,0 +1,43 @@
+# Unblessed: sqlite transaction abandonment (#467); first blessing awaits human review.
+# In d1 the Run ends with the scope open, so the Core abandons it with an
+# automatic rollback, and the Segment then commits the rest. In d2 an explicit
+# rollback closes the scope, and the change after it commits with the Segment.
+> load s identity=56a5f55155b47215eef64352e19a8a28a958139ccfeb80ea1fb205d674c3b417
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.rollback value=nothing
+> stub-effect s.db phase=commit status=ok
+> deliver d1 to=s message=keep
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.begin args=[] result=nothing
+scope s/r1.c1 grant=db name=transaction action=opened
+call s/r1.c2 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []}
+call s/r1.c3 op=db.rollback args=[] result=nothing automatic=yes
+scope s/r1.c3 grant=db name=transaction action=abandoned
+effect s/r1.s1 grant=db phase=commit status=ok
+seg s/r1 start delivery=d1 handler=keep clause=1 fuel=56 alloc=171 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=keep fuel=56 alloc=171
+pumped state=idle fuel=56
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.rollback value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub-effect s.db phase=commit status=ok
+> deliver d2 to=s message=undo
+> pump clock=2026-10-09T12:00:00Z
+effect s/r2.s1 grant=db phase=begin status=ok
+call s/r2.c1 op=db.begin args=[] result=nothing
+scope s/r2.c1 grant=db name=transaction action=opened
+call s/r2.c2 op=db.change args=["INSERT INTO t (n) VALUES (?)", [2], 0] result={changes: 1, rows: []}
+call s/r2.c3 op=db.rollback args=[] result=nothing
+scope s/r2.c3 grant=db name=transaction action=closed
+call s/r2.c4 op=db.change args=["INSERT INTO t (n) VALUES (?)", [3], 0] result={changes: 1, rows: []}
+effect s/r2.s1 grant=db phase=commit status=ok
+seg s/r2 start delivery=d2 handler=undo clause=1 fuel=97 alloc=326 state=16 end=return
+run s/r2 outcome=completed delivery=d2 handler=undo fuel=97 alloc=326
+pumped state=idle fuel=97
+> vars
+vars s count=2

@@ -1,0 +1,9 @@
+function twice n
+  return n * 2
+end twice
+on read params, max
+  ask db to query "SELECT 1", params, max
+end read
+on keep
+  ask db to query "SELECT ?", [twice], 0
+end keep

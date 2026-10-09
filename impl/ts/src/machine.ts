@@ -3584,7 +3584,7 @@ export class Run {
             true,
           );
     });
-    standardChecks(op)?.arguments?.(args, grant.binding);
+    standardChecks(op)?.arguments?.(args, grant.binding, named);
     if (op.mode === 'suspending') {
       this.checkScopeBoundary();
     }

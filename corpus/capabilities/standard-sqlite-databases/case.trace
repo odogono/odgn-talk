@@ -1,0 +1,24 @@
+# Unblessed: two sqlite databases in one Segment (#467); first blessing awaits human review.
+# db and alias name one database, so they share its coordinator's participant.
+# A query on another database never enrolls, but a change there raises
+# `segment participant conflict` before the call, and the Segment commits the
+# first database's changes.
+> load s identity=67eb00150efca9e1bddaad489a741f005ab4164cd411de54dcffbb6e2fec55b8
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.query value={columns: ["n"], rows: [[4]]}
+> stub-effect s.db phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []}
+call s/r1.c2 op=alias.change args=["INSERT INTO t (n) VALUES (?)", [2], 0] result={changes: 1, rows: []}
+call s/r1.c3 op=other.query args=["SELECT count(*) AS n FROM log", [], 1] result=[{n: 4}] charged=1
+raise s/r1 code="segment participant conflict" at=s:30 pos=7:3
+effect s/r1.s1 grant=db phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=102 alloc=488 state=16 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "segment participant conflict", capability: "other", operation: "change", participant: "db", at: {unit: "s", handler: "go", line: 7, column: 3}} fuel=102 alloc=488
+pumped state=idle fuel=102
+> vars
+vars s count=4

@@ -116,8 +116,8 @@ func localeDefaults(given, defaults Value) Value {
 	v, _ := Map(pairs...)
 	return v
 }
-func localeArguments(name string, required int, options bool) func([]corevalue.Value, any) *corevalue.Value {
-	return func(args []corevalue.Value, binding any) *corevalue.Value {
+func localeArguments(name string, required int, options bool) func([]corevalue.Value, any, []corevalue.Pair) *corevalue.Value {
+	return func(args []corevalue.Value, binding any, _ []corevalue.Pair) *corevalue.Value {
 		domain := func(value corevalue.Value) *corevalue.Value {
 			err := machine.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText(name)}, corevalue.Pair{Key: "value", Val: value})
 			return &err

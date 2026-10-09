@@ -1,0 +1,5 @@
+script variable count = 0
+on read max
+  put count + 1 into count
+  ask db to query "SELECT 1 AS n", [], max
+end read

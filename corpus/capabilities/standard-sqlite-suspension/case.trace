@@ -1,0 +1,28 @@
+# Unblessed: sqlite's transaction at a suspension (#467); first blessing awaits human review.
+# A wait with the transaction open raises `scope open` and suspends nothing.
+# After commit closes the scope, the wait suspends: the Segment commits there,
+# and the Run continues in a new Segment.
+> load s identity=693976716b1ba0417c9ced79a1b17767656812e6656783ffbb419369bc1ba27d
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.begin value=nothing
+> stub sqlite.change value={columns: [], rows: [], changes: 1}
+> stub sqlite.commit value=nothing
+> stub-effect s.db phase=commit status=ok
+> deliver d1 to=s message=go
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.begin args=[] result=nothing
+scope s/r1.c1 grant=db name=transaction action=opened
+raise s/r1 code="scope open" at=s:9 pos=6:5
+call s/r1.c2 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] result={changes: 1, rows: []}
+call s/r1.c3 op=db.commit args=[] result=nothing
+scope s/r1.c3 grant=db name=transaction action=closed
+effect s/r1.s1 grant=db phase=commit status=ok
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=83 alloc=163 state=1758 end=wait until=2026-10-09T12:00:00Z
+pumped state=idle fuel=83 next=2026-10-09T12:00:00Z
+> pump clock=2026-10-09T12:00:01Z
+seg s/r1 resume fuel=6 alloc=0 state=34 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=89 alloc=163
+pumped state=idle fuel=6
+> vars
+vars s caught="scope open" waited=true

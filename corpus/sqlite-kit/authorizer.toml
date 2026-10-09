@@ -1,0 +1,70 @@
+# The authorizer (chapter 9, The authorizer): what would step outside the
+# Segment's transaction or the binding fails with `sql`, and nothing runs.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } }, narrow = { capability = "sqlite", binding = { database = "app", tables = ["a"], maxRows = 10 } } }
+
+[[sequence]]
+name = "transaction control is the Segment's and the Script transaction's"
+setup = ["CREATE TABLE a (id INTEGER PRIMARY KEY, v TEXT)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "BEGIN", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "BEGIN IMMEDIATE", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "COMMIT", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "END", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "ROLLBACK", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "SAVEPOINT s", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "RELEASE s", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "ROLLBACK TO s", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "INSERT INTO a (v) VALUES ('kept')", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT v FROM a", gives = '[{v: "kept"}]' },
+]
+
+[[sequence]]
+name = "other databases, copies and extensions are refused"
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "ATTACH DATABASE ':memory:' AS other", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "DETACH DATABASE main", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "VACUUM INTO 'copy.db'", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT load_extension('x') AS x", error = '{code: "sql"}' },
+  { in = "a", hook = "commit" },
+]
+
+[[sequence]]
+name = "only the read forms of seven PRAGMAs are allowed"
+setup = ["CREATE TABLE a (id INTEGER PRIMARY KEY, v TEXT NOT NULL)", "CREATE INDEX a_v ON a (v)"]
+steps = [
+  { in = "a", do = "query", sql = "PRAGMA table_info(a)", gives = '[{cid: 0, name: "id", type: "INTEGER", notnull: 0, dflt_value: nothing, pk: 1}, {cid: 1, name: "v", type: "TEXT", notnull: 1, dflt_value: nothing, pk: 0}]' },
+  { in = "a", do = "query", sql = "PRAGMA table_xinfo(a)", gives = '[{cid: 0, name: "id", type: "INTEGER", notnull: 0, dflt_value: nothing, pk: 1, hidden: 0}, {cid: 1, name: "v", type: "TEXT", notnull: 1, dflt_value: nothing, pk: 0, hidden: 0}]' },
+  { in = "a", do = "query", sql = "PRAGMA index_list(a)", gives = '[{seq: 0, name: "a_v", unique: 0, origin: "c", partial: 0}]' },
+  { in = "a", do = "query", sql = "PRAGMA index_info(a_v)", gives = '[{seqno: 0, cid: 1, name: "v"}]' },
+  { in = "a", do = "query", sql = "PRAGMA foreign_key_list(a)", gives = '[]' },
+  { in = "a", do = "query", sql = "PRAGMA user_version", gives = '[{user_version: 0}]' },
+  { in = "a", do = "query", sql = "PRAGMA journal_mode", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "PRAGMA table_list", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "PRAGMA foreign_keys", error = '{code: "sql"}' },
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "PRAGMA user_version = 3", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "PRAGMA foreign_keys = OFF", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", sql = "PRAGMA writable_schema = ON", max = 0, error = '{code: "sql"}' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "PRAGMA user_version", gives = '[{user_version: 0}]' },
+]
+
+[[sequence]]
+name = "a binding's tables limit what the Grant reads and writes"
+setup = ["CREATE TABLE a (id INTEGER PRIMARY KEY)", "CREATE TABLE b (id INTEGER PRIMARY KEY)", "INSERT INTO a (id) VALUES (1)", "INSERT INTO b (id) VALUES (1)"]
+steps = [
+  { in = "a", do = "query", grant = "narrow", sql = "SELECT id FROM a", gives = '[{id: 1}]' },
+  { in = "a", do = "query", grant = "narrow", sql = "SELECT id FROM b", error = '{code: "sql"}' },
+  { in = "a", do = "query", grant = "narrow", sql = "SELECT a.id FROM a JOIN b ON a.id = b.id", error = '{code: "sql"}' },
+  { in = "a", do = "query", grant = "narrow", sql = "SELECT id FROM a WHERE id IN (SELECT id FROM b)", error = '{code: "sql"}' },
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", grant = "narrow", sql = "INSERT INTO b (id) VALUES (2)", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", grant = "narrow", sql = "INSERT INTO a (id) SELECT id + 1 FROM b", max = 0, error = '{code: "sql"}' },
+  { in = "a", do = "change", grant = "narrow", sql = "INSERT INTO a (id) VALUES (2)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "query", sql = "SELECT a.id FROM a JOIN b ON a.id = b.id", gives = '[{id: 1}]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT count(*) AS a, (SELECT count(*) FROM b) AS b FROM a", gives = '[{a: 2, b: 1}]' },
+]

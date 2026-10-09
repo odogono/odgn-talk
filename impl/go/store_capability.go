@@ -86,7 +86,7 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 			return slices.ContainsFunc(op.Errors, func(e ErrorDecl) bool { return e.Code == code }) && storeFailure(code, data)
 		}}
 		if op.Name != "keys" {
-			checks.arguments = func(a []corevalue.Value, _ any) *corevalue.Value {
+			checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
 				if a[0].Text == "" {
 					e := machine.ErrorValue("invalid key")
 					return &e

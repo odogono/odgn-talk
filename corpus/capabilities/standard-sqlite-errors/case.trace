@@ -1,0 +1,82 @@
+# Unblessed: sqlite Host failures a Script catches (#467); first blessing awaits human review.
+# `sqlite busy` from change and begin, a constraint with its kind, and
+# `too many rows` are caught like any Script error. A failed call still
+# enrolls its Grant, so the Segment commits; a begin that fails opens no scope.
+# A constraint kind outside the list becomes host error.
+> load s identity=5519afd7bff28d480f3ed7bb28f798227e087ed9986c99518af30d326aefe293
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change error={code: "sqlite busy"}
+> stub-effect s.db phase=commit status=ok
+> deliver d1 to=s message=write
+> pump clock=2026-10-09T12:00:00Z
+effect s/r1.s1 grant=db phase=begin status=ok
+call s/r1.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] error={code: "sqlite busy"}
+raise s/r1 code="sqlite busy" at=s:8 pos=4:5
+effect s/r1.s1 grant=db phase=commit status=ok
+seg s/r1 start delivery=d1 handler=write clause=1 fuel=48 alloc=91 state=51 end=return
+run s/r1 outcome=completed delivery=d1 handler=write fuel=48 alloc=91
+pumped state=idle fuel=48
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.begin error={code: "sqlite busy"}
+> stub-effect s.db phase=commit status=ok
+> deliver d2 to=s message=open
+> pump clock=2026-10-09T12:00:00Z
+effect s/r2.s1 grant=db phase=begin status=ok
+call s/r2.c1 op=db.begin args=[] error={code: "sqlite busy"}
+raise s/r2 code="sqlite busy" at=s:28 pos=11:5
+effect s/r2.s1 grant=db phase=commit status=ok
+seg s/r2 start delivery=d2 handler=open clause=1 fuel=38 alloc=51 state=86 end=return
+run s/r2 outcome=completed delivery=d2 handler=open fuel=38 alloc=51
+pumped state=idle fuel=38
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change error={code: "constraint", kind: "foreign key"}
+> stub-effect s.db phase=commit status=ok
+> deliver d3 to=s message=write
+> pump clock=2026-10-09T12:00:00Z
+effect s/r3.s1 grant=db phase=begin status=ok
+call s/r3.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] error={code: "constraint", kind: "foreign key"}
+raise s/r3 code="constraint" at=s:8 pos=4:5
+effect s/r3.s1 grant=db phase=commit status=ok
+seg s/r3 start delivery=d3 handler=write clause=1 fuel=50 alloc=145 state=120 end=return
+run s/r3 outcome=completed delivery=d3 handler=write fuel=50 alloc=145
+pumped state=idle fuel=50
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change error={code: "too many rows", max: 0}
+> stub-effect s.db phase=commit status=ok
+> deliver d4 to=s message=write
+> pump clock=2026-10-09T12:00:00Z
+effect s/r4.s1 grant=db phase=begin status=ok
+call s/r4.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] error={code: "too many rows", max: 0}
+raise s/r4 code="too many rows" at=s:8 pos=4:5
+effect s/r4.s1 grant=db phase=commit status=ok
+seg s/r4 start delivery=d4 handler=write clause=1 fuel=49 alloc=136 state=157 end=return
+run s/r4 outcome=completed delivery=d4 handler=write fuel=49 alloc=136
+pumped state=idle fuel=49
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change error={code: "constraint", kind: "exclusion"}
+> stub-effect s.db phase=commit status=ok
+> deliver d5 to=s message=write
+> pump clock=2026-10-09T12:00:00Z
+effect s/r5.s1 grant=db phase=begin status=ok
+call s/r5.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] error={code: "constraint", kind: "exclusion"}
+call-failed s/r5.c1 op=db.change
+raise s/r5 code="host error" at=s:8 pos=4:5
+effect s/r5.s1 grant=db phase=commit status=ok
+seg s/r5 start delivery=d5 handler=write clause=1 fuel=47 alloc=74 state=191 end=return
+run s/r5 outcome=completed delivery=d5 handler=write fuel=47 alloc=74
+pumped state=idle fuel=47
+> stub-effect s.db phase=begin status=ok
+> stub sqlite.change value={columns: [], rows: [], changes: -1}
+> stub-effect s.db phase=commit status=ok
+> deliver d6 to=s message=write
+> pump clock=2026-10-09T12:00:00Z
+effect s/r6.s1 grant=db phase=begin status=ok
+call s/r6.c1 op=db.change args=["INSERT INTO t (n) VALUES (?)", [1], 0] error={}
+call-failed s/r6.c1 op=db.change
+raise s/r6 code="host error" at=s:8 pos=4:5
+effect s/r6.s1 grant=db phase=commit status=ok
+seg s/r6 start delivery=d6 handler=write clause=1 fuel=47 alloc=74 state=225 end=return
+run s/r6 outcome=completed delivery=d6 handler=write fuel=47 alloc=74
+pumped state=idle fuel=47
+> vars
+vars s codes=["sqlite busy", "sqlite busy", "constraint", "too many rows", "host error", "host error"]

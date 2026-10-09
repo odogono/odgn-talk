@@ -90,6 +90,16 @@ capabilities/standard-console-timeout
 capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
+capabilities/standard-sqlite
+capabilities/standard-sqlite-abandon
+capabilities/standard-sqlite-charge
+capabilities/standard-sqlite-databases
+capabilities/standard-sqlite-errors
+capabilities/standard-sqlite-limit-fault
+capabilities/standard-sqlite-results
+capabilities/standard-sqlite-suspension
+capabilities/standard-sqlite-transfer
+capabilities/standard-sqlite-validation
 capabilities/standard-store
 capabilities/standard-store-coordinator
 capabilities/standard-store-errors

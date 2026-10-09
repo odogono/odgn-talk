@@ -1,0 +1,74 @@
+# The value mapping in both directions (chapter 7, Values in and Values out).
+# A runner converts params and answers as the sqlite factory does, so these
+# hold the implementation and the Core's conversions to it together.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } } }
+
+[[sequence]]
+name = "a number with no fraction digits that fits 64 bits binds as INTEGER"
+steps = [
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[3]', gives = '[{t: "integer", v: 3}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[-12]', gives = '[{t: "integer", v: -12}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[9223372036854775807]', gives = '[{t: "integer", v: 9223372036854775807}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[-9223372036854775808]', gives = '[{t: "integer", v: -9223372036854775808}]' },
+]
+
+[[sequence]]
+name = "every other number binds as REAL, the nearest double"
+steps = [
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[3.0]', gives = '[{t: "real", v: 3}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[0.1]', gives = '[{t: "real", v: 0.1}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[9223372036854775808]', gives = '[{t: "real", v: 9223372036854776000}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[12345678901234567890.5]', gives = '[{t: "real", v: 12345678901234567000}]' },
+  { in = "a", do = "query", sql = "SELECT ?1 + ?2 AS v", params = '[0.1, 0.2]', gives = '[{v: 0.30000000000000004}]' },
+]
+
+[[sequence]]
+name = "Nothing, text, Bytes and booleans bind as NULL, TEXT, BLOB and 1 or 0"
+steps = [
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[nothing]', gives = '[{t: "null", v: nothing}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '["Zoë"]', gives = '[{t: "text", v: "Zoë"}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[""]', gives = '[{t: "text", v: ""}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[<<0x01, 0xFF>>]', gives = '[{t: "blob", v: <<0x01, 0xFF>>}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[true]', gives = '[{t: "integer", v: 1}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[false]', gives = '[{t: "integer", v: 0}]' },
+]
+
+[[sequence]]
+name = "any other kind is refused before the statement runs"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", do = "query", sql = "SELECT ?1 AS v", params = '[2 m]', error = '{code: "wrong kind", expected: "nothing or number or text or bytes or boolean", got: "quantity", value: 2 m, capability: "db", operation: "query", argument: 2, path: [1]}' },
+  { in = "a", do = "query", sql = "SELECT :when AS v", params = '{when: 2026-10-09}', error = '{code: "wrong kind", expected: "nothing or number or text or bytes or boolean", got: "civil date", value: 2026-10-09, capability: "db", operation: "query", argument: 2, path: ["when"]}' },
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (?)", params = '[[1]]', error = '{code: "wrong kind", expected: "nothing or number or text or bytes or boolean", got: "list", value: [1], capability: "db", operation: "change", argument: 2, path: [1]}' },
+  { in = "a", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+  { in = "a", hook = "commit" },
+]
+
+[[sequence]]
+name = "values out: INTEGER, REAL by its shortest digits, TEXT as NFC, BLOB and NULL"
+steps = [
+  { in = "a", do = "query", sql = "SELECT 1 AS i, 1.0 AS r, 0.1 AS f, 1e-7 AS s, -0.0 AS z", gives = '[{i: 1, r: 1, f: 0.1, s: 0.0000001, z: 0}]' },
+  { in = "a", do = "query", sql = "SELECT 9.99e33 AS big", gives = '[{big: 9990000000000000000000000000000000}]' },
+  { in = "a", do = "query", sql = "SELECT 'e' || char(769) AS t", gives = '[{t: "é"}]' },
+  { in = "a", do = "query", sql = "SELECT x'00ff' AS b, NULL AS n", gives = '[{b: <<0x00, 0xFF>>, n: nothing}]' },
+  { in = "a", do = "query", sql = "SELECT 1 = 1 AS yes, 1 = 2 AS no", gives = '[{yes: 1, no: 0}]' },
+  { in = "a", do = "query", sql = "SELECT 1 AS a WHERE 0", gives = '[]' },
+]
+
+[[sequence]]
+name = "a value Talk can't hold is unrepresentable, naming its column"
+steps = [
+  { in = "a", do = "query", sql = "SELECT 1 AS ok, 9e999 AS x", error = '{code: "unrepresentable", column: "x"}' },
+  { in = "a", do = "query", sql = "SELECT -9e999 AS x", error = '{code: "unrepresentable", column: "x"}' },
+  { in = "a", do = "query", sql = "SELECT 1e34 AS x", error = '{code: "unrepresentable", column: "x"}' },
+  { in = "a", do = "query", sql = "SELECT CAST(x'ff' AS TEXT) AS x", error = '{code: "unrepresentable", column: "x"}' },
+]
+
+[[sequence]]
+name = "rows are maps in the statement's column order, each column named once"
+steps = [
+  { in = "a", do = "query", sql = "SELECT 2 AS b, 1 AS a", gives = '[{b: 2, a: 1}]' },
+  { in = "a", do = "query", sql = "SELECT 1 AS a, 2 AS a", error = '{code: "sql"}' },
+  { in = "a", do = "query", sql = "SELECT value AS v FROM (SELECT 1 AS value UNION ALL SELECT 2) ORDER BY v DESC", gives = '[{v: 2}, {v: 1}]' },
+]

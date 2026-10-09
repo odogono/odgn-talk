@@ -1,0 +1,78 @@
+# A Store kept in the database, sharing its coordinator (chapter 7, In a
+# sqlite database, and chapter 9, A co-located Store). `{store}` is the table
+# that keeps the Store.
+grants = { db = { capability = "sqlite", binding = { database = "app", maxRows = 10 } }, st = { capability = "store", binding = "scores" }, listed = { capability = "sqlite", binding = { database = "app", tables = ["{store}"], maxRows = 10 } } }
+
+[[sequence]]
+name = "one commit covers the Store's writes and the database's changes"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin", grant = "st" },
+  { in = "a", do = "set", grant = "st", args = '["k", 1]' },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "get", grant = "st", args = '["k"]', gives = '1' },
+  { in = "b", do = "get", grant = "st", args = '["k"]', gives = 'nothing' },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "get", grant = "st", args = '["k"]', gives = '1' },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 1}]' },
+]
+
+[[sequence]]
+name = "one rollback discards both"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "a", do = "increment", grant = "st", args = '["n", 2]', gives = '2' },
+  { in = "a", hook = "rollback" },
+  { in = "b", do = "get", grant = "st", args = '["n"]', gives = 'nothing' },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+]
+
+[[sequence]]
+name = "a Store write is store busy while another Segment holds the write lock"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin" },
+  { in = "a", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, gives = '{changes: 1, rows: []}' },
+  { in = "b", hook = "begin", grant = "st" },
+  { in = "b", do = "set", grant = "st", args = '["k", 1]', error = '{code: "store busy", key: "k"}' },
+  { in = "b", do = "increment", grant = "st", args = '["n"]', error = '{code: "store busy", key: "n"}' },
+  { in = "b", do = "get", grant = "st", args = '["k"]', gives = 'nothing' },
+  { in = "b", do = "keys", grant = "st", gives = '[]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "set", grant = "st", args = '["k", 1]' },
+  { in = "b", hook = "commit" },
+  { in = "c", do = "get", grant = "st", args = '["k"]', gives = '1' },
+]
+
+[[sequence]]
+name = "a Store write takes the write lock at its call"
+setup = ["CREATE TABLE t (v)"]
+steps = [
+  { in = "a", hook = "begin", grant = "st" },
+  { in = "a", do = "set", grant = "st", args = '["k", 1]' },
+  { in = "b", hook = "begin" },
+  { in = "b", do = "change", sql = "INSERT INTO t (v) VALUES (1)", max = 0, error = '{code: "sqlite busy"}' },
+  { in = "b", do = "begin", error = '{code: "sqlite busy"}' },
+  { in = "b", do = "query", sql = "SELECT count(*) AS n FROM t", gives = '[{n: 0}]' },
+  { in = "b", hook = "commit" },
+  { in = "a", hook = "commit" },
+  { in = "c", do = "get", grant = "st", args = '["k"]', gives = '1' },
+]
+
+[[sequence]]
+name = "every sqlite Grant is denied the Store's table, for reads too"
+steps = [
+  { in = "a", hook = "begin", grant = "st" },
+  { in = "a", do = "set", grant = "st", args = '["k", 1]' },
+  { in = "a", hook = "commit" },
+  { in = "b", do = "query", sql = "SELECT * FROM {store}", error = '{code: "sql"}' },
+  { in = "b", do = "query", grant = "listed", sql = "SELECT * FROM {store}", error = '{code: "sql"}' },
+  { in = "b", hook = "begin" },
+  { in = "b", do = "change", sql = "DELETE FROM {store}", max = 0, error = '{code: "sql"}' },
+  { in = "b", do = "change", sql = "DROP TABLE {store}", max = 0, error = '{code: "sql"}' },
+  { in = "b", hook = "commit" },
+  { in = "c", do = "get", grant = "st", args = '["k"]', gives = '1' },
+]
