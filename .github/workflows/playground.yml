@@ -1,7 +1,7 @@
 name: Playground
 
 # Publish the Playground's static dist/ to GitHub Pages, rebuilt from each
-# push to main. It serves at https://odogono.github.io/odgn-talk/.
+# push to main. It serves at https://opendoorgonorth.com/odgn-talk/.
 on:
   push:
     branches: [main]
