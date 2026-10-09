@@ -160,7 +160,7 @@ or drops an unfinished Entry. Ctrl-D and `:quit` exit; `:help` lists Commands.
 Prompts, line editing and Ctrl-C presentation are outside Transcript parity.
 
 The Host supports `:grant`, `:mock`, `:stub`, `:answer`, `:fail`, `:clock`,
-`:limits`, `:cancel`, `:runs`, `:mailbox`, `:vars`, `:save`, `:restore`,
+`:limits`, `:cancel`, `:fix`, `:runs`, `:mailbox`, `:vars`, `:save`, `:restore`,
 `:library`, `:export` and `:store`, as specified in
 [chapter 12](../../spec/12-sessions-and-tooling.md). Configure Grants and mock
 Operations before the first Entry. `:clock virtual 2026-09-30T10:00:00Z` makes

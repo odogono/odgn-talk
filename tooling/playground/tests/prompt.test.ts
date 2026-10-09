@@ -38,6 +38,7 @@ test('the worker collects, detaches, refuses and cancels documentation Entries',
     expect(await call({ t: 'transcript' })).toEqual({
       t: 'transcript',
       text: '> :grant canvas canvas\n',
+      ended: false,
     });
     for (const text of [
       '--| Docs.',

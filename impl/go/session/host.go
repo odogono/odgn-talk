@@ -94,6 +94,8 @@ type saved struct {
 // Foreground bookkeeping reads only the Trace; Inspect is reserved for the
 // three explicit inspection commands, each of which is a vars Host Input.
 type Host struct {
+	// rewound is whether the last Pump returned rewound.
+	rewound                      bool
 	objectItems                  []Item
 	objectSession                *Objects
 	objectBindings               map[string]*talk.Object
@@ -465,9 +467,42 @@ func (h *Host) declare(d declaration, n *syntax.Node) []string {
 			}
 		}
 	}
+	next := placed(h.declarations, d)
+	offset := 0
+	for _, old := range next {
+		if old.source == d.source {
+			break
+		}
+		offset += len(strings.Split(old.source, "\n"))
+	}
+	out, err := h.reloadFrom(next, false)
+	if err != nil {
+		return h.refused(err, placement{line: offset}, len(strings.Split(d.source, "\n")))
+	}
+	return out
+}
+
+// reloadFrom reloads the Script from next as the session source, carrying
+// its Script Variables over. An error changes nothing.
+func (h *Host) reloadFrom(next []declaration, keepMailbox bool) ([]string, error) {
+	reports, err := h.script.Reload(sourceOf(next), talk.CarryVariables, talk.ReloadOptions{KeepMailbox: keepMailbox})
+	if err != nil {
+		return nil, err
+	}
+	h.declarations = next
+	h.implicit = map[string]bool{}
+	h.placements = map[string]placement{}
+	h.units = 1
+	h.deadline = time.Time{}
+	return h.discarded(reports), nil
+}
+
+// placed is the session source with d in it: in place of the declarations
+// whose names it reuses, or at the end.
+func placed(declarations []declaration, d declaration) []declaration {
 	next := []declaration{}
-	placed := false
-	for _, old := range h.declarations {
+	done := false
+	for _, old := range declarations {
 		overlap := false
 		for _, name := range old.names {
 			overlap = overlap || slices.Contains(d.names, name)
@@ -484,32 +519,17 @@ func (h *Host) declare(d declaration, n *syntax.Node) []string {
 			if len(left) > 0 {
 				next = append(next, useDeclaration(old.library, left))
 			}
-		} else if !placed && d.kind != "use" {
+		} else if !done && d.kind != "use" {
 			next = append(next, d)
-			placed = true
+			done = true
 		}
 	}
-	if !placed {
+	if !done {
 		next = append(next, d)
 	}
-	offset := 0
-	for _, old := range next {
-		if old.source == d.source {
-			break
-		}
-		offset += len(strings.Split(old.source, "\n"))
-	}
-	reports, err := h.script.Reload(sourceOf(next), talk.CarryVariables)
-	if err != nil {
-		return h.refused(err, placement{line: offset}, len(strings.Split(d.source, "\n")))
-	}
-	h.declarations = next
-	h.implicit = map[string]bool{}
-	h.placements = map[string]placement{}
-	h.units = 1
-	h.deadline = time.Time{}
-	return h.discarded(reports)
+	return next
 }
+
 func (h *Host) run(source string, expression bool, node *syntax.Node) (bool, []string) {
 	return h.runAt(source, expression, node, placement{})
 }

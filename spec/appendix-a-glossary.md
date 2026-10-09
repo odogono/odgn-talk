@@ -202,7 +202,7 @@ _Avoid_: execution tree, runtime state
 In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
 
 **Fix and Continue**:
-In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them.
+In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them. A session makes it with `:fix`.
 _Avoid_: hot reload, hot swap, live edit
 _Avoid_: reset, reload, refresh
 

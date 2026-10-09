@@ -136,7 +136,7 @@ export type ReplayOptions = {
    */
   live?: Pick<
     SessionEnvironment,
-    'builtIns' | 'capabilities' | 'now' | 'record' | 'result'
+    'builtIns' | 'capabilities' | 'now' | 'record' | 'result' | 'transcriptEnds'
   >;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
@@ -226,6 +226,7 @@ export const replayTranscript = (
         options.live!.result?.(run, value);
       }
     },
+    transcriptEnds: dropped => options.live?.transcriptEnds?.(dropped),
     builtIns: {
       calendar: builtIn(
         ['today', 'now', 'toCivil', 'toInstant', 'offset', 'zone'],

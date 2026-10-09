@@ -56,6 +56,11 @@ usage = ":cancel [<run>]"
 does = "Cancels a Run, by default the latest Entry's Run if it hasn't ended"
 
 [[command]]
+name = ":fix"
+usage = ":fix <run> <path>"
+does = "Fix and Continue: rewinds a Run that hasn't passed a Suspension Point and reloads the session with the file's declarations in place, keeping the mailbox, so the Run's message runs again on the new code"
+
+[[command]]
 name = ":runs"
 usage = ":runs"
 does = "Lists every Run that hasn't ended"
