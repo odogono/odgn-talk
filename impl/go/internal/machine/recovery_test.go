@@ -47,7 +47,7 @@ func TestRecoveryExecution(t *testing.T) {
 				t.Fatal("missing go")
 			}
 			r := Start(state, body, nil, Limits{Fuel: 100000, Alloc: 1000000, Depth: 200})
-			r.Execute(0)
+			executeDepthChecked(t, r)
 			if c.Fuel != nil && r.Fuel != *c.Fuel {
 				t.Fatalf("Fuel=%d want=%d", r.Fuel, *c.Fuel)
 			}

@@ -59,7 +59,7 @@ func StartFunction(s *State, fn value.Value, args []value.Value, limits Limits) 
 		r.Error, _ = value.NewMap(append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at}))
 		r.Error.CoreMessage = true
 		r.Status = Errored
-		r.Frames = nil
+		r.setFrames(nil)
 	}
 	return r
 }

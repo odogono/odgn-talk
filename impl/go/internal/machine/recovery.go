@@ -63,32 +63,6 @@ func activeEntries(f Frame) []lower.UnwindEntry {
 	}
 	return entries
 }
-func (r *Run) realDepth() int {
-	frames := map[int]bool{}
-	for _, f := range r.CancellationOwners {
-		frames[f.ID] = true
-	}
-	for _, scope := range r.Cancellation {
-		id := scope.Frame.ID
-		if scope.Frame.OwnerID != 0 {
-			id = scope.Frame.OwnerID
-		}
-		frames[id] = true
-	}
-	for _, c := range r.Recoveries {
-		for _, f := range c.Retained {
-			if !f.Recovery {
-				frames[f.ID] = true
-			}
-		}
-	}
-	for _, f := range r.Frames {
-		if !f.Recovery {
-			frames[f.ID] = true
-		}
-	}
-	return len(frames)
-}
 func (r *Run) unwind(err value.Value) {
 	if r.Cancelling {
 		r.unwindLegacy(err)
@@ -144,6 +118,7 @@ func (r *Run) unwind(err value.Value) {
 			}
 		}
 	}
+	r.invalidateDepth()
 	r.Recoveries = append(r.Recoveries, c)
 	if escapingCleanup != nil {
 		r.escapeCleanup(c, escapingCleanup)
@@ -190,7 +165,7 @@ search:
 			activation.PC = entry.Target
 			activation.Stack = append(slices.Clone(owner.Stack[:entry.Depth]), c.Error)
 			c.Activation = &activation
-			r.Frames = append(slices.Clone(c.Retained), activation)
+			r.setFrames(append(slices.Clone(c.Retained), activation))
 			return
 		}
 		if r.leaveCleanupSearch(c, j, nil) {
@@ -341,6 +316,7 @@ func (r *Run) escapeCleanup(c, outer *RecoveryContext) {
 // An aborted transfer must not remain reachable through a retained cleanup
 // cursor. The cursor still owns its locals/scopes, but no longer its transfer.
 func (r *Run) discardRecovery(outer *RecoveryContext) {
+	r.invalidateDepth()
 	clear := func(f *Frame) {
 		if f.Transfer == outer {
 			f.Transfer = nil
@@ -397,7 +373,7 @@ func (r *Run) acceptCatch() {
 func (r *Run) nextCatch() {
 	c := r.Recoveries[len(r.Recoveries)-1]
 	c.Activation = nil
-	r.Frames = slices.Clone(c.Retained)
+	r.setFrames(slices.Clone(c.Retained))
 	r.searchCatch(c)
 }
 
@@ -513,20 +489,21 @@ func (r *Run) advanceTransfer(c *RecoveryContext) {
 		f.PC = next.Entry.Target
 		f.Stack = slices.Clone(f.Stack[:next.Entry.Depth])
 		f.Clause = false
-		r.Frames = append(slices.Clone(c.Retained[:next.Index]), f)
+		r.setFrames(append(slices.Clone(c.Retained[:next.Index]), f))
 		return
 	}
 	p := c.Pending
+	r.invalidateDepth()
 	r.Recoveries = r.Recoveries[:len(r.Recoveries)-1]
 	if p.Kind == "error" {
 		r.AbandonJoin()
-		r.Frames = nil
+		r.setFrames(nil)
 		r.Error = c.Error
 		r.Status = Errored
 		return
 	}
 	r.leaveJoin(p.Owner, p.PC)
-	r.Frames = slices.Clone(c.Retained[:p.Owner+1])
+	r.setFrames(slices.Clone(c.Retained[:p.Owner+1]))
 	f := &r.Frames[p.Owner]
 	f.PC = p.PC
 	f.Stack = p.Stack
@@ -565,6 +542,7 @@ func cleanupEnd(f Frame, start int) int {
 // RestoreRecoveryLocals rebuilds shared owner storage after the private codec
 // has decoded and validated all control references.
 func (r *Run) RestoreRecoveryLocals() {
+	r.invalidateDepth()
 	contexts := map[int]*RecoveryContext{}
 	for _, c := range r.Recoveries {
 		contexts[c.ID] = c
@@ -720,7 +698,7 @@ func (r *Run) nextCancellationCleanup() {
 	}
 	r.CancellationOwners = slices.DeleteFunc(r.CancellationOwners, func(f Frame) bool { return !needed[f.ID] })
 	if len(r.Cancellation) == 0 {
-		r.Frames = nil
+		r.setFrames(nil)
 		r.Status = Cancelled
 		return
 	}
@@ -731,5 +709,5 @@ func (r *Run) nextCancellationCleanup() {
 	f.Waiting = false
 	f.PC = next.Entry.Target
 	f.Clause = false
-	r.Frames = []Frame{f}
+	r.setFrames([]Frame{f})
 }

@@ -114,7 +114,10 @@ type Run struct {
 	FrameCounter  int
 	OfferAttempt  int
 	OfferRecords  []OfferRecord
-	spareFrames   []Frame // empty buffers reused only within ExecuteHosted
+	depth         int
+	depthValid    bool
+	depthRetained map[int]bool // real frames still owned by recovery or cancellation
+	spareFrames   []Frame      // empty buffers reused only within ExecuteHosted
 	Base          []value.Value
 	Limits        Limits
 	Status        Status
@@ -212,7 +215,7 @@ func StartDelivery(s *State, name string, args []value.Value, limits Limits, fal
 	return r
 }
 func (r *Run) nextClause() {
-	r.Frames = nil
+	r.setFrames(nil)
 	if len(r.Clauses) == 0 {
 		r.Clause = 0
 		r.Status = Unhandled
@@ -250,6 +253,9 @@ func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
 		f.Locals[b.Checked.Slot(b.Checked.During)] = r.During
 	}
 	r.Frames = append(r.Frames, f)
+	if r.depthValid {
+		r.depth++ // every call receives a fresh real frame ID
+	}
 }
 
 // SetDuring binds the failed message before dispatch, including Guards. Every
@@ -265,6 +271,7 @@ func (r *Run) SetDuring(v value.Value) {
 	}
 }
 func (r *Run) fault(limit string) {
+	r.invalidateDepth()
 	r.Recoveries = nil
 	r.Cancellation = nil
 	r.CancellationOwners = nil
@@ -631,7 +638,7 @@ func (r *Run) Drop() {
 		r.fault("persistent")
 		return
 	}
-	r.Frames = nil
+	r.setFrames(nil)
 	r.Status = Dropped
 }
 
@@ -663,7 +670,7 @@ search:
 		r.CancelCode = code
 		r.Cancellation = nil
 		r.CancellationOwners = nil
-		r.Frames = nil
+		r.setFrames(nil)
 		r.Status = Cancelled
 		return
 	}
@@ -707,7 +714,7 @@ func (r *Run) unwindLegacy(err value.Value) {
 			if !r.Cancelling && !r.pay(int64(4*(len(r.Frames)-1-frame)), 0) {
 				return
 			}
-			r.Frames = r.Frames[:frame+1]
+			r.setFrames(r.Frames[:frame+1])
 			f = &r.Frames[frame]
 			f.Waiting = false
 			f.Stack = slices.Clone(f.Stack[:u.Depth])
@@ -728,7 +735,7 @@ func (r *Run) unwindLegacy(err value.Value) {
 		}
 	}
 	if r.Cancelling {
-		r.Frames = nil
+		r.setFrames(nil)
 		r.Status = Cancelled
 		return
 	}
@@ -737,7 +744,7 @@ func (r *Run) unwindLegacy(err value.Value) {
 	if !r.pay(int64(4*len(r.Frames)), 0) {
 		return
 	}
-	r.Frames = nil
+	r.setFrames(nil)
 	r.Error = err
 	r.Status = Errored
 }
@@ -929,7 +936,7 @@ func (r *Run) failClause() {
 		return
 	}
 	d := f.Dispatch
-	r.Frames = r.Frames[:len(r.Frames)-1]
+	r.popFrame()
 	if len(d.Bodies) > 0 {
 		body := d.Bodies[0]
 		d.Bodies = d.Bodies[1:]
