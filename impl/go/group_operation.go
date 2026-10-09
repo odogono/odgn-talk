@@ -170,6 +170,9 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 			call.failureDetail = detail
 			return fail("host error", named...)
 		}
+		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
+			return corevalue.Value{}, nil, false
+		}
 		g.record("call-failed", false, []string{string(call.id)}, map[string]string{"op": grantName + "." + opName})
 		*reports = append(*reports, &CallFailed{Script: s.name, Call: call.id, Operation: OperationRef{Capability: grant.definition.name, Operation: opName}, Detail: detail})
 		return fail("host error", named...)

@@ -554,6 +554,10 @@ invalid results, plain errors and panics also become `host error`, with Host-onl
 detail in `CallFailed`. Returned failures and queued `Call.Fail` inputs retain
 Error maps in the Trace even when Data collides with the error envelope. Valid
 Nothing/map failures retain their ordinary conversion costs and budget checks.
+If Stop or a newly landed cancellation interrupts the Run at an Operation
+crossing, the Host failure raises no `host error` and emits no `CallFailed`;
+the `call` error record is still written. Operation failures during cancellation's
+`finally` cleanup still raise and report normally.
 Calls carry the named Grant, binding, Pump Clock, Run and Segment identity.
 Caught raises precede subsequent Host call records. Host inputs accepted during
 a call join the next Pump; worker reentry is refused.

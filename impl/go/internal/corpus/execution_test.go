@@ -132,8 +132,8 @@ func TestLimitsStepFourAcceptance(t *testing.T) {
 			}
 		})
 	}
-	if count != 41 {
-		t.Fatalf("required step-4 limits set: %d cases, want 41", count)
+	if count != 42 {
+		t.Fatalf("required step-4 limits set: %d cases, want 42", count)
 	}
 }
 

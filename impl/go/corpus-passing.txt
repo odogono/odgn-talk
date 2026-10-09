@@ -13,6 +13,7 @@ bytes/value-encoding
 cancellation/broadcast-recipients
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/failed-operation-crossings
 cancellation/host-crossings
 cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection

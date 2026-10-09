@@ -87,6 +87,12 @@ it in both modes; its first blessing awaits human review. The two parent-cycle
 refusals in `sessions/object-inspection/case.trace` use the same corrected order;
 that case's first blessing remains pending for #485.
 
+The [`cancellation/failed-operation-crossings`](cancellation/failed-operation-crossings/)
+case pins Host failures at Operation crossings interrupted by cancellation and
+Stop (#540): the `call` error record remains, with no `host error` raise or
+`call-failed` report. Both Cores agree in ordinary and Save/Restore replay, and
+Go requires it in its passing gate; first-blessing approval awaits human review.
+
 The `reload/decomposed-source` and `sessions/decomposed-source` cases
 preserve source scalars and Code identities through Extend, Reload, Library
 replacement and Session inspection, while runtime Text Values remain NFC
