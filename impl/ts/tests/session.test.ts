@@ -70,11 +70,13 @@ test('stale Function Values keep their name and arity through Session restore', 
   ]) {
     expect(host.input(source)).toEqual([]);
   }
+  expect(host.input('g')).toEqual(['<function session:double>']);
   expect(host.input('functionName(g)')).toEqual(['"double"']);
   expect(host.input('functionArity(g)')).toEqual(['1..2']);
   for (let i = 0; i < 2; i++) {
     expect(host.input(':save s')).toEqual(['saved s']);
     expect(host.input(':restore s')).toEqual(['restored s']);
+    expect(host.input('g')).toEqual(['<function session:double>']);
     expect(host.input('functionName(g)')).toEqual(['"double"']);
     expect(host.input('functionArity(g)')).toEqual(['1..2']);
     expect(host.input('[functionName(pair), functionArity(pair)]')).toEqual([
@@ -83,6 +85,9 @@ test('stale Function Values keep their name and arity through Session restore', 
     expect(host.input('[functionName(zero), functionArity(zero)]')).toEqual([
       '[nothing, 0..0]',
     ]);
+    expect(host.input(':describe g')).toContain(
+      'value {kind: "function", value: <function session:double>}',
+    );
     expect(host.input(':describe g')).toContain(
       'function {name: "double", arity: 1..2, home: "session"}',
     );

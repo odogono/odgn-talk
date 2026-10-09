@@ -1,0 +1,139 @@
+# Unblessed: named Function display (#450); first blessing awaits human review.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="--| Original double." & newline & "function double n" & newline & "  return n * 2" & newline & "end double" identity=662f90ee4fab65cab4c6f1d0c6bb16f7c82d645314aba8080833c31d1dfbd322
+> extend session source="script variable g" & newline & "on entry1" & newline & "put double into g" & newline & "end entry1" & newline identity=3e43c703952df4972d3bbcefa3915f2218c45b9d7a38f95ee672b0c5ad9da8ce
+> request d1 to=session message=entry1
+> pump clock=2026-10-08T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=13 alloc=32 state=32 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=13 alloc=32
+pumped state=idle fuel=13
+> extend session source="on entry2" & newline & "return g" & newline & "end entry2" & newline identity=efbf354339d63efe88faca9ddb821c06277be1b2db22779c7fab368a10dfe932
+> request d2 to=session message=entry2
+> pump clock=2026-10-08T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=7 alloc=0 state=32 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 value=<function session:double> fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars session g=<function session:double>
+> extend session source="on entry3" & newline & "return g(4)" & newline & "end entry3" & newline identity=b954b8ad8774a2604b95ea44f04f54ae870a171faf06d902972b44d1395cbac6
+> request d3 to=session message=entry3
+> pump clock=2026-10-08T10:00:00Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=24 alloc=16 state=32 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value=8 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="function triple n" & newline & "  return n * 3" & newline & "end triple" identity=8026a61ab053b0ad160ec67ba36d24965d996f1260e85de9e76461980dc9cbb3
+> extend session source="on entry4" & newline & "return g" & newline & "end entry4" & newline identity=02826c0fa8f3651238436b9f13ef97c1c6ab50dfc46228370e4a928bc14d7e50
+> request d4 to=session message=entry4
+> pump clock=2026-10-08T10:00:00Z
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=7 alloc=0 state=32 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 value=<function session:double> fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="on entry5" & newline & "return g = double" & newline & "end entry5" & newline identity=c19cc2284922ce068c46798337ac10082fea9f0f0c85d7e2231b29cbfa84c5be
+> request d5 to=session message=entry5
+> pump clock=2026-10-08T10:00:00Z
+seg session/r5 start delivery=d5 handler=entry5 clause=1 fuel=13 alloc=32 state=32 end=return
+run session/r5 outcome=completed delivery=d5 handler=entry5 value=true fuel=13 alloc=32
+pumped state=idle fuel=13
+> save s1
+> restore from=s1 fingerprint=f85aafcf3aa1bd060d6c874e7470e6ba3da7895f36963e76e828e21d23750ef4 mode=full
+> extend session source="on entry6" & newline & "return g" & newline & "end entry6" & newline identity=396e266af7941918f46865e4ab25f3c0f738648b79771d5cdad4deda09e61502
+> request d6 to=session message=entry6
+> pump clock=2026-10-08T10:00:00Z
+seg session/r6 start delivery=d6 handler=entry6 clause=1 fuel=7 alloc=0 state=32 end=return
+run session/r6 outcome=completed delivery=d6 handler=entry6 value=<function session:double> fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars session g=<function session:double>
+> extend session source="on entry7" & newline & "return g(5)" & newline & "end entry7" & newline identity=3e49c01647cf21b1e88e73d145a737ff9196985a1a0566a5ea0f7bfa6b9340d1
+> request d7 to=session message=entry7
+> pump clock=2026-10-08T10:00:00Z
+seg session/r7 start delivery=d7 handler=entry7 clause=1 fuel=24 alloc=16 state=32 end=return
+run session/r7 outcome=completed delivery=d7 handler=entry7 value=10 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="use pad from text as padded" identity=596d9e4a43afbb74f8220beb351cca059e245b80f6ba515786f045bcfe189f40
+> extend session source="script variable p" & newline & "on entry8" & newline & "put padded into p" & newline & "end entry8" & newline identity=79c5d85d8ea0569d9192b822588c3e0e3ece2395c37591469baa1535da285234
+> request d8 to=session message=entry8
+> pump clock=2026-10-08T10:00:00Z
+seg session/r8 start delivery=d8 handler=entry8 clause=1 fuel=13 alloc=32 state=64 end=return
+run session/r8 outcome=completed delivery=d8 handler=entry8 fuel=13 alloc=32
+pumped state=idle fuel=13
+> extend session source="on entry9" & newline & "return p" & newline & "end entry9" & newline identity=d3ec994f4a96e8d56f4054f722744049d5661a7a24f3e3392ca92b76bb5fcabb
+> request d9 to=session message=entry9
+> pump clock=2026-10-08T10:00:00Z
+seg session/r9 start delivery=d9 handler=entry9 clause=1 fuel=7 alloc=0 state=64 end=return
+run session/r9 outcome=completed delivery=d9 handler=entry9 value=<function session:text:pad> fuel=7 alloc=0
+pumped state=idle fuel=7
+> reload session carry=yes source="function double n" & newline & "  return n * 3" & newline & "end double" & newline & "script variable g" & newline & "function triple n" & newline & "  return n * 3" & newline & "end triple" & newline & "use pad from text as padded" & newline & "script variable p" & newline identity=d1bfe0c980afd876538ddd95575b6ff5bc73495fa3ac1f7d27c1518aaee878cb
+stopped session reason="reload"
+> extend session source="script variable fresh" & newline & "on entry10" & newline & "put double into fresh" & newline & "end entry10" & newline identity=8726fd45b3b0813ffc3c0c95b5e53afdb69dae32fef70360679cbd51d128bda6
+> request d10 to=session message=entry10
+> pump clock=2026-10-08T10:00:00Z
+seg session/r10 start delivery=d10 handler=entry10 clause=1 fuel=13 alloc=32 state=96 end=return
+run session/r10 outcome=completed delivery=d10 handler=entry10 fuel=13 alloc=32
+pumped state=idle fuel=13
+> extend session source="on entry11" & newline & "return [g, fresh]" & newline & "end entry11" & newline identity=8087c4bf30eee908626b5912eb87278d9cf6cc0e9f722c6580cc2889eb396f13
+> request d11 to=session message=entry11
+> pump clock=2026-10-08T10:00:00Z
+seg session/r11 start delivery=d11 handler=entry11 clause=1 fuel=13 alloc=96 state=96 end=return
+run session/r11 outcome=completed delivery=d11 handler=entry11 value=[<function session:double>, <function session:double>] fuel=13 alloc=96
+pumped state=idle fuel=13
+> extend session source="on entry12" & newline & "return g = fresh" & newline & "end entry12" & newline identity=7d041748ba38988e113002a4600b5320fa0ec23194c3a195dc53151ae728770b
+> request d12 to=session message=entry12
+> pump clock=2026-10-08T10:00:00Z
+seg session/r12 start delivery=d12 handler=entry12 clause=1 fuel=10 alloc=0 state=96 end=return
+run session/r12 outcome=completed delivery=d12 handler=entry12 value=false fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session g=<function session:double> p=<function session:text:pad> fresh=<function session:double>
+> extend session source="on entry13" & newline & "return fresh(4)" & newline & "end entry13" & newline identity=68d7503ab42cc26efd25ba1260a4115a13d4c11630f004dde568743b8e270fa0
+> request d13 to=session message=entry13
+> pump clock=2026-10-08T10:00:00Z
+seg session/r13 start delivery=d13 handler=entry13 clause=1 fuel=24 alloc=16 state=96 end=return
+run session/r13 outcome=completed delivery=d13 handler=entry13 value=12 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="on entry14" & newline & "try" & newline & "  g(4)" & newline & "catch e" & newline & "  say the code of e" & newline & "end try" & newline & "end entry14" & newline identity=85e7684465f7b3166c9299981a5d4a2d7736a7c28415f7acb773c6497b8c64e8
+> request d14 to=session message=entry14
+> pump clock=2026-10-08T10:00:00Z
+raise session/r14 code="function gone" at=session+5:4 pos=3:3
+call session/r14.c1 op=console.write args=["function gone"]
+seg session/r14 start delivery=d14 handler=entry14 clause=1 fuel=37 alloc=0 state=96 end=return
+run session/r14 outcome=completed delivery=d14 handler=entry14 fuel=37 alloc=0
+pumped state=idle fuel=37
+> save s2
+> restore from=s2 fingerprint=781f3bfb829334fe1b79ee3f24b3c5c41e96b6665e3ae9feb5403cfc344bf689 mode=full
+> extend session source="on entry15" & newline & "return [g, fresh]" & newline & "end entry15" & newline identity=76a795a73e463f4945a0d102a73d7641fdf826e2a307adde9ce3a58d92631470
+> request d15 to=session message=entry15
+> pump clock=2026-10-08T10:00:00Z
+seg session/r15 start delivery=d15 handler=entry15 clause=1 fuel=13 alloc=96 state=96 end=return
+run session/r15 outcome=completed delivery=d15 handler=entry15 value=[<function session:double>, <function session:double>] fuel=13 alloc=96
+pumped state=idle fuel=13
+> extend session source="on entry16" & newline & "return g = fresh" & newline & "end entry16" & newline identity=aa1c4a38be64931262fd8162e4e323caa6c2337cfa9b11aa30e948069d715e75
+> request d16 to=session message=entry16
+> pump clock=2026-10-08T10:00:00Z
+seg session/r16 start delivery=d16 handler=entry16 clause=1 fuel=10 alloc=0 state=96 end=return
+run session/r16 outcome=completed delivery=d16 handler=entry16 value=false fuel=10 alloc=0
+pumped state=idle fuel=10
+> vars
+vars session g=<function session:double> p=<function session:text:pad> fresh=<function session:double>
+> extend session source="on entry17" & newline & "return fresh(5)" & newline & "end entry17" & newline identity=463012ff75a1ff244f7ce8c2fb8bdd486370520a4a0abc4ef2cce636bfd1a45a
+> request d17 to=session message=entry17
+> pump clock=2026-10-08T10:00:00Z
+seg session/r17 start delivery=d17 handler=entry17 clause=1 fuel=24 alloc=16 state=96 end=return
+run session/r17 outcome=completed delivery=d17 handler=entry17 value=15 fuel=24 alloc=16
+pumped state=idle fuel=24
+> extend session source="on entry18" & newline & "try" & newline & "  g(5)" & newline & "catch e" & newline & "  say the code of e" & newline & "end try" & newline & "end entry18" & newline identity=a53df0a0ca065de033da2644313c1299252fb41e8b60a9629d858853d34ab97d
+> request d18 to=session message=entry18
+> pump clock=2026-10-08T10:00:00Z
+raise session/r18 code="function gone" at=session+9:4 pos=3:3
+call session/r18.c1 op=console.write args=["function gone"]
+seg session/r18 start delivery=d18 handler=entry18 clause=1 fuel=37 alloc=0 state=96 end=return
+run session/r18 outcome=completed delivery=d18 handler=entry18 fuel=37 alloc=0
+pumped state=idle fuel=37
+> extend session source="on entry19" & newline & "return p" & newline & "end entry19" & newline identity=fe0febae62f4fcd7a7145eb73109a79967174f945a5c541391867f64c3476b5f
+> request d19 to=session message=entry19
+> pump clock=2026-10-08T10:00:00Z
+seg session/r19 start delivery=d19 handler=entry19 clause=1 fuel=7 alloc=0 state=96 end=return
+run session/r19 outcome=completed delivery=d19 handler=entry19 value=<function session:text:pad> fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars session g=<function session:double> p=<function session:text:pad> fresh=<function session:double>

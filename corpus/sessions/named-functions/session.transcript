@@ -1,0 +1,89 @@
+# Unblessed: named Function display (#450); first blessing awaits human review.
+# Named functions omit extension units, while equality retains code identity.
+> :clock virtual 2026-10-08T10:00:00Z
+> --| Original double.
+| function double n
+|   return n * 2
+| end double
+> put double into g
+> g
+'<function session:double>
+> :describe g
+describe {target: {name: "g", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable g"}
+doc ""
+value {kind: "function", value: <function session:double>}
+function {name: "double", arity: 1..1, home: "session"}
+doc "Original double."
+> g(4)
+8
+> function triple n
+|   return n * 3
+| end triple
+> g
+'<function session:double>
+> g = double
+true
+> :save live
+saved live
+> :restore live
+restored live
+> g
+'<function session:double>
+> :describe g
+describe {target: {name: "g", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable g"}
+doc ""
+value {kind: "function", value: <function session:double>}
+function {name: "double", arity: 1..1, home: "session"}
+doc "Original double."
+> g(5)
+10
+> use pad from text as padded
+> put padded into p
+> p
+'<function session:text:pad>
+> function double n
+|   return n * 3
+| end double
+> put double into fresh
+> [g, fresh]
+[<function session:double>, <function session:double>]
+> g = fresh
+false
+> :describe g
+describe {target: {name: "g", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable g"}
+doc ""
+value {kind: "function", value: <function session:double>}
+function {name: "double", arity: 1..1, home: "session"}
+doc "Original double."
+> fresh(4)
+12
+> try
+|   g(4)
+| catch e
+|   say the code of e
+| end try
+function gone
+> :save stale
+saved stale
+> :restore stale
+restored stale
+> [g, fresh]
+[<function session:double>, <function session:double>]
+> g = fresh
+false
+> :describe g
+describe {target: {name: "g", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable g"}
+doc ""
+value {kind: "function", value: <function session:double>}
+function {name: "double", arity: 1..1, home: "session"}
+doc "Original double."
+> fresh(5)
+15
+> try
+|   g(5)
+| catch e
+|   say the code of e
+| end try
+function gone
+> p
+'<function session:text:pad>
