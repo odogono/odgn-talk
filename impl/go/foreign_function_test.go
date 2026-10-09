@@ -2,6 +2,7 @@ package northtalk
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 )
@@ -347,7 +348,8 @@ func TestForeignFunctionUsesHomeGrant(t *testing.T) {
 
 func TestHostFunctionCancellationBeforeRunReleasesMailbox(t *testing.T) {
 	ready := make(chan struct{}, 8)
-	g := New().NewGroup(GroupOptions{OnReady: func() { ready <- struct{}{} }})
+	var trace lines
+	g := New().NewGroup(GroupOptions{Trace: &trace, OnReady: func() { ready <- struct{}{} }})
 	home, fn := exportFunction(t, g, "on exported\n return given: 5\nend exported", Limits{MailboxDepth: 1})
 	<-ready
 	ctx, cancel := context.WithCancel(context.Background())
@@ -380,6 +382,10 @@ func TestHostFunctionCancellationBeforeRunReleasesMailbox(t *testing.T) {
 	end := operationalReports(result.Reports)[0].(*RunEnd)
 	if end.Delivery != id || end.Run != "" || end.Outcome != Cancelled {
 		t.Fatal(end)
+	}
+	want := "run outcome=cancelled delivery=" + string(id) + " fn=" + fn.String() + " fuel=0 alloc=0"
+	if !slices.Contains(trace, want) {
+		t.Fatalf("missing cancelled Function trace %q; got %v", want, trace)
 	}
 	if _, _, err := g.Call(context.Background(), fn, nil, nil); err != nil {
 		t.Fatal("cancel retained mailbox reservation", err)

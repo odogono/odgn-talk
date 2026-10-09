@@ -496,7 +496,9 @@ inputs drain; a stale call fails `send failed`, reason `function gone`, without
 a Run or Fuel. A live call's arity mismatch is an error at the body's first
 instruction, before any execution charge or unwind. It cannot enter catch or
 finally cleanup. Defaults and captures use the same binding as Script calls.
-Context cancellation uses ordinary Delivery cancellation.
+Context cancellation uses ordinary Delivery cancellation. A Host Function call
+cancelled before dispatch has no Run id and spends no Fuel or allocation; its
+Trace `run` record retains the Function Value's `fn` label.
 
 The reviewed `functions/foreign-calls` and full `functions/host-calls` cases pass
 unchanged, including Stop and stale Host calls. Full snapshots retain Function
