@@ -37,7 +37,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
   - `run end`, carrying its delivery id and any broadcast id. A Run that a [Fallback Handler](05-handlers-messages-and-scheduling.md#the-fallback-handler) clause ran sets `fallback`, and its `handler` is the message's Selector. An `errored` Run's error reaches the Host as a `ScriptError`: its `code`, its text `message`, and its other fields as its data. Its `at` is the raise that no Unwind Table entry caught, the Run's last `raise` record, and a Limit Fault's is its faulting instruction, the `fault` record's: each gives the code unit, the frame's Handler as an error's `at` names it, the instruction index and the source position. Other outcomes have no `at`
   - `stop`
   - `unhandled`
-  - `call failed`, which carries the Host-side detail of a `host error` the Script saw
+  - `call failed`, which carries the Host-side detail of a `host error` the Script saw. If Stop or cancellation interrupts the Run at a property crossing, a getter or setter failure neither raises `host error` in the Script nor emits `call failed`; the property's `prop` error record is still written
   - `effect failure`, carrying Script, Run, named Grant, Segment, phase (`abandon`, `begin`, `commit`, `rollback`), status (`failed`, `unknown`), scope for abandonment, and optional Host-only detail; `effect failed` Run reports also identify the failure that prevented commit
   - `decided`, carrying a Decision's Verdict (below)
   - the lifecycle and cumulative [Run accounting](#run-accounting) reports

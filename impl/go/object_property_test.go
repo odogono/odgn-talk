@@ -162,6 +162,159 @@ end go`})
 	}
 }
 
+func TestObjectPropertyFailureAtInterruptedCrossing(t *testing.T) {
+	for _, control := range []string{"stop", "cancel"} {
+		for _, failure := range []string{"getter error", "setter error", "invalid result", "malformed failure", "catalogue failure"} {
+			t.Run(control+"/"+failure, func(t *testing.T) {
+				core := New()
+				var script *Script
+				calls := 0
+				invoke := func() (Value, error) {
+					calls++
+					if control == "stop" {
+						script.Stop("getter")
+					} else {
+						script.CancelRun("s/r1")
+					}
+					switch failure {
+					case "invalid result":
+						return Int(1), nil
+					case "malformed failure":
+						return Nothing, &ScriptError{Code: "lamp broken", Data: Int(1)}
+					case "catalogue failure":
+						return Nothing, &ScriptError{Code: "object gone"}
+					default:
+						return Nothing, errors.New("Host secret")
+					}
+				}
+				kind, err := core.DefineObjectKind(ObjectKindDef{Name: "light", Props: []Prop{{Name: "label", Shape: TextShape,
+					Get: func(*Object) (Value, error) { return invoke() },
+					Set: func(*Object, Value) error { _, err := invoke(); return err },
+				}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var trace lines
+				g := core.NewGroup(GroupOptions{Trace: &trace})
+				bulb, err := g.Object(kind, "bulb", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				statement, op := "return the label of bulb", "get"
+				if failure == "setter error" {
+					statement, op = `set the label of bulb to "on"`, "set"
+				}
+				script, err = g.Load(LoadOptions{Name: "s", Objects: map[string]*Object{"bulb": bulb}, Source: `on go
+ try
+  ` + statement + `
+ catch e
+  return "caught"
+ end try
+end go`})
+				if err != nil {
+					t.Fatal(err)
+				}
+				script.Deliver(Message{Name: "go"})
+				result, err := g.Pump(time.Date(2026, 10, 4, 21, 0, 0, 0, time.UTC), PumpOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if calls != 1 {
+					t.Fatal("property callback must run once", calls)
+				}
+				for _, report := range result.Reports {
+					if failure, ok := report.(*CallFailed); ok {
+						t.Fatal("interrupted property must not report call failed", failure)
+					}
+				}
+				if control == "cancel" && joinEnd(t, result, "s").Outcome != Cancelled {
+					t.Fatal(result.Reports)
+				}
+				if control == "stop" {
+					stopped := false
+					for _, report := range result.Reports {
+						if stop, ok := report.(*Stop); ok && stop.Script == "s" && stop.Reason == "getter" {
+							stopped = true
+						}
+					}
+					if !stopped {
+						t.Fatal("missing stop report", result.Reports)
+					}
+				}
+				joined := strings.Join(trace, "\n")
+				propAt, controlAt := -1, -1
+				input := "> stop "
+				if control == "cancel" {
+					input = "> cancel-run "
+				}
+				for i, line := range trace {
+					if strings.HasPrefix(line, "prop s/r1 ") && strings.Contains(line, "op="+op) && strings.Contains(line, "error=") {
+						propAt = i
+					}
+					if strings.HasPrefix(line, input) {
+						controlAt = i
+					}
+				}
+				if propAt < 0 || controlAt <= propAt || strings.Contains(joined, "raise ") || strings.Contains(joined, "Host secret") {
+					t.Fatal(trace)
+				}
+			})
+		}
+	}
+}
+
+func TestObjectPropertyFailureDuringCancellationCleanup(t *testing.T) {
+	core := New()
+	var script *Script
+	calls := 0
+	kind, err := core.DefineObjectKind(ObjectKindDef{Name: "light", Props: []Prop{{Name: "label", Shape: AnyShape, Get: func(*Object) (Value, error) {
+		calls++
+		if calls == 1 {
+			script.CancelRun("s/r1")
+		}
+		return Nothing, errors.New("Host secret")
+	}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trace lines
+	g := core.NewGroup(GroupOptions{Trace: &trace})
+	bulb, err := g.Object(kind, "bulb", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, err = g.Load(LoadOptions{Name: "s", Objects: map[string]*Object{"bulb": bulb}, Source: `on go
+ try
+  put the label of bulb into ignored
+ finally
+  put the label of bulb into ignored
+ end try
+end go`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	script.Deliver(Message{Name: "go"})
+	result, err := g.Pump(time.Date(2026, 10, 4, 21, 0, 0, 0, time.UTC), PumpOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || joinEnd(t, result, "s").Outcome != Cancelled {
+		t.Fatal(calls, result.Reports)
+	}
+	failures := 0
+	for _, report := range result.Reports {
+		if failure, ok := report.(*CallFailed); ok {
+			failures++
+			if failure.Call != "" || failure.Operation != (OperationRef{Capability: "light", Operation: "label"}) || failure.Detail != "Host secret" {
+				t.Fatal(failure)
+			}
+		}
+	}
+	if failures != 1 || strings.Count(strings.Join(trace, "\n"), "raise ") != 1 {
+		t.Fatal("only the cleanup failure must report and raise", failures, trace)
+	}
+}
+
 func TestObjectPropertyPreHostCostFaults(t *testing.T) {
 	for _, test := range []struct {
 		name   string

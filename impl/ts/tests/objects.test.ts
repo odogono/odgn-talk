@@ -10,6 +10,7 @@ import {
   readDisplay,
   restore,
   ScriptError,
+  shape,
   text,
 } from '../src/index';
 
@@ -349,6 +350,130 @@ describe('Object Guard keys', () => {
       }),
     ).not.toThrow();
   });
+});
+
+for (const control of ['stop', 'cancel']) {
+  for (const failure of [
+    'getter error',
+    'setter error',
+    'invalid result',
+    'malformed failure',
+    'catalogue failure',
+  ]) {
+    test(`${control} at a property crossing suppresses ${failure}`, () => {
+      const trace: string[] = [];
+      const group = newGroup({ name: 'g', trace: line => trace.push(line) });
+      let calls = 0;
+      const invoke = () => {
+        calls++;
+        if (control === 'stop') {
+          script.stop('getter');
+        } else {
+          script.cancelRun('s/r1');
+        }
+        switch (failure) {
+          case 'invalid result':
+            return readDisplay('1');
+          case 'malformed failure':
+            throw new ScriptError('lamp broken', '', readDisplay('1'));
+          case 'catalogue failure':
+            throw new ScriptError('object gone', '');
+          default:
+            throw new Error('Host secret');
+        }
+      };
+      const kind = defineObjectKind({
+        name: 'light',
+        props: { label: { shape: shape.text, get: invoke, set: invoke } },
+      });
+      const bulb = group.object(kind, 'bulb', null);
+      const statement =
+        failure === 'setter error'
+          ? 'set the label of bulb to "on"'
+          : 'return the label of bulb';
+      const script = group.load({
+        name: 's',
+        objects: { bulb },
+        source: `on go
+ try
+  ${statement}
+ catch e
+  return "caught"
+ end try
+end go`,
+      });
+      script.deliver({ name: 'go' });
+      const reports = group.pump(now).reports;
+      expect(calls).toBe(1);
+      expect(reports.some(report => report.kind === 'call failed')).toBe(false);
+      expect(reports).toContainEqual(
+        expect.objectContaining(
+          control === 'stop'
+            ? { kind: 'stop', script: 's', reason: 'getter' }
+            : { kind: 'run end', script: 's', outcome: 'cancelled' },
+        ),
+      );
+      const propAt = trace.findIndex(line => line.startsWith('prop s/r1 '));
+      const controlAt = trace.findIndex(line =>
+        line.startsWith(control === 'stop' ? '> stop ' : '> cancel-run '),
+      );
+      expect(propAt).toBeGreaterThanOrEqual(0);
+      expect(controlAt).toBeGreaterThan(propAt);
+      expect(trace[propAt]).toContain('error=');
+      expect(trace[propAt]).toContain(
+        failure === 'setter error' ? 'op=set' : 'op=get',
+      );
+      expect(trace.some(line => line.startsWith('raise '))).toBe(false);
+      expect(trace.join('\n')).not.toContain('Host secret');
+    });
+  }
+}
+
+test('a property Host error during cancellation cleanup still reports its detail', () => {
+  const trace: string[] = [];
+  const group = newGroup({ name: 'g', trace: line => trace.push(line) });
+  let calls = 0;
+  const kind = defineObjectKind({
+    name: 'light',
+    props: {
+      label: {
+        get: () => {
+          if (++calls === 1) {
+            script.cancelRun('s/r1');
+          }
+          throw new Error('Host secret');
+        },
+      },
+    },
+  });
+  const bulb = group.object(kind, 'bulb', null);
+  const script = group.load({
+    name: 's',
+    objects: { bulb },
+    source: `on go
+ try
+  put the label of bulb into ignored
+ finally
+  put the label of bulb into ignored
+ end try
+end go`,
+  });
+  script.deliver({ name: 'go' });
+  const reports = group.pump(now).reports;
+  expect(calls).toBe(2);
+  expect(reports.filter(report => report.kind === 'call failed')).toEqual([
+    {
+      kind: 'call failed',
+      script: 's',
+      call: '',
+      operation: { capability: 'light', operation: 'label' },
+      detail: expect.stringContaining('Host secret'),
+    },
+  ]);
+  expect(reports).toContainEqual(
+    expect.objectContaining({ kind: 'run end', outcome: 'cancelled' }),
+  );
+  expect(trace.filter(line => line.startsWith('raise '))).toHaveLength(1);
 });
 
 test('property Host errors return Host-only detail without a fabricated Trace call', () => {
