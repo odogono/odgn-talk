@@ -39,6 +39,7 @@ func TestAllCaseSetupsAndTracesRead(t *testing.T) {
 	}
 }
 func TestEncodingCasesAndPassingList(t *testing.T) {
+	skipUnderRace(t)
 	var out bytes.Buffer
 	r := Runner{Root: filepath.Join(root(t), "corpus"), Output: &out, Backends: ExecutionBackends()}
 	if e := r.CheckPassing(filepath.Join(root(t), "impl/go/corpus-passing.txt")); e != nil {
