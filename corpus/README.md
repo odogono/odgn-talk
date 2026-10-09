@@ -96,6 +96,15 @@ received human first-blessing approval on 2026-10-09
 
 ## Seed blessing
 
+The `sessions/named-functions` case (#450) pins named Function Values from
+Extend units in expression echoes, `:describe` value rows and final `vars`.
+Both Cores agree on the Transcript and on independent ordinary and save/restore
+Trace replay. The case covers live and stale values through explicit Save and
+Restore, unequal old/new definitions with the same display, and a renamed
+Library import added by Extend. The runtime display correction landed in #462;
+chapters 3 and 11 now state the rule explicitly. Both expectation files retain
+their `Unblessed` markers pending first-blessing review.
+
 The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).
 
 The corrected `capabilities/scope-slots` and `scope-suspension-boundaries`

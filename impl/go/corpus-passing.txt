@@ -297,6 +297,7 @@ sessions/extension-lambdas
 sessions/fenced-text
 sessions/inspection
 sessions/mocks
+sessions/named-functions
 sessions/object-inspection
 sessions/observation
 sessions/real-clock

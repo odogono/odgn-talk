@@ -25,6 +25,7 @@ func TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore(t *testin
 		source string
 		want   string
 	}{
+		{"g", `<function session:double>`},
 		{"functionName(g)", `"double"`},
 		{"functionArity(g)", "1..2"},
 		{"[functionName(pair), functionArity(pair)]", "[nothing, 2..2]"},
@@ -32,6 +33,7 @@ func TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore(t *testin
 		{"try\n  g(2)\ncatch e\n  say the code of e\nend try", "function gone"},
 		{":save s", "saved s"},
 		{":restore s", "restored s"},
+		{"g", `<function session:double>`},
 		{"functionName(g)", `"double"`},
 		{"functionArity(g)", "1..2"},
 		{"[functionName(pair), functionArity(pair)]", "[nothing, 2..2]"},
@@ -39,6 +41,7 @@ func TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore(t *testin
 		{"try\n  g(2)\ncatch e\n  say the code of e\nend try", "function gone"},
 		{":save s", "saved s"},
 		{":restore s", "restored s"},
+		{"g", `<function session:double>`},
 		{"functionName(g)", `"double"`},
 		{"functionArity(g)", "1..2"},
 	} {
@@ -47,7 +50,7 @@ func TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore(t *testin
 		}
 	}
 	out := h.Input(":describe g")
-	for _, want := range []string{`function {name: "double", arity: 1..2, home: "session"}`, `doc "Original double."`} {
+	for _, want := range []string{`value {kind: "function", value: <function session:double>}`, `function {name: "double", arity: 1..2, home: "session"}`, `doc "Original double."`} {
 		if !strings.Contains(strings.Join(out, "\n"), want) {
 			t.Fatalf("describe: got %v, missing %s", out, want)
 		}

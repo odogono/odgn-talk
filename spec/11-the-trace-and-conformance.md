@@ -49,9 +49,10 @@ Text literals have no escapes ([ADR 0029](../docs/adr/0029-text-literals-have-no
 A Function Value is `<function`, a space, its Home Script and where its code is, then its captures, then `>` ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)):
 
 - **A Lambda** is placed by the code unit it is in and the line and column of its `given`: `<function weather:12:3>` in the Home Script's own source, `<function session+3:1:9>` in its third extension, and `<function orders:list:14:7>` in the Library `list`.
-- **A named function** of the Script is placed by its name, `<function weather:tax>`, and an imported one by its Library and its name there, `<function weather:text:pad>`.
+- **A named function** of the Script is placed by its Home Script and declaration name, `<function weather:tax>`, whether the initial source or an Extend unit defines it. An extension's unit name is omitted: a Session Entry defining `double` displays as `<function session:double>`. An imported function is placed by its Home Script, defining Library and declaration name there, `<function weather:text:pad>`, even if the Import renames it or is added by Extend.
 - **Captures** follow as a map, in the order of their capture slots ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#slots)): `<function weather:12:3 {n: 3}>`. With no captures, the map is left out.
 - **Staleness** isn't shown, since it isn't part of the value ([chapter 3](03-values.md#function-values)).
+- **Code identity** still includes the defining code unit ([chapter 10](10-save-and-restore.md#reload-and-extend)). Different Function Values can share a display form; matching displays do not imply equality or make a stale value call new code.
 
 ### The canonical source of a Text Pattern
 

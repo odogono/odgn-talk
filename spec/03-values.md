@@ -470,7 +470,7 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
 ## Function Values
 
 - **A Function Value** is plain data: its Home Script, the Lambda or named function it came from, and the values it captured ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)). Calling one is in [chapter 4](04-expressions-and-statements.md#calls).
-- **Its display form** names the Home Script, the Lambda's position and the captures, as in `<function weather:12:3 {n: 3}>`.
+- **Its display form** names the Home Script and either the named function or the Lambda's code unit and position, followed by any captures ([chapter 11](11-the-trace-and-conformance.md#function-values)). A named Script function displays as `<function weather:tax>`, including when an Extend unit defines it; a Lambda may display as `<function weather:12:3 {n: 3}>`.
 - **Stale:** once its Home Script stops or reloads, or its code is replaced, it is stale, and calling it raises `function gone`. It stays an ordinary value, and still compares by the rule above.
 - **Its arity and name:** the Built-ins `functionArity(f)` and `functionName(f)` read the argument counts it accepts and the name of the function it came from, so Scripts never need to read its display form ([chapter 7](07-libraries-and-the-standard-library.md#values), [ADR 0043](../docs/adr/0043-values-are-introspected-through-built-in-functions.md)).
 

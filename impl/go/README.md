@@ -689,6 +689,10 @@ Function Value display uses a Lambda's source unit and line/column, including
 `<function session+N:L:C>` for a Session extension, with its captures when present.
 Library Lambdas retain the Home Script and Library name. Internal enclosing
 Handler names are not displayed.
+Named Script functions display as `<function session:double>` even when an
+extension defines them; imports retain their defining Library and declaration
+name. The defining code unit remains part of equality and call identity, so a
+redefinition can produce unequal Function Values with the same display.
 
 The Host starts `read` with a Call and answers it with text without the line
 break, including an empty line. Its fixed 2,147,483,647 ms timeout overrides

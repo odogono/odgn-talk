@@ -16,6 +16,11 @@ Use the [TS and tooling task map](NAVIGATION.md) for implementation files, Spec 
 
 ## The Session Host
 
+Named Script Function Values display as `<function session:double>` even when
+an extension defines them; imports retain their defining Library and declaration
+name. The defining code unit remains part of equality and call identity, so a
+redefinition can produce unequal Function Values with the same display.
+
 **Implemented commands:** [Session observation](../../spec/session-observation.md) adds `:describe`, `:inspect`, `:apropos`, `:trace`/`:untrace`, `:fuel`, marked declaration docs and object-crossing Transcript envelopes. This Core implements the public Run accounting reports, `RestoreResult.reports`, Declaration Documentation ([#436](https://github.com/odogono/odgn-talk/issues/436)), `:describe` and `:apropos` ([#437](https://github.com/odogono/odgn-talk/issues/437)), and `:trace`, `:untrace` and `:fuel` ([#438](https://github.com/odogono/odgn-talk/issues/438)). It also implements `:inspect` and object-crossing envelopes ([#439](https://github.com/odogono/odgn-talk/issues/439)); coordinated release review remains in #370.
 
 
