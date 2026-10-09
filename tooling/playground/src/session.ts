@@ -13,6 +13,7 @@ import {
   type DebugInstruction,
   type DebugPause,
   type DebugSnapshot,
+  type RepeatedEffect,
 } from '@odgn/northtalk/debug';
 import {
   replayTranscript,
@@ -67,6 +68,11 @@ export type PauseView = {
   limit?: string;
   line: number;
   reason: DebugPause['reason'];
+  /**
+   * Live only, while the paused Run can be rewound: Fix and Continue's
+   * effects that happen again (ADR 0068).
+   */
+  repeated?: string[];
   run: string;
   /** The tab and its line, or none for a prompt Entry's own code. */
   tab?: { line: number; name: string };
@@ -116,7 +122,15 @@ export type ApplyResult =
       lines: string[];
       /** Declarations left when a debugger paused the session part way. */
       pending: number;
-    };
+    }
+  /** Fix and Continue entered `:fix` at a pause (ADR 0072). */
+  | { kind: 'fixed'; lines: string[] };
+
+/** An effect Fix and Continue makes happen again, as the panel lists it. */
+const repeatedText = (e: RepeatedEffect): string =>
+  e.kind === 'call'
+    ? `call ${e.op} (${e.id})`
+    : `send ${e.message ?? 'a message'} to ${e.to}`;
 
 /** Do it, print it or inspect it: what running a selection shows. */
 export type SelectionAction = 'do' | 'print' | 'inspect';
@@ -172,6 +186,7 @@ export class PlaygroundSession {
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => this.transcript.push(item),
         result: (run, value) => this.echoed(run, value),
+        transcriptEnds: dropped => this.endTranscript(dropped),
         trace: line => this.trace.push(line),
       });
   }
@@ -204,6 +219,7 @@ export class PlaygroundSession {
         ...(env.builtIns ? { builtIns: env.builtIns } : {}),
         record: item => session!.transcript.push(item),
         result: (run, value) => session!.echoed(run, value),
+        transcriptEnds: dropped => session!.endTranscript(dropped),
       },
     });
     const expected = writeTranscript(recorded).split('\n');
@@ -232,6 +248,10 @@ export class PlaygroundSession {
     return { session };
   }
 
+  private endTranscript(dropped: number) {
+    this.transcriptEnd ??= this.transcript.length - dropped;
+  }
+
   /** A real Clock reading less the time the debugger held the session paused. */
   private now(): bigint {
     return this.env.now() - this.pausedNs;
@@ -241,8 +261,11 @@ export class PlaygroundSession {
     return this.host.started;
   }
 
+  /** The Session Transcript: up to a Fix and Continue made at a pause. */
   get transcriptText(): string {
-    return writeTranscript(this.transcript);
+    return writeTranscript(
+      this.transcript.slice(0, this.transcriptEnd ?? this.transcript.length),
+    );
   }
 
   /** Whether `source` is an unfinished Entry, so the prompt goes on at `|`. */
@@ -404,6 +427,48 @@ export class PlaygroundSession {
       return { kind: 'restart', removed: plan.removed.map(d => d.key) };
     }
     return this.enter(plan.enter);
+  }
+
+  /**
+   * Fix and Continue at a pause (ADR 0072): enters `:fix` of the paused Run
+   * with the Script tab's new and changed declarations, so its message runs
+   * again on them. The Transcript ends before the Host call that paused.
+   */
+  fix(script: string): ApplyResult {
+    const pause = this.pauseView();
+    if (!pause?.repeated) {
+      throw new Error('Fix and Continue needs a pause in a Run it can rewind');
+    }
+    const tab = splitDeclarations(script);
+    if (tab.error) {
+      return {
+        kind: 'syntax',
+        error: `${tab.error.code} at ${tab.error.line}:${tab.error.col}`,
+      };
+    }
+    const plan = planApply(tab.declarations, this.sessionDeclarations());
+    if (plan.removed.length) {
+      return { kind: 'restart', removed: plan.removed.map(d => d.key) };
+    }
+    if (!plan.enter.length) {
+      return { kind: 'fixed', lines: [] };
+    }
+    const lines = this.host.input(
+      `:fix ${pause.run}\n${plan.enter.map(d => d.source).join('\n')}`,
+    );
+    // The Reload replaced the code the breakpoints were bound to.
+    this.syncBreakpoints();
+    this.settled();
+    return { kind: 'fixed', lines };
+  }
+
+  // How many items of `transcript` the Session Transcript keeps, once a Fix
+  // and Continue at a pause has ended it (ADR 0072).
+  private transcriptEnd: number | null = null;
+
+  /** The Transcript stops at a Fix and Continue made at a pause (ADR 0072). */
+  get transcriptEnded(): boolean {
+    return this.transcriptEnd !== null;
   }
 
   // Enters declarations, retrying any that fail while others still load, so
@@ -667,6 +732,7 @@ export class PlaygroundSession {
       .find(r => r.id === pause.run);
     const tab = this.tabPosition(pause.unit, pause.line);
     return {
+      ...(run?.rewindable ? { repeated: run.repeated.map(repeatedText) } : {}),
       reason: pause.reason,
       run: pause.run,
       unit: pause.unit,

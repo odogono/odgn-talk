@@ -101,8 +101,9 @@ Ordinary execution prints the lines below; [observation commands](session-observ
 | `! <code> at <line>:<column>` | each syntax error or load-time diagnostic of an Entry, in its own lines |
 | `! unhandled <message> <args>` | a message that reached the end of the Message Path, with its arguments as a list |
 | `! discarded <run>` | each Run a Reload or a restore discarded |
+| `! rewound <run>` | the Run a `:fix` rewound |
 | `call <call> <capability>.<operation> <args>` | each call of a mock Operation, with its arguments as a list |
-| `! <reason>` | a refused Session Command or Entry: a Host error's code, or `unknown command`, `bad arguments`, `session started`, `clock is real`, `no such run`, `no such call`, `no such save` or `no such name` |
+| `! <reason>` | a refused Session Command or Entry: a Host error's code, or `unknown command`, `bad arguments`, `session started`, `clock is real`, `not rewindable`, `no such run`, `no such call`, `no such save` or `no such name` |
 
 ## Session Commands
 
@@ -120,6 +121,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 | `:clock` | `:clock [real \| virtual [<instant>] \| advance <duration>]` | Shows the Clock, switches it between real and virtual, or advances a virtual Clock by an exact duration and pumps |  |
 | `:limits` | `:limits [<limit> <value> \| reset]` | Shows the limits later Entries run with, tightens one of the limits a Delivery may override, or clears every override |  |
 | `:cancel` | `:cancel [<run>]` | Cancels a Run, by default the latest Entry's Run if it hasn't ended |  |
+| `:fix` | `:fix <run> <path>` | Fix and Continue: rewinds a Run that hasn't passed a Suspension Point and reloads the session with the file's declarations in place, keeping the mailbox, so the Run's message runs again on the new code |  |
 | `:runs` | `:runs` | Lists every Run that hasn't ended |  |
 | `:mailbox` | `:mailbox` | Lists every message waiting in the Session Script's mailbox |  |
 | `:vars` | `:vars` | Lists the Session Script's Script Variables and their values |  |
@@ -154,6 +156,12 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
   - `:limits` prints each limit a Delivery may override, one per line as `<name> <value>`, by its `ts` name: `fuelPerRun`, `allocPerRun`, `maxWaitMs` and `maxJoin`.
   - `:limits <name> <value>` sets that override for every Entry requested afterwards. It can only tighten the default limit profile, and a looser value is refused as `invalid value`. Runs started by a `send` keep the Script's limits.
   - `:limits reset` clears every override.
+- **`:fix`** is Fix and Continue ([ADR 0072](../docs/adr/0072-fix-and-continue-is-a-session-command.md)). A Transcript records it as `> :fix <run>`, followed by the file's lines as `|` lines, instead of the path, as for `:library`.
+  - **Its declarations** are the file's, read as a Script's source, so a syntax error prints `! <code> at <line>:<column>` in the file's own lines, and a file with none is refused as `bad arguments`. Each declaration's lines run from the line after the last one's last line, without the blank lines at their start, to its own last line, so the comments before a declaration go with it. A Run that is not one of the Session Script's, or has ended, is refused as `no such run`. A refused `:fix` makes no Host Input.
+  - **The Rewind:** it makes `RewindRun` of the Run and pumps ([chapter 9](09-embedding.md#threads-and-the-input-queue)). If that Pump doesn't return `rewound`, the Rewind did nothing: it prints what the Pump printed, then `! not rewindable`, and reloads nothing. Otherwise it prints `! rewound <run>`.
+  - **The Reload:** each declaration goes into the session source as a redefinition or a new name would put it, in the file's order, and the Session Host reloads the Script from it with its Script Variables carried over and its mailbox kept ([chapter 10](10-save-and-restore.md#reload)), and prints each Run discarded. A `script variable x = e` for an `x` the Script has changes its initialiser, and runs no `put`. A Reload that fails prints each diagnostic as `! <code> at session:<line>:<column>` and leaves the session source as it was, so the message runs again on the code it had.
+  - **Then** it pumps, and the message runs again.
+  - **Between Pumps,** a Run still in its first Segment is one parked by `, queued`, since the Session Host pumps after every Entry. At a [debugger pause](#the-debugger), `:fix` takes only the paused Run, and the Rewind lands at the paused instruction, through the TS Core's tooling hooks. A paused Entry's Run keeps its message's Handler: the Reload loads the Entry's implicit Handler after the session source. The Session Transcript stops before the Entry, command, line or deadline whose Pump was paused, and what the session does after it is outside the Transcript.
 - **`:runs`** prints one line per Run that hasn't ended, from `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)): its id, its status (`ready`, `suspended`, `parked` or `preempted`) and its Handler, then, for a suspended one, the end reason it suspended at, `until <instant>` if it has a deadline, and the ids it waits for, each separated from the last by a space.
 - **`:mailbox`** prints one line per message waiting: its delivery id, or the call or Run that sent it, then its name and its arguments as a list.
 - **`:vars`** prints one line per Script Variable, in declaration order, as `<name> = <value>`.
@@ -200,7 +208,7 @@ OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
 <!-- end -->
 
 - **`> `** starts the first line of an Entry, or a Session Command.
-- **`| `** starts each further line of an Entry, or a line of the source that `:library` records. A `|` alone is an empty one.
+- **`| `** starts each further line of an Entry, or a line of the source that `:library` or `:fix` records. A `|` alone is an empty one.
 - **`< `** starts a line the user typed for `console`'s `read`, and a `<` alone is an empty one.
 - **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
 - **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map: its `code`, its `message` and its other fields, or `{}` for a failure that isn't a Script error, which the Script sees as `host error`. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
@@ -311,7 +319,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 - **Recovery dispatch:** live and replay stepping follow the active policy/cleanup cursor, rather than the retained failed stack's deepest PC. Step over/out use the active owner path and helpers. Tooling-only frame views may add `role` (`retained` or `dispatch`); a dispatch activation includes an owning-frame reference and displays its actual shared owner locals. Ordinary frame views and chapter 9's Inspect schema are unchanged. Debugger callbacks stay outside saves, costs and Trace.
 - **The Clock:** live, the debugger's Host supplies Clock readings and subtracts paused time, so deadlines don't all fire on resume. In replay, the readings come from the Trace.
 - **Faults:** "break on error", caught or not, and "break on Limit Fault" pause before any rollback, so the state that caused it can be seen.
-- **No edits:** the debugger never writes Script state, and changing code is a Reload. **Fix and Continue** is a `RewindRun` of the paused Run followed by a Reload that keeps the mailbox, so the same message runs on the edited code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)). It is offered only while the paused Run hasn't passed a Suspension Point, and the debugger lists the Segment's effects that will happen again. The message runs again on the carried Script Variables, before any Entry the developer makes, so a change to their shape is migrated after it.
+- **No edits:** the debugger never writes Script state, and changing code is a Reload. **Fix and Continue** is a `RewindRun` of the paused Run followed by a Reload that keeps the mailbox, so the same message runs on the edited code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)). It is offered only while the paused Run hasn't passed a Suspension Point, and the debugger lists the Segment's effects that will happen again. A session makes it with [`:fix`](#session-commands). The message runs again on the carried Script Variables, before any Entry the developer makes, so a change to their shape is migrated after it.
 - **Going back:** replay offers "run to Host Input *n*" and reverse steps, by replaying again from the start or from a save.
 - **Replaying a live Host's Trace,** the debugger answers every Host crossing from the Trace's own records ([chapter 11](11-the-trace-and-conformance.md#stubs)), and lands each early `Stop`, `CancelRun` or `RewindRun` at the instruction its `pc` names.
 
@@ -325,7 +333,7 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 - **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Inspect, Canvas, live Debug, Replay and Setup.
 - **Syntax** is a readable projection of the recovering parser tree of the current editor text, including errors. Source selection and tree selection are linked; it does not describe the last loaded session.
 - **Run fresh** prepares a replacement from the setup, current Library tabs and Script tab. Failed loading preserves the live session. Successful loading replaces it, starts a fresh Transcript, then evaluates the launch Entry if nonempty; an execution fault belongs to that new session.
-- **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.
+- **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. While the debugger is paused in a Run that can be rewound, Apply is Fix and Continue: it lists the effects that will happen again, and on confirmation enters `:fix` with the changed declarations. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.
 - **Do it, Print it and Inspect it** enter the editor's selection as an ordinary Entry, or as `:inspect` with it, against the live session. Print it shows what the Entry printed beside the selection; Inspect it shows the rows in the inspector.
 - **It ships** the LSP in a worker, the formatter, live debugging, and replay debugging of a pasted Trace.
 - **Libraries** are tabs, and saving one replaces it, recorded as `:library replace`. A Session Script can choose a Library offer; the CLI and Playground run the same forms through the shared stack. The live and replay panels show retained/dispatch roles, shared owner locals and the owning frame.

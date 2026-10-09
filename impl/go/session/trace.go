@@ -100,6 +100,7 @@ func (h *Host) pump() []string {
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
+	h.rewound = result.State == talk.Rewound
 	h.objectSession.reports(result.Reports)
 	h.deadline = result.NextDeadline
 	ends := map[string]*talk.RunEnd{}

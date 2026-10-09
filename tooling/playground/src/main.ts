@@ -699,8 +699,19 @@ const renderPause = (pause: PauseView | null) => {
   for (const id of ['debug-resume', 'debug-step', 'debug-over', 'debug-out']) {
     ($(id) as HTMLButtonElement).disabled = !pause;
   }
-  for (const id of ['apply', 'restart']) {
-    ($(id) as HTMLButtonElement).disabled = Boolean(pause);
+  ($('restart') as HTMLButtonElement).disabled = Boolean(pause);
+  // While the paused Run can be rewound, Apply is Fix and Continue (ADR 0072).
+  const apply = $('apply') as HTMLButtonElement;
+  const fixable = Boolean(pause?.repeated);
+  apply.disabled = Boolean(pause) && !fixable;
+  apply.textContent = fixable ? 'Fix & Continue' : 'Apply';
+  apply.title = fixable
+    ? `Rewind ${pause!.run} and run its message again on the Script tab (Ctrl/Cmd-S)`
+    : pause
+      ? `${pause.run} has passed a Suspension Point, so it can't be rewound: continue first`
+      : 'Enter the Script tab into the session (Ctrl/Cmd-S)';
+  if (pause?.run !== lastPause?.run || !fixable) {
+    $('fix-confirm').hidden = true;
   }
   renderRows($('pause-view'), pause ? pauseRows(pause) : []);
   if (lastPause?.tab) {
@@ -775,6 +786,8 @@ const applied = (response: SessionResponse) => {
     ) {
       void restart();
     }
+  } else if (result.kind === 'fixed') {
+    $('fix-confirm').hidden = true;
   } else {
     for (const failed of result.failed) {
       note(`${failed.key} did not load: ${failed.lines.join('; ')}`, 'error');
@@ -789,8 +802,35 @@ const applied = (response: SessionResponse) => {
   sendBreakpoints();
 };
 
-const apply = async () =>
+const apply = async () => {
+  if (lastPause?.repeated) {
+    confirmFix(lastPause);
+    return;
+  }
   applied(await call({ t: 'apply', script: tabText(scriptTab()) }));
+};
+// Fix and Continue lists the effects that will happen again, and waits for
+// the user to confirm (ADR 0068).
+const confirmFix = (pause: PauseView) => {
+  $('fix-summary').textContent =
+    `Fix and Continue rewinds ${pause.run} and runs its message again on the Script tab. ` +
+    (pause.repeated!.length
+      ? 'These effects happen again:'
+      : 'No effects happen again.');
+  $('fix-effects').textContent = pause.repeated!.map(e => `  ${e}`).join('\n');
+  $('fix-effects').hidden = !pause.repeated!.length;
+  $('fix-confirm').hidden = false;
+  workbench.selectInspector('debugger');
+  ($('debugger') as HTMLDetailsElement).open = true;
+  ($('fix-run') as HTMLButtonElement).focus();
+};
+$('fix-run').onclick = async () => {
+  $('fix-confirm').hidden = true;
+  applied(await call({ t: 'fix', script: tabText(scriptTab()) }));
+};
+$('fix-cancel').onclick = () => {
+  $('fix-confirm').hidden = true;
+};
 const restart = async () => {
   applied(await call({ t: 'restart', tabs: currentTabs() }));
 };
@@ -1021,7 +1061,13 @@ $('download').onclick = async () => {
   link.download = 'session.transcript';
   link.click();
   URL.revokeObjectURL(link.href);
+  if (response.ended) {
+    note(TRANSCRIPT_ENDED);
+  }
 };
+
+const TRANSCRIPT_ENDED =
+  'The Transcript stops before a Fix and Continue made at a pause, which no Transcript can replay.';
 
 // Share
 const shareUrl = async () => {
@@ -1034,6 +1080,9 @@ const shareUrl = async () => {
     const response = await call({ t: 'transcript' });
     if (response.t === 'transcript' && response.text) {
       shared.transcript = response.text;
+    }
+    if (response.t === 'transcript' && response.ended) {
+      note(TRANSCRIPT_ENDED);
     }
   }
   const url = `${location.origin}${location.pathname}#${await encodeLink(shared)}`;

@@ -122,7 +122,7 @@ func (h *Host) command(source string) []string {
 		return nil
 	}
 	switch name {
-	case "stub", "answer", "fail", "clock", "limits", "cancel", "save", "restore", "library", "export", "describe", "apropos":
+	case "stub", "answer", "fail", "clock", "limits", "cancel", "fix", "save", "restore", "library", "export", "describe", "apropos":
 		h.start()
 	case "runs", "mailbox", "vars":
 		if len(words) > 0 {
@@ -139,7 +139,7 @@ func (h *Host) command(source string) []string {
 		return h.fuel(rest)
 	case "help":
 		h.recording = nil
-		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :runs :mailbox :vars :save :restore :library :export :store :trace :untrace :fuel :describe :apropos :inspect :help :quit"}
+		return []string{"Commands: :grant :mock :stub :answer :fail :clock :limits :cancel :fix :runs :mailbox :vars :save :restore :library :export :store :trace :untrace :fuel :describe :apropos :inspect :help :quit"}
 	case "quit":
 		h.recording = nil
 		return nil
@@ -222,6 +222,8 @@ func (h *Host) command(source string) []string {
 		}
 		h.script.CancelRun(talk.RunID(run))
 		return h.pump()
+	case "fix":
+		return h.fix(rest)
 	case "save", "restore":
 		if len(words) > 1 {
 			return refusal("bad arguments")

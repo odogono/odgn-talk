@@ -89,6 +89,8 @@ export type SessionRequest =
   /** Do it, print it or inspect it: a tab's selection, run as an Entry. */
   | { how: SelectionAction; source: string; t: 'selection'; tab: string }
   | { script: string; t: 'apply' }
+  /** Fix and Continue at a pause, with the Script tab (ADR 0072). */
+  | { script: string; t: 'fix' }
   | { library: Library; t: 'saveLibrary' }
   | { t: 'restart'; tabs: Tabs }
   | {
@@ -125,7 +127,8 @@ export type SessionResponse =
       state: SessionState;
       t: 'mismatch';
     }
-  | { t: 'transcript'; text: string }
+  /** ended: a Fix and Continue at a pause stopped it (ADR 0072). */
+  | { ended: boolean; t: 'transcript'; text: string }
   | { replay: ReplayView; t: 'replay' }
   | { file: string; t: 'needSource' }
   /** `:store save` wrote a slot, for the page to keep. */
