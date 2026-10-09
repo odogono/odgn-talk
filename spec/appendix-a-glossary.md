@@ -254,6 +254,10 @@ _Avoid_: type definitions, SDK, d.ts, host profile
 A piece of advice from tooling about a Script that loads. It never rejects code, and unlike a load-time diagnostic, parity doesn't cover it.
 _Avoid_: warning (unqualified), diagnostic (unqualified)
 
+**Source Form**:
+The display form with the substitutions that make it valid source, which reads back as an equal value with the same display form: a Civil Date or Instant as an `as` conversion, and Text that isn't one quoted piece as one backtick literal. Tooling uses it to copy values into Scripts and tests, and nothing about it is normative. A value holding a Function Value or Host Object has none, so it is not readable.
+_Avoid_: repr, readable form, literal form
+
 **Test Script**:
 A Script an author writes to test their own Scripts. It runs beside them in a fresh Script Group for each test, and reaches them only by message. Tooling runs it, and nothing it produces is normative.
 _Avoid_: test suite, spec file, fixture
