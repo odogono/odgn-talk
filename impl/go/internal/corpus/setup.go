@@ -10,7 +10,8 @@ import (
 )
 
 // The Corpus uses the TOML subset below: tables, arrays of tables, inline
-// tables, arrays, single-line basic/literal strings, integers and booleans.
+// tables, arrays, single-line basic/literal strings, multi-line literal
+// strings, integers and booleans.
 // Other TOML types are not part of case.toml's schema and are refused.
 type Setup map[string]any
 type tomlReader struct {
@@ -121,6 +122,31 @@ func (r *tomlReader) string() (string, error) {
 	}
 	return "", r.error()
 }
+
+// literal reads a multi-line literal string: raw text up to the first
+// `”'`, which may follow one or two quotes of the text's own, without a
+// newline straight after the opening `”'`.
+func (r *tomlReader) literal() (string, error) {
+	r.at += 3
+	if !r.take("\r\n") {
+		r.take("\n")
+	}
+	end := strings.Index(r.text[r.at:], "'''")
+	if end < 0 {
+		return "", r.error()
+	}
+	for i := 0; i < 2 && r.at+end+3 < len(r.text) && r.text[r.at+end+3] == '\''; i++ {
+		end++
+	}
+	s := r.text[r.at : r.at+end]
+	for _, cp := range s {
+		if cp < 0x20 && cp != '\t' && cp != '\n' && cp != '\r' || cp == 0x7f {
+			return "", r.error()
+		}
+	}
+	r.at += end + 3
+	return s, nil
+}
 func (r *tomlReader) value() (any, error) {
 	r.space(false)
 	if r.at >= len(r.text) {
@@ -128,6 +154,9 @@ func (r *tomlReader) value() (any, error) {
 	}
 	switch r.text[r.at] {
 	case '"', '\'':
+		if strings.HasPrefix(r.text[r.at:], "'''") {
+			return r.literal()
+		}
 		return r.string()
 	case '[':
 		r.at++

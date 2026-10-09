@@ -74,7 +74,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
 
-The module has no third-party requirements and no `go.work`. Its Core,
+The module has no third-party requirements and no `go.work`. `sqlite/` is a
+separate module, `github.com/odogono/odgn-talk/impl/go/sqlite`, so that only
+Hosts that offer `sqlite` depend on its driver. Its Core,
 `session/`, `driver/` and `cmd/northtalk/` boundaries follow
 [ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md).
 
@@ -90,6 +92,7 @@ go -C impl/go vet ./...
 go -C impl/go test -v ./...
 go -C impl/go test -race ./...    # skips the exhaustive single-goroutine replays
 go -C impl/go run ./cmd/corpus --check-passing
+go -C impl/go/sqlite test ./...  # the sqlite Host, a separate module
 gofmt -l impl/go               # must print no paths
 ```
 
@@ -822,6 +825,36 @@ failures with valid fields pass through. The corpus runner replays `sqlite.*`
 Stubs as the implementation's `{columns, rows[, changes]}`, with `{real: t}` for
 a double, and gives each `database` one coordinator that takes `stub-effect`
 lines.
+
+The `sqlite/` module holds an implementation on
+[`github.com/ncruces/go-sqlite3`](https://github.com/ncruces/go-sqlite3), which
+bundles SQLite 3.53 and needs no cgo. It isn't the Core. `sqlite.Open(path)`
+opens one database file, and `sqlite.Databases(map[string]*Database)` is the
+`SqliteImpl` over the Host's databases, by the name a binding gives; a binding
+naming no database maps to no coordinator, so its Grant is refused. Each
+database is one Segment Coordinator. A Segment's first `change` or `begin` takes
+the one writer connection and opens its transaction with `BEGIN IMMEDIATE`, and a
+Script transaction is a savepoint inside it. Every other read goes through a
+read-only connection, which sees the last committed state in WAL mode. The
+authorizer enforces chapter 9's denials and the binding's `Tables`, `query` is
+checked with `sqlite3_stmt_readonly`, and the driver's prepare tail and bind
+names give the one-statement and placeholder checks. The write lock lives in the
+process, so the process owns the file: it holds an exclusive lock on a sidecar
+database, `<path>-lock`, until `Close`, and a second `Open` fails. `Exec` runs
+SQL outside every Segment, as for a migration.
+
+- **Concurrency:** a `Database` is safe for Groups pumped on separate
+  goroutines, whose calls take turns on its connections. Their Segments run at
+  once, so one Group's first `change` or `begin` raises `sqlite busy` while
+  another Group's Segment holds the write lock, with no Fuel Slice involved.
+- **Limits:** the database keeps no Stores, so a Store and `sqlite` don't share
+  a coordinator, and `Core.StoreCoordinator` is not implemented. `VACUUM` is
+  refused by its keyword, since `VACUUM INTO` never reaches the authorizer.
+- **Tests:** [`internal/sqlitekit`](internal/sqlitekit/) runs the
+  [sqlite test kit](../../corpus/sqlite-kit/) through the factory's
+  Operations, by way of the `internal/hostkit` hook. `sqlite/kit_test.go` runs it
+  on this implementation, skipping `store.toml`, and `sqlite/host_test.go` runs
+  Scripts against it.
 
 ### Host Object handles, properties and disposal
 

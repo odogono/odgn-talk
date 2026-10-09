@@ -52,4 +52,8 @@ or `go -C impl/go test ./store ./internal/storekit ./session` for Store changes.
 The optional `sqlite` factory lives in [sqlite_capability.go](sqlite_capability.go),
 with its corpus runner Stubs in [internal/corpus/sqlite.go](internal/corpus/sqlite.go);
 check it with `go -C impl/go test . ./internal/corpus -run Sqlite` and the
-`standard-sqlite*` Capability cases.
+`standard-sqlite*` Capability cases. The Host implementation on a real database
+is the separate module [sqlite/](sqlite/), which runs the
+[sqlite kit](../../corpus/sqlite-kit/) through
+[internal/sqlitekit/](internal/sqlitekit/); check it with
+`go -C impl/go/sqlite test ./...`.

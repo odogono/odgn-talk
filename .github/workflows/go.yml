@@ -56,6 +56,9 @@ jobs:
       # Skips the exhaustive single-goroutine replays, which the run above covers.
       - run: go test -race ./...
         working-directory: impl/go
+      # The sqlite Host is its own module, so the runs above skip it.
+      - run: go vet ./... && go test -v ./... && go test -race ./...
+        working-directory: impl/go/sqlite
       # Every case, in ordinary and save/restore replay; a failure names its
       # first divergence and the command that reproduces it.
       - name: Run the complete Corpus on the Go Core
