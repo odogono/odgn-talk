@@ -351,6 +351,23 @@ const testDir = (tests: string) => {
       'on log line',
       '  tell http to note line',
       'end log',
+      'script variable rang = nothing',
+      'on remind',
+      '  ask clock to now',
+      '  tell timer to schedule "r", it + 5 s, "ring", ["late"]',
+      'end remind',
+      'on forget',
+      '  tell timer to cancel "r"',
+      'end forget',
+      'on ring note',
+      '  put note into rang',
+      'end ring',
+      'on rung',
+      '  return rang',
+      'end rung',
+      'on openDoor',
+      '  if the label of frontDoor is "front" then set the isOpen of frontDoor to true',
+      'end openDoor',
       '',
     ].join('\n'),
   );
@@ -374,8 +391,17 @@ const testDir = (tests: string) => {
       ],
       libraries: [],
       messages: [],
-      objects: [],
-      objectKinds: [],
+      objects: [{ name: 'frontDoor', kind: 'door' }],
+      objectKinds: [
+        {
+          name: 'door',
+          props: [
+            { name: 'isOpen', shape: 'boolean', readOnly: false },
+            { name: 'label', shape: 'text', readOnly: true },
+          ],
+          parentKinds: [],
+        },
+      ],
     }),
   );
   return { dir, manifest };
@@ -547,6 +573,74 @@ test('test runs on a virtual Clock the harness moves on', () => {
   const { code, stdout } = run(['test', '--manifest', manifest, dir]);
   expect(stdout).toEndWith('2 passed, 0 failed\n');
   expect(code).toBe(0);
+});
+
+test('test delivers timers on the virtual Clock', () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assertEqual from test',
+      'on testFires',
+      '  send remind to counter and wait',
+      '  ask harness to advance 4 s and wait',
+      '  send rung to counter and wait',
+      '  assertEqual(it, nothing)',
+      '  ask harness to advance 1 s and wait',
+      '  send rung to counter and wait',
+      '  assertEqual(it, "late")',
+      'end testFires',
+      'on testWaitJumps',
+      '  send remind to counter and wait',
+      '  wait for never or 1 min',
+      '  send rung to counter and wait',
+      '  assertEqual(it, "late")',
+      'end testWaitJumps',
+      'on testCancel',
+      '  send remind to counter and wait',
+      '  send forget to counter and wait',
+      '  ask harness to advance 1 min and wait',
+      '  send rung to counter and wait',
+      '  assertEqual(it, nothing)',
+      '  ask harness to calls "timer.cancel"',
+      '  assertEqual(it, [["r"]])',
+      'end testCancel',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(stdout).toEndWith('3 passed, 0 failed\n');
+  expect(code).toBe(0);
+});
+
+test("test binds the Host Manifest's well-known objects, set through the harness", () => {
+  const { dir, manifest } = testDir(
+    [
+      'use assertEqual from test',
+      'on testSet',
+      '  tell harness to set "frontDoor.label", "front"',
+      '  send openDoor to counter and wait',
+      '  assertEqual(the isOpen of frontDoor, true)',
+      'end testSet',
+      'on testUnset',
+      '  send openDoor to counter',
+      'end testUnset',
+      'on testUnknown',
+      '  tell harness to set "frontDoor.colour", "red"',
+      'end testUnknown',
+      '',
+    ].join('\n'),
+  );
+  const { code, stdout } = run(['test', '--manifest', manifest, dir]);
+  expect(code).toBe(1);
+  const file = join(dir, 'counter.test.talk');
+  const counter = join(dir, 'counter.talk');
+  expect(stdout).toContain(`ok ${file} testSet\n`);
+  expect(stdout).toContain(
+    `FAIL ${counter}:36:6 testUnset\n  counter openDoor errored: {code: "unset property", capability: "door", operation: "label"}\n    No value is set for frontDoor.label\n`,
+  );
+  expect(stdout).toContain(
+    `FAIL ${file}:11:3 testUnknown\n  counterTest testUnknown errored: {code: "no such property", name: "frontDoor.colour", capability: "harness", operation: "set"}\n`,
+  );
+  expect(stdout).toEndWith('1 passed, 2 failed\n');
 });
 
 test('test replays Session Transcripts as tests', () => {

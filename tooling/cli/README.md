@@ -65,13 +65,18 @@ bun run northtalk test --only testIncrements counter.test.talk
   - The Test Script reaches the others only by message: `send inc to counter and wait`.
   - An optional `on setup` runs before each test.
 - **Grants:**
-  - Every Script gets `console`, a `clock`, a `calendar` in UTC and the root `locale`. Each Grant in the `--manifest` Host Manifest is also given as a mock with the manifest's Operation Shapes, and the manifest's Libraries are loaded.
+  - Every Script gets `console`, a `clock`, a `calendar` in UTC, the root `locale` and a `timer`. Each Grant in the `--manifest` Host Manifest is also given as a mock with the manifest's Operation Shapes, and the manifest's Libraries are loaded. A manifest Grant of the `timer` Capability is the runner's `timer`, not a mock.
   - Without a manifest, a Script that uses another Capability doesn't load.
-  - Host Objects and `timer` aren't offered.
+- **Host Objects:** each of the manifest's well-known objects is bound to its name in every Script, with its id the same name.
+  - A property holds what was last set on it, by a Script or the harness, and starts unset. Reading an unset property fails with `unset property`.
+  - A read-only property can be set only through the harness.
+  - Objects have no parents and no Owning Scripts, so a message sent to one goes unhandled.
+- **Timers:** the runner keeps each Script's timers and delivers each one's message to its Script when the Clock reaches it, as a Host does. A due timer is delivered before the Clock moves on, so timers and `wait` deadlines fire in order of time.
 - **The harness Capability:** granted to the Test Script only. `<op>` names a manifest Operation as `<grant>.<operation>`, or `console.read`.
   - `tell harness to stub "<op>", value` queues an answer for the next call of `<op>`.
   - `tell harness to stubFail "<op>", {code: "…", …}` queues a failure for it.
-  - `ask harness to calls "<op>"` gives the argument lists of every call so far, oldest first.
+  - `ask harness to calls "<op>"` gives the argument lists of every call so far, oldest first. It also reads `timer.schedule` and `timer.cancel`.
+  - `tell harness to set "<object>.<property>", value` sets a well-known object's property, read-only or not.
   - `ask harness to advance 3 s and wait` moves the Clock on. Each deadline it passes fires in order.
   - A call of an immediate or suspending Operation with nothing queued fails with `unstubbed call`. A fire-and-forget call is only recorded.
 - **The test Library:** `use assert, assertEqual from test`.

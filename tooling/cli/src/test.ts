@@ -9,6 +9,7 @@ import {
   compileLibrary,
   consoleCapability,
   defineCapability,
+  defineObjectKind,
   list,
   LoadError,
   localeCapability,
@@ -19,12 +20,14 @@ import {
   ScriptError,
   shape,
   text,
+  timerCapability,
   waitNs,
   type Call,
   type CapabilityDef,
   type Grant,
   type GrantDecls,
   type Group,
+  type HostObject,
   type Library,
   type Operation,
   type Report,
@@ -65,6 +68,13 @@ type Test = { col: number; line: number; name: string };
 type Location = { col: number; file: string; line: number };
 type Problem = { at?: Location; text: string };
 type Stub = { error?: Value; value?: Value };
+type Timer = {
+  args: Value[];
+  at: bigint;
+  message: string;
+  order: number;
+  script: string;
+};
 
 /** Runs every test under the paths, and returns the exit code. */
 export const runTests = (
@@ -76,6 +86,16 @@ export const runTests = (
     : null;
   if (manifest?.grants.has('harness')) {
     throw new Error('The Host Manifest may not name a Grant harness');
+  }
+  if (manifest?.objectsKinds.has('harness')) {
+    throw new Error('The Host Manifest may not name an object harness');
+  }
+  for (const [name, kind] of manifest?.objectsKinds ?? []) {
+    if (!manifest!.objectKinds.has(kind)) {
+      throw new Error(
+        `The Host Manifest has no Object Kind ${kind} for ${name}`,
+      );
+    }
   }
   if (manifest?.libraries.some(library => library.name === 'test')) {
     throw new Error('The Host Manifest may not name a Library test');
@@ -266,14 +286,18 @@ const testScript = (
 };
 
 // One test: a fresh Group of the Scripts under test and the Test Script, with
-// mocked Grants, the harness, and a virtual Clock.
+// mocked Grants and well-known objects, the harness, and a virtual Clock.
 class TestRun {
   readonly output: string[] = [];
   private readonly calls = new Map<string, Value[]>();
   private readonly files = new Map<string, string>();
   private readonly group: Group;
+  private readonly objects: Record<string, HostObject<Map<string, Value>>> = {};
   private readonly problems: Problem[] = [];
   private readonly stubs = new Map<string, Stub[]>();
+  // Each Script's timers, by Script and timer name.
+  private readonly timers = new Map<string, Timer>();
+  private timersSet = 0;
   private readonly unhandled: string[] = [];
   private advances: { call: Call<unknown>; to: bigint }[] = [];
   private answers: (() => void)[] = [];
@@ -298,6 +322,7 @@ class TestRun {
     });
     const capabilities = this.capabilities();
     const declarations = declarationsOf(capabilities);
+    this.makeObjects();
     let loading = 'a Library';
     try {
       for (const library of this.libraries(declarations)) {
@@ -314,6 +339,7 @@ class TestRun {
         this.group.load({
           name: script.name,
           source: script.source,
+          objects: this.objects,
           grants:
             script.name === testName
               ? {
@@ -375,13 +401,16 @@ class TestRun {
         this.answers.splice(0).forEach(settle => settle());
         continue;
       }
+      if (this.fireTimers()) {
+        continue;
+      }
       if (answer) {
         // The Clock has reached the advance's end: let the test go on.
         answer.answer(nothing);
         answer = undefined;
         continue;
       }
-      const next = pumped.nextDeadline;
+      const next = earliest(pumped.nextDeadline, this.nextTimer());
       const advance = this.advances[0];
       if (advance) {
         if (next !== undefined && next <= advance.to) {
@@ -541,7 +570,12 @@ class TestRun {
         ]),
       ) as CapabilityDef<unknown>,
     );
+    out.set('timer', this.timer());
     for (const [grant, operations] of this.manifest?.grants ?? []) {
+      if (this.manifest!.capabilities.get(grant) === 'timer') {
+        out.set(grant, this.timer());
+        continue;
+      }
       const ops: Record<string, Operation<unknown>> = {};
       for (const [name, op] of operations) {
         const key = `${grant}.${name}`;
@@ -584,6 +618,100 @@ class TestRun {
     return out;
   }
 
+  // Timers the runner keeps and delivers on the virtual Clock.
+  private timer(): CapabilityDef<unknown> {
+    return timerCapability(
+      {
+        schedule: (call, name, at, message, args) => {
+          const listed = Array.from({ length: args.length }, (_, i) =>
+            args.index(i + 1),
+          );
+          this.record(`${call.grantName}.schedule`, [
+            text(name),
+            at,
+            text(message),
+            args,
+          ]);
+          this.timers.set(`${call.scriptName}\u0000${name}`, {
+            script: call.scriptName,
+            at: at.asInstant()!,
+            message,
+            args: listed,
+            order: this.timersSet++,
+          });
+        },
+        cancel: (call, name) => {
+          this.record(`${call.grantName}.cancel`, [text(name)]);
+          this.timers.delete(`${call.scriptName}\u0000${name}`);
+        },
+      },
+      free(['schedule', 'cancel']),
+    );
+  }
+
+  private nextTimer(): bigint | undefined {
+    return [...this.timers.values()].reduce<bigint | undefined>(
+      (soonest, timer) => earliest(soonest, timer.at),
+      undefined,
+    );
+  }
+
+  // Delivers every timer that is due, soonest and then first set first. True
+  // if there were any.
+  private fireTimers(): boolean {
+    const due = [...this.timers]
+      .filter(([, timer]) => timer.at <= this.now)
+      .sort(
+        ([, a], [, b]) =>
+          (a.at < b.at ? -1 : a.at > b.at ? 1 : 0) || a.order - b.order,
+      );
+    for (const [key, timer] of due) {
+      this.timers.delete(key);
+      this.group
+        .script(timer.script)
+        ?.deliver({ name: timer.message, args: timer.args });
+    }
+    return due.length > 0;
+  }
+
+  // The manifest's well-known objects, each holding the property values
+  // Scripts and the harness set.
+  private makeObjects() {
+    for (const [name, kindName] of this.manifest?.objectsKinds ?? []) {
+      const declared = this.manifest!.objectKinds.get(kindName)!;
+      const kind = defineObjectKind<Map<string, Value>>({
+        name: kindName,
+        props: Object.fromEntries(
+          [...declared.props].map(([prop, { readOnly, shape }]) => [
+            prop,
+            {
+              shape,
+              get: object => {
+                const value = object.native.get(prop);
+                if (!value) {
+                  throw new ScriptError(
+                    'unset property',
+                    `No value is set for ${object.id}.${prop}`,
+                    map([]),
+                  );
+                }
+                return value;
+              },
+              ...(readOnly
+                ? {}
+                : {
+                    set: (object, value) => {
+                      object.native.set(prop, value);
+                    },
+                  }),
+            },
+          ]),
+        ),
+      });
+      this.objects[name] = this.group.object(kind, name, new Map());
+    }
+  }
+
   // The Test Script's control over everything else in the test.
   private harness(): CapabilityDef<unknown> {
     const manifest = this.manifest;
@@ -602,6 +730,15 @@ class TestRun {
         cost: { fuel: 0 },
         fire: (_call, op, error) => {
           this.queue(mockedOperation(manifest, op!), { error: error! });
+        },
+      },
+      set: {
+        mode: 'fire-and-forget',
+        args: [shape.text, shape.any],
+        cost: { fuel: 0 },
+        fire: (_call, property, value) => {
+          const [object, prop] = this.property(property!);
+          object.native.set(prop, value!);
         },
       },
       calls: {
@@ -630,6 +767,21 @@ class TestRun {
         },
       },
     });
+  }
+
+  // A well-known object's property, named `<object>.<property>`.
+  private property(value: Value): [HostObject<Map<string, Value>>, string] {
+    const key = value.asText()!;
+    const [name = '', prop = ''] = key.split('.');
+    const object = this.objects[name];
+    if (!object?.kind.props.has(prop)) {
+      throw new ScriptError(
+        'no such property',
+        `No well-known object has a property ${key}`,
+        map([['name', value]]),
+      );
+    }
+    return [object, prop];
   }
 
   private queue(key: string, stub: Stub) {
@@ -665,14 +817,22 @@ class TestRun {
   }
 }
 
-// A mocked Operation, or `console.read`, named `<grant>.<operation>`.
+// A mocked Operation, `console.read`, or a `timer` Operation, named
+// `<grant>.<operation>`.
 const mockedOperation = (
   manifest: HostManifest | null,
   value: Value,
 ): string => {
   const key = value.asText()!;
   const [grant = '', name = ''] = key.split('.');
-  if (key !== 'console.read' && !manifest?.grants.get(grant)?.has(name)) {
+  const timer =
+    (name === 'schedule' || name === 'cancel') &&
+    (grant === 'timer' || manifest?.capabilities.get(grant) === 'timer');
+  if (
+    key !== 'console.read' &&
+    !timer &&
+    !manifest?.grants.get(grant)?.has(name)
+  ) {
     throw new ScriptError(
       'no such operation',
       `No mocked Operation is named ${key}`,
@@ -706,6 +866,9 @@ const failure = (error: Value): ScriptError =>
     error.get('message').asText() ?? '',
     map(error.entries().filter(([k]) => k !== 'code' && k !== 'message')),
   );
+
+const earliest = (a: bigint | undefined, b: bigint | undefined) =>
+  a === undefined ? b : b === undefined || a <= b ? a : b;
 
 const free = (operations: readonly string[]) =>
   Object.fromEntries(operations.map(op => [op, { fuel: 0 }]));
