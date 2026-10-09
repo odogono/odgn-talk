@@ -359,6 +359,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			if q.broadcast != "" {
 				fields["broadcast"] = string(q.broadcast)
 			}
+			if q.function != nil {
+				fields["fn"] = Value{*q.function}.String()
+			}
 			g.record("run", false, nil, fields)
 			if q.pending != nil {
 				settlements = append(settlements, func() { q.pending.settle(Nothing, sendFailure("cancelled", nil)) })

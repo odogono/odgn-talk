@@ -149,6 +149,7 @@ functions/capability-callbacks
 functions/foreign-calls
 functions/host-calls
 functions/host-cancellation
+functions/queued-host-cancellation
 libraries/caller-capabilities
 libraries/calls
 libraries/errors

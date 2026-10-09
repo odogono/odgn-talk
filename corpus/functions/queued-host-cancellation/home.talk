@@ -1,0 +1,12 @@
+script variable called = false
+on named
+  return work
+end named
+function work
+  put true into called
+end work
+on lambda
+  return given
+    put true into called
+  end given
+end lambda
