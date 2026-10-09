@@ -41,6 +41,10 @@ const explicitSources: readonly (readonly [string, string])[] = [
     'on h\n  wait for all\n    tell feed\n      fetch "a" and wait\n    end tell\n  end wait\nend h',
   ],
   [
+    'Timeout Block',
+    'on h\n  with timeout of 1 s\n    wait 1 s\n  end timeout\nend h',
+  ],
+  [
     'waiting branches',
     'on h\n  wait for\n    when done x then\n      put x into y\n    after 1 s then\n      put 0 into y\n  end wait\nend h',
   ],
@@ -131,6 +135,12 @@ describe('optional block endings', () => {
     ['wrong block keyword', 'on h\nif true then\nend repeat\nend', 3, 5],
     ['wrong tell block keyword', 'on h\ntell canvas\nend repeat\nend', 3, 5],
     [
+      'wrong Timeout Block keyword',
+      'on h\nwith timeout of 1 s\nwait 1 s\nend wait\nend',
+      4,
+      5,
+    ],
+    [
       'wrong Lambda keyword',
       'on h\nput given x\nreturn x\nend repeat into f\nend',
       4,
@@ -181,6 +191,11 @@ describe('optional block endings', () => {
       'wrong tell block keyword',
       'on h\ntell canvas\nend if\nend',
       'expected end of line or `tell` after `end` (closing line 2), found `if`',
+    ],
+    [
+      'wrong Timeout Block keyword',
+      'on h\nwith timeout of 1 s\nwait 1 s\nend if\nend',
+      'expected end of line or `timeout` after `end` (closing line 2), found `if`',
     ],
     [
       'Lambda closed with end tell',

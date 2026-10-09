@@ -87,6 +87,12 @@ func (r *Run) ResumeJoinOperation(resume ResumeOperationFunc) {
 	}
 	r.Join = nil
 	f := &r.Frames[len(r.Frames)-1]
+	if j.Failure != nil && j.Failure.Deadline != nil {
+		// No member failed: the Join as a whole ran out of time.
+		f.PC--
+		r.raise(r.positionedError(DeadlineTimeout(*j.Failure.Deadline)))
+		return
+	}
 	if j.Failure != nil {
 		f.PC--
 		err := sendResumeError(*j.Failure)

@@ -1,0 +1,29 @@
+# timeout-block-join: a Timeout Block around a Join (ADR 0073). d1's block
+# runs out with its second fetch still pending, so that member is abandoned
+# and the Join raises `timeout` with `deadline: true` and no `index`, at its
+# closing `end`; the late answer is noted. d2's members all answer first, so
+# the deadline never fires (spec chapter 5, Timeout Blocks).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+grants = { feed = { ops = ["fetch"] } }
+
+[[scripts]]
+name = "shop"
+source = "shop.talk"

@@ -35,7 +35,7 @@ func (g *Group) observe(s *Script, d delivery, allow func()) (fuel, alloc int64)
 		alloc += a
 		g.writeRaises(x, raised)
 		if matched {
-			x.deadline = nil
+			x.deadline, x.deadlineAfter = nil, nil
 			x.how = "resume"
 			s.queue = append(s.queue, workItem{run: x})
 			allow()

@@ -1,0 +1,30 @@
+# timeout-block: pins chapter 8's lowering of a Timeout Block (ADR 0073).
+# `timeout-start` pops the duration and pushes the deadline, which stays on
+# the stack below the body, as an iterator does, until `timeout-end` pops it.
+# An Unwind entry's depth counts it: the catch around the inner block has
+# depth 2. `exit repeat` and `next repeat` pop the deadline of each block they
+# leave, innermost first among the `finally` copies, at their own position,
+# while `return` leaves it with the frame.
+# Unblessed: first expectation review pending for #542.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+
+[[scripts]]
+name = "poll"
+source = "poll.talk"
+grants = { feed = { ops = "all" } }
+
+[[disassembly]]
+unit = "poll"
+expected = "poll.dis"

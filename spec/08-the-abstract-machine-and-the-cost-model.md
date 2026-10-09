@@ -1,6 +1,6 @@
 # 8. The Abstract Machine and the Cost Model
 
-_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md).
+_Draws on:_ [ADR 0001](../docs/adr/0001-value-semantics.md), [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-built-in-core-plus-libraries-written-in-the-language.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [ADR 0037](../docs/adr/0037-errors-raised-in-stdlib-code-point-at-the-scripts-call.md), [ADR 0053](../docs/adr/0053-backticks-interpolate-and-raw-fences-preserve-text.md), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md), [ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md).
 
 Every Script and Library compiles to a code unit for one Abstract Machine: a stack machine with numbered local slots. The instruction set, and the exact instructions each construct lowers to, are normative, including which local slot each name gets and the order of the constant pool ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). Each instruction is one language-level operation, and is charged Fuel by the Cost Model. So both Cores charge the same Fuel, fault at the same instruction and report the same positions, and a Disassembly Case can pin a Script's lowering exactly ([chapter 11](11-the-trace-and-conformance.md)).
 
@@ -27,10 +27,11 @@ The state is defined abstractly. A Core may represent it any way it likes, as lo
 - **A frame** holds its code unit, its body, its pc (an instruction index in the code unit), its locals (as many as the body table says, [below](#bodies)) and its operand stack. A new frame's locals are all Nothing, apart from the arguments.
 - **A dispatch activation** has its own PC and operand stack, initialized with its owner's outer iterator prefix and the dispatched Error, while reading and writing the owner's actual locals. Original failed PCs and stacks remain retained. A nested context may refer to an earlier activation's continuation; the ultimate local owner is a real frame. Ownership and continuation references are acyclic control references, never Script Values or Trace ids.
 - **A Function Value** is its Home Script, its body (a code unit and a body index, or an imported function), its captured values and its may-suspend flag. It is stale when, since it was made, its Home Script has stopped or reloaded, or its code has been replaced. Extending the Script doesn't make it stale ([chapter 10](10-save-and-restore.md#extend-script)) ([chapter 3](03-values.md#function-values)).
-- **Values on the operand stack** are Script values, plus three internal values that only instructions can see, and that are plain data too:
+- **Values on the operand stack** are Script values, plus four internal values that only instructions can see, and that are plain data too:
   - an **iterator**: a list or range snapshot and a position, or a count left
   - a **replacement**: a text, its Matches, a position and the pieces so far
   - a **reader**: Bytes, a position and the bits left over from a bit field
+  - a **deadline**: a Timeout Block's deadline, as an Instant, and its duration in `ms` ([ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md))
 
 ## Code units
 
@@ -339,6 +340,8 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
 | `join-send-spread` |  | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
 | `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
+| `timeout-start` |  | 1 | 1 | `with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later | `wrong kind` |
+| `timeout-end` |  | 1 | 0 | Pops a Timeout Block's deadline as control leaves the block |  |
 | `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
 | `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message` |  |
 
@@ -514,7 +517,7 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `repeat until c` | L1: ⟦c⟧ `branch-true L2`, the body, `jump L1`, L2: |
 | `repeat forever` | L1: the body, `jump L1`, L2: |
 | `repeat … collecting e into v` | `list 0` and the `store` of `v`, then the loop above, with the `load` of `v`, ⟦e⟧, `list-append` and the `store` of `v` after the body, before its `jump L1` |
-| `exit repeat`, `next repeat` | any `finally` blocks it leaves, innermost first, then `jump` to the loop's L2, or L1 |
+| `exit repeat`, `next repeat` | for each `finally` block and Timeout Block it leaves, innermost first, a copy of the `finally` block or `timeout-end`; then `jump` to the loop's L2, or L1 |
 | `match e` | [below](#match) |
 | `try` | [below](#try) |
 | `throw e` | ⟦e⟧ `throw` |
@@ -534,9 +537,11 @@ With the pattern and the text on the stack: `replace-start` of 1 for `replace fi
 | `wait d` | ⟦d⟧ `wait` |
 | `wait for …` | [below](#waiting) |
 | `wait for all … end wait` | `join-start`, the body, `join-end` `store 0` |
+| `with timeout of d … end timeout` | ⟦d⟧ `timeout-start`, the body, `timeout-end` |
 
 - **`if`** jumps to L2 after every arm, except the last one when there is no `else`.
 - **An iterator** stays on the stack below the loop's body, which leaves the stack as it found it, and L2 pops it.
+- **A deadline** stays on the stack below a Timeout Block's body in the same way, and `timeout-end` pops it. Wherever an iterator depth or prefix is given, such as an Unwind Table entry's depth, an offer record's depth or a dispatch activation's prefix, it counts the deadlines below too. So a catch outside the block drops its deadline, and a `return` leaves it with the frame.
 - **`repeat for each`'s temp** is released after the `move`s, before the body.
 - **Grants:** the name after `ask` or `tell` is a Grant, and the Operation's mode picks `ask`, `ask-wait` or `tell`, checked at load ([chapter 5](05-handlers-messages-and-scheduling.md)). In a `tell` block, the mode alone picks it ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)).
 
@@ -571,6 +576,8 @@ A Handler ending in `finally` is this with no catch clauses around its body.
 - **`wait for m p… [from x] [or d]`:** ⟦x⟧, the `load` of each local the event's test captures, then ⟦d⟧, then `wait-for` of its event entry, then `store 0`.
 - **The block form:** for each branch in order, ⟦x⟧ and its captures for a `when`, or ⟦d⟧ for an `after`, then `wait-for-any` of its entry, then `store t` of the branch number and `store 0` of the message. Then for each branch, numbered from 1, with F its own label: `load t` `const i` `equal` `branch-false F`, the branch's body, `jump L`, F:. And L:.
 - **Bindings:** when an event matches, the Core writes the values its test gives into the slots its entry lists, then resumes.
+- **A Timeout Block's deadline:** `wait`, `wait-for`, `wait-for-any`, `ask-wait`, each `send…-wait` and `join-end` are bounded by the topmost deadline on their frame's operand stack, if there is one. It is the innermost Timeout Block's, which `timeout-start` already made the earliest in force. A Lambda runs in a frame of its own, so a block outside it bounds none of its waits ([chapter 5](05-handlers-messages-and-scheduling.md#timeout-blocks)).
+- **Already past:** when that deadline is at or before the Pump's Clock reading, the instruction raises `timeout` with `after`, `deadline: true` and, for `ask-wait`, `capability` and `operation`. It does so once its own operands are checked, before `scope open`, and charges nothing. `join-end` with members abandons them first, in start order. With no members it pushes `[]` as before, since it doesn't suspend.
 
 ### Handler Clauses
 
@@ -852,6 +859,7 @@ The Allocation Budget and Persistent State count values by their logical size, a
 | iterator | `24 + size(v)` |
 | replacement | `32 + contents(v)` |
 | reader | `24 + size(v)` |
+| deadline | `40` |
 | frame | `64 + 8 * items(v) + contents(v)` |
 | run | `96 + contents(v)` |
 | message | `32 + contents(v)` |
@@ -914,6 +922,7 @@ Cost Model **0**.
 | `send` | `20 + size(input) / 32` | `size(input)` | the message, whose size counts toward the receiver's mailbox |
 | `wait` | `10` | 0 |  |
 | `join` | `10` | `size(result)` |  |
+| `timeout` | `2` | `40` | a deadline holds an Instant and the block's duration in `ms` |
 | `catch-accept` | `1` | 0 |  |
 | `catch-next` | `1` | 0 |  |
 | `choose-offer` | `8 + count` | 0 |  |

@@ -658,7 +658,7 @@ is = "why the stretch ended ([End reasons](#end-reasons))"
 key = "until"
 type = "instant"
 optional = true
-is = "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in"
+is = "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's"
 
 [[record.key]]
 key = "n"

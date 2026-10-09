@@ -76,18 +76,21 @@ type Frame struct {
 	Accepted      bool
 }
 type Run struct {
-	OpenScope      *Scope
-	Rollback       []string
-	WaitNS         *big.Int
-	EventWait      *EventWait
-	EventResume    *EventResume
-	Join           *Join
-	Abandons       []string
-	FaultAbandons  []string
-	OperationWait  bool
-	SendWait       bool
-	FunctionWait   bool
-	SendResume     *SendResume
+	OpenScope     *Scope
+	Rollback      []string
+	WaitNS        *big.Int
+	EventWait     *EventWait
+	EventResume   *EventResume
+	Join          *Join
+	Abandons      []string
+	FaultAbandons []string
+	OperationWait bool
+	SendWait      bool
+	FunctionWait  bool
+	SendResume    *SendResume
+	// Expired is the duration of the Timeout Block whose deadline ended a
+	// `wait` or `wait for`, raised when the Run resumes (ADR 0073).
+	Expired        *value.Value
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 	Vetoed         bool
@@ -479,6 +482,21 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("pattern")
 			break
 		}
+		// A Suspension Point reached after its Timeout Block's deadline raises
+		// at once, before `scope open`, and charges nothing (ADR 0073).
+		if err == nil && r.pastDeadline(f, i.Name) {
+			if f.Clause {
+				if !r.pay(4, 0) {
+					break
+				}
+				f.Clause = false
+			}
+			r.raise(*r.DeadlineError())
+			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
+				r.Status = Preempted
+			}
+			continue
+		}
 		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
 			if f.Clause {
 				if !r.pay(4, 0) {
@@ -790,6 +808,7 @@ func (r *Run) Cancel(budget int64) {
 		r.EventResume = nil
 		r.SendWait = false
 		r.SendResume = nil
+		r.Expired = nil
 	}
 	r.AbandonJoin()
 	r.State.Variables = slices.Clone(r.Base)

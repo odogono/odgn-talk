@@ -167,6 +167,7 @@ const blockRules = new Set([
   'OfferClause',
   'Wait',
   'TellBlock',
+  'TimeoutBlock',
 ]);
 const propertyNames = new Set<string>(properties);
 const catalogue = new Map(lintCatalogue.map(entry => [entry.id, entry]));
@@ -302,10 +303,12 @@ export const lintSyntax = (
         'Try',
         'Wait',
         'TellBlock',
+        'TimeoutBlock',
       ].includes(node.rule) &&
       (!direct[endIndex + 1] || direct[endIndex + 1]!.line !== ending.line)
     ) {
-      let suffix = first.v;
+      // A Timeout Block opens with `with` and closes with `end timeout`.
+      let suffix = node.rule === 'TimeoutBlock' ? 'timeout' : first.v;
       if (node.rule === 'Handler' || node.rule === 'Function') {
         const name = children.find(
           child => child.rule === 'MessageName' || child.rule === 'Name',

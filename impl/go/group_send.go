@@ -110,7 +110,7 @@ func (g *Group) reply(call CallID, answer corevalue.Value, reason string, failur
 			if x.run.Join != nil {
 				x.removeMemberTimer(string(call))
 				if x.run.SettleJoin(string(call), machine.SendResume{Answer: answer, Reason: reason, Error: failure}) {
-					x.deadline = nil
+					x.deadline, x.deadlineAfter = nil, nil
 					x.memberTimers = nil
 					g.cancelPendingAbandons(x)
 					x.how = "resume"
@@ -122,7 +122,7 @@ func (g *Group) reply(call CallID, answer corevalue.Value, reason string, failur
 				continue
 			}
 			x.waitCall = ""
-			x.deadline = nil
+			x.deadline, x.deadlineAfter = nil, nil
 			x.run.SettleSend(machine.SendResume{Answer: answer, Reason: reason, Error: failure})
 			x.how = "resume"
 			s.queue = append(s.queue, workItem{run: x})

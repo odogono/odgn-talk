@@ -49,7 +49,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case "make-pattern", "contains", "begins-with", "ends-with", "matches", "match-all":
 		return true
-	case "append", "prepend", "append-all", "prepend-all", "iterate", "iterate-times", "next":
+	case "append", "prepend", "append-all", "prepend-all", "iterate", "iterate-times", "next", "timeout-start", "timeout-end":
 		return true
 	case "test-map", "test-list", "test-list-at-least", "list-item", "list-rest", "map-get", "test-constant", "test-equal":
 		return true

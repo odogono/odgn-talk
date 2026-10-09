@@ -5,6 +5,7 @@ package value
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -33,9 +34,10 @@ const (
 	Iterator
 	BinaryReader
 	Replacement
+	Deadline
 )
 
-var KindNames = []string{"nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object", "iterator", "reader", "replacement"}
+var KindNames = []string{"nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object", "iterator", "reader", "replacement", "deadline"}
 
 type DateFields struct {
 	Year, Month, Day                 int
@@ -87,6 +89,14 @@ type ReplacementData struct {
 	Parts        []string
 }
 
+// DeadlineData is a Timeout Block's deadline, kept on the stack below its
+// body: the Instant in Clock nanoseconds, and the block's duration as a
+// Quantity in `ms` (ADR 0073).
+type DeadlineData struct {
+	At    *big.Int
+	After Value
+}
+
 type Value struct {
 	// CoreMessage marks only a Core-generated error message. It is visible to
 	// Scripts but omitted from parity Trace values (chapter 11).
@@ -95,6 +105,7 @@ type Value struct {
 	Reader      *ReaderData
 	Replacement *ReplacementData
 	Iterator    *IteratorData
+	Deadline    *DeadlineData
 	Kind        Kind
 	Bool        bool
 	Number      decimal.Number

@@ -21,6 +21,9 @@ type SendResume struct {
 	Error          value.Value
 	Timeout        bool
 	AfterMS        int64
+	// Deadline is the block's duration when a Timeout Block's deadline, not
+	// the call's own, ended the wait.
+	Deadline *value.Value
 }
 
 // SettleSend replaces the pending call's logical size with its resumption.
@@ -65,6 +68,9 @@ func (r *Run) ResumeSendOperation(resume ResumeOperationFunc) {
 }
 
 func sendResumeError(p SendResume) value.Value {
+	if p.Timeout && p.Deadline != nil {
+		return DeadlineTimeout(*p.Deadline)
+	}
 	if p.Timeout {
 		after, _ := value.NewQuantity(decimal.FromInt(p.AfterMS), "ms")
 		return failure("timeout", value.Pair{Key: "after", Val: after})

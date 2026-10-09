@@ -1,0 +1,58 @@
+# Unblessed: Timeout Block deadlines on single waits (#542); first blessing awaits human review.
+# timeout-block-waits: every block starts at 09:00:00; the 1 s deadlines fire
+# at 09:00:01, then `inner`'s 3 s wait would have ended at 09:00:03.
+
+> load poll identity=edb22ec7f6178a5daf61d59594100eef52a8886ae77808d5a7ca725e9e31cc84
+> deliver d1 to=poll message=nested
+> deliver d2 to=poll message=tie
+> deliver d3 to=poll message=again
+> deliver d4 to=poll message=inner
+> deliver d5 to=poll message=slow
+> pump clock=2026-10-09T09:00:00Z
+seg poll/r1 start delivery=d1 handler=nested clause=1 fuel=20 alloc=80 state=448 end=wait-for until=2026-10-09T09:00:01Z
+seg poll/r2 start delivery=d2 handler=tie clause=1 fuel=18 alloc=40 state=680 end=wait-for until=2026-10-09T09:00:01Z
+call poll/r3.c1 op=feed.fetch args=["slow"]
+seg poll/r3 start delivery=d3 handler=again clause=1 fuel=38 alloc=40 state=992 end=ask-wait until=2026-10-09T09:00:01Z
+seg poll/r4 start delivery=d4 handler=inner clause=1 fuel=21 alloc=80 state=1264 end=wait until=2026-10-09T09:00:01Z
+send poll/r5.c1 to=poll message=ping wait=yes
+seg poll/r5 start delivery=d5 handler=slow clause=1 fuel=29 alloc=72 state=1576 end=send-wait until=2026-10-09T09:00:01Z
+seg poll/r6 start from=poll/r5.c1 handler=ping clause=1 fuel=15 alloc=0 state=1720 end=wait until=2026-10-09T09:00:02Z
+pumped state=idle fuel=141 next=2026-10-09T09:00:01Z
+> pump clock=2026-10-09T09:00:01Z
+raise poll/r1 code="timeout" at=poll:8 pos=10:9
+seg poll/r1 resume fuel=18 alloc=477 state=1797 end=return
+run poll/r1 outcome=completed delivery=d1 handler=nested fuel=38 alloc=557
+raise poll/r2 code="timeout" at=poll:32 pos=22:7
+seg poll/r2 resume fuel=18 alloc=474 state=2007 end=return
+run poll/r2 outcome=completed delivery=d2 handler=tie fuel=36 alloc=514
+raise poll/r3 code="timeout" at=poll:55 pos=34:9
+abandon poll/r3.c1
+raise poll/r3 code="timeout" at=poll:72 pos=38:7
+seg poll/r3 resume fuel=34 alloc=1060 state=2771 end=return
+run poll/r3 outcome=completed delivery=d3 handler=again fuel=72 alloc=1100
+raise poll/r4 code="timeout" at=poll:96 pos=50:9
+seg poll/r4 resume fuel=26 alloc=476 state=4587 end=wait until=2026-10-09T09:00:03Z
+raise poll/r5 code="timeout" at=poll:130 pos=65:7
+abandon poll/r5.c1
+seg poll/r5 resume fuel=18 alloc=475 state=4798 end=return
+run poll/r5 outcome=completed delivery=d5 handler=slow fuel=47 alloc=547
+pumped state=idle fuel=114 next=2026-10-09T09:00:02Z
+> answer poll/r3.c1 value=1
+> pump clock=2026-10-09T09:00:03Z
+note poll/r3.c1 kind=late-answer
+seg poll/r6 resume fuel=3 alloc=0 state=4622 end=return
+run poll/r6 outcome=completed handler=ping value="pong" fuel=18 alloc=0
+send poll/r4.c1 to=poll message=ping wait=yes
+seg poll/r4 resume fuel=22 alloc=32 state=4702 end=send-wait until=2026-10-09T09:00:10Z
+seg poll/r7 start from=poll/r4.c1 handler=ping clause=1 fuel=15 alloc=0 state=4846 end=wait until=2026-10-09T09:00:05Z
+pumped state=idle fuel=40 next=2026-10-09T09:00:05Z
+> pump clock=2026-10-09T09:00:05Z
+seg poll/r7 resume fuel=3 alloc=0 state=4670 end=return
+run poll/r7 outcome=completed handler=ping value="pong" fuel=18 alloc=0
+seg poll/r4 resume fuel=14 alloc=28 state=3006 end=return
+run poll/r4 outcome=completed delivery=d4 handler=inner fuel=83 alloc=616
+pumped state=idle fuel=17
+> pump clock=2026-10-09T09:00:08Z
+pumped state=idle fuel=0
+> vars
+vars poll results=[{code: "timeout", after: 1000 ms, deadline: true, at: {unit: "poll", handler: "nested", line: 10, column: 9}}, {code: "timeout", after: 1000 ms, deadline: true, at: {unit: "poll", handler: "tie", line: 22, column: 7}}, {code: "timeout", after: 1000 ms, capability: "feed", operation: "fetch", deadline: true, at: {unit: "poll", handler: "again", line: 34, column: 9}}, {code: "timeout", after: 1000 ms, deadline: true, at: {unit: "poll", handler: "again", line: 38, column: 7}}, {code: "timeout", after: 1000 ms, deadline: true, at: {unit: "poll", handler: "inner", line: 50, column: 9}}, {code: "timeout", after: 1000 ms, deadline: true, at: {unit: "poll", handler: "slow", line: 65, column: 7}}, "pong"]

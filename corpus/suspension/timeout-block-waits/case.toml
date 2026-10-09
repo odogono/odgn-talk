@@ -1,0 +1,27 @@
+# timeout-block-waits: Timeout Blocks (ADR 0073) around single waits. Nested
+# blocks keep the earliest deadline in force; of equal deadlines the block's
+# wins over `wait for … or d`; a block ends a suspending Operation as its
+# `maxPending` would, with `capability` and `operation`; a wait reached after
+# the deadline raises at once; an inner block's deadline ends with the block;
+# and a `send … and wait` ended by the deadline leaves its receiver running
+# (spec chapter 5, Timeout Blocks).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "feed"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+
+[[scripts]]
+name = "poll"
+source = "poll.talk"
+grants = { feed = { ops = ["fetch"] } }

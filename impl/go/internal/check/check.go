@@ -611,7 +611,9 @@ type context struct {
 	loop, finally, join, lambda int
 	finallyLoop                 int
 	// joinTry is set inside a `try` within a Join's body.
-	joinTry      bool
+	joinTry bool
+	// timeout is set inside a Timeout Block's body, outside its Lambdas.
+	timeout      bool
 	recovery     bool
 	recoveryLoop int
 	guard        bool
@@ -629,6 +631,7 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 		ctx.finally = 0
 		ctx.join = 0
 		ctx.joinTry = false
+		ctx.timeout = false
 		ctx.recovery = false
 	}
 	for _, p := range b.Node.Params {
@@ -771,6 +774,11 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	}
 	if ctx.join > 0 && (slices.Contains([]string{"wait", "wait-for", "wait-any", "join", "return", "veto", "pass"}, n.Kind) || n.Kind == "command" && syntax.HasFlag(n, "and") || n.Kind == "call-statement" && syntax.HasFlag(n, "and")) {
 		u.add("not in a join", n.Pos())
+	}
+	// `name … and wait` and `f(x) and wait` wait in code written elsewhere,
+	// which a Timeout Block can't bound (ADR 0073).
+	if ctx.timeout && (n.Kind == "command" || n.Kind == "call-statement") && syntax.HasFlag(n, "and") {
+		u.add("not in a timeout", n.Pos())
 	}
 	// A `try` goes around the whole Join, not around a member (chapter 5).
 	if ctx.joinTry && (n.Kind == "ask" || n.Kind == "send") && syntax.HasFlag(n, "and") {
@@ -989,6 +997,13 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		}
 		ctx.join++
 		ctx.joinTry = false
+	case "timeout-block":
+		// In a Join's body, every wait is a member or a load error, so the
+		// block bounds nothing.
+		if ctx.join > 0 || !hasSuspension(n) {
+			u.add("empty timeout", n.Pos())
+		}
+		ctx.timeout = true
 	case "build":
 		u.bits(n)
 	case "command":
@@ -1323,4 +1338,26 @@ func (u *Unit) inheritedBody(body *Body) bool {
 	}
 	_, inherited := u.Options.Existing.Bodies[body.Node]
 	return inherited
+}
+
+// hasSuspension reports whether a Timeout Block's body holds a Suspension
+// Point outside the Lambdas in it. A Join is one, and its members aren't.
+func hasSuspension(block *syntax.Node) bool {
+	found := false
+	syntax.Walk(block, func(x *syntax.Node) bool {
+		if found || x != block && x.Kind == "lambda" {
+			return false
+		}
+		switch x.Kind {
+		case "wait", "wait-for", "wait-any", "join":
+			found = true
+			return false
+		case "ask", "send":
+			if syntax.HasFlag(x, "and") {
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
 }

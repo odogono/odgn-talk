@@ -144,6 +144,7 @@ disassembly/fenced-text
 disassembly/messages-and-waiting
 disassembly/recovery-offers
 disassembly/tell-block
+disassembly/timeout-block
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
@@ -206,6 +207,7 @@ load-diagnostics/duplicate-key
 load-diagnostics/duplicate-name
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
+load-diagnostics/empty-timeout
 load-diagnostics/fallback-handler
 load-diagnostics/initialiser-failed
 load-diagnostics/invalid-raw-text-closing-margin
@@ -227,6 +229,7 @@ load-diagnostics/not-in-a-join
 load-diagnostics/not-in-a-join-try
 load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
+load-diagnostics/not-in-a-timeout
 load-diagnostics/nothing-to-fold
 load-diagnostics/object-properties
 load-diagnostics/outside-a-loop
@@ -324,6 +327,8 @@ suspension/send-and-wait
 suspension/send-preemption
 suspension/send-reply-preemption
 suspension/send-wait-replacement
+suspension/timeout-block-join
+suspension/timeout-block-waits
 suspension/wait-for
 suspension/wait-observation
 suspension/wait-precision

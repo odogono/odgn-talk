@@ -846,6 +846,22 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			it.Done = it.Current.Compare(v.Items[1].Number) > 0
 		}
 		push(value.Value{Kind: value.Iterator, Iterator: &it})
+	case "timeout-start":
+		// The Pump's Clock reading plus `d`, unless an enclosing block's
+		// deadline is no later (ADR 0073).
+		ns, err := waitNanos(pop())
+		if err != nil {
+			bad(*err)
+			break
+		}
+		at := new(big.Int).Add(r.clock(), ns)
+		if enclosing := blockDeadline(f.Stack); enclosing != nil && enclosing.At.Cmp(at) <= 0 {
+			push(value.Value{Kind: value.Deadline, Deadline: &value.DeadlineData{At: new(big.Int).Set(enclosing.At), After: enclosing.After}})
+			break
+		}
+		push(value.Value{Kind: value.Deadline, Deadline: &value.DeadlineData{At: at, After: millis(ns)}})
+	case "timeout-end":
+		pop()
 	case "iterate-times":
 		v := pop()
 		if v.Kind != value.Number {

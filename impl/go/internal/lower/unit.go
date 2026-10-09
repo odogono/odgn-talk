@@ -131,6 +131,9 @@ type loop struct {
 	finally    int
 	iterator   bool
 }
+
+// A finalizer is an open `finally` block, or with no node, a Timeout Block,
+// whose deadline `exit repeat` and `next repeat` pop as they leave it.
 type finalizer struct {
 	scope int
 	node  *syntax.Node
@@ -143,6 +146,8 @@ type builder struct {
 	loops     []loop
 	finally   []*finalizer
 	join      int
+	// deadlines counts the Timeout Blocks whose deadlines are on the stack.
+	deadlines int
 	moves     []bindingMove
 }
 
@@ -414,8 +419,10 @@ func (u *Unit) hasPatternParams(n *syntax.Node) bool {
 	}
 	return false
 }
+
+// depth is the number of iterators and deadlines on the operand stack.
 func (u *Unit) depth() int {
-	n := 0
+	n := u.state.deadlines
 	for _, loop := range u.state.loops {
 		if loop.iterator {
 			n++

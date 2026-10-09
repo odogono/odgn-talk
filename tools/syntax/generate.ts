@@ -192,6 +192,9 @@ const machineContent =
     null,
     2,
   )};\n` +
+  `export const reservedErrorKeys = ${JSON.stringify(
+    errors.reserved as string[],
+  )} as const;\n` +
   `export const limitDefaults = ${JSON.stringify(
     Object.fromEntries(
       (limits.limit as { default: number; ts: string }[]).map(

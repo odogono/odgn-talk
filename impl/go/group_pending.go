@@ -79,6 +79,7 @@ func (g *Group) settleOperation(d delivery) {
 	if x.run.Join != nil {
 		x.removeMemberTimer(string(d.reply))
 		if x.run.SettleJoin(string(d.reply), p) {
+			x.deadline, x.deadlineAfter = nil, nil
 			g.cancelPendingAbandons(x)
 			x.memberTimers = nil
 			x.how = "resume"
@@ -86,7 +87,7 @@ func (g *Group) settleOperation(d delivery) {
 		}
 	} else {
 		x.waitCall = ""
-		x.deadline = nil
+		x.deadline, x.deadlineAfter = nil, nil
 		x.run.SettleSend(p)
 		x.how = "resume"
 		s.queue = append(s.queue, workItem{run: x})
@@ -97,6 +98,10 @@ func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (coreva
 	delete(g.calls, CallID(p.Call))
 	if p.Reason == "call lost" || p.Reason == "capability revoked" {
 		e := operationError(p.Reason, []corevalue.Pair{{Key: "capability", Val: mustText(pending.call.grantName)}, {Key: "operation", Val: mustText(pending.name)}})
+		return corevalue.Value{}, &e
+	}
+	if p.Timeout && p.Deadline != nil {
+		e := machine.DeadlineTimeout(*p.Deadline, corevalue.Pair{Key: "capability", Val: mustText(pending.call.grantName)}, corevalue.Pair{Key: "operation", Val: mustText(pending.name)})
 		return corevalue.Value{}, &e
 	}
 	if p.Timeout {

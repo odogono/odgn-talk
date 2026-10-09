@@ -1,0 +1,37 @@
+-- poll.talk: the timeout-block case's Script.
+
+on poll keys
+  with timeout of 1 min
+    repeat for each k in keys
+      try
+        with timeout of 5 s
+          ask feed to fetch k and wait
+          exit repeat
+        end timeout
+      catch "timeout"
+        wait 5 s
+        next repeat
+      end try
+    end repeat
+    wait for all
+      send ping to me and wait
+    end wait
+  end timeout
+end poll
+
+on cleanup
+  repeat 2 times
+    try
+      with timeout of 1 s
+        wait for ready or 1 s
+        exit repeat
+      end timeout
+    finally
+      put 1 into x
+    end try
+  end repeat
+  with timeout of 1 s
+    wait 1 s
+    return x
+  end timeout
+end cleanup
