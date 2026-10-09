@@ -7,17 +7,21 @@ import (
 	northtalk "github.com/odogono/odgn-talk/impl/go"
 )
 
-// These ceilings are one tenth of the pre-#322 bytes per full-size Run.
+// The core ceilings are one tenth of the pre-#322 bytes per full-size Run.
+// List construction also guards against the quadratic copying from #503.
 // Measure allocation, not timing, so machine speed cannot make CI flaky.
 func TestCoreRunAllocationBudgets(t *testing.T) {
 	budgets := map[string]struct {
 		bytes uint64
 		fuel  int64
+		alloc int64 // zero leaves the existing core workload's allocation unpinned
 	}{
-		"core/loop":    {8_750_662, 48_016},
-		"core/fib":     {4_066_059, 46_365},
-		"core/calls":   {6_343_266, 46_018},
-		"core/lambdas": {10_443_816, 58_027},
+		"core/loop":               {8_750_662, 48_016, 0},
+		"core/fib":                {4_066_059, 46_365, 0},
+		"core/calls":              {6_343_266, 46_018, 0},
+		"core/lambdas":            {10_443_816, 58_027, 0},
+		"collections/list-build":  {8_000_000, 19_091, 3_022_112},
+		"collections/list-append": {16_000_000, 52_056, 80_200},
 	}
 	for _, bench := range manifest(t, "go") {
 		budget, ok := budgets[bench.Name]
@@ -45,7 +49,7 @@ func TestCoreRunAllocationBudgets(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got.Outcome != northtalk.Completed || got.Result.String() != bench.Expect || got.Fuel != budget.fuel {
+				if got.Outcome != northtalk.Completed || got.Result.String() != bench.Expect || got.Fuel != budget.fuel || budget.alloc != 0 && got.Alloc != budget.alloc {
 					t.Fatalf("Run output or Fuel changed: %+v", got)
 				}
 			}

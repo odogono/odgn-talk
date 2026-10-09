@@ -1,0 +1,46 @@
+script variable values = [1, 2]
+
+on grow
+  put values into original
+  put 3 after values
+  put values into left
+  put values into right
+  put 4 after left
+  put 5 after right
+  put 0 before left
+  put -1 before right
+  put ...left after left
+  put ...right before right
+  put 9 into item 2 of left
+  put [original, left, right] into branches
+  put [] into values
+  repeat for each i in 1..64
+    put i after values
+  end repeat
+  put values into appended
+  repeat for each i in 1..64
+    put i before values
+  end repeat
+  put the length of values into grownLength
+  put original into values
+  put [] into partial
+  repeat for each i in 1..8 collecting i into collected
+    if i = 4 then
+      put collected into partial
+    end if
+  end repeat
+  put ...partial after collected
+  put ...[] before collected
+  return [branches, grownLength, item 1 of appended, item 64 of appended, partial, collected]
+end grow
+
+on fault
+  repeat forever
+    put ...[3, 4] after values
+    put ...[0, -1] before values
+  end repeat
+end fault
+
+on read
+  return values
+end read

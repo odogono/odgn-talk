@@ -1,4 +1,5 @@
 import type { HostObject } from './objects';
+import { ListStorage } from './list-storage';
 import {
   checkInstant,
   civilFields,
@@ -85,7 +86,7 @@ type Payload =
   | boolean
   | string
   | Decimal
-  | readonly Value[]
+  | ListStorage
   | Pairs
   | readonly [Value, Value]
   | FunctionRef
@@ -93,6 +94,12 @@ type Payload =
 const valueToken = Symbol('Value');
 const decimalToken = Symbol('Decimal');
 let makeValue: (kind: Kind, payload: Payload) => Value;
+let extendListValue: (
+  current: Value,
+  part: Value,
+  prepend: boolean,
+  all: boolean,
+) => Value;
 let makeDecimal: (canonical: string) => Decimal;
 
 export class Decimal {
@@ -136,6 +143,16 @@ export class Value {
   }
   static {
     makeValue = (kind, payload) => new Value(valueToken, kind, payload);
+    extendListValue = (current, part, prepend, all) => {
+      const storage = current.#data as ListStorage;
+      const added = all ? (part.#data as ListStorage) : undefined;
+      const result = storage.extend(
+        added?.length ?? 1,
+        i => (added ? added.index(i)! : part),
+        prepend,
+      );
+      return result === storage ? current : makeValue('list', result);
+    };
   }
   static isValue(input: unknown): input is Value {
     return typeof input === 'object' && input !== null && #data in input;
@@ -222,13 +239,13 @@ export class Value {
     return this.kind === 'function' ? (this.#data as FunctionRef) : undefined;
   }
   get length(): number {
-    return this.kind === 'list' ? (this.#data as readonly Value[]).length : 0;
+    return this.kind === 'list' ? (this.#data as ListStorage).length : 0;
   }
   index(i: number): Value {
     if (this.kind !== 'list' || !Number.isInteger(i) || i < 1) {
       return nothing;
     }
-    return (this.#data as readonly Value[])[i - 1] ?? nothing;
+    return (this.#data as ListStorage).index(i - 1) ?? nothing;
   }
   get(key: string): Value {
     const nfc = normalizeNFC(key);
@@ -376,12 +393,12 @@ export class Value {
         case 'list': {
           output.push('[');
           pending.push(']');
-          const items = next.#data as readonly Value[];
+          const items = next.#data as ListStorage;
           for (let i = items.length - 1; i >= 0; i--) {
             if (i < items.length - 1) {
               pending.push(', ');
             }
-            pending.push(items[i]!);
+            pending.push(items.index(i)!);
           }
           break;
         }
@@ -675,8 +692,15 @@ export const functionValue = (ref: FunctionRef): Value =>
 // Readers use this array form to avoid JS argument-count limits. It is not a Host API.
 export const listValues = (vs: readonly Value[]): Value => {
   vs.forEach(requireValue);
-  return makeValue('list', Object.freeze([...vs]));
+  return makeValue('list', ListStorage.copy(vs));
 };
+/** Internal List growth; the operation validates both operands' kinds. */
+export const extendList = (
+  current: Value,
+  part: Value,
+  prepend: boolean,
+  all: boolean,
+): Value => extendListValue(current, part, prepend, all);
 export const map = (
   input: Map<string, Value> | Iterable<[string, Value]>,
 ): Value => {

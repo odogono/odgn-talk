@@ -558,17 +558,15 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(wrong("list", list))
 			break
 		}
-		vs := slices.Clone(list.Items)
+		vs := []value.Value{v}
 		if i.Name == "list-extend" {
 			if v.Kind != value.List {
 				bad(wrong("list", v))
 				break
 			}
-			vs = append(vs, v.Items...)
-		} else {
-			vs = append(vs, v)
+			vs = v.Items
 		}
-		push(value.NewList(vs))
+		push(extendList(list, vs, false))
 	case "map":
 		n := idx(1)
 		m.Count = int64(n)

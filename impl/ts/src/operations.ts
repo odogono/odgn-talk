@@ -20,7 +20,7 @@ import {
   type Dec,
 } from './decimal';
 import { functionHead } from './code-unit';
-import { itemsOf } from './costs';
+import { cacheListExtension, itemsOf } from './costs';
 import { BINARY32, BINARY64, readFloat, writeFloat } from './floats';
 import {
   acos,
@@ -78,6 +78,7 @@ import {
   compareBytes,
   instantOf,
   dec,
+  extendList,
   list,
   listValues,
   map,
@@ -1374,24 +1375,19 @@ export const appendTo = (
   op: 'append' | 'prepend' | 'append-all' | 'prepend-all',
 ): Value => {
   const after = op === 'append' || op === 'append-all';
-  if (op === 'append-all' || op === 'prepend-all') {
+  const all = op === 'append-all' || op === 'prepend-all';
+  if (all) {
     if (current.kind !== 'list') {
       throw wrongKind('list', current);
     }
     if (e.kind !== 'list') {
       throw wrongKind('list', e);
     }
-    const a = Array.from({ length: current.length }, (_, i) =>
-      current.index(i + 1),
-    );
-    const b = Array.from({ length: e.length }, (_, i) => e.index(i + 1));
-    return listValues(after ? [...a, ...b] : [...b, ...a]);
   }
   if (current.kind === 'list') {
-    const a = Array.from({ length: current.length }, (_, i) =>
-      current.index(i + 1),
-    );
-    return listValues(after ? [...a, e] : [e, ...a]);
+    const result = extendList(current, e, !after, all);
+    cacheListExtension(result, current, e, all);
+    return result;
   }
   if (current.kind === 'text') {
     return text(

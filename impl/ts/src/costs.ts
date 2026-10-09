@@ -63,6 +63,7 @@ const sizes = new Map(
 
 const encoder = new TextEncoder();
 const known = new WeakMap<Value, number>();
+const knownContents = new WeakMap<Value, number>();
 
 /** The measures of one value that aren't sizes. */
 const measureOf = (measure: string, v: Value | undefined): number => {
@@ -154,10 +155,15 @@ const evaluate = (
 const contentsOf = (v: Value): number => {
   switch (v.kind) {
     case 'list': {
+      const cached = knownContents.get(v);
+      if (cached !== undefined) {
+        return cached;
+      }
       let total = 0;
       for (let i = 1; i <= v.length; i++) {
         total += sizeOf(v.index(i));
       }
+      knownContents.set(v, total);
       return total;
     }
     case 'map':
@@ -178,6 +184,19 @@ const contentsOf = (v: Value): number => {
         .captures.reduce((total, [, value]) => total + sizeOf(value), 0);
   }
   return 0;
+};
+
+/** Seed a List's contents after growth, without walking its retained items. */
+export const cacheListExtension = (
+  result: Value,
+  current: Value,
+  part: Value,
+  all: boolean,
+): void => {
+  const contents =
+    contentsOf(current) + (all ? contentsOf(part) : sizeOf(part));
+  knownContents.set(result, contents);
+  known.set(result, partSize('list', result.length, contents));
 };
 
 /** A value's logical size (chapter 8, Logical sizes), as if nothing were shared. */
