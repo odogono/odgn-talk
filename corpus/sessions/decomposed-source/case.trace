@@ -1,0 +1,24 @@
+# Decomposed Session source preserves Code identity (#456).
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on entry1" & newline & "return " & quote & "é" & quote & newline & "end entry1" & newline identity=3eb426219249e8659827878a1b4603880fe3a0881311785be2785820148f214d
+> request d1 to=session message=entry1
+> pump clock=2026-10-09T10:00:00Z
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=7 alloc=0 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 value="é" fuel=7 alloc=0
+pumped state=idle fuel=7
+> extend session source="script variable source" & newline & "on entry2" & newline & "put " & quote & "é" & quote & " into source" & newline & "end entry2" & newline identity=4122757bfdbd6157df53e653556d47381e8ed57b1a28e493fb6d26124fe0dd7f
+> request d2 to=session message=entry2
+> pump clock=2026-10-09T10:00:00Z
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=10 alloc=0 state=18 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=10 alloc=0
+pumped state=idle fuel=10
+> save s1
+> restore from=s1 fingerprint=4d5734c076aafc36f9be31bfeae70c15f530c0ba55469a92ba3f1e102bf1761b mode=full
+> extend session source="on entry3" & newline & "return source" & newline & "end entry3" & newline identity=d7f88fc14d7cf4627e97b96878bac83290b0bdf43a34b64d953a97d2910a1228
+> request d3 to=session message=entry3
+> pump clock=2026-10-09T10:00:00Z
+seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=7 alloc=0 state=18 end=return
+run session/r3 outcome=completed delivery=d3 handler=entry3 value="é" fuel=7 alloc=0
+pumped state=idle fuel=7
+> vars
+vars session source="é"

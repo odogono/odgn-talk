@@ -135,7 +135,15 @@ func parseRecord(line string) (Record, error) {
 		switch keyType {
 		case "value", "instant":
 			var e error
-			v, e = r.Value()
+			if record.Input && key == "source" && (record.Name == "reload" || record.Name == "extend" || record.Name == "replace-library") {
+				// Source transport preserves scalars for Code identity (chapter 11).
+				// Ordinary Script Text Values still go through NewText below.
+				var source string
+				source, e = r.TextValue()
+				v = value.Value{Kind: value.Text, Text: source}
+			} else {
+				v, e = r.Value()
+			}
 			if e != nil {
 				return record, e
 			}
