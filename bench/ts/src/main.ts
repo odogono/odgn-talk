@@ -108,6 +108,26 @@ if (peers) {
       ),
     ) as Measurement[]),
   );
+  // AppleScript runs only on macOS; elsewhere its runner is left out.
+  if (platform() === 'darwin') {
+    console.error('Measuring AppleScript…');
+    measurements.push(
+      ...(JSON.parse(
+        run(
+          [
+            'osascript',
+            'measure.applescript',
+            filter,
+            flags.smoke ? 'smoke' : '',
+            flags.count,
+          ],
+          join(peersDir, 'applescript'),
+        ),
+      ) as Measurement[]),
+    );
+  } else {
+    console.error('Skipping AppleScript, which runs only on macOS.');
+  }
 }
 if (runners.includes('go') || peers) {
   console.error(
@@ -149,7 +169,8 @@ if (runners.includes('go') || peers) {
 }
 
 // The Peer Language versions: the Go module versions, the exact npm versions
-// bench/ts pins, and the CPython .python-version pins.
+// bench/ts pins, the CPython .python-version pins, and on macOS the system's
+// AppleScript.
 const peerVersions = (): Record<string, string> => {
   const npm = (
     JSON.parse(
@@ -173,6 +194,14 @@ const peerVersions = (): Record<string, string> => {
       .map(line => line.split(' ')),
   ) as Record<string, string>;
   return {
+    ...(platform() === 'darwin'
+      ? {
+          applescript: [
+            run(['osascript', '-e', "AppleScript's version"], benchDir),
+            `(macOS ${run(['sw_vers', '-productVersion'], benchDir)})`,
+          ].join(' '),
+        }
+      : {}),
     cpython: readFileSync(
       join(peersDir, 'python', '.python-version'),
       'utf8',

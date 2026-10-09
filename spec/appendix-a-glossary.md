@@ -283,7 +283,7 @@ The whole set of Benchmarks, run together to find a Core's slow paths and to com
 _Avoid_: perf suite, test suite
 
 **Peer Language**:
-Another language a Benchmark is compared with: an embeddable scripting language such as Lua or Starlark, a relatable general-purpose one such as Python, or the Core's own host language as a ceiling.
+Another language a Benchmark is compared with: an embeddable scripting language such as Lua or Starlark, a relatable general-purpose one such as Python, a HyperTalk descendant such as AppleScript, or the Core's own host language as a ceiling.
 _Avoid_: competitor, rival, baseline (unqualified)
 
 **Lint Profile**:
