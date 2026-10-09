@@ -251,6 +251,7 @@ recovery-offers/cancellation
 recovery-offers/cleanup-restore
 recovery-offers/costs
 recovery-offers/nested
+reload/decomposed-source
 reload/extend-units
 reload/extension-state-cap
 reload/function-staleness
@@ -279,6 +280,7 @@ sessions/apropos
 sessions/argument-labels
 sessions/basics
 sessions/cancel
+sessions/decomposed-source
 sessions/describe
 sessions/export-and-library
 sessions/extension-lambdas

@@ -86,6 +86,13 @@ it in both modes; its first blessing awaits human review. The two parent-cycle
 refusals in `sessions/object-inspection/case.trace` use the same corrected order;
 that case's first blessing remains pending for #485.
 
+The `reload/decomposed-source` and `sessions/decomposed-source` cases
+preserve source scalars and Code identities through Extend, Reload, Library
+replacement and Session inspection, while runtime Text Values remain NFC
+(#456). Both Cores replay them in both modes; their three expectation files
+received human first-blessing approval on 2026-10-09
+([approval and evidence](../docs/reviews/trace-source/README.md)).
+
 ## Seed blessing
 
 The original 198 seed cases execute on the TS Core, which supplied their first blessings. Every seed's first blessing has had its human review, the last being the five seeds whose headers derive their figures from Cost Model 0 (`fuel-alloc-minimums`, `persistent-state-minimum`, `matching-fuel-exhaustion`, `canonical-source-leading-group` and `replace-all-empty-matches`), reviewed in [#126](https://github.com/odogono/odgn-talk/issues/126). The four Value Encoding cases' hand-written bytes are reproduced exactly by the TS Core and were reviewed with them. The Go Core now replays its supported subset through its public embedding API; see its [passing gate](../impl/go/README.md#corpus-runner).

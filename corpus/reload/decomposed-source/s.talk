@@ -1,0 +1,4 @@
+use accent from lexicon
+on readAccent
+  return accent()
+end readAccent

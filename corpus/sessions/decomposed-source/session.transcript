@@ -1,0 +1,14 @@
+# Decomposed Session source preserves Code identity (#456).
+# The literals below contain U+0065 U+0301; their runtime Text Values are NFC.
+> :clock virtual 2026-10-09T10:00:00Z
+> :inspect "é"
+value {kind: "text", value: "é"}
+size 1
+> put "é" into source
+> :save
+saved default
+> :restore
+restored default
+> :inspect source
+value {kind: "text", value: "é"}
+size 1
