@@ -74,7 +74,7 @@
   ],
   "wordPattern": "[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?",
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(?:(?:private\\s+)?(?:on|function)\\s|repeat\\b|try\\s*(?:--.*)?$|match\\s|else\\s*(?:--.*)?$|catch\\b|finally\\b|offer\\b|tell\\s+[A-Za-z_][A-Za-z0-9_]*\\s*(?:--.*)?$|.*\\bthen\\s*(?:--.*)?$)",
+    "increaseIndentPattern": "^\\s*(?:(?:private\\s+)?(?:on|function)\\s|repeat\\b|try\\s*(?:--.*)?$|match\\s|else\\s*(?:--.*)?$|catch\\b|finally\\b|offer\\b|tell\\s+[A-Za-z_][A-Za-z0-9_]*\\s*(?:--.*)?$|with\\s+timeout\\s+of\\s|.*\\bthen\\s*(?:--.*)?$)",
     "decreaseIndentPattern": "^\\s*(?:end|else|catch|finally|offer)\\b"
   }
 }

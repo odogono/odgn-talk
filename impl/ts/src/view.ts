@@ -215,6 +215,8 @@ export type Stmt =
   | { event: Event; k: 'wait-for'; pos: Pos; timeout: Expr | null }
   | { branches: WaitBranch[]; k: 'wait-block'; pos: Pos }
   | { body: Stmt[]; end: Pos; k: 'join'; pos: Pos }
+  /** A Timeout Block (ADR 0073). */
+  | { body: Stmt[]; duration: Expr; k: 'timeout-block'; pos: Pos }
   | { k: 'return' | 'veto'; pos: Pos; value: Expr | null }
   | { k: 'pass'; message: string; pos: Pos }
   | { k: 'exit' | 'next'; pos: Pos }
@@ -626,6 +628,17 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
     }
     case 'Try':
       return tryStatement(node, of);
+    case 'TimeoutBlock':
+      return {
+        k: 'timeout-block',
+        pos: at,
+        duration: of<Expr>(children[3]),
+        body: blockAt(
+          node,
+          children.findIndex(c => c.kind === 'node' && c.rule === 'Block'),
+          of,
+        ),
+      } satisfies Stmt;
     case 'Replace': {
       const operands = children.filter(child => child.kind === 'node');
       return {

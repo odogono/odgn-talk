@@ -1246,3 +1246,36 @@ describe('tell blocks', () => {
     ).toEqual(['ask', 'tell', 'ask-wait']);
   });
 });
+
+describe('Timeout Blocks', () => {
+  test('refuse a Command Call that waits, outside a Lambda', () => {
+    expect(
+      tellBlockDiagnostics(
+        'on b\n wait 1 s\nend b\non t\n with timeout of 1 s\n  b and wait\n  wait 1 s\n end timeout\nend t',
+      ),
+    ).toEqual([['not in a timeout', 6, 3]]);
+    expect(
+      tellBlockDiagnostics(
+        'on t f\n with timeout of 1 s\n  put given\n   f() and wait\n  end given into g\n  send b to me and wait\n end timeout\nend t',
+      ),
+    ).toEqual([]);
+  });
+
+  test('need a Suspension Point outside a Lambda and a Join', () => {
+    expect(
+      tellBlockDiagnostics(
+        'on t\n with timeout of 1 s\n  put given\n   wait 1 s\n  end given into f\n end timeout\nend t',
+      ),
+    ).toEqual([['empty timeout', 2, 2]]);
+    expect(
+      tellBlockDiagnostics(
+        'on t\n wait for all\n  with timeout of 1 s\n   send x to me and wait\n  end timeout\n end wait\nend t',
+      ),
+    ).toEqual([['empty timeout', 3, 3]]);
+    expect(
+      tellBlockDiagnostics(
+        'on t\n with timeout of 1 s\n  wait for all\n   send x to me and wait\n  end wait\n end timeout\nend t',
+      ),
+    ).toEqual([]);
+  });
+});

@@ -1,0 +1,47 @@
+# Unblessed: Timeout Block deadlines around a Join (#542); first blessing awaits human review.
+# timeout-block-join: d1's deadline fires at 09:00:02 with r1.c3 pending; d2
+# answers within its deadline.
+
+> load board identity=535c2229e6c85313be304731f8a27cc9d5a4cbf297845007f0e1ae0345c70bfd
+> load shop identity=238417d7c722c51febad5bf2beb61cf691d54346309696d042906583756dbee7
+> deliver d1 to=board message=gather args=[["a", "b"]]
+> pump clock=2026-10-09T09:00:00Z
+call board/r1.c1 op=feed.fetch args=["a"]
+send board/r1.c2 to=shop message=price args=["a"] wait=join
+call board/r1.c3 op=feed.fetch args=["b"]
+send board/r1.c4 to=shop message=price args=["b"] wait=join
+seg board/r1 start delivery=d1 handler=gather clause=1 fuel=151 alloc=162 state=587 end=join-end until=2026-10-09T09:00:02Z
+seg shop/r1 start from=board/r1.c2 handler=price clause=1 fuel=12 alloc=18 state=49 end=return
+run shop/r1 outcome=completed handler=price value="a!" fuel=12 alloc=18
+seg shop/r2 start from=board/r1.c4 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
+run shop/r2 outcome=completed handler=price value="b!" fuel=12 alloc=18
+pumped state=idle fuel=175 next=2026-10-09T09:00:02Z
+> answer board/r1.c1 value=1
+> pump clock=2026-10-09T09:00:01Z
+pumped state=idle fuel=0 next=2026-10-09T09:00:02Z
+> pump clock=2026-10-09T09:00:02Z
+raise board/r1 code="timeout" at=board:18 pos=13:7
+abandon board/r1.c3
+seg board/r1 resume fuel=18 alloc=478 state=494 end=return
+run board/r1 outcome=completed delivery=d1 handler=gather fuel=169 alloc=640
+pumped state=idle fuel=18
+> answer board/r1.c3 value=2
+> deliver d2 to=board message=gather args=[["c"]]
+> pump clock=2026-10-09T09:00:03Z
+note board/r1.c3 kind=late-answer
+call board/r2.c1 op=feed.fetch args=["c"]
+send board/r2.c2 to=shop message=price args=["c"] wait=join
+seg board/r2 start delivery=d2 handler=gather clause=1 fuel=92 alloc=113 state=944 end=join-end until=2026-10-09T09:00:05Z
+seg shop/r3 start from=board/r2.c2 handler=price clause=1 fuel=12 alloc=18 state=0 end=return
+run shop/r3 outcome=completed handler=price value="c!" fuel=12 alloc=18
+pumped state=idle fuel=104 next=2026-10-09T09:00:05Z
+> answer board/r2.c1 value=3
+> pump clock=2026-10-09T09:00:04Z
+seg board/r2 resume fuel=16 alloc=156 state=568 end=return
+run board/r2 outcome=completed delivery=d2 handler=gather fuel=108 alloc=269
+pumped state=idle fuel=16
+> pump clock=2026-10-09T09:00:10Z
+pumped state=idle fuel=0
+> vars
+vars board results=[{code: "timeout", after: 2000 ms, deadline: true, at: {unit: "board", handler: "gather", line: 13, column: 7}}, [3, "c!"]]
+vars shop

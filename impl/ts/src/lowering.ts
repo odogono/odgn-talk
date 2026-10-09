@@ -394,7 +394,9 @@ class BodyLowering {
   locals: string[] = ['it'];
   free: number[] = [];
   loops: Loop[] = [];
-  finallies: Stmt[][] = [];
+  // The open `finally` blocks and, as `'timeout'`, Timeout Blocks, whose
+  // deadlines `exit repeat` and `next repeat` pop as they leave (chapter 8).
+  finallies: (Stmt[] | 'timeout')[] = [];
   // The open `try`s, outermost first: their entries' spans and their
   // `finally` block's index in `finallies`.
   tries: {
@@ -404,6 +406,7 @@ class BodyLowering {
     offer: Span | null;
   }[] = [];
   join = 0;
+  // The iterators and deadlines on the operand stack: the static depth.
   iterators = 0;
   private starts = new Set<number>();
 
@@ -788,8 +791,10 @@ class BodyLowering {
       case 'exit':
       case 'next': {
         const loop = this.loops.at(-1)!;
-        return yield* this.leave(loop.finallies, () =>
-          this.emit(at, 'jump', s.k === 'exit' ? loop.exit : loop.top),
+        return yield* this.leave(
+          loop.finallies,
+          () => this.emit(at, 'jump', s.k === 'exit' ? loop.exit : loop.top),
+          at,
         );
       }
       case 'command':
@@ -880,6 +885,17 @@ class BodyLowering {
         this.join--;
         this.emit(s.end, 'join-end');
         return void this.emit(at, 'store', 0);
+      case 'timeout-block':
+        // The deadline stays on the stack below the body, as an iterator
+        // does (ADR 0073).
+        yield this.expr(s.duration);
+        this.emit(at, 'timeout-start');
+        this.iterators++;
+        this.finallies.push('timeout');
+        yield this.block(s.body);
+        this.finallies.pop();
+        this.iterators--;
+        return void this.emit(at, 'timeout-end');
     }
   }
 
@@ -1030,7 +1046,8 @@ class BodyLowering {
   ): Task {
     const tail = () =>
       message === undefined ? this.emit(at, op) : this.emit(at, op, message);
-    if (!this.finallies.length) {
+    // A Timeout Block's deadline leaves with the frame.
+    if (!this.finallies.some(f => f !== 'timeout')) {
       return void tail();
     }
     let t = -1;
@@ -1051,23 +1068,37 @@ class BodyLowering {
 
   // Leaves the `finally` blocks from `depth` in: lowers a copy of each,
   // innermost first, then `tail`. The copies and the tail are outside the
-  // spans of those `try`s and of every `try` inside them (chapter 8).
-  *leave(depth: number, tail: () => void): Task {
+  // spans of those `try`s and of every `try` inside them (chapter 8). Given
+  // the leaving statement's position, each Timeout Block left pops its
+  // deadline in turn.
+  *leave(depth: number, tail: () => void, deadlines?: Pos): Task {
     if (depth >= this.finallies.length) {
       return void tail();
     }
-    const from = this.tries.findIndex(t => t.finally === depth);
-    const paused = this.tries
-      .slice(from)
-      .flatMap(t => [t.catch, t.offer, t.finallySpan])
-      .filter((span): span is Span => !!span && span.open !== null);
+    const from = this.tries.findIndex(
+      t => t.finally !== null && t.finally >= depth,
+    );
+    const paused =
+      from < 0
+        ? []
+        : this.tries
+            .slice(from)
+            .flatMap(t => [t.catch, t.offer, t.finallySpan])
+            .filter((span): span is Span => !!span && span.open !== null);
     for (const span of paused) {
       this.close(span);
     }
     const saved = this.finallies;
     for (let i = saved.length - 1; i >= depth; i--) {
+      const left = saved[i]!;
+      if (left === 'timeout') {
+        if (deadlines) {
+          this.emit(deadlines, 'timeout-end');
+        }
+        continue;
+      }
       this.finallies = saved.slice(0, i);
-      yield this.block(saved[i]!);
+      yield this.block(left);
     }
     this.finallies = saved;
     tail();

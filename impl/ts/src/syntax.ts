@@ -41,6 +41,7 @@ export type SyntaxRule =
   | 'Send'
   | 'AskTell'
   | 'TellBlock'
+  | 'TimeoutBlock'
   | 'OperationLine'
   | 'Wait'
   | 'Event'

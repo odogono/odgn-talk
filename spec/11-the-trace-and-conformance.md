@@ -366,7 +366,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `alloc` | `count` | the allocation the stretch made |
 | `seg` | `state` | `count` | the Script's Persistent State at the Segment's end |
 | `seg` | `end` | `word` | why the stretch ended ([End reasons](#end-reasons)) |
-| `seg` | `until` | `instant` | the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in |
+| `seg` | `until` | `instant` | the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's |
 | `seg` | `n` | `count` | for `join-end`, the number of members |
 | `seg` | `value` | `value` | for `veto`, the reason |
 | `preempt` | `delivery` | `id` | for a start, its Delivery |

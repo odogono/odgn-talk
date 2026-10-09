@@ -58,6 +58,13 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return corevalue.Value{}, err, false
 		}
 	}
+	// An `ask … and wait` reached after its Timeout Block's deadline raises
+	// at once (ADR 0073). A Join Member isn't a Suspension Point.
+	if op.Mode == Suspending && x.run.At.Name == "ask-wait" {
+		if err := x.run.DeadlineError(named...); err != nil {
+			return corevalue.Value{}, err, false
+		}
+	}
 	if op.Mode == Suspending && x.run.OpenScope != nil {
 		err := x.run.OpenScope.Error()
 		return corevalue.Value{}, &err, false

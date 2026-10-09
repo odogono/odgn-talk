@@ -1,0 +1,75 @@
+-- poll.talk: the timeout-block-waits case's Script.
+
+script variable results = []
+
+-- The inner block gets the outer, earlier deadline, so `after` is 1 s.
+on nested
+  try
+    with timeout of 1 s
+      with timeout of 10 s
+        wait for ready
+      end timeout
+    end timeout
+  catch e
+    put e after results
+  end try
+end nested
+
+-- Of equal deadlines the block's wins, so this raises and leaves no Nothing.
+on tie
+  try
+    with timeout of 1 s
+      wait for ready or 1 s
+    end timeout
+  catch e
+    put e after results
+  end try
+end tie
+
+-- A call the block ends, then a wait reached after its deadline.
+on again
+  try
+    with timeout of 1 s
+      try
+        ask feed to fetch "slow" and wait
+      catch e
+        put e after results
+      end try
+      wait 0 s
+    end timeout
+  catch e
+    put e after results
+  end try
+end again
+
+-- After the inner block ends, only the outer deadline applies.
+on inner
+  with timeout of 10 s
+    try
+      with timeout of 1 s
+        wait 3 s
+      end timeout
+    catch e
+      put e after results
+    end try
+    wait 2 s
+    send ping to me and wait
+    put it after results
+  end timeout
+end inner
+
+-- The receiver keeps running when its sender's deadline ends the wait.
+on slow
+  try
+    with timeout of 1 s
+      send ping to me and wait
+    end timeout
+  catch e
+    put e after results
+  end try
+end slow
+
+on ping
+  wait 2 s
+  return "pong"
+end ping

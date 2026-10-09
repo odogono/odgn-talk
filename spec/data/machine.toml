@@ -1544,6 +1544,27 @@ errors = ["send failed", "timeout"]
 does = "a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend"
 
 [[instruction]]
+name = "timeout-start"
+group = "effects"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "timeout"
+errors = ["wrong kind"]
+does = "`with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later"
+
+[[instruction]]
+name = "timeout-end"
+group = "effects"
+operands = []
+pops = 1
+pushes = 0
+suspends = false
+cost = "stack"
+does = "Pops a Timeout Block's deadline as control leaves the block"
+
+[[instruction]]
 name = "veto"
 group = "effects"
 operands = []

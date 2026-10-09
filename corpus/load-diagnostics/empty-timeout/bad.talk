@@ -1,0 +1,12 @@
+on t
+  with timeout of 5 s
+    put given
+      wait 1 s
+    end given into later
+  end timeout
+  wait for all
+    with timeout of 5 s
+      send ping to me and wait
+    end timeout
+  end wait
+end t

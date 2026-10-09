@@ -1,0 +1,95 @@
+unit poll script
+constants
+  0 nothing
+  1 1 min
+  2 5 s
+  3 "timeout"
+  4 2
+  5 1 s
+  6 1
+bodies
+  0 init initialiser () locals 1 0000..0001
+  1 handler poll clause 1 (keys) locals 5 may suspend 0002..0041
+  2 handler cleanup clause 1 () locals 2 may suspend 0042..0073
+code
+  0000 1:1 const 0 ; nothing
+  0001 1:1 return
+  0002 4:19 const 1 ; 1 min
+  0003 4:3 timeout-start
+  0004 5:26 load 1 ; keys
+  0005 5:5 iterate
+  0006 5:5 next 0032
+  0007 5:5 store 2 ; k
+  0008 7:25 const 2 ; 5 s
+  0009 7:9 timeout-start
+  0010 8:29 load 2 ; k
+  0011 8:11 ask-wait feed fetch 1
+  0012 8:11 store 0 ; it
+  0013 9:11 timeout-end
+  0014 9:11 jump 0032
+  0015 7:9 timeout-end
+  0016 6:7 jump 0031
+  0017 11:7 store 3 ; (3)
+  0018 11:13 load 3 ; (3)
+  0019 11:13 test-map 0030
+  0020 11:13 load 3 ; (3)
+  0021 11:13 map-get "code" 0030
+  0022 11:13 store 4 ; (4)
+  0023 11:13 load 4 ; (4)
+  0024 11:13 test-constant 3 0030 ; "timeout"
+  0025 11:7 catch-accept
+  0026 12:14 const 2 ; 5 s
+  0027 12:9 wait
+  0028 13:9 jump 0006
+  0029 11:7 jump 0031
+  0030 11:7 catch-next
+  0031 5:5 jump 0006
+  0032 5:5 pop
+  0033 16:5 join-start
+  0034 17:20 me
+  0035 17:7 join-send ping 0
+  0036 18:5 join-end
+  0037 16:5 store 0 ; it
+  0038 4:3 timeout-end
+  0039 20:1 const 0 ; nothing
+  0040 20:1 return
+  0041 20:1 clause-fail
+  0042 23:10 const 4 ; 2
+  0043 23:3 iterate-times
+  0044 23:3 next 0063
+  0045 23:3 pop
+  0046 25:23 const 5 ; 1 s
+  0047 25:7 timeout-start
+  0048 26:27 const 5 ; 1 s
+  0049 26:9 wait-for 0
+  0050 26:9 store 0 ; it
+  0051 27:9 timeout-end
+  0052 30:11 const 6 ; 1
+  0053 30:7 store 1 ; x
+  0054 27:9 jump 0063
+  0055 25:7 timeout-end
+  0056 30:11 const 6 ; 1
+  0057 30:7 store 1 ; x
+  0058 24:5 jump 0062
+  0059 30:11 const 6 ; 1
+  0060 30:7 store 1 ; x
+  0061 24:5 end-cleanup
+  0062 23:3 jump 0044
+  0063 23:3 pop
+  0064 33:19 const 5 ; 1 s
+  0065 33:3 timeout-start
+  0066 34:10 const 5 ; 1 s
+  0067 34:5 wait
+  0068 35:12 load 1 ; x
+  0069 35:5 return
+  0070 33:3 timeout-end
+  0071 37:1 const 0 ; nothing
+  0072 37:1 return
+  0073 37:1 clause-fail
+unwind
+  0008..0015 catch -> 0017 depth 2
+  0018..0024 guard -> 0030 depth 2
+  0046..0050 finally -> 0059 depth 1
+  0055..0055 finally -> 0059 depth 1
+events
+  0 when ready; or

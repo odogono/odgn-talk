@@ -125,7 +125,7 @@ func (g *Group) applyRestoredSettlement(d delivery, reports *[]Report) int64 {
 			x.run.FaultAbandons = append(x.run.FaultAbandons, string(call.id))
 		}
 		x.waitCall = ""
-		x.deadline = nil
+		x.deadline, x.deadlineAfter = nil, nil
 		x.memberTimers = nil
 		x.how = "resume"
 		if p.s.active != x && !slices.ContainsFunc(p.s.queue, func(w workItem) bool { return w.run == x }) {

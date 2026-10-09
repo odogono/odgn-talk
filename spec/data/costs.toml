@@ -132,6 +132,10 @@ of = "reader"
 size = "24 + size(v)"
 
 [[size]]
+of = "deadline"
+size = "40"
+
+[[size]]
 of = "frame"
 size = "64 + 8 * items(v) + contents(v)"
 
@@ -360,6 +364,12 @@ fuel = "10"
 key = "join"
 fuel = "10"
 alloc = "size(result)"
+
+[[rate]]
+key = "timeout"
+fuel = "2"
+alloc = "40"
+input = "a deadline holds an Instant and the block's duration in `ms`"
 
 # ---------------------------------------------------------------------------
 # Built-ins: one rate each (ADR 0021). A Built-in's arguments are x1, x2, …

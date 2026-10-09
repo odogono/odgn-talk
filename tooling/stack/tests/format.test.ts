@@ -142,6 +142,16 @@ test("indents a tell block's lines and comments, and keeps its ending", () => {
   );
 });
 
+test("indents a Timeout Block's body and keeps its ending", () => {
+  expect(
+    formatSource(
+      'on t\nwith   timeout of 5 s\n      wait 1 s\nwith timeout of 1 s\nwait for done\n   end\n      end timeout\nend t\n',
+    ).source,
+  ).toBe(
+    'on t\n  with timeout of 5 s\n    wait 1 s\n    with timeout of 1 s\n      wait for done\n    end\n  end timeout\nend t\n',
+  );
+});
+
 test('treats punctuation inside text as text', () => {
   for (const punctuation of [
     '[',

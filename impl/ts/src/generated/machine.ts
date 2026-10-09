@@ -1327,6 +1327,22 @@ export const instructions = [
     "suspends": true
   },
   {
+    "name": "timeout-start",
+    "cost": "timeout",
+    "operands": [],
+    "pops": 1,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
+    "name": "timeout-end",
+    "cost": "stack",
+    "operands": [],
+    "pops": 1,
+    "pushes": 0,
+    "suspends": false
+  },
+  {
     "name": "veto",
     "cost": "return",
     "operands": [],
@@ -1392,6 +1408,7 @@ export const errorMessages = {
   "too many rows": "The statement gave more than {max} rows",
   "unrepresentable": "The value in {column} can't be represented"
 };
+export const reservedErrorKeys = ["code","message","at","capability","operation","index","during","deadline"] as const;
 export const limitDefaults = {
   "fuelPerRun": 10000000,
   "allocPerRun": 16777216,
@@ -1423,6 +1440,7 @@ export const costModel = {
     "iterator": "24 + size(v)",
     "replacement": "32 + contents(v)",
     "reader": "24 + size(v)",
+    "deadline": "40",
     "frame": "64 + 8 * items(v) + contents(v)",
     "run": "96 + contents(v)",
     "message": "32 + contents(v)",
@@ -1590,6 +1608,10 @@ export const costModel = {
     "join": {
       "fuel": "10",
       "alloc": "size(result)"
+    },
+    "timeout": {
+      "fuel": "2",
+      "alloc": "40"
     },
     "builtin.min": {
       "fuel": "4 + scanned",

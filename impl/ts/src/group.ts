@@ -427,7 +427,23 @@ type TimerAction =
       s: ScriptState;
       waiter: ScriptState['waiters'][number];
     }
-  | { abort?: AbortController; id: string; k: 'call'; ms: number };
+  | {
+      abort?: AbortController;
+      /** A Timeout Block's duration, when its deadline is this call's. */
+      deadline?: Value;
+      id: string;
+      k: 'call';
+      ms: number;
+    }
+  /** A Timeout Block's deadline ending a wait, a `wait for` or a Join. */
+  | {
+      after: Value;
+      join?: JoinWait;
+      k: 'deadline';
+      running: Running;
+      s: ScriptState;
+      waiter?: ScriptState['waiters'][number];
+    };
 type Timer = {
   action: TimerAction;
   deadline: bigint;
@@ -435,10 +451,17 @@ type Timer = {
   running?: Running;
   seq: number;
 };
+// A suspended Join: its members, the answers in so far, and its Timeout
+// Block's deadline timer, if it has one.
+type JoinWait = {
+  answers: Map<string, Resumption>;
+  deadline?: Timer;
+  members: Member[];
+};
 // A suspended Run waiting on a call: an Operation's answer, or a reply.
 type Pending = {
-  /** For a Join Member, its Join's members and the answers in so far. */
-  join?: { answers: Map<string, Resumption>; members: Member[] };
+  /** For a Join Member, its Join. */
+  join?: JoinWait;
   running: Running;
   s: ScriptState;
   timer: Timer;
@@ -2882,8 +2905,33 @@ export class Group {
         break;
       case 'call':
         action.abort?.abort();
-        this.settleReply(action.id, { k: 'timeout', after: action.ms });
+        this.settleReply(action.id, {
+          k: 'timeout',
+          after: action.ms,
+          ...(action.deadline ? { deadline: action.deadline } : {}),
+        });
         break;
+      case 'deadline': {
+        // What the Run waits on is abandoned, a Join's pending members in
+        // start order (ADR 0073).
+        if (action.waiter) {
+          this.endWaiter(action.s, action.waiter);
+        }
+        const abandon = (action.join?.members ?? []).filter(m =>
+          this.pending.has(m.id),
+        );
+        for (const m of abandon) {
+          this.pending.get(m.id)!.timer.live = false;
+          this.pending.delete(m.id);
+          m.abort?.abort();
+        }
+        this.ready(action.s, action.running, {
+          k: 'deadline',
+          after: action.after,
+          abandon: abandon.map(m => m.id),
+        });
+        break;
+      }
     }
   }
 
@@ -2924,6 +2972,9 @@ export class Group {
       answers.set(id, r);
       members[index]!.answer = r.value;
       if (answers.size === members.length) {
+        if (p.join.deadline) {
+          p.join.deadline.live = false;
+        }
         this.ready(p.s, p.running, {
           k: 'joined',
           answers: members.map(m => answers.get(m.id)!),
@@ -2936,6 +2987,9 @@ export class Group {
       this.pending.get(m.id)!.timer.live = false;
       this.pending.delete(m.id);
       m.abort?.abort();
+    }
+    if (p.join.deadline) {
+      p.join.deadline.live = false;
     }
     this.ready(p.s, p.running, {
       k: 'join-failed',
@@ -2982,7 +3036,23 @@ export class Group {
   private suspended(s: ScriptState, running: Running, sus: Suspension) {
     s.suspended.add(running);
     const now = this.lastClock!;
+    // A Timeout Block's deadline wins over the wait's own when it is no
+    // later, and then is the wait's only timer (ADR 0073).
+    const block = sus.deadline;
+    const ends = (own: bigint | null) =>
+      !!block && (own === null || block.at <= own);
+    const deadline = (extra: Partial<TimerAction> = {}) =>
+      ({
+        k: 'deadline',
+        s,
+        running,
+        after: block!.after,
+        ...extra,
+      }) as TimerAction;
     if (sus.k === 'wait') {
+      if (ends(now + sus.ns)) {
+        return this.timer(block!.at, deadline(), running).deadline;
+      }
       return this.timer(now + sus.ns, { k: 'wake', s, running }, running)
         .deadline;
     }
@@ -2990,6 +3060,20 @@ export class Group {
       // A timeout, and each `after` branch, is a timer; the first to fire
       // ends the wait, as a matching message does.
       const waiter = { running, timers: [] as Timer[] };
+      const own = [
+        ...(sus.timeout === null ? [] : [sus.timeout]),
+        ...sus.afters.map(after => after.ns),
+      ].reduce<bigint | null>(
+        (min, ns) => (min === null || now + ns < min ? now + ns : min),
+        null,
+      );
+      if (ends(own)) {
+        waiter.timers.push(
+          this.timer(block!.at, deadline({ waiter }), running),
+        );
+        s.waiters.push(waiter);
+        return block!.at;
+      }
       const fire = (branch: number): TimerAction => ({
         k: 'event',
         s,
@@ -3012,10 +3096,15 @@ export class Group {
     }
     if (sus.k === 'join') {
       // Each member waits on its own `maxPending` or `MaxWait`.
-      const join = {
+      const join: JoinWait = {
         members: sus.members,
         answers: new Map<string, Resumption>(),
       };
+      // Set first, so that it fires before a member's timer at the same
+      // deadline.
+      if (block) {
+        join.deadline = this.timer(block.at, deadline({ join }), running);
+      }
       for (const m of sus.members) {
         const timer = this.timer(
           now + BigInt(m.ms) * 1_000_000n,
@@ -3027,17 +3116,26 @@ export class Group {
       for (const { id, reply } of running.run.takeJoinReplies()) {
         this.settleReply(id, reply);
       }
-      return null;
+      return block ? block.at : null;
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
     const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
+    const own = now + BigInt(ms) * 1_000_000n;
+    const bounded = ends(own);
     const timer = this.timer(
-      now + BigInt(ms) * 1_000_000n,
-      { k: 'call', id, ms, ...(sus.k === 'ask' ? { abort: sus.abort } : {}) },
+      bounded ? block!.at : own,
+      {
+        k: 'call',
+        id,
+        ms,
+        ...(sus.k === 'ask' ? { abort: sus.abort } : {}),
+        ...(bounded ? { deadline: block!.after } : {}),
+      },
       running,
     );
     this.pending.set(id, { s, running, timer });
-    return null;
+    // A call's own deadline is shown only inside a Timeout Block.
+    return block ? timer.deadline : null;
   }
 
   private checkFunctionGroups(values: readonly Value[], line?: string) {
@@ -4753,7 +4851,11 @@ export class Group {
         t =>
           t.live &&
           t.running === running &&
-          (t.action.k === 'wake' || t.action.k === 'event'),
+          (t.action.k === 'wake' ||
+            t.action.k === 'event' ||
+            t.action.k === 'deadline' ||
+            // A call's own deadline shows only inside a Timeout Block.
+            (t.action.k === 'call' && !!sus.deadline && sus.k !== 'join')),
       )
       .map(t => t.deadline);
     const until = deadlines.length

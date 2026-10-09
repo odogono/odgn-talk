@@ -149,6 +149,10 @@ var Costs = CostsTable{
 			Size: "24 + size(v)",
 		},
 		CostsTableSizeEntry{
+			Of:   "deadline",
+			Size: "40",
+		},
+		CostsTableSizeEntry{
 			Of:   "frame",
 			Size: "64 + 8 * items(v) + contents(v)",
 		},
@@ -375,6 +379,12 @@ var Costs = CostsTable{
 			Key:   "join",
 			Fuel:  "10",
 			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
+			Key:   "timeout",
+			Fuel:  "2",
+			Alloc: "40",
+			Input: "a deadline holds an Instant and the block's duration in `ms`",
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.min",

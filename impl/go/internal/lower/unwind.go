@@ -32,18 +32,45 @@ func (u *Unit) resumeRegions(regions []*region) {
 		r.active = true
 	}
 }
-func (u *Unit) inlineFinally(from int) []*region {
+
+// inlineFinally lowers a copy of each `finally` block from `from` in,
+// innermost first. A Timeout Block among them pops its deadline at the
+// leaving statement's position when deadlines is given (chapter 8).
+func (u *Unit) inlineFinally(from int, deadlines ...syntax.Position) []*region {
 	if from >= len(u.state.finally) {
 		return nil
 	}
 	finals := append([]*finalizer{}, u.state.finally...)
-	paused := u.pauseRegions(finals[from].scope)
+	var paused []*region
+	for _, f := range finals[from:] {
+		if f.node != nil {
+			paused = u.pauseRegions(f.scope)
+			break
+		}
+	}
 	for i := len(finals) - 1; i >= from; i-- {
+		if finals[i].node == nil {
+			if len(deadlines) > 0 {
+				u.emit(deadlines[0], "timeout-end")
+			}
+			continue
+		}
 		u.state.finally = append([]*finalizer{}, finals[:i]...)
 		u.statements(finals[i].node.Body)
 	}
 	u.state.finally = finals
 	return paused
+}
+
+// hasFinally reports whether a `finally` block is open, not counting the
+// Timeout Blocks, whose deadlines leave with the frame.
+func (u *Unit) hasFinally() bool {
+	for _, f := range u.state.finally {
+		if f.node != nil {
+			return true
+		}
+	}
+	return false
 }
 func (u *Unit) tryStatement(n *syntax.Node) {
 	pos := n.Pos()

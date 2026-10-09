@@ -1,0 +1,5 @@
+# Unblessed: `not in a timeout` and its source positions (#542); first blessing awaits human review.
+> load bad identity=d2c3a02e02cf9700969fc7874a349e7d3ee1c21399610b4581e05619d463d6be
+diag bad code="not in a timeout" pos=7:5
+diag bad code="not in a timeout" pos=8:5
+> vars

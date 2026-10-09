@@ -110,6 +110,8 @@ type execution struct {
 	clause        int // selected body index; -1 until accepted
 	how           string
 	deadline      *big.Int
+	// deadlineAfter is the Timeout Block's duration when deadline is its.
+	deadlineAfter *corevalue.Value
 	memberTimers  []memberTimer
 	timerOrder    int64
 	parked        bool
@@ -672,7 +674,10 @@ func (g *Group) Inspect() Inspection {
 				if x.run.FunctionWait {
 					run.Wait = "call-value-wait"
 				}
-				run.Until = time.Time{}
+				// A call's own deadline shows only inside a Timeout Block.
+				if x.run.BlockDeadline() == nil {
+					run.Until = time.Time{}
+				}
 				if x.run.OperationWait {
 					run.Wait = "ask-wait"
 				}
@@ -680,6 +685,9 @@ func (g *Group) Inspect() Inspection {
 			if j := x.run.Join; j != nil && j.Waiting && !j.Ready {
 				run.Status, run.Wait = Suspended, "join-end"
 				run.Until = time.Time{}
+				if x.deadlineAfter != nil {
+					run.Until = deadlineTime(x.deadline)
+				}
 				for _, m := range j.Members {
 					if m.Reply == nil {
 						run.Calls = append(run.Calls, CallID(m.ID))

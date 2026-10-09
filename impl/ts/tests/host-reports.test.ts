@@ -282,6 +282,38 @@ describe('call failed reports', () => {
   });
 });
 
+test("a Fail's Data may not use `deadline`, a reserved key (ADR 0073)", () => {
+  let pending: Call<unknown> | undefined;
+  const http = defineCapability('http', {
+    fetch: {
+      mode: 'suspending',
+      cost: { fuel: 1 },
+      errors: [{ code: 'not found' }],
+      start: call => {
+        pending = call;
+      },
+    },
+  });
+  const g = newGroup({ name: 'g' });
+  g.load({
+    name: 's',
+    source:
+      'on go\n  try\n    ask web to fetch and wait\n  catch e\n    return e\n  end try\nend go',
+    grants: { web: http.grant('all', undefined) },
+  }).deliver({ name: 'go' });
+  g.pump(now);
+  pending!.fail(
+    new ScriptError('not found', 'gone', map([['deadline', text('soon')]])),
+  );
+  const { reports } = g.pump(later(1));
+  const [failed] = failures(reports);
+  expect(failed!.kind === 'call failed' && failed!.detail).toContain(
+    'reserved data key "deadline"',
+  );
+  const end = reports.find(r => r.kind === 'run end');
+  expect(end!.result!.get('code').toString()).toBe('"host error"');
+});
+
 describe('the next deadline', () => {
   test('a Pump gives the earliest deadline the next Pump could fire, as its `pumped` record does', () => {
     const lines: string[] = [];
