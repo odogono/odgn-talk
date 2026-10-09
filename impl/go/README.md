@@ -818,6 +818,10 @@ charged for conversion. Panics, invalid results and malformed failures raise
 `host error` with the Object Kind and property names; Host detail stays in a
 `CallFailed` report with an empty Call id, since properties have no call id.
 Each actual call writes a `prop` record before later raises or cancellation.
+If Stop or a newly landed cancellation interrupts the Run at that crossing,
+the property failure raises no `host error` and emits no `CallFailed` report.
+Failures in property calls made during cancellation's finally cleanup still
+raise and report normally.
 Host effects survive later conversion faults or Script Segment rollback.
 
 Outside Guards, disposed handles reject every non-id key read, including missing

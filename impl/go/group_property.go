@@ -71,13 +71,19 @@ func (g *Group) property(s *Script, x *execution, object corevalue.Value, name s
 		fields["value"] = coretrace.Display(input)
 	}
 	record := func() { g.record("prop", false, []string{string(x.id)}, fields); boundary() }
+	interrupted := func() bool {
+		return x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling
+	}
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(o.kind.name)}, {Key: "operation", Val: mustText(name)}}
 	hostError := func(detail string) (corevalue.Value, *corevalue.Value) {
+		if interrupted() {
+			return corevalue.Value{}, nil
+		}
 		*reports = append(*reports, &CallFailed{Script: s.name, Operation: OperationRef{Capability: o.kind.name, Operation: name}, Detail: detail})
 		return fail("host error", named...)
 	}
 	conversion := func(v corevalue.Value) bool {
-		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
+		if interrupted() {
 			return false
 		}
 		fuel, alloc := machine.Charge("capability", machine.Measures{Result: v, ResultPresent: true})
