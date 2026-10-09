@@ -43,7 +43,7 @@ Enter a declaration, a statement or an expression at the `>` prompt. An unfinish
 
 ## The Playground
 
-The NorthTalk Playground is the REPL's browser counterpart, on the TS Core:
+The NorthTalk Playground is the REPL's browser counterpart, on the TS Core. It is published at <https://odogono.github.io/odgn-talk/>, rebuilt from each push to `main`. To run it locally:
 
 ```sh
 bun run playground          # build and serve it at http://127.0.0.1:3927/, rebuilding on change
