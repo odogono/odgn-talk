@@ -250,16 +250,14 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			push(v)
 		}
 	case "pass":
-		effect = func() { r.Frames = nil; r.Passed = true; r.Status = Completed }
+		effect = func() { r.setFrames(nil); r.Passed = true; r.Status = Completed }
 	case "return", "veto":
 		v := pop()
 		effect = func() {
-			retired := r.Frames[len(r.Frames)-1]
+			retired := r.popFrame()
 			clear(retired.Stack[:cap(retired.Stack)])
 			clear(retired.Locals[:cap(retired.Locals)])
 			r.spareFrames = append(r.spareFrames, Frame{Stack: retired.Stack[:0], Locals: retired.Locals[:0]})
-			r.Frames[len(r.Frames)-1] = Frame{}
-			r.Frames = r.Frames[:len(r.Frames)-1]
 			if len(r.Frames) == 0 {
 				if i.Name == "veto" {
 					r.Vetoed, r.VetoReason = true, v

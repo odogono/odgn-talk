@@ -63,16 +63,18 @@ func TestRecoveryCancellation(t *testing.T) {
 					break
 				}
 				r.Execute(1)
+				checkRealDepth(t, r)
 			}
 			if !found {
 				t.Fatalf("missing checkpoint: %v", r.Status)
 			}
 			if phase == "transfer" {
 				r.Execute(1)
+				checkRealDepth(t, r)
 			}
 			fuel := r.Fuel
 			r.Cancel(1000)
-			r.Execute(0)
+			executeDepthChecked(t, r)
 			want := "[1, 2, 3, 4]"
 			if phase == "policy" || phase == "nested" {
 				want = "[5, 1, 2, 3, 4]"
