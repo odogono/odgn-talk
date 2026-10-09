@@ -120,7 +120,7 @@ const checkLibraryNeeds = (
 ): LoadDiagnostic[] => {
   const diagnostics: LoadDiagnostic[] = [];
   const uses = new Map(
-    viewSource(root).flatMap(d =>
+    viewSource(root, declaration => declaration.rule === 'Use').flatMap(d =>
       d.k === 'use'
         ? [[d.imports[0]!.local.span.line, d.library] as const]
         : [],

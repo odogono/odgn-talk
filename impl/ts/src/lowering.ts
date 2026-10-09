@@ -2333,8 +2333,8 @@ export const exportsOf = (
  */
 export const importsOf = (tree: SemanticTree): string[] => [
   ...new Set(
-    viewSource(tree.root).flatMap(decl =>
-      decl.k === 'use' ? [decl.library] : [],
+    viewSource(tree.root, declaration => declaration.rule === 'Use').flatMap(
+      decl => (decl.k === 'use' ? [decl.library] : []),
     ),
   ),
 ];

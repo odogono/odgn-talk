@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-09",
+  "baselineCommit": "2372361",
+  "optimized": "Issue #505 working-tree changes, measured before commit",
+  "machine": "Apple M5 (10 cores, 24 GiB), darwin arm64",
+  "bun": "1.4.2",
+  "language": "1.0-rc.2",
+  "costModel": 0,
+  "command": "bun bench/ts/src/measure-ts.ts lifecycle/load",
+  "runs": [
+    {
+      "label": "baseline",
+      "round": 1,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 599.7647058823529,
+          "load": {
+            "medianNs": 44416,
+            "minNs": 33625,
+            "samples": 13114
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 4830.7342529296875,
+            "minNs": 4714.55908203125,
+            "samples": 30
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 2798.690391459075,
+          "load": {
+            "medianNs": 26856917,
+            "minNs": 22993250,
+            "samples": 22
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1184063,
+            "minNs": 1064334,
+            "samples": 558
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "label": "optimized",
+      "round": 1,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 767.4666666666667,
+          "load": {
+            "medianNs": 33542,
+            "minNs": 22750,
+            "samples": 15231
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 5060.27734375,
+            "minNs": 4985.9111328125,
+            "samples": 26
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 8221.153024911033,
+          "load": {
+            "medianNs": 15467416,
+            "minNs": 12941584,
+            "samples": 41
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1175166.5,
+            "minNs": 1065667,
+            "samples": 558
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "label": "baseline",
+      "round": 2,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 642.3529411764706,
+          "load": {
+            "medianNs": 44292,
+            "minNs": 33666,
+            "samples": 13066
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 4857.4066162109375,
+            "minNs": 4737.457275390625,
+            "samples": 30
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 2090.3724137931035,
+          "load": {
+            "medianNs": 28511875,
+            "minNs": 23230292,
+            "samples": 21
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1147083.5,
+            "minNs": 1029958,
+            "samples": 576
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "label": "optimized",
+      "round": 2,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 488.3529411764706,
+          "load": {
+            "medianNs": 30041,
+            "minNs": 20083,
+            "samples": 19193
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 4980.8553466796875,
+            "minNs": 4434.18359375,
+            "samples": 30
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 15448.581314878893,
+          "load": {
+            "medianNs": 15169583,
+            "minNs": 11783208,
+            "samples": 43
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1155937.5,
+            "minNs": 1039500,
+            "samples": 574
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "label": "baseline",
+      "round": 3,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 622,
+          "load": {
+            "medianNs": 43959,
+            "minNs": 33458,
+            "samples": 13248
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 4843.1854248046875,
+            "minNs": 4783.660888671875,
+            "samples": 30
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 5519.743315508022,
+          "load": {
+            "medianNs": 27737333,
+            "minNs": 22623584,
+            "samples": 22
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1184833,
+            "minNs": 1063917,
+            "samples": 557
+          },
+          "runner": "ts"
+        }
+      ]
+    },
+    {
+      "label": "optimized",
+      "round": 3,
+      "measurements": [
+        {
+          "benchmark": "lifecycle/load-small",
+          "fuel": 7,
+          "hostBytes": 530.3529411764706,
+          "load": {
+            "medianNs": 29833,
+            "minNs": 20208,
+            "samples": 19458
+          },
+          "logicalAlloc": 0,
+          "run": {
+            "medianNs": 4991.8111572265625,
+            "minNs": 4632.904052734375,
+            "samples": 30
+          },
+          "runner": "ts"
+        },
+        {
+          "benchmark": "lifecycle/load-large",
+          "fuel": 4609,
+          "hostBytes": 2853.0758620689653,
+          "load": {
+            "medianNs": 15084729,
+            "minNs": 11138083,
+            "samples": 44
+          },
+          "logicalAlloc": 16742,
+          "run": {
+            "medianNs": 1143937.5,
+            "minNs": 1028625,
+            "samples": 576
+          },
+          "runner": "ts"
+        }
+      ]
+    }
+  ]
+}

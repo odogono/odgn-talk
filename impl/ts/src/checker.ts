@@ -95,6 +95,25 @@ const tokens = (node: SyntaxNode) =>
 const isName = (token: Token) =>
   token.t === 'word' && token.v !== '_' && !RESERVED.has(token.v);
 const bodyRules = new Set(['Handler', 'Function', 'Lambda']);
+// Only these productions introduce or classify name sites.
+const siteRules = new Set<SyntaxNode['rule']>([
+  'Declaration',
+  'Handler',
+  'Function',
+  'Use',
+  'Name',
+  'PatternPrimary',
+  'Field',
+  'Atom',
+  'Primary',
+  'Call',
+  'FieldType',
+  'SimpleStatement',
+  'Send',
+  'Event',
+  'AskTell',
+  'TellBlock',
+]);
 
 // Error regions are opaque to semantic passes. A malformed operand makes its
 // enclosing construct unusable, but a block retains its other statements.
@@ -106,8 +125,10 @@ const parsedSyntax = (root: SyntaxNode): SyntaxNode => {
     const node = work.pop()!;
     ordered.push(node);
     if (node.rule !== 'Error') {
-      for (const child of nodes(node)) {
-        work.push(child);
+      for (const child of node.children) {
+        if (child.kind === 'node') {
+          work.push(child);
+        }
       }
     } else {
       recovered = true;
@@ -165,24 +186,24 @@ export const checkSyntax = (
     return scope;
   };
   const unit = newScope('unit', null);
-  const parents = new Map<SyntaxElement, SyntaxNode>();
-  const scopeOf = new Map<SyntaxElement, Scope>();
-  const groupOf = new Map<SyntaxElement, SyntaxNode | null>();
-  const binaryOf = new Map<SyntaxElement, SyntaxNode | null>();
-  const patternOf = new Map<SyntaxElement, boolean>();
-  const parameterOf = new Map<SyntaxElement, boolean>();
-  const ordered: SyntaxElement[] = [];
-  const first = new Map<SyntaxElement, Token>();
-  const last = new Map<SyntaxElement, Token>();
-  type Work = {
+  // One record per element carries traversal context, token bounds and the
+  // semantic result. Keep it local: the same syntax can be checked again with
+  // different imports, Grants or existing bindings.
+  type Context = {
     binary: SyntaxNode | null;
+    converted: SemanticElement | null;
     element: SyntaxElement;
+    first: Token | undefined;
     group: SyntaxNode | null;
+    last: Token | undefined;
     parameter: boolean;
+    parent: SyntaxNode | null;
     pattern: boolean;
     scope: Scope;
   };
-  const work: Work[] = [
+  const context = new Map<SyntaxElement, Context>();
+  const ordered: Context[] = [];
+  const work: Context[] = [
     {
       element: syntax,
       scope: unit,
@@ -190,13 +211,17 @@ export const checkSyntax = (
       binary: null,
       pattern: false,
       parameter: false,
+      parent: null,
+      first: undefined,
+      last: undefined,
+      converted: null,
     },
   ];
   while (work.length) {
     const current = work.pop()!;
     const { element } = current;
     let { scope, group, binary, pattern, parameter } = current;
-    const parent = parents.get(element);
+    const parent = current.parent;
     if (element.kind === 'node') {
       if (bodyRules.has(element.rule)) {
         scope = newScope(
@@ -235,34 +260,43 @@ export const checkSyntax = (
         pattern = parameter = false;
         group = null;
       }
-      for (const child of [...element.children].reverse()) {
-        parents.set(child, element);
-        work.push({ element: child, scope, group, binary, pattern, parameter });
+      for (let i = element.children.length - 1; i >= 0; i--) {
+        work.push({
+          element: element.children[i]!,
+          scope,
+          group,
+          binary,
+          pattern,
+          parameter,
+          parent: element,
+          first: undefined,
+          last: undefined,
+          converted: null,
+        });
       }
     }
-    ordered.push(element);
-    scopeOf.set(element, scope);
-    groupOf.set(element, group);
-    binaryOf.set(element, binary);
-    patternOf.set(element, pattern);
-    parameterOf.set(element, parameter);
+    ordered.push(current);
+    current.scope = scope;
+    current.group = group;
+    current.binary = binary;
+    current.pattern = pattern;
+    current.parameter = parameter;
+    context.set(element, current);
   }
   // Cache token bounds bottom-up; no recursive walk or repeated subtree scans.
-  for (const element of [...ordered].reverse()) {
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    const info = ordered[i]!;
+    const { element } = info;
     if (element.kind === 'token') {
       if (element.t !== 'nl' && element.t !== 'eof') {
-        first.set(element, element);
-        last.set(element, element);
+        info.first = info.last = element;
       }
     } else {
       for (const child of element.children) {
-        const start = first.get(child);
-        const end = last.get(child);
-        if (start && !first.has(element)) {
-          first.set(element, start);
-        }
-        if (end) {
-          last.set(element, end);
+        const bounds = context.get(child)!;
+        info.first ??= bounds.first;
+        if (bounds.last) {
+          info.last = bounds.last;
         }
       }
     }
@@ -274,6 +308,7 @@ export const checkSyntax = (
     binds = false,
     at: SyntaxElement = token,
   ): Site => {
+    const info = context.get(at)!;
     const site: Site = {
       name: {
         kind: 'name',
@@ -283,10 +318,10 @@ export const checkSyntax = (
         binding: null,
       },
       token,
-      scope: scopeOf.get(at)!,
-      group: groupOf.get(at) ?? null,
-      binary: binaryOf.get(at) ?? null,
-      parameter: parameterOf.get(at) ?? false,
+      scope: info.scope,
+      group: info.group,
+      binary: info.binary,
+      parameter: info.parameter,
       binds,
     };
     sites.set(token, site);
@@ -384,20 +419,22 @@ export const checkSyntax = (
     );
   };
 
-  for (const element of ordered) {
-    if (element.kind !== 'node') {
+  for (const { element } of ordered) {
+    if (element.kind !== 'node' || !siteRules.has(element.rule)) {
       continue;
     }
     const ts = tokens(element);
     const ns = nodes(element);
-    const head = first.get(element);
+    const head = context.get(element)?.first;
     if (!head) {
       continue;
     }
     switch (element.rule) {
       case 'Declaration': {
         if (head.v === 'constant' || head.v === 'script') {
-          const name = first.get(ns.find(node => node.rule === 'Name')!);
+          const name = context.get(
+            ns.find(node => node.rule === 'Name')!,
+          )?.first;
           if (name) {
             declaration(
               name,
@@ -409,13 +446,13 @@ export const checkSyntax = (
       }
       case 'Handler':
       case 'Function': {
-        const name = first.get(
+        const name = context.get(
           ns.find(
             node =>
               node.rule ===
               (element.rule === 'Handler' ? 'MessageName' : 'Name'),
           )!,
-        );
+        )?.first;
         if (name) {
           const parameters = ns.filter(node => node.rule === 'Parameter');
           declaration(
@@ -456,11 +493,11 @@ export const checkSyntax = (
         const after = element.children
           .slice(from + 1)
           .filter((child): child is SyntaxNode => child.kind === 'node');
-        const library = first.get(after[0]!)!;
+        const library = context.get(after[0]!)!.first!;
         mark(library, 'library');
-        const rename = after[1] ? first.get(after[1]) : undefined;
+        const rename = after[1] ? context.get(after[1])?.first : undefined;
         for (const node of imported) {
-          const name = first.get(node)!;
+          const name = context.get(node)!.first!;
           if (rename) {
             mark(name, 'import');
           }
@@ -487,13 +524,13 @@ export const checkSyntax = (
         if (sites.has(head)) {
           break;
         }
-        const parent = parents.get(element)!;
+        const parent = context.get(element)!.parent!;
         const prefix = tokens(parent)[0];
         if (parent.rule === 'OfferClause' || parent.rule === 'ChooseOffer') {
           mark(head, 'offer');
         } else if (parent.rule === 'MessageName') {
           mark(head, 'message').name.text = syntaxSelector(
-            parents.get(parent)!,
+            context.get(parent)!.parent!,
             head.v,
           );
         } else if (
@@ -544,14 +581,15 @@ export const checkSyntax = (
           mark(
             head,
             'capture',
-            patternOf.get(element) || parents.get(element)?.rule === 'Replace',
+            context.get(element)?.pattern ||
+              context.get(element)?.parent?.rule === 'Replace',
           );
         }
         break;
       }
       case 'Primary': {
         if (!sites.has(head) && isName(head) && ts[0] === head && !ns.length) {
-          mark(head, binaryOf.get(element) ? 'binary size' : 'value');
+          mark(head, context.get(element)?.binary ? 'binary size' : 'value');
         }
         if (head.t === 'word' && head.v === 'it') {
           mark(head, 'value');
@@ -595,7 +633,8 @@ export const checkSyntax = (
         ) {
           base = nodes(base)[0]!;
         }
-        const name = base?.kind === 'node' ? first.get(base) : undefined;
+        const name =
+          base?.kind === 'node' ? context.get(base)?.first : undefined;
         if (
           base?.kind === 'node' &&
           base.rule === 'Primary' &&
@@ -616,7 +655,7 @@ export const checkSyntax = (
           while (nodes(base).length === 1 && tokens(base).length === 0) {
             base = nodes(base)[0]!;
           }
-          const grant = first.get(base);
+          const grant = context.get(base)?.first;
           if (
             base.rule === 'Primary' &&
             grant &&
@@ -631,7 +670,7 @@ export const checkSyntax = (
     }
   }
   // A Replace expression/statement binds the captures written in its first operand.
-  for (const element of ordered) {
+  for (const { element } of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Replace') {
       continue;
     }
@@ -657,7 +696,7 @@ export const checkSyntax = (
   }
   // Container grammar always follows its base operand down to a bare Primary.
   const containers: { node: SyntaxNode; root: Site }[] = [];
-  for (const element of ordered) {
+  for (const { element } of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Container') {
       continue;
     }
@@ -665,7 +704,7 @@ export const checkSyntax = (
     for (;;) {
       const children = nodes(base);
       if (base.rule === 'Primary' && !children.length) {
-        const root = first.get(base)!;
+        const root = context.get(base)!.first!;
         containers.push({ node: element, root: mark(root, 'write', true) });
         break;
       }
@@ -698,6 +737,7 @@ export const checkSyntax = (
   };
   const firstTokenAt = new Map(
     ordered
+      .map(info => info.element)
       .filter((element): element is Token => element.kind === 'token')
       .map(token => [token.pos, token]),
   );
@@ -809,14 +849,14 @@ export const checkSyntax = (
   // bindings so a Lambda's own local with the same spelling may shadow it.
   const collectingBodies = new Map<SyntaxNode, Site>();
   const collectingPatterns = new Map<SyntaxNode, Site>();
-  for (const element of ordered) {
+  for (const { element } of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Repeat') {
       continue;
     }
     const clause = nodes(element).find(node => node.rule === 'Collecting');
     const targetNode =
       clause && nodes(clause).find(node => node.rule === 'Name');
-    const target = targetNode && sites.get(first.get(targetNode)!);
+    const target = targetNode && sites.get(context.get(targetNode)!.first!);
     if (!target) {
       continue;
     }
@@ -835,9 +875,9 @@ export const checkSyntax = (
         continue;
       }
       for (
-        let parent = parents.get(site.token);
+        let parent = context.get(site.token)?.parent;
         parent;
-        parent = parents.get(parent)
+        parent = context.get(parent)?.parent
       ) {
         const patternTarget = collectingPatterns.get(parent);
         const bodyTarget = collectingBodies.get(parent);
@@ -910,7 +950,7 @@ export const checkSyntax = (
           : undefined
       )?.find(
         candidate =>
-          (parents.get(candidate.token)?.end ?? candidate.token.end) <=
+          (context.get(candidate.token)?.parent?.end ?? candidate.token.end) <=
           site.token.pos,
       );
       site.name.binding = earlier?.name.binding ?? null;
@@ -959,12 +999,12 @@ export const checkSyntax = (
     ) {
       report("can't write", root.token);
     }
-    const statement = parents.get(node);
-    const head = statement && first.get(statement);
+    const statement = context.get(node)?.parent;
+    const head = statement && context.get(statement)?.first;
     if (
       head?.v === 'set' &&
-      first.get(node) === root.token &&
-      last.get(node) === root.token
+      context.get(node)?.first === root.token &&
+      context.get(node)?.last === root.token
     ) {
       report('not a property', head);
     }
@@ -977,7 +1017,7 @@ export const checkSyntax = (
       if (element.kind === 'node') {
         // Creation reads captures now; the Lambda body only runs when called.
         if (element.rule === 'Lambda') {
-          const capture = firstCapture.get(scopeOf.get(element)!);
+          const capture = firstCapture.get(context.get(element)!.scope!);
           if (capture) {
             report('not constant', capture);
             return;
@@ -985,7 +1025,7 @@ export const checkSyntax = (
           continue;
         }
         if (element.rule === 'The' && !nodes(element).length) {
-          report('not constant', first.get(element)!);
+          report('not constant', context.get(element)!.first!);
           return;
         }
         pending.push(...[...element.children].reverse());
@@ -993,7 +1033,7 @@ export const checkSyntax = (
       }
       const site = sites.get(element);
       if (
-        parents.get(element)?.rule === 'Primary' &&
+        context.get(element)?.parent?.rule === 'Primary' &&
         element.t === 'word' &&
         (element.v === 'me' || element.v === 'it')
       ) {
@@ -1018,11 +1058,16 @@ export const checkSyntax = (
       }
     }
   };
-  for (const element of ordered) {
-    if (element.kind !== 'node') {
+  for (const { element } of ordered) {
+    if (
+      element.kind !== 'node' ||
+      (element.rule !== 'Call' &&
+        element.rule !== 'Function' &&
+        element.rule !== 'Declaration')
+    ) {
       continue;
     }
-    const head = first.get(element);
+    const head = context.get(element)?.first;
     if (!head) {
       continue;
     }
@@ -1050,7 +1095,7 @@ export const checkSyntax = (
           defaultSeen = true;
           checkConstant(expression, head.pos);
         } else if (defaultSeen) {
-          report('default order', first.get(parameter)!);
+          report('default order', context.get(parameter)!.first!);
         }
       }
     } else if (
@@ -1063,43 +1108,49 @@ export const checkSyntax = (
       }
     }
   }
-  const converted = new Map<SyntaxElement, SemanticElement>();
-  for (const element of [...ordered].reverse()) {
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    const info = ordered[i]!;
+    const { element } = info;
     if (element.kind === 'token') {
       if (element.t === 'nl' || element.t === 'eof' || element.t === 'error') {
         continue;
       }
-      converted.set(
-        element,
-        sites.get(element)?.name ?? {
-          kind: 'token',
-          type: element.t,
-          text: element.v,
-          raw: element.raw,
-          span: span(element),
-        },
-      );
+      info.converted = sites.get(element)?.name ?? {
+        kind: 'token',
+        type: element.t,
+        text: element.v,
+        raw: element.raw,
+        span: span(element),
+      };
     } else {
-      const start = first.get(element);
-      const end = last.get(element);
+      const { first: start, last: end } = info;
       if (!start && element !== syntax) {
         continue;
       }
-      converted.set(element, {
+      const children: SemanticElement[] = [];
+      for (const child of element.children) {
+        const result = context.get(child)!.converted;
+        if (result) {
+          children.push(result);
+        }
+      }
+      info.converted = {
         kind: 'node',
         rule: element.rule,
-        scope: scopeOf.get(element)!.id,
-        children: element.children.flatMap(child => {
-          const result = converted.get(child);
-          return result ? [result] : [];
-        }),
+        scope: info.scope.id,
+        children,
         span: start
-          ? { ...span(start), end: end!.end }
+          ? {
+              start: start.pos,
+              end: end!.end,
+              line: start.line,
+              col: start.col,
+            }
           : { start: element.start, end: element.end, line: 1, col: 1 },
-      });
+      };
     }
   }
-  const root = converted.get(syntax) as SemanticNode;
+  const root = context.get(syntax)!.converted as SemanticNode;
   const reportAt = (code: DiagnosticCode, at: SemanticName | SemanticToken) =>
     diagnostics.push({ code, span: at.span, message: `${code}: ${at.text}` });
   checkControl(

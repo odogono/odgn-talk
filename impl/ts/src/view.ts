@@ -354,8 +354,32 @@ const words = (node: SemanticNode) =>
     .map(child => (child.kind === 'node' ? '' : child.text))
     .join(' ');
 
-/** Convert a checked Source tree into its declarations. */
-export const viewSource = (root: SemanticNode): Decl[] => {
+/**
+ * Convert a checked Source tree into its declarations. A selection inspects
+ * each declaration's construct inside its optional Declaration/private wrapper,
+ * so callers needing only imports or Decision bodies avoid converting the rest.
+ */
+export const viewSource = (
+  root: SemanticNode,
+  select?: (declaration: SemanticNode) => boolean,
+): Decl[] => {
+  if (select) {
+    root = {
+      ...root,
+      children: root.children.filter(child => {
+        if (child.kind !== 'node') {
+          return false;
+        }
+        const first =
+          child.children[isToken(child.children[0], 'private') ? 1 : 0];
+        return select(
+          child.rule === 'Declaration' && first?.kind === 'node'
+            ? first
+            : child,
+        );
+      }),
+    };
+  }
   const built = new Map<SemanticNode, unknown>();
   const work: [SemanticNode, boolean][] = [[root, false]];
   while (work.length) {
