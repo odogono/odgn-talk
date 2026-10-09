@@ -23,6 +23,9 @@ type Measures struct {
 }
 
 func contents(v value.Value) int64 {
+	if v.Kind == value.List {
+		return v.ListContents(Size)
+	}
 	var n int64
 	if v.Kind == value.Replacement {
 		n = Size(v.Replacement.Subject)

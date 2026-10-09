@@ -36,6 +36,54 @@ func recoveryOutput(lines []string) []string {
 	}
 	return out
 }
+
+// Public observations contain opaque Values. Compare those by value semantics,
+// not by private backing buffers, spare capacity or memoized logical sizes.
+// Other fields retain DeepEqual's exact comparison, including nil slices.
+func snapshotObservationEqual(a, b any) bool {
+	var equal func(reflect.Value, reflect.Value) bool
+	equal = func(a, b reflect.Value) bool {
+		if !a.IsValid() || !b.IsValid() {
+			return a.IsValid() == b.IsValid()
+		}
+		if a.Type() != b.Type() {
+			return false
+		}
+		if v, ok := a.Interface().(Value); ok {
+			return v.Equal(b.Interface().(Value))
+		}
+		switch a.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			if a.IsNil() || b.IsNil() {
+				return a.IsNil() == b.IsNil()
+			}
+			return equal(a.Elem(), b.Elem())
+		case reflect.Slice:
+			if a.IsNil() != b.IsNil() || a.Len() != b.Len() {
+				return false
+			}
+			for i := range a.Len() {
+				if !equal(a.Index(i), b.Index(i)) {
+					return false
+				}
+			}
+			return true
+		case reflect.Struct:
+			for i := range a.NumField() {
+				if !a.Field(i).CanInterface() {
+					return reflect.DeepEqual(a.Interface(), b.Interface())
+				}
+				if !equal(a.Field(i), b.Field(i)) {
+					return false
+				}
+			}
+			return true
+		default:
+			return reflect.DeepEqual(a.Interface(), b.Interface())
+		}
+	}
+	return equal(reflect.ValueOf(a), reflect.ValueOf(b))
+}
 func TestRecoverySnapshotEveryBoundary(t *testing.T) {
 	skipUnderRace(t)
 	for _, fixture := range recoveryFixtures(t) {
@@ -73,7 +121,7 @@ func TestRecoverySnapshotEveryBoundary(t *testing.T) {
 					}
 					a.Reports = operationalReports(a.Reports)
 					b.Reports = operationalReports(b.Reports)
-					if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
+					if !snapshotObservationEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !snapshotObservationEqual(g.Inspect(), copy.Inspect()) {
 						t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 					}
 					saved, err = g.Save()
@@ -261,7 +309,7 @@ func TestCancelledRecoverySnapshotEveryCleanupBoundary(t *testing.T) {
 				}
 				a.Reports = operationalReports(a.Reports)
 				b.Reports = operationalReports(b.Reports)
-				if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
+				if !snapshotObservationEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !snapshotObservationEqual(g.Inspect(), copy.Inspect()) {
 					t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 				}
 				saved, err = g.Save()
@@ -341,7 +389,7 @@ func TestLibraryRecoverySnapshotEveryBoundary(t *testing.T) {
 		}
 		a.Reports = operationalReports(a.Reports)
 		b.Reports = operationalReports(b.Reports)
-		if !reflect.DeepEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !reflect.DeepEqual(g.Inspect(), copy.Inspect()) {
+		if !snapshotObservationEqual(a, b) || !reflect.DeepEqual(recoveryOutput(original), recoveryOutput(resumed)) || !snapshotObservationEqual(g.Inspect(), copy.Inspect()) {
 			t.Fatalf("step %d differs\noriginal=%v\nrestored=%v", step, original, resumed)
 		}
 		for _, l := range original {

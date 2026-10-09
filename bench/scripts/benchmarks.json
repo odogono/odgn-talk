@@ -136,6 +136,15 @@
       }
     },
     {
+      "name": "collections/list-append",
+      "n": 2000,
+      "expect": "2001000",
+      "smoke": {
+        "n": 4,
+        "expect": "10"
+      }
+    },
+    {
       "name": "collections/map-build",
       "n": 300,
       "expect": "45150",

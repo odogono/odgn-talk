@@ -101,6 +101,7 @@ type Value struct {
 	Text        string
 	Bytes       []byte
 	Items       []Value
+	list        *listView
 	Entries     []Pair
 	Unit        Unit
 	Date        DateFields
@@ -130,8 +131,7 @@ func NewMap(pairs []Pair) (Value, error) {
 	}
 	return Value{Kind: Map, Entries: out}, nil
 }
-func NewList(vs []Value) Value { return Value{Kind: List, Items: slices.Clone(vs)} }
-func NewBytes(b []byte) Value  { return Value{Kind: Bytes, Bytes: slices.Clone(b)} }
+func NewBytes(b []byte) Value { return Value{Kind: Bytes, Bytes: slices.Clone(b)} }
 func NewQuantity(n decimal.Number, s string) (Value, error) {
 	u, e := ParseUnit(s)
 	if e != nil {

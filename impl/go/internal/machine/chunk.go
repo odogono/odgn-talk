@@ -376,11 +376,18 @@ func appendValue(whole, part value.Value, prepend, all bool) (value.Value, *valu
 			}
 			vs = part.Items
 		}
-		if prepend {
-			return value.NewList(append(slices.Clone(vs), whole.Items...)), nil
-		}
-		return value.NewList(append(slices.Clone(whole.Items), vs...)), nil
+		return extendList(whole, vs, prepend), nil
 	}
 	e := wrong("text", whole)
 	return value.Value{}, &e
+}
+
+func extendList(whole value.Value, vs []value.Value, prepend bool) value.Value {
+	n := contents(whole)
+	for _, v := range vs {
+		n += Size(v)
+	}
+	result := whole.ExtendList(vs, prepend)
+	result.CacheListContents(n)
+	return result
 }

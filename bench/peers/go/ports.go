@@ -22,6 +22,7 @@ var Ports = map[string]func(n int64) any{
 	"text/index":              text.Index,
 	"text/patterns":           text.Patterns,
 	"collections/list-build":  collections.ListBuild,
+	"collections/list-append": collections.ListAppend,
 	"collections/map-build":   collections.MapBuild,
 	"collections/list-update": collections.ListUpdate,
 	"collections/map-update":  collections.MapUpdate,

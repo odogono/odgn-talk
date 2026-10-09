@@ -1,0 +1,15 @@
+-- Grow a Script Variable while retaining its initial value, then checksum it.
+script variable values = []
+
+on run n
+  put [-1] into values
+  put values into original
+  repeat for each i in 1..n
+    put i after values
+  end repeat
+  put 0 into total
+  repeat for each v in values
+    add v to total
+  end repeat
+  return total + the length of original
+end run
