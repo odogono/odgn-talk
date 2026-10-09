@@ -1,0 +1,15 @@
+use makeDate, formatDate, daysInMonth, isLeapYear from date
+
+-- A Civil Date is a calendar day with no time zone.
+on main
+  put makeDate(2026, 10, 9) into today
+  say "today: " & today
+  say "weekday: " & weekday(today) & " (Monday is 1)"
+  say "next month: " & today + 1 month
+  say "in 100 days: " & today + 100 day
+  say formatDate(today, "${day:2}/${month:2}/${year}")
+  say "days in February 2028: " & daysInMonth(makeDate(2028, 2, 1))
+  if isLeapYear(2028) then say "2028 is a leap year"
+  put "2026-12-25" as civil date into christmas
+  say "day of year for Christmas: " & dayOfYear(christmas)
+end main

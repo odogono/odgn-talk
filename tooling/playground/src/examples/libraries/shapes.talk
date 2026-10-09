@@ -1,0 +1,18 @@
+-- The shapes Library. A Library has no state; its code runs in the caller.
+function area shape
+  match shape
+    when {kind: "square", side: s} then return s * s
+    when {kind: "circle", radius: r} then return pi * r * r
+    when {kind: "rectangle", width: w, height: h} then return w * h
+  end match
+  throw {code: "unknown shape", shape: shape}
+end area
+
+function perimeter shape
+  match shape
+    when {kind: "square", side: s} then return 4 * s
+    when {kind: "circle", radius: r} then return 2 * pi * r
+    when {kind: "rectangle", width: w, height: h} then return 2 * (w + h)
+  end match
+  throw {code: "unknown shape", shape: shape}
+end perimeter

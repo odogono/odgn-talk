@@ -1,0 +1,18 @@
+-- Loops draw patterns: a grid of circles that grow along each row.
+on draw
+  tell canvas
+    background "#1d2b35"
+    noStroke
+  end tell
+  repeat for each row in 1..8
+    repeat for each column in 1..8
+      if (row + column) mod 2 = 0 then
+        ask canvas to fill "#e0a458"
+      else
+        ask canvas to fill "#6fb3b8"
+      end if
+      put column * 5 into size
+      ask canvas to ellipse column * 45, row * 45, size, size
+    end repeat
+  end repeat
+end draw

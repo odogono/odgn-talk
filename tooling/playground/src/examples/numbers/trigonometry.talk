@@ -1,0 +1,8 @@
+-- Angles are in radians. `pi` is a Built-in Constant.
+on main
+  repeat for each degrees in [0, 30, 45, 60, 90]
+    put degrees * pi / 180 into r
+    say degrees & "°  sin " & round(sin(r), 4) & "  cos " & round(cos(r), 4)
+  end repeat
+  say "atan2(1, 1) in degrees: " & round(atan2(1, 1) * 180 / pi, 6)
+end main

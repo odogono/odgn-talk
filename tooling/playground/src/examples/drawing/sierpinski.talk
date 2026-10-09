@@ -1,0 +1,25 @@
+-- A recursive Handler draws a Sierpiński carpet: each square leaves its
+-- middle empty and repeats in the eight squares around it.
+on carpet x, y, size, depth
+  if depth = 0 then
+    ask canvas to rectangle x, y, size, size
+    return
+  end if
+  put size / 3 into third
+  repeat for each row in 0..2
+    repeat for each column in 0..2
+      if row <> 1 or column <> 1 then
+        carpet x + column * third, y + row * third, third, depth - 1
+      end if
+    end repeat
+  end repeat
+end carpet
+
+on draw
+  tell canvas
+    background "#ffffff"
+    noStroke
+    fill "#235f75"
+  end tell
+  carpet 20, 20, 360, 3
+end draw

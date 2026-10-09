@@ -1,0 +1,24 @@
+-- Draw a bar chart from a list of maps.
+on draw
+  put [{label: "Mon", value: 12}, {label: "Tue", value: 19}, {label: "Wed", value: 7}, {label: "Thu", value: 15}, {label: "Fri", value: 22}] into data
+  tell canvas
+    background "#ffffff"
+    stroke "#888888"
+    line 40, 340, 380, 340
+    noStroke
+    textSize 14
+  end tell
+  put 1 into i
+  repeat for each d in data
+    put the value of d * 12 into h
+    put i * 64 into x
+    tell canvas
+      fill "#235f75"
+      rectangle x, 340 - h, 40, h
+      fill "#23313b"
+      text the label of d, x + 6, 360
+      text the value of d as text, x + 10, 332 - h
+    end tell
+    add 1 to i
+  end repeat
+end draw

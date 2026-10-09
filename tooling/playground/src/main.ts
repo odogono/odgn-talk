@@ -21,6 +21,7 @@ import {
   refreshHints,
   selectionToRun,
 } from './editor';
+import { EXAMPLES, exampleById, type Example } from './examples';
 import { decodeLink, encodeLink, type Shared } from './link';
 import { LspClient } from './lsp-client';
 import type {
@@ -761,43 +762,161 @@ $('fresh').onclick = async () =>
   applied(
     await call({ t: 'fresh', tabs: currentTabs(), launch: launch.value }),
   );
-$('canvas-example').onclick = async () => {
+$('canvas-example').onclick = () => void loadExample(exampleById('shapes')!);
+
+// ------------------------------------------------------------- examples
+
+// The tabs as an example or the welcome left them, so loading another
+// replaces them without asking.
+let untouched: string | null = null;
+const tabsText = () => JSON.stringify(currentTabs());
+
+const loadExample = async (example: Example) => {
   if (
+    tabsText() !== untouched &&
     !confirm(
-      'Replace the Script tab with a drawing example? Your current source will be replaced.',
+      `Load the example ${example.title}? It replaces your tabs and runs fresh.`,
     )
   ) {
     return;
   }
   switchTo(0);
+  for (const tab of tabs.splice(1)) {
+    lsp.close(tab.uri);
+  }
   view.dispatch({
-    changes: {
-      from: 0,
-      to: view.state.doc.length,
-      insert: `on draw
-  tell canvas
-    background "#f5f0e8"
-    noStroke
-    fill "#235f75"
-    rectangle 70, 70, 180, 180
-    fill "#e0a458"
-    ellipse 250, 250, 160, 160
-    fill "#23313b"
-    textSize 20
-    text "Hello, NorthTalk", 70, 350
-  end tell
-end draw
-`,
-    },
+    changes: { from: 0, to: view.state.doc.length, insert: example.script },
   });
-  launch.value = 'draw';
-  // Setup is immutable once execution starts; use the existing setup on fresh.
-  const response = await call({ t: 'canvasExample' });
-  if (response.t !== 'error') {
+  for (const library of example.libraries ?? []) {
+    addTab('library', library.name, library.source);
+  }
+  configureSources();
+  renderTabs();
+  launch.value = example.launch;
+  untouched = tabsText();
+  scheduleAutosave();
+  await call({
+    t: 'exampleSetup',
+    setup: [':grant canvas canvas', ...(example.setup ?? [])],
+  });
+  note(`Example: ${example.title}. Launch runs ${example.launch}.`);
+  if (example.draws) {
     workbench.selectInspector('canvas');
   }
-  scheduleAutosave();
+  applied(
+    await call({ t: 'fresh', tabs: currentTabs(), launch: launch.value }),
+  );
 };
+
+// A menu of groups, each opening a submenu of examples. Arrow keys move
+// through it as in a menu bar's menu.
+const examplesButton = $('examples-button');
+const examplesMenu = $('examples-menu');
+const menuItems = (menu: Element) =>
+  [...menu.children].map(li => li.firstElementChild as HTMLElement);
+const closeSubmenus = () => {
+  for (const button of menuItems(examplesMenu)) {
+    button.setAttribute('aria-expanded', 'false');
+  }
+};
+const closeExamples = (focus = false) => {
+  examplesMenu.hidden = true;
+  examplesButton.setAttribute('aria-expanded', 'false');
+  closeSubmenus();
+  if (focus) {
+    examplesButton.focus();
+  }
+};
+const openSubmenu = (button: HTMLElement, focusFirst: boolean) => {
+  closeSubmenus();
+  button.setAttribute('aria-expanded', 'true');
+  if (focusFirst) {
+    menuItems(button.nextElementSibling!)[0]?.focus();
+  }
+};
+for (const group of EXAMPLES) {
+  const li = document.createElement('li');
+  li.setAttribute('role', 'none');
+  const button = document.createElement('button');
+  button.setAttribute('role', 'menuitem');
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-expanded', 'false');
+  button.textContent = group.title;
+  button.onclick = () => openSubmenu(button, true);
+  button.onmouseenter = () => openSubmenu(button, false);
+  const submenu = document.createElement('ul');
+  submenu.setAttribute('role', 'menu');
+  submenu.setAttribute('aria-label', group.title);
+  for (const example of group.examples) {
+    const item = document.createElement('li');
+    item.setAttribute('role', 'none');
+    const choose = document.createElement('button');
+    choose.setAttribute('role', 'menuitem');
+    choose.textContent = example.title;
+    choose.onclick = () => {
+      closeExamples();
+      void loadExample(example);
+    };
+    item.append(choose);
+    submenu.append(item);
+  }
+  li.append(button, submenu);
+  examplesMenu.append(li);
+}
+examplesButton.onclick = () => {
+  if (examplesMenu.hidden) {
+    examplesMenu.hidden = false;
+    examplesButton.setAttribute('aria-expanded', 'true');
+    menuItems(examplesMenu)[0]?.focus();
+  } else {
+    closeExamples();
+  }
+};
+examplesMenu.onkeydown = event => {
+  const current = document.activeElement as HTMLElement;
+  const menu = current.closest('[role=menu]')!;
+  const items = menuItems(menu);
+  const index = items.indexOf(current);
+  const inSubmenu = menu !== examplesMenu;
+  const move = (by: number) =>
+    items[(index + by + items.length) % items.length]!.focus();
+  switch (event.key) {
+    case 'ArrowDown':
+      move(1);
+      break;
+    case 'ArrowUp':
+      move(-1);
+      break;
+    case 'ArrowRight':
+      if (!inSubmenu) {
+        openSubmenu(current, true);
+      }
+      break;
+    case 'ArrowLeft':
+      if (inSubmenu) {
+        const parent = menu.previousElementSibling as HTMLElement;
+        parent.setAttribute('aria-expanded', 'false');
+        parent.focus();
+      }
+      break;
+    case 'Escape':
+      closeExamples(true);
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+};
+document.addEventListener('pointerdown', event => {
+  if (!(event.target as Element).closest('.examples')) {
+    closeExamples();
+  }
+});
+document.addEventListener('focusin', event => {
+  if (!(event.target as Element).closest('.examples')) {
+    closeExamples();
+  }
+});
 $('evaluate').onclick = () =>
   void call({ t: 'evaluate', launch: launch.value });
 $('apply').onclick = () => void apply();
@@ -1105,6 +1224,9 @@ const start = async () => {
   configureSources();
   view.setState(tabs[0]!.state);
   renderTabs();
+  if (!shared && !saved) {
+    untouched = tabsText();
+  }
   const response = await call({
     t: 'open',
     slots: loadStoreSlots(),

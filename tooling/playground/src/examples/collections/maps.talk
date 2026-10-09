@@ -1,0 +1,16 @@
+-- A map holds values under keys. `the name of person` and
+-- `person's name` read the same key.
+on main
+  put {name: "Ann", age: 34, city: "Leeds"} into person
+  say the name of person & " is " & person's age
+  put 35 into the age of person
+  put "tea" into the drink of person
+  repeat for each k in the keys of person
+    say k & " = " & the (k) of person
+  end repeat
+
+  -- Maps nest, and a key path is somewhere a value can be put.
+  put {home: {street: "1 High St", town: "York"}} into address
+  put "Hull" into the town of the home of address
+  say the town of the home of address
+end main

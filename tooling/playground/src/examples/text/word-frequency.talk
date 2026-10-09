@@ -1,0 +1,22 @@
+use sortBy from list
+
+-- Count how often each word appears, using a map. `the (w) of counts`
+-- reads the key held in `w`.
+function frequencies s
+  put {} into counts
+  repeat for each w in the words of lower(s)
+    replace <punctuation> in w with ""
+    if the (w) of counts is nothing then put 0 into the (w) of counts
+    add 1 to the (w) of counts
+  end repeat
+  return counts
+end frequencies
+
+on main
+  put "the cat sat on the mat, and the dog sat on the cat." into story
+  put frequencies(story) into counts
+  put sortBy(the keys of counts, given k: the (k) of counts, "descending") into ranked
+  repeat for each w in ranked
+    say w & ": " & the (w) of counts
+  end repeat
+end main

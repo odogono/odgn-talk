@@ -75,7 +75,8 @@ export type SessionRequest =
     }
   | { t: 'line'; text: string }
   | { t: 'cancel' }
-  | { t: 'canvasExample' }
+  /** Setup commands an example needs, for the next Run fresh. */
+  | { setup: string[]; t: 'exampleSetup' }
   | { launch: string; t: 'fresh'; tabs: Tabs }
   | { launch: string; t: 'evaluate' }
   /** Do it, print it or inspect it: a tab's selection, run as an Entry. */

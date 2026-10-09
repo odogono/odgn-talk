@@ -1,0 +1,13 @@
+-- Every Script is an actor with a mailbox. `send … to me` queues a message
+-- and goes on; `and wait` suspends until the answer comes back in `it`.
+on review order
+  if the amount of order > 1000 then return "needs a human"
+  return "approved"
+end review
+
+on main
+  send review with {amount: 50} to me and wait
+  say "small order: " & it
+  send review with {amount: 5000} to me and wait
+  say "large order: " & it
+end main

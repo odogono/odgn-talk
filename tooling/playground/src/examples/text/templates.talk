@@ -1,0 +1,17 @@
+use format from text
+
+-- Backticks interpolate expressions as they run. `format` fills a
+-- template you can keep and reuse.
+on main
+  put "Ann" into who
+  put 3 into n
+  say `${who} has ${n} items, ${n * 2} after doubling`
+
+  put "${name} owes ${amount}" into reminder
+  say format(reminder, {name: "Bo", amount: 12.50 GBP})
+  say format(reminder, {name: "Cy", amount: 7 GBP})
+
+  -- Line breaks and quotes come from Built-in Constants.
+  say "first line" & newline & "second line"
+  say "she said " & quote & "hi" & quote
+end main

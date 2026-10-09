@@ -1,0 +1,11 @@
+use classify from billing
+
+-- A Handler can have several clauses, tried top to bottom. Each matches the
+-- argument's shape, and `where` adds a condition. The clauses are in the
+-- billing tab: a Library can hold many, while entering `on classify` in the
+-- session replaces every clause it had.
+on main
+  repeat for each doc in [{type: "invoice", amount: 250}, {type: "invoice", amount: 5000}, {type: "refund", amount: 40}, "junk mail"]
+    classify doc
+  end repeat
+end main

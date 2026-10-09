@@ -1,0 +1,14 @@
+-- A Script Variable is shared by every Handler and keeps its value between
+-- Runs. After Run fresh, type `tally` at the console prompt to count again.
+script variable visits = 0
+
+on tally
+  add 1 to visits
+  say "visit number " & visits
+end tally
+
+on main
+  tally
+  tally
+  tally
+end main

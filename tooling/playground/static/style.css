@@ -345,3 +345,12 @@ main { grid-template-columns: minmax(0, var(--editor-width)) 5px minmax(0, 1fr);
 .canvas-heading { flex-shrink: 0; }
 .canvas-stage { flex: 1; min-height: 0; overflow: hidden; }
 #drawing { max-height: 100%; object-fit: contain; }
+.examples { position: relative; margin-right: auto; }
+.examples [role="menu"] { position: absolute; z-index: 20; margin: 0; padding: 4px; list-style: none; min-width: 13rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.25); }
+#examples-menu { top: calc(100% + 4px); left: 0; }
+.examples [role="menu"] [role="menu"] { top: -5px; left: 100%; display: none; }
+.examples li { position: relative; }
+.examples [aria-expanded="true"] + [role="menu"] { display: block; }
+.examples [role="menuitem"] { display: block; width: 100%; text-align: left; border: 0; border-radius: 4px; background: transparent; white-space: nowrap; }
+.examples [role="menuitem"]:hover, .examples [role="menuitem"]:focus-visible, .examples [aria-expanded="true"][role="menuitem"] { background: var(--panel); outline: none; }
+.examples [aria-haspopup="menu"][role="menuitem"]::after { content: "▸"; float: right; margin-left: 1rem; color: var(--muted); }

@@ -1,0 +1,25 @@
+-- Build text one Character at a time.
+function reversed s
+  put "" into result
+  repeat for each c in the characters of s
+    put c before result
+  end repeat
+  return result
+end reversed
+
+function isPalindrome s
+  put lower(s) into plain
+  replace <one or more of <space or punctuation>> in plain with ""
+  return plain = reversed(plain)
+end isPalindrome
+
+on main
+  say reversed("NorthTalk")
+  repeat for each phrase in ["Never odd or even", "Hello, world", "A man, a plan, a canal: Panama"]
+    if isPalindrome(phrase) then
+      say quote & phrase & quote & " is a palindrome"
+    else
+      say quote & phrase & quote & " is not a palindrome"
+    end if
+  end repeat
+end main

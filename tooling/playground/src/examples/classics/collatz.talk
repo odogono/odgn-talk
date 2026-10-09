@@ -1,0 +1,19 @@
+-- The Collatz sequence: halve even numbers, triple and add one to odd ones.
+-- Nobody has found a start that never reaches 1.
+function collatz n
+  put [n] into steps
+  repeat while n <> 1
+    if n mod 2 = 0 then
+      divide n by 2
+    else
+      put 3 * n + 1 into n
+    end if
+    put n after steps
+  end repeat
+  return steps
+end collatz
+
+on main
+  say collatz(6)
+  say "27 takes " & the length of collatz(27) - 1 & " steps"
+end main

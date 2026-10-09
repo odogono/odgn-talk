@@ -1,0 +1,24 @@
+-- A clock face at a time you choose: Launch is `face 10, 10`.
+on face hours, minutes
+  tell canvas
+    background "#f5f0e8"
+    fill "#ffffff"
+    stroke "#23313b"
+    strokeWidth 4
+    ellipse 200, 200, 320, 320
+    strokeWidth 2
+  end tell
+  repeat for each h in 1..12
+    put h * pi / 6 into a
+    ask canvas to line 200 + 140 * sin(a), 200 - 140 * cos(a), 200 + 155 * sin(a), 200 - 155 * cos(a)
+  end repeat
+  put (hours mod 12 + minutes / 60) * pi / 6 into hourAngle
+  put minutes * pi / 30 into minuteAngle
+  tell canvas
+    strokeWidth 8
+    line 200, 200, 200 + 80 * sin(hourAngle), 200 - 80 * cos(hourAngle)
+    strokeWidth 4
+    stroke "#c0392b"
+    line 200, 200, 200 + 125 * sin(minuteAngle), 200 - 125 * cos(minuteAngle)
+  end tell
+end face

@@ -1,0 +1,22 @@
+-- The Caesar cipher shifts each letter along the alphabet.
+constant alphabet = "abcdefghijklmnopqrstuvwxyz"
+
+function shift message, by
+  put "" into result
+  repeat for each c in the characters of lower(message)
+    put offset(c, alphabet) into position
+    if position = 0 then
+      put c after result
+    else
+      put (position - 1 + by) mod 26 + 1 into moved
+      put character moved of alphabet after result
+    end if
+  end repeat
+  return result
+end shift
+
+on main
+  put shift("Meet me at the old oak", 3) into secret
+  say secret
+  say shift(secret, -3)
+end main

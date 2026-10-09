@@ -1,0 +1,20 @@
+use celsiusToFahrenheit from units
+
+-- A number followed by a Unit makes a Quantity. The left operand's Unit wins.
+on main
+  put 5 kg into bag
+  say bag + 250 g
+  put 500 mi / 4 hr into speed
+  say speed
+  say speed as km/hr
+  say 2 m * 3 ft
+  say 90 min + 1 day
+  say 100 EUR * 1.1 USD/EUR
+  say celsiusToFahrenheit(20)
+
+  try
+    say 5 kg + 2 m
+  catch {code: c}
+    say "5 kg + 2 m raised " & c
+  end try
+end main

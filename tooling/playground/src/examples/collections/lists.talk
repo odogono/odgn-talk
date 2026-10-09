@@ -1,0 +1,18 @@
+-- Lists count from 1. Changing a copy never changes the original.
+on main
+  put ["apples", "pears", "figs"] into fruit
+  say "first: " & item 1 of fruit
+  say "last: " & the last item of fruit
+  say "how many: " & the length of fruit
+
+  put fruit into basket
+  put "kiwis" into item 1 of basket
+  put "plums" after basket
+  say "fruit: " & fruit
+  say "basket: " & basket
+
+  put [...fruit, "dates"] into more
+  say "more: " & more
+  if 8 is in [4, 8, 15] then say "8 is in the list"
+  say "items 2..3: " & items 2..3 of more
+end main
