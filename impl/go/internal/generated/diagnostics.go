@@ -278,6 +278,24 @@ var Diagnostics = DiagnosticsTable{
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
+			Code:       "not in a timeout",
+			RaisedWhen: "A Timeout Block's body holds `name … and wait` or `f(x) and wait` outside a Lambda",
+			At:         "the call's first token",
+			Sources: []string{
+				"ADR 0073",
+				"#524",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
+			Code:       "empty timeout",
+			RaisedWhen: "A Timeout Block has no Suspension Point in its source outside a Lambda, which includes every Timeout Block in a Join's body",
+			At:         "its `with`",
+			Sources: []string{
+				"ADR 0073",
+				"#524",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
 			Code:       "leaves finally",
 			RaisedWhen: "A `return`, `veto` or `pass` is inside a `finally` block, or an `exit repeat` or `next repeat` inside one belongs to a loop outside it",
 			At:         "its first token",

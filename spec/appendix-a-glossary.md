@@ -414,6 +414,10 @@ _Avoid_: parallel block, gather, fan-out, Promise.all
 An `ask … and wait` or `send … and wait` inside a Join. It is started where it stands and answered at the Join's closing `end`.
 _Avoid_: branch, task, future
 
+**Timeout Block**:
+A `with timeout of d … end timeout` block. Entering it sets one deadline, `d` after the Clock reading of the Pump in which it is entered. Every Suspension Point written inside it waits at most until then, and one that runs out of time raises `timeout` with `deadline: true`.
+_Avoid_: deadline scope, time limit block, timeout scope
+
 **Suspending Capability**:
 A Capability with an Operation that the Host declares may take time to answer, so calling that Operation is a Suspension Point. Every other Operation answers immediately.
 _Avoid_: async function, blocking call

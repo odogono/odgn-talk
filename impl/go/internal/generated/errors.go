@@ -24,6 +24,7 @@ var Errors = ErrorsTable{
 		"operation",
 		"index",
 		"during",
+		"deadline",
 	},
 	Error: []ErrorsTableErrorEntry{
 		ErrorsTableErrorEntry{
@@ -225,16 +226,18 @@ var Errors = ErrorsTable{
 			Fields: []string{
 				"after",
 			},
-			RaisedWhen: "A suspending Operation call runs past its `maxPending` or the Script's `MaxWait`, or a `send … and wait` or a call to a Function Value in another Script runs past `MaxWait`, and is abandoned; `after` is the limit that ran out, in `ms`, and a Capability call adds `capability` and `operation`",
+			RaisedWhen: "A suspending Operation call runs past its `maxPending` or the Script's `MaxWait`, or a `send … and wait` or a call to a Function Value in another Script runs past `MaxWait`, and is abandoned; or a Suspension Point runs past, or is reached after, the deadline of a Timeout Block it is written in; `after` is the limit that ran out, in `ms`, a Capability call adds `capability` and `operation`, and a Timeout Block's deadline adds `deadline`, which is `true`",
 			Sources: []string{
 				"ADR 0015",
 				"ADR 0017",
 				"ADR 0026",
+				"ADR 0073",
 			},
 			Message: "No answer came within {after}",
 			Optional: []string{
 				"capability",
 				"operation",
+				"deadline",
 			},
 		},
 		ErrorsTableErrorEntry{

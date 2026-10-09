@@ -236,6 +236,13 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
+// Timeout Blocks (ADR 0073), which the Cores' tests don't read until both
+// Cores parse them.
+mustParse(
+  readFileSync(join(import.meta.dir, 'timeout-block/sketch.talk'), 'utf8'),
+  'tools/grammar/timeout-block/sketch.talk',
+);
+broken(join(import.meta.dir, 'timeout-block/broken.talk'));
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

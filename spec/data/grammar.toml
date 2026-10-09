@@ -238,6 +238,10 @@ word = "times"
 positions = ["after the count in `repeat`"]
 
 [[contextual]]
+word = "timeout"
+positions = ["after `with` at the start of a statement (a Timeout Block)", "after a Timeout Block's `end`"]
+
+[[contextual]]
 word = "use"
 positions = ["at the start of a top-level declaration"]
 
@@ -247,7 +251,7 @@ positions = ["after `script` at the start of a top-level declaration"]
 
 [[contextual]]
 word = "with"
-positions = ["after the message name in `send`", "after the Container in `replace`", "after `begins` or `ends`"]
+positions = ["after the message name in `send`", "after the Container in `replace`", "after `begins` or `ends`", "at the start of a statement, before `timeout` (a Timeout Block)"]
 
 [[chunk]]
 singular = "character"
@@ -474,6 +478,10 @@ rule = "in an event, `from` followed by a token that can start an operand is the
 [[decision]]
 name = "when-contains"
 rule = "after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name"
+
+[[decision]]
+name = "with-timeout"
+rule = "at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call"
 
 [[advanced]]
 construct = "The pin"
