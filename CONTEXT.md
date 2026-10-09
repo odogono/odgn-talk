@@ -88,6 +88,10 @@ _Avoid_: cascade, with block, receiver block
 An opaque handle to something the Host owns, with identity: copying the handle never copies the thing. The only kind of value through which a Script can observe sharing.
 _Avoid_: reference, native object, proxy
 
+**Host Crossing**:
+One synchronous call from a Run into its Host during a Pump: an Operation call or a Host Object property get or set. It writes one `call` or `prop` record, and it is where a pending Stop, cancellation, Rewind or refusal lands.
+_Avoid_: callout, host call
+
 **Script Variable**:
 A variable declared at Script level, visible to all of the Script's Handlers and kept for as long as the Host keeps the Script loaded.
 _Avoid_: global, static, script property
@@ -200,7 +204,7 @@ _Avoid_: execution tree, runtime state
 In the Playground, replacing the session with a fresh one built from its setup Session Commands and the current tabs. It is not a Reload: no Script Variables carry over, and it starts a new Session Transcript.
 
 **Fix and Continue**:
-In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them.
+In the debugger, editing a Script while one of its Runs is paused, then Rewinding that Run and Reloading the Script with its mailbox kept, so the same message runs again on the new code. The Script's other Runs are discarded, as a Reload discards them. A session makes it with `:fix`.
 _Avoid_: hot reload, hot swap, live edit
 _Avoid_: reset, reload, refresh
 
@@ -215,6 +219,14 @@ _Avoid_: session (as a language concept), workspace, scratch script
 **Session Host**:
 The part of a REPL or Playground that runs a session as an ordinary Host: it turns each Entry and Session Command into Host Inputs on the Session Script, and prints what comes back. Its behaviour is normative, since Session Transcripts replay through it.
 _Avoid_: session (as a language concept), shell, kernel
+
+**Session Setup**:
+The declaration of a Session Host's Script Group: its Grants and their bindings, mocks, Host Objects, extension Capabilities and Libraries. The Session Host builds its live Group from it, and Trace replay builds a stubbed Group from the same value.
+_Avoid_: session config, session state
+
+**Session Driver**:
+The Tooling that feeds a Session Host from a REPL or Playground: it collects multiline Entries, queues input while the session sleeps, wakes it at its deadlines, and turns an interrupt into `:cancel`. Not normative.
+_Avoid_: REPL loop, settle loop
 
 **Entry**:
 One unit of input at a REPL or Playground prompt: one declaration, one statement or one expression. A statement or expression executes as a Run of an implicit Handler of the Session Script.
@@ -242,7 +254,7 @@ _Avoid_: timing, elapsed time, Pump cost
 
 **Value Exposure**:
 One occasion on which a Core hands values to its Host, as a Session Transcript counts them: an Operation callback's arguments, a property setter's argument, a returned Script Snapshot, or any public report, whether or not it carries a value. Exposures are numbered in the order they happen, and a Function Value the Host receives is identified by its exposure and its place within it.
-_Avoid_: crossing (that is a Host Object property call), callback
+_Avoid_: crossing (that is a Host Crossing), callback
 
 **Host Manifest**:
 A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive and the Host Objects it may meet. Tooling reads it. The Core never does.

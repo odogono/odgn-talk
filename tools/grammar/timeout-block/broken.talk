@@ -1,4 +1,4 @@
--- Timeout Blocks (ADR 0072) that don't parse. The format is broken.talk's.
+-- Timeout Blocks (ADR 0073) that don't parse. The format is broken.talk's.
 -- case: no `of`
 -- expect: unexpected token at 2:16
 on t

@@ -188,13 +188,13 @@ sources = ["ADR 0026", "#115"]
 code = "not in a timeout"
 raised_when = "A Timeout Block's body holds `name … and wait` or `f(x) and wait` outside a Lambda"
 at = "the call's first token"
-sources = ["ADR 0072", "#524"]
+sources = ["ADR 0073", "#524"]
 
 [[diagnostic]]
 code = "empty timeout"
 raised_when = "A Timeout Block has no Suspension Point in its source outside a Lambda, which includes every Timeout Block in a Join's body"
 at = "its `with`"
-sources = ["ADR 0072", "#524"]
+sources = ["ADR 0073", "#524"]
 
 [[diagnostic]]
 code = "leaves finally"

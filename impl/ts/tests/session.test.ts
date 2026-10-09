@@ -697,6 +697,33 @@ test('outside-Pump lifecycle reports render fatal cleanup instead of silent repl
   ]);
 });
 
+test('`:fix` reads its declarations from a file and records them', () => {
+  const items: TranscriptItem[] = [];
+  const host = new SessionHost({
+    now: () => start,
+    readFile: () => 'on tick, queued\n  say "fixed"\nend tick\n',
+    record: item => items.push(item),
+  });
+  for (const source of [
+    ':mock api.later suspending',
+    ':clock virtual 2026-09-30T10:00:00Z',
+    'on tick, queued\n  ask api to later and wait\nend tick',
+    'send tick to session',
+    'send tick to session',
+  ]) {
+    host.input(source);
+  }
+  expect(host.input(':fix session/r4 fix.talk')).toEqual([
+    '! rewound session/r4',
+    '! discarded session/r2',
+    '[session/r5] fixed',
+  ]);
+  expect(items).toContainEqual({
+    k: 'input',
+    source: ':fix session/r4\non tick, queued\n  say "fixed"\nend tick',
+  });
+});
+
 test('fatal cleanup reports keep the Session Source and user Library at their previous definitions', () => {
   const reports: import('../src/group').Report[] = [
     {
@@ -775,6 +802,61 @@ describe('Debugging a session', () => {
     expect(out).toEqual(expected);
     expect(trace).toEqual(plain.trace);
     expect(() => host.continueDebug('resume')).toThrow('not debug-paused');
+  });
+
+  test('`:fix` at a pause reruns the message on the new code and ends the Transcript', () => {
+    const items: TranscriptItem[] = [];
+    let end = null as number | null;
+    const host = new SessionHost({
+      now: () => start,
+      record: item => items.push(item),
+      transcriptEnds: dropped => (end = items.length - dropped),
+    });
+    host.input('script variable n = 0');
+    host.input('on tick\n  add 1 to n\n  say "old " & n\nend tick');
+    const recorded = items.length;
+    const controller = host.debugController()!;
+    const unit = controller.sources().find(s => s.unit.name === 'session+2')!;
+    controller.breakAt([{ unit: 'session+2', pc: unit.statements[1]! }]);
+    expect(host.input('send tick to session')).toEqual([]);
+    const run = controller.current!.run;
+    expect(host.input(':fix session/r9\non tick\nend tick')).toEqual([
+      '! no such run',
+    ]);
+    controller.clearBreaks();
+    const fixed = host.input(
+      `:fix ${run}\non tick\n  add 10 to n\n  say "new " & n\nend tick`,
+    );
+    expect(fixed).toEqual([`! rewound ${run}`]);
+    // The rerun pauses at its first instruction.
+    expect(host.waiting).toEqual({ k: 'paused' });
+    expect(controller.current!.run).not.toBe(run);
+    expect(host.continueDebug('resume')).toEqual(['[session/r3] new 10']);
+    expect(host.transcriptEnded).toBe(true);
+    // It ends before the Entry whose Pump paused; the console goes on.
+    expect(end).toBe(recorded);
+    expect(items[recorded]).toEqual({
+      k: 'input',
+      source: 'send tick to session',
+    });
+    expect(items.at(-1)).toEqual({ k: 'output', text: '[session/r3] new 10' });
+  });
+
+  test('`:fix` at a pause past a Suspension Point is refused and stays paused', () => {
+    const { host } = session();
+    host.input(':clock virtual 2026-09-30T10:00:00Z');
+    host.input('on nap\n  wait 1 s\n  say "woke"\nend nap');
+    const controller = host.debugController()!;
+    const unit = controller.sources().find(s => s.unit.name === 'session+1')!;
+    controller.breakAt([{ unit: 'session+1', pc: unit.statements[1]! }]);
+    host.input('send nap to session');
+    expect(host.input(':clock advance 1 s')).toEqual([]);
+    const run = controller.current!.run;
+    expect(host.input(`:fix ${run}\non nap\nend nap`)).toEqual([
+      '! not rewindable',
+    ]);
+    expect(host.waiting).toEqual({ k: 'paused' });
+    expect(host.transcriptEnded).toBe(false);
   });
 
   test('places each declaration in its loaded code unit', () => {

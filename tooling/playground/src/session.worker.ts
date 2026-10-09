@@ -438,6 +438,26 @@ const handle = (request: SessionRequest): SessionResponse => {
       settle();
       return { t: 'applied', result, state: state() };
     }
+    case 'fix': {
+      if (!session.pauseView()?.repeated) {
+        note(
+          'Fix and Continue needs a pause in a Run that can be rewound.',
+          'warning',
+        );
+        break;
+      }
+      const run = session.pauseView()!.run;
+      const result = session.fix(request.script);
+      if (result.kind === 'fixed') {
+        note(
+          session.transcriptEnded
+            ? `Rewound ${run}: its message runs again on the new code. The Session Transcript stops before the paused Entry.`
+            : 'The Script tab has no new or changed declarations to fix.',
+        );
+      }
+      settle();
+      return { t: 'applied', result, state: state() };
+    }
     case 'saveLibrary':
       if (session.paused) {
         note('Continue the debugger before saving.', 'warning');
@@ -466,7 +486,11 @@ const handle = (request: SessionRequest): SessionResponse => {
       session.continueDebug(request.action);
       break;
     case 'transcript':
-      return { t: 'transcript', text: session.transcriptText };
+      return {
+        t: 'transcript',
+        text: session.transcriptText,
+        ended: session.transcriptEnded,
+      };
     case 'replayLoad': {
       // A pasted Trace comes with its Setup as JSON, or is a session's. With
       // no Trace, replay the shared session that differed, or this one.

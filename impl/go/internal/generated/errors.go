@@ -231,7 +231,7 @@ var Errors = ErrorsTable{
 				"ADR 0015",
 				"ADR 0017",
 				"ADR 0026",
-				"ADR 0072",
+				"ADR 0073",
 			},
 			Message: "No answer came within {after}",
 			Optional: []string{

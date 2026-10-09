@@ -106,6 +106,13 @@ export type SessionEnvironment = {
   result?(run: string, value: Value): void;
   /** Receives each line of the Group's Trace, without its LF. */
   trace?(line: string): void;
+  /**
+   * TS tooling only: a `:fix` landed at a debugger pause, which a Transcript
+   * can't replay (ADR 0072). The Transcript ends before the last `dropped`
+   * items recorded, which came from the Host call whose Pump paused.
+   * Recording goes on, for a console, but isn't Transcript.
+   */
+  transcriptEnds?(dropped: number): void;
   /** Writes a file of `:export`, given a directory. */
   writeFile?(directory: string, file: string, text: string): void;
   /** Writes a Store's contents to the file `:store save` names. */
@@ -425,6 +432,28 @@ export class SessionHost {
     return this.printed(this.pumped(result));
   }
 
+  /**
+   * TS tooling only: a `:fix` landed at a debugger pause, which a Transcript
+   * can't replay, so it records nothing from the Host call whose Pump paused
+   * (ADR 0072).
+   */
+  get transcriptEnded(): boolean {
+    return this.transcriptEnd !== null;
+  }
+  // The recorded items the Transcript keeps, once it has ended.
+  private transcriptEnd: number | null = null;
+  // What is entered at a pause isn't recorded, until a `:fix` lands.
+  private unrecorded = false;
+  // The recorded items before the latest Host call that could pause.
+  private callStart = 0;
+
+  // Each implicit Entry Handler the Script has, with its source, for a
+  // `:fix` at a pause in its Run.
+  private entryHandlers = new Map<string, string>();
+
+  // Whether the last Pump returned `rewound`.
+  private rewound = false;
+
   // The debug controller tooling asked for, on the current Group.
   private controller: DebugController | null = null;
   private paused() {
@@ -495,9 +524,24 @@ export class SessionHost {
     return functionDoc(value);
   }
 
-  /** An Entry or a Session Command. Returns the lines it printed. */
+  /**
+   * An Entry or a Session Command. Returns the lines it printed. At a
+   * debugger pause, only `:fix` of the paused Run.
+   */
   input(source: string): string[] {
-    this.paused();
+    if (this.state.k === 'paused') {
+      if (!/^:fix\b/u.test(source)) {
+        this.paused();
+      }
+      // What is entered at a pause is outside the Transcript (ADR 0072).
+      this.unrecorded = true;
+      try {
+        return this.printed(this.entry(source));
+      } finally {
+        this.unrecorded = false;
+      }
+    }
+    this.callStart = this.recordedItems.length;
     this.recording = source.replace(/\n+$/, '');
     const out = this.entry(source);
     this.recorded();
@@ -509,6 +553,9 @@ export class SessionHost {
   private recording: string | null = null;
   private readonly recordedItems: TranscriptItem[] = [];
   private record(item: TranscriptItem) {
+    if (this.unrecorded) {
+      return;
+    }
     this.recordedItems.push(item);
     this.env.record?.(item);
   }
@@ -560,6 +607,7 @@ export class SessionHost {
   /** Answers the Foreground Run's `read` with a line the user typed. */
   read(line: string): string[] {
     this.paused();
+    this.callStart = this.recordedItems.length;
     const pending = [...this.reads].find(
       ([, r]) => r.run !== undefined && r.run === this.foreground?.run,
     );
@@ -587,7 +635,13 @@ export class SessionHost {
     this.objectSession!.drain(item);
   }
   get objectTranscript(): readonly TranscriptItem[] {
-    return this.objectSession?.items.length ? this.recordedItems : [];
+    if (!this.objectSession?.items.length) {
+      return [];
+    }
+    return this.recordedItems.slice(
+      0,
+      this.transcriptEnd ?? this.recordedItems.length,
+    );
   }
   finishObjectReplay() {
     this.objectSession?.finish();
@@ -595,9 +649,11 @@ export class SessionHost {
 
   /** Pumps at a deadline, under a real Clock. */
   tick(): string[] {
-    return this.group && this.state.k !== 'paused'
-      ? this.printed(this.pump())
-      : [];
+    if (!this.group || this.state.k === 'paused') {
+      return [];
+    }
+    this.callStart = this.recordedItems.length;
+    return this.printed(this.pump());
   }
 
   // ------------------------------------------------------------- starting
@@ -835,6 +891,9 @@ export class SessionHost {
       case 'cancel':
         this.start();
         return this.cancel(rest);
+      case 'fix':
+        this.start();
+        return this.fix(rest);
       case 'save':
         this.start();
         return this.save(words(rest, rest.trim() ? 1 : 0)[0] ?? 'default');
@@ -1054,38 +1113,31 @@ export class SessionHost {
   }
 
   private redefine(decl: Declaration): string[] {
-    const next: Declaration[] = [];
-    let placed = false;
-    for (const d of this.declarations) {
-      const reused = d.names.filter(n => decl.names.includes(n));
-      if (!reused.length) {
-        next.push(d);
-      } else if (d.kind === 'use') {
-        const left = d.uses!.filter(u => !reused.includes(u.local));
-        if (left.length) {
-          next.push(usesDeclaration(d.library!, left));
-        }
-      } else if (!placed && decl.kind !== 'use') {
-        next.push(decl);
-        placed = true;
-      }
-    }
-    if (!placed) {
-      next.push(decl);
-    }
+    const next = placed(this.declarations, decl);
     const start = next.indexOf(decl);
     const line = next
       .slice(0, start)
       .reduce((n, d) => n + lineCount(d.source), 0);
-    let reports: Report[];
     try {
-      reports = this.script!.reload(
-        this.sessionSource(next),
-        'carry variables',
-      );
+      return this.reloadFrom(next);
     } catch (error) {
       return this.refused(error, { line, col: 0 }, lineCount(decl.source));
     }
+  }
+
+  // Reloads the Script from `next` as the session source, carrying its
+  // Script Variables over. Throws as the Reload does, changing nothing.
+  private reloadFrom(
+    next: Declaration[],
+    keepMailbox = false,
+    entry?: string,
+  ): string[] {
+    const handler = entry && this.entryHandlers.get(entry);
+    const reports = this.script!.reload(
+      this.sessionSource(next) + (handler ?? ''),
+      'carry variables',
+      { keepMailbox },
+    );
     if (terminalEffects(reports)) {
       this.deadline = undefined;
       return this.discarded(reports);
@@ -1097,11 +1149,108 @@ export class SessionHost {
       return placed;
     });
     this.implicit.clear();
+    this.entryHandlers.clear();
+    if (handler) {
+      this.implicit.add(entry!);
+      this.entryHandlers.set(entry!, handler);
+    }
     this.placements.clear();
     this.units = 1;
     // The Reload discarded every Run, and every deadline with them.
     this.deadline = undefined;
     return this.discarded(reports);
+  }
+
+  // `:fix <run> <path>`, or as a Transcript records it, the declarations on
+  // the lines after `:fix <run>`: Fix and Continue (ADR 0072).
+  private fix(rest: string): string[] {
+    const newline = rest.indexOf('\n');
+    const head = newline < 0 ? rest : rest.slice(0, newline);
+    const [run, path, more] = head.trim().split(/\s+/u);
+    if (!run || more !== undefined || newline < 0 === (path === undefined)) {
+      refuse('bad arguments');
+    }
+    let source: string;
+    if (newline >= 0) {
+      source = `${rest.slice(newline + 1)}\n`;
+    } else {
+      try {
+        source = librarySource(this.env.readFile!(path!));
+      } catch {
+        return refuse('bad arguments');
+      }
+      // A Transcript records the declarations in place of the path.
+      this.recording = `:fix ${run}\n${source.slice(0, -1)}`;
+    }
+    const parsed = parseSource(source);
+    if (parsed.error) {
+      const t = parsed.error.tok;
+      return [`! ${parsed.error.code} at ${t.line}:${t.col}`];
+    }
+    const declarations = fixDeclarations(source, parsed.tree!);
+    if (!declarations.length) {
+      refuse('bad arguments');
+    }
+    // At a pause, the debugger knows the paused Run before the Host does, and
+    // it may be an Entry's, whose implicit Handler the Reload keeps.
+    let entry: string | undefined;
+    const controller = this.state.k === 'paused' ? this.controller! : null;
+    if (controller) {
+      const paused = controller
+        .snapshot()
+        .scripts.find(s => s.name === NAME)!
+        .runs.find(r => r.id === run);
+      if (!paused) {
+        refuse('no such run');
+      }
+      if (controller.current!.run !== run) {
+        throw new Error(
+          `At a pause, :fix rewinds only ${controller.current!.run}`,
+        );
+      }
+      if (!paused!.rewindable) {
+        refuse('not rewindable');
+      }
+      entry = paused!.handler;
+    } else if (!this.lastSeg.has(run!)) {
+      refuse('no such run');
+    }
+    this.script!.rewindRun(run!);
+    // An Entry's message runs again in the foreground. At a pause, the
+    // landing Pump's records name its Run.
+    const held = this.foreground;
+    let out: string[];
+    if (controller) {
+      // The Rewind lands at the paused instruction, which no Transcript can
+      // replay, so the Transcript ends before the Host call that paused.
+      this.transcriptEnd ??= this.callStart;
+      this.env.transcriptEnds?.(this.recordedItems.length - this.callStart);
+      this.unrecorded = false;
+      const landed = controller.resume();
+      this.rewound = landed.state === 'rewound';
+      out = this.pumped(landed);
+    } else {
+      out = this.pump();
+    }
+    if (!this.rewound) {
+      return [...out, '! not rewindable'];
+    }
+    this.lastSeg.delete(run!);
+    if (held && held.run === run) {
+      this.foreground = { delivery: held.delivery };
+    }
+    out.push(`! rewound ${run}`);
+    const next = declarations.reduce(placed, this.declarations);
+    try {
+      out.push(...this.reloadFrom(next, true, entry));
+    } catch (error) {
+      // The message runs again on the code it had.
+      out.push(...this.refused(error, { line: 0, col: 0 }, 0));
+    }
+    if (controller) {
+      controller.pauseAtNextStart(NAME);
+    }
+    return [...out, ...this.pump()];
   }
 
   private clock(rest: string): string[] {
@@ -1652,6 +1801,10 @@ export class SessionHost {
     }
     this.lastEntry = n;
     this.implicit.add(handler);
+    this.entryHandlers.set(
+      handler,
+      unit.split('\n').slice(bound.length).join('\n'),
+    );
     const extension = `${NAME}+${this.units++}`;
     this.placements.set(extension, placement);
     for (const [i, v] of bound.entries()) {
@@ -1743,6 +1896,7 @@ export class SessionHost {
     this.lastClock = now;
     this.events = [];
     const result = this.group!.pump(now);
+    this.rewound = result.state === 'rewound';
     if (this.controller?.isPaused) {
       this.state = { k: 'paused' };
       return [];
@@ -1982,6 +2136,53 @@ const describe = (source: string): Declaration => {
     return { kind: decl.k, names: [decl.name], source };
   }
   return { kind: decl.k, names: [decl.name.text], source };
+};
+
+// `:fix`'s declarations. Each one's lines run from the line after the last
+// one's last line, without the blank lines at their start, to its own last
+// line, so the comments before it go with it.
+const fixDeclarations = (source: string, tree: SyntaxNode): Declaration[] => {
+  const all = source.split('\n');
+  let from = 0;
+  return nodes(tree)
+    .filter(n => n.rule === 'Declaration')
+    .map(n => {
+      const last = source.slice(0, n.end).trimEnd().split('\n').length - 1;
+      let first = from;
+      while (first < last && /^[ \t\r]*$/u.test(all[first]!)) {
+        first++;
+      }
+      from = last + 1;
+      return describe(all.slice(first, last + 1).join('\n'));
+    });
+};
+
+// The session source with `decl` in it: in place of the declarations whose
+// names it reuses, or at the end.
+const placed = (
+  declarations: readonly Declaration[],
+  decl: Declaration,
+): Declaration[] => {
+  const next: Declaration[] = [];
+  let done = false;
+  for (const d of declarations) {
+    const reused = d.names.filter(n => decl.names.includes(n));
+    if (!reused.length) {
+      next.push(d);
+    } else if (d.kind === 'use') {
+      const left = d.uses!.filter(u => !reused.includes(u.local));
+      if (left.length) {
+        next.push(usesDeclaration(d.library!, left));
+      }
+    } else if (!done && decl.kind !== 'use') {
+      next.push(decl);
+      done = true;
+    }
+  }
+  if (!done) {
+    next.push(decl);
+  }
+  return next;
 };
 
 const usesDeclaration = (

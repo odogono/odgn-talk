@@ -1,0 +1,73 @@
+# Unblessed: `:fix` Fix and Continue between Pumps (#444); first blessing awaits human review.
+# `:fix` (ADR 0072): its refusals before any Host Input, a Rewind that does
+# nothing on a suspended Run, then a Rewind of a Run `, queued` parked, which
+# reloads with the mailbox kept, so its message runs again on the new code.
+# A `:fix` whose Reload fails still rewinds, and the message runs again on the
+# code it had.
+> :mock api.later suspending
+> :clock virtual 2026-09-30T10:00:00Z
+> script variable n = 0
+> on tick, queued
+|   add 1 to n
+|   ask api to later and wait
+|   say "tick " & n
+| end tick
+> send tick to session
+[session/r2] call session/r2.c1 api.later []
+> send tick to session
+> :runs
+session/r2 suspended tick ask-wait session/r2.c1
+session/r4 parked tick
+> :fix
+! bad arguments
+> :fix session/r4 a b
+! bad arguments
+> :fix session/r4
+! bad arguments
+> :fix session/r4
+| say "no"
+! unexpected token at 1:1
+> :fix session/r1
+| on tick
+| end tick
+! no such run
+> :fix session/r2
+| on tick
+| end tick
+! not rewindable
+> :fix session/r4
+| script variable n = 10
+| --| Says the count, then waits.
+| on tick, queued
+|   add 10 to n
+|   say "fixed " & n
+|   ask api to later and wait
+| end tick
+! rewound session/r4
+! discarded session/r2
+[session/r5] fixed 11
+[session/r5] call session/r5.c2 api.later []
+> :runs
+session/r5 suspended tick ask-wait session/r5.c2
+> :vars
+n = 11
+> send tick to session
+> :fix session/r7
+| on tick, queued
+|   say missing
+| end tick
+! rewound session/r7
+! unknown name at session:3:7
+> :runs
+session/r5 suspended tick ask-wait session/r5.c2
+session/r8 parked tick
+> :vars
+n = 11
+> :export
+script variable n = 10
+--| Says the count, then waits.
+on tick, queued
+  add 10 to n
+  say "fixed " & n
+  ask api to later and wait
+end tick

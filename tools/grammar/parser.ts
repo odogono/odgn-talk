@@ -972,7 +972,7 @@ export class Parser {
     return { k: 'TellBlock', target, lines };
   }
 
-  // `with timeout of d`, a block, then `end` or `end timeout` (ADR 0072).
+  // `with timeout of d`, a block, then `end` or `end timeout` (ADR 0073).
   timeoutBlock(): Node {
     const at = this.next();
     this.next();

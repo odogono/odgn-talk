@@ -1,4 +1,4 @@
--- Timeout Blocks (ADR 0072): one deadline for the waits written inside.
+-- Timeout Blocks (ADR 0073): one deadline for the waits written inside.
 
 -- A deadline for a whole Join.
 on compare stations

@@ -223,6 +223,64 @@ describe('Debugging', () => {
     expect(s.paused).toBe(false);
   });
 
+  test('Fix and Continue reruns the paused message on the Script tab and stops the Transcript', () => {
+    const { env } = environment();
+    const s = new PlaygroundSession(env);
+    const script = `script variable n = 0\n${greet}\n`;
+    const tabs = { script, libraries: [] };
+    s.apply(script);
+    s.input(':clock virtual 2026-09-30T10:00:00Z');
+    const before = s.transcriptText;
+    s.setBreakpoints(
+      [{ tab: SESSION_TAB, line: 4 }],
+      { error: false, limitFault: false },
+      tabs,
+    );
+    expect(s.input('greet "Ann"')).toEqual([]);
+    // `say "hello …"` ran before the pause, so it writes again.
+    expect(s.pauseView()!.repeated).toEqual([
+      'call console.write (session/r1.c1)',
+    ]);
+    const fixed = `script variable n = 0\n${greet.replace('"bye"', '"see you"')}\n`;
+    s.setBreakpoints(
+      [],
+      { error: false, limitFault: false },
+      {
+        script: fixed,
+        libraries: [],
+      },
+    );
+    expect(s.fix(fixed)).toEqual({
+      kind: 'fixed',
+      lines: ['hello Ann', '! rewound session/r1'],
+    });
+    // The rerun pauses at its first instruction.
+    expect(s.paused).toBe(true);
+    expect(s.continueDebug('resume')).toEqual(['hello Ann', 'see you']);
+    expect(s.transcriptEnded).toBe(true);
+    expect(s.transcriptText).toBe(before);
+    expect(s.host.source).toContain('say "see you"');
+    expect('session' in PlaygroundSession.replay(env, s.transcriptText)).toBe(
+      true,
+    );
+  });
+
+  test('offers Fix and Continue only in a Run that can be rewound', () => {
+    const s = new PlaygroundSession(environment().env);
+    const script = 'on nap\n  wait 1 s\n  say "woke"\nend nap\n';
+    s.apply(script);
+    s.input(':clock virtual 2026-09-30T10:00:00Z');
+    s.setBreakpoints(
+      [{ tab: SESSION_TAB, line: 3 }],
+      { error: false, limitFault: false },
+      { script, libraries: [] },
+    );
+    s.input('send nap to session');
+    s.input(':clock advance 1 s');
+    expect(s.pauseView()?.repeated).toBeUndefined();
+    expect(() => s.fix(script)).toThrow('Run it can rewind');
+  });
+
   test('keeps breakpoints across a Reload', () => {
     const s = new PlaygroundSession(environment().env);
     s.apply(`constant k = 1\n${greet}\n`);
