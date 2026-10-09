@@ -242,6 +242,10 @@ _Avoid_: docstring, prose metadata
 The Fuel spent by an Entry's Run and all Runs it transitively spawns, including detached work. It remains pending while any of those Runs or their queued messages remain, and excludes later Host Deliveries and pre-existing Runs awakened by the work.
 _Avoid_: timing, elapsed time, Pump cost
 
+**Value Exposure**:
+One occasion on which a Core hands values to its Host, as a Session Transcript counts them: an Operation callback's arguments, a property setter's argument, a returned Script Snapshot, or any public report, whether or not it carries a value. Exposures are numbered in the order they happen, and a Function Value the Host receives is identified by its exposure and its place within it.
+_Avoid_: crossing (that is a Host Object property call), callback
+
 **Host Manifest**:
 A data file a Host exports for one kind of Script, describing what that Script can use: its Grants and their Operation Declarations, the Libraries it may import, the messages it may receive and the Host Objects it may meet. Tooling reads it. The Core never does.
 _Avoid_: type definitions, SDK, d.ts, host profile
