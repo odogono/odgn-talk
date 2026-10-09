@@ -9,6 +9,10 @@
   <body>
     <header>
       <h1>NorthTalk <span>Playground</span></h1>
+      <div class="examples">
+        <button id="examples-button" aria-haspopup="menu" aria-expanded="false" aria-controls="examples-menu" title="Load and run an example script">Examples ▾</button>
+        <ul id="examples-menu" role="menu" aria-label="Examples" hidden></ul>
+      </div>
       <div class="toolbar">
         <button id="apply" title="Enter the Script tab into the session (Ctrl/Cmd-S)">Apply</button>
         <button id="restart" title="A fresh session from the setup and the tabs">Restart</button>
@@ -54,7 +58,7 @@
         </nav>
         <section id="syntax" role="tabpanel" aria-labelledby="tab-syntax"><p class="hint">Current source · select a node to explore its code</p><div id="syntax-tree"></div></section>
         <section id="inspect" role="tabpanel" aria-labelledby="tab-inspect" hidden><p class="hint">Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).</p><p id="inspect-source"></p><pre id="inspect-view"></pre></section>
-        <section id="canvas" role="tabpanel" aria-labelledby="tab-canvas" hidden><div class="canvas-heading"><span id="canvas-size">400 × 400</span><span>Static canvas</span></div><div class="canvas-stage"><canvas id="drawing" width="400" height="400" aria-label="Script drawing"></canvas></div><p class="hint">Grant canvas in Setup, then draw from your script. <button id="canvas-example">Load drawing example</button></p></section>
+        <section id="canvas" role="tabpanel" aria-labelledby="tab-canvas" hidden><div class="canvas-heading"><span id="canvas-size">400 × 400</span><span>Static canvas</span></div><div class="canvas-stage"><canvas id="drawing" width="400" height="400" aria-label="Script drawing"></canvas></div><p class="hint">Draw from your script with <code>tell canvas</code>. <button id="canvas-example">Run drawing example</button></p></section>
         <details role="tabpanel" aria-labelledby="tab-grants" id="grants" open>
           <summary>Grants</summary>
           <p class="hint">Before the session starts. <code>console</code> is always granted.</p>

@@ -1,0 +1,20 @@
+-- The kinds of `repeat`.
+on main
+  repeat 3 times
+    say "hip hip hooray"
+  end repeat
+
+  repeat for each n in 1..5
+    say n & " squared is " & n * n
+  end repeat
+
+  repeat for each fruit in ["apple", "pear", "fig"]
+    say "I like " & fruit
+  end repeat
+
+  put 10 into count
+  repeat while count > 0
+    subtract 3 from count
+  end repeat
+  say "count ended at " & count
+end main

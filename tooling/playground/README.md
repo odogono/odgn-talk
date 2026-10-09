@@ -48,6 +48,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
   - When the tab drops a declaration, Apply offers a **Restart**. A Restart makes a fresh session from the Grants, the Clock and limits, the Library tabs and the Script tab, and starts a new Transcript.
 - **Library tabs:** **+ Library** adds one. Saving it (Ctrl/Cmd-S) records `:library add` the first time and `:library replace` after that. Renaming or closing a saved Library needs a Restart to take it out of the session.
 - **The console** is the live Session Transcript.
+- **Examples** opens a menu of example scripts by topic, from first steps to drawing and classic puzzles. Choosing one replaces the tabs, sets Launch and runs fresh. It asks first unless the tabs are as the welcome or the last example left them.
   - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete, including labelled calls whose arguments continue inside brackets.
   - A `console` `read` is answered at the `<` prompt.
   - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
@@ -84,6 +85,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
 - [`src/lsp.worker.ts`](src/lsp.worker.ts): the tooling stack's language server over `postMessage`.
 - [`src/main.ts`](src/main.ts), [`src/editor.ts`](src/editor.ts), [`src/lsp-client.ts`](src/lsp-client.ts): the page, the CodeMirror 6 editor, and its LSP client.
 - [`src/workbench.ts`](src/workbench.ts): pane controls, themes and syntax navigation. [`src/syntax.worker.ts`](src/syntax.worker.ts) projects the recovering tree; [`src/canvas.ts`](src/canvas.ts) renders validated drawing commands.
+- [`src/examples.ts`](src/examples.ts): the Examples menu's catalogue, over the `.talk` files in [`src/examples/`](src/examples/). [`tests/examples.test.ts`](tests/examples.test.ts) runs each one fresh and lints it with the beginner profile.
 - [`src/link.ts`](src/link.ts): the Shared Link codec. [`src/protocol.ts`](src/protocol.ts): the worker messages.
 
 ## The corpus in a browser
@@ -100,7 +102,7 @@ This serves a page at http://127.0.0.1:3928/. Open it in a browser and it runs e
 
 ## Static canvas
 
-Use **Load drawing example** in the Canvas inspector, then **Run fresh**. Alternatively grant `canvas` in Setup before the session starts, or enter `:grant canvas canvas` at the prompt. Canvas is a Host capability, not language syntax or a Standard Capability. The same capability is available in the TypeScript CLI, including `northtalk replay`.
+A new session grants `canvas` by default, so a script can draw straight away: choose an example under **Examples → Drawing**, or **Run drawing example** in the Canvas inspector. A session replayed from a Shared Link's Transcript has only the Grants it recorded; loading an example adds `canvas` for its **Run fresh**. Canvas is a Host capability, not language syntax or a Standard Capability. The same capability is available in the TypeScript CLI, including `northtalk replay`.
 
 ```northtalk
 on draw

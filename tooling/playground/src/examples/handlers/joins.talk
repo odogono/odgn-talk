@@ -1,0 +1,15 @@
+-- A Join starts several requests at once and suspends once, at its `end`.
+-- Each answer lands in `it`, in the order the requests started.
+on slowSquare n
+  wait n * 200 ms
+  return n * n
+end slowSquare
+
+on main
+  wait for all
+    repeat for each n in [3, 1, 2]
+      send slowSquare with n to me and wait
+    end repeat
+  end wait
+  say "squares: " & it
+end main

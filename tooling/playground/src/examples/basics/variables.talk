@@ -1,0 +1,19 @@
+-- `put … into` stores a value. A local variable is made on first use.
+on main
+  put 3 into apples
+  put 5 into pears
+  put apples + pears into fruit
+  say "fruit: " & fruit
+
+  -- Numbers are exact decimals, so 0.1 + 0.2 really is 0.3.
+  say "0.1 + 0.2 = " & (0.1 + 0.2)
+
+  -- add, subtract, multiply and divide change a variable in place.
+  add 2 to fruit
+  multiply fruit by 10
+  say "after: " & fruit
+
+  -- Text joins with `&`. Convert text to a number with `as number`.
+  put "42" into answer
+  say answer as number + 1
+end main

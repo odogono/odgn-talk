@@ -1,0 +1,19 @@
+-- Roman numerals, from the largest value down.
+constant numerals = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]
+
+function roman n
+  put "" into result
+  repeat for each [value, letters] in numerals
+    repeat while n >= value
+      put letters after result
+      subtract value from n
+    end repeat
+  end repeat
+  return result
+end roman
+
+on main
+  repeat for each year in [1066, 1984, 2026]
+    say year & " is " & roman(year)
+  end repeat
+end main

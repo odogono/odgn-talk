@@ -1,0 +1,16 @@
+-- Chunk Expressions name part of a text by kind and position.
+on main
+  put "The quick brown fox jumps over the lazy dog" into s
+  say "word 2: " & word 2 of s
+  say "last word: " & the last word of s
+  say "characters 5..9: " & characters 5..9 of s
+  say "word count: " & the length of the words of s
+
+  put "red,green,blue" into colors
+  say "item 2: " & item 2 of colors
+  put "yellow" into item 2 of colors
+  say "now: " & colors
+
+  put "one;two;three" into parts
+  say "item 3 by ;: " & item 3 of parts delimited by ";"
+end main

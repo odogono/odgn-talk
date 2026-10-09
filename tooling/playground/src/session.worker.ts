@@ -340,21 +340,25 @@ const handle = (request: SessionRequest): SessionResponse => {
         for (const command of request.shared?.setup ?? []) {
           session.input(command);
         }
+        // Grant canvas by default, so drawing works without any Setup.
+        if (!session.host.grants.granted.canvas) {
+          session.input(':grant canvas canvas');
+        }
       }
       return { t: 'state', state: state() };
     }
     case 'line':
       line(request.text);
       break;
-    case 'canvasExample': {
-      if (!session.setup.includes(':grant canvas canvas')) {
-        session.setup.push(':grant canvas canvas');
+    case 'exampleSetup':
+      // Setup is fixed once execution starts, so the next Run fresh,
+      // which starts from the setup, enters these.
+      for (const command of request.setup) {
+        if (!session.setup.includes(command)) {
+          session.setup.push(command);
+        }
       }
-      note(
-        'Drawing example ready. Run fresh to load its canvas grant and source.',
-      );
       break;
-    }
     case 'fresh': {
       const prepared = session.prepareFresh(request.tabs);
       if (prepared.session) {

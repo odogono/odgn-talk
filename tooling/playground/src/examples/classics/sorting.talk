@@ -1,0 +1,18 @@
+-- Insertion sort, written out by hand. The list Library's `sort` does
+-- this for you.
+function insertionSort xs
+  put [] into sorted
+  repeat for each x in xs
+    put 1 into i
+    repeat while i <= the length of sorted and item i of sorted < x
+      add 1 to i
+    end repeat
+    put [...items 1..i - 1 of sorted, x, ...items i..-1 of sorted] into sorted
+  end repeat
+  return sorted
+end insertionSort
+
+on main
+  say insertionSort([31, 4, 15, 9, 26, 5, 3])
+  say insertionSort(["pear", "apple", "fig"])
+end main

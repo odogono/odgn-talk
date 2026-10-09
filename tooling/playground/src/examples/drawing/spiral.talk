@@ -1,0 +1,19 @@
+-- `sin` and `cos` turn an angle into a position on a circle.
+on draw
+  tell canvas
+    background "#10141a"
+    noStroke
+  end tell
+  repeat for each i in 1..180
+    put i * 0.35 into angle
+    put i into radius
+    put 200 + radius * cos(angle) into x
+    put 200 + radius * sin(angle) into y
+    if i mod 3 = 0 then
+      ask canvas to fill "#e0a458"
+    else
+      ask canvas to fill "#6fb3b8"
+    end if
+    ask canvas to ellipse x, y, 4 + i / 20, 4 + i / 20
+  end repeat
+end draw

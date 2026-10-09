@@ -1,0 +1,14 @@
+-- Count to 20, but say Fizz for multiples of 3, Buzz for multiples of 5,
+-- and FizzBuzz for both.
+function fizzbuzz n
+  if n mod 15 = 0 then return "FizzBuzz"
+  if n mod 3 = 0 then return "Fizz"
+  if n mod 5 = 0 then return "Buzz"
+  return n
+end fizzbuzz
+
+on main
+  repeat for each n in 1..20
+    say fizzbuzz(n)
+  end repeat
+end main

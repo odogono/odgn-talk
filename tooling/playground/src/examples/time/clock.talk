@@ -1,0 +1,10 @@
+-- The clock is a Capability the Host grants. This example grants `clock`
+-- for you; see Setup. Each reading shows with @ ~ checked.
+on main
+  ask clock to now
+  put it into started
+  say "started at " & started
+  wait 1500 ms
+  ask clock to now
+  say "about " & round((it - started) as s, 1) & " later"
+end main

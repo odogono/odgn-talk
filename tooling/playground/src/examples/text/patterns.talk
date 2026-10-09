@@ -1,0 +1,28 @@
+-- Text Patterns are a readable alternative to regular expressions.
+on parse line
+  match line
+    when <"ID-", num: 4 digits as number, " ", name: word> then
+      say "id " & num & " belongs to " & name
+    when <qty: a number, " x ", sku: word> then
+      say qty & " of " & sku
+    else
+      say "not understood: " & line
+  end match
+end parse
+
+on main
+  parse "ID-0042 Ann"
+  parse "3 x widget"
+  parse "hello there"
+
+  if "2026-10-09" matches <4 digits, "-", 2 digits, "-", 2 digits> then
+    say "looks like a date"
+  end if
+
+  put "Smith, Ann" into fullName
+  replace <last: word, ", ", first: word> in fullName with first & " " & last
+  say fullName
+
+  put every match of <digits> in "a1 b22 c333" into hits
+  say "found " & the length of hits & " numbers"
+end main

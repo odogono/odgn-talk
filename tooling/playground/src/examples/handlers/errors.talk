@@ -1,0 +1,30 @@
+-- An Error is a map with a `code`. `catch` matches its shape.
+script variable balance = 100 GBP
+
+on withdraw amount
+  if amount <= 0 GBP then throw "bad amount"
+  if amount > balance then
+    throw {code: "insufficient funds", balance: balance, wanted: amount}
+  end if
+  subtract amount from balance
+  say "withdrew " & amount & ", " & balance & " left"
+end withdraw
+
+on pay amount
+  try
+    withdraw amount
+  catch {code: "insufficient funds", balance: left}
+    say "only " & left & " left, can't pay " & amount
+  catch "bad amount"
+    say "pay something more than nothing"
+  finally
+    say "(pay attempted)"
+  end try
+end pay
+
+on main
+  pay 30 GBP
+  pay 0 GBP
+  pay 500 GBP
+  pay 70 GBP
+end main

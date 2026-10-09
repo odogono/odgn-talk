@@ -1,0 +1,14 @@
+-- `wait` pauses a Run without blocking the session. A Handler that may
+-- wait is called with `and wait`, which Launch does here too.
+on countdown n
+  repeat while n > 0
+    say n & "…"
+    wait 1 s
+    subtract 1 from n
+  end repeat
+  say "lift off!"
+end countdown
+
+on main
+  countdown 3 and wait
+end main

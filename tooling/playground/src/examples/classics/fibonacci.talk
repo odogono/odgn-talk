@@ -1,0 +1,18 @@
+-- Numbers are exact, so even the 150th Fibonacci number is right.
+function fibonacci n
+  put 0 into a
+  put 1 into b
+  repeat n times
+    put a + b into next
+    put b into a
+    put next into b
+  end repeat
+  return a
+end fibonacci
+
+on main
+  repeat for each n in 1..10
+    say "fib(" & n & ") = " & fibonacci(n)
+  end repeat
+  say "fib(150) = " & fibonacci(150)
+end main

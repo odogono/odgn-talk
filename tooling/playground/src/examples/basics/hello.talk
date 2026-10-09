@@ -1,0 +1,5 @@
+-- A Handler runs when its message arrives. Launch sends `greet "Ann"`.
+-- Try another name in Launch, then Run fresh again.
+on greet name
+  say "Hello, " & name & "!"
+end greet

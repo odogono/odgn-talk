@@ -1,0 +1,9 @@
+use area, perimeter from shapes
+
+-- This example has a second tab, shapes.talk: a Library of your own.
+-- Edit it and save (Ctrl/Cmd-S), or Run fresh to load both tabs again.
+on main
+  repeat for each s in [{kind: "square", side: 3}, {kind: "circle", radius: 2}, {kind: "rectangle", width: 2, height: 5}]
+    say the kind of s & ": area " & round(area(s), 2) & ", perimeter " & round(perimeter(s), 2)
+  end repeat
+end main

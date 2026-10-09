@@ -1,0 +1,24 @@
+-- `match` tries each `when` in order. A shape names the parts it matches.
+function describe value
+  match value
+    when [] then return "an empty list"
+    when [only] then return "a list of just " & only
+    when [first, second, ...rest] then
+      return "a list starting " & first & ", " & second & " with " & the length of rest & " more"
+    when {name: n, age: a} where a < 18 then return n & ", a child"
+    when {name: n} then return n & ", an adult"
+    else return "something else"
+  end match
+end describe
+
+on main
+  say describe([])
+  say describe([7])
+  say describe([1, 2, 3, 4])
+  say describe({name: "Ann", age: 12})
+  say describe({name: "Bo", age: 40})
+  say describe(42)
+
+  let [x, y] be [10, 20]
+  say "x is " & x & " and y is " & y
+end main

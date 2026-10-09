@@ -1,0 +1,12 @@
+-- The Towers of Hanoi: move n discs from one peg to another, one at a
+-- time, never putting a larger disc on a smaller one.
+on hanoi n, source, target, spare
+  if n = 0 then return
+  hanoi n - 1, source, spare, target
+  say "move disc " & n & " from " & source & " to " & target
+  hanoi n - 1, spare, target, source
+end hanoi
+
+on main
+  hanoi 3, "A", "C", "B"
+end main

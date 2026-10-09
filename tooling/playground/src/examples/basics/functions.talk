@@ -1,0 +1,20 @@
+-- A function returns a value and is called with brackets: `area(3, 4)`.
+-- A Handler is called as a command: `report 3, 4`.
+function area width, height
+  return width * height
+end area
+
+function describeSize size
+  if size > 100 then return "large"
+  return "small"
+end describeSize
+
+on report width, height
+  put area(width, height) into a
+  say width & " × " & height & " = " & a & " (" & describeSize(a) & ")"
+end report
+
+on main
+  report 3, 4
+  report 20, 30
+end main

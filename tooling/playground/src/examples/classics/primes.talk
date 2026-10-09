@@ -1,0 +1,20 @@
+-- The Sieve of Eratosthenes: cross out every multiple of each prime.
+-- `collecting … into` gathers a loop's results into a list, and
+-- `next repeat` leaves a pass out.
+function primesUpTo limit
+  repeat limit times collecting false into crossed
+  end repeat
+  repeat for each n in 2..limit collecting n into primes
+    if item n of crossed then next repeat
+    put n * n into multiple
+    repeat while multiple <= limit
+      put true into item multiple of crossed
+      add n to multiple
+    end repeat
+  end repeat
+  return primes
+end primesUpTo
+
+on main
+  say primesUpTo(100)
+end main

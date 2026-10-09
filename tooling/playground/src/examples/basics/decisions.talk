@@ -1,0 +1,19 @@
+-- `if` needs a true or false condition: `if 0 then …` is an error.
+on describe temperature
+  if temperature < 0 then
+    say temperature & "° is freezing"
+  else if temperature < 15 then
+    say temperature & "° is chilly"
+  else if temperature < 25 then
+    say temperature & "° is pleasant"
+  else
+    say temperature & "° is hot"
+  end if
+end describe
+
+on main
+  describe -5
+  describe 10
+  describe 20
+  describe 31
+end main

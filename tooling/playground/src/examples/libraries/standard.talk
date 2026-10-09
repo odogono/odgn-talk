@@ -1,0 +1,23 @@
+use pad, padLeft, split, join, trim, repeated from text
+use unique, zip, group, average from list
+use merge, pick from map
+use encodeJson, decodeJson from json
+
+-- The Standard Library is written in NorthTalk. `use` names what comes in.
+on main
+  say "[" & pad("left", 8) & "][" & padLeft("right", 8) & "]"
+  say join(split("a b c", " "), "-")
+  say "[" & trim("   spaced   ") & "]"
+  say repeated("ab", 3)
+
+  say unique([1, 2, 2, 3, 1])
+  say zip(["a", "b", "c"], [1, 2, 3])
+  say average([18, 21, 24])
+  say group(["apple", "avocado", "banana"], given w: character 1 of w)
+
+  say merge({a: 1}, {b: 2})
+  say pick({a: 1, b: 2, c: 3}, ["a", "c"])
+  put encodeJson({name: "Ann", tags: ["x", "y"]}) into json
+  say json
+  say the name of decodeJson(json)
+end main

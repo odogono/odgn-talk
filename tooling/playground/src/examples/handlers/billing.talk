@@ -1,0 +1,16 @@
+-- The billing Library: one Handler in four clauses.
+on classify {type: "invoice", amount: a} where a > 1000
+  say "invoice for " & a & ": needs approval"
+end classify
+
+on classify {type: "invoice", amount: a}
+  say "invoice for " & a & ": paid"
+end classify
+
+on classify {type: "refund", amount: a}
+  say "refund of " & a
+end classify
+
+on classify other
+  say "ignored " & other
+end classify
