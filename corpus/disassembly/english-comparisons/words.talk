@@ -1,0 +1,19 @@
+-- words.talk: each English comparison word (ADR 0075) beside the
+-- comparison it spells. Part of the english-comparisons case.
+
+on searching s, p
+  put [s does not contain "x", not (s contains "x")] into a
+  put [s does not begin with p, not (s begins with p)] into b
+  put [s does not end with "y" ignoring case, not (s ends with "y" ignoring case)] into c
+  put [s does not match <digits>, not (s matches <digits>)] into d
+  return [a, b, c, d]
+end searching
+
+on ordering x, y
+  put [x is greater than y, x > y, x is less than y, x < y] into a
+  put [x is at least y, x >= y, x is at most y, x <= y] into b
+  put [x is not greater than y, not (x > y), x is not less than y, not (x < y)] into c
+  put [x is not at least y, not (x >= y), x is not at most y, not (x <= y)] into d
+  put [x comes before y ignoring case, x < y ignoring case, x comes after y, x > y] into e
+  return [a, b, c, d, e]
+end ordering

@@ -127,6 +127,26 @@ test('case advice covers ordering', () => {
   ).toEqual(['suggest-ignoring-case']);
 });
 
+test('case advice covers the English comparison words, except `does not match`', () => {
+  const source = [
+    'on demo',
+    'if name does not contain "Ann" then say 1',
+    'if name comes before "Ann" then say 1',
+    'if name is at least "Ann" then say 1',
+    'if name does not match "Ann" then say 1',
+    'end demo',
+  ].join('\n');
+  expect(
+    lint(source, { profile: 'beginner' }).lints.map(
+      item => `${item.id} ${item.span.start}`,
+    ),
+  ).toEqual([
+    `suggest-ignoring-case ${source.indexOf('does')}`,
+    `suggest-ignoring-case ${source.indexOf('comes')}`,
+    `suggest-ignoring-case ${source.indexOf('is at')}`,
+  ]);
+});
+
 test('binary exponentiation is not a pin, and Binary builds are Beginner Surface', () => {
   const source =
     'on demo <<data: (2 ^ 3) bytes>>\nput <<n as uint16>> into x\nend demo';

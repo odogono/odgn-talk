@@ -147,7 +147,13 @@ func kindDisplay(name string) string {
 	return name
 }
 
-var binaryOps = map[string]string{"+": "add", "-": "subtract", "*": "multiply", "/": "divide", "div": "div", "mod": "mod", "^": "power", "&": "concat", "..": "range", "=": "equal", "is": "equal", "<>": "not-equal", "is not": "not-equal", "<": "less", ">": "greater", "<=": "less-or-equal", ">=": "greater-or-equal", "is in": "member", "is not in": "member", "contains": "contains", "begins with": "begins-with", "ends with": "ends-with", "matches": "matches"}
+var binaryOps = map[string]string{"+": "add", "-": "subtract", "*": "multiply", "/": "divide", "div": "div", "mod": "mod", "^": "power", "&": "concat", "..": "range", "=": "equal", "is": "equal", "<>": "not-equal", "is not": "not-equal", "<": "less", ">": "greater", "<=": "less-or-equal", ">=": "greater-or-equal", "is in": "member", "is not in": "member", "contains": "contains", "begins with": "begins-with", "ends with": "ends-with", "matches": "matches",
+	// The English comparison words (ADR 0075): each `does not` and `is not` form
+	// is followed by `not`.
+	"does not contain": "contains", "does not begin with": "begins-with", "does not end with": "ends-with", "does not match": "matches",
+	"is greater than": "greater", "is less than": "less", "is at least": "greater-or-equal", "is at most": "less-or-equal",
+	"is not greater than": "greater", "is not less than": "less", "is not at least": "greater-or-equal", "is not at most": "less-or-equal",
+	"comes before": "less", "comes after": "greater"}
 
 func (u *Unit) expression(n *syntax.Node) {
 	pos := n.Pos()
@@ -201,7 +207,7 @@ func (u *Unit) expression(n *syntax.Node) {
 				args = append(args, text("fold"))
 			}
 			u.emit(pos, binaryOps[n.Text], args...)
-			if n.Text == "is not in" {
+			if strings.HasPrefix(n.Text, "is not ") || strings.HasPrefix(n.Text, "does not ") {
 				u.emit(pos, "not")
 			}
 		}

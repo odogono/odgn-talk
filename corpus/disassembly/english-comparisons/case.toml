@@ -1,0 +1,20 @@
+# english-comparisons: pins chapter 8's lowering of the English comparison
+# words (ADR 0075). Each word form sits beside the comparison it spells, and
+# emits the same instructions: the spelled comparison's instruction, with
+# `fold` after `ignoring case`, then `not` for a `does not` or `is not` form.
+# Each word form's instructions are at its first word.
+# Unblessed: first expectation review pending for #528.
+
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "words"
+source = "words.talk"
+
+[[disassembly]]
+unit = "words"
+expected = "words.dis"

@@ -72,11 +72,13 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 | --- | --- |
 | `=`, `<>`, `is`, `is not` | [equality](03-values.md#equality) |
 | `<`, `>`, `<=`, `>=` | [ordering](03-values.md#ordering) |
+| `is less than`, `is greater than`, `is at most`, `is at least`, `comes before`, `comes after` | ordering, in words (below) |
 | `is in`, `is not in` | membership (below) |
 | `is a`, `is not a`, `can be` | [kind tests](03-values.md#conversion) |
 | `is empty`, `is not empty` | [emptiness](03-values.md#conversion) |
 | `contains`, `begins with`, `ends with` | search (below) |
 | `matches` | a whole-text match (below) |
+| `does not contain`, `does not begin with`, `does not end with`, `does not match` | a search or match that fails, in words (below) |
 | `&` | joins the [text forms](03-values.md#the-text-form) of its operands |
 | `..` | makes a [range](03-values.md#ranges) |
 | `+`, `-`, `*`, `/`, `mod`, `div`, `^`, unary `-` | arithmetic on [numbers](03-values.md#arithmetic), [Quantities](03-values.md#quantity-arithmetic) and [dates](03-values.md#date-arithmetic) |
@@ -86,6 +88,10 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 - **Membership:** `x is in xs` is `true` when some element of the list `xs` equals `x`. `x is in r` over a range is chapter 3's. Any other right operand raises `wrong kind`, with `expected` `"list"`.
 - **Search:** `a contains b`, `a begins with b` and `a ends with b` take text on the left, and text or a Text Pattern on the right. Text on the right matches its own Characters, on whole-Character boundaries. They also take Bytes on both sides, and a Bytes needle matches its bytes in a row. Bytes on the left with anything else on the right raises `wrong kind` with `expected` `"bytes"`. Any other operand raises `wrong kind`.
 - **`matches`:** `s matches p` is `true` when the Text Pattern or text `p` matches the whole of the text `s` ([Text Patterns](#matching)).
+- **In words:** each English comparison spells one above, with its instructions, Fuel and errors ([ADR 0075](../docs/adr/0075-english-comparison-words-spell-the-existing-comparisons.md)).
+  - `is less than`, `is greater than`, `is at most` and `is at least` are `<`, `>`, `<=` and `>=`. After `is not` they give the opposite, so `a is not at least b` is `not (a >= b)`.
+  - `comes before` and `comes after` are `<` and `>`, for every kind those order.
+  - `does not contain`, `does not begin with`, `does not end with` and `does not match` are `not (a contains b)`, `not (a begins with b)`, `not (a ends with b)` and `not (a matches b)`.
 - **`&`:** the result is the NFC form of the two text forms, joined.
 - **`ignoring case`** makes every comparison of two texts that its operator makes compare their simple case foldings, inside lists and maps too, and it applies to every text literal of a Text Pattern the operator uses. After `is a`, `can be` or `is empty` it is a load error, since they compare no text.
 
@@ -97,6 +103,9 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 > if "banana" contains "nan" then say "found"
 > if "ID-0042" begins with <"ID-", digit> then say "an id"
 > if 3 is in [1, 2, 3] then say "listed"
+> if "banana" does not contain "x" then say "no x"
+> if 10 is at least 3 then say "enough"
+> if "apple" comes before "banana" then say "in order"
 > ```
 
 ## Keys and properties
