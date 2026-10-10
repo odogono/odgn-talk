@@ -20,16 +20,6 @@ export {
   same,
   type Setup,
 } from '../src/replay';
-/**
- * Corpus cases the debugger parity suites skip. Each costs seconds per replay
- * and the parity suites replay it several times. The complete Corpus run still
- * replays them both ways, and smaller cases cover the same Limit Faults.
- */
-export const debugParitySkips: ReadonlySet<string> = new Set([
-  // Builds a 64 MiB text; the small Persistent State caps in limits/ cover its
-  // fault. Remove once its replay is fast (#560).
-  'limits/persistent-state-minimum/case.toml',
-]);
 /** Replay with file-backed sources; debugging hooks remain Trace-silent. */
 export const replay = (
   dir: string,

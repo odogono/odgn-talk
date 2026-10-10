@@ -345,6 +345,7 @@ export class JsonObject {
   readonly kind = 'object';
   constructor(readonly pairs: [string, Json][]) {}
 }
+const plainRun = /[^\u0000-\u001f"\\]+/y;
 class JsonReader extends Reader {
   whitespace(): void {
     this.match(/[\u0009\u000a\u000d ]*/y);
@@ -353,6 +354,11 @@ class JsonReader extends Reader {
     this.eat('"');
     let result = '';
     while (this.i < this.source.length) {
+      // Take each run of unescaped characters whole.
+      result += this.match(plainRun) ?? '';
+      if (this.i >= this.source.length) {
+        break;
+      }
       const ch = this.source[this.i++]!;
       if (ch === '"') {
         assertScalarText(result);

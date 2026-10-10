@@ -12,6 +12,7 @@ import {
   lower,
   generalCategory,
   isWhiteSpace,
+  scalarCount,
 } from '../src/unicode';
 
 const dataRoot = resolve(import.meta.dir, '../../../.cache/unicode/18.0.0');
@@ -44,6 +45,18 @@ describe('Unicode scalar text', () => {
       expect(() => normalizeNFC(s)).toThrow();
     }
     expect(() => assertScalarText('\u0000\uFFFF\u{10FFFF}😀')).not.toThrow();
+  });
+  test('counts scalars as the string iterator does', () => {
+    for (const s of [
+      '',
+      'abc',
+      'é😀a\u{10FFFF}',
+      '\ud800',
+      '\ud800\ud800\udc00',
+      '\udc00\ud800',
+    ]) {
+      expect(scalarCount(s), JSON.stringify(s)).toBe(Array.from(s).length);
+    }
   });
 });
 

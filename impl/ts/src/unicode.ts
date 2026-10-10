@@ -36,9 +36,15 @@ const lookup = <T>(ranges: Ranges<T>, cp: number, fallback: T): T => {
   return fallback;
 };
 
+const surrogate = /[\uD800-\uDFFF]/;
+const surrogatePair = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
+
 export const assertScalarText = (s: string): void => {
   if (typeof s !== 'string') {
     invalidValue('Text must be a string');
+  }
+  if (!surrogate.test(s)) {
+    return;
   }
   for (let i = 0; i < s.length; i++) {
     const cp = s.charCodeAt(i);
@@ -52,6 +58,12 @@ export const assertScalarText = (s: string): void => {
     }
   }
 };
+
+/** Unicode scalar values in `s`, each lone surrogate counting as one. */
+export const scalarCount = (s: string): number =>
+  surrogate.test(s)
+    ? s.length - (s.match(surrogatePair)?.length ?? 0)
+    : s.length;
 
 const combiningClass = (cp: number) => lookup(combining, cp, 0);
 export const generalCategory = (cp: number) => lookup(category, cp, 'Cn');

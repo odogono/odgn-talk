@@ -27,6 +27,8 @@ import {
   type Value,
   type Versions,
 } from '../src/index';
+import { readOrderedJSON } from '../src/readers';
+import { displayText, hiddenCodePoint } from '../src/values';
 
 const now = parseInstant('2026-09-30T09:00:00Z');
 const libraryCodec = (
@@ -271,6 +273,36 @@ describe('Host JSON boundary', () => {
       }
     }
   });
+});
+
+describe('ordered JSON reader strings', () => {
+  test('joins plain runs with escapes', () => {
+    // Plain strings: Bun's transpiler escapes non-ASCII in String.raw.
+    // eslint-disable-next-line unicorn/prefer-string-raw -- see above.
+    const source = '"ab\\"c\\\\d\\u00e9\\ud83d\\ude00e"';
+    // eslint-disable-next-line unicorn/prefer-string-raw -- see above.
+    expect(readOrderedJSON(source)).toBe('ab"c\\dé😀e');
+    expect(readOrderedJSON('["", "x"]')).toEqual(['', 'x']);
+  });
+  test('refuses controls, lone escaped surrogates and open strings', () => {
+    for (const source of ['"a\u0001"', String.raw`"a\ud800b"`, '"abc', '"']) {
+      expect(() => readOrderedJSON(source), source).toThrow();
+    }
+  });
+});
+
+test('display text quotes plain text whole and names the rest', () => {
+  for (let cp = 0; cp <= 0xff_ff; cp++) {
+    if (cp >= 0xd8_00 && cp <= 0xdf_ff) {
+      continue;
+    }
+    const ch = String.fromCodePoint(cp);
+    expect(displayText(ch) === `"${ch}"`, `U+${cp.toString(16)}`).toBe(
+      cp !== 34 && !hiddenCodePoint(cp),
+    );
+  }
+  expect(displayText('')).toBe('""');
+  expect(displayText('😀a')).toBe('"😀a"');
 });
 
 test('coreVersions reports the generated pins and the actual save format', () => {
