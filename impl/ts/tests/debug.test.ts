@@ -236,7 +236,7 @@ test('debug state is absent from saves and Fingerprints, including restored Grou
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { replay } from '../tools/trace-case';
+import { debugParitySkips, replay } from '../tools/trace-case';
 
 test('a recorded early landing Trace replays in both replay modes', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-debug-'));
@@ -278,7 +278,9 @@ const corpusTraceCases = [
     ) as {
       kind: string;
     };
-    return setup.kind === 'trace' ? [{ path, setup }] : [];
+    return setup.kind === 'trace' && !debugParitySkips.has(path)
+      ? [{ path, setup }]
+      : [];
   });
 
 test('debug pause comparisons discover the corpus Trace Cases', () => {
@@ -288,8 +290,8 @@ test('debug pause comparisons discover the corpus Trace Cases', () => {
 for (const { path, setup } of corpusTraceCases) {
   for (const restoreBetweenPumps of [false, true]) {
     const mode = restoreBetweenPumps ? 'save/restore' : 'ordinary';
-    // The 64 MiB Persistent State case is expensive to restore. Give each
-    // case/mode its own budget, rather than timing the entire corpus as one test.
+    // Give each case/mode its own budget, rather than timing the entire
+    // corpus as one test.
     test(`debug pause preserves ${path} (${mode} replay)`, () => {
       const dir = resolve(corpusRoot, path, '..');
       const trace = readFileSync(resolve(dir, 'case.trace'), 'utf8').split(

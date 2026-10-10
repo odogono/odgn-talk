@@ -13,6 +13,7 @@ on:
       - 'bun.lock'
       - 'tsconfig.base.json'
       - '.github/workflows/ts.yml'
+      - '.github/actions/setup-ts/**'
   push:
     branches: [main]
     paths:
@@ -26,9 +27,31 @@ on:
       - 'bun.lock'
       - 'tsconfig.base.json'
       - '.github/workflows/ts.yml'
+      - '.github/actions/setup-ts/**'
 
+# Independent jobs, so the check takes as long as its slowest part.
 jobs:
-  check:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - run: bun test tests
+        working-directory: impl/ts
+      - run: bun run build
+        working-directory: impl/ts
+
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      # Every case, blessed or awaiting first review, in both replays.
+      - name: Run the complete Corpus on the TS Core
+        run: bun run corpus:run
+        working-directory: impl/ts
+
+  fuzz:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,22 +59,7 @@ jobs:
         with:
           go-version: '1.27'
           cache: false
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      # The Unicode tests read the pinned source files this check downloads.
-      - run: bun run unicode:check
-      - run: bun test tests
-        working-directory: impl/ts
-      # Every case, blessed or awaiting first review, in both replays.
-      - name: Run the complete Corpus on the TS Core
-        run: bun run corpus:run
-        working-directory: impl/ts
+      - uses: ./.github/actions/setup-ts
       - run: bun test tests
         working-directory: tooling/fuzz
       # A fixed seed keeps this a deterministic gate; the nightly job explores new seeds.
@@ -64,24 +72,35 @@ jobs:
           name: fuzz-smoke-findings
           path: fuzz-findings
           if-no-files-found: ignore
-      # Includes the real stdio LSP fixture workspace under Bun.
-      - run: bun test tests
-        working-directory: tooling/cli
-      - run: bun run lints:check
+
+  stack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
       - run: bun test tests
         working-directory: tooling/stack
       - run: bun run build
         working-directory: tooling/stack
       - run: bun run test:node
         working-directory: tooling/stack
+
+  tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - run: bun run typecheck
+      - run: bun run lints:check
+      # Includes the real stdio LSP fixture workspace under Bun.
+      - run: bun test tests
+        working-directory: tooling/cli
       # Runs the same stdio LSP workspace under Node.
       - run: bun run build && bun run test:node
         working-directory: tooling/cli
       # The editor extension's grammar tests, and its bundled client and server.
       - run: bun test tests && bun run build
         working-directory: tooling/vscode
-      - run: bun run build
-        working-directory: impl/ts
       # The sqlite implementation is node:sqlite, so it must also pass the sqlite
       # kit under Node and Deno. setAuthorizer needs Node 24.10 or later.
       - uses: actions/setup-node@v4

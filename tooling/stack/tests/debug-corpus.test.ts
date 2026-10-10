@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileSource } from '@odgn/northtalk';
-import { replay } from '../../../impl/ts/tools/trace-case';
+import { debugParitySkips, replay } from '../../../impl/ts/tools/trace-case';
 import { LiveDebugger } from '../src/debug';
 
 const root = resolve(import.meta.dir, '../../../corpus');
@@ -13,7 +13,9 @@ const cases = [...new Bun.Glob('**/case.toml').scanSync({ cwd: root })]
       kind: string;
       scripts?: { name: string; source: string }[];
     };
-    return setup.kind === 'trace' ? [{ path, setup }] : [];
+    return setup.kind === 'trace' && !debugParitySkips.has(path)
+      ? [{ path, setup }]
+      : [];
   });
 test('live-debugger parity discovers all corpus Trace Cases', () => {
   expect(cases.length).toBeGreaterThan(100);

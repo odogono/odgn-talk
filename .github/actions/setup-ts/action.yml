@@ -1,0 +1,17 @@
+name: Set up the TS workspace
+description: Installs Bun, Node 22 and the workspace, and fetches the pinned Unicode sources.
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.4.2
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - run: bun install --frozen-lockfile
+      shell: bash
+    # The Unicode tests read the pinned source files this check downloads.
+    - run: bun run unicode:check
+      shell: bash
