@@ -4,10 +4,13 @@ This standalone C Host measures the Go Core's WASI Preview 1 reactor through
 the Wasmtime C API for [#552](https://github.com/odogono/odgn-talk/issues/552),
 part of [#532](https://github.com/odogono/odgn-talk/issues/532). It uses the
 ordinary Message Layer, including interim `op` / `op-result` exchanges.
-Measurements are descriptive; no pass/fail thresholds are applied.
+It also takes the figures [#532's thresholds](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407)
+gate, defined as the [Elixir Host](../message-layer/elixir/) defines them, and
+serves one instance to that Host's fault and containment suites. The
+[report](../../docs/research/message-layer-measurements.md) judges them for #554.
 
 The [2026-10-10 Apple M5 results](results/2026-10-10-darwin-arm64-apple-m5.md)
-record the first run, with raw samples and provenance.
+record the first, descriptive run, with raw samples and provenance.
 
 ## Run
 
@@ -52,7 +55,38 @@ simultaneously live instances. Override `SAMPLES`, `ITERATIONS`, `INSTANCES`,
 SAMPLES=1 ITERATIONS=10 INSTANCES=2 bench/message-layer-c/run.sh
 ```
 
-## Measurements
+## Threshold figures
+
+The `thresholds` block in `out/measurements.json` holds #532's gated figures.
+Each latency figure takes 5,000 samples after 500 warm-up, on a fresh instance,
+three times, and is judged on the run with the median p50. Set `RUNS`,
+`THRESHOLD_SAMPLES`, `WARMUP`, `THRESHOLD_INSTANCES` and `MEMORY_INSTANCES` to
+change the sizes.
+
+- **Capability call:** the time from the Host receiving one `op` need to
+  receiving the next, inside a Pump of 100 calls to `echo` with
+  `{items: [i, "hello", true], count: 1}`, answered at once with its argument.
+- **Pump:** a `deliver` and then a `pump` of an empty Handler, until its `run end`.
+- **Instantiation:** from the compiled Module to the `hello` reply, 5,000 per run
+  after 20 warm-up instances. Deleting the Store is outside the interval.
+- **Memory:** linear memory after `hello`, a Group, a small Script and one Pump,
+  as the median and maximum over 20 instances.
+
+## Bridge for the fault and containment suites
+
+```sh
+TALK_MEMORY=/tmp/memory out/host --serve out/messagelayer.wasm 1073741824
+```
+
+serves one instance on stdin and stdout in the sidecar's framing (a 4-byte
+big-endian length, then the JSON), with linear memory capped at the given bytes
+(`0` for wasm32's 4 GiB). A trap writes `wasmtime: …` to stderr and exits 3; a
+null `talk_buffer` is answered with `{"refused":"null_buffer"}`. The last linear
+memory size is kept in `$TALK_MEMORY`. `mix talk.measure` in
+[`bench/message-layer/elixir`](../message-layer/elixir/) runs its suites through
+it as the `c, wasmtime` transport when `out/host` exists.
+
+## Descriptive measurements
 
 - **Compilation:** one raw WASM compilation with a fresh Engine, separately
   from instance creation. No compilation cache is configured.
@@ -91,7 +125,8 @@ This identity Host is not a reusable C binding.
 
 The same instance runs ten fuel-exhaustion cases, ten deliberate `throw`s,
 and ten non-tail-recursive depth faults. It then rejects malformed JSON, an
-unknown message, malformed Value Encoding, and a source load error. After
+unknown message, malformed Value Encoding, a source load error, and a
+`talk_send` length past the `talk_buffer` allocation. After
 **each** case, `hello` and a healthy Handler returning 42 must succeed on that
 instance. Representative Run Reports are recorded. Any Wasmtime error/trap,
 wrong error/outcome, or failed reuse check causes a nonzero exit.
