@@ -15,10 +15,13 @@ import (
 // REPLOptions controls terminal-only presentation and I/O, outside parity.
 // Input must be closed by its owner if a blocked reader needs to be released.
 // Interrupt cancels a foreground Run or drops an unfinished Entry.
+// Questions receives a user prompt's question, which isn't Session output;
+// when nil, it is output with a Prompt, and stderr without.
 type REPLOptions struct {
 	Environment session.Environment
 	Prompt      bool
 	Interrupt   <-chan os.Signal
+	Questions   io.Writer
 }
 type inputLine struct {
 	text string
@@ -56,15 +59,37 @@ func RunREPL(ctx context.Context, input io.Reader, output io.Writer, options REP
 		}
 		return nil
 	}
+	questions := options.Questions
+	if questions == nil {
+		questions = os.Stderr
+		if options.Prompt {
+			questions = output
+		}
+	}
+	ask := func(p session.Prompt) error {
+		for _, line := range promptLines(p) {
+			if _, err := fmt.Fprintln(questions, line); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	asked := ""
 	var entry []string
 	for {
 		waiting := host.Waiting()
+		if waiting.Kind == "user" && waiting.Call != asked {
+			asked = waiting.Call
+			if err := ask(*waiting.Prompt); err != nil {
+				return err
+			}
+		}
 		if options.Prompt && waiting.Kind != "deadline" {
 			prompt := "> "
 			if len(entry) > 0 {
 				prompt = "| "
 			}
-			if waiting.Kind == "read" {
+			if waiting.Kind == "read" || waiting.Kind == "user" {
 				prompt = ""
 			}
 			if _, err := io.WriteString(output, prompt); err != nil {
@@ -120,6 +145,17 @@ func RunREPL(ctx context.Context, input io.Reader, output io.Writer, options REP
 			}
 			if waiting.Kind == "read" {
 				if err := print(host.Read(line.text)); err != nil {
+					return err
+				}
+				continue
+			}
+			if waiting.Kind == "user" {
+				answer, ok := promptAnswer(*waiting.Prompt, line.text)
+				if !ok {
+					if err := ask(*waiting.Prompt); err != nil {
+						return err
+					}
+				} else if err := print(host.AnswerPrompt(answer)); err != nil {
 					return err
 				}
 				continue

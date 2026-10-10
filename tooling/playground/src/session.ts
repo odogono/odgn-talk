@@ -312,6 +312,12 @@ export class PlaygroundSession {
     return out;
   }
 
+  answerPrompt(answer: Value): string[] {
+    const out = this.host.answerPrompt(answer);
+    this.settled();
+    return out;
+  }
+
   tick(): string[] {
     const out = this.host.tick();
     this.settled();

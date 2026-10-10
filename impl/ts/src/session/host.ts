@@ -62,6 +62,7 @@ import {
   type CalendarImpl,
 } from '../standard-capabilities';
 import { storeCapability } from '../store-capability';
+import { userCapability, type UserImpl } from '../user-capability';
 import {
   decodeContents,
   encodeContents,
@@ -132,6 +133,8 @@ export type Waiting =
   | { k: 'prompt' }
   /** The Foreground Run waits on `console`'s `read`. */
   | { k: 'read' }
+  /** The Foreground Run waits on a `user` prompt (chapter 12, Prompts). */
+  | { call: string; k: 'user'; prompt: UserPrompt }
   /** The Foreground Run waits only for a deadline, so the Host sleeps. */
   | { at: bigint; k: 'deadline' }
   /**
@@ -139,6 +142,20 @@ export type Waiting =
    * Host Input, and the Pump's lines print when it completes.
    */
   | { k: 'paused' };
+
+/**
+ * A `user` prompt, as the person sees it. An omitted prompt, default or
+ * title is "".
+ */
+export type UserPrompt =
+  | { k: 'confirm'; message: string }
+  | {
+      items: readonly string[];
+      k: 'choose';
+      multiple: boolean;
+      prompt: string;
+    }
+  | { fallback: string; k: 'enter'; message: string };
 
 /** How a debugger continues a paused Pump. */
 export type DebugAction = 'resume' | 'step' | 'stepOver' | 'stepOut';
@@ -167,7 +184,7 @@ export type Mock = {
 const MODES = new Set<string>(['immediate', 'suspending', 'fire-and-forget']);
 // The Standard Capabilities a Session Host may build in, for `:grant`, and
 // the binding each takes when `:grant` gives none.
-const BUILT_IN = new Set(['clock', 'calendar', 'locale', 'store']);
+const BUILT_IN = new Set(['clock', 'calendar', 'locale', 'store', 'user']);
 const DEFAULT_BINDING: Record<string, string> = {
   calendar: 'UTC',
   locale: 'und',
@@ -185,6 +202,7 @@ const STORE_COSTS = {
 // The Operations of each Standard Capability the Host answers.
 const OPERATIONS: Record<string, readonly string[]> = {
   calendar: ['today', 'now', 'toCivil', 'toInstant', 'offset', 'zone'],
+  user: ['confirm', 'choose', 'enter', 'notify'],
   locale: [
     'compare',
     'rank',
@@ -195,6 +213,26 @@ const OPERATIONS: Record<string, readonly string[]> = {
     'dayNames',
     'tag',
   ],
+};
+// A restored prompt, from its call's Operation and arguments.
+const promptOf = (operation: string, args: readonly Value[]): UserPrompt => {
+  const option = (key: string) => {
+    const v = args[1]?.kind === 'map' ? args[1].get(key) : undefined;
+    return v?.kind === 'nothing' ? undefined : v;
+  };
+  const message = args[0]!.asText() ?? '';
+  return operation === 'confirm'
+    ? { k: 'confirm', message }
+    : operation === 'enter'
+      ? { k: 'enter', message, fallback: option('default')?.asText() ?? '' }
+      : {
+          k: 'choose',
+          items: Array.from({ length: args[0]!.length }, (_, i) =>
+            args[0]!.index(i + 1).asText()!,
+          ),
+          prompt: option('prompt')?.asText() ?? '',
+          multiple: option('multiple')?.asBool() === true,
+        };
 };
 const free = (operations: readonly string[]) =>
   Object.fromEntries(operations.map(op => [op, { fuel: 0 }]));
@@ -286,6 +324,12 @@ export class SessionHost {
   private lastSeg = new Map<string, Extract<RunEvent, { k: 'seg' }>>();
   private writes = new Map<string, Value>();
   private reads = new Map<string, { call: Call<unknown>; run?: string }>();
+  // Unanswered `user` prompts, and each `notify`'s line, by call.
+  private prompts = new Map<
+    string,
+    { call: Call<unknown>; prompt: UserPrompt; run?: string }
+  >();
+  private notes = new Map<string, string>();
   private events: RunEvent[] = [];
   private state: Waiting = { k: 'prompt' };
   // The Script's code units: an extension is named after their count.
@@ -651,6 +695,25 @@ export class SessionHost {
     return this.printed(this.pump());
   }
 
+  /**
+   * Answers the Foreground Run's `user` prompt with what the person gave:
+   * a boolean, the chosen item or items, the entered text, or Nothing.
+   */
+  answerPrompt(answer: Value): string[] {
+    this.paused();
+    this.callStart = this.recordedItems.length;
+    const pending = [...this.prompts].find(
+      ([, p]) => p.run !== undefined && p.run === this.foreground?.run,
+    );
+    if (!pending) {
+      return [];
+    }
+    this.prompts.delete(pending[0]);
+    this.record({ k: 'answer', call: pending[0], answer: answer.toString() });
+    pending[1].call.answer(answer);
+    return this.printed(this.pump());
+  }
+
   /** `Inspect()`, which is the Host Input `vars`; null before the session starts. */
   inspect(): Inspection | null {
     this.recorded();
@@ -764,6 +827,12 @@ export class SessionHost {
         ) as CapabilityDef<unknown>,
       );
     }
+    if (granted.has('user')) {
+      capabilities.set(
+        'user',
+        userCapability(this.userHost(), costs.get('user')!),
+      );
+    }
     if (granted.has('store')) {
       capabilities.set(
         'store',
@@ -780,6 +849,42 @@ export class SessionHost {
       }
     }
     return capabilities;
+  }
+
+  // A prompt, refused with `user busy` while another waits.
+  private ask(call: Call<unknown>, prompt: UserPrompt) {
+    if (this.prompts.size) {
+      const busy = new ScriptError(
+        'user busy',
+        'Another prompt is waiting for an answer',
+      );
+      this.record({
+        k: 'answer',
+        call: call.id,
+        answer: `fail ${map([
+          ['code', text(busy.code)],
+          ['message', text(busy.message)],
+        ]).toString()}`,
+      });
+      throw busy;
+    }
+    this.prompts.set(call.id, { call, prompt });
+    call.signal.addEventListener('abort', () => this.prompts.delete(call.id));
+  }
+
+  // The Session Host's `user`: one prompt at a time, shown by whoever drives
+  // the session, and `notify` printed at its `call` record.
+  private userHost(): UserImpl {
+    return {
+      confirm: (call, message) => this.ask(call, { k: 'confirm', message }),
+      choose: (call, items, prompt, multiple) =>
+        this.ask(call, { k: 'choose', items, prompt, multiple }),
+      enter: (call, message, fallback) =>
+        this.ask(call, { k: 'enter', message, fallback }),
+      notify: (call, message, title) => {
+        this.notes.set(call.id, `* ${title ? `${title}: ` : ''}${message}`);
+      },
+    };
   }
 
   // A built-in Capability's Host functions, each answer recorded as the `~`
@@ -1016,13 +1121,14 @@ export class SessionHost {
     return [];
   }
 
-  // `clock` and `store` are always built in, and `calendar` and `locale`
+  // `clock`, `store` and `user` are always built in, and `calendar` and `locale`
   // when the environment supplies their Host functions.
   private builtIn(capability: string): boolean {
     return (
       this.extensions.has(capability) ||
       capability === 'clock' ||
       capability === 'store' ||
+      capability === 'user' ||
       (capability === 'calendar' && Boolean(this.env.builtIns?.calendar)) ||
       (capability === 'locale' && Boolean(this.env.builtIns?.locale))
     );
@@ -1519,6 +1625,8 @@ export class SessionHost {
     this.state = { k: 'prompt' };
     this.writes.clear();
     this.reads.clear();
+    this.prompts.clear();
+    this.notes.clear();
     this.pending.clear();
     this.mockCalls.clear();
     for (const call of result.pending) {
@@ -1526,6 +1634,15 @@ export class SessionHost {
       const run = call.id.slice(0, call.id.lastIndexOf('.'));
       if (call.grant === 'console') {
         this.reads.set(call.id, { call: adopted, run });
+      } else if (call.operation.capability === 'user') {
+        this.prompts.set(call.id, {
+          call: adopted,
+          prompt: promptOf(call.operation.operation, call.args),
+          run,
+        });
+        adopted.signal.addEventListener('abort', () =>
+          this.prompts.delete(call.id),
+        );
       } else {
         this.pending.set(call.id, adopted);
       }
@@ -2043,9 +2160,18 @@ export class SessionHost {
             ...lines(textForm(written)).map(l => this.prefix(e.run) + l),
           );
         }
+        const note = this.notes.get(e.call);
+        if (note !== undefined) {
+          this.notes.delete(e.call);
+          out.push(...lines(note).map(l => this.prefix(e.run) + l));
+        }
         const read = this.reads.get(e.call);
         if (read) {
           read.run = e.run;
+        }
+        const prompt = this.prompts.get(e.call);
+        if (prompt) {
+          prompt.run = e.run;
         }
       } else if (e.k === 'unhandled') {
         out.push(
@@ -2135,6 +2261,11 @@ export class SessionHost {
     }
     if ([...this.reads.values()].some(r => r.run === run)) {
       this.state = { k: 'read' };
+      return;
+    }
+    const prompt = [...this.prompts].find(([, p]) => p.run === run);
+    if (prompt) {
+      this.state = { k: 'user', call: prompt[0], prompt: prompt[1].prompt };
       return;
     }
     const seg = this.lastSeg.get(run)!;

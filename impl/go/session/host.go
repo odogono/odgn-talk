@@ -39,9 +39,13 @@ type Environment struct {
 	WriteStoreFile   func(path, source string) error
 }
 
+// Waiting is what the Session Host waits for: prompt, read, user (with the
+// prompt's Call and Prompt), deadline (with At) or paused.
 type Waiting struct {
-	Kind string
-	At   time.Time
+	Kind   string
+	At     time.Time
+	Call   string
+	Prompt *Prompt
 }
 type placement struct{ line, col int }
 type declaration struct {
@@ -115,6 +119,8 @@ type Host struct {
 	events                       []event
 	writes                       map[string]talk.Value
 	reads, pending               map[string]*talk.Call
+	prompts                      map[string]*prompt
+	notes                        map[string]string
 	readOrder                    []string
 	mocks                        []mock
 	granted                      map[string]string
@@ -139,7 +145,7 @@ func New(env Environment) *Host {
 	if env.Now == nil {
 		env.Now = time.Now
 	}
-	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, inspections: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
+	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, inspections: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, prompts: map[string]*prompt{}, notes: map[string]string{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
 }
 func (h *Host) Source() string          { return sourceOf(h.declarations) }
 func (h *Host) Started() bool           { return h.group != nil }
@@ -266,11 +272,17 @@ func (h *Host) start() {
 			defs[capability], err = h.core.ClockCapability(talk.Costs{"now": {}})
 			must(err)
 		}
+		if capability == "user" && defs[capability] == nil {
+			defs[capability], err = h.core.UserCapability(userBinding{h}, talk.Costs{"confirm": {}, "choose": {}, "enter": {}, "notify": {}})
+			must(err)
+		}
 		names := []string{}
 		if capability == "store" {
 			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
 		} else if capability == "clock" {
 			names = []string{"now"}
+		} else if capability == "user" {
+			names = []string{"confirm", "choose", "enter", "notify"}
 		} else {
 			for _, m := range h.mocks {
 				if m.capability == capability {

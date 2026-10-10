@@ -12,6 +12,7 @@ export {
   SessionHost,
   type Mock,
   type SessionEnvironment,
+  type UserPrompt,
   type Waiting,
 } from './host';
 export {

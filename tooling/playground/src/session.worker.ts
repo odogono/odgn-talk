@@ -9,6 +9,7 @@ import {
   renderDebugView,
   type ReplayResult,
 } from '@odgn/northtalk-tooling/debug';
+import { bool, list, nothing, text } from '@odgn/northtalk';
 import { SessionDriver } from '@odgn/northtalk-tooling/session-driver';
 import type {
   ConsoleLine,
@@ -124,7 +125,11 @@ const state = (): SessionState => {
   notes = [];
   const result = session.latestCopy;
   const copy = selection ? session.copyOf(selection.id) : undefined;
+  const waiting = session.host.waiting;
   return {
+    ...(waiting.k === 'user'
+      ? { question: { ...waiting.prompt, call: waiting.call } }
+      : {}),
     lines,
     generation,
     revision: ++revision,
@@ -249,9 +254,14 @@ const handle = (request: SessionRequest): SessionResponse => {
         for (const command of request.shared?.setup ?? []) {
           session.input(command);
         }
-        // Grant canvas by default, so drawing works without any Setup.
-        if (!session.host.setup.scripts![0]!.grants!.canvas) {
+        // Grant canvas and user by default, so drawing and prompts work
+        // without any Setup.
+        const grants = session.host.setup.scripts![0]!.grants!;
+        if (!grants.canvas) {
           session.input(':grant canvas canvas');
+        }
+        if (!grants.user) {
+          session.input(':grant user user');
         }
       }
       return { t: 'state', state: state() };
@@ -259,6 +269,19 @@ const handle = (request: SessionRequest): SessionResponse => {
     case 'line':
       driver.input(request.text);
       break;
+    case 'answer': {
+      const given = request.answer;
+      driver.answer(
+        given === null
+          ? nothing
+          : typeof given === 'boolean'
+            ? bool(given)
+            : typeof given === 'string'
+              ? text(given)
+              : list(...given.map(item => text(item))),
+      );
+      break;
+    }
     case 'exampleSetup':
       // Setup is fixed once execution starts, so the next Run fresh,
       // which starts from the setup, enters these.
@@ -300,6 +323,10 @@ const handle = (request: SessionRequest): SessionResponse => {
       }
       if (session.host.waiting.k === 'read') {
         note('Answer the read at the < prompt first.', 'warning');
+        break;
+      }
+      if (session.host.waiting.k === 'user') {
+        note('Answer the prompt first.', 'warning');
         break;
       }
       const ran = session.runSelection(

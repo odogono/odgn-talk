@@ -14,6 +14,7 @@ import { createInterface } from 'node:readline';
 import { SessionHost, writeTranscript } from '@odgn/northtalk/session';
 import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
 import { SessionDriver } from '@odgn/northtalk-tooling/session-driver';
+import { promptAnswer, promptLines } from './prompts';
 
 const help = [
   'Enter a declaration, a statement or an expression. An unfinished one',
@@ -72,9 +73,17 @@ export const repl = ({
       process.stdout.write(`${line}\n`);
     }
   };
+  // A question isn't Session output: on a terminal it shows with the rest,
+  // and otherwise it goes to stderr, leaving stdout as the session printed it.
+  const ask = (lines: readonly string[]) => {
+    for (const line of lines) {
+      (tty ? process.stdout : process.stderr).write(`${line}\n`);
+    }
+  };
   const driver = new SessionDriver(host, {
     now,
     help,
+    answerLine: promptAnswer,
     timer: (ms, fire) => {
       const timer = setTimeout(fire, ms);
       return () => clearTimeout(timer);
@@ -84,12 +93,14 @@ export const repl = ({
         print(event.lines);
       } else if (event.k === 'note') {
         print([event.text]);
+      } else if (event.k === 'question') {
+        ask(promptLines(event.prompt));
       } else if (event.prompt === 'closed') {
         rl.close();
         done(0);
       } else if (tty && event.prompt !== 'sleeping') {
         rl.setPrompt(
-          event.prompt === 'read'
+          event.prompt === 'read' || event.prompt === 'user'
             ? ''
             : event.prompt === 'continue'
               ? '| '
