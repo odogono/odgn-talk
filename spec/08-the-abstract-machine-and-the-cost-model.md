@@ -436,7 +436,7 @@ The temp is released at the end. A plural chunk word lowers as its singular.
    - for `second` to `tenth`: `load k` `const 1` `subtract` `store k` `load k` `const 0` `equal` `branch-false L1`, then `load t` `store r` `jump L2`
 5. L2: `pop` `load r`.
 
-Inside ⟦c⟧, `it` is `load t`. The temps are released at the end. A condition that isn't a boolean raises `wrong kind` at `branch-false`, and an ordinal Whose Clause stops at L2 without evaluating `c` on the chunks after its match.
+Inside ⟦c⟧, `it` is `load t`, and a Whose Key `K` lowers as `the K of it`. The temps are released at the end. A condition that isn't a boolean raises `wrong kind` at `branch-false`, and an ordinal Whose Clause stops at L2 without evaluating `c` on the chunks after its match.
 
 ### Calls, Lambdas and Function Values
 

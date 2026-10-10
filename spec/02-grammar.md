@@ -477,6 +477,7 @@ MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
 EveryHead      ::= 'every' ( 'code' 'point' | Name ) 'of' Postfix ( 'delimited' 'by' Postfix )?
                    /* the Name after `every` is a chunk kind's singular */
 Whose          ::= 'whose' Expression
+                   /* a Name operand that is the Expression's first token is a Whose Key, a key or property of `it` */
 ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
@@ -493,7 +494,7 @@ MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 - **Calls need a name:** `name(` with no space is the only call. A call's result can't be called again, so `times(3)(14)` is a syntax error at the second `(`.
 - **Lists and maps:** `...` spreads a list into a list literal. In a map literal, a Word other than `offer` or a Text followed by `:` is a key, other Reserved Words included. A map literal has no computed keys.
 - **The Match Search** is `every match of <p> in s`.
-- **Whose Clauses:** at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head, `every item of xs`, which must be followed by `whose` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). An ordinal Chunk Expression that is a whole operand may be followed by `whose` too, after its `delimited by` if it has one: `the first item of s delimited by ";" whose it is empty`. `whose` after any other operand is a syntax error, and so is `whose` in a Container. Any other `every` is a Name.
+- **Whose Clauses:** at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head, `every item of xs`, which must be followed by `whose` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). An ordinal Chunk Expression that is a whole operand may be followed by `whose` too, after its `delimited by` if it has one: `the first item of s delimited by ";" whose it is empty`. `whose` after any other operand is a syntax error, and so is `whose` in a Container. A Name operand that is the condition's first token is a Whose Key, a key or property of `it` ([chapter 4](04-expressions-and-statements.md#whose-clauses)), so `whose amount > 1` parses as `whose the amount of it > 1`, and `whose (amount) > 1` reads the name `amount`. Any other `every` is a Name.
 
 The chunk kinds:
 

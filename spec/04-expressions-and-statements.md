@@ -181,7 +181,9 @@ A Chunk Expression reads part of a value by kind and position: `word 2 of line 3
 A Whose Clause, `whose c`, keeps only the chunks for which `c` is `true` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). It may end an Every Head, `every K of x`, or an ordinal Chunk Expression, `the first K of x`. It is a whole expression, as a Lambda is, so inside an operand it needs brackets: `the length of (every item of xs whose it > 1)` ([chapter 2](02-grammar.md#operands)).
 
 - **The walk:** `every K of x whose c` and `the first K of x whose c` walk `the Ks of x`, the plural property of the chunk kind `K` ([Keys and properties](#keys-and-properties)), with the chain's `delimited by` if there is one. So they walk the elements of a list, the integers of an integer range, the items, lines, words, Characters or code points of text as texts, and the bytes of Bytes as numbers. Any other value raises `wrong kind`, as the property does. The walk is over a snapshot taken when it starts.
-- **`it`** is the chunk being tested. Every other name in `c` resolves as it does outside the clause, and the body's own `it` can't be read there. A Whose Clause inside `c` has its own `it`.
+- **`it`** is the chunk being tested, and the body's own `it` can't be read in `c`. A Whose Clause inside `c` has its own `it`.
+- **A Whose Key:** a Name operand that is `c`'s first token, not a call and not the start of a Chunk Expression, is the key or property of `it` with that name, as the possessive _whose_ reads. `whose amount > 100 GBP` means `whose the amount of it > 100 GBP`, and `whose length > 80` means `whose the length of it > 80`. A local of the same name isn't read there. A Reserved Word can't be a Whose Key, and in brackets the first Name is a plain one: `whose (limit) > 3`.
+- **Other names** in `c` resolve as they do outside the clause. In `whose amount > 100 GBP and region is "EU"`, `region` is a local, or the load error `unknown name` if there is none, and the key is `it's region`.
 - **The condition** must give a boolean, or `wrong kind` is raised with `expected` `"boolean"`, as for `if`. An error in `c` is raised in the Run.
 - **What `c` may use:** anything an expression may, except a call to anything but a Built-in and a Lambda. A call to a Script or Library function, a Handler or a Function Value, including one through a name that shadows a Built-in, and a Lambda, are the load error `not in a whose`. Keys and Host Object properties are read as anywhere else.
 - **`every K of x whose c`** gives a new list of the chunks for which `c` is `true`, in order, or `[]` if there are none. It is a list for chunks of text too.
@@ -192,9 +194,9 @@ A Whose Clause, `whose c`, keeps only the chunks for which `c` is `true` ([ADR 0
 >
 > ```
 > put every item of [3, 8, 1, 12] whose it > 5 into big          -- [8, 12]
-> put every item of orders whose the amount of it > 100 GBP into large
-> put the first item of tickets whose the status of it is "open" into next
-> put the last word of "a bb ccc dd" whose the length of it = 2 into w   -- "dd"
+> put every item of orders whose amount > 100 GBP into large
+> put the first item of tickets whose status is "open" and it's owner is empty into next
+> put the last word of "a bb ccc dd" whose length = 2 into w     -- "dd"
 > put every line of report whose it begins with "WARN" into warnings
 > put the first item of [1, 3] whose it > 5 into none            -- nothing
 > ```

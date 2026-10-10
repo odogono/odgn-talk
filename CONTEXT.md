@@ -362,6 +362,10 @@ _Avoid_: accumulator, collect clause, comprehension
 The `whose c` that may end an ordinal Chunk Expression or an Every Head, keeping only the chunks for which `c` is `true`, with `it` as the chunk being tested. `every item of xs whose it > 3` gives a list, and `the first item of xs whose it > 3` gives one chunk or Nothing.
 _Avoid_: filter reference, comprehension, where clause
 
+**Whose Key**:
+The Name that starts a Whose Clause's condition, read as a key or property of `it`: `amount` in `every item of orders whose amount > 100 GBP`. Only the first token is one, and a local of the same name isn't read there.
+_Avoid_: implicit key, bare key
+
 **Every Head**:
 The `every item of xs` that starts a Whose Clause's list form. It is never written without `whose`.
 _Avoid_: every reference, every chunk

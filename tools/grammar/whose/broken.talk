@@ -49,3 +49,8 @@ end t
 on t xs
   put every items of xs whose it > 1 into ys
 end t
+-- case: a Reserved Word can't be a Whose Key
+-- expect: unexpected token at 2:30
+on t xs
+  put every item of xs whose end > 1 into ys
+end t

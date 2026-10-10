@@ -121,6 +121,7 @@ export class Parser {
   brackets: string[] = []; // the open brackets, innermost last
   build = 0; // inside a `<< … >>` build value, where `as uint16` is a field type
   size = 0; // inside a parenthesised Binary Pattern size, where `^n` is allowed
+  whoseKeyAt = -1; // the offset of a Whose Clause condition's first token
   // A newline is skipped only while more brackets are open than the top of
   // this stack. A Lambda head and a block Lambda body push their own depth.
   nlBase: number[] = [0];
@@ -1374,7 +1375,7 @@ export class Parser {
     const e = this.or();
     if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
       const op = this.next('operator');
-      return this.at(op, { k: 'Whose', of: e, cond: this.expr() });
+      return this.at(op, { k: 'Whose', of: e, cond: this.whoseCondition() });
     }
     return e;
   }
@@ -1853,6 +1854,13 @@ export class Parser {
     if (this.isOp(p, '(') && !p.spaceBefore) {
       return this.call(w);
     }
+    if (t.pos === this.whoseKeyAt) {
+      return {
+        k: PROPERTIES.has(w) ? 'Property' : 'Key',
+        key: w,
+        base: { k: 'Const', v: 'it' },
+      };
+    }
     return { k: 'Name', name: w };
   }
 
@@ -1879,7 +1887,21 @@ export class Parser {
       delimiter = this.postfix(this.primary());
     }
     this.expectWord('whose', 'operator');
-    return { k: 'Whose', every: true, kind, src, delimiter, cond: this.expr() };
+    return {
+      k: 'Whose',
+      every: true,
+      kind,
+      src,
+      delimiter,
+      cond: this.whoseCondition(),
+    };
+  }
+
+  // A Name operand that is the condition's first token is a Whose Key, a key
+  // or property of `it`: `whose amount > 100 GBP` (ADR 0074).
+  whoseCondition(): Node {
+    this.whoseKeyAt = this.peek(0).pos;
+    return this.expr();
   }
 
   // `item 2 of x`, `characters 2..4 of w`

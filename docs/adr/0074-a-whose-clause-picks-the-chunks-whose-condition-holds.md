@@ -1,11 +1,12 @@
 # A `whose` clause picks the chunks whose condition holds
 
-A Chunk Expression may end with a Whose Clause, `whose c`, which keeps only the chunks for which `c` is `true`. Inside `c`, `it` is the chunk being tested. `every item of orders whose the amount of it > 100 GBP` gives the list of matching elements. `the first item of tickets whose the status of it is "open"` gives the first match, or Nothing when there is none. Any ordinal works this way, and `last` gives the last match. For example:
+A Chunk Expression may end with a Whose Clause, `whose c`, which keeps only the chunks for which `c` is `true`. Inside `c`, `it` is the chunk being tested, and a Name that is `c`'s first token is a Whose Key, a key or property of `it`, as the possessive _whose_ reads in English. `every item of orders whose amount > 100 GBP` gives the list of elements whose `amount` is over 100 GBP. `the first item of tickets whose status is "open"` gives the first match, or Nothing when there is none. Any ordinal works this way, and `last` gives the last match. For example:
 
 ```
-put every item of orders whose the amount of it > 100 GBP into big
-put the first item of tickets whose the status of it is "open" into next
-put every line of report whose the length of it > 80 into long
+put every item of orders whose amount > 100 GBP into big
+put the first item of tickets whose status is "open" into next
+put every line of report whose length > 80 into long
+put every item of xs whose it > 3 into big
 ```
 
 We chose this because filtering is one of the first things a beginner needs, and today it takes a Library import and a Lambda: `use filter from list`, then `filter(orders, given o: the amount of o > 100 GBP)`. Chunk Expressions are already Beginner Surface (`the first word of s`, `the last line of report`), and a Whose Clause only adds a condition to them. It is HyperTalk's and AppleScript's spelling (`every window whose visible is true`), which many of the language's readers know.
@@ -14,7 +15,10 @@ This narrows ADR 0025, which removed Comprehensions as a second spelling of `map
 
 ## Considered Options
 
-- **Bare key names, as AppleScript has** (`whose amount > 100 GBP`): this reads best, but `amount` could be a local, a Script Variable, a Constant or a Built-in property such as `length`, and nothing in the source would show which one it is. One rule would make a key shadow the local, which silently changes what a name means inside the clause. Another would make a name that is both a key and a local a load error. That breaks a Script when a map gains a key, and the loader can't know a map's keys anyway.
+- **Only `it`, with every key spelt out** (`whose the amount of it > 100 GBP`, or `whose it's amount > 100 GBP`): this is the plainest rule, and the first draft of this ADR. But it reads worse than the issue's `whose amount > 100 GBP`, which is the commonest use, and `it's` is spelt like "it is".
+- **Bare key names anywhere in the condition, as AppleScript has** (`whose amount > 100 GBP and region is "EU"`): `region` could be a local, a Script Variable, a Constant or a key, and nothing in the source would show which one it is. One rule would make a key shadow the local, which silently changes what a name means inside the clause. Another would make a name that is both a key and a local a load error. That breaks a Script when a map gains a key, and the loader can't know a map's keys anyway. A Whose Key avoids this because its position, not its name, makes it a key, as `amount` in `the amount of x` is never a local.
+- **`its` as the possessive of `it`** (`whose its amount > 100 GBP`): AppleScript has it, but it adds a word, and `whose its` is clumsy English.
+- **A Whose Key after each `and` and `or` too**, or `and whose region is "EU"`: this would read well for a second key, but a Name after `and` would then mean a key in a Whose Clause and a local everywhere else. The first token is one position, easy to see and to teach, and `it's region` spells any later key.
 - **An explicit name** (`whose each …`, `whose o: …`): `each` already has a meaning after `repeat for`. A named form brings back the Comprehension's binding, and once it has a name, a Lambda is the better tool.
 - **`where` in place of `whose`:** `where` is already reserved, so no source would break. But `where` is the Guard's word and was the removed Comprehension's spelling. Inside a Guard, `the first item of xs where …` would read as a second Guard.
 - **Any expression as the condition:** a Whose Clause would then do every job `filter` does, which is the two spellings ADR 0025 rejected. Limiting the condition to Built-ins keeps each job to one spelling. A test on the chunk's own data is a Whose Clause, and a test that needs Script code is `filter`, or `repeat … collecting` with `next repeat` (ADR 0059).
@@ -41,7 +45,9 @@ This narrows ADR 0025, which removed Comprehensions as a second spelling of `map
   - `every …` gives a new list of the chunks for which `c` is `true`, in order, and `[]` when there are none. It is a list even for chunks of text.
   - `the n-th …` gives the n-th match, and `the last …` the last one. Each gives Nothing when there is no such match, for text too, so the empty text a matching empty line gives is told apart from no match.
 - **The condition:**
-  - `it` is the chunk being tested. Every other name resolves as it does outside the clause. The body's own `it` can't be read inside the clause. A nested Whose Clause has its own `it`.
+  - `it` is the chunk being tested.
+  - **A Whose Key:** a Name operand that is `c`'s first token, not a call and not the start of a Chunk Expression, is a key or property of `it`. `whose amount > 100 GBP` means `whose the amount of it > 100 GBP`, `whose length > 80` means `whose the length of it > 80`, and `whose amount's currency is "GBP"` reads on with `'s`. A local named `amount` isn't read there. A Reserved Word can't be a Whose Key, and brackets make the first Name a plain one: `whose (limit) > 3`.
+  - Every other name resolves as it does outside the clause, so in `whose amount > 100 GBP and region is "EU"`, `region` is a local. A later key is spelt with `it`: `and it's region is "EU"`. When no such local exists, `region` is the load error `unknown name`. The body's own `it` can't be read inside the clause. A nested Whose Clause has its own `it`.
   - `c` must give a boolean. Any other value raises `wrong kind` with `expected` `"boolean"`, as an `if` condition does.
   - An error in `c` is raised in the Run, as any other expression's error is.
   - `c` may call only Built-ins, and may not hold a Lambda. A call to a Script or Library function, a Handler or a Function Value, including one through a name that shadows a Built-in, is the new load error `not in a whose`. Keys, Built-in properties and Host Object properties are read as anywhere else in a Run.
@@ -49,8 +55,8 @@ This narrows ADR 0025, which removed Comprehensions as a second spelling of `map
 - **Lowering:** narrows ADR 0010. No new instruction is needed.
   - `every K of x whose c` lowers to: `list 0` `store r`, then ⟦x⟧ and `property` of `K`'s plural (or `property-delimited items`), then `iterate`. L1: `next L2` `store t`, ⟦c⟧ `branch-false L1`, then `load r` `load t` `list-append` `store r` and `jump L1`. L2: `pop` `load r`.
   - The ordinal forms start with `const nothing` `store r` and replace the append. For `first`, a match does `load t` `store r` `jump L2`. For `last`, it does `load t` `store r` `jump L1`. For `second` to `tenth`, a counter `k` that starts at n is counted down on each match, and the match that brings it to 0 does `load t` `store r` `jump L2`.
-  - Inside `c`, `it` is `load t`. Every step is charged as its instructions are (ADR 0021).
+  - Inside `c`, `it` is `load t`, and a Whose Key lowers as `the K of it`. Every step is charged as its instructions are (ADR 0021).
 - **Surface:** Beginner Surface, with no `[[advanced]]` tag (ADR 0027).
-- **Tooling:** a `suggest-whose` hint, at the `beginner` level, for a `filter` call whose Lambda has one plain parameter and a body that would be a valid condition. It ships with the Cores' implementation. Adding it isn't a language change.
-- **Delivery:** the rules land with this ADR (ADR 0032): the grammar in chapter 2, `grammar.ebnf` and `grammar.toml`, chapters 4 and 8, `diagnostics.toml`, and the reference parser with its sketch and broken cases under `tools/grammar/whose/`. The examples stay in plain code blocks until both Cores parse them, since the TS Core's tests parse every `talk` block in `docs/` and `spec/`. The implementation follow-up supplies both Cores' parsers, checkers and lowerings, the Disassembly and Trace Cases, and the Lint. Its cases cover maps, text chunks, no match, the ordinal and `last` forms, `not in a whose`, and a local named like a key, which the clause doesn't read.
+- **Tooling:** an `unknown name` in a Whose Clause's condition, other than its first token, suggests `it's` with the name. A `suggest-whose` hint, at the `beginner` level, for a `filter` call whose Lambda has one plain parameter and a body that would be a valid condition. It ships with the Cores' implementation. Adding it isn't a language change.
+- **Delivery:** the rules land with this ADR (ADR 0032): the grammar in chapter 2, `grammar.ebnf` and `grammar.toml`, chapters 4 and 8, `diagnostics.toml`, and the reference parser with its sketch and broken cases under `tools/grammar/whose/`. The examples stay in plain code blocks until both Cores parse them, since the TS Core's tests parse every `talk` block in `docs/` and `spec/`. The implementation follow-up supplies both Cores' parsers, checkers and lowerings, the Disassembly and Trace Cases, and the Lint. Its cases cover maps, text chunks, no match, the ordinal and `last` forms, `not in a whose`, a Whose Key with a local of the same name, which the clause doesn't read, and a later Name that is a local, which it does.
 - **A breaking change, with no version bump.** A chunk index that is a variable named `whose`, as in `item whose of xs`, no longer parses and needs brackets: `item (whose) of xs`. No source in the corpus, the stdlib or the docs is affected.
