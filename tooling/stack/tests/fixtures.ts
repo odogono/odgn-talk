@@ -45,6 +45,15 @@ export const fixtures: readonly {
     negative: script('ask scores to increment "best"'),
   },
   {
+    id: 'interpolated-sql',
+    positive: script(
+      'put 3 into id\nask db to query "SELECT name FROM users WHERE id = " & id, []',
+    ),
+    negative: script(
+      'put 3 into id\nask db to query "SELECT name FROM users WHERE id = ?", [id]',
+    ),
+  },
+  {
     id: 'unreachable-clause',
     positive: 'on demo x\nend demo\non demo 1\nend demo',
     negative: 'on demo x where x > 1\nend demo\non demo 1\nend demo',

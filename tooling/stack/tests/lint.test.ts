@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { checkSource, newGroup, parseSourceRecovering } from '@odgn/northtalk';
-import { lint, lintSyntax, lintCatalogue } from '../src/lint';
+import {
+  lint,
+  lintSyntax,
+  lintCatalogue,
+  type HostManifest,
+} from '../src/lint';
 import { fixtureManifest, fixtures } from './fixtures';
 
 for (const { id, positive, negative, options } of fixtures) {
@@ -24,10 +29,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-three implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(23);
+test('ships twenty-four implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(24);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(23);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(24);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -843,4 +848,63 @@ test('store-race follows a read through locals to a set of the same key and Gran
       'put [] into v\nask s to get "best"\nput it into item 1 of v\nask s to set "best", v',
     ),
   ).toHaveLength(1);
+});
+
+const sql = (
+  body: string,
+  options: { manifest?: HostManifest; profile?: 'beginner' | 'standard' } = {},
+) =>
+  lint(`constant TABLE = "users"\non demo k, n\n${body}\nend demo`, {
+    profile: 'standard',
+    ...options,
+  }).lints.filter(l => l.id === 'interpolated-sql');
+const grantOf = (capability: string) => ({
+  ...fixtureManifest,
+  capabilities: new Map([['db', capability]]),
+});
+
+test('interpolated-sql flags Interpolated Text and & from a non-Constant as SQL', () => {
+  const source = 'ask db to query `SELECT * FROM users WHERE id = ${k}`, []';
+  expect(sql(source)).toMatchObject([
+    {
+      level: 'warning',
+      message:
+        'Values joined into SQL text can change the statement. Bind them as parameters, with ? or :name placeholders.',
+      span: { line: 3, col: 17 },
+    },
+  ]);
+  expect(sql(source, { profile: 'beginner' })).toMatchObject([
+    { level: 'warning' },
+  ]);
+  for (const flagged of [
+    // A hole flags whatever it holds, a Constant included.
+    'ask db to change `DELETE FROM ${TABLE}`, []',
+    'ask db to query "SELECT * FROM users WHERE id = " & k, []',
+    'ask db to change "DELETE FROM " & TABLE & " WHERE id = " & k, []',
+    'ask db to query ("SELECT * FROM " & TABLE) & " LIMIT " & n, []',
+    'ask db to query "SELECT * FROM t WHERE x = " & the upper of k, []',
+    'tell db\n  query "SELECT * FROM t WHERE x = " & k, []\nend tell',
+  ]) {
+    expect(sql(flagged)).toHaveLength(1);
+  }
+  for (const safe of [
+    // Plain and raw-fenced literals, Constants, and text built from them.
+    'ask db to query "SELECT * FROM users WHERE id = ?", [k]',
+    'ask db to query `SELECT * FROM users`, []',
+    'ask db to query """\nSELECT * FROM t WHERE x = ${k}\n""", []',
+    'ask db to query TABLE, []',
+    'ask db to query "SELECT * FROM " & TABLE & " LIMIT " & 10, []',
+    // Interpolated params are bound, not spliced.
+    'ask db to query "SELECT * FROM users WHERE id = ?", [`${k}`]',
+    // A local holding SQL is not followed.
+    'ask db to query k, []',
+    // Other Operations.
+    'ask db to get "a" & k',
+    '-- lint: ignore interpolated-sql\nask db to query "SELECT " & k, []',
+  ]) {
+    expect(sql(safe)).toEqual([]);
+  }
+  const built = 'ask db to query "SELECT " & k, []';
+  expect(sql(built, { manifest: grantOf('sqlite') })).toHaveLength(1);
+  expect(sql(built, { manifest: grantOf('search') })).toEqual([]);
 });
