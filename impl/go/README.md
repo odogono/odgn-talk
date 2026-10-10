@@ -302,6 +302,12 @@ errors from stdlib code name the nearest call in user code, while user
 Library errors retain the Library location. Reviewed traces pin ordinary calls,
 Function metadata, registration, faults, unwind charges and stdlib caller errors.
 
+The first Group compiles these Libraries once per process; each WASI instance
+pays this cost independently. Library compilation reuses one compact syntax
+tree for dependency discovery, code identity, checks, lowering and metadata,
+without retaining the tooling token tape. The cold-compilation benchmark is
+`go test . -run '^$' -bench BenchmarkColdStandardLibraries -benchmem`.
+
 Library calls to immediate, suspending and fire-and-forget Operations use the
 caller's named Grant, Host binding and charge/settlement path. Loading and Reload
 recheck every original Library call against the caller's modes, arity and literal
@@ -1270,7 +1276,10 @@ The check exercises `hello`, invalid lengths and malformed frames, hostile
 source and JSON nesting with instance reuse, memory
 growth and reply retention, immediate and suspending Operations across exports,
 charging, a Script error followed by more requests, save, fingerprint and
-independent instances. It also prints the artifact's SHA-256 and raw, gzip
+independent instances. Fresh instances must hold no more than 16 MiB of linear
+memory after `hello`, a Group, a small Script and one Pump; the check records
+three instances and enforces this limit before hostile workloads. It also prints
+the artifact's SHA-256 and raw, gzip
 level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
 of the stripped module, including Go's runtime; they aren't compiled-module
 cache sizes or per-instance memory measurements.
@@ -1281,6 +1290,15 @@ The check ran under Wasmtime 49.0.0 with Python 3.14.8, zlib 1.2.12 and
 Brotli 1.2.0. The module's SHA-256 was
 `68a8eaa630d1799d47bfaa379f0ce2dd437ebb176ae568b5330757e2ec250421`.
 These sizes are evidence for this build, not a fixed limit on later builds.
+
+After reducing Standard Library compilation allocations, the Elixir Host's
+`mix talk.measure --only latency --no-save` measured **15.5 MiB median** and
+**15.8 MiB maximum** linear memory over 20 fresh Wasmex instances on
+2026-10-10 (Go 1.27.2, Wasmex 0.15.1, Wasmtime 47.0.2, macOS arm64).
+This covers `hello`, one Group, a small Script and one Pump, meeting the
+16 MiB startup target in [#585](https://github.com/odogono/odgn-talk/issues/585).
+The [measurement record](../../tools/wasi/results/2026-10-10-stdlib-memory.json)
+includes the build command, artifact hash and a separate Wasmtime 49.0.0 check.
 
 #### List memory and Host caps
 

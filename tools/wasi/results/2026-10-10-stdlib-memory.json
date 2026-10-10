@@ -1,0 +1,68 @@
+{
+  "issue": "https://github.com/odogono/odgn-talk/issues/585",
+  "date": "2026-10-10",
+  "baseCommit": "0701253ab0e036b1b8cf639a9cb5fd7b7665a105",
+  "uncommittedImplementation": true,
+  "environment": {
+    "cpu": "Apple M5",
+    "os": "macOS 27.0.1",
+    "go": "go1.27.2",
+    "elixir": "1.20.4",
+    "otp": "29",
+    "wasmex": "0.15.1",
+    "wasmexWasmtime": "47.0.2",
+    "pythonWasmtime": "49.0.0"
+  },
+  "reactorSha256": "abde358b1356f6798ce2d16005ea9ac024af9a3b8b7eac3c52c4876aba14be2d",
+  "buildCommand": "GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi",
+  "baseline": {
+    "command": "mix test test/session_test.exs:7",
+    "instances": 3,
+    "medianBytes": 26214400,
+    "maxBytes": 26214400,
+    "limitBytes": 16777216,
+    "passed": false
+  },
+  "elixirLatencyMeasurement": {
+    "workingDirectory": "bench/message-layer/elixir",
+    "command": "mix talk.measure --only latency --no-save",
+    "instancesPerTransport": 20,
+    "renderedMemoryMiB": {
+      "wasmex": {
+        "median": 15.5,
+        "max": 15.8
+      },
+      "wasmex, opt-level none": {
+        "median": 15.5,
+        "max": 15.5
+      },
+      "sidecar": {
+        "median": 19.5,
+        "max": 19.9
+      }
+    },
+    "note": "Memory figures are rounded by the existing report; latency ran alongside Go validation and is not used as performance evidence. Other sections retained by --only were not remeasured."
+  },
+  "additionalWasmexMemoryProbe": {
+    "command": "TalkHost.Measure.memory(fn -> TalkHost.Transport.Wasi.start(opt_level: :speed) end, 30)",
+    "instances": 30,
+    "medianBytes": 16252928,
+    "maxBytes": 16515072
+  },
+  "wasiRegressionCheck": {
+    "command": "uv run tools/wasi/check.py .cache/messagelayer.wasm",
+    "instanceMemoryBytes": [
+      16252928,
+      16252928,
+      16252928
+    ],
+    "passed": true
+  },
+  "nativeColdCompilation": {
+    "beforeBytesPerOp": 43590136,
+    "afterBytesPerOp": 7776488,
+    "beforeIterations": 1,
+    "afterIterations": 3,
+    "note": "The baseline probe called the first NewGroup with a reset process cache; the permanent benchmark compiles the seven Libraries directly without touching the global cache."
+  }
+}

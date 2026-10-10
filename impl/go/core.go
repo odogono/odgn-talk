@@ -129,7 +129,7 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	return c.compileParsed(name, options, parsedIdentity(kind, name, source, ids, tree), tree, err)
 }
 
-// Load shares its compact parse between identity, checking and lowering.
+// Load and Library compilation share a compact parse for identity, checking and lowering.
 func (c *Core) compileParsed(name string, options check.Options, id [32]byte, tree *syntax.Tree, parseErr error) (*lower.Unit, *LoadError) {
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)

@@ -75,8 +75,15 @@ func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declaration
 }
 
 func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, declarations GrantDecls) (*Library, error) {
+	tree, err := syntax.ParseCompact(src.Source)
+	return c.compileLibraryParsed(src, available, declarations, tree, err)
+}
+
+// Reuse one compact parse for cycle checks, identity, lowering and exports.
+// Standard Library dependency discovery supplies this same tree too.
+func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Library, declarations GrantDecls, tree *syntax.Tree, parseErr error) (*Library, error) {
 	exports, ids, states, _ := libraryOptions(available)
-	if tree, err := syntax.Parse(src.Source); err == nil {
+	if parseErr == nil {
 		for _, n := range tree.Declarations {
 			if n.Kind == "use" && (n.Text == src.Name || reachesLibrary(available[n.Text], src.Name, map[*Library]bool{})) {
 				pos := n.Pos()
@@ -97,7 +104,8 @@ func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, 
 			grants[name][op] = decl
 		}
 	}
-	unit, rejected := c.compile(src.Name, src.Source, check.Options{Library: true, Imports: exports, Grants: grants}, ids)
+	id := parsedIdentity("library", src.Name, src.Source, ids, tree)
+	unit, rejected := c.compileParsed(src.Name, check.Options{Library: true, Imports: exports, Grants: grants}, id, tree, parseErr)
 	if rejected != nil {
 		return nil, rejected
 	}
@@ -106,10 +114,9 @@ func (c *Core) compileLibrary(src LibrarySource, available map[string]*Library, 
 		pos := err.(*machine.InitError).Instruction.Pos
 		return nil, &LoadError{[]Diagnostic{{Code: "initialiser failed", Unit: src.Name, Line: pos.Line, Col: pos.Column}}}
 	}
-	l := &Library{source: src, id: codeIdentity("library", src.Name, src.Source, ids), exports: map[string]check.Symbol{}, state: state}
+	l := &Library{source: src, id: id, exports: map[string]check.Symbol{}, state: state}
 	seen := map[string]bool{}
 	needs := map[OperationRef]bool{}
-	tree, _ := syntax.Parse(src.Source)
 	for _, n := range tree.Declarations {
 		if n.Kind == "use" {
 			for _, need := range available[n.Text].needs {
