@@ -10,7 +10,13 @@ import {
   parseCivil,
   type CivilRef,
 } from './dates';
-import { compareDec, parseDec } from './decimal';
+import {
+  compareDec,
+  formatDec,
+  integerOf,
+  isInteger,
+  type Dec,
+} from './decimal';
 import { invalidValue } from './errors';
 import { characterBoundaries, isWhiteSpace, normalizeNFC } from './unicode';
 import {
@@ -100,29 +106,38 @@ let extendListValue: (
   prepend: boolean,
   all: boolean,
 ) => Value;
-let makeDecimal: (canonical: string) => Decimal;
+let makeDecimal: (canonical: string, parts: Dec) => Decimal;
+/** Internal: a Decimal's cached, immutable arithmetic representation. */
+export let decimalParts: (decimal: Decimal) => Dec;
 
 export class Decimal {
   readonly #canonical: string;
-  private constructor(token: symbol, canonical: string) {
+  readonly #parts: Dec;
+  private constructor(token: symbol, canonical: string, parts: Dec) {
     if (token !== decimalToken) {
       invalidValue('Use a numeric constructor');
     }
     this.#canonical = canonical;
+    this.#parts = Object.freeze({
+      coefficient: parts.coefficient,
+      exponent: parts.exponent,
+      negative: parts.negative && parts.coefficient !== 0n,
+    });
     Object.freeze(this);
   }
   static {
-    makeDecimal = canonical => new Decimal(decimalToken, canonical);
+    makeDecimal = (canonical, parts) =>
+      new Decimal(decimalToken, canonical, parts);
+    decimalParts = decimal => decimal.#parts;
   }
   toString(): string {
     return this.#canonical;
   }
   toBigInt(): bigint {
-    const [whole, fraction] = this.#canonical.split('.');
-    if (fraction && /[1-9]/.test(fraction)) {
+    if (!isInteger(this.#parts)) {
       invalidValue('Decimal is not an integer');
     }
-    return BigInt(whole!);
+    return integerOf(this.#parts);
   }
   toNumberLossy(): number {
     return Number(this.#canonical);
@@ -527,12 +542,19 @@ export const dec = (s: string): Value => {
   const { whole, fraction } = digits;
   const zero = !/[1-9]/.test(whole + fraction);
   const canonical = `${negative && !zero ? '-' : ''}${whole}${fraction.length ? `.${fraction}` : ''}`;
-  return makeValue('number', makeDecimal(canonical));
+  return makeValue(
+    'number',
+    makeDecimal(canonical, {
+      coefficient: BigInt(whole + fraction),
+      exponent: fraction.length ? -fraction.length : 0,
+      negative: negative && !zero,
+    }),
+  );
 };
 
-/** Internal: a number from canonical text the decimal arithmetic produced. */
-export const canonicalNumber = (canonical: string): Value =>
-  makeValue('number', makeDecimal(canonical));
+/** Internal: a checked arithmetic result, retaining its coefficient directly. */
+export const canonicalNumber = (parts: Dec): Value =>
+  makeValue('number', makeDecimal(formatDec(parts), parts));
 
 /** ECMAScript's shortest round-trip digits, expanded without rounding. */
 export const num = (n: number | bigint): Value => {
@@ -619,8 +641,8 @@ export const quantityOf = (n: Decimal, unit: UnitSpec): Value =>
 const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>
   sameDimension(a.unit, b.unit) &&
   compareDec(
-    toBase(parseDec(a.number.toString()), a.unit),
-    toBase(parseDec(b.number.toString()), b.unit),
+    toBase(decimalParts(a.number), a.unit),
+    toBase(decimalParts(b.number), b.unit),
   ) === 0;
 /** An Instant, from epoch nanoseconds; a JS Date is never accepted. */
 export const instant = (epochNanos: bigint): Value => {

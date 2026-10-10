@@ -28,8 +28,12 @@ func RestoreSnapshot(s string) (Number, error) {
 		return n, err
 	}
 	if n.coefficient != "" {
-		if _, ok := new(big.Int).SetString(n.coefficient, 10); !ok {
+		c, ok := new(big.Int).SetString(n.coefficient, 10)
+		if !ok {
 			return Number{}, fmt.Errorf("invalid coefficient")
+		}
+		if c.IsInt64() {
+			n.smallCoefficient = c.Int64()
 		}
 	}
 	if n.exponent < MinExponent || n.exponent > 0 || len(strings.TrimPrefix(n.coefficient, "-")) > Precision {

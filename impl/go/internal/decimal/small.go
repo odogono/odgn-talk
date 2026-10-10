@@ -2,16 +2,8 @@ package decimal
 
 import (
 	"math"
-	"strconv"
 	"strings"
 )
-
-func (n Number) coefficientOrZero() string {
-	if n.coefficient == "" {
-		return "0"
-	}
-	return n.coefficient
-}
 
 // calculateSmall keeps exact, representable coefficients out of math/big.
 // Overflow or rounding falls back to the general decimal implementation.
@@ -19,11 +11,10 @@ func calculateSmall(op string, a, b Number) (Number, bool) {
 	if a.comparisonExponent != "" || b.comparisonExponent != "" || a.exponent > 0 || b.exponent > 0 {
 		return Number{}, false
 	}
-	x, xe := strconv.ParseInt(a.coefficientOrZero(), 10, 64)
-	y, ye := strconv.ParseInt(b.coefficientOrZero(), 10, 64)
-	if xe != nil || ye != nil {
+	if !a.hasSmallCoefficient() || !b.hasSmallCoefficient() {
 		return Number{}, false
 	}
+	x, y := a.smallCoefficient, b.smallCoefficient
 	e := min(a.exponent, b.exponent)
 	var z int64
 	switch op {
@@ -62,7 +53,7 @@ func calculateSmall(op string, a, b Number) (Number, bool) {
 	default:
 		return Number{}, false
 	}
-	return Number{coefficient: strconv.FormatInt(z, 10), exponent: e}, true
+	return fromSmallCoefficient(z, e), true
 }
 
 func scaleSmall(x int64, places int) (int64, bool) {

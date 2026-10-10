@@ -1,7 +1,7 @@
 // Bytes built and matched by Binary Patterns (chapter 4, Binary Patterns;
 // chapter 8, the `bytes-…` and `bin-…` instructions). Fields are read and
 // written left to right, never searching or backtracking.
-import { integerOf, isInteger, parseDec } from './decimal';
+import { integerOf, isInteger } from './decimal';
 import {
   byteOf,
   decodeUtf8,
@@ -9,7 +9,7 @@ import {
   outOfRange,
   wrongKind,
 } from './operations';
-import { bytesOf, text, type Value } from './values';
+import { bytesOf, decimalParts, text, type Value } from './values';
 
 const utf8 = new TextEncoder();
 
@@ -47,7 +47,7 @@ const integerIn = (v: Value, field: string, bits: number, signed: boolean) => {
   if (v.kind !== 'number') {
     throw wrongKind('number', v);
   }
-  const d = parseDec(v.asDecimal()!.toString());
+  const d = decimalParts(v.asDecimal()!);
   if (!isInteger(d)) {
     throw wrongKind('integer', v);
   }
@@ -101,7 +101,7 @@ export const buildSized = (
   if (size.kind !== 'number') {
     throw wrongKind('number', size);
   }
-  if (!isInteger(parseDec(size.asDecimal()!.toString()))) {
+  if (!isInteger(decimalParts(size.asDecimal()!))) {
     throw wrongKind('integer', size);
   }
   const asText = field === 'bytes as text';
@@ -109,9 +109,7 @@ export const buildSized = (
     throw wrongKind(asText ? 'text' : 'bytes', v);
   }
   const body = asText ? utf8.encode(v.asText()!) : v.bytesView()!;
-  if (
-    BigInt(body.length) !== integerOf(parseDec(size.asDecimal()!.toString()))
-  ) {
+  if (BigInt(body.length) !== integerOf(decimalParts(size.asDecimal()!))) {
     throw outOfRange(field, v);
   }
   return join(sofar.bytesView()!, body);
@@ -143,7 +141,7 @@ const literalBytes = (v: Value): Uint8Array | undefined => {
   if (v.kind === 'text') {
     return utf8.encode(v.asText()!);
   }
-  const n = parseDec(v.asDecimal()!.toString());
+  const n = decimalParts(v.asDecimal()!);
   const i = isInteger(n) ? integerOf(n) : -1n;
   return i >= 0n && i <= 255n ? Uint8Array.of(Number(i)) : undefined;
 };
@@ -219,7 +217,7 @@ export const readBytes = (
   if (size.kind !== 'number') {
     return undefined;
   }
-  const d = parseDec(size.asDecimal()!.toString());
+  const d = decimalParts(size.asDecimal()!);
   if (!isInteger(d) || d.negative) {
     return undefined;
   }

@@ -3,8 +3,8 @@
 import { costMeasure, costModel, costSubject } from './generated/machine';
 import { characters } from './text';
 import { scalarCount } from './unicode';
-import { integerOf, isInteger, parseDec } from './decimal';
-import type { Value } from './values';
+import { digitsOf, integerOf, isInteger } from './decimal';
+import { decimalParts, type Value } from './values';
 
 /** What one charge measures: its subjects and the instruction's own counts. */
 export type Measured = {
@@ -77,9 +77,7 @@ const measureOf = (measure: number, v: Value | undefined): number => {
     case DIGITS: {
       // A number's, or a Quantity's number's.
       const n = v.asDecimal() ?? v.asQuantityRef()?.number;
-      return n
-        ? Math.max(1, parseDec(n.toString()).coefficient.toString().length)
-        : 0;
+      return n ? digitsOf(decimalParts(n)) : 0;
     }
     case PROGRAM:
       return v.kind === 'pattern' ? v.asPattern()!.program : 0;
@@ -99,8 +97,8 @@ export const itemsOf = (v: Value): number => {
     if (from.kind !== 'number') {
       return 0;
     }
-    const a = parseDec(from.asDecimal()!.toString());
-    const b = parseDec(to.asDecimal()!.toString());
+    const a = decimalParts(from.asDecimal()!);
+    const b = decimalParts(to.asDecimal()!);
     if (!isInteger(a) || !isInteger(b)) {
       return 0;
     }
