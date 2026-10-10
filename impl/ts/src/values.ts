@@ -1,5 +1,6 @@
 import type { HostObject } from './objects';
 import { ListStorage } from './list-storage';
+import { MapStorage } from './map-storage';
 import {
   checkInstant,
   civilFields,
@@ -87,7 +88,7 @@ type Payload =
   | string
   | Decimal
   | ListStorage
-  | Pairs
+  | MapStorage
   | readonly [Value, Value]
   | FunctionRef
   | ObjectRef;
@@ -99,6 +100,16 @@ let extendListValue: (
   part: Value,
   prepend: boolean,
   all: boolean,
+) => Value;
+let editListValue: (
+  current: Value,
+  i: number,
+  value: Value | undefined,
+) => Value;
+let editMapValue: (
+  current: Value,
+  key: string,
+  value: Value | undefined,
 ) => Value;
 let makeDecimal: (canonical: string) => Decimal;
 
@@ -143,6 +154,13 @@ export class Value {
   }
   static {
     makeValue = (kind, payload) => new Value(valueToken, kind, payload);
+    editListValue = (current, i, value) =>
+      makeValue('list', (current.#data as ListStorage).set(i, value));
+    editMapValue = (current, key, value) => {
+      const storage = current.#data as MapStorage;
+      const next = storage.set(key, value);
+      return next === storage ? current : makeValue('map', next);
+    };
     extendListValue = (current, part, prepend, all) => {
       const storage = current.#data as ListStorage;
       const added = all ? (part.#data as ListStorage) : undefined;
@@ -250,16 +268,24 @@ export class Value {
   get(key: string): Value {
     const nfc = normalizeNFC(key);
     return this.kind === 'map'
-      ? ((this.#data as Pairs).find(([k]) => k === nfc)?.[1] ?? nothing)
+      ? ((this.#data as MapStorage).get(nfc) ?? nothing)
       : nothing;
   }
   /** Internal: the frozen pairs themselves, without copying. */
   mapPairs(): Pairs | undefined {
-    return this.kind === 'map' ? (this.#data as Pairs) : undefined;
+    return this.kind === 'map' ? (this.#data as MapStorage).pairs() : undefined;
+  }
+  get mapSize(): number {
+    return this.kind === 'map' ? (this.#data as MapStorage).length : 0;
+  }
+  hasKey(key: string): boolean {
+    return (
+      this.kind === 'map' && (this.#data as MapStorage).has(normalizeNFC(key))
+    );
   }
   entries(): [string, Value][] {
     return this.kind === 'map'
-      ? (this.#data as Pairs).map(([k, v]) => [k, v])
+      ? (this.#data as MapStorage).pairs().map(([k, v]) => [k, v])
       : [];
   }
   equals(other: Value): boolean {
@@ -355,7 +381,7 @@ export class Value {
         }
         case 'map': {
           const rhs = new Map(right.entries());
-          const entries = left.#data as Pairs;
+          const entries = (left.#data as MapStorage).pairs();
           if (entries.length !== rhs.size) {
             return false;
           }
@@ -439,14 +465,14 @@ export class Value {
           output.push(`<function ${fn.displayHome ?? fn.home}:${fn.place}`);
           pending.push('>');
           if (fn.captures.length) {
-            pending.push(makeValue('map', fn.captures), ' ');
+            pending.push(makeValue('map', MapStorage.copy(fn.captures)), ' ');
           }
           break;
         }
         case 'map': {
           output.push('{');
           pending.push('}');
-          const entries = next.#data as Pairs;
+          const entries = (next.#data as MapStorage).pairs();
           for (let i = entries.length - 1; i >= 0; i--) {
             const [k, v] = entries[i]!;
             if (i < entries.length - 1) {
@@ -709,6 +735,12 @@ export const extendList = (
   prepend: boolean,
   all: boolean,
 ): Value => extendListValue(current, part, prepend, all);
+/** Internal: replace or delete one existing List item, zero-based. */
+export const listWithItem = (
+  v: Value,
+  i: number,
+  value: Value | undefined,
+): Value => editListValue(v, i, value);
 /**
  * Internal: a Map with one normalised key set, or removed when `value` is
  * undefined. The other pairs are already checked and frozen, so they're shared.
@@ -717,21 +749,7 @@ export const mapWithEntry = (
   m: Value,
   nfc: string,
   value: Value | undefined,
-): Value => {
-  const pairs = m.mapPairs()!;
-  const at = pairs.findIndex(([k]) => k === nfc);
-  const next = pairs.slice();
-  if (value === undefined) {
-    if (at >= 0) {
-      next.splice(at, 1);
-    }
-  } else if (at >= 0) {
-    next[at] = Object.freeze([nfc, value] as const);
-  } else {
-    next.push(Object.freeze([nfc, value] as const));
-  }
-  return makeValue('map', Object.freeze(next));
-};
+): Value => editMapValue(m, nfc, value);
 export const map = (
   input: Map<string, Value> | Iterable<[string, Value]>,
 ): Value => {
@@ -757,7 +775,7 @@ export const map = (
     seen.add(nfc);
     pairs.push(Object.freeze([nfc, value] as const));
   }
-  return makeValue('map', Object.freeze(pairs));
+  return makeValue('map', MapStorage.copy(pairs));
 };
 export const record = (input: Record<string, Value>): Value => {
   if (

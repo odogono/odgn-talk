@@ -21,7 +21,12 @@ import {
   type Dec,
 } from './decimal';
 import { functionHead } from './code-unit';
-import { cacheListExtension, itemsOf } from './costs';
+import {
+  cacheListExtension,
+  cacheListEdit,
+  cacheMapWrite,
+  itemsOf,
+} from './costs';
 import { BINARY32, BINARY64, readFloat, writeFloat } from './floats';
 import {
   acos,
@@ -82,6 +87,7 @@ import {
   extendList,
   list,
   listValues,
+  listWithItem,
   map,
   nothing,
   num,
@@ -226,7 +232,7 @@ const foldedEquals = (a: Value, b: Value): boolean => {
       }
     } else if (x.kind === 'map') {
       const rhs = new Map(y.entries());
-      if (x.entries().length !== rhs.size) {
+      if (x.mapSize !== rhs.size) {
         return false;
       }
       for (const [k, v] of x.entries()) {
@@ -749,7 +755,7 @@ export const isEmpty = (v: Value): Value =>
   bool(
     (v.kind === 'text' && textOf(v) === '') ||
       (v.kind === 'list' && v.length === 0) ||
-      (v.kind === 'map' && v.entries().length === 0) ||
+      (v.kind === 'map' && v.mapSize === 0) ||
       (v.kind === 'bytes' && v.bytesView()!.length === 0),
   );
 
@@ -882,19 +888,25 @@ export const hasKey = (m: Value, key: string): boolean => {
     throw wrongKind('map', m);
   }
   const nfc = normalizeNFC(key);
-  return m.entries().some(([k]) => k === nfc);
+  return m.hasKey(nfc);
 };
 export const setKey = (m: Value, key: string, value: Value): Value => {
   if (m.kind !== 'map') {
     throw wrongKind('map', m);
   }
-  return mapWithEntry(m, normalizeNFC(key), value);
+  const nfc = normalizeNFC(key);
+  const result = mapWithEntry(m, nfc, value);
+  cacheMapWrite(result, m, nfc, value);
+  return result;
 };
 export const deleteKey = (m: Value, key: string): Value => {
   if (m.kind !== 'map') {
     throw wrongKind('map', m);
   }
-  return mapWithEntry(m, normalizeNFC(key), undefined);
+  const nfc = normalizeNFC(key);
+  const result = mapWithEntry(m, nfc, undefined);
+  cacheMapWrite(result, m, nfc, undefined);
+  return result;
 };
 
 const integersOf = (r: Value): Value[] => {
@@ -931,7 +943,7 @@ export const property = (
         return integerValue(BigInt(v.length));
       }
       if (v.kind === 'map') {
-        return integerValue(BigInt(v.entries().length));
+        return integerValue(BigInt(v.mapSize));
       }
       if (isIntegerRange(v)) {
         return integerValue(BigInt(itemsOf(v)));
@@ -1261,13 +1273,22 @@ export const chunkSet = (
     if (a < 1n || b < 1n || a > b) {
       throw writeOutOfRange(kind, index);
     }
+    if (!index.range) {
+      let current = whole;
+      if (a > BigInt(n)) {
+        const padding = listValues(
+          Array.from({ length: Number(a) - n }, () => nothing),
+        );
+        current = extendList(whole, padding, false, true);
+        cacheListExtension(current, whole, padding, true);
+      }
+      const result = listWithItem(current, Number(a) - 1, part);
+      cacheListEdit(result, current, Number(a) - 1, part);
+      return result;
+    }
     const items = Array.from({ length: n }, (_, i) => whole.index(i + 1));
     while (items.length < Number(b)) {
       items.push(nothing);
-    }
-    if (!index.range) {
-      items[Number(a) - 1] = part;
-      return listValues(items);
     }
     if (part.kind !== 'list') {
       throw wrongKind('list', part);
@@ -1344,6 +1365,11 @@ export const chunkDelete = (
     const at = covered(index, whole.length);
     if (!at) {
       return whole;
+    }
+    if (at[0] === at[1]) {
+      const result = listWithItem(whole, at[0] - 1, undefined);
+      cacheListEdit(result, whole, at[0] - 1, undefined);
+      return result;
     }
     const items = Array.from({ length: whole.length }, (_, i) =>
       whole.index(i + 1),

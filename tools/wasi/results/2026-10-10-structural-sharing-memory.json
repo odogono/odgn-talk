@@ -1,0 +1,520 @@
+{
+  "measured": "2026-10-10",
+  "go": "1.27.2",
+  "wasmtime": "49.0.0",
+  "source": "e35980e9 plus the uncommitted persistent-collection implementation for #598",
+  "trace": false,
+  "gc_percent": 100,
+  "samples_per_case": 1,
+  "note": "Fresh sidecar processes and WASI instances. Every profile/workload/item reached the expected Script fault within 64 MiB + 12 times Allocation Budget, then ran a healthy Handler. Artifact hashes identify the tested builds.",
+  "sidecar": {
+    "artifact": ".cache/issue-598/messagelayer",
+    "sha256": "892688d419511fdb4496f249023c138314dd8792a90cd92a9ec546d0c581a572",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "results": [
+      {
+        "seconds": 0.387,
+        "pumps": 2,
+        "fault": {
+          "alloc": 16777216,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 1715861,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "default",
+        "workload": "local",
+        "item": "text",
+        "peak_bytes": 40992768,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 2.443
+      },
+      {
+        "seconds": 1.034,
+        "pumps": 10,
+        "fault": {
+          "alloc": 16777216,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 9437186,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "default",
+        "workload": "local",
+        "item": "nothing",
+        "peak_bytes": 105857024,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 6.31
+      },
+      {
+        "seconds": 0.021,
+        "pumps": 12,
+        "fault": {
+          "alloc": 1056288,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 156219,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 11000,
+        "profile": "default",
+        "workload": "persistent",
+        "item": "text",
+        "peak_bytes": 31047680,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 1.851
+      },
+      {
+        "seconds": 0.083,
+        "pumps": 66,
+        "fault": {
+          "alloc": 1057584,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 859191,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 65000,
+        "profile": "default",
+        "workload": "persistent",
+        "item": "nothing",
+        "peak_bytes": 39600128,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 2.36
+      },
+      {
+        "seconds": 2.891,
+        "pumps": 28,
+        "fault": {
+          "alloc": 268435392,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 27453629,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "minimum",
+        "workload": "local",
+        "item": "text",
+        "peak_bytes": 250085376,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 0.932
+      },
+      {
+        "seconds": 16.19,
+        "pumps": 151,
+        "fault": {
+          "alloc": 268435456,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 150994946,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "minimum",
+        "workload": "local",
+        "item": "nothing",
+        "peak_bytes": 1301987328,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 4.85
+      },
+      {
+        "seconds": 1.313,
+        "pumps": 763,
+        "fault": {
+          "alloc": 67162312,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 9932737,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 762000,
+        "profile": "minimum",
+        "workload": "persistent",
+        "item": "text",
+        "peak_bytes": 416776192,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 1.553
+      },
+      {
+        "seconds": 5.477,
+        "pumps": 4195,
+        "fault": {
+          "alloc": 67220680,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 54610513,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 4194000,
+        "profile": "minimum",
+        "workload": "persistent",
+        "item": "nothing",
+        "peak_bytes": 788004864,
+        "peak_kind": "process max RSS",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 2.936
+      }
+    ]
+  },
+  "wasip1": {
+    "artifact": ".cache/issue-598/messagelayer.wasm",
+    "sha256": "21a415eff5d74f2930a2e2a60d6767552978fc368b5df4c9f8da6c868d16b440",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "results": [
+      {
+        "seconds": 0.959,
+        "pumps": 2,
+        "fault": {
+          "alloc": 16777216,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 1715861,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "default",
+        "workload": "local",
+        "item": "text",
+        "peak_bytes": 94371840,
+        "peak_kind": "linear memory",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 5.625
+      },
+      {
+        "seconds": 4.955,
+        "pumps": 10,
+        "fault": {
+          "alloc": 16777216,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 9437186,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "default",
+        "workload": "local",
+        "item": "nothing",
+        "peak_bytes": 139984896,
+        "peak_kind": "linear memory",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 8.344
+      },
+      {
+        "seconds": 0.096,
+        "pumps": 12,
+        "fault": {
+          "alloc": 1056288,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 156219,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 11000,
+        "profile": "default",
+        "workload": "persistent",
+        "item": "text",
+        "peak_bytes": 29884416,
+        "peak_kind": "linear memory",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 1.781
+      },
+      {
+        "seconds": 0.382,
+        "pumps": 66,
+        "fault": {
+          "alloc": 1057584,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 859191,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 65000,
+        "profile": "default",
+        "workload": "persistent",
+        "item": "nothing",
+        "peak_bytes": 39321600,
+        "peak_kind": "linear memory",
+        "allocation_budget": 16777216,
+        "cap_bytes": 268435456,
+        "multiple": 2.344
+      },
+      {
+        "seconds": 16.251,
+        "pumps": 28,
+        "fault": {
+          "alloc": 268435392,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 27453629,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "minimum",
+        "workload": "local",
+        "item": "text",
+        "peak_bytes": 349175808,
+        "peak_kind": "linear memory",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 1.301
+      },
+      {
+        "seconds": 90.855,
+        "pumps": 151,
+        "fault": {
+          "alloc": 268435456,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 4,
+            "pc": 8,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 150994946,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "alloc",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 42,
+        "profile": "minimum",
+        "workload": "local",
+        "item": "nothing",
+        "peak_bytes": 1638924288,
+        "peak_kind": "linear memory",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 6.105
+      },
+      {
+        "seconds": 7.713,
+        "pumps": 763,
+        "fault": {
+          "alloc": 67162312,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 9932737,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 762000,
+        "profile": "minimum",
+        "workload": "persistent",
+        "item": "text",
+        "peak_bytes": 487063552,
+        "peak_kind": "linear memory",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 1.814
+      },
+      {
+        "seconds": 29.287,
+        "pumps": 4195,
+        "fault": {
+          "alloc": 67220680,
+          "at": {
+            "col": 5,
+            "handler": "grow",
+            "line": 7,
+            "pc": 17,
+            "unit": "s"
+          },
+          "delivery": "d1",
+          "fuel": 54610513,
+          "handler": "grow",
+          "kind": "run end",
+          "limit": "persistent",
+          "outcome": "limit fault",
+          "run": "s/r1",
+          "script": "s"
+        },
+        "healthy_result": 4194000,
+        "profile": "minimum",
+        "workload": "persistent",
+        "item": "nothing",
+        "peak_bytes": 875560960,
+        "peak_kind": "linear memory",
+        "allocation_budget": 268435456,
+        "cap_bytes": 3288334336,
+        "multiple": 3.262
+      }
+    ]
+  }
+}

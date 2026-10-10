@@ -26,6 +26,9 @@ func contents(v value.Value) int64 {
 	if v.Kind == value.List {
 		return v.ListContents(Size)
 	}
+	if v.Kind == value.Map {
+		return v.MapContents(Size)
+	}
 	var n int64
 	if v.Kind == value.Replacement {
 		n = Size(v.Replacement().Subject)
@@ -80,7 +83,7 @@ func measure(name string, v value.Value) int64 {
 		}
 	case "items":
 		if v.Kind == value.List {
-			return int64(len(v.Items()))
+			return int64(v.ListLen())
 		}
 		if v.Kind == value.Range && v.Items()[0].Kind == value.Number && v.Items()[1].Kind == value.Number {
 			a, ok := v.Items()[0].Number().Integer()
@@ -95,7 +98,7 @@ func measure(name string, v value.Value) int64 {
 			}
 		}
 	case "entries":
-		return int64(len(v.Entries()))
+		return int64(v.MapLen())
 	case "digits":
 		if v.Kind == value.Number || v.Kind == value.Quantity {
 			return int64(max(1, v.Number().Digits()))

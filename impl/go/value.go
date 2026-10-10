@@ -172,13 +172,13 @@ func (v Value) Len() int {
 	if v.Kind() != KindList {
 		return 0
 	}
-	return len(v.inner.Items())
+	return v.inner.ListLen()
 }
 func (v Value) Index(i int) Value {
-	if v.Kind() != KindList || i < 1 || i > len(v.inner.Items()) {
+	if v.Kind() != KindList || i < 1 || i > v.inner.ListLen() {
 		return Nothing
 	}
-	return Value{v.inner.Items()[i-1]}
+	return Value{v.inner.ListAt(i - 1)}
 }
 func (v Value) Get(key string) Value {
 	if v.Kind() != KindMap {

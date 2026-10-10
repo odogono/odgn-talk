@@ -6,7 +6,6 @@ import (
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
-	"slices"
 	"unicode/utf8"
 )
 
@@ -114,9 +113,9 @@ func empty(v value.Value) bool {
 	case value.Bytes:
 		return len(v.Bytes()) == 0
 	case value.List:
-		return len(v.Items()) == 0
+		return v.ListLen() == 0
 	case value.Map:
-		return len(v.Entries()) == 0
+		return v.MapLen() == 0
 	}
 	return false
 }
@@ -180,17 +179,16 @@ func mapWrite(whole value.Value, key string, part value.Value, deleting bool) (v
 	if nfc, e := coreunicode.NFC(key); e == nil {
 		key = nfc
 	}
-	pairs := slices.Clone(whole.Entries())
-	at := slices.IndexFunc(pairs, func(p value.Pair) bool { return p.Key == key })
-	switch {
-	case at >= 0 && deleting:
-		pairs = slices.Delete(pairs, at, at+1)
-	case at >= 0:
-		pairs[at].Val = part
-	case !deleting:
-		pairs = append(pairs, value.Pair{Key: key, Val: part})
+	previous, found := whole.MapEntry(key)
+	n := contents(whole)
+	if found {
+		n -= int64(16+len(key)) + Size(previous)
 	}
-	v := whole.WithEntries(pairs)
+	if !deleting {
+		n += int64(16+len(key)) + Size(part)
+	}
+	v := whole.SetMapEntry(key, part, deleting)
+	v.CacheMapContents(n)
 	v.CoreMessage = whole.CoreMessage && key != "message"
 	return v, nil
 }

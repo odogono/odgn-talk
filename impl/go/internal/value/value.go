@@ -127,7 +127,6 @@ type Fields struct {
 	Text        string
 	Bytes       []byte
 	Items       []Value
-	list        *listView
 	Entries     []Pair
 	Unit        Unit
 	Date        DateFields
@@ -147,7 +146,7 @@ type instantData struct {
 }
 
 func (f Fields) Value() Value {
-	v := Value{Kind: f.Kind, CoreMessage: f.CoreMessage, Bool: f.Bool, list: f.list}
+	v := Value{Kind: f.Kind, CoreMessage: f.CoreMessage, Bool: f.Bool}
 	switch f.Kind {
 	case Number:
 		v.data = f.Number
@@ -199,16 +198,37 @@ func (v Value) WithNumber(n decimal.Number) Value {
 	}
 	return v
 }
-func (v Value) Items() []Value { x, _ := v.data.([]Value); return x }
+func (v Value) Items() []Value {
+	if v.list != nil {
+		v.list.once.Do(func() {
+			v.list.items = make([]Value, 0, treeTotal(v.list.root))
+			treeWalk(v.list.root, func(chunk []Value) { v.list.items = append(v.list.items, chunk...) })
+		})
+		return v.list.items
+	}
+	x, _ := v.data.([]Value)
+	return x
+}
 func (v Value) WithItems(x []Value) Value {
 	if v.Kind == List || v.Kind == Range {
 		v.data = x
+		v.list = nil
 	}
 	return v
 }
-func (v Value) Text() string    { x, _ := v.data.(string); return x }
-func (v Value) Bytes() []byte   { x, _ := v.data.([]byte); return x }
-func (v Value) Entries() []Pair { x, _ := v.data.([]Pair); return x }
+func (v Value) Text() string  { x, _ := v.data.(string); return x }
+func (v Value) Bytes() []byte { x, _ := v.data.([]byte); return x }
+func (v Value) Entries() []Pair {
+	if view, ok := v.data.(*mapView); ok {
+		view.once.Do(func() {
+			view.pairs = make([]Pair, 0, treeTotal(view.order))
+			treeWalk(view.order, func(p Pair) { view.pairs = append(view.pairs, p) })
+		})
+		return view.pairs
+	}
+	x, _ := v.data.([]Pair)
+	return x
+}
 func (v Value) WithEntries(x []Pair) Value {
 	if v.Kind == Map {
 		v.data = x
@@ -255,7 +275,7 @@ func NewMap(pairs []Pair) (Value, error) {
 		seen[key] = true
 		out[i] = Pair{key, p.Val}
 	}
-	return Fields{Kind: Map, Entries: out}.Value(), nil
+	return Value{Kind: Map, data: newMapView(out)}, nil
 }
 func NewBytes(b []byte) Value { return Fields{Kind: Bytes, Bytes: slices.Clone(b)}.Value() }
 func NewQuantity(n decimal.Number, s string) (Value, error) {
@@ -282,12 +302,8 @@ func (v Value) Get(key string) Value {
 	if e != nil {
 		return Value{}
 	}
-	for _, p := range v.Entries() {
-		if p.Key == key {
-			return p.Val
-		}
-	}
-	return Value{}
+	result, _ := v.MapEntry(key)
+	return result
 }
 func (v Value) Equal(w Value) bool {
 	if v.Kind != w.Kind {
@@ -320,18 +336,12 @@ func (v Value) Equal(w Value) bool {
 		}
 		return true
 	case Map:
-		if len(v.Entries()) != len(w.Entries()) {
+		if v.MapLen() != w.MapLen() {
 			return false
 		}
 		for _, p := range v.Entries() {
-			found := false
-			for _, q := range w.Entries() {
-				if p.Key == q.Key {
-					found = p.Val.Equal(q.Val)
-					break
-				}
-			}
-			if !found {
+			other, found := w.MapEntry(p.Key)
+			if !found || !p.Val.Equal(other) {
 				return false
 			}
 		}
