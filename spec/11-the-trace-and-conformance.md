@@ -220,7 +220,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `answer` | `call` | `value`, `fuel`? | answers a suspending call |
 | `fail` | `call` | `error` | fails a suspending call |
 | `settle` | `call` | `how`, `value`?, `error`? | settles a pending call after a restore |
-| `stub` | `operation` | `value`?, `error`?, `charge`? | queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, and any call's charge; the runner writes it, and the Core never sees it |
+| `stub` | `operation` | `value`?, `error`?, `charge`? | queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, a suspending call's error, which fails it as it starts, and any call's charge; the runner writes it, and the Core never sees it |
 | `cancel-run` | `run` | `pc`? | cancels a Run |
 | `rewind-run` | `run` | `pc`? | rewinds a Run still in its first Segment: its message goes back to the head of its Script's mailbox |
 | `stop` | `script` | `reason`, `pc`? | stops a Script |
@@ -551,9 +551,10 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
   - **`query` and `change`:** a Stub's `value` is a map `{columns, rows}`, with `changes` too for `change`: `columns` a list of the column names, `rows` a list of rows, each a list of SQL values, and `changes` a number.
   - **SQL values:** Nothing stands for `NULL`. A number stands for an `INTEGER` if its canonical text has no fraction digits and it fits a signed 64-bit integer, and for a `REAL`, the nearest double, otherwise, as `params` bind. Text stands for `TEXT` and Bytes for a `BLOB`. A map `{real: t}` stands for the `REAL` that `t` names: `"NaN"`, `"Infinity"`, `"-Infinity"`, or decimal text the nearest double reads from, such as `"1e34"`. Any other value, at any place in the map, stands for a value of a type the implementation must not give, so the Core ends the call as `host error`.
   - **`begin`, `commit` and `rollback`:** a Stub gives Nothing, or fails.
+- **Standard `user` calls:** `confirm`, `choose` and `enter` are suspending calls, so a case answers each with an `answer` or `fail` line, and writes a Host's `user busy` as a Stub's `error`. `notify` takes fire-and-forget Stubs.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
-- **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` only.
-- **Suspending calls** are answered by later `answer` and `fail` lines. The runner's Host functions do nothing else.
+- **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` and `error` only.
+- **Suspending calls** are answered by later `answer` and `fail` lines, unless a Stub's `error` fails one as it starts, as a Host that refuses a call at once does. The runner's Host functions do nothing else.
 - **Replaying a Trace from a live Host,** which has no Stubs, a replaying Host answers each immediate call from its `call` record's `result` or `error`, charges its `charged`, and answers each property read from its `prop` record ([chapter 12](12-sessions-and-tooling.md#the-debugger)).
 
 ### Key types

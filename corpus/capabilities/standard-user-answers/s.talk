@@ -1,0 +1,9 @@
+script variable got = []
+on pick items, options
+  try
+    ask user to choose items, options and wait
+    put it after got
+  catch {code: code}
+    put code after got
+  end try
+end pick

@@ -136,6 +136,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			names = []string{"query", "change", "begin", "commit", "rollback"}
 		case "locale":
 			names = []string{"compare", "rank", "upper", "lower", "numberSymbols", "monthNames", "dayNames", "tag"}
+		case "user":
+			names = []string{"confirm", "choose", "enter", "notify"}
 		}
 		costs, costErr := setupStandardCosts(row, names)
 		if costErr != nil {
@@ -181,6 +183,19 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 				"keys":      {Mode: talk.Immediate, Args: []talk.Shape{talk.Optional(talk.TextShape)}},
 				"increment": {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.Optional(talk.AnyShape)}},
 				"swap":      {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.AnyShape, talk.AnyShape}},
+			}
+		case "user":
+			def, err = core.UserCapability(replayUser{out}, costs)
+			optionalText := talk.Optional(talk.TextShape)
+			options := func(fields ...talk.Field) talk.Shape { return talk.Optional(talk.MapShape(fields...)) }
+			out.declarations[name] = map[string]talk.OperationCheck{
+				"confirm": {Mode: talk.Suspending, Args: []talk.Shape{talk.TextShape}},
+				"choose": {Mode: talk.Suspending, Args: []talk.Shape{talk.ListOf(talk.TextShape), options(
+					talk.Field{Key: "prompt", Shape: optionalText, Optional: true},
+					talk.Field{Key: "multiple", Shape: talk.Optional(talk.BoolShape), Optional: true},
+				)}},
+				"enter":  {Mode: talk.Suspending, Args: []talk.Shape{talk.TextShape, options(talk.Field{Key: "default", Shape: optionalText, Optional: true})}},
+				"notify": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.TextShape, options(talk.Field{Key: "title", Shape: optionalText, Optional: true})}},
 			}
 		case "sqlite":
 			perRow := int64(0)
@@ -566,4 +581,26 @@ func (h replayStore) Swap(c *talk.Call, key string, expected, replacement talk.V
 		return false, fmt.Errorf("store.swap Stub is not boolean")
 	}
 	return b, nil
+}
+
+type replayUser struct{ replay *operationReplay }
+
+// prompt starts a suspending user call, which a Stub fails at once, or an
+// `answer` line settles later.
+func (h replayUser) prompt(operation string, c *talk.Call) error {
+	h.replay.calls[c.ID()] = c
+	if len(h.replay.stubs[operation]) == 0 {
+		return nil
+	}
+	_, err := h.replay.invoke(operation, talk.Suspending, c)
+	return err
+}
+func (h replayUser) Confirm(c *talk.Call, _ string) error { return h.prompt("user.confirm", c) }
+func (h replayUser) Choose(c *talk.Call, _ []string, _ string, _ bool) error {
+	return h.prompt("user.choose", c)
+}
+func (h replayUser) Enter(c *talk.Call, _ string, _ string) error { return h.prompt("user.enter", c) }
+func (h replayUser) Notify(c *talk.Call, _ string, _ string) error {
+	_, err := h.replay.invoke("user.notify", talk.FireAndForget, c)
+	return err
 }

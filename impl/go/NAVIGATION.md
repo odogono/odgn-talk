@@ -58,3 +58,8 @@ is the separate module [sqlite/](sqlite/), which runs the
 [sqlite kit](../../corpus/sqlite-kit/) through
 [internal/sqlitekit/](internal/sqlitekit/); check it with
 `go -C impl/go/sqlite test ./...`.
+
+The optional `user` factory lives in [user_capability.go](user_capability.go),
+with its corpus runner Stubs in [internal/corpus/operations.go](internal/corpus/operations.go);
+check it with `go -C impl/go test . -run User` and the `standard-user*`
+Capability cases.

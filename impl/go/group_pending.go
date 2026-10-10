@@ -117,7 +117,12 @@ func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (coreva
 			err = &ScriptError{Code: p.FailureCode, Message: p.FailureMessage, Data: Value{p.FailureData}}
 		}
 	}
-	crossing := operationHostCrossing(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, nil)
+	// A Standard answer rule, such as `choose`'s, reads the call's arguments.
+	args := make([]corevalue.Value, len(pending.args))
+	for i, a := range pending.args {
+		args[i] = a.inner
+	}
+	crossing := operationHostCrossing(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, args)
 	return g.resumeHost(crossing, Value{p.Answer}, err, p.Fuel, reports)
 }
 func (g *Group) abandonOperation(id string) {

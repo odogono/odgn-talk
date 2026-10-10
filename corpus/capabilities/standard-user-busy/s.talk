@@ -1,0 +1,9 @@
+script variable got = []
+on confirmIt
+  try
+    ask user to confirm "Delete?" and wait
+    put it after got
+  catch {code: code}
+    put code after got
+  end try
+end confirmIt

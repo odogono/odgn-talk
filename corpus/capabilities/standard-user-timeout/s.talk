@@ -1,0 +1,15 @@
+script variable got = []
+on confirmIt
+  try
+    with timeout of 5 s
+      ask user to confirm "Still there?" and wait
+    end timeout
+    put it after got
+  catch {code: code, deadline: d}
+    put [code, d] after got
+  end try
+end confirmIt
+on enterName
+  ask user to enter "Your name?" and wait
+  put it after got
+end enterName

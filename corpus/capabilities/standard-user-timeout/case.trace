@@ -1,0 +1,27 @@
+# Unblessed: user timeouts (#527); first blessing awaits human review.
+> load s identity=03349eb1a0f3aae92837cfd2b43e4054f3281307455efad175b5a9e2f212eae7
+> deliver d1 to=s message=confirmIt
+> deliver d2 to=s message=enterName
+> pump clock=2026-10-10T12:00:00Z
+call s/r1.c1 op=user.confirm args=["Still there?"]
+seg s/r1 start delivery=d1 handler=confirmIt clause=1 fuel=21 alloc=40 state=408 end=ask-wait until=2026-10-10T12:00:05Z
+call s/r2.c1 op=user.enter args=["Your name?"]
+seg s/r2 start delivery=d2 handler=enterName clause=1 fuel=22 alloc=0 state=616 end=ask-wait
+pumped state=idle fuel=43 next=2026-10-10T12:00:05Z
+> pump clock=2026-10-10T12:00:01Z
+pumped state=idle fuel=0 next=2026-10-10T12:00:05Z
+> pump clock=2026-10-10T12:00:05Z
+raise s/r1 code="timeout" at=s:7 pos=5:7
+abandon s/r1.c1
+seg s/r1 resume fuel=31 alloc=134 state=327 end=return
+run s/r1 outcome=completed delivery=d1 handler=confirmIt fuel=52 alloc=174
+pumped state=idle fuel=31 next=2026-11-04T08:31:23.647Z
+> answer s/r1.c1 value=true
+> answer s/r2.c1 value="late, but in time"
+> pump clock=2026-10-10T12:00:06Z
+note s/r1.c1 kind=late-answer
+seg s/r2 resume fuel=15 alloc=74 state=128 end=return
+run s/r2 outcome=completed delivery=d2 handler=enterName fuel=37 alloc=74
+pumped state=idle fuel=15
+> vars
+vars s got=[["timeout", true], "late, but in time"]

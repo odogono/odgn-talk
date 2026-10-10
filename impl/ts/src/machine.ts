@@ -649,6 +649,8 @@ export type RunRecord =
 // A call in flight: what its answer or failure needs at the call.
 type CallContext = {
   adoptable?: boolean;
+  /** A suspending Standard Capability call's arguments, for its answer rules. */
+  args?: readonly Value[];
   declared: number;
   id: string;
   key: string;
@@ -2519,7 +2521,9 @@ export class Run {
       case 'answer':
         if (
           !functionsBelongTo([r.value], this.script.functionGroup) ||
-          (call!.op.result && mismatch(r.value, call!.op.result))
+          (call!.op.result && mismatch(r.value, call!.op.result)) ||
+          (call!.args !== undefined &&
+            standardChecks(call!.op)?.result?.(r.value, call!.args) === false)
         ) {
           throw this.hostError(
             call!,
@@ -3733,6 +3737,9 @@ export class Run {
       declared,
       opName: `${grantName}.${opName}`,
       adoptable: op.mode === 'suspending' && !!op.start,
+      ...(op.mode === 'suspending' && standardChecks(op)?.result
+        ? { args: [...args] }
+        : {}),
     };
     let charged = 0;
     let reached = false;

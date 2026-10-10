@@ -390,7 +390,7 @@ is = "the error, for `fail`"
 name = "stub"
 input = true
 ids = ["operation"]
-is = "queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, and any call's charge; the runner writes it, and the Core never sees it"
+is = "queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, a suspending call's error, which fails it as it starts, and any call's charge; the runner writes it, and the Core never sees it"
 
 [[record.key]]
 key = "value"

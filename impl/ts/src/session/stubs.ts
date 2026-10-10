@@ -102,7 +102,7 @@ export class Stubs {
     return stub.value ?? nothing;
   }
 
-  /** A suspending call takes a Stub for its charge only. */
+  /** A suspending call takes a Stub for its charge, and for an error that fails it at once. */
   start(
     operation: string,
     call: { charge(fuel: number): void },
@@ -113,11 +113,16 @@ export class Stubs {
     if (stub?.charge) {
       call.charge(stub.charge);
     }
-    if (!queued && recorded?.error) {
-      if (!recorded.error.entries().length) {
-        throw new Error(`The recorded call of ${operation} fails`);
+    // A Stub's error, or a recorded one, fails the call as it starts.
+    if (stub?.error) {
+      if (!stub.error.entries().length) {
+        throw new Error(
+          queued
+            ? `The Stub for ${operation} fails`
+            : `The recorded call of ${operation} fails`,
+        );
       }
-      throw hostFailure(recorded.error);
+      throw hostFailure(stub.error);
     }
   }
 }

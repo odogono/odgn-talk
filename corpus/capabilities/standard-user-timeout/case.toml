@@ -1,0 +1,16 @@
+# standard-user-timeout: a prompt waits past the Script's MaxWait for its
+# own maxPending, and a Timeout Block bounds it, abandoning the call
+# (chapter 7, ADR 0073, ADR 0077).
+
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[standard]]
+capability = "user"
+costs = { confirm = { fuel = 3 }, choose = { fuel = 5 }, enter = { fuel = 7 }, notify = { fuel = 2 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { maxWaitMs = 1 }
+grants = { user = { ops = "all" } }

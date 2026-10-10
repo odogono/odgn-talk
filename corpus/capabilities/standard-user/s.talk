@@ -1,0 +1,21 @@
+script variable got = []
+on confirmIt
+  ask user to confirm "Delete 12 files?" and wait
+  put it after got
+end confirmIt
+on chooseOne
+  ask user to choose ["Small", "Medium", "Large"], {prompt: "Pick a size"} and wait
+  put it after got
+end chooseOne
+on chooseMany
+  ask user to choose ["Small", "Medium", "Large"], {multiple: true} and wait
+  put it after got
+end chooseMany
+on enterName
+  ask user to enter "Your name?", {default: "Ann"} and wait
+  put it after got
+end enterName
+on tellDone
+  tell user to notify "Backup finished", {title: "Backup"}
+  put "notified" after got
+end tellDone
