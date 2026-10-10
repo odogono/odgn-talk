@@ -867,12 +867,15 @@ func (p *parser) waitStatement(inline bool) *Node {
 	}
 	return n
 }
+
+// FOLLOW words distinguish a chunk-kind Name from a Chunk Expression, but
+// remain ordinary Names at the start of other operands.
 func startsIndex(t Token) bool {
-	return startsOperand(t) && !slices.Contains([]string{"<", "<<"}, t.Raw)
+	return startsOperand(t) && !slices.Contains(generated.Grammar.Follow, t.Raw) && !slices.Contains([]string{"<", "<<"}, t.Raw)
 }
 func startsOperand(t Token) bool {
 	if t.Kind == Number || t.Kind == Text || t.Kind == Template || isName(t) {
-		return !slices.Contains(generated.Grammar.Follow, t.Raw)
+		return true
 	}
 	return slices.Contains([]string{"(", "[", "{", "<", "<<", "-", "not", "given", "the", "every", "replace", "true", "false", "nothing", "it", "me"}, t.Raw)
 }
