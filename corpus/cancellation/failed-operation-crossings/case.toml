@@ -1,0 +1,23 @@
+# Host failures at interrupted Operation crossings retain the call record,
+# suppress host error and call failed, and preserve cancellation/Stop semantics.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "fail"
+mode = "immediate"
+result = "number"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["fail"] } }
+
+[[scripts]]
+name = "t"
+source = "s.talk"
+grants = { api = { ops = ["fail"] } }

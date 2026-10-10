@@ -1,0 +1,22 @@
+# Unblessed: Host failures at interrupted Operation crossings (#540); first blessing awaits human review.
+# Cancellation rolls back and runs finally; Stop rolls back without finally.
+# Both failures remain call error records, with no raise or call-failed record.
+> load s identity=6697467898929a3d812a2862545a50772be8a778b82324bcaabd1324e668488a
+> load t identity=195236b006d1bfc75dd54dc5378491348cfe5726c73cea9233d77ab190ba650d
+> stub api.fail error={}
+> stub api.fail error={}
+> deliver d1 to=s message=go
+> deliver d2 to=t message=go
+> pump clock=2026-10-09T00:00:00Z
+call s/r1.c1 op=api.fail args=[] error={}
+> cancel-run s/r1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=29 alloc=16 state=16 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=29 alloc=16
+call t/r1.c1 op=api.fail args=[] error={}
+> stop t reason="off"
+seg t/r1 start delivery=d2 handler=go clause=1 fuel=17 alloc=0 state=16 end=stop
+stopped t reason="off" discarded=[t/r1]
+pumped state=idle fuel=46
+> vars
+vars s n=1
+vars t n=0
