@@ -56,4 +56,8 @@ func (i *Instruction) prepare() {
 	if i.Name == "call-builtin" && len(i.operands) > 0 {
 		i.Cost = "builtin." + i.operands[0].Text
 	}
+	i.Rate = -1
+	if rate, ok := generated.CostRateIndex[i.Cost]; ok {
+		i.Rate = rate
+	}
 }

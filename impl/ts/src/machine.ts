@@ -15,9 +15,9 @@ import {
   readRest,
   type Reader,
 } from './binary';
-import { charge, partSize, sizeOf, type Measured } from './costs';
+import { charge, partSize, rateOf, sizeOf, type Measured } from './costs';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
-import { arityOf, instructionSpec } from './code-unit';
+import { arityOf } from './code-unit';
 import {
   errorMessages,
   limitDefaults,
@@ -117,6 +117,15 @@ export const defaultLimits: Limits = {
   maxJoin: limitDefaults.maxJoin,
   cleanupBudget: limitDefaults.cleanupBudget,
 };
+
+// The rates charged outside an instruction's own.
+const CALL = rateOf('call');
+const CAPABILITY = rateOf('capability');
+const CHOOSE_OFFER = rateOf('choose-offer');
+const CLAUSE = rateOf('clause');
+const JOIN = rateOf('join');
+const OFFER_LOOKUP = rateOf('offer-lookup');
+const UNWIND = rateOf('unwind');
 
 /** The error maps the Core raised, which a Trace writes without `message`. */
 export const coreRaised = new WeakSet<Value>();
@@ -653,11 +662,12 @@ type CallContext = {
   args?: readonly Value[];
   declared: number;
   id: string;
-  key: string;
   named: [string, Value][];
   op: Operation<unknown>;
   /** As the Trace names it, `<granted name>.<operation>`. */
   opName: string;
+  /** The rate the call is charged by. */
+  rate: number;
 };
 /** Why a Run suspended, which its Group waits on (chapter 5, Suspension Points). */
 export type Suspension = (
@@ -1996,7 +2006,7 @@ export class Run {
   acceptClause(dispatchOnly: boolean): boolean {
     if (this.frame.clauseCharge) {
       try {
-        const fuel = charge('clause').fuel;
+        const fuel = charge(CLAUSE).fuel;
         if (this.fuel + fuel > this.limits.fuelPerRun) {
           throw new LimitFaultError('fuelPerRun', this.frame.pc);
         }
@@ -2156,14 +2166,14 @@ export class Run {
   // ------------------------------------------------------------- charging
 
   /** Charge an instruction, faulting before it does anything if it can't pay. */
-  private pay(key: string, measured: Measured = this.m, allocation = 0) {
+  private pay(rate: number, measured: Measured = this.m, allocation = 0) {
     if (!this.charging) {
       return;
     }
     const frame = this.frame;
-    const own = charge(key, measured);
+    const own = charge(rate, measured);
     this.payAmount(
-      own.fuel + (frame.clauseCharge ? charge('clause').fuel : 0),
+      own.fuel + (frame.clauseCharge ? charge(CLAUSE).fuel : 0),
       own.alloc + allocation,
     );
   }
@@ -2238,11 +2248,7 @@ export class Run {
     }
     const frame = this.frame;
     const ins = frame.code.unit.code[frame.pc]!;
-    // A Built-in call is charged by that Built-in's rate, when it raises too.
-    const key =
-      ins.op === 'call-builtin'
-        ? `builtin.${ins.operands[0]}`
-        : instructionSpec.get(ins.op)!.cost;
+    const rate = ins.rate;
     this.m = {};
     const resumption = this.resumption;
     this.resumption = null;
@@ -2283,13 +2289,13 @@ export class Run {
       if (resumption) {
         this.resume(resumption);
       } else {
-        this.execute(ins, key);
+        this.execute(ins, rate);
       }
     } catch (error) {
       if (error instanceof CrossingInterruptedError) {
         // Cancellation has already installed cleanup, or Stop discarded the Run.
       } else if (error instanceof ScriptError) {
-        this.raiseCore(error, ins, key);
+        this.raiseCore(error, ins, rate);
       } else if (error instanceof ThrownError) {
         this.unwind(error.error, ins);
       } else if (error instanceof LimitFaultError) {
@@ -2462,8 +2468,8 @@ export class Run {
         }
       });
       const result = listValues(values);
-      const all = charge('join', { result });
-      const before = charge('join', {});
+      const all = charge(JOIN, { result });
+      const before = charge(JOIN, {});
       this.payAmount(all.fuel - before.fuel, all.alloc - before.alloc);
       frame.stack.push(result);
       frame.pc++;
@@ -2627,11 +2633,11 @@ export class Run {
    * the Host's property, charged as a Capability result is, recorded as
    * `prop`. A key its Object Kind doesn't define gives Nothing.
    */
-  private getProperty(v: Value, name: string, key: string): Value {
+  private getProperty(v: Value, name: string, rate: number): Value {
     const o = stateOf(v)!;
     if (name === 'id') {
       const id = text(o.handle.id);
-      this.pay(key, { result: id });
+      this.pay(rate, { result: id });
       return id;
     }
     const guard = this.frame.code.unit.unwind.some(
@@ -2646,11 +2652,11 @@ export class Run {
     }
     const prop = o.handle.kind.props.get(name);
     if (!prop) {
-      this.pay(key);
+      this.pay(rate);
       return nothing;
     }
     const ctx = this.propContext(o, name, prop.getCost);
-    this.pay(key);
+    this.pay(rate);
     this.payAmount(ctx.declared, prop.getCost?.alloc ?? 0);
     let result: unknown;
     try {
@@ -2699,7 +2705,7 @@ export class Run {
   }
 
   /** `set the p of o to v`: the Host's `Set`, after the value's Shape check. */
-  private setProperty(v: Value, name: string, value: Value, key: string) {
+  private setProperty(v: Value, name: string, value: Value, rate: number) {
     const o = stateOf(v);
     if (!o) {
       throw wrongKind('object', v);
@@ -2724,7 +2730,7 @@ export class Run {
       );
     }
     const ctx = this.propContext(o, name, prop.setCost);
-    this.pay(key, { input: value });
+    this.pay(rate, { input: value });
     this.payAmount(ctx.declared, prop.setCost?.alloc ?? 0);
     try {
       prop.set(o.handle, value);
@@ -2757,7 +2763,7 @@ export class Run {
     return {
       id: '',
       op: { mode: 'immediate', cost: cost ?? { fuel: 0 }, do: () => nothing },
-      key: 'capability',
+      rate: CAPABILITY,
       named: [
         ['capability', text(o.handle.kind.name)],
         ['operation', text(name)],
@@ -2925,14 +2931,14 @@ export class Run {
 
   // A Core-raised error: the instruction is charged on what it worked on, then
   // the error unwinds.
-  private raiseCore(error: ScriptError, ins: Instruction, key: string) {
+  private raiseCore(error: ScriptError, ins: Instruction, rate: number) {
     try {
       if (!error.uncharged) {
-        this.pay(key, { ...this.m, result: undefined });
+        this.pay(rate, { ...this.m, result: undefined });
       } else if (this.frame.clauseCharge) {
         // Validation and lifecycle guards skip the instruction's charge,
         // but dispatch still pays for trying this Handler Clause.
-        this.payAmount(charge('clause').fuel, 0);
+        this.payAmount(charge(CLAUSE).fuel, 0);
       }
     } catch (error_) {
       if (error_ instanceof LimitFaultError) {
@@ -3156,7 +3162,7 @@ export class Run {
         );
       }
       if (entry) {
-        this.pay('unwind', { frames: left });
+        this.pay(UNWIND, { frames: left });
         context.cursor = i;
         const seen = context.seen.get(owner) ?? new Set<number>();
         seen.add(entry.target);
@@ -3183,7 +3189,7 @@ export class Run {
       this.escapePolicy(context);
     }
     this.leaveJoin(-1, undefined);
-    this.pay('unwind', { frames: left });
+    this.pay(UNWIND, { frames: left });
     context.pending = { kind: 'error' };
     context.queue = this.exitedCleanups(context, -1);
     this.advanceTransfer(context);
@@ -3412,8 +3418,8 @@ export class Run {
   private chooseOffer(name: string, count: number, ins: Instruction) {
     const found = this.lookupOffer(name);
     this.m.count = count;
-    this.pay('choose-offer');
-    this.pay('offer-lookup', { frames: found.frames });
+    this.pay(CHOOSE_OFFER);
+    this.pay(OFFER_LOOKUP, { frames: found.frames });
     if (!found.offer) {
       throw new ThrownError(
         this.errorMap('offer unavailable', [['name', text(name)]], ins),
@@ -3541,7 +3547,7 @@ export class Run {
     if (this.callWouldExceedDepth()) {
       throw new LimitFaultError('callDepth', this.frame.pc);
     }
-    this.pay('call');
+    this.pay(CALL);
     this.push(code, body, args, null);
   }
 
@@ -3604,7 +3610,7 @@ export class Run {
     grantName: string,
     opName: string,
     args: Value[],
-    key: string,
+    rate: number,
     member = false,
   ): Value {
     const host = this.host;
@@ -3712,7 +3718,7 @@ export class Run {
       );
     }
     const declared = op.cost.fuel;
-    this.pay(key, { declared }, op.cost.alloc ?? 0);
+    this.pay(rate, { declared }, op.cost.alloc ?? 0);
     if (
       op.mode === 'immediate' &&
       op.segmentBound &&
@@ -3744,7 +3750,7 @@ export class Run {
     const ctx: CallContext = {
       id,
       op,
-      key,
+      rate,
       named,
       declared,
       opName: `${grantName}.${opName}`,
@@ -3951,8 +3957,8 @@ export class Run {
 
   // A result's conversion, and any late cost, charged at the call.
   private payConversion(ctx: CallContext, result: Value, late: number) {
-    const conversion = charge(ctx.key, { declared: ctx.declared, result });
-    const before = charge(ctx.key, { declared: ctx.declared });
+    const conversion = charge(ctx.rate, { declared: ctx.declared, result });
+    const before = charge(ctx.rate, { declared: ctx.declared });
     this.payAmount(
       conversion.fuel - before.fuel + late,
       conversion.alloc - before.alloc,
@@ -4025,7 +4031,7 @@ export class Run {
 
   // ------------------------------------------------------------- instructions
 
-  private execute(ins: Instruction, key: string) {
+  private execute(ins: Instruction, rate: number) {
     const frame = this.frame;
     const [a, b, c] = ins.operands;
     const m = this.m;
@@ -4041,36 +4047,36 @@ export class Run {
       // Values and slots
       case 'const': {
         const value = code.constant(a as number);
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push(value);
         return next();
       }
       case 'pop':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         return next();
       case 'load':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push(frame.locals[a as number]!);
         return next();
       case 'store':
-        this.pay(key);
+        this.pay(rate);
         frame.locals[a as number] = this.pop();
         return next();
       case 'move':
-        this.pay(key);
+        this.pay(rate);
         frame.locals[b as number] = frame.locals[a as number]!;
         return next();
       case 'load-var':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push(this.script.variables[a as number]!);
         return next();
       case 'store-var':
-        this.pay(key);
+        this.pay(rate);
         this.script.variables[a as number] = this.pop();
         return next();
       case 'load-definition':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push(
           homeConstant(
             code.definitions[a as number]!,
@@ -4079,13 +4085,13 @@ export class Run {
         );
         return next();
       case 'store-definition':
-        this.pay(key);
+        this.pay(rate);
         code.definitions[a as number] = this.pop();
         return next();
 
       // Control
       case 'jump':
-        this.pay(key);
+        this.pay(rate);
         return jump(a as number);
       case 'branch-false':
       case 'branch-true':
@@ -4094,7 +4100,7 @@ export class Run {
         if (v.kind !== 'boolean') {
           throw wrongKind('boolean', v);
         }
-        this.pay(key);
+        this.pay(rate);
         if (ins.op === 'check-boolean') {
           return next();
         }
@@ -4109,7 +4115,7 @@ export class Run {
           throw wrongKind('boolean', v);
         }
         m.result = bool(!v.asBool());
-        return this.replace(1, key);
+        return this.replace(1, rate);
       }
 
       // Operators
@@ -4121,16 +4127,16 @@ export class Run {
       case 'mod':
       case 'power':
         m.result = arithmetic(ins.op, this.peek(1), this.peek());
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'negate':
         m.result = negated(this.peek());
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'concat':
         m.result = concat(this.peek(1), this.peek());
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'range':
         m.result = makeRange(this.peek(1), this.peek());
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'equal':
       case 'not-equal':
       case 'less':
@@ -4140,20 +4146,20 @@ export class Run {
         const out = comparison(ins.op, this.peek(1), this.peek(), a === 'fold');
         m.scanned = out.scanned;
         m.result = out.result;
-        return this.replace(2, key);
+        return this.replace(2, rate);
       }
       case 'member': {
         const out = member(this.peek(1), this.peek(), a === 'fold');
         m.scanned = out.scanned;
         m.result = out.result;
-        return this.replace(2, key);
+        return this.replace(2, rate);
       }
       case 'is-kind':
         m.result = isKind(this.peek(), a as string);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'is-empty':
         m.result = isEmpty(this.peek());
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'can-convert':
       case 'convert':
         m.input = this.peek();
@@ -4161,7 +4167,7 @@ export class Run {
           ins.op === 'convert'
             ? convert(m.input, a as string)
             : canConvert(m.input, a as string);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'contains':
       case 'begins-with':
       case 'ends-with':
@@ -4170,19 +4176,19 @@ export class Run {
         const out = search(ins.op, m.input, this.peek(), a === 'fold');
         m.steps = out.steps;
         m.result = out.result;
-        return this.replace(2, key);
+        return this.replace(2, rate);
       }
 
       // Keys, properties and chunks
       case 'get-key':
         if (this.peek().kind === 'object') {
-          m.result = this.getProperty(this.peek(), a as string, key);
+          m.result = this.getProperty(this.peek(), a as string, rate);
           frame.stack.pop();
           frame.stack.push(m.result);
           return next();
         }
         m.result = getKey(this.peek(), a as string);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'set-property':
       case 'set-property-computed': {
         const computed = ins.op === 'set-property-computed';
@@ -4190,27 +4196,27 @@ export class Run {
         const o = this.peek(1);
         const v = this.peek();
         const name = computed ? keyText(this.peek(2)) : (a as string);
-        this.setProperty(o, name, v, key);
+        this.setProperty(o, name, v, rate);
         this.popN(computed ? 3 : 2);
         return next();
       }
       case 'get-key-computed':
         if (this.peek().kind === 'object') {
-          m.result = this.getProperty(this.peek(), keyText(this.peek(1)), key);
+          m.result = this.getProperty(this.peek(), keyText(this.peek(1)), rate);
           frame.stack.length -= 2;
           frame.stack.push(m.result);
           return next();
         }
         m.result = getKey(this.peek(), keyText(this.peek(1)));
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'property':
         m.input = this.peek();
         m.result = property(a as string, m.input);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'property-delimited':
         m.input = this.peek(1);
         m.result = property(a as string, m.input, this.peek());
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'chunk-get':
       case 'chunk-get-delimited': {
         const delimited = ins.op === 'chunk-get-delimited';
@@ -4221,7 +4227,7 @@ export class Run {
         const out = chunkGet(a as string, index, whole, d);
         m.scanned = out.scanned;
         m.result = out.result;
-        return this.replace(delimited ? 3 : 2, key);
+        return this.replace(delimited ? 3 : 2, rate);
       }
       case 'chunk-set':
       case 'chunk-set-delimited': {
@@ -4232,7 +4238,7 @@ export class Run {
         const index = this.peek(delimited ? 3 : 2);
         m.input = part;
         m.result = chunkSet(a as string, index, whole, part, d);
-        return this.replace(delimited ? 4 : 3, key);
+        return this.replace(delimited ? 4 : 3, rate);
       }
       case 'chunk-delete':
       case 'chunk-delete-delimited': {
@@ -4241,7 +4247,7 @@ export class Run {
         const whole = this.peek(delimited ? 1 : 0);
         const index = this.peek(delimited ? 2 : 1);
         m.result = chunkDelete(a as string, index, whole, d);
-        return this.replace(delimited ? 3 : 2, key);
+        return this.replace(delimited ? 3 : 2, rate);
       }
       case 'test-chunk':
       case 'test-chunk-delimited': {
@@ -4252,7 +4258,7 @@ export class Run {
         m.input = whole;
         const there = chunkThere(a as string, index, whole, d);
         m.scanned = chunkGet(a as string, index, whole, d).scanned;
-        this.pay(key);
+        this.pay(rate);
         this.popN(delimited ? 3 : 2);
         return there ? next() : jump(b as number);
       }
@@ -4263,31 +4269,31 @@ export class Run {
           this.peek(),
           computed ? keyText(this.peek(1)) : (a as string),
         );
-        this.pay(key);
+        this.pay(rate);
         this.popN(computed ? 2 : 1);
         return there ? next() : jump((computed ? a : b) as number);
       }
       case 'set-key':
         m.input = this.peek();
         m.result = setKey(this.peek(1), a as string, m.input);
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'set-key-computed':
         m.input = this.peek();
         m.result = setKey(this.peek(1), keyText(this.peek(2)), m.input);
-        return this.replace(3, key);
+        return this.replace(3, rate);
       case 'delete-key':
         m.result = deleteKey(this.peek(), a as string);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'delete-key-computed':
         m.result = deleteKey(this.peek(), keyText(this.peek(1)));
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'append':
       case 'prepend':
       case 'append-all':
       case 'prepend-all':
         m.input = this.peek();
         m.result = appendTo(this.peek(1), m.input, ins.op);
-        return this.replace(2, key);
+        return this.replace(2, rate);
 
       // Building values
       case 'list': {
@@ -4296,18 +4302,18 @@ export class Run {
         m.result = listValues(
           this.frame.stack.slice(this.frame.stack.length - n) as Value[],
         );
-        return this.replace(n, key);
+        return this.replace(n, rate);
       }
       case 'list-append':
         m.result = appendTo(this.peek(1), this.peek(), 'append');
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'list-extend': {
         const e = this.peek();
         if (e.kind !== 'list') {
           throw wrongKind('list', e);
         }
         m.result = appendTo(this.peek(1), e, 'append-all');
-        return this.replace(2, key);
+        return this.replace(2, rate);
       }
       case 'map': {
         const keys = code.constant(a as number);
@@ -4317,17 +4323,17 @@ export class Run {
           this.frame.stack.length - n,
         ) as Value[];
         m.result = map(values.map((v, i) => [textForm(keys.index(i + 1)), v]));
-        return this.replace(n, key);
+        return this.replace(n, rate);
       }
       // Building Bytes
       case 'bytes-field':
         m.input = this.peek();
         m.result = buildField(this.peek(1), m.input, a as string);
-        return this.replace(2, key);
+        return this.replace(2, rate);
       case 'bytes-sized':
         m.input = this.peek(1);
         m.result = buildSized(this.peek(2), m.input, this.peek(), a as string);
-        return this.replace(3, key);
+        return this.replace(3, rate);
       case 'bytes-bits': {
         const n = b as number;
         const values = this.frame.stack.slice(-n) as Value[];
@@ -4336,13 +4342,13 @@ export class Run {
           values,
           widthsOf(code.constant(a as number)),
         );
-        return this.replace(n + 1, key);
+        return this.replace(n + 1, rate);
       }
 
       // Binary Patterns: a jump pops the reader, and the subject or size.
       case 'bin-start': {
         const v = this.peek();
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         if (v.kind !== 'bytes') {
           return jump(a as number);
@@ -4352,7 +4358,7 @@ export class Run {
       }
       case 'bin-literal': {
         const r = this.reader();
-        this.pay(key);
+        this.pay(rate);
         if (!readLiteral(r, code.constant(a as number))) {
           frame.stack.pop();
           return jump(b as number);
@@ -4362,7 +4368,7 @@ export class Run {
       case 'bin-int': {
         const r = this.reader();
         m.result = readInt({ ...r }, a as string);
-        this.pay(key);
+        this.pay(rate);
         if (!m.result) {
           frame.stack.pop();
           return jump(b as number);
@@ -4376,7 +4382,7 @@ export class Run {
         const widths = widthsOf(code.constant(a as number));
         const values = readBits({ ...r }, widths);
         m.resultSize = values?.reduce((t, v) => t + sizeOf(v), 0) ?? 0;
-        this.pay(key);
+        this.pay(rate);
         if (!values) {
           frame.stack.pop();
           return jump(c as number);
@@ -4390,7 +4396,7 @@ export class Run {
         const r = this.frame.stack.at(-2) as Reader;
         const probe = { ...r };
         m.result = readBytes(probe, size, a as string);
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         if (!m.result) {
           frame.stack.pop();
@@ -4403,7 +4409,7 @@ export class Run {
       case 'bin-rest': {
         const r = this.reader();
         m.result = readRest(r, a as string);
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         if (!m.result) {
           return jump(b as number);
@@ -4413,7 +4419,7 @@ export class Run {
       }
       case 'bin-end': {
         const r = this.reader();
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         return r.at === r.bytes.length ? next() : jump(a as number);
       }
@@ -4433,13 +4439,13 @@ export class Run {
           throw new LimitFaultError('patternSize', frame.pc);
         }
         m.result = pattern;
-        return this.replace(n, key);
+        return this.replace(n, rate);
       }
       case 'match-all': {
         const out = matchesOf(this.peek(1), this.peek());
         m.steps = out.steps;
         m.result = listValues(out.matches);
-        return this.replace(2, key);
+        return this.replace(2, rate);
       }
       case 'replace-start': {
         const pattern = this.peek(1);
@@ -4460,14 +4466,14 @@ export class Run {
           0,
           sizeOf(subject) + out.matches.reduce((t, v) => t + sizeOf(v), 0),
         );
-        this.pay(key);
+        this.pay(rate);
         this.popN(2);
         frame.stack.push(replacement);
         return next();
       }
       case 'replace-next': {
         const r = frame.stack.at(-1) as Replacement;
-        this.pay(key);
+        this.pay(rate);
         if (r.at >= r.matches.length) {
           return jump(a as number);
         }
@@ -4477,7 +4483,7 @@ export class Run {
       case 'replace-put': {
         const piece = this.peek();
         const r = frame.stack.at(-2) as Replacement;
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         r.pieces.push(textForm(piece));
         r.at++;
@@ -4493,7 +4499,7 @@ export class Run {
         });
         out.push(r.cs.slice(from).join(''));
         m.result = text(out.join(''));
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         frame.stack.push(m.result);
         return next();
@@ -4508,11 +4514,11 @@ export class Run {
           this.frame.stack.slice(this.frame.stack.length - n) as Value[],
           ins,
         );
-        return this.replace(n, key);
+        return this.replace(n, rate);
       }
       case 'make-function':
         m.result = this.functionValue(code, unit.bodies[a as number]!, [], ins);
-        return this.replace(0, key);
+        return this.replace(0, rate);
       case 'make-imported-function': {
         const target = code.library(a as string);
         m.result = this.functionValue(
@@ -4521,7 +4527,7 @@ export class Run {
           [],
           ins,
         );
-        return this.replace(0, key);
+        return this.replace(0, rate);
       }
 
       // Effects
@@ -4529,7 +4535,7 @@ export class Run {
         const name = unit.objects[a as number]!;
         const object = this.host?.object(name);
         if (object) {
-          this.pay(key);
+          this.pay(rate);
           frame.stack.push(object);
           return next();
         }
@@ -4539,14 +4545,14 @@ export class Run {
         if (!named && !this.host?.isScript(name)) {
           throw new ScriptError('object gone', [['object', text(name)]]);
         }
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push({ k: 'receiver', name });
         return next();
       }
       case 'me': {
         // The object the Script owns, or Nothing (chapter 5, `me`). A Script
         // that owns none is its own receiver in `send … to me`.
-        this.pay(key);
+        this.pay(rate);
         const me = this.host?.me ?? nothing;
         const then = unit.code[frame.pc + 1]?.op;
         frame.stack.push(
@@ -4564,7 +4570,7 @@ export class Run {
       case 'tell': {
         const n = c as number;
         const args = this.popArgs(n);
-        const result = this.capability(a as string, b as string, args, key);
+        const result = this.capability(a as string, b as string, args, rate);
         frame.stack.length -= n;
         if (ins.op === 'ask') {
           frame.stack.push(result);
@@ -4575,7 +4581,7 @@ export class Run {
         const ns = waitNs(this.peek());
         this.checkDeadline();
         this.checkScopeBoundary();
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         this.suspend({ k: 'wait', ns });
         return;
@@ -4583,7 +4589,7 @@ export class Run {
       case 'ask-wait': {
         const n = c as number;
         const args = this.popArgs(n);
-        this.capability(a as string, b as string, args, key);
+        this.capability(a as string, b as string, args, rate);
         return;
       }
       case 'wait-for':
@@ -4643,20 +4649,20 @@ export class Run {
         }
         this.checkDeadline();
         this.checkScopeBoundary();
-        this.pay(key);
+        this.pay(rate);
         frame.stack.length -= count;
         this.suspend(sus);
         return;
       }
       case 'join-start':
         this.checkScopeBoundary();
-        this.pay(key);
+        this.pay(rate);
         this.join = { frame, members: [], replies: [], start: frame.pc };
         return next();
       case 'join-ask': {
         this.joinWidth();
         const n = c as number;
-        this.capability(a as string, b as string, this.popArgs(n), key, true);
+        this.capability(a as string, b as string, this.popArgs(n), rate, true);
         frame.stack.length -= n;
         return next();
       }
@@ -4665,14 +4671,14 @@ export class Run {
         if (!members.length) {
           // No members: `[]` at once, with no Segment boundary.
           m.result = listValues([]);
-          this.pay(key);
+          this.pay(rate);
           this.join = null;
           frame.stack.push(m.result);
           return next();
         }
         // Raising here, with the Join open, abandons its members.
         this.checkDeadline();
-        this.pay(key);
+        this.pay(rate);
         this.suspend({ k: 'join', members });
         return;
       }
@@ -4760,7 +4766,7 @@ export class Run {
           }
           this.checkScopeBoundary();
         }
-        this.pay(key);
+        this.pay(rate);
         const id = waits ? `${this.id}.c${this.calls + 1}` : null;
         const reached = up
           ? this.host!.sendUp(message, args, id)
@@ -4811,7 +4817,7 @@ export class Run {
       case 'veto': {
         const reason = this.peek();
         this.checkState();
-        this.pay(key);
+        this.pay(rate);
         this.frames = [];
         this.outcome = { kind: 'completed', result: nothing, veto: reason };
         return;
@@ -4819,12 +4825,12 @@ export class Run {
       case 'pass':
         // Ends the Run as `completed`; its Group sends the message on up.
         this.checkState();
-        this.pay(key);
+        this.pay(rate);
         this.frames = [];
         this.outcome = { kind: 'completed', result: nothing, passed: true };
         return;
       case 'target':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.push(this.target);
         return next();
 
@@ -4869,7 +4875,7 @@ export class Run {
         if (this.callWouldExceedDepth()) {
           throw new LimitFaultError('callDepth', frame.pc);
         }
-        this.pay('call');
+        this.pay(CALL);
         frame.stack.length -= n;
         this.dispatch({ clauses, code: target.code, next: 0, args });
         return;
@@ -4890,7 +4896,7 @@ export class Run {
           if (name.kind !== 'text') {
             throw wrongKind('text', name);
           }
-          this.pay(key);
+          this.pay(rate);
           const found =
             /^[A-Z_a-z]\w*$/.test(name.asText()!) &&
             name.asText() !== '_' &&
@@ -4899,7 +4905,7 @@ export class Run {
             )
               ? this.lookupOffer(name.asText()!)
               : { frames: 0 };
-          this.pay('offer-lookup', { frames: found.frames });
+          this.pay(OFFER_LOOKUP, { frames: found.frames });
           frame.stack.length -= n;
           frame.stack.push(bool(!!('offer' in found && found.offer)));
           frame.pc++;
@@ -4909,7 +4915,7 @@ export class Run {
         m.result = out.result;
         m.scanned = out.scanned;
         m.steps = out.steps;
-        return this.replace(n, key);
+        return this.replace(n, rate);
       }
       case 'call-value':
       case 'call-value-wait': {
@@ -4936,7 +4942,7 @@ export class Run {
         }
         if (foreign) {
           this.checkScopeBoundary();
-          this.pay(key);
+          this.pay(rate);
           const id = `${this.id}.c${this.calls + 1}`;
           const to = this.host!.callValue(fn, args, id);
           this.calls++;
@@ -4960,14 +4966,14 @@ export class Run {
         if (this.frames.length === 1) {
           this.checkState();
         }
-        this.pay(key);
+        this.pay(rate);
         return this.returnFrom(value);
       }
       case 'clause-fail': {
         if (this.frames.length === 1 && !Run.more(frame.dispatch)) {
           this.checkState();
         }
-        this.pay(key);
+        this.pay(rate);
         const failed = this.frames.pop()!;
         const d = failed.dispatch!;
         if (this.dispatch(d)) {
@@ -4987,13 +4993,13 @@ export class Run {
         const fold = b === 'fold';
         const target = (fold ? c : b) as number;
         const ok = equals(this.peek(), code.constant(a as number), fold).equal;
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         return ok ? next() : jump(target);
       }
       case 'test-equal': {
         const ok = equals(this.peek(1), this.peek(), false).equal;
-        this.pay(key);
+        this.pay(rate);
         this.popN(2);
         return ok ? next() : jump(a as number);
       }
@@ -5004,13 +5010,13 @@ export class Run {
         const ok =
           v.kind === 'list' &&
           (ins.op === 'test-list' ? v.length === n : v.length >= n);
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         return ok ? next() : jump(b as number);
       }
       case 'list-item':
         m.result = this.peek().index(a as number);
-        return this.replace(1, key);
+        return this.replace(1, rate);
       case 'list-rest': {
         const v = this.peek();
         const from = a as number;
@@ -5019,18 +5025,18 @@ export class Run {
             v.index(from + i),
           ),
         );
-        return this.replace(1, key);
+        return this.replace(1, rate);
       }
       case 'test-map': {
         const ok = this.peek().kind === 'map';
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         return ok ? next() : jump(a as number);
       }
       case 'map-get': {
         const v = this.peek();
         const there = hasKey(v, a as string);
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         if (!there) {
           return jump(b as number);
@@ -5050,7 +5056,7 @@ export class Run {
         );
         m.steps = out.steps;
         m.result = out.result ?? undefined;
-        this.pay(key);
+        this.pay(rate);
         this.popN(2);
         if (!out.result) {
           return jump(target);
@@ -5066,7 +5072,7 @@ export class Run {
         const ns = waitNs(this.peek());
         const enclosing = this.blockDeadline();
         const at = this.host!.now + ns;
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         frame.stack.push(
           enclosing && enclosing.at <= at
@@ -5076,7 +5082,7 @@ export class Run {
         return next();
       }
       case 'timeout-end':
-        this.pay(key);
+        this.pay(rate);
         frame.stack.pop();
         return next();
       case 'iterate': {
@@ -5105,7 +5111,7 @@ export class Run {
         } else {
           throw wrongKind('list', v);
         }
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         frame.stack.push(iterator);
         return next();
@@ -5122,7 +5128,7 @@ export class Run {
             ['value', v],
           ]);
         }
-        this.pay(key);
+        this.pay(rate);
         this.pop();
         frame.stack.push({
           k: 'iterator',
@@ -5134,7 +5140,7 @@ export class Run {
       }
       case 'next': {
         const it = frame.stack.at(-1) as Iterator;
-        this.pay(key);
+        this.pay(rate);
         if (it.at >= it.count) {
           return jump(a as number);
         }
@@ -5154,7 +5160,7 @@ export class Run {
         } else {
           throw new ScriptError('bad throw');
         }
-        this.pay(key);
+        this.pay(rate);
         const code = textForm(error.get('code'));
         if (
           frame.code.stdlib &&
@@ -5175,19 +5181,19 @@ export class Run {
         throw new ThrownError(error);
       }
       case 'catch-accept':
-        this.pay(key);
+        this.pay(rate);
         return this.acceptCatch();
       case 'catch-next':
-        this.pay(key);
+        this.pay(rate);
         return this.nextCatch();
       case 'choose-offer':
         return this.chooseOffer(a as string, b as number, ins);
       case 'raise': {
-        this.pay(key);
+        this.pay(rate);
         throw new ThrownError(this.errorMap(a as string, [], ins));
       }
       case 'end-cleanup': {
-        this.pay(key);
+        this.pay(rate);
         if (this.cancelling) {
           this.checkState();
           return this.nextCancellationCleanup();
@@ -5207,8 +5213,8 @@ export class Run {
   }
 
   // Charge, then replace the top `n` values with the measured result.
-  private replace(n: number, key: string) {
-    this.pay(key);
+  private replace(n: number, rate: number) {
+    this.pay(rate);
     const frame = this.frame;
     frame.stack.length -= n;
     frame.stack.push(this.m.result!);

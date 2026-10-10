@@ -15,7 +15,7 @@
     "syntax:generate": "bun syntax/generate.ts",
     "syntax:check": "bun syntax/generate.ts --check",
     "typecheck": "tsc",
-    "test": "bun test spec/commands.test.ts commits/ corpus/ go/ machine/rejected-sources.test.ts",
+    "test": "bun test spec/commands.test.ts commits/ corpus/ costs/ go/ machine/rejected-sources.test.ts",
     "go:generate": "bun go/generate.ts",
     "go:check": "bun go/generate.ts --check",
     "commits:check": "bun commits/check.ts",

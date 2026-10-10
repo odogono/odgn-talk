@@ -510,7 +510,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		fuel, alloc := Charge(i.Cost, m)
+		fuel, alloc := ChargeRate(i.Rate, m)
 		if f.Clause {
 			fuel += 4
 		}

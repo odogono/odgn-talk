@@ -1424,411 +1424,941 @@ export const limitDefaults = {
 export const costModel = {
   "version": 0,
   "sizes": {
-    "nothing": "8",
-    "boolean": "8",
-    "number": "16",
-    "quantity": "24",
-    "text": "16 + utf8(v)",
-    "bytes": "16 + bytes(v)",
-    "list": "16 + 8 * items(v) + contents(v)",
-    "map": "16 + 8 * entries(v) + contents(v)",
-    "range": "16 + contents(v)",
-    "instant": "16",
-    "civil date": "16",
-    "pattern": "16 + 8 * program(v)",
-    "function": "32 + 8 * items(v) + contents(v)",
-    "object": "16",
-    "iterator": "24 + size(v)",
-    "replacement": "32 + contents(v)",
-    "reader": "24 + size(v)",
-    "deadline": "40",
-    "frame": "64 + 8 * items(v) + contents(v)",
-    "run": "96 + contents(v)",
-    "message": "32 + contents(v)",
-    "pending call": "48",
-    "dispatch context": "96 + 8 * items(v) + contents(v)",
-    "dispatch activation": "48 + contents(v)"
+    "nothing": [
+      [0, 0, 8, 1]
+    ],
+    "boolean": [
+      [0, 0, 8, 1]
+    ],
+    "number": [
+      [0, 0, 16, 1]
+    ],
+    "quantity": [
+      [0, 0, 24, 1]
+    ],
+    "text": [
+      [0, 0, 16, 1],
+      [5, 3, 1, 1]
+    ],
+    "bytes": [
+      [0, 0, 16, 1],
+      [6, 3, 1, 1]
+    ],
+    "list": [
+      [0, 0, 16, 1],
+      [7, 3, 8, 1],
+      [2, 3, 1, 1]
+    ],
+    "map": [
+      [0, 0, 16, 1],
+      [8, 3, 8, 1],
+      [2, 3, 1, 1]
+    ],
+    "range": [
+      [0, 0, 16, 1],
+      [2, 3, 1, 1]
+    ],
+    "instant": [
+      [0, 0, 16, 1]
+    ],
+    "civil date": [
+      [0, 0, 16, 1]
+    ],
+    "pattern": [
+      [0, 0, 16, 1],
+      [12, 3, 8, 1]
+    ],
+    "function": [
+      [0, 0, 32, 1],
+      [7, 3, 8, 1],
+      [2, 3, 1, 1]
+    ],
+    "object": [
+      [0, 0, 16, 1]
+    ],
+    "iterator": [
+      [0, 0, 24, 1],
+      [1, 3, 1, 1]
+    ],
+    "replacement": [
+      [0, 0, 32, 1],
+      [2, 3, 1, 1]
+    ],
+    "reader": [
+      [0, 0, 24, 1],
+      [1, 3, 1, 1]
+    ],
+    "deadline": [
+      [0, 0, 40, 1]
+    ],
+    "frame": [
+      [0, 0, 64, 1],
+      [7, 3, 8, 1],
+      [2, 3, 1, 1]
+    ],
+    "run": [
+      [0, 0, 96, 1],
+      [2, 3, 1, 1]
+    ],
+    "message": [
+      [0, 0, 32, 1],
+      [2, 3, 1, 1]
+    ],
+    "pending call": [
+      [0, 0, 48, 1]
+    ],
+    "dispatch context": [
+      [0, 0, 96, 1],
+      [7, 3, 8, 1],
+      [2, 3, 1, 1]
+    ],
+    "dispatch activation": [
+      [0, 0, 48, 1],
+      [2, 3, 1, 1]
+    ]
   },
-  "rates": {
-    "const": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "stack": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "slot": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "store-var": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "jump": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "branch": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "operator": {
-      "fuel": "2",
-      "alloc": "size(result)"
-    },
-    "arithmetic": {
-      "fuel": "3 + digits(result) / 8",
-      "alloc": "size(result)"
-    },
-    "power": {
-      "fuel": "8 + 2 * digits(result)",
-      "alloc": "size(result)"
-    },
-    "concat": {
-      "fuel": "3 + scalars(result) / 16",
-      "alloc": "size(result)"
-    },
-    "compare": {
-      "fuel": "2 + scanned / 16",
-      "alloc": "0"
-    },
-    "member": {
-      "fuel": "2 + scanned",
-      "alloc": "0"
-    },
-    "convert": {
-      "fuel": "4 + scalars(input) / 8 + scalars(result) / 8",
-      "alloc": "size(result)"
-    },
-    "search": {
-      "fuel": "4 + steps",
-      "alloc": "0"
-    },
-    "get-key": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "property": {
-      "fuel": "3 + scalars(input) / 8 + items(result)",
-      "alloc": "size(result)"
-    },
-    "chunk-get": {
-      "fuel": "3 + scanned / 8",
-      "alloc": "size(result)"
-    },
-    "chunk-set": {
-      "fuel": "4 + scalars(result) / 8 + items(result) / 8",
-      "alloc": "size(input)"
-    },
-    "set-key": {
-      "fuel": "4 + entries(result) / 16",
-      "alloc": "8 + size(input)"
-    },
-    "append": {
-      "fuel": "3 + scalars(result) / 16",
-      "alloc": "8 + size(input)"
-    },
-    "set-property": {
-      "fuel": "10 + size(input) / 32",
-      "alloc": "0"
-    },
-    "list": {
-      "fuel": "2 + count + items(result) / 16",
-      "alloc": "size(result)"
-    },
-    "map": {
-      "fuel": "2 + 2 * count",
-      "alloc": "size(result)"
-    },
-    "make-pattern": {
-      "fuel": "20 + 2 * program(result)",
-      "alloc": "size(result)"
-    },
-    "bytes-field": {
-      "fuel": "3 + bytes(input) / 8",
-      "alloc": "size(result)"
-    },
-    "match": {
-      "fuel": "6 + steps",
-      "alloc": "size(result)"
-    },
-    "iterate": {
-      "fuel": "2",
-      "alloc": "24"
-    },
-    "next": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "make-closure": {
-      "fuel": "4 + count",
-      "alloc": "size(result)"
-    },
-    "call": {
-      "fuel": "8",
-      "alloc": "0"
-    },
-    "clause": {
-      "fuel": "4",
-      "alloc": "0"
-    },
-    "return": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "test": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "bin-field": {
-      "fuel": "2 + bytes(result) / 8 + scalars(result) / 8",
-      "alloc": "size(result)"
-    },
-    "throw": {
-      "fuel": "10",
-      "alloc": "48"
-    },
-    "unwind": {
-      "fuel": "4 * frames",
-      "alloc": "0"
-    },
-    "capability": {
-      "fuel": "10 + declared + size(result) / 32",
-      "alloc": "size(result)"
-    },
-    "send": {
-      "fuel": "20 + size(input) / 32",
-      "alloc": "size(input)"
-    },
-    "wait": {
-      "fuel": "10",
-      "alloc": "0"
-    },
-    "join": {
-      "fuel": "10",
-      "alloc": "size(result)"
-    },
-    "timeout": {
-      "fuel": "2",
-      "alloc": "40"
-    },
-    "builtin.min": {
-      "fuel": "4 + scanned",
-      "alloc": "0"
-    },
-    "builtin.max": {
-      "fuel": "4 + scanned",
-      "alloc": "0"
-    },
-    "builtin.codePoint": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.fromCodePoint": {
-      "fuel": "4",
-      "alloc": "size(result)"
-    },
-    "builtin.upper": {
-      "fuel": "4 + scalars(x1) / 4 + scalars(result) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.lower": {
-      "fuel": "4 + scalars(x1) / 4 + scalars(result) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.offset": {
-      "fuel": "4 + steps",
-      "alloc": "0"
-    },
-    "builtin.isDisposed": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "builtin.objectKind": {
-      "fuel": "2",
-      "alloc": "size(result)"
-    },
-    "builtin.rangeStart": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "builtin.rangeEnd": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "builtin.kindOf": {
-      "fuel": "2",
-      "alloc": "size(result)"
-    },
-    "builtin.functionArity": {
-      "fuel": "2",
-      "alloc": "size(result)"
-    },
-    "builtin.functionName": {
-      "fuel": "2",
-      "alloc": "size(result)"
-    },
-    "builtin.abs": {
-      "fuel": "3",
-      "alloc": "size(result)"
-    },
-    "builtin.floor": {
-      "fuel": "3 + digits(x1) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.ceiling": {
-      "fuel": "3 + digits(x1) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.truncate": {
-      "fuel": "3 + digits(x1) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.round": {
-      "fuel": "5 + digits(result) / 8",
-      "alloc": "size(result)"
-    },
-    "builtin.sqrt": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.exp": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.ln": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.log10": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.power": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.sin": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.cos": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.tan": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.asin": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.acos": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.atan": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.atan2": {
-      "fuel": "60",
-      "alloc": "size(result)"
-    },
-    "builtin.fromFloat64": {
-      "fuel": "8",
-      "alloc": "size(result)"
-    },
-    "builtin.fromFloat32": {
-      "fuel": "8",
-      "alloc": "size(result)"
-    },
-    "builtin.toFloat64": {
-      "fuel": "8",
-      "alloc": "size(result)"
-    },
-    "builtin.toFloat32": {
-      "fuel": "8",
-      "alloc": "size(result)"
-    },
-    "builtin.year": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.month": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.day": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.hour": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.minute": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.second": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.nanosecond": {
-      "fuel": "3",
-      "alloc": "0"
-    },
-    "builtin.weekday": {
-      "fuel": "4",
-      "alloc": "0"
-    },
-    "builtin.dayOfYear": {
-      "fuel": "4",
-      "alloc": "0"
-    },
-    "builtin.isoWeek": {
-      "fuel": "6",
-      "alloc": "0"
-    },
-    "builtin.isoWeekYear": {
-      "fuel": "6",
-      "alloc": "0"
-    },
-    "builtin.hasTime": {
-      "fuel": "2",
-      "alloc": "0"
-    },
-    "builtin.toCivil": {
-      "fuel": "10",
-      "alloc": "size(result)"
-    },
-    "builtin.toInstant": {
-      "fuel": "10",
-      "alloc": "size(result)"
-    },
-    "catch-accept": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "catch-next": {
-      "fuel": "1",
-      "alloc": "0"
-    },
-    "choose-offer": {
-      "fuel": "8 + count",
-      "alloc": "0"
-    },
-    "builtin.offerAvailable": {
-      "fuel": "3 + utf8(x1) / 16",
-      "alloc": "0"
-    },
-    "offer-lookup": {
-      "fuel": "4 * frames",
-      "alloc": "0"
+  "rates": [
+    {
+      "key": "const",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "stack",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "slot",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "store-var",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "jump",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "branch",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "operator",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "arithmetic",
+      "fuel": [
+        [0, 0, 3, 1],
+        [9, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "power",
+      "fuel": [
+        [0, 0, 8, 1],
+        [9, 2, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "concat",
+      "fuel": [
+        [0, 0, 3, 1],
+        [4, 2, 1, 16]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "compare",
+      "fuel": [
+        [0, 0, 2, 1],
+        [10, 0, 1, 16]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "member",
+      "fuel": [
+        [0, 0, 2, 1],
+        [10, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "convert",
+      "fuel": [
+        [0, 0, 4, 1],
+        [4, 1, 1, 8],
+        [4, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "search",
+      "fuel": [
+        [0, 0, 4, 1],
+        [11, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "get-key",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "property",
+      "fuel": [
+        [0, 0, 3, 1],
+        [4, 1, 1, 8],
+        [7, 2, 1, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "chunk-get",
+      "fuel": [
+        [0, 0, 3, 1],
+        [10, 0, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "chunk-set",
+      "fuel": [
+        [0, 0, 4, 1],
+        [4, 2, 1, 8],
+        [7, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 1, 1, 1]
+      ]
+    },
+    {
+      "key": "set-key",
+      "fuel": [
+        [0, 0, 4, 1],
+        [8, 2, 1, 16]
+      ],
+      "alloc": [
+        [0, 0, 8, 1],
+        [1, 1, 1, 1]
+      ]
+    },
+    {
+      "key": "append",
+      "fuel": [
+        [0, 0, 3, 1],
+        [4, 2, 1, 16]
+      ],
+      "alloc": [
+        [0, 0, 8, 1],
+        [1, 1, 1, 1]
+      ]
+    },
+    {
+      "key": "set-property",
+      "fuel": [
+        [0, 0, 10, 1],
+        [1, 1, 1, 32]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "list",
+      "fuel": [
+        [0, 0, 2, 1],
+        [15, 0, 1, 1],
+        [7, 2, 1, 16]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "map",
+      "fuel": [
+        [0, 0, 2, 1],
+        [15, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "make-pattern",
+      "fuel": [
+        [0, 0, 20, 1],
+        [12, 2, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "bytes-field",
+      "fuel": [
+        [0, 0, 3, 1],
+        [6, 1, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "match",
+      "fuel": [
+        [0, 0, 6, 1],
+        [11, 0, 1, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "iterate",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [0, 0, 24, 1]
+      ]
+    },
+    {
+      "key": "next",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "make-closure",
+      "fuel": [
+        [0, 0, 4, 1],
+        [15, 0, 1, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "call",
+      "fuel": [
+        [0, 0, 8, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "clause",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "return",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "test",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "bin-field",
+      "fuel": [
+        [0, 0, 2, 1],
+        [6, 2, 1, 8],
+        [4, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "throw",
+      "fuel": [
+        [0, 0, 10, 1]
+      ],
+      "alloc": [
+        [0, 0, 48, 1]
+      ]
+    },
+    {
+      "key": "unwind",
+      "fuel": [
+        [13, 0, 4, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "capability",
+      "fuel": [
+        [0, 0, 10, 1],
+        [16, 0, 1, 1],
+        [1, 2, 1, 32]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "send",
+      "fuel": [
+        [0, 0, 20, 1],
+        [1, 1, 1, 32]
+      ],
+      "alloc": [
+        [1, 1, 1, 1]
+      ]
+    },
+    {
+      "key": "wait",
+      "fuel": [
+        [0, 0, 10, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "join",
+      "fuel": [
+        [0, 0, 10, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "timeout",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [0, 0, 40, 1]
+      ]
+    },
+    {
+      "key": "builtin.min",
+      "fuel": [
+        [0, 0, 4, 1],
+        [10, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.max",
+      "fuel": [
+        [0, 0, 4, 1],
+        [10, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.codePoint",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.fromCodePoint",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.upper",
+      "fuel": [
+        [0, 0, 4, 1],
+        [4, 4, 1, 4],
+        [4, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.lower",
+      "fuel": [
+        [0, 0, 4, 1],
+        [4, 4, 1, 4],
+        [4, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.offset",
+      "fuel": [
+        [0, 0, 4, 1],
+        [11, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.isDisposed",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.objectKind",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.rangeStart",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.rangeEnd",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.kindOf",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.functionArity",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.functionName",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.abs",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.floor",
+      "fuel": [
+        [0, 0, 3, 1],
+        [9, 4, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.ceiling",
+      "fuel": [
+        [0, 0, 3, 1],
+        [9, 4, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.truncate",
+      "fuel": [
+        [0, 0, 3, 1],
+        [9, 4, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.round",
+      "fuel": [
+        [0, 0, 5, 1],
+        [9, 2, 1, 8]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.sqrt",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.exp",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.ln",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.log10",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.power",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.sin",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.cos",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.tan",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.asin",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.acos",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.atan",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.atan2",
+      "fuel": [
+        [0, 0, 60, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.fromFloat64",
+      "fuel": [
+        [0, 0, 8, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.fromFloat32",
+      "fuel": [
+        [0, 0, 8, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.toFloat64",
+      "fuel": [
+        [0, 0, 8, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.toFloat32",
+      "fuel": [
+        [0, 0, 8, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.year",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.month",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.day",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.hour",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.minute",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.second",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.nanosecond",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.weekday",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.dayOfYear",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.isoWeek",
+      "fuel": [
+        [0, 0, 6, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.isoWeekYear",
+      "fuel": [
+        [0, 0, 6, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.hasTime",
+      "fuel": [
+        [0, 0, 2, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.toCivil",
+      "fuel": [
+        [0, 0, 10, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.toInstant",
+      "fuel": [
+        [0, 0, 10, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "catch-accept",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "catch-next",
+      "fuel": [
+        [0, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "choose-offer",
+      "fuel": [
+        [0, 0, 8, 1],
+        [15, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.offerAvailable",
+      "fuel": [
+        [0, 0, 3, 1],
+        [5, 4, 1, 16]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "offer-lookup",
+      "fuel": [
+        [13, 0, 4, 1]
+      ],
+      "alloc": []
     }
-  }
+  ]
 };
+/** Cost Model measure codes, as each compiled term's first element. */
+export const costMeasure = {
+  "constant": 0,
+  "size": 1,
+  "contents": 2,
+  "characters": 3,
+  "scalars": 4,
+  "utf8": 5,
+  "bytes": 6,
+  "items": 7,
+  "entries": 8,
+  "digits": 9,
+  "scanned": 10,
+  "steps": 11,
+  "program": 12,
+  "frames": 13,
+  "clauses": 14,
+  "count": 15,
+  "declared": 16
+} as const;
+/** Subject codes, the second; `x1 + n - 1` is a Built-in's nth argument. */
+export const costSubject = {
+  "none": 0,
+  "input": 1,
+  "result": 2,
+  "v": 3,
+  "x1": 4
+} as const;
