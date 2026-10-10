@@ -21,7 +21,12 @@ export class LspClient {
     void this.request('initialize', {
       processId: null,
       rootUri: null,
-      capabilities: {},
+      // Hover stays plaintext: the editor shows it as text, not markdown.
+      capabilities: {
+        textDocument: {
+          completion: { completionItem: { snippetSupport: true } },
+        },
+      },
     }).then(() => this.notify('initialized', {}));
   }
 

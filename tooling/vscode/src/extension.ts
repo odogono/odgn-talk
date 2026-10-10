@@ -1,7 +1,13 @@
 // Starts `northtalk lsp` for `northtalk` documents. Highlighting comes from the
 // TextMate grammar alone; everything else is the language server's.
 import { join } from 'node:path';
-import { commands, window, workspace, type ExtensionContext } from 'vscode';
+import {
+  commands,
+  ViewColumn,
+  window,
+  workspace,
+  type ExtensionContext,
+} from 'vscode';
 import {
   LanguageClient,
   type LanguageClientOptions,
@@ -53,6 +59,26 @@ const start = async (context: ExtensionContext) => {
   await client.start();
 };
 
+// The Host Manifest's Grants and Operations, as a Markdown document beside the
+// editor (#526).
+const showDictionary = async () => {
+  if (!client) {
+    window.showErrorMessage('The NorthTalk language server is not running.');
+    return;
+  }
+  const content = await client.sendRequest<string>('northtalk/dictionary', {
+    format: 'markdown',
+  });
+  const document = await workspace.openTextDocument({
+    language: 'markdown',
+    content,
+  });
+  await window.showTextDocument(document, {
+    viewColumn: ViewColumn.Beside,
+    preview: true,
+  });
+};
+
 const stop = async () => {
   const current = client;
   client = undefined;
@@ -65,6 +91,7 @@ export const activate = async (context: ExtensionContext) => {
       await stop();
       await start(context);
     }),
+    commands.registerCommand('northtalk.showDictionary', showDictionary),
     workspace.onDidChangeConfiguration(async event => {
       // Profile and manifest reach the running server as configuration; a
       // different server process needs a restart.

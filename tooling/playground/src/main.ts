@@ -6,6 +6,7 @@ import { createCanvasView } from './canvas';
 import { createWorkbench } from './workbench';
 import { writeTranscript } from '@odgn/northtalk/session';
 import { libraryUri, type Position } from '@odgn/northtalk-tooling/lsp';
+import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
 import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { planApply, splitDeclarations } from './declarations';
@@ -497,6 +498,7 @@ const render = (state: SessionState) => {
   if (text !== manifest) {
     manifest = text;
     lsp.configure({ manifest: state.manifest });
+    renderDictionary(state.manifest);
   }
   setCopy($('copy-result') as HTMLButtonElement, state.result);
   renderPause(state.pause);
@@ -623,6 +625,37 @@ const renderSetup = (state: SessionState) => {
   $('grants').querySelector('.hint')!.textContent = state.started
     ? 'The session has started, so its Grants are fixed. Restart to change them.'
     : 'Before the session starts. console is always granted.';
+};
+
+// The Dictionary panel lists each Grant's Operations from the session's Host
+// Manifest, as LSP hover shows them (#526).
+const element = (tag: string, text?: string) => {
+  const el = document.createElement(tag);
+  if (text !== undefined) {
+    el.textContent = text;
+  }
+  return el;
+};
+const renderDictionary = (data: unknown) => {
+  $('dictionary-view').replaceChildren(
+    ...readDictionary(data).flatMap(grant => {
+      const heading = element('h3', grant.name);
+      if (grant.capability !== grant.name) {
+        heading.append(' ', element('span', grant.capability));
+      }
+      return [
+        heading,
+        ...grant.operations.map(op => {
+          const article = element('article');
+          article.className = 'dictionary-op';
+          const facts = element('ul');
+          facts.append(...op.facts.map(fact => element('li', fact)));
+          article.append(element('code', op.call), facts);
+          return article;
+        }),
+      ];
+    }),
+  );
 };
 
 // ------------------------------------------------------------- copy as source

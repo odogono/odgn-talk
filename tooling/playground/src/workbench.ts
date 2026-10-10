@@ -58,9 +58,15 @@ export const createWorkbench = (view: EditorView) => {
 
   const selectInspector = (name: string) => {
     if (
-      !['syntax', 'inspect', 'canvas', 'debugger', 'replay', 'grants'].includes(
-        name,
-      )
+      ![
+        'syntax',
+        'inspect',
+        'canvas',
+        'debugger',
+        'replay',
+        'grants',
+        'dictionary',
+      ].includes(name)
     ) {
       name = 'syntax';
     }

@@ -8,10 +8,17 @@ import {
 import { record, string } from './protocol';
 export type ManifestOperation = {
   args: Shape[];
+  /** The declared cost; a manifest written by `ExportManifest` always has one. */
+  cost?: { alloc: number; fuel: number };
   declaration: Record<string, unknown>;
   errors: string[];
+  /** Whole milliseconds, on a suspending Operation only. */
+  maxPending?: number;
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
   name: string;
+  result?: Shape;
+  scope?: { abandon: string; opens: string } | { closes: string };
+  segmentBound: boolean;
 };
 export type ManifestObjectKind = {
   name: string;
@@ -34,6 +41,22 @@ const array = (value: unknown): unknown[] => {
     throw new Error('Expected a manifest array');
   }
   return value;
+};
+const whole = (value: unknown): number => {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error('Expected a whole number in the manifest');
+  }
+  return value as number;
+};
+const cost = (value: unknown) => {
+  const data = record(value);
+  return { fuel: whole(data.fuel), alloc: whole(data.alloc ?? 0) };
+};
+const scope = (value: unknown): ManifestOperation['scope'] => {
+  const data = record(value);
+  return 'closes' in data
+    ? { closes: string(data.closes) }
+    : { opens: string(data.opens), abandon: string(data.abandon) };
 };
 const kinds = new Set([
   'nothing',
@@ -126,7 +149,14 @@ export const readManifest = (value: unknown): HostManifest => {
       operations.set(opName, {
         name: opName,
         mode,
-        args: array(op.args).map(v => shape(v)),
+        args: array(op.args ?? []).map(v => shape(v)),
+        ...(op.result === undefined ? {} : { result: shape(op.result) }),
+        ...(op.cost === undefined ? {} : { cost: cost(op.cost) }),
+        ...(op.maxPending === undefined
+          ? {}
+          : { maxPending: whole(op.maxPending) }),
+        ...(op.scope === undefined ? {} : { scope: scope(op.scope) }),
+        segmentBound: op.segmentBound === true,
         declaration: op,
         errors: array(op.errors ?? []).map(v => string(record(v).code)),
       });

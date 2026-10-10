@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { parseInstant } from '@odgn/northtalk';
 import { writeTranscript } from '@odgn/northtalk/session';
+import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
 import { PlaygroundSession, SESSION_TAB } from '../src/session';
 import {
   recoveryLibrary,
@@ -537,5 +538,22 @@ describe('Running a selection', () => {
     });
     expect(s.transcript).toEqual([]);
     expect(s.runSelection('1', 'do', 'rows')).toEqual({ selection: 0 });
+  });
+});
+
+test("the Dictionary panel lists the session's Grants from its Host Manifest", () => {
+  const s = new PlaygroundSession(environment().env);
+  s.input(':grant canvas canvas');
+  s.input(':grant c clock');
+  const grants = readDictionary(JSON.parse(s.host.exportManifest()));
+  expect(grants.map(g => g.name)).toEqual(['c', 'canvas', 'console']);
+  const output = grants.find(g => g.name === 'console')!;
+  expect(output.operations.map(op => op.call)).toEqual([
+    'ask console to read and wait',
+    'tell console to write ‹value›',
+  ]);
+  expect(grants.find(g => g.name === 'c')!.operations[0]).toMatchObject({
+    mode: 'immediate',
+    facts: expect.arrayContaining([expect.stringMatching(/^Cost per call: /u)]),
   });
 });

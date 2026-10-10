@@ -28,7 +28,11 @@ import {
   type Location,
   type TextEdit,
 } from './protocol';
-import type { HostManifest } from './manifest';
+import type { HostManifest, ManifestOperation } from './manifest';
+import { dictionaryOperation, operationText } from '../dictionary';
+
+/** What the client said it can show, from its `initialize` capabilities. */
+export type ClientFeatures = { markdown: boolean; snippets: boolean };
 
 const leaf = (node: SemanticNode) =>
   semanticElements(node).find(e => e.kind !== 'node');
@@ -424,11 +428,36 @@ const item = (label: string, kind: number, detail?: string) => ({
   kind,
   ...(detail ? { detail } : {}),
 });
+// An Operation's completion inserts `and wait` exactly when its mode needs it,
+// unless the line already has it after the cursor.
+const operationItem = (
+  grant: string,
+  op: ManifestOperation,
+  rest: string,
+  client: ClientFeatures,
+) => {
+  const entry = dictionaryOperation(grant, op);
+  const wait = op.mode === 'suspending' && !/\band\s+wait\b/.test(rest);
+  const insert =
+    !wait || !op.args.length
+      ? { insertText: wait ? `${op.name} and wait` : op.name }
+      : client.snippets
+        ? { insertText: `${op.name} \${1} and wait`, insertTextFormat: 2 }
+        : {};
+  return {
+    ...item(op.name, 2, entry.call),
+    ...insert,
+    documentation: client.markdown
+      ? { kind: 'markdown', value: operationText(entry, 'markdown') }
+      : operationText(entry, 'plaintext'),
+  };
+};
 export const completion = (
   analysis: Analysis,
   offset: number,
   manifest: HostManifest | null,
   all: Map<string, Analysis>,
+  client: ClientFeatures = { markdown: false, snippets: false },
 ) => {
   const source = analysis.document.text;
   const before = source.slice(0, offset);
@@ -450,14 +479,30 @@ export const completion = (
     return [];
   }
 
-  const operations = (grant: string, prefix: string) =>
+  const rest = source.slice(offset).split(/\r\n|\r|\n/)[0]!;
+  // `tell g to` calls only fire-and-forget Operations, and `ask g to` only the
+  // others; a `tell` block line calls any, in its own mode (ADR 0063).
+  const operations = (
+    grant: string,
+    prefix: string,
+    verb: 'ask' | 'tell' | 'block',
+  ) =>
     [...(manifest?.grants.get(grant)?.values() ?? [])]
-      .filter(op => op.name.startsWith(prefix))
-      .map(op => item(op.name, 2, JSON.stringify(op.declaration)));
+      .filter(
+        op =>
+          op.name.startsWith(prefix) &&
+          (verb === 'block' ||
+            (verb === 'tell') === (op.mode === 'fire-and-forget')),
+      )
+      .map(op => operationItem(grant, op, rest, client));
   const operation =
-    /\b(?:ask|tell)\s+([\p{L}\p{N}_]+)\s+to\s+([\p{L}\p{N}_]*)$/u.exec(line);
+    /\b(ask|tell)\s+([\p{L}\p{N}_]+)\s+to\s+([\p{L}\p{N}_]*)$/u.exec(line);
   if (operation) {
-    return operations(operation[1]!, operation[2]!);
+    return operations(
+      operation[2]!,
+      operation[3]!,
+      operation[1] as 'ask' | 'tell',
+    );
   }
   // A `tell` block's line starts with an Operation of its receiver (ADR 0063).
   const lineStart = /^\s*([\p{L}\p{N}_]*)$/u.exec(line);
@@ -473,7 +518,7 @@ export const completion = (
     const head = receiver?.kind === 'node' ? receiver : undefined;
     const grant = head && source.slice(head.start, head.end).trim();
     if (head && head.end < offset && grant && /^[\p{L}\p{N}_]+$/u.test(grant)) {
-      return operations(grant, lineStart[1]!);
+      return operations(grant, lineStart[1]!, 'block');
     }
   }
   if (/^\s*catch\s+[^\n]*$/.test(line)) {
@@ -616,6 +661,7 @@ export const hover = (
   analysis: Analysis,
   offset: number,
   manifest: HostManifest | null,
+  client: ClientFeatures = { markdown: false, snippets: false },
 ) => {
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;
@@ -643,15 +689,23 @@ export const hover = (
       const first = node.children[0];
       op = first?.kind === 'node' ? undefined : first;
     }
-    const declaration =
+    const declared =
+      grant && op && manifest?.grants.get(grant.text)?.get(op.text);
+    if (
+      declared &&
       grant &&
       op &&
-      manifest?.grants.get(grant.text)?.get(op.text)?.declaration;
-    if (declaration && op && op.span.start <= offset && offset < op.span.end) {
+      op.span.start <= offset &&
+      offset < op.span.end
+    ) {
+      const format = client.markdown ? 'markdown' : 'plaintext';
       return {
         contents: {
-          kind: 'plaintext',
-          value: JSON.stringify(declaration, null, 2),
+          kind: format,
+          value: operationText(
+            dictionaryOperation(grant.text, declared),
+            format,
+          ),
         },
         range: rangeAt(analysis.document.text, op.span.start, op.span.end),
       };

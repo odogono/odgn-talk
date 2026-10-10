@@ -140,6 +140,11 @@ export const verifyLspStdio = async (
       position: { line: 2, character: 5 },
     })) as { contents: { value: string } };
     assert.equal(hover.contents.value, '42');
+    // The discovered manifest's Grants make the dictionary (#526).
+    assert.match(
+      String(await request('northtalk/dictionary', {})),
+      /## http\n\n### fetch\n\n```northtalk\nask http to fetch ‹text› and wait\n```/u,
+    );
     const definition = (await request('textDocument/definition', {
       textDocument: { uri },
       position: { line: 2, character: 5 },

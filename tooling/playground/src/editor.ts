@@ -5,6 +5,7 @@ import type { LspDiagnostic, Position } from '@odgn/northtalk-tooling/lsp';
 import {
   autocompletion,
   type CompletionContext,
+  snippet,
   type CompletionResult,
 } from '@codemirror/autocomplete';
 import {
@@ -303,20 +304,39 @@ export const createEditorState = (
     if (!word || (word.from === word.to && !context.explicit)) {
       return null;
     }
-    const result = await lsp.request<
-      | { items?: { detail?: string; kind?: number; label: string }[] }
-      | { detail?: string; kind?: number; label: string }[]
-      | null
-    >('textDocument/completion', {
-      textDocument: { uri },
-      position: positionOf(context.state.doc, context.pos),
-    });
+    type Item = {
+      detail?: string;
+      documentation?: string;
+      insertText?: string;
+      insertTextFormat?: number;
+      kind?: number;
+      label: string;
+    };
+    const result = await lsp.request<{ items?: Item[] } | Item[] | null>(
+      'textDocument/completion',
+      {
+        textDocument: { uri },
+        position: positionOf(context.state.doc, context.pos),
+      },
+    );
     const items = Array.isArray(result) ? result : (result?.items ?? []);
     return {
       from: word.from,
       options: items.map(i => ({
         label: i.label,
         ...(i.detail ? { detail: i.detail } : {}),
+        ...(typeof i.documentation === 'string'
+          ? { info: i.documentation }
+          : {}),
+        // The LSP's only snippet field is `${1}`, CodeMirror's `${}`.
+        ...(i.insertText === undefined
+          ? {}
+          : {
+              apply:
+                i.insertTextFormat === 2
+                  ? snippet(i.insertText.replaceAll(/\$\{\d+\}/gu, '${}'))
+                  : i.insertText,
+            }),
         type:
           i.kind === 3 ? 'function' : i.kind === 14 ? 'keyword' : 'variable',
       })),
