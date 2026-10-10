@@ -177,6 +177,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "interpolated-sql",
+    "flags": "Interpolated Text, or text built with `&` from a non-Constant, passed as the SQL of `sqlite`'s `query` or `change`",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "Values joined into SQL text can change the statement. Bind them as parameters, with ? or :name placeholders.",
+    "status": "implemented"
+  },
+  {
     "id": "suggest-list-splice",
     "flags": "`put xs after acc` when xs has clear list evidence, suggesting a splice",
     "beginner": "hint",

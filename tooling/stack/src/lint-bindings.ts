@@ -1092,6 +1092,62 @@ const lintStoreRace = (handler: SemanticNode, emit: Emit) => {
     }
   }
 };
+// Interpolated Text, or `&` over anything but literals and Constants, as the
+// SQL of `sqlite`'s `query` or `change` splices values that parameters should
+// bind (ADR 0070). A manifest that names the Grant's Capability narrows it.
+const constantText = (e: SemanticElement): boolean => {
+  if (e.kind === 'token') {
+    return e.type === 'str' || e.type === 'num';
+  }
+  if (e.kind === 'name') {
+    return (
+      e.binding?.kind === 'constant' || e.binding?.kind === 'builtin constant'
+    );
+  }
+  return (
+    e.rule === 'Concat' &&
+    e.children.every(
+      c =>
+        (c.kind === 'token' && c.text === '&') ||
+        (c.kind === 'node' && constantText(unwrap(c))),
+    )
+  );
+};
+const lintSql = (
+  call: SemanticNode,
+  parents: Map<SemanticElement, SemanticNode>,
+  manifest: HostManifest | null | undefined,
+  emit: Emit,
+) => {
+  const tell = parents.get(call);
+  const operation =
+    call.rule === 'AskTell' ? leaves(call)[2]?.text : first(call)?.text;
+  const target = child(
+    call.rule === 'AskTell' ? call : tell?.rule === 'TellBlock' ? tell : call,
+    'Expression',
+  );
+  const grant = target && unwrap(target);
+  const sql = nodes(child(call, 'ExpressionList') ?? call).find(
+    n => n.rule === 'Expression',
+  );
+  if (
+    (operation !== 'query' && operation !== 'change') ||
+    grant?.kind !== 'name' ||
+    grant.role !== 'grant' ||
+    (manifest?.capabilities.has(grant.text) &&
+      manifest.capabilities.get(grant.text) !== 'sqlite') ||
+    !sql
+  ) {
+    return;
+  }
+  const text = unwrap(sql);
+  if (
+    elements(sql).some(e => e.kind === 'node' && e.rule === 'Interpolated') ||
+    (text.kind === 'node' && text.rule === 'Concat' && !constantText(text))
+  ) {
+    emit('interpolated-sql', sql.span);
+  }
+};
 // The binding `it` has in a Handler body, from any use of it there.
 const itOf = (body: SemanticNode): number | undefined => {
   for (const e of elements(body)) {
@@ -1280,6 +1336,9 @@ export const lintBindings = (
     }
     if (e.rule === 'Handler') {
       lintStoreRace(e, emit);
+    }
+    if (e.rule === 'AskTell' || e.rule === 'OperationLine') {
+      lintSql(e, parents, manifest, emit);
     }
     if (e.rule === 'Try' && leaves(e).some(t => t.text === 'catch')) {
       const body = child(e, 'Block');
