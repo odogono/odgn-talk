@@ -117,7 +117,9 @@ func (p *parser) take(mode Mode) Token {
 	case ")", "]", "}", ">>":
 		p.depth--
 	}
-	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be"}, token.Raw)
+	// The last words of `does not contain`, `does not match`, `is greater than`,
+	// `is less than`, `is at least` and `is at most` continue too (ADR 0075).
+	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be", "contain", "match", "than", "least", "most"}, token.Raw)
 	return token
 }
 func (p *parser) fail(t Token) {
@@ -870,12 +872,15 @@ func (p *parser) waitStatement(inline bool) *Node {
 	}
 	return n
 }
+
+// FOLLOW words distinguish a chunk-kind Name from a Chunk Expression, but
+// remain ordinary Names at the start of other operands.
 func startsIndex(t Token) bool {
-	return startsOperand(t) && !slices.Contains([]string{"<", "<<"}, t.Raw)
+	return startsOperand(t) && !slices.Contains(generated.Grammar.Follow, t.Raw) && !slices.Contains([]string{"<", "<<"}, t.Raw)
 }
 func startsOperand(t Token) bool {
 	if t.Kind == Number || t.Kind == Text || t.Kind == Template || isName(t) {
-		return !slices.Contains(generated.Grammar.Follow, t.Raw)
+		return true
 	}
 	return slices.Contains([]string{"(", "[", "{", "<", "<<", "-", "not", "given", "the", "every", "replace", "true", "false", "nothing", "it", "me"}, t.Raw)
 }
@@ -1068,10 +1073,41 @@ func (p *parser) comparison() *Node {
 		} else if p.accept("empty") {
 			left = node("empty-test", t, left)
 			left.Text = op + " empty"
+		} else if p.atOperand("greater") && spelling(p.second(Operator)) == "than" || p.atOperand("less") && spelling(p.second(Operator)) == "than" || p.atOperand("at") && slices.Contains([]string{"least", "most"}, spelling(p.second(Operator))) {
+			// `is greater than`, `is at least` and the rest (ADR 0075).
+			first := p.take(Operator).Raw
+			second := p.take(Operator).Raw
+			if first == "at" {
+				first += " " + second
+			} else {
+				first += " than"
+			}
+			left = node("binary", t, left, p.binary(5))
+			left.Text = op + " " + first
 		} else {
 			left = node("binary", t, left, p.binary(5))
 			left.Text = op
 		}
+	} else if p.pair("comes", "before") || p.pair("comes", "after") {
+		p.take(Operator)
+		left = node("binary", t, left, nil)
+		left.Text = "comes " + p.take(Operator).Raw
+		left.Children[1] = p.binary(5)
+	} else if p.pair("does", "not") {
+		p.take(Operator)
+		p.take(Operator)
+		word := p.peek(Operator)
+		if !slices.Contains([]string{"contain", "begin", "end", "match"}, word.Raw) {
+			p.fail(word)
+		}
+		p.take(Operator)
+		left = node("binary", t, left, nil)
+		left.Text = "does not " + word.Raw
+		if word.Raw == "begin" || word.Raw == "end" {
+			p.expect("with")
+			left.Text += " with"
+		}
+		left.Children[1] = p.binary(5)
 	} else if p.pair("can", "be") {
 		p.take(Operator)
 		p.expect("be")

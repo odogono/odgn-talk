@@ -140,9 +140,11 @@ var Grammar = GrammarTable{
 		"by",
 		"can",
 		"collecting",
+		"comes",
 		"contains",
 		"delimited",
 		"div",
+		"does",
 		"ends",
 		"from",
 		"ignoring",
@@ -227,12 +229,25 @@ var Grammar = GrammarTable{
 			Positions: []string{
 				"after the value in `put`",
 				"after a catch pattern, before `unwind`",
+				"after `comes`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "at",
+			Positions: []string{
+				"after `is` or `is not`, before `least` or `most`",
 			},
 		},
 		GrammarTableContextualEntry{
 			Word: "begins",
 			Positions: []string{
 				"operator position, before `with`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "begin",
+			Positions: []string{
+				"after `does not`, before `with`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -279,6 +294,12 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "comes",
+			Positions: []string{
+				"operator position, before `before` or `after`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "constant",
 			Positions: []string{
 				"at the start of a top-level declaration",
@@ -289,6 +310,12 @@ var Grammar = GrammarTable{
 			Positions: []string{
 				"operator position",
 				"after `when`, before `<`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "contain",
+			Positions: []string{
+				"after `does not`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -313,6 +340,12 @@ var Grammar = GrammarTable{
 			Word: "div",
 			Positions: []string{
 				"operator position",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "does",
+			Positions: []string{
+				"operator position, before `not`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -367,9 +400,27 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "greater",
+			Positions: []string{
+				"after `is` or `is not`, before `than`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "ignoring",
 			Positions: []string{
 				"after a comparison, a `match` subject or a Text Pattern element, before `case`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "least",
+			Positions: []string{
+				"after `is at` or `is not at`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "less",
+			Positions: []string{
+				"after `is` or `is not`, before `than`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -388,6 +439,12 @@ var Grammar = GrammarTable{
 			Word: "matches",
 			Positions: []string{
 				"operator position",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "most",
+			Positions: []string{
+				"after `is at` or `is not at`",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -433,6 +490,12 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "than",
+			Positions: []string{
+				"after `is greater` or `is less`, with or without `not` after `is`",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "times",
 			Positions: []string{
 				"after the count in `repeat`",
@@ -469,6 +532,7 @@ var Grammar = GrammarTable{
 				"after the message name in `send`",
 				"after the Container in `replace`",
 				"after `begins` or `ends`",
+				"after `does not begin` or `does not end`",
 				"at the start of a statement, before `timeout` (a Timeout Block)",
 			},
 		},
@@ -601,6 +665,20 @@ var Grammar = GrammarTable{
 				"begins with",
 				"ends with",
 				"matches",
+				"does not contain",
+				"does not begin with",
+				"does not end with",
+				"does not match",
+				"is greater than",
+				"is not greater than",
+				"is less than",
+				"is not less than",
+				"is at least",
+				"is not at least",
+				"is at most",
+				"is not at most",
+				"comes before",
+				"comes after",
 			},
 		},
 		GrammarTableOperatorEntry{
@@ -738,8 +816,16 @@ var Grammar = GrammarTable{
 			Rule: "`code` followed by `point` or `points` is the chunk kind",
 		},
 		GrammarTableDecisionEntry{
+			Name: "comes",
+			Rule: "`comes` followed by `before` or `after` is the operator; otherwise the word ends the expression",
+		},
+		GrammarTableDecisionEntry{
 			Name: "delimited-by",
 			Rule: "`delimited` followed by `by` is the modifier",
+		},
+		GrammarTableDecisionEntry{
+			Name: "does-not",
+			Rule: "`does` followed by `not` is the operator, and `contain`, `begin with`, `end with` or `match` must follow; otherwise the word ends the expression",
 		},
 		GrammarTableDecisionEntry{
 			Name: "during",
@@ -776,6 +862,10 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "ordinal",
 			Rule: "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
+		},
+		GrammarTableDecisionEntry{
+			Name: "ordering-words",
+			Rule: "after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name",
 		},
 		GrammarTableDecisionEntry{
 			Name: "pattern-anchor",

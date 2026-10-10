@@ -160,9 +160,11 @@ And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
 Not            ::= 'not' Not | Comparison
 Comparison     ::= Concat ( Comparator IgnoringCase? )?
 Comparator     ::= ( '=' | '<>' | '<' | '>' | '<=' | '>=' | 'contains' | 'matches'
-                   | 'begins' 'with' | 'ends' 'with' ) Concat
-                 | 'is' 'not'? ( 'in' Concat | Article Kind | 'empty' | Concat )
+                   | 'begins' 'with' | 'ends' 'with' | 'comes' ( 'before' | 'after' )
+                   | 'does' 'not' ( 'contain' | 'begin' 'with' | 'end' 'with' | 'match' ) ) Concat
+                 | 'is' 'not'? ( 'in' Concat | Article Kind | 'empty' | Ordering Concat | Concat )
                  | 'can' 'be' Article? Kind
+Ordering       ::= ( 'greater' | 'less' ) 'than' | 'at' ( 'least' | 'most' )
 Article        ::= 'a' | 'an'
 IgnoringCase   ::= 'ignoring' 'case'
 Concat         ::= Range ( '&' Range )*

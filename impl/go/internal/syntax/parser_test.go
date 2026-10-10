@@ -8,7 +8,42 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 )
+
+func TestCommandArgumentsStartingWithFollowNames(t *testing.T) {
+	for _, word := range generated.Grammar.Follow {
+		for _, call := range []struct {
+			phrase, kind, selector string
+			args                   int
+		}{
+			{"say " + word, "command", "say", 1},
+			{"forward " + word + ", value", "command", "forward", 2},
+			{"forward " + word + " to value", "command", "forward:to:", 2},
+			{"send to me: forward " + word, "send", "forward", 1},
+		} {
+			t.Run(call.phrase, func(t *testing.T) {
+				source := "on t\n  " + call.phrase + "\nend t\n"
+				tree, err := Parse(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				n := tree.Declarations[0].Body[0]
+				if n.Kind != call.kind || n.Text != call.selector || len(n.Children) != call.args {
+					t.Fatalf("got %s %q with %d arguments", n.Kind, n.Text, len(n.Children))
+				}
+				arg := n.Children[0]
+				if arg.Kind != "name" || arg.Text != word {
+					t.Fatalf("first argument: got %s %q, want Name %q", arg.Kind, arg.Text, word)
+				}
+				if tree.Source() != source {
+					t.Fatal("source changed")
+				}
+			})
+		}
+	}
+}
 
 func TestEmptyPatternsUseOperandModeAndPreserveSource(t *testing.T) {
 	for _, statement := range []string{

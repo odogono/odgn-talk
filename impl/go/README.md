@@ -196,6 +196,11 @@ Help and quit are terminal actions and are not recorded.
 
 ## Front-end and lowering checks
 
+Command Call arguments may start with any Name, including contextual words in
+the FOLLOW set such as `times`, `before` and `whose`, as
+[chapter 2](../../spec/02-grammar.md#statements) specifies. These words still
+cannot start a chunk index; `item mod 2` reads `item` as a Name.
+
 Argument Labels in Handler heads, Command Calls, target-first `send`, `pass`
 and `wait for` form Selectors as [chapter 2](../../spec/02-grammar.md#argument-labels)
 specifies. `move p to sq` names `move:to:`; positional calls retain `move`.

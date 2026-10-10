@@ -50,7 +50,9 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `an` | as `a` |
 | `any` | after `on`, `pass` or a Handler's `end`, before `message` (the Fallback Handler) |
 | `as` | after an operand (a conversion); after a pattern (binding the whole value); after the Library name in `use`, before the new name; after a Text Pattern element; after the value of a Binary Pattern build field |
-| `before` | after the value in `put`; after a catch pattern, before `unwind` |
+| `at` | after `is` or `is not`, before `least` or `most` |
+| `before` | after the value in `put`; after a catch pattern, before `unwind`; after `comes` |
+| `begin` | after `does not`, before `with` |
 | `begins` | operator position, before `with` |
 | `by` | after the Container in `multiply` and `divide`; after `delimited` |
 | `can` | operator position, before `be` |
@@ -58,12 +60,15 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `choose` | at the start of a statement, before `offer` |
 | `civil` | before `date` in a kind |
 | `collecting` | after a `repeat` head, before the collected expression |
+| `comes` | operator position, before `before` or `after` |
 | `constant` | at the start of a top-level declaration |
+| `contain` | after `does not` |
 | `contains` | operator position; after `when`, before `<` |
 | `date` | after `civil`, in a kind |
 | `deciding` | after a comma in a Handler head |
 | `delimited` | after a Chunk Expression, before `by` |
 | `div` | operator position |
+| `does` | operator position, before `not` |
 | `dropping` | after a comma in a Handler head |
 | `during` | after a comma in a Handler head, before a name |
 | `each` | after `repeat for` |
@@ -72,24 +77,29 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `every` | operand position, before `match` (the Match Search); at the start of an expression, before a chunk kind's singular or `code` (an Every Head) |
 | `forever` | straight after `repeat` |
 | `from` | after the value in `subtract`; after the event in `wait for`; after the imported names in `use` |
+| `greater` | after `is` or `is not`, before `than` |
 | `ignoring` | after a comparison, a `match` subject or a Text Pattern element, before `case` |
 | `lazily` | after a Text Pattern element |
+| `least` | after `is at` or `is not at` |
+| `less` | after `is` or `is not`, before `than` |
 | `matches` | operator position |
 | `message` | after `any` (the Fallback Handler) |
 | `mod` | operator position |
+| `most` | after `is at` or `is not at` |
 | `next` | at the start of a statement, before `repeat` |
 | `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
 | `queued` | after a comma in a Handler head |
 | `replacing` | after a comma in a Handler head |
 | `script` | at the start of a top-level declaration, before `variable` |
 | `target` | after `the`, when `of` doesn't follow |
+| `than` | after `is greater` or `is less`, with or without `not` after `is` |
 | `timeout` | after `with` at the start of a statement (a Timeout Block); after a Timeout Block's `end` |
 | `times` | after the count in `repeat` |
 | `unwind` | after `before` in a catch head |
 | `use` | at the start of a top-level declaration |
 | `variable` | after `script` at the start of a top-level declaration |
 | `whose` | after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause) |
-| `with` | after the message name in `send`; after the Container in `replace`; after `begins` or `ends`; at the start of a statement, before `timeout` (a Timeout Block) |
+| `with` | after the message name in `send`; after the Container in `replace`; after `begins` or `ends`; after `does not begin` or `does not end`; at the start of a statement, before `timeout` (a Timeout Block) |
 
 <!-- end -->
 
@@ -99,7 +109,7 @@ The chunk kinds, the ordinals, the Built-in property names, the Text Pattern key
 
 <!-- generated: grammar.follow -->
 
-`as`, `before`, `begins`, `by`, `can`, `collecting`, `contains`, `delimited`, `div`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `whose`, `with`
+`as`, `before`, `begins`, `by`, `can`, `collecting`, `comes`, `contains`, `delimited`, `div`, `does`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `whose`, `with`
 
 <!-- end -->
 
@@ -221,7 +231,7 @@ An Argument Label names the parameter after it, in a Handler's head and at its c
 
 - **The Selector:** the message name and its labels make the message's Selector, written with a colon after each part. `on move piece to square` handles `move:to:`, and `on move piece` handles `move`, a different message. A message with no labels keeps its plain name.
 - **Where labels go:** one leading parameter or argument, then any number of `label parameter` pairs. There is no comma after a label, no label before the first parameter, and no labels after a comma-separated list. The same shape holds in a Handler head, a Command Call, an event of `wait for` and the phrase of a target-first `send`.
-- **Decided on one token:** after a complete parameter or argument, a label word in operator position starts a label. Any reading that continues the expression comes first, so `as`, `mod`, `div`, `contains` and `matches`, and `begins`, `ends`, `can`, `ignoring` and `delimited` when their [two-token decision](#two-token-decisions) gives the operator, are never labels there.
+- **Decided on one token:** after a complete parameter or argument, a label word in operator position starts a label. Any reading that continues the expression comes first, so `as`, `mod`, `div`, `contains` and `matches`, and `begins`, `ends`, `can`, `does`, `comes`, `ignoring` and `delimited` when their [two-token decision](#two-token-decisions) gives the operator, are never labels there.
 - **Lines:** a label at the end of a line doesn't continue the line. A long labelled call goes in brackets.
 - **Traps:** the existing reading wins. A chunk word before an open label starts a Chunk Expression (`move word toward x` reads `word toward …`), and a number before a Unit-named label is a Quantity (`scale 3 m 4`). Brackets avoid both: `move (word) toward x`, `scale (3) m 4`.
 - **Errors:** a word in operator position after an argument is now a label, so a mistake such as `log error rest` fails at the end of the line, where `rest` has no argument.
@@ -388,9 +398,11 @@ And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
 Not            ::= 'not' Not | Comparison
 Comparison     ::= Concat ( Comparator IgnoringCase? )?
 Comparator     ::= ( '=' | '<>' | '<' | '>' | '<=' | '>=' | 'contains' | 'matches'
-                   | 'begins' 'with' | 'ends' 'with' ) Concat
-                 | 'is' 'not'? ( 'in' Concat | Article Kind | 'empty' | Concat )
+                   | 'begins' 'with' | 'ends' 'with' | 'comes' ( 'before' | 'after' )
+                   | 'does' 'not' ( 'contain' | 'begin' 'with' | 'end' 'with' | 'match' ) ) Concat
+                 | 'is' 'not'? ( 'in' Concat | Article Kind | 'empty' | Ordering Concat | Concat )
                  | 'can' 'be' Article? Kind
+Ordering       ::= ( 'greater' | 'less' ) 'than' | 'at' ( 'least' | 'most' )
 Article        ::= 'a' | 'an'
 IgnoringCase   ::= 'ignoring' 'case'
 Concat         ::= Range ( '&' Range )*
@@ -415,7 +427,7 @@ The operators, lowest precedence first:
 | 1 | left | `or` |
 | 2 | left | `and` |
 | 3 | prefix | `not` |
-| 4 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches` |
+| 4 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches`, `does not contain`, `does not begin with`, `does not end with`, `does not match`, `is greater than`, `is not greater than`, `is less than`, `is not less than`, `is at least`, `is not at least`, `is at most`, `is not at most`, `comes before`, `comes after` |
 | 5 | left | `&` |
 | 6 | none | `..` |
 | 7 | left | `+`, `-` |
@@ -430,7 +442,8 @@ The operators, lowest precedence first:
 - **Lambdas** have the lowest precedence of all. The body of `given r: …` runs to the next top-level comma or closing bracket, so `map(xs, given r: r * 2, 2)` passes `2` as a third argument. A block Lambda (`given r` at the end of a line) ends with `end` or `end given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
 - **Whose Clauses** are whole expressions too, as Lambdas are. The condition after `whose` runs to the next top-level comma, closing bracket or word that ends an expression, such as `into` or `then`. Inside an operand a Whose Clause needs brackets: `the length of (every item of xs whose it > 1)`, and `(the first item of xs whose it > 3) is empty`. Without them, `1 + every item of xs whose …` is a syntax error at `item`, and `if the first item of xs whose it > 3 is empty then …` one at `is`, since comparisons don't chain.
 - **Comparisons don't chain:** `a = b = c` is a syntax error at the second `=`.
-- **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`.
+- **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, `greater than`, `less than`, `at least` and `at most` order, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`. Likewise `x is at least 3` orders, and `x is at` compares `x` with a variable `at`.
+- **English comparison words** spell existing comparisons ([ADR 0075](../docs/adr/0075-english-comparison-words-spell-the-existing-comparisons.md)). `does not` takes `contain`, `begin with`, `end with` or `match`, and anything else after it is a syntax error at that token. `comes` takes `before` or `after`. Each is decided on its first two words: `does` without `not`, and `comes` without `before` or `after`, end the expression, as `begins` without `with` does.
 - **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. Which names are kinds is a load rule ([chapter 3](03-values.md)).
 - **Unary minus** binds tighter than `^`, so `-2 ^ 2` is `4`.
 
@@ -658,7 +671,9 @@ These are the only places where the parser reads a second token before it choose
 | `choose-offer` | at the start of a statement, `choose` followed by `offer` is a choice; otherwise `choose` starts a Command Call |
 | `chunk-word` | a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name |
 | `code-point` | `code` followed by `point` or `points` is the chunk kind |
+| `comes` | `comes` followed by `before` or `after` is the operator; otherwise the word ends the expression |
 | `delimited-by` | `delimited` followed by `by` is the modifier |
+| `does-not` | `does` followed by `not` is the operator, and `contain`, `begin with`, `end with` or `match` must follow; otherwise the word ends the expression |
 | `during` | after a comma in a Handler head, `during` followed by a word is the modifier |
 | `every-chunk` | at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head |
 | `every-match` | `every` followed by `match` starts a Match Search; otherwise `every` is a name, unless `every-chunk` applies |
@@ -668,6 +683,7 @@ These are the only places where the parser reads a second token before it choose
 | `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |
 | `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key |
+| `ordering-words` | after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
 | `replace-first` | after `replace`, `first` followed by anything but `in` means only the first match |
 | `script-variable` | at top level, `script` followed by `variable` starts a Script Variable |

@@ -139,6 +139,7 @@ disassembly/calls-and-lambdas
 disassembly/collecting
 disassembly/containers
 disassembly/destructuring
+disassembly/english-comparisons
 disassembly/errors-and-loops
 disassembly/expressions
 disassembly/fenced-text

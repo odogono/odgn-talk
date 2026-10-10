@@ -57,8 +57,9 @@ reserved = [
 ]
 
 follow = [
-  "as", "before", "begins", "by", "can", "collecting", "contains", "delimited",
-  "div", "ends", "from", "ignoring", "matches", "mod", "times", "whose", "with",
+  "as", "before", "begins", "by", "can", "collecting", "comes", "contains",
+  "delimited", "div", "does", "ends", "from", "ignoring", "matches", "mod",
+  "times", "whose", "with",
 ]
 
 ordinals = [
@@ -99,11 +100,19 @@ positions = ["after an operand (a conversion)", "after a pattern (binding the wh
 
 [[contextual]]
 word = "before"
-positions = ["after the value in `put`", "after a catch pattern, before `unwind`"]
+positions = ["after the value in `put`", "after a catch pattern, before `unwind`", "after `comes`"]
+
+[[contextual]]
+word = "at"
+positions = ["after `is` or `is not`, before `least` or `most`"]
 
 [[contextual]]
 word = "begins"
 positions = ["operator position, before `with`"]
+
+[[contextual]]
+word = "begin"
+positions = ["after `does not`, before `with`"]
 
 [[contextual]]
 word = "by"
@@ -134,12 +143,20 @@ word = "collecting"
 positions = ["after a `repeat` head, before the collected expression"]
 
 [[contextual]]
+word = "comes"
+positions = ["operator position, before `before` or `after`"]
+
+[[contextual]]
 word = "constant"
 positions = ["at the start of a top-level declaration"]
 
 [[contextual]]
 word = "contains"
 positions = ["operator position", "after `when`, before `<`"]
+
+[[contextual]]
+word = "contain"
+positions = ["after `does not`"]
 
 [[contextual]]
 word = "date"
@@ -156,6 +173,10 @@ positions = ["after a Chunk Expression, before `by`"]
 [[contextual]]
 word = "div"
 positions = ["operator position"]
+
+[[contextual]]
+word = "does"
+positions = ["operator position, before `not`"]
 
 [[contextual]]
 word = "dropping"
@@ -190,8 +211,20 @@ word = "from"
 positions = ["after the value in `subtract`", "after the event in `wait for`", "after the imported names in `use`"]
 
 [[contextual]]
+word = "greater"
+positions = ["after `is` or `is not`, before `than`"]
+
+[[contextual]]
 word = "ignoring"
 positions = ["after a comparison, a `match` subject or a Text Pattern element, before `case`"]
+
+[[contextual]]
+word = "least"
+positions = ["after `is at` or `is not at`"]
+
+[[contextual]]
+word = "less"
+positions = ["after `is` or `is not`, before `than`"]
 
 [[contextual]]
 word = "lazily"
@@ -204,6 +237,10 @@ positions = ["after `any` (the Fallback Handler)"]
 [[contextual]]
 word = "matches"
 positions = ["operator position"]
+
+[[contextual]]
+word = "most"
+positions = ["after `is at` or `is not at`"]
 
 [[contextual]]
 word = "mod"
@@ -234,6 +271,10 @@ word = "target"
 positions = ["after `the`, when `of` doesn't follow"]
 
 [[contextual]]
+word = "than"
+positions = ["after `is greater` or `is less`, with or without `not` after `is`"]
+
+[[contextual]]
 word = "times"
 positions = ["after the count in `repeat`"]
 
@@ -255,7 +296,7 @@ positions = ["after an Every Head, or an ordinal Chunk Expression that is a whol
 
 [[contextual]]
 word = "with"
-positions = ["after the message name in `send`", "after the Container in `replace`", "after `begins` or `ends`", "at the start of a statement, before `timeout` (a Timeout Block)"]
+positions = ["after the message name in `send`", "after the Container in `replace`", "after `begins` or `ends`", "after `does not begin` or `does not end`", "at the start of a statement, before `timeout` (a Timeout Block)"]
 
 [[chunk]]
 singular = "character"
@@ -316,7 +357,11 @@ assoc = "none"
 ops = [
   "=", "<>", "<", ">", "<=", ">=", "is", "is not", "is in", "is not in",
   "is a", "is not a", "is empty", "is not empty", "can be", "contains",
-  "begins with", "ends with", "matches",
+  "begins with", "ends with", "matches", "does not contain",
+  "does not begin with", "does not end with", "does not match",
+  "is greater than", "is not greater than", "is less than", "is not less than",
+  "is at least", "is not at least", "is at most", "is not at most",
+  "comes before", "comes after",
 ]
 
 [[operator]]
@@ -428,8 +473,16 @@ name = "code-point"
 rule = "`code` followed by `point` or `points` is the chunk kind"
 
 [[decision]]
+name = "comes"
+rule = "`comes` followed by `before` or `after` is the operator; otherwise the word ends the expression"
+
+[[decision]]
 name = "delimited-by"
 rule = "`delimited` followed by `by` is the modifier"
+
+[[decision]]
+name = "does-not"
+rule = "`does` followed by `not` is the operator, and `contain`, `begin with`, `end with` or `match` must follow; otherwise the word ends the expression"
 
 [[decision]]
 name = "during"
@@ -466,6 +519,10 @@ rule = "at the start of a statement, `next` followed by `repeat` is the loop sta
 [[decision]]
 name = "ordinal"
 rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key"
+
+[[decision]]
+name = "ordering-words"
+rule = "after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name"
 
 [[decision]]
 name = "pattern-anchor"

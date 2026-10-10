@@ -1,0 +1,56 @@
+-- English comparison words (ADR 0075, #528). Each spells a comparison the
+-- language already has, and lowers to exactly its instructions.
+
+on searching name, line, code
+  if name does not begin with "_" then say name
+  if name does not end with ".tmp" ignoring case then say name
+  if line does not contain "WARN" then say line
+  if code does not match <digits> then throw {code: "bad code"}
+  put [name does not contain <"x" ignoring case>, not (name contains "x")] into same
+end searching
+
+on ordering total, limit, surname
+  if total is greater than limit then say "over"
+  if total is less than 0 then say "negative"
+  if total is at least 10 GBP then say "free delivery"
+  if total is at most limit then say "fits"
+  if total is not greater than limit then say "fits too"
+  if total is not at least 1 then say "too small"
+  if surname comes before "M" ignoring case then say "first half"
+  if surname comes after "M" ignoring case then say "second half"
+  put [total > limit, total is greater than limit] into same
+end ordering
+
+-- The last word of each operator continues a line, as `contains` does.
+on continuing total, limit, line
+  if total is greater than
+    limit then say "over"
+  if line does not contain
+    "WARN" then say line
+  if line does not match
+    <digits> then say line
+  if total is at least
+    limit then say "enough"
+  if total is at most
+    limit then say "within"
+end continuing
+
+-- Without their second word, the new keywords are ordinary Names.
+on names greater, at, does, comes, less
+  put greater into does
+  put at + less into comes
+  if comes is greater then say "equal to a variable named greater"
+  if comes is at then say "equal to a variable named at"
+  if comes is not less then say "not equal to a variable named less"
+  put line (does) of "a" into at
+end names
+
+-- A label is read only when the operator's decision doesn't apply.
+on check x does y comes z
+  return x
+end check
+
+on calling a, b, c
+  check a does b comes c
+  check a does (not b) comes c
+end calling

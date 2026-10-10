@@ -2849,6 +2849,9 @@ export class BodyCompiler {
       this.expr(n.r);
       this.at(n);
       this.emit(op, n.ignoringCase && FOLDING.has(op) ? ['fold'] : []);
+      if (n.neg) {
+        this.emit('not'); // `does not contain`, `is not at least` (ADR 0075)
+      }
       return;
     }
     this.fail(n, `no lowering for the expression ${n.k}`);

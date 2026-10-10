@@ -342,6 +342,19 @@ const comparisons: Record<string, string> = {
   '<=': 'less-or-equal',
   '>=': 'greater-or-equal',
 };
+// The English comparison words (ADR 0075), as the instructions they spell.
+const orderingWords: Record<string, string> = {
+  greater: 'greater',
+  less: 'less',
+  least: 'greater-or-equal',
+  most: 'less-or-equal',
+};
+const negatedWords: Record<string, string> = {
+  contain: 'contains',
+  begin: 'begins-with',
+  end: 'ends-with',
+  match: 'matches',
+};
 const arithmetic: Record<string, string> = {
   '+': 'add',
   '-': 'subtract',
@@ -1458,6 +1471,24 @@ const comparison = (node: SemanticNode, of: Of): Expr => {
       if (isToken(next, 'empty')) {
         return { k: 'is-empty', pos: at, neg, l };
       }
+      // `is greater than`, `is at least` and the rest (ADR 0075).
+      const [first, second] = [children[i], children[i + 1]];
+      if (
+        isToken(first) &&
+        isToken(second) &&
+        ['than', 'least', 'most'].includes(second.text)
+      ) {
+        const word = first.text === 'at' ? second : first;
+        const e: Expr = {
+          k: 'binary',
+          pos: at,
+          op: orderingWords[word.text]!,
+          l,
+          r: operand(i + 2),
+          fold,
+        };
+        return neg ? { k: 'not', pos: at, e } : e;
+      }
       return {
         k: 'binary',
         pos: at,
@@ -1486,6 +1517,28 @@ const comparison = (node: SemanticNode, of: Of): Expr => {
         r: operand(3),
         fold,
       };
+    case 'comes':
+      return {
+        k: 'binary',
+        pos: at,
+        op: isToken(children[2], 'before') ? 'less' : 'greater',
+        l,
+        r: operand(3),
+        fold,
+      };
+    case 'does': {
+      // `does not contain b` is `not (a contains b)`, at the `does`.
+      const word = (children[3] as SemanticToken).text;
+      const e: Expr = {
+        k: 'binary',
+        pos: at,
+        op: negatedWords[word]!,
+        l,
+        r: operand(word === 'begin' || word === 'end' ? 5 : 4),
+        fold,
+      };
+      return { k: 'not', pos: at, e };
+    }
   }
   return shape(node);
 };
