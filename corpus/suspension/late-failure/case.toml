@@ -1,0 +1,21 @@
+# late-failure: a failure that arrives for an abandoned call is ignored with
+# the same `late-answer` note as a late answer (spec chapter 11, Notes).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "api"
+name = "fetch"
+mode = "suspending"
+result = "number"
+maxPending = 1000
+errors = [{ code = "gone" }]
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = ["fetch"] } }

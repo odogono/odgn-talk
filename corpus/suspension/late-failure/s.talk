@@ -1,0 +1,10 @@
+-- late-failure: a suspending call that times out, then is failed late.
+script variable seen = []
+
+on go
+  try
+    ask api to fetch and wait
+  catch {code: code}
+    put code after seen
+  end try
+end go

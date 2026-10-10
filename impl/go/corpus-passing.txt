@@ -332,6 +332,7 @@ suspension/event-test-slice-debt
 suspension/join-closing-position
 suspension/join-preemption
 suspension/joins
+suspension/late-failure
 suspension/nested-waits
 suspension/script-joins
 suspension/script-sends

@@ -1,0 +1,28 @@
+# Unblessed: a late failure's note (#614); first blessing awaits human review.
+# late-failure: the call times out at its 1000 ms maxPending and is abandoned.
+# The Host's failure arrives afterwards, and is recorded and ignored with
+# `note … kind=late-answer`, which covers a late answer or failure (chapter 11).
+
+> load s identity=8e5a9034180193b36a2404f3e9d9ebbdbf015d521a4388a5a012bc883c025ed4
+> deliver d1 to=s message=go
+> pump clock=2026-10-10T09:00:00Z
+call s/r1.c1 op=api.fetch args=[]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=14 alloc=0 state=288 end=ask-wait
+pumped state=idle fuel=14 next=2026-10-10T09:00:01Z
+
+# The call times out and is abandoned.
+> pump clock=2026-10-10T09:00:01Z
+raise s/r1 code="timeout" at=s:4 pos=6:5
+abandon s/r1.c1
+seg s/r1 resume fuel=21 alloc=31 state=47 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=35 alloc=31
+pumped state=idle fuel=21
+
+# The failure arrives after the call was abandoned.
+> fail s/r1.c1 error={code: "gone"}
+> pump clock=2026-10-10T09:00:02Z
+note s/r1.c1 kind=late-answer
+pumped state=idle fuel=0
+
+> vars
+vars s seen=["timeout"]
