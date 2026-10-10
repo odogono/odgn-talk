@@ -1,4 +1,3 @@
-# Unblessed: the multi-tenant Example Host's globex tenant (#143); first blessing awaits human review.
 # tenants-globex: the globex tenant of the multi-tenant Go Example Host
 # (impl/go/examples/tenants), recorded by `go run ./examples/tenants record`.
 # The Host recorded the `stub` lines from what its Host functions did.

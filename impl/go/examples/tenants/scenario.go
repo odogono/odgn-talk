@@ -176,8 +176,7 @@ func runScenario(h *Host, clock *driver.ManualClock) (map[string]*Tenant, error)
 // caseFiles renders a tenant's Trace Case: case.toml, the Script it loads
 // and case.trace.
 func caseFiles(t *Tenant) map[string]string {
-	header := fmt.Sprintf("# Unblessed: the multi-tenant Example Host's %s tenant (#143); first blessing awaits human review.\n", t.Name)
-	header += fmt.Sprintf("# tenants-%s: the %s tenant of the multi-tenant Go Example Host\n", t.Name, t.Name)
+	header := fmt.Sprintf("# tenants-%s: the %s tenant of the multi-tenant Go Example Host\n", t.Name, t.Name)
 	header += "# (impl/go/examples/tenants), recorded by `go run ./examples/tenants record`.\n"
 	header += "# The Host recorded the `stub` lines from what its Host functions did.\n"
 	header += "# Its Fuel, allocation and state figures are Cost Model 0's.\n\n"
