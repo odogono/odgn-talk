@@ -370,8 +370,12 @@ export const lintSyntax = (
           'contains',
           'begins',
           'ends',
+          'comes',
+          'does',
         ].includes(token.v),
       ) &&
+      // `does not match` is left alone, as `matches` is.
+      !direct.some(token => token.v === 'match') &&
       !children.some(
         child => child.rule === 'IgnoringCase' && tokens(child).length > 0,
       )

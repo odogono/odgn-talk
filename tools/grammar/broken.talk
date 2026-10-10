@@ -807,3 +807,34 @@ on t
     wait 1 s
   end timeout
 end t
+-- case: `does not` takes only `contain`, `begin with`, `end with` or `match` (ADR 0075)
+-- expect: unexpected token at 2:20
+on t
+  if name does not have "x" then say name
+end t
+-- case: `does not begin` needs its `with`
+-- expect: unexpected token at 2:26
+on t
+  if name does not begin "_" then say name
+end t
+-- case: a label `does` before an argument starting `not` is now the operator
+-- expect: unexpected token at 2:24
+on t
+  check ready does not done
+end t
+-- case: `comes before` at the end of a line doesn't continue it, as `put … before` doesn't
+-- expect: unexpected token at 2:20
+on t
+  if a comes before
+    b then say a
+end t
+-- case: the English comparisons don't chain
+-- expect: unexpected token at 2:23
+on t
+  if a is less than b is less than c then say b
+end t
+-- case: a chunk index named `does` needs brackets
+-- expect: unexpected token at 2:12
+on t
+  put line does of s into x
+end t

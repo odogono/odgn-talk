@@ -277,7 +277,7 @@
         },
         {
           "name": "keyword.operator.word.northtalk",
-          "match": "(?<![A-Za-z0-9_])(?:contains|matches|begins|ends|and|div|mod|not|in|is|of|or)(?![A-Za-z0-9_])"
+          "match": "(?<![A-Za-z0-9_])(?:contains|matches|begins|comes|does|ends|and|div|mod|not|in|is|of|or)(?![A-Za-z0-9_])"
         },
         {
           "name": "storage.modifier.northtalk",

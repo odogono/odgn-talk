@@ -54,6 +54,19 @@ const SIZE_UNITS = new Set<string>(grammar.binary_patterns.size_units);
 const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
+// The English comparison words (ADR 0075), as the operators they spell.
+const ORDERING_WORDS: Record<string, string> = {
+  'greater than': '>',
+  'less than': '<',
+  'at least': '>=',
+  'at most': '<=',
+};
+const NEGATED_WORDS: Record<string, string> = {
+  contain: 'contains',
+  begin: 'begins with',
+  end: 'ends with',
+  match: 'matches',
+};
 // The Argument Label words (ADR 0055): any Name but the excluded ones, and the
 // listed Reserved Words.
 const LABEL_RESERVED = new Set<string>(grammar.labels.reserved);
@@ -93,6 +106,13 @@ const CONTINUING_WORDS = new Set([
   'matches',
   'with',
   'be',
+  // The last words of `does not contain`, `does not match`, `is greater
+  // than`, `is less than`, `is at least` and `is at most` (ADR 0075).
+  'contain',
+  'match',
+  'than',
+  'least',
+  'most',
 ]);
 
 export type Stats = {
@@ -256,7 +276,7 @@ export class Parser {
     }
     this.buf.shift();
     this.offset = t.end;
-    this.prev = t;
+    this.prev = { ...t, mode }; // a label spelt like an operator doesn't continue
     const o = this.opens(t);
     if (o) {
       this.brackets.push(o);
@@ -1488,6 +1508,21 @@ export class Parser {
       } else if (this.isWord(u, 'empty')) {
         this.next();
         node = { k: 'is empty', neg, l };
+      } else if (
+        this.isWord(u, 'greater', 'less', 'at') &&
+        this.isWord(
+          this.la2('ordering-words', 'operator'),
+          ...(u.v === 'at' ? ['least', 'most'] : ['than']),
+        )
+      ) {
+        this.next('operator');
+        const w = this.next('operator');
+        node = {
+          k: ORDERING_WORDS[`${u.v} ${w.v}`]!,
+          neg,
+          l,
+          r: this.concat(),
+        };
       } else {
         node = { k: 'is', neg, l, r: this.concat() };
       }
@@ -1511,6 +1546,28 @@ export class Parser {
       this.next('operator');
       this.next('operator');
       node = { k: `${t.v} with`, l, r: this.concat() };
+    } else if (
+      this.isWord(t, 'comes') &&
+      this.isWord(this.la2('comes', 'operator'), 'before', 'after')
+    ) {
+      this.next('operator');
+      const w = this.next('operator');
+      node = { k: w.v === 'before' ? '<' : '>', l, r: this.concat() };
+    } else if (
+      this.isWord(t, 'does') &&
+      this.isWord(this.la2('does-not', 'operator'), 'not')
+    ) {
+      this.next('operator');
+      this.next('operator');
+      const w = this.peek(0, 'operator');
+      if (!this.isWord(w, 'contain', 'begin', 'end', 'match')) {
+        this.fail(w, '`contain`, `begin with`, `end with` or `match`');
+      }
+      this.next('operator');
+      if (w.v === 'begin' || w.v === 'end') {
+        this.expectWord('with', 'operator');
+      }
+      node = { k: NEGATED_WORDS[w.v]!, neg: true, l, r: this.concat() };
     }
     if (!node) {
       return l;

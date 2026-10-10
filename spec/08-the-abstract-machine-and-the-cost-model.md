@@ -389,6 +389,9 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 | `a op b`, for a binary operator | ⟦a⟧ ⟦b⟧, then the operator's instruction, with `fold` after `ignoring case` |
 | `a is b`, `a is not b` | ⟦a⟧ ⟦b⟧ `equal`, or `not-equal` |
 | `a is in b` | ⟦a⟧ ⟦b⟧ `member`, then `not` for `is not in` |
+| `a is greater than b`, `a is less than b`, `a is at least b`, `a is at most b` | ⟦a⟧ ⟦b⟧ `greater`, `less`, `greater-or-equal` or `less-or-equal`, then `not` for `is not` |
+| `a comes before b`, `a comes after b` | ⟦a⟧ ⟦b⟧ `less`, or `greater` |
+| `a does not contain b`, and `begin with`, `end with`, `match` | ⟦a⟧ ⟦b⟧ `contains`, `begins-with`, `ends-with` or `matches`, then `not` |
 | `a is a K`, `a is empty` | ⟦a⟧ `is-kind K`, or `is-empty`, then `not` for `is not` |
 | `a can be K` | ⟦a⟧ `can-convert K` |
 | `a as K` | ⟦a⟧ `convert K` |
@@ -676,7 +679,7 @@ events
 
 Each instruction has a source position, the second column of its disassembly line ([chapter 1](01-lexical-structure.md#source-text)). It is the position of the construct whose lowering emits it, where ⟦e⟧'s instructions are `e`'s own, and everything else a rule emits (its jumps, `store`s, `move`s, `pop`s and tests) is the construct's the rule is for. A construct's position is:
 
-- for an operator, the operator's token, such as the `+` of `a + b`, and for `not` and unary `-`, that token
+- for an operator, the operator's token, such as the `+` of `a + b`, or the first word of an operator of several words, such as the `is` of `is not in` and the `does` of `does not contain`, and for `not` and unary `-`, that token
 - for a literal or a name, its token, for a list, a map or a build, its opening bracket, and for a Chunk Expression, its chunk word
 - for a key, its `the` or `'s`, and for a call, the function's name
 - for a statement, its first token, for a `when`, `catch` or `wait for` branch, its first word, and for a Guard, its first token

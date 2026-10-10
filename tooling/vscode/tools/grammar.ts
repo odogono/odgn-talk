@@ -65,7 +65,16 @@ take(['on', 'function']);
 // The remaining Reserved Words are statement words and separators.
 const statements = [...reserved];
 const operatorWords = follow.filter(word =>
-  ['begins', 'contains', 'div', 'ends', 'matches', 'mod'].includes(word),
+  [
+    'begins',
+    'comes',
+    'contains',
+    'div',
+    'does',
+    'ends',
+    'matches',
+    'mod',
+  ].includes(word),
 );
 // Contextual words worth colouring wherever they stand, as the Playground does.
 const contextual = [
