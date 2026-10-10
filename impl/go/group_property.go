@@ -63,13 +63,18 @@ func (g *Group) property(s *Script, x *execution, object corevalue.Value, name s
 	crossing := &hostCrossing{
 		script: s, execution: x,
 		operation: OperationRef{Capability: o.kind.name, Operation: name},
-		fields:    map[string]string{"object": coretrace.Display(object), "name": name, "op": "get"},
+		fields:    map[string]string{"name": name, "op": "get"},
 		resultKey: "value", ignoreResult: set,
 		convert: func(v corevalue.Value) bool { return shape.Check(v, prop.Shape.inner, nil) == nil },
 	}
 	if set {
 		crossing.fields["op"] = "set"
-		crossing.fields["value"] = coretrace.Display(input)
+	}
+	if g.options.Trace != nil {
+		crossing.fields["object"] = coretrace.Display(object)
+		if set {
+			crossing.fields["value"] = coretrace.Display(input)
+		}
 	}
 	return g.crossHost(crossing, func() (Value, error) {
 		return invokeProperty(prop, o, set, Value{input})
