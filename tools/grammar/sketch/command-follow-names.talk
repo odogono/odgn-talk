@@ -1,0 +1,17 @@
+-- FOLLOW-set words remain Names at the start of Command Call arguments (#559).
+on commandFollowNames times, before, whose, item
+  say times
+  say before
+  say whose
+  forward before, whose
+  forward times to whose
+  send to me: forward before
+  send to me: forward whose to times
+  -- An event source is an operand too, including a FOLLOW-set Name.
+  wait for ready from before
+  -- FOLLOW words after a chunk-kind Name still introduce their normal syntax.
+  say item mod 2
+  repeat item times
+    say before
+  end repeat
+end commandFollowNames
