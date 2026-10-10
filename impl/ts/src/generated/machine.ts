@@ -1406,7 +1406,8 @@ export const errorMessages = {
   "sqlite busy": "Another Segment is writing to the database",
   "not read-only": "A query must not change the database",
   "too many rows": "The statement gave more than {max} rows",
-  "unrepresentable": "The value in {column} can't be represented"
+  "unrepresentable": "The value in {column} can't be represented",
+  "user busy": "Another prompt is waiting for an answer"
 };
 export const reservedErrorKeys = ["code","message","at","capability","operation","index","during","deadline"] as const;
 export const limitDefaults = {

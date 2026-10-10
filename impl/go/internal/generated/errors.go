@@ -294,12 +294,13 @@ var Errors = ErrorsTable{
 				"function",
 				"value",
 			},
-			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, or a Standard Capability option word that isn't listed; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name",
+			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, or an empty list of `user` `choose` items; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name",
 			Sources: []string{
 				"ADR 0002",
 				"ADR 0021",
 				"ADR 0025",
 				"ADR 0033",
+				"ADR 0077",
 			},
 			Message: "{value} is outside the domain of {function}",
 		},
@@ -624,6 +625,16 @@ var Errors = ErrorsTable{
 				"#466",
 			},
 			Message: "The value in {column} can't be represented",
+		},
+		ErrorsTableErrorEntry{
+			Code:       "user busy",
+			Fields:     []string{},
+			RaisedWhen: "A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything",
+			Sources: []string{
+				"ADR 0077",
+				"#527",
+			},
+			Message: "Another prompt is waiting for an answer",
 		},
 	},
 }
