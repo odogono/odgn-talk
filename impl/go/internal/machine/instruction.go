@@ -172,7 +172,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			// checked against the list's length, before the receiver
 			// (chapter 5, A spread; ADR 0064).
 			list, v := f.Stack[len(f.Stack)-2], f.Stack[len(f.Stack)-3]
-			n = len(list.Items())
+			n = list.ListLen()
 			if v.Kind != value.Text {
 				bad(wrong("text", v))
 				break

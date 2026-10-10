@@ -1,39 +1,59 @@
 import type { Value } from './values';
+import { at, put, remove, total, type Tree } from './persistent-tree';
 
-type Buffer = { end: number; items: Value[]; start: number };
+const chunkSize = 32;
 
-/**
- * A fixed window over append-only storage. Only unpublished slots may be
- * written. Extending an older endpoint forks the buffer; geometric spare
- * capacity makes unbranched List construction linear, including prepends.
- */
+/** A persistent sequence of small chunks. Growth and point edits copy only a
+ * chunk and its AVL path, including when extending a retained older List. */
 export class ListStorage {
-  readonly #buffer: Buffer;
-  readonly #end: number;
-  readonly #start: number;
+  readonly #root: Tree<number, readonly Value[]> | undefined;
+  readonly #first: number;
+  readonly #last: number;
 
-  private constructor(buffer: Buffer, start: number, end: number) {
-    this.#buffer = buffer;
-    this.#start = start;
-    this.#end = end;
+  private constructor(
+    root: Tree<number, readonly Value[]> | undefined,
+    first: number,
+    last: number,
+  ) {
+    this.#root = root;
+    this.#first = first;
+    this.#last = last;
   }
 
   static copy(items: readonly Value[]): ListStorage {
-    return new ListStorage(
-      { items: [...items], start: 0, end: items.length },
-      0,
-      items.length,
-    );
+    let root: Tree<number, readonly Value[]> | undefined;
+    let key = 0;
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const chunk = items.slice(i, i + chunkSize);
+      root = put(root, key++, chunk, chunk.length);
+    }
+    return new ListStorage(root, 0, key - 1);
   }
 
   get length(): number {
-    return this.#end - this.#start;
+    return total(this.#root);
   }
 
   index(i: number): Value | undefined {
-    return i >= 0 && i < this.length
-      ? this.#buffer.items[this.#start + i]
-      : undefined;
+    const found = at(this.#root, i);
+    return found?.node.value[found.offset];
+  }
+
+  set(i: number, value: Value | undefined): ListStorage {
+    const found = at(this.#root, i)!;
+    const chunk = [...found.node.value];
+    if (value === undefined) {
+      chunk.splice(found.offset, 1);
+    } else {
+      chunk[found.offset] = value;
+    }
+    const root = chunk.length
+      ? put(this.#root, found.node.key, chunk, chunk.length)
+      : remove(this.#root, found.node.key);
+    // Endpoint keys need not be contiguous after deletion.
+    const first = at(root, 0)?.node.key ?? 0;
+    const last = at(root, total(root) - 1)?.node.key ?? -1;
+    return new ListStorage(root, first, last);
   }
 
   extend(
@@ -44,42 +64,37 @@ export class ListStorage {
     if (count === 0) {
       return this;
     }
-    const buffer = this.#buffer;
-    if (prepend && this.#start === buffer.start && count <= this.#start) {
-      const start = this.#start - count;
-      for (let i = 0; i < count; i++) {
-        buffer.items[start + i] = item(i);
+    let root = this.#root;
+    let first = this.#first;
+    let last = this.#last;
+    let done = 0;
+    const edge = at(root, prepend ? 0 : total(root) - 1)?.node;
+    if (edge && edge.span < chunkSize) {
+      const n = Math.min(count, chunkSize - edge.span);
+      const added = Array.from({ length: n }, (_, i) =>
+        item(prepend ? count - n + i : i),
+      );
+      const chunk = prepend
+        ? [...added, ...edge.value]
+        : [...edge.value, ...added];
+      root = put(root, edge.key, chunk, chunk.length);
+      done = n;
+    }
+    while (done < count) {
+      const n = Math.min(chunkSize, count - done);
+      const chunk = Array.from({ length: n }, (_, i) =>
+        item(prepend ? count - done - n + i : done + i),
+      );
+      const key = !root ? 0 : prepend ? first - 1 : last + 1;
+      root = put(root, key, chunk, n);
+      if (prepend || total(root) === n) {
+        first = key;
       }
-      buffer.start = start;
-      return new ListStorage(buffer, start, this.#end);
-    }
-    if (
-      !prepend &&
-      this.#end === buffer.end &&
-      count <= buffer.items.length - this.#end
-    ) {
-      const end = this.#end + count;
-      for (let i = 0; i < count; i++) {
-        buffer.items[this.#end + i] = item(i);
+      if (!prepend || total(root) === n) {
+        last = key;
       }
-      buffer.end = end;
-      return new ListStorage(buffer, this.#start, end);
+      done += n;
     }
-    const length = this.length + count;
-    const items = new Array<Value>(Math.max(8, 2 * length));
-    const start = Math.floor((items.length - length) / 2);
-    const oldStart = start + (prepend ? count : 0);
-    const newStart = start + (prepend ? 0 : this.length);
-    for (let i = 0; i < this.length; i++) {
-      items[oldStart + i] = this.index(i)!;
-    }
-    for (let i = 0; i < count; i++) {
-      items[newStart + i] = item(i);
-    }
-    return new ListStorage(
-      { items, start, end: start + length },
-      start,
-      start + length,
-    );
+    return new ListStorage(root, first, last);
   }
 }

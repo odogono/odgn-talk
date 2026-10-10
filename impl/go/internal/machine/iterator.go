@@ -10,10 +10,10 @@ import (
 func advanceIterator(it value.IteratorData) (value.IteratorData, value.Value, bool) {
 	switch it.Snapshot.Kind {
 	case value.List:
-		if it.Position >= len(it.Snapshot.Items()) {
+		if it.Position >= it.Snapshot.ListLen() {
 			return it, value.Value{}, false
 		}
-		item := it.Snapshot.Items()[it.Position]
+		item := it.Snapshot.ListAt(it.Position)
 		it.Position++
 		return it, item, true
 	case value.Range:

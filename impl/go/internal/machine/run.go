@@ -783,12 +783,8 @@ func (r *Run) replaceCleanupError(err value.Value, frame, entry int) value.Value
 }
 
 func hasKey(v value.Value, key string) bool {
-	for _, p := range v.Entries() {
-		if p.Key == key {
-			return true
-		}
-	}
-	return false
+	_, found := v.MapEntry(key)
+	return found
 }
 
 // Cancel rolls back the interrupted Segment, then enters the nearest finally

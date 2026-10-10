@@ -1,0 +1,29 @@
+script variable values = {list: [1, 2], map: {"é": nothing, other: [3]}}
+
+on edit
+  put values into original
+  put values's list into xs
+  put values's map into m
+  repeat for each i in 1..80
+    put i into item 1 of xs
+    put i after xs
+    put i into the (i as text) of m
+  end repeat
+  put m into retained
+  put xs into branch
+  delete item 2 of xs
+  put 9 before xs
+  delete the "é" of m
+  put ["longer", nothing] into the "é" of m
+  put [original, retained, branch, xs, m] into result
+  return result
+end edit
+
+on fault
+  repeat forever
+    put 9 into item 1 of values's list
+    put nothing after values's list
+    put values's list into values's map's other
+    put nothing into the "new" of values's map
+  end repeat
+end fault

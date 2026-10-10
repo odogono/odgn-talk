@@ -12,12 +12,15 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 Whose Clauses ([ADR 0074](../../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)) parse as a whole Expression: an Every Head (`every item of xs whose …`) is decided at the start of one, and an ordinal Chunk Expression takes `whose` only when it is the whole operand. The Syntax Tree has `Whose`, `EveryHead` and `WhoseKey` nodes; a Whose Key isn't a name, so it is never resolved or renamed. The checker reports `not in a whose` at a condition's non-Built-in call or Lambda, and an `unknown name` in a condition suggests `it's` in its message. Lowering walks the plural property with `iterate` and `next`, and `it` in the condition loads the innermost clause's temp, as chapter 8 lays out.
 
-Sequential List growth with `put … after/before`, spreading or `collecting`
-uses amortized constant host work per added item. Lists retain immutable windows
-over shared storage; extending an older endpoint that has already grown copies
-that branch. Retained values, Segment checkpoints and Host reads keep their
-original contents. Logical contents sizes are cached and extended incrementally;
-Fuel and logical allocation still follow the unchanged Cost Model, including
+Maps use persistent balanced trees for key lookup and insertion order. Lists
+use persistent balanced trees of at most 32 values per chunk. A Map key write,
+a List point replacement or deletion, and List growth with `put … after/before`,
+spreading or `collecting` copy only the affected tree paths and chunks. Their
+storage work is O(log n) per changed item, including branches from retained
+values. Replacing or deleting a List range still rebuilds the result. Retained
+values, Segment checkpoints and Host reads keep their original contents.
+Logical contents sizes are cached and updated incrementally, as if nothing were
+shared; Fuel and logical allocation follow the unchanged Cost Model, including
 charging the full result size for `collecting`. Save/Restore uses the same value
 format and reconstructs independent storage.
 

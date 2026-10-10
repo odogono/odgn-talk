@@ -79,7 +79,7 @@ Then port it to each Peer Language under `peers/`: Lua, Starlark, JavaScript, Py
 core workloads against host-allocation ceilings about 1.5 times their bytes per
 Run after #592, and pins their output and Fuel. It also checks `collections/list-build`,
 `collections/list-append` and `collections/map-build` against 8 MB, 16 MB and
-4.2 MB ceilings respectively, with their output, Fuel and logical allocation pinned.
+1 MB ceilings respectively, with their output, Fuel and logical allocation pinned.
 The full-size `lifecycle/restore` Run is also held below 20 MB of Host
 allocation, with 8,015 Fuel and 8,024 bytes of logical allocation pinned (#504).
 Timing comparisons remain advisory.
@@ -145,3 +145,8 @@ bun --cpu-prof --cpu-prof-dir=.cache/profiles bench/ts/src/measure-ts.ts lifecyc
 Compare timings separately with `bun run bench --filter lifecycle/load --only ts
 --no-save`, without profiling. CPU profiles include the runner's warm-up and
 measurement overhead; timings remain advisory rather than a CI gate.
+
+The [persistent collection measurements](results/2026-10-10-structural-sharing.md)
+compare point writes at 512 and 8,192 elements and the full collection workloads
+for [#598](https://github.com/odogono/odgn-talk/issues/598). The focused Go benchmark
+runs with `go -C impl/go test ./internal/machine -run '^$' -bench BenchmarkCollectionPointWrites`.

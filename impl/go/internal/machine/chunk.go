@@ -120,7 +120,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 		chunks = spans(kind, whole.Text(), delimiter.Text())
 		count = len(chunks)
 	} else if kind == "item" && whole.Kind == value.List {
-		count = len(whole.Items())
+		count = whole.ListLen()
 	} else if kind == "byte" && whole.Kind == value.Bytes {
 		count = len(whole.Bytes())
 	} else {
@@ -167,7 +167,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 			if !exists {
 				return value.Value{}, scanned, false, nil
 			}
-			return whole.Items()[a-1], scanned, true, nil
+			return whole.ListAt(int(a - 1)), scanned, true, nil
 		}
 		if index.Kind == value.Range {
 			if empty {
@@ -232,6 +232,19 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 			return text(s[:start] + s[end:]), 0, true, nil
 		}
 		return text(s[:start] + textForm(part) + s[end:]), 0, true, nil
+	}
+	if whole.Kind == value.List && index.Kind != value.Range {
+		current := whole
+		if !deleting && int(a) > current.ListLen() {
+			current = extendList(current, make([]value.Value, int(a)-current.ListLen()), false)
+		}
+		n := contents(current) - Size(current.ListAt(int(a-1)))
+		if !deleting {
+			n += Size(part)
+		}
+		result := current.SetListItem(int(a-1), part, deleting)
+		result.CacheListContents(n)
+		return result, 0, true, nil
 	}
 	if whole.Kind == value.List {
 		vs := slices.Clone(whole.Items())
@@ -309,9 +322,9 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 		case value.Bytes:
 			return integer(int64(len(v.Bytes()))), nil
 		case value.List:
-			return integer(int64(len(v.Items()))), nil
+			return integer(int64(v.ListLen())), nil
 		case value.Map:
-			return integer(int64(len(v.Entries()))), nil
+			return integer(int64(v.MapLen())), nil
 		}
 		return bad("text, bytes, list or map")
 	case "bytes":

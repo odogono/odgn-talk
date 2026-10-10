@@ -73,7 +73,7 @@ const measureOf = (measure: number, v: Value | undefined): number => {
     case ITEMS:
       return itemsOf(v);
     case ENTRIES:
-      return v.kind === 'map' ? v.entries().length : 0;
+      return v.kind === 'map' ? v.mapSize : 0;
     case DIGITS: {
       // A number's, or a Quantity's number's.
       const n = v.asDecimal() ?? v.asQuantityRef()?.number;
@@ -183,14 +183,21 @@ const contentsOf = (v: Value): number => {
       knownContents.set(v, total);
       return total;
     }
-    case 'map':
-      return v
-        .entries()
+    case 'map': {
+      const cached = knownContents.get(v);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const total = v
+        .mapPairs()!
         .reduce(
-          (total, [k, value]) =>
-            total + 16 + encoder.encode(k).length + sizeOf(value),
+          (sum, [key, value]) =>
+            sum + 16 + encoder.encode(key).length + sizeOf(value),
           0,
         );
+      knownContents.set(v, total);
+      return total;
+    }
     case 'range': {
       const { from, to } = v.asRange()!;
       return sizeOf(from) + sizeOf(to);
@@ -212,6 +219,39 @@ export const cacheListExtension = (
 ): void => {
   const contents =
     contentsOf(current) + (all ? contentsOf(part) : sizeOf(part));
+  knownContents.set(result, contents);
+  known.set(result, partSize('list', result.length, contents));
+};
+
+/** Seed the logical sizes of point edits from their retained collection. */
+export const cacheMapWrite = (
+  result: Value,
+  current: Value,
+  key: string,
+  part: Value | undefined,
+): void => {
+  if (result === current) {
+    return;
+  }
+  const previous = current.hasKey(key)
+    ? 16 + encoder.encode(key).length + sizeOf(current.get(key))
+    : 0;
+  const added =
+    part === undefined ? 0 : 16 + encoder.encode(key).length + sizeOf(part);
+  const contents = contentsOf(current) - previous + added;
+  knownContents.set(result, contents);
+  known.set(result, partSize('map', result.mapSize, contents));
+};
+export const cacheListEdit = (
+  result: Value,
+  current: Value,
+  i: number,
+  part: Value | undefined,
+): void => {
+  const contents =
+    contentsOf(current) -
+    sizeOf(current.index(i + 1)) +
+    (part === undefined ? 0 : sizeOf(part));
   knownContents.set(result, contents);
   known.set(result, partSize('list', result.length, contents));
 };
@@ -272,7 +312,12 @@ export const partSize = (
   }
   let total = 0;
   for (const term of formula) {
-    const m = term[0] === CONSTANT ? 1 : term[0] === ITEMS ? items : contents;
+    const m =
+      term[0] === CONSTANT
+        ? 1
+        : term[0] === ITEMS || term[0] === ENTRIES
+          ? items
+          : contents;
     total += Math.ceil((term[2]! * m) / term[3]!);
   }
   return total;

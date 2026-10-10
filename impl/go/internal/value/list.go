@@ -6,102 +6,155 @@ import (
 	"sync/atomic"
 )
 
-// A List publishes a fixed window. Growth writes only outside every published
-// window; a branch whose end has already been extended gets a fresh buffer.
-// Geometric capacity makes an unbranched sequence of appends/prepends linear.
-// Items remains a contiguous, read-only view for the rest of the Core.
-type listBuffer struct {
-	mu         sync.Mutex // Values can be shared by concurrently pumped Groups.
-	items      []Value
-	start, end int // The union of all published windows in this buffer.
-}
+const listChunkSize = 32
 
+// A List is a persistent AVL sequence of small chunks. Published chunks and
+// nodes are immutable, so updates and branched growth copy only a tree path.
+// Legacy contiguous reads materialize once; machine point operations use
+// ListLen and ListAt without flattening the collection.
 type listView struct {
-	buffer     *listBuffer
-	start, end int
-	contents   atomic.Int64 // Logical contents size + 1; zero means unmeasured.
+	root        *tree[int, []Value]
+	first, last int
+	once        sync.Once
+	items       []Value
+	contents    atomic.Int64 // Logical contents size + 1; zero means unmeasured.
 }
 
 func NewList(vs []Value) Value {
-	items := slices.Clone(vs)
-	buffer := &listBuffer{items: items, end: len(items)}
-	return listWindow(buffer, 0, len(items))
+	view := &listView{last: -1}
+	for i := 0; i < len(vs); i += listChunkSize {
+		chunk := slices.Clone(vs[i:min(i+listChunkSize, len(vs))])
+		view.last++
+		view.root = treePut(view.root, view.last, chunk, len(chunk))
+	}
+	return Value{Kind: List, list: view}
+}
+func (v Value) ListLen() int {
+	if v.list != nil {
+		return treeTotal(v.list.root)
+	}
+	return len(v.Items())
+}
+func (v Value) ListAt(i int) Value {
+	if v.list != nil {
+		n, at := treeAt(v.list.root, i)
+		if n != nil {
+			return n.val[at]
+		}
+		return Value{}
+	}
+	if i >= 0 && i < len(v.Items()) {
+		return v.Items()[i]
+	}
+	return Value{}
 }
 
-func listWindow(buffer *listBuffer, start, end int) Value {
-	return Fields{Kind: List, Items: buffer.items[start:end:end], list: &listView{buffer: buffer, start: start, end: end}}.Value()
+// SetListItem replaces or deletes one existing item (zero-based).
+func (v Value) SetListItem(i int, part Value, deleting bool) Value {
+	if v.list == nil {
+		v = NewList(v.Items())
+	}
+	view := v.list
+	n, at := treeAt(view.root, i)
+	chunk := slices.Clone(n.val)
+	if deleting {
+		chunk = slices.Delete(chunk, at, at+1)
+	} else {
+		chunk[at] = part
+	}
+	root := view.root
+	if len(chunk) == 0 {
+		root = treeRemove(root, n.key)
+	} else {
+		root = treePut(root, n.key, chunk, len(chunk))
+	}
+	next := &listView{root: root, last: -1}
+	if first, _ := treeAt(root, 0); first != nil {
+		next.first = first.key
+	}
+	if last, _ := treeAt(root, treeTotal(root)-1); last != nil {
+		next.last = last.key
+	}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, list: next}
 }
-
-// Internal transformations sometimes replace Items on a copied Value. Such a
-// detached slice cannot use the old window's storage or accounting cache.
-func (v Value) listWindowValid() bool {
-	return v.Kind == List && v.list != nil && len(v.Items()) == v.list.end-v.list.start &&
-		(len(v.Items()) == 0 || &v.Items()[0] == &v.list.buffer.items[v.list.start])
-}
-
-// ExtendList retains every existing item, including those visible through
-// aliases and Segment checkpoints. vs may itself share this List's buffer.
 func (v Value) ExtendList(vs []Value, prepend bool) Value {
 	if len(vs) == 0 {
 		return v
 	}
-	if v.listWindowValid() {
-		view, count := v.list, len(vs)
-		buffer := view.buffer
-		buffer.mu.Lock()
-		if prepend && view.start == buffer.start && count <= view.start {
-			start := view.start - count
-			copy(buffer.items[start:view.start], vs)
-			buffer.start = start
-			buffer.mu.Unlock()
-			return listWindow(buffer, start, view.end)
-		}
-		if !prepend && view.end == buffer.end && count <= len(buffer.items)-view.end {
-			end := view.end + count
-			copy(buffer.items[view.end:end], vs)
-			buffer.end = end
-			buffer.mu.Unlock()
-			return listWindow(buffer, view.start, end)
-		}
-		buffer.mu.Unlock()
+	if v.list == nil {
+		v = NewList(v.Items())
 	}
-	count := len(v.Items()) + len(vs)
-	items := make([]Value, max(8, 2*count))
-	start := (len(items) - count) / 2
+	view := v.list
+	root, first, last := view.root, view.first, view.last
+	done := 0
+	position := treeTotal(root) - 1
 	if prepend {
-		copy(items[start:], vs)
-		copy(items[start+len(vs):], v.Items())
-	} else {
-		copy(items[start:], v.Items())
-		copy(items[start+len(v.Items()):], vs)
+		position = 0
 	}
-	buffer := &listBuffer{items: items, start: start, end: start + count}
-	return listWindow(buffer, start, start+count)
+	if edge, _ := treeAt(root, position); edge != nil && edge.span < listChunkSize {
+		n := min(len(vs), listChunkSize-edge.span)
+		chunk := make([]Value, 0, edge.span+n)
+		if prepend {
+			chunk = append(chunk, vs[len(vs)-n:]...)
+			chunk = append(chunk, edge.val...)
+		} else {
+			chunk = append(chunk, edge.val...)
+			chunk = append(chunk, vs[:n]...)
+		}
+		root = treePut(root, edge.key, chunk, len(chunk))
+		done = n
+	}
+	for done < len(vs) {
+		n := min(listChunkSize, len(vs)-done)
+		start := done
+		if prepend {
+			start = len(vs) - done - n
+		}
+		chunk := slices.Clone(vs[start : start+n])
+		key := 0
+		if root != nil {
+			if prepend {
+				key = first - 1
+			} else {
+				key = last + 1
+			}
+		}
+		root = treePut(root, key, chunk, n)
+		if prepend || treeTotal(root) == n {
+			first = key
+		}
+		if !prepend || treeTotal(root) == n {
+			last = key
+		}
+		done += n
+	}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, list: &listView{root: root, first: first, last: last}}
 }
 
-// ListContents memoizes the sum of item sizes, as if no storage were shared.
-// The machine supplies the current Cost Model's size function.
+// ListContents counts every logical child, even when chunks are shared.
 func (v Value) ListContents(size func(Value) int64) int64 {
-	valid := v.listWindowValid()
-	if valid {
+	if v.list != nil {
 		if cached := v.list.contents.Load(); cached != 0 {
 			return cached - 1
 		}
 	}
 	var total int64
-	for _, item := range v.Items() {
-		total += size(item)
+	if v.list != nil {
+		treeWalk(v.list.root, func(chunk []Value) {
+			for _, item := range chunk {
+				total += size(item)
+			}
+		})
+	} else {
+		for _, item := range v.Items() {
+			total += size(item)
+		}
 	}
-	if valid {
-		v.list.contents.Store(total + 1)
-	}
+	v.CacheListContents(total)
 	return total
 }
-
-// CacheListContents seeds the new window from its old contents and additions,
-// avoiding a full List walk for each collecting pass or Container append.
 func (v Value) CacheListContents(contents int64) {
-	if v.listWindowValid() {
+	if v.list != nil {
 		v.list.contents.Store(contents + 1)
 	}
 }

@@ -17,12 +17,15 @@ Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-
 
 Whose Clauses ([ADR 0074](../../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)) parse as a whole Expression into a `whose` node, whose `NameToken` is the chunk word: an Every Head is a `chunk` node with an `every` ordinal, and either head sits in a `delimited` node when it has `delimited by`, so `no item chunk` covers it. A Whose Key is a `key` node on a synthetic `it`, never a name. The checker reports `not in a whose` at a condition's non-Built-in call or Lambda, and an `unknown name` in a condition suggests `it's` in its message. Lowering walks the plural property with `iterate` and `next`, and `it` in the condition loads the innermost clause's temp, as chapter 8 lays out. `the items of` a list is the list itself, as chapter 4's property table says.
 
-Sequential List growth with `put … after/before`, spreading or `collecting`
-uses amortized constant host work per added item. Lists retain immutable windows
-over shared storage; extending an older endpoint that has already grown copies
-that branch. Retained values, Segment checkpoints and Host reads keep their
-original contents. Logical contents sizes are cached and extended incrementally;
-Fuel and logical allocation still follow the unchanged Cost Model, including
+Maps use persistent balanced trees for key lookup and insertion order. Lists
+use persistent balanced trees of at most 32 values per chunk. A Map key write,
+a List point replacement or deletion, and List growth with `put … after/before`,
+spreading or `collecting` copy only the affected tree paths and chunks. Their
+storage work is O(log n) per changed item, including branches from retained
+values. Replacing or deleting a List range still rebuilds the result. Retained
+values, Segment checkpoints and Host reads keep their original contents.
+Logical contents sizes are cached and updated incrementally, as if nothing were
+shared; Fuel and logical allocation follow the unchanged Cost Model, including
 charging the full result size for `collecting`. Save/Restore uses the same value
 format and reconstructs independent storage.
 
@@ -1308,9 +1311,9 @@ includes the build command, artifact hash and a separate Wasmtime 49.0.0 check.
 The Allocation Budget and Persistent State measure **logical size**, rather
 than physical Go heap or WASI linear memory. Container slots use a 32-byte
 tagged Value on 64-bit Hosts (16 bytes on `wasip1`), with kind-specific payloads
-shared across immutable copies. List growth still needs spare capacity, old
-buffers during copying, Segment checkpoints and Go's garbage-collection
-headroom. Sharing changes neither Fuel nor logical accounting; the public
+shared across immutable copies. Persistent List trees copy a small chunk and
+its path during growth; contiguous internal reads materialize an array on demand.
+Segment checkpoints and Go's garbage-collection headroom also consume memory. Sharing changes neither Fuel nor logical accounting; the public
 Value API and `go/6` saves remain compatible.
 
 For a fresh Message Layer Session running one of the flat List-growth
@@ -1330,22 +1333,26 @@ using a fresh process/instance per case, default Go GC settings and no Trace:
 
 | Growth workload | Limits | Sidecar peak RSS | `wasip1` peak linear memory |
 | --- | --- | --- | --- |
-| Run-local List, repeated 64-byte text | default | 57.30 MiB | 66.19 MiB |
-| Run-local List, `nothing` | default | 171.69 MiB | 212.00 MiB |
-| Run-local List, repeated 64-byte text | conformance minimums | 518.84 MiB | 563.00 MiB |
-| Run-local List, `nothing` | conformance minimums | 2,518.23 MiB | 2,452.88 MiB |
-| Script Variable List, repeated 64-byte text | conformance minimums | 392.16 MiB | 395.50 MiB |
-| Script Variable List, `nothing` | conformance minimums | 761.62 MiB | 818.00 MiB |
+| Run-local List, repeated 64-byte text | default | 39.09 MiB | 90.00 MiB |
+| Run-local List, `nothing` | default | 100.95 MiB | 133.50 MiB |
+| Script Variable List, repeated 64-byte text | default | 29.61 MiB | 28.50 MiB |
+| Script Variable List, `nothing` | default | 37.77 MiB | 37.50 MiB |
+| Run-local List, repeated 64-byte text | conformance minimums | 238.50 MiB | 333.00 MiB |
+| Run-local List, `nothing` | conformance minimums | 1241.67 MiB | 1563.00 MiB |
+| Script Variable List, repeated 64-byte text | conformance minimums | 397.47 MiB | 464.50 MiB |
+| Script Variable List, `nothing` | conformance minimums | 751.50 MiB | 835.00 MiB |
 
 The Run-local workloads fault on allocation; Script Variable workloads
 commit every 1,000 additions and fault on Persistent State (64 MiB at the
-minimums), retaining the last committed window after rollback. Every case
+minimums), retaining the last committed List after rollback. Every case
 then runs a healthy Handler on the same Session. At conformance minimums,
 even the cheapest-element List faults below wasm32's 4 GiB ceiling. RSS and
 linear memory are distinct metrics; these are single-run observations, not
 cgroup peaks or measurements from the Elixir Host in #553. The
-[raw reports and artifact hashes](../../tools/wasi/results/2026-10-10-list-memory.json)
-record all eight cases per transport for [#584](https://github.com/odogono/odgn-talk/issues/584).
+[raw reports and artifact hashes](../../tools/wasi/results/2026-10-10-structural-sharing-memory.json)
+record all eight cases per transport for [#598](https://github.com/odogono/odgn-talk/issues/598).
+The [earlier buffer-growth measurements](../../tools/wasi/results/2026-10-10-list-memory.json)
+remain the evidence for [#584](https://github.com/odogono/odgn-talk/issues/584).
 
 Reproduce the measurements after building the reactor as above:
 

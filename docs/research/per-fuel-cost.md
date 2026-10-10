@@ -135,7 +135,7 @@ Each fix keeps parity, so each can land in one Core without the other.
 - [#595](https://github.com/odogono/odgn-talk/issues/595): remaining cost 2, integer opcodes.
 - [#596](https://github.com/odogono/odgn-talk/issues/596): remaining cost 3, Go's trial frame copy.
 - [#597](https://github.com/odogono/odgn-talk/issues/597): remaining cost 5, integers beside canonical Number text.
-- [#598](https://github.com/odogono/odgn-talk/issues/598): remaining cost 6, structural sharing for Maps and Lists.
+- [#598](https://github.com/odogono/odgn-talk/issues/598): remaining cost 6, structural sharing for Maps and Lists. The implementation and its sequential-growth tradeoff are described in the [Go](../../impl/go/README.md) and [TS](../../impl/ts/README.md) guides, with [measurements](../../bench/results/2026-10-10-structural-sharing.md).
 
 Costs 1 and 2 touch the generators and lowering, so they benefit from landing in both Cores together.
 

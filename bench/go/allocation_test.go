@@ -9,7 +9,7 @@ import (
 
 // The core ceilings are about 1.5 times the bytes per full-size Run after
 // #592, which stopped per-instruction formula parsing and escapes. List and
-// Map construction also guard against the copying from #503 and #592.
+// Map construction also guard against the copying from #503, #592 and #598.
 // Save/Restore guards the direct Codec path from #504 below a third of its
 // original allocation. Measure bytes, not timing, so machine speed cannot
 // make CI flaky.
@@ -25,7 +25,7 @@ func TestCoreRunAllocationBudgets(t *testing.T) {
 		"core/lambdas":            {2_000_000, 58_027, 0},
 		"collections/list-build":  {8_000_000, 19_091, 3_022_112},
 		"collections/list-append": {16_000_000, 52_056, 80_200},
-		"collections/map-build":   {4_200_000, 14_094, 24_920},
+		"collections/map-build":   {1_000_000, 14_094, 24_920},
 		"lifecycle/restore":       {20_000_000, 8_015, 8_024},
 	}
 	for _, bench := range manifest(t, "go") {
