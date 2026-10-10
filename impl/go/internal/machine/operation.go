@@ -18,6 +18,18 @@ func (r *Run) ChargeHost(fuel int64) bool {
 	}
 	return r.pay(fuel, 0)
 }
+
+// HostFuelLeft is the most ChargeHost would accept; ok is false when the Run
+// has no Fuel limit.
+func (r *Run) HostFuelLeft() (fuel int64, ok bool) {
+	if r.Cancelling {
+		return r.CleanupBudget - r.CleanupFuel, true
+	}
+	if r.Limits.Fuel > 0 || r.Limits.Bounded {
+		return r.Limits.Fuel - r.Fuel, true
+	}
+	return 0, false
+}
 func (r *Run) FaultHostFuel() { r.fault("fuel") }
 
 func ErrorValue(code string, fields ...value.Pair) value.Value { return failure(code, fields...) }

@@ -105,7 +105,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	}
 	x.calls++
 	ctx, cancel := operationContext(op.Mode)
-	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost}
+	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost, fuelLeft: x.run.HostFuelLeft}
 	if op.Scope != nil {
 		call.scopeName = op.Scope.Closes
 		if op.Scope.Opens != "" {

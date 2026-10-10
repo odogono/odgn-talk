@@ -81,6 +81,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   incremental replay Host, resolving symbolic Host Inputs as the fuzzer's TS
   runner does. `cmd/fuzzworker/` serves it over the
   [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
+- `internal/messagelayer/` is the [Message Layer](#message-layer) over the
+  root package's embedding interface; `cmd/messagelayer/` serves it as a
+  sidecar on stdio.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -1137,6 +1140,40 @@ observers before Handler dispatch.
 
 Inspection and counters are worker calls; a refused call with no error return
 panics with `HostError`. Trace callbacks run without the input queue lock.
+
+## Message Layer
+
+`internal/messagelayer` carries the
+[Message Layer](../../spec/09-embedding.md#the-message-layer) over the ordinary
+Go embedding interface, for a Host that isn't Go or TS
+([#532](https://github.com/odogono/odgn-talk/issues/532)). A `Session` takes
+one JSON frame and returns one reply frame; the framing is the transport's.
+`cmd/messagelayer` is the sidecar: each frame is a 4-byte big-endian length
+and then the JSON, both ways on stdio.
+
+A `pump` runs on its own goroutine. Each Operation or property it reaches
+returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's
+`op-result` or `prop-result` arrives under the same `ref`. Any other message
+sent meanwhile is a protocol error. So the Core never calls the Host, and the
+same `Session` can sit behind `wasip1` exports, where a goroutine parks across
+exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
+Fuel the Run can still be charged; the reply's `charged` goes through
+`Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
+reply lists the started calls the Core has abandoned under `abandoned`.
+
+It carries `hello`, `define-capability`, the `clock` Standard Capability,
+`add`, `define-object-kind`, `grant`, `new-group`, `load`, `object`,
+`set-parent`, `dispose`, `deliver`, `request`, `cancel-delivery`, `broadcast`,
+`answer`, `fail`, `pump`, `save`, `fingerprint`, `stop`, `cancel-run`,
+`rewind-run`, `revoke`, `counters` and `grants`. It doesn't yet carry
+Libraries, `call`, `decide`, `inspect`, `restore` and `settle`, `reload`,
+`extend`, `export-manifest`, Segment lifecycles and Coordinators, the other
+Standard Capabilities, or the `$function` form of Function Values. Those
+messages reply with a protocol error that says so. A protocol error,
+`{"kind": "protocol error", "detail"}`, is the transport's, outside parity.
+
+A panic in the Core or a Host callback becomes an error reply, so no fault
+ends the `Session`. Check it with `go -C impl/go test ./internal/messagelayer`.
 
 ## Corpus runner
 

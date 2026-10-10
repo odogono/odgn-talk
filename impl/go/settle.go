@@ -102,6 +102,7 @@ func (g *Group) applyRestoredSettlement(d delivery, reports *[]Report) int64 {
 	call.mu.Lock()
 	call.starting = true
 	call.charge = x.run.ChargeHost
+	call.fuelLeft = x.run.HostFuelLeft
 	call.now = g.clock
 	call.charged = 0
 	call.mu.Unlock()
