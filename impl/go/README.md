@@ -83,7 +83,7 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
 - `internal/messagelayer/` is the [Message Layer](#message-layer) over the
   root package's embedding interface; `cmd/messagelayer/` serves it as a
-  sidecar on stdio.
+  sidecar on stdio, and `cmd/messagelayer-wasi/` as a WASI Preview 1 reactor.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -1159,7 +1159,7 @@ A `pump` runs on its own goroutine. Each Operation or property it reaches
 returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's
 `op-result` or `prop-result` arrives under the same `ref`. Any other message
 sent meanwhile is a protocol error. So the Core never calls the Host, and the
-same `Session` can sit behind `wasip1` exports, where a goroutine parks across
+same `Session` serves the `wasip1` exports, where a goroutine parks across
 exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
 Fuel the Run can still be charged; the reply's `charged` goes through
 `Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
@@ -1176,8 +1176,59 @@ Standard Capabilities, or the `$function` form of Function Values. Those
 messages reply with a protocol error that says so. A protocol error,
 `{"kind": "protocol error", "detail"}`, is the transport's, outside parity.
 
-A panic in the Core or a Host callback becomes an error reply, so no fault
-ends the `Session`. Check it with `go -C impl/go test ./internal/messagelayer`.
+A Script fault becomes a Pump report, and a recovered panic in the Core or a
+Host callback becomes an error reply. Neither ends the `Session`. Check it
+with `go -C impl/go test ./internal/messagelayer`.
+
+### WASI reactor
+
+`cmd/messagelayer-wasi` builds with standard Go as a WASI Preview 1 reactor.
+From the repository root:
+
+```sh
+mkdir -p .cache
+GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi
+uv run tools/wasi/check.py .cache/messagelayer.wasm
+```
+
+The check uses Python 3.11 or later, wasmtime 49.0.0's Python bindings and
+Brotli 1.2.0; `uv` installs the pinned dependencies declared in the script.
+CI runs the same build and check. The Go module itself has no extra dependency.
+
+Each instance owns one Message Layer Session. The Host supplies the WASI
+imports, calls `_initialize` once, then drives these exports serially:
+
+- `talk_buffer(n) -> i32` reserves `n` input bytes and returns their linear
+  memory address. Write the JSON frame there, without a length prefix.
+  The buffer is valid until the next `talk_buffer`. A zero length or a length
+  above 64 MiB returns 0; the Host must not write through that address.
+- `talk_send(n) -> i64` reads `n` bytes of the reserved buffer and returns
+  the reply packed as `ptr << 32 | len`. Interpret it as unsigned, copy
+  the reply from linear memory, and decode the JSON. The reply is valid until
+  the next `talk_send`. A length exceeding the reserved buffer returns a
+  protocol error with `ref: -1`, without reading outside the buffer.
+
+Either export can grow linear memory; refresh memory views after a call.
+Host Operations and properties use the same `need`/result exchanges as the
+sidecar, with no custom Host imports or reentrant exports. A Host queues inputs
+that arrive while an export runs, and a Host needing prompt interruption pumps
+with a Fuel Slice. Supported messages and limitations are the same on both
+transports; `wasip1` adds no embedding API.
+
+The check exercises `hello`, invalid lengths and malformed frames, memory
+growth and reply retention, immediate and suspending Operations across exports,
+charging, a Script error followed by more requests, save, fingerprint and
+independent instances. It also prints the artifact's SHA-256 and raw, gzip
+level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
+of the stripped module, including Go's runtime; they aren't compiled-module
+cache sizes or per-instance memory measurements.
+
+Measured on 2026-10-10 with Go 1.27.2 and the command above: **12,299,060
+bytes raw**, **2,943,787 bytes gzip**, **2,090,654 bytes Brotli**. The check ran
+under wasmtime 49.0.0 with Python 3.14.8, zlib 1.2.12 and Brotli 1.2.0.
+The module's SHA-256 was
+`803151709641c3d9783a74972440b0e3dcaee362b55119b1edf8a3ba4c056080`.
+These sizes are evidence for this build, not a fixed limit on later builds.
 
 ## Corpus runner
 
