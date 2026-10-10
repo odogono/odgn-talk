@@ -4,12 +4,17 @@ defmodule Mix.Tasks.Talk.Measure do
   Measures the Go Core's Message Layer from Elixir, over Wasmex and over the
   sidecar on an Erlang Port, against the thresholds set in #532.
 
-      mix talk.measure [--quick] [--only latency,containment,faults] [--no-save] [--build]
+      mix talk.measure [--quick] [--only latency,containment,faults] [--transports wasmex,sidecar,c]
+                       [--no-save] [--build]
       mix talk.measure --render bench/results/<file>.json
 
     * `--quick` takes few samples, to check the harness. Its figures mean nothing.
-    * `--only` runs some sections. When the day's results file exists, they
+    * `--only` runs some sections. When the results file for the day and commit exists, they
       replace those sections in it and the rest are kept.
+    * `--transports` measures some transports. `c` is the minimal C Host's
+      bridge, from `bench/message-layer-c/run.sh`, for containment and faults
+      only: its latency is measured inside the C Host. It runs by default when
+      that build exists.
     * `--no-save` prints the report without writing it to `bench/results/`.
     * `--build` rebuilds the Go artifacts in `.cache/` first.
     * `--render` rewrites a saved run's Markdown from its JSON, without measuring.
@@ -34,7 +39,14 @@ defmodule Mix.Tasks.Talk.Measure do
   def run(argv) do
     {opts, _} =
       OptionParser.parse!(argv,
-        strict: [quick: :boolean, only: :string, save: :boolean, build: :boolean, render: :string]
+        strict: [
+          quick: :boolean,
+          only: :string,
+          transports: :string,
+          save: :boolean,
+          build: :boolean,
+          render: :string
+        ]
       )
 
     if path = opts[:render] do
@@ -69,10 +81,21 @@ defmodule Mix.Tasks.Talk.Measure do
           mutations: 2_000
         ]
 
-    transports = [
-      {"wasmex", fn -> Transport.Wasi.start(opt_level: :speed) end},
-      {"sidecar", fn -> Transport.Sidecar.start() end}
-    ]
+    chosen =
+      if t = opts[:transports],
+        do: String.split(t, ","),
+        else: ["wasmex", "sidecar"] ++ if(File.exists?(TalkHost.Artifacts.c_host()), do: ["c"], else: [])
+
+    transports =
+      Enum.filter(
+        [
+          {"wasmex", fn -> Transport.Wasi.start(opt_level: :speed) end},
+          {"sidecar", fn -> Transport.Sidecar.start() end}
+        ],
+        fn {name, _} -> name in chosen end
+      )
+
+    bridge? = "c" in chosen
 
     results =
       %{
@@ -82,9 +105,9 @@ defmodule Mix.Tasks.Talk.Measure do
         "thresholds" => @thresholds
       }
       |> Map.put("payload", payload())
-      |> maybe("latency" in sections, "latency", fn -> latency(transports, sizes) end)
-      |> maybe("containment" in sections, "containment", fn -> containment(sizes) end)
-      |> maybe("faults" in sections, "faults", fn -> faults(transports, sizes) end)
+      |> maybe("latency" in sections and transports != [], "latency", fn -> latency(transports, sizes) end)
+      |> maybe("containment" in sections, "containment", fn -> containment(chosen, sizes) end)
+      |> maybe("faults" in sections, "faults", fn -> faults(transports, bridge?, sizes) end)
 
     base = Path.join(TalkHost.Artifacts.root(), "bench/results/#{file_stem(results["environment"])}")
 
@@ -122,8 +145,10 @@ defmodule Mix.Tasks.Talk.Measure do
       end
       |> Map.new()
 
+    extra = if List.keymember?(transports, "wasmex", 0), do: [wasmex_none], else: []
+
     figures =
-      for {name, start} <- transports ++ [wasmex_none], into: %{} do
+      for {name, start} <- transports ++ extra, into: %{} do
         IO.puts(:stderr, "latency: #{name}")
         start.() |> elem(1) |> Transport.stop()
 
@@ -139,31 +164,41 @@ defmodule Mix.Tasks.Talk.Measure do
     Map.put(figures, "compileMs", compile)
   end
 
-  defp containment(sizes) do
-    IO.puts(:stderr, "containment: wasmex")
-    wasi = Containment.wasi(sizes[:reps])
-
-    IO.puts(:stderr, "containment: sidecar in a container")
-
-    sidecar =
+  defp containment(chosen, sizes) do
+    sidecar = fn ->
       case System.cmd("docker", ["info", "--format", "{{.ServerVersion}}"], stderr_to_stdout: true) do
         {_, 0} -> Containment.sidecar(sizes[:reps])
         {out, _} -> %{"skipped" => "Docker isn't available: #{String.trim(out)}"}
       end
+    end
 
-    %{"wasmex" => wasi, "sidecar" => sidecar}
+    for {name, label, fun} <- [
+          {"wasmex", "wasmex", fn -> Containment.wasi(sizes[:reps]) end},
+          {"sidecar", "sidecar in a container", sidecar},
+          {"c", "c, wasmtime", fn -> Containment.bridge(sizes[:reps]) end}
+        ],
+        name in chosen,
+        into: %{} do
+      IO.puts(:stderr, "containment: #{label}")
+      {key(name), fun.()}
+    end
   end
 
-  defp faults(transports, sizes) do
-    for {name, start} <- transports, into: %{} do
+  defp faults(transports, bridge?, sizes) do
+    bridge = if bridge?, do: [{"c", fn -> Transport.Bridge.start(memory_cap: 1024 * @mib) end}], else: []
+
+    for {name, start} <- transports ++ bridge, into: %{} do
       IO.puts(:stderr, "faults: #{name}")
 
       start =
         if name == "wasmex", do: fn -> Transport.Wasi.start(opt_level: :speed, memory_cap: 1024 * @mib) end, else: start
 
-      {name, Faults.run(start, Keyword.merge(sizes, seed: 532, extra: extra(name)))}
+      {key(name), Faults.run(start, Keyword.merge(sizes, seed: 532, extra: extra(name)))}
     end
   end
+
+  defp key("c"), do: "c, wasmtime"
+  defp key(name), do: name
 
   # The WASI framing has a failure the Port's framing can't express: a length
   # that doesn't match the buffer. Wasmex takes an i32, so -1 is the length
@@ -187,9 +222,16 @@ defmodule Mix.Tasks.Talk.Measure do
     bytes = File.read!(path)
     sha = :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
 
-    # #551 measured Brotli for this build; Erlang has no Brotli encoder.
+    # Erlang has no Brotli encoder, so this uses Brotli's CLI as the Go guide does.
     brotli =
-      if sha == "803151709641c3d9783a74972440b0e3dcaee362b55119b1edf8a3ba4c056080", do: 2_090_654
+      case System.find_executable("brotli") do
+        nil ->
+          nil
+
+        exe ->
+          {out, 0} = System.cmd(exe, ["--quality=11", "--lgwin=22", "--stdout", path])
+          byte_size(out)
+      end
 
     %{"sha256" => sha, "raw" => byte_size(bytes), "gzip9" => byte_size(:zlib.gzip(bytes)), "brotli11" => brotli}
   end
@@ -237,6 +279,6 @@ defmodule Mix.Tasks.Talk.Measure do
 
   defp file_stem(env) do
     cpu = env["cpu"] |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-")
-    "#{env["date"]}-message-layer-elixir-darwin-arm64-#{cpu}"
+    "#{env["date"]}-#{env["commit"]}-message-layer-elixir-darwin-arm64-#{cpu}"
   end
 end

@@ -1,0 +1,288 @@
+{
+  "wasmtime": "49.0.2",
+  "compile_ms": 943.5379166388884,
+  "instantiate_initialize_hello_ms": [
+    1.4822083758190274,
+    1.3452082639560103,
+    1.2402500724419951,
+    1.2881249422207475,
+    1.22937501873821,
+    1.2228749692440033,
+    1.1749167460948229,
+    1.1744167422875762
+  ],
+  "instances": 8,
+  "rss_before_bytes": 716767232,
+  "rss_with_instances_bytes": 767229952,
+  "rss_delta_per_instance_bytes": 6307840,
+  "linear_memory_per_instance_bytes": 7340032,
+  "core_versions": {
+    "core": "go/0.1.0",
+    "costModel": "0",
+    "language": "1.0-rc.2",
+    "saveFormat": "go/6",
+    "unicode": "18.0.0"
+  },
+  "idle_pump_us": [
+    33.98625005502254,
+    30.20637494046241,
+    25.227874983102083,
+    25.1097499858588,
+    27.073791599832475,
+    22.53316668793559,
+    26.566291693598032
+  ],
+  "empty_handler_pump_us": [
+    61.78816850297153,
+    64.79825195856392,
+    61.153749004006386,
+    60.955540160648525,
+    61.20466790162027,
+    64.21116879209876,
+    63.46574681811035
+  ],
+  "calls_per_pump": 1000,
+  "number": [
+    31.645541661418974,
+    31.451249960809946,
+    31.300375005230308,
+    29.2149999877438,
+    32.92175009846687,
+    33.40924996882677,
+    38.154666777700186
+  ],
+  "nested_value": [
+    69.23195836134255,
+    69.14158340077847,
+    70.6628749612719,
+    68.57116671744734,
+    68.08524997904897,
+    69.22579160891473,
+    67.26741674356163
+  ],
+  "thresholds": {
+    "sizes": {
+      "runs": 3,
+      "samples": 5000,
+      "warmup": 500,
+      "instances": 5000,
+      "memory": 20
+    },
+    "call": {
+      "n": 5000,
+      "p50": 41.54164344072342,
+      "p99": 233.74997545033693,
+      "mean": 49.55874173901975,
+      "min": 34.87500362098217,
+      "max": 702.3332873359323,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 41.54164344072342,
+          "p99": 233.74997545033693,
+          "mean": 49.55874173901975,
+          "min": 34.87500362098217,
+          "max": 702.3332873359323
+        },
+        {
+          "n": 5000,
+          "p50": 41.95829387754202,
+          "p99": 225.58332420885563,
+          "mean": 50.87864161469042,
+          "min": 35.33333074301481,
+          "max": 662.7499824389815
+        },
+        {
+          "n": 5000,
+          "p50": 40.83337262272835,
+          "p99": 229.41664792597294,
+          "mean": 49.57135831937194,
+          "min": 35.125063732266426,
+          "max": 759.7500225529075
+        }
+      ]
+    },
+    "pump": {
+      "n": 5000,
+      "p50": 65.50003308802843,
+      "p99": 333.20835791528225,
+      "mean": 75.51939245313406,
+      "min": 57.75003228336573,
+      "max": 744.166667573154,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 64.79164585471153,
+          "p99": 325.041706673801,
+          "mean": 73.69870028924197,
+          "min": 57.416618801653385,
+          "max": 639.5416567102075
+        },
+        {
+          "n": 5000,
+          "p50": 65.50003308802843,
+          "p99": 333.20835791528225,
+          "mean": 75.51939245313406,
+          "min": 57.75003228336573,
+          "max": 744.166667573154
+        },
+        {
+          "n": 5000,
+          "p50": 75.45831613242626,
+          "p99": 375.0832984223962,
+          "mean": 85.5180323123932,
+          "min": 61.291735619306564,
+          "max": 753.5000331699848
+        }
+      ]
+    },
+    "instantiation": {
+      "n": 5000,
+      "p50": 972.250010818243,
+      "p99": 1064.874930307269,
+      "mean": 965.7948930514976,
+      "min": 845.583388581872,
+      "max": 2391.6250793263316,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 995.5833666026592,
+          "p99": 1218.7917018309236,
+          "mean": 995.0970003847033,
+          "min": 852.4166187271476,
+          "max": 3965.041716583073
+        },
+        {
+          "n": 5000,
+          "p50": 971.0832964628935,
+          "p99": 1093.041617423296,
+          "mean": 955.2127252100036,
+          "min": 844.208407215774,
+          "max": 1692.5832023844123
+        },
+        {
+          "n": 5000,
+          "p50": 972.250010818243,
+          "p99": 1064.874930307269,
+          "mean": 965.7948930514976,
+          "min": 845.583388581872,
+          "max": 2391.6250793263316
+        }
+      ]
+    },
+    "memory": {
+      "instances": 20,
+      "medianBytes": 16252928,
+      "maxBytes": 16252928
+    }
+  },
+  "fault_checks": {
+    "spin": {
+      "alloc": 0,
+      "at": {
+        "col": 3,
+        "handler": "spin",
+        "line": 5,
+        "pc": 11,
+        "unit": "faults"
+      },
+      "delivery": "d8017",
+      "fuel": 5000,
+      "handler": "spin",
+      "kind": "run end",
+      "limit": "fuel",
+      "outcome": "limit fault",
+      "run": "faults/r1",
+      "script": "faults"
+    },
+    "boom": {
+      "alloc": 48,
+      "at": {
+        "col": 3,
+        "handler": "boom",
+        "line": 9,
+        "pc": 16,
+        "unit": "faults"
+      },
+      "delivery": "d8037",
+      "error": {
+        "code": "deliberate",
+        "data": {
+          "at": {
+            "unit": "faults",
+            "handler": "boom",
+            "line": 9,
+            "column": 3
+          }
+        },
+        "message": ""
+      },
+      "fuel": 19,
+      "handler": "boom",
+      "kind": "run end",
+      "outcome": "errored",
+      "run": "faults/r11",
+      "script": "faults"
+    },
+    "dive": {
+      "alloc": 3184,
+      "at": {
+        "col": 10,
+        "handler": "down",
+        "line": 2,
+        "pc": 5,
+        "unit": "faults"
+      },
+      "delivery": "d8057",
+      "fuel": 2791,
+      "handler": "dive",
+      "kind": "run end",
+      "limit": "depth",
+      "outcome": "limit fault",
+      "run": "faults/r21",
+      "script": "faults"
+    },
+    "script_faults_checked": 30,
+    "hostile_frames_checked": 5,
+    "same_instance_healthy_after_each": true
+  },
+  "linear_memory_after_workloads_bytes": 24903680,
+  "payload": {
+    "sha256": "ac9e2a5e127afc5f858452e551e13e9b0dbabd9dd2cbd796b6b9ff247a4c3c84",
+    "raw_bytes": 12726753,
+    "gzip_9_bytes": 3030781,
+    "brotli_11_bytes": 2134852,
+    "brotli_lgwin": 22
+  },
+  "provenance": {
+    "date_utc": "2026-10-10T18:36:45.056766+00:00",
+    "checkout_commit": "2605c656921aa22018c49cbb5f64de737b311bc3",
+    "checkout_status": "",
+    "go_source_status": "",
+    "reactor_revision": "2605c656921aa22018c49cbb5f64de737b311bc3",
+    "host_sha256": "e5f899c59767318847cc4b54c0139c3de9285186ee53aac3a5d773d151397042",
+    "runner_sha256": "bb10df0a1311dd2bc0158a657e7a69ea0d1f364fd308071a132bd10083e84bab",
+    "metadata_sha256": "30890debdbc979898528ae9fb907bdec5af7d04eed2fd7ddcd989a3ec9bb8140",
+    "executable_sha256": "fee0e6c9795897678406d8f7290198b5bd1587962da201aad04ff43e7dcfe65b",
+    "cjson_c_sha256": "298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d",
+    "cjson_h_sha256": "25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee",
+    "os": "macOS-27.0.1-arm64-arm-64bit",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "go": "go version go1.27.2 darwin/arm64",
+    "python": "3.9.6",
+    "zlib": "1.2.12",
+    "brotli": "brotli 1.2.0",
+    "cjson": "1.7.19",
+    "samples": 7,
+    "iterations": 1000,
+    "memory_backstop_bytes": 268435456,
+    "reactor_build_flags": "GOOS=wasip1 GOARCH=wasm -buildmode=c-shared -trimpath -buildvcs=false -ldflags=\"-s -w\"",
+    "cflags": "",
+    "ldflags": "",
+    "wasmtime_prefix": "/opt/homebrew/opt/wasmtime",
+    "threshold_decision": "The thresholds block is judged against #532 in docs/research/message-layer-measurements.md (#554); the rest is descriptive.",
+    "reactor_source_sha256": "a6474237abd606c2bc6fee5d9b445d3c21a4d431bc6385505e8bd335f44cf6d2"
+  }
+}

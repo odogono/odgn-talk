@@ -66,7 +66,7 @@ data["provenance"] = {
     "cflags": os.environ.get("CFLAGS", ""),
     "ldflags": os.environ.get("LDFLAGS", ""),
     "wasmtime_prefix": os.environ.get("WASMTIME_PREFIX", ""),
-    "threshold_decision": "Descriptive only; no pass/fail thresholds applied (#532).",
+    "threshold_decision": "The thresholds block is judged against #532 in docs/research/message-layer-measurements.md (#554); the rest is descriptive.",
 }
 source = os.environ.get("REACTOR_SOURCE")
 if source:

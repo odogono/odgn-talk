@@ -170,9 +170,10 @@ defmodule TalkHost.Faults do
       case session.transport do
         %Transport.Wasi{} = t -> Transport.Wasi.stderr(t)
         %Transport.Sidecar{} = t -> Transport.Sidecar.stderr(t)
+        %Transport.Bridge{} = t -> Transport.Bridge.stderr(t)
       end
 
-    case Regex.run(~r/^(?:fatal error: |messagelayer: |runtime: goroutine stack).*$/m, stderr) do
+    case Regex.run(~r/^(?:fatal error: |messagelayer: |runtime: goroutine stack|wasmtime: ).*$/m, stderr) do
       [line] ->
         line
 

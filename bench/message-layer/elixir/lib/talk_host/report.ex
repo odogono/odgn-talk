@@ -4,14 +4,16 @@ defmodule TalkHost.Report do
 
   Latency rows gate on p50 only. A p99 above 10× its p50 is flagged for
   investigation, not failed. The fault and memory containment rows are hard
-  gates. The Elixir Host passes if either transport meets every row.
+  gates. The Elixir Host passes if either transport meets every row. The C
+  Host's bridge is judged on containment and faults only; its latency and
+  memory rows come from bench/message-layer-c.
   """
 
   @mib 1024 * 1024
-  @transports ["wasmex", "sidecar"]
+  @transports ["wasmex", "sidecar", "c, wasmtime"]
 
   def verdicts(results, payload) do
-    for t <- @transports do
+    for t <- @transports, results["latency"][t] || results["containment"][t] || results["faults"][t] do
       th = results["thresholds"][t]
       lat = get_in(results, ["latency", t])
 
@@ -159,7 +161,7 @@ defmodule TalkHost.Report do
   defp verdict_tables(verdicts) do
     Enum.map_join(verdicts, "\n", fn v ->
       """
-      **#{v["transport"]}: #{if v["pass"], do: "meets every row", else: "misses #{Enum.count(v["rows"], &(not &1["pass"]))} rows"}**
+      **#{v["transport"]}: #{if v["pass"], do: "meets every row#{if v["transport"] == "c, wasmtime", do: " judged here (containment and faults)"}", else: "misses #{Enum.count(v["rows"], &(not &1["pass"]))} rows"}**
 
       | Row | Measured | Threshold | | Note |
       | --- | --- | --- | --- | --- |

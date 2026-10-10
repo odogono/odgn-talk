@@ -3,7 +3,8 @@ defmodule TalkHost.Containment do
   A Script that allocates without bound must end in a Limit Fault, never in
   the instance running out of memory (#532).
 
-  Under WASI the cap is Wasmex's `StoreLimits` on linear memory. For the
+  Under WASI the cap is Wasmex's `StoreLimits` on linear memory, or the C
+  Host's Store limiter for its bridge. For the
   sidecar it is a cgroup memory limit, by running the Linux build of the
   sidecar in a container with `docker run --memory`.
 
@@ -38,16 +39,19 @@ defmodule TalkHost.Containment do
 
   @scripts [{"a growing List", "hog"}, {"doubling text", "double"}, {"a growing Script Variable", :hoard}]
 
-  def wasi(reps) do
+  def wasi(reps), do: linear(reps, Transport.Wasi)
+  def bridge(reps), do: linear(reps, Transport.Bridge)
+
+  defp linear(reps, transport) do
     run(reps, fn cap ->
-      start = fn -> Transport.Wasi.start(memory_cap: cap) end
+      start = fn -> transport.start(memory_cap: cap) end
 
       observe = fn t ->
-        fatal = Regex.run(~r/^runtime: out of memory.*$|^fatal error: .*$/m, Transport.Wasi.stderr(t))
+        fatal = Regex.run(~r/^runtime: out of memory.*$|^fatal error: .*$|^wasmtime: .*$/m, transport.stderr(t))
         %{"linearMemoryBytes" => Transport.memory_bytes(t), "fatal" => fatal && hd(fatal)}
       end
 
-      {start, observe}
+      {start, observe, fn -> :ok end}
     end)
   end
 
@@ -63,7 +67,8 @@ defmodule TalkHost.Containment do
 
       start = fn -> Transport.Sidecar.start(command: command, timeout: 300_000) end
 
-      # The container is kept after it exits, so a kill can be read back.
+      # The container is kept after it exits, so a kill can be read back. It is
+      # removed only after the health check, which needs it running.
       observe = fn _ ->
         observed =
           case System.cmd("docker", ["exec", name, "cat", "/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory.events"],
@@ -79,11 +84,11 @@ defmodule TalkHost.Containment do
               %{"exited" => %{"oomKilled" => oom == "true", "exitCode" => String.to_integer(code)}}
           end
 
-        System.cmd("docker", ["rm", "-f", name], stderr_to_stdout: true)
         observed
       end
 
-      {start, observe}
+      remove = fn -> System.cmd("docker", ["rm", "-f", name], stderr_to_stdout: true) end
+      {start, observe, remove}
     end)
   end
 
@@ -93,7 +98,7 @@ defmodule TalkHost.Containment do
 
       cases =
         for {name, handler} <- @scripts do
-          {start, observe} = instance.(cap)
+          {start, observe, remove} = instance.(cap)
           session = Faults.fresh_session(start)
 
           {session, outcomes} =
@@ -106,6 +111,7 @@ defmodule TalkHost.Containment do
           observed = observe.(session.transport)
           {health, session} = if outcomes["lost"], do: {:lost, session}, else: Faults.health_check(session)
           Transport.stop(session.transport)
+          remove.()
 
           %{
             "case" => name,
