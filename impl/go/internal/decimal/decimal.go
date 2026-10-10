@@ -17,10 +17,14 @@ const Precision = 34
 
 // Number is immutable. The zero value is the number 0; coefficients are
 // signed decimal digits, stored as text so copies cannot alias a mutable Int.
+// Coefficients that fit int64 are also cached; the zero value's cache is valid.
 type Number struct {
 	coefficient        string
 	exponent           int
 	comparisonExponent string
+	// Zero also marks an uncached coefficient outside int64; canonical zero
+	// text (including the Number zero value's empty text) distinguishes it.
+	smallCoefficient int64
 }
 type Error struct{ Code, Operator string }
 
@@ -122,7 +126,17 @@ func checked(c *big.Int, exponent int) (Number, error) {
 	if exponent < MinExponent || exponent > 0 || len(new(big.Int).Abs(c).String()) > Precision {
 		return Number{}, invalid
 	}
-	return Number{coefficient: c.String(), exponent: exponent}, nil
+	return fromCoefficient(c, exponent), nil
+}
+func fromCoefficient(c *big.Int, exponent int) Number {
+	n := Number{coefficient: c.String(), exponent: exponent}
+	if c.IsInt64() {
+		n.smallCoefficient = c.Int64()
+	}
+	return n
+}
+func fromSmallCoefficient(c int64, exponent int) Number {
+	return Number{coefficient: strconv.FormatInt(c, 10), exponent: exponent, smallCoefficient: c}
 }
 func FromFloat(f float64) (Number, error) {
 	if math.IsNaN(f) || math.IsInf(f, 0) || math.Abs(f) >= 1e34 {
@@ -130,11 +144,19 @@ func FromFloat(f float64) (Number, error) {
 	}
 	return ParseJSON(strconv.FormatFloat(f, 'g', -1, 64))
 }
-func FromInt(i int64) Number   { return Number{coefficient: strconv.FormatInt(i, 10), exponent: 0} }
-func FromUint(i uint64) Number { return Number{coefficient: strconv.FormatUint(i, 10), exponent: 0} }
+func FromInt(i int64) Number { return fromSmallCoefficient(i, 0) }
+func FromUint(i uint64) Number {
+	if i <= math.MaxInt64 {
+		return FromInt(int64(i))
+	}
+	return Number{coefficient: strconv.FormatUint(i, 10)}
+}
+func (n Number) hasSmallCoefficient() bool {
+	return n.smallCoefficient != 0 || n.coefficient == "0" || n.coefficient == ""
+}
 func (n Number) coefficientInt() *big.Int {
-	if n.coefficient == "" {
-		return new(big.Int)
+	if n.hasSmallCoefficient() {
+		return big.NewInt(n.smallCoefficient)
 	}
 	c, _ := new(big.Int).SetString(n.coefficient, 10)
 	return c
@@ -142,7 +164,15 @@ func (n Number) coefficientInt() *big.Int {
 func (n Number) Exponent() int { return n.exponent }
 func (n Number) Sign() int     { return n.coefficientInt().Sign() }
 func (n Number) Negate() Number {
-	n.coefficient = n.coefficientInt().Neg(n.coefficientInt()).String()
+	var negated Number
+	if n.hasSmallCoefficient() && n.smallCoefficient != math.MinInt64 {
+		negated = fromSmallCoefficient(-n.smallCoefficient, n.exponent)
+	} else {
+		c := n.coefficientInt()
+		negated = fromCoefficient(c.Neg(c), n.exponent)
+	}
+	n.coefficient = negated.coefficient
+	n.smallCoefficient = negated.smallCoefficient
 	return n
 }
 func (n Number) String() string {
@@ -166,9 +196,8 @@ func pow10(n int) *big.Int     { return new(big.Int).Exp(big.NewInt(10), big.New
 func (n Number) Rat() *big.Rat { return new(big.Rat).SetFrac(n.coefficientInt(), pow10(-n.exponent)) }
 func (n Number) Compare(m Number) int {
 	if n.comparisonExponent == "" && m.comparisonExponent == "" && n.exponent == m.exponent {
-		a, ae := strconv.ParseInt(n.coefficientOrZero(), 10, 64)
-		b, be := strconv.ParseInt(m.coefficientOrZero(), 10, 64)
-		if ae == nil && be == nil {
+		if n.hasSmallCoefficient() && m.hasSmallCoefficient() {
+			a, b := n.smallCoefficient, m.smallCoefficient
 			if a < b {
 				return -1
 			}
@@ -259,7 +288,7 @@ func ComparisonStep(op string, a, b Number) Number {
 		return n
 	}
 	if shift.Sign() < 0 {
-		return Number{coefficient: "0", exponent: MinExponent}
+		return fromSmallCoefficient(0, MinExponent)
 	}
 	// At a very large positive scale the subnormal bound cannot participate.
 	// Round only the coefficient ratio, then restore the arbitrary-size scale.
@@ -317,7 +346,7 @@ func roundScaled(r *big.Rat, shift, ideal int, op string, bounded bool) (Number,
 	}
 	ideal = max(MinExponent, ideal)
 	if r.Sign() == 0 {
-		return Number{coefficient: "0", exponent: ideal}, nil
+		return fromSmallCoefficient(0, ideal), nil
 	}
 	negative := r.Sign() < 0
 	numerator := new(big.Int).Abs(r.Num())
@@ -333,7 +362,7 @@ func roundScaled(r *big.Rat, shift, ideal int, op string, bounded bool) (Number,
 			adjusted--
 		}
 		if adjusted+shift < MinExponent-1 {
-			return Number{coefficient: "0", exponent: ideal}, nil
+			return fromSmallCoefficient(0, ideal), nil
 		}
 		if bounded && adjusted+shift >= Precision {
 			return Number{}, &Error{"overflow", op}
@@ -360,7 +389,7 @@ func roundScaled(r *big.Rat, shift, ideal int, op string, bounded bool) (Number,
 		return Number{}, &Error{"overflow", op}
 	}
 	if c.Sign() == 0 {
-		return Number{coefficient: "0", exponent: ideal}, nil
+		return fromSmallCoefficient(0, ideal), nil
 	}
 	// Remove only exact zeros on the path toward the ideal exponent.
 	for exponent < ideal {
@@ -379,7 +408,7 @@ func roundScaled(r *big.Rat, shift, ideal int, op string, bounded bool) (Number,
 	if negative {
 		c.Neg(c)
 	}
-	return Number{coefficient: c.String(), exponent: exponent}, nil
+	return fromCoefficient(c, exponent), nil
 }
 func Calculate(op string, a, b Number) (Number, *Error) {
 	if n, ok := calculateSmall(op, a, b); ok {

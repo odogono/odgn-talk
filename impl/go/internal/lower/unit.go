@@ -30,6 +30,8 @@ type Instruction struct {
 	args     []operand
 	operands []Operand
 	Cost     string
+	// Rate is Cost's index in generated.CostRates, or -1 if it has none.
+	Rate     int
 	Suspends bool
 }
 type unwind struct {

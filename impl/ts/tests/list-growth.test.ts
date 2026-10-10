@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { compileSource } from '../src/lowering';
 import { deliver, loadScript } from '../src/machine';
 import { appendTo } from '../src/operations';
-import { charge, sizeOf } from '../src/costs';
+import { charge, rateOf, sizeOf } from '../src/costs';
 import { list, nothing, num, text } from '../src/values';
 import { newGroup, restore } from '../src/index';
 
@@ -100,5 +100,7 @@ test('List growth accounts for nested contents without changing retained values'
   expect(current.index(1).equals(nested)).toBe(true);
   expect(current.index(2001).equals(nested)).toBe(true);
   expect(current.index(2002)).toBe(nothing);
-  expect(charge('list', { result: current }).alloc).toBe(sizeOf(current));
+  expect(charge(rateOf('list'), { result: current }).alloc).toBe(
+    sizeOf(current),
+  );
 });

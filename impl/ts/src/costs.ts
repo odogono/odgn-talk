@@ -1,10 +1,10 @@
 // Cost Model 0 (chapter 8, The Cost Model): each rate's Fuel and allocation
 // formulas, the logical sizes of values, and the measures they're taken over.
-import { costModel } from './generated/machine';
+import { costMeasure, costModel, costSubject } from './generated/machine';
 import { characters } from './text';
 import { scalarCount } from './unicode';
-import { integerOf, isInteger, parseDec } from './decimal';
-import type { Value } from './values';
+import { digitsOf, integerOf, isInteger } from './decimal';
+import { decimalParts, type Value } from './values';
 
 /** What one charge measures: its subjects and the instruction's own counts. */
 export type Measured = {
@@ -22,80 +22,66 @@ export type Measured = {
   /** A Built-in's arguments, x1, x2, …, defaults included. */
   x?: readonly Value[];
 };
-type Term = {
-  divide: number;
-  measure: string | null;
-  subject: string | null;
-  times: number;
-};
-type Formula = readonly Term[];
+/** A compiled term: `[measure, subject, factor, divisor]`, by code. */
+type Formula = readonly (readonly number[])[];
 
-/** A formula: whole numbers and measures, each optionally `n *` and `/ d`. */
-const parse = (formula: string): Formula =>
-  formula.split('+').map(raw => {
-    const text = raw.trim();
-    if (/^\d+$/.test(text)) {
-      return { times: Number(text), measure: null, subject: null, divide: 1 };
-    }
-    const m =
-      /^(?:(\d+) \* )?([a-z][\da-z]*)(?:\(([\da-z]+)\))?(?: \/ (\d+))?$/.exec(
-        text,
-      );
-    if (!m) {
-      throw new Error(`Unreadable Cost Model term: ${text}`);
-    }
-    return {
-      times: m[1] ? Number(m[1]) : 1,
-      measure: m[2]!,
-      subject: m[3] ?? null,
-      divide: m[4] ? Number(m[4]) : 1,
-    };
-  });
-
-const rates = new Map(
-  Object.entries(costModel.rates).map(([key, { fuel, alloc }]) => [
-    key,
-    { fuel: parse(fuel), alloc: parse(alloc) },
-  ]),
-);
-const sizes = new Map(
-  Object.entries(costModel.sizes).map(([of, size]) => [of, parse(size)]),
-);
+const rates: readonly { alloc: Formula; fuel: Formula; key: string }[] =
+  costModel.rates;
+const rateIndex = new Map(rates.map(({ key }, i) => [key, i]));
+const sizes = new Map<string, Formula>(Object.entries(costModel.sizes));
+const {
+  constant: CONSTANT,
+  size: SIZE,
+  contents: CONTENTS,
+  characters: CHARACTERS,
+  scalars: SCALARS,
+  utf8: UTF8,
+  bytes: BYTES,
+  items: ITEMS,
+  entries: ENTRIES,
+  digits: DIGITS,
+  scanned: SCANNED,
+  steps: STEPS,
+  program: PROGRAM,
+  frames: FRAMES,
+  count: COUNT,
+  declared: DECLARED,
+} = costMeasure;
+const { none: NONE, input: INPUT, result: RESULT, v: V, x1: X1 } = costSubject;
+const noCounts: Measured = {};
 
 const encoder = new TextEncoder();
 const known = new WeakMap<Value, number>();
 const knownContents = new WeakMap<Value, number>();
 
 /** The measures of one value that aren't sizes. */
-const measureOf = (measure: string, v: Value | undefined): number => {
+const measureOf = (measure: number, v: Value | undefined): number => {
   if (!v) {
     return 0;
   }
   switch (measure) {
-    case 'size':
+    case SIZE:
       return sizeOf(v);
-    case 'contents':
+    case CONTENTS:
       return contentsOf(v);
-    case 'characters':
+    case CHARACTERS:
       return v.kind === 'text' ? characters(v.asText()!).length : 0;
-    case 'scalars':
+    case SCALARS:
       return v.kind === 'text' ? scalarCount(v.asText()!) : 0;
-    case 'utf8':
+    case UTF8:
       return v.kind === 'text' ? encoder.encode(v.asText()!).length : 0;
-    case 'items':
+    case ITEMS:
       return itemsOf(v);
-    case 'entries':
+    case ENTRIES:
       return v.kind === 'map' ? v.mapSize : 0;
-    case 'digits': {
+    case DIGITS: {
       // A number's, or a Quantity's number's.
       const n = v.asDecimal() ?? v.asQuantityRef()?.number;
-      return n
-        ? Math.max(1, parseDec(n.toString()).coefficient.toString().length)
-        : 0;
+      return n ? digitsOf(decimalParts(n)) : 0;
     }
-    case 'program':
+    case PROGRAM:
       return v.kind === 'pattern' ? v.asPattern()!.program : 0;
-    case 'bytes':
+    case BYTES:
       return v.bytesView()?.length ?? 0;
   }
   throw new Error(`Unknown measure ${measure}`);
@@ -111,8 +97,8 @@ export const itemsOf = (v: Value): number => {
     if (from.kind !== 'number') {
       return 0;
     }
-    const a = parseDec(from.asDecimal()!.toString());
-    const b = parseDec(to.asDecimal()!.toString());
+    const a = decimalParts(from.asDecimal()!);
+    const b = decimalParts(to.asDecimal()!);
     if (!isInteger(a) || !isInteger(b)) {
       return 0;
     }
@@ -124,32 +110,62 @@ export const itemsOf = (v: Value): number => {
 
 const evaluate = (
   formula: Formula,
-  subject: (name: string) => Value | undefined,
   counts: Measured,
+  v: Value | undefined,
 ): number => {
   let total = 0;
   for (const term of formula) {
+    const measure = term[0]!;
+    const subject = term[1]!;
     let m = 1;
-    if (
-      term.measure === 'size' &&
-      term.subject === 'result' &&
+    if (measure === CONSTANT) {
+      // A whole number's term is its factor.
+    } else if (subject === NONE) {
+      m = countOf(measure, counts);
+    } else if (
+      measure === SIZE &&
+      subject === RESULT &&
       counts.resultSize !== undefined
     ) {
       m = counts.resultSize;
     } else if (
-      term.measure === 'size' &&
-      term.subject === 'input' &&
+      measure === SIZE &&
+      subject === INPUT &&
       counts.inputSize !== undefined
     ) {
       m = counts.inputSize;
-    } else if (term.measure) {
-      m = term.subject
-        ? measureOf(term.measure, subject(term.subject))
-        : ((counts as Record<string, number | undefined>)[term.measure] ?? 0);
+    } else {
+      m = measureOf(
+        measure,
+        subject === INPUT
+          ? counts.input
+          : subject === RESULT
+            ? counts.result
+            : subject === V
+              ? v
+              : counts.x?.[subject - X1],
+      );
     }
-    total += Math.ceil((term.times * m) / term.divide);
+    total += Math.ceil((term[2]! * m) / term[3]!);
   }
   return total;
+};
+
+/** A count the instruction measured itself, rather than a value's measure. */
+const countOf = (measure: number, counts: Measured): number => {
+  switch (measure) {
+    case SCANNED:
+      return counts.scanned ?? 0;
+    case STEPS:
+      return counts.steps ?? 0;
+    case FRAMES:
+      return counts.frames ?? 0;
+    case COUNT:
+      return counts.count ?? 0;
+    case DECLARED:
+      return counts.declared ?? 0;
+  }
+  return 0;
 };
 
 /** The sum of the logical sizes of the values a value holds. */
@@ -264,10 +280,7 @@ export const sizeOf = (v: Value): number => {
   for (let i = order.length - 1; i >= 0; i--) {
     const value = order[i]!;
     const formula = sizes.get(value.kind)!;
-    known.set(
-      value,
-      evaluate(formula, name => (name === 'v' ? value : undefined), {}),
-    );
+    known.set(value, evaluate(formula, noCounts, value));
   }
   return known.get(v)!;
 };
@@ -300,34 +313,29 @@ export const partSize = (
   let total = 0;
   for (const term of formula) {
     const m =
-      term.measure === null
+      term[0] === CONSTANT
         ? 1
-        : term.measure === 'items' || term.measure === 'entries'
+        : term[0] === ITEMS || term[0] === ENTRIES
           ? items
           : contents;
-    total += Math.ceil((term.times * m) / term.divide);
+    total += Math.ceil((term[2]! * m) / term[3]!);
   }
   return total;
 };
 
 export type Charge = { alloc: number; fuel: number };
+
+/** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */
+export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;
+
 /** A rate's Fuel and allocation, over what the instruction worked on. */
-export const charge = (key: string, measured: Measured = {}): Charge => {
-  const rate = rates.get(key);
-  if (!rate) {
-    throw new Error(`No Cost Model rate ${key}`);
+export const charge = (rate: number, measured: Measured = noCounts): Charge => {
+  const formulas = rates[rate];
+  if (!formulas) {
+    throw new Error(`No Cost Model rate ${rate}`);
   }
-  const subject = (name: string): Value | undefined =>
-    name === 'input'
-      ? measured.input
-      : name === 'result'
-        ? measured.result
-        : /^x\d+$/.test(name)
-          ? measured.x?.[Number(name.slice(1)) - 1]
-          : undefined;
   return {
-    fuel: evaluate(rate.fuel, subject, measured),
-    alloc: evaluate(rate.alloc, subject, measured),
+    fuel: evaluate(formulas.fuel, measured, undefined),
+    alloc: evaluate(formulas.alloc, measured, undefined),
   };
 };
-export const hasRate = (key: string) => rates.has(key);

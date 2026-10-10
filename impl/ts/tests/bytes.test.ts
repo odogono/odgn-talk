@@ -9,7 +9,7 @@ import {
   readDisplay,
   text,
 } from '../src/index';
-import { charge } from '../src/costs';
+import { charge, rateOf } from '../src/costs';
 import { search } from '../src/operations';
 import { fromBase64, toBase64 } from '../src/base64';
 
@@ -328,14 +328,14 @@ describe('Bytes operations', () => {
 
   test('a build field and a read field charge Cost Model 0', () => {
     const b = bytes(Uint8Array.from({ length: 17 }));
-    expect(charge('bytes-field', { input: b, result: b })).toEqual({
+    expect(charge(rateOf('bytes-field'), { input: b, result: b })).toEqual({
       fuel: 6,
       alloc: 33,
     });
-    expect(charge('bin-field', { result: text('abcdefghi') })).toEqual({
+    expect(charge(rateOf('bin-field'), { result: text('abcdefghi') })).toEqual({
       fuel: 4,
       alloc: 25,
     });
-    expect(charge('bin-field', {})).toEqual({ fuel: 2, alloc: 0 });
+    expect(charge(rateOf('bin-field'), {})).toEqual({ fuel: 2, alloc: 0 });
   });
 });

@@ -4,7 +4,11 @@
 // Every step is exact BigInt work, so both Cores agree bit for bit.
 
 /** A number: (-1)^negative × coefficient × 10^exponent, exponent ≤ 0. */
-export type Dec = { coefficient: bigint; exponent: number; negative: boolean };
+export type Dec = {
+  readonly coefficient: bigint;
+  readonly exponent: number;
+  readonly negative: boolean;
+};
 export class ArithmeticError extends Error {
   constructor(readonly code: 'overflow' | 'division by zero') {
     super(code);

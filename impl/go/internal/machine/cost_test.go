@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -22,7 +23,8 @@ func TestCostTermsRoundAndSaturateWithoutOverflow(t *testing.T) {
 				if want.IsInt64() {
 					expected = want.Int64()
 				}
-				if got := formula(expr, Measures{Count: count}, value.Value{}); got != expected {
+				terms := []generated.CostTerm{{Measure: generated.MeasureConstant, Factor: 3, Divisor: 1}, {Measure: generated.MeasureCount, Factor: factor, Divisor: divisor}}
+				if got := evaluate(terms, Measures{Count: count}, value.Value{}); got != expected {
 					t.Fatalf("%s with count=%d: got %d; want %d", expr, count, got, expected)
 				}
 			}

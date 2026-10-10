@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { compileSource } from '../src/lowering';
 import { deliver, loadScript } from '../src/machine';
 import { newGroup, restore } from '../src/index';
-import { charge, sizeOf } from '../src/costs';
+import { charge, rateOf, sizeOf } from '../src/costs';
 import {
   appendTo,
   chunkDelete,
@@ -83,7 +83,9 @@ test('persistent Maps preserve key presence, order, aliases and logical sizes', 
     expect(actual.mapSize).toBe(entries.size);
     expect(actual.entries()).toEqual([...entries]);
     expect(sizeOf(actual)).toBe(sizeOf(map(entries)));
-    expect(charge('map', { result: actual }).alloc).toBe(sizeOf(actual));
+    expect(charge(rateOf('map'), { result: actual }).alloc).toBe(
+      sizeOf(actual),
+    );
     for (const [key, part] of entries) {
       expect(actual.hasKey(key)).toBe(true);
       expect(actual.get(key)).toBe(part);

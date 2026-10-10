@@ -3,7 +3,6 @@ package decimal
 import (
 	"math/big"
 	"math/rand/v2"
-	"strconv"
 	"testing"
 )
 
@@ -20,10 +19,10 @@ func TestSmallArithmeticAgainstRationals(t *testing.T) {
 	} {
 		values = append(values, number(t, s))
 	}
-	values = append(values, Number{coefficient: "1", exponent: MinExponent}, Number{coefficient: "5", exponent: MinExponent})
+	values = append(values, fromSmallCoefficient(1, MinExponent), fromSmallCoefficient(5, MinExponent))
 	rng := rand.New(rand.NewPCG(322, 1))
 	for range 50 {
-		values = append(values, Number{coefficient: strconv.FormatInt(int64(rng.Uint64()), 10), exponent: -rng.IntN(19)})
+		values = append(values, fromSmallCoefficient(int64(rng.Uint64()), -rng.IntN(19)))
 	}
 	for _, a := range values {
 		for _, b := range values {

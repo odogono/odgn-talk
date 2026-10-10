@@ -13,7 +13,6 @@ import {
   mod,
   multiply,
   negate,
-  parseDec,
   powerInteger,
   subtract,
   withinLimits,
@@ -100,6 +99,7 @@ import {
   Value,
   type QuantityRef,
   canonicalNumber,
+  decimalParts,
   mapWithEntry,
 } from './values';
 import {
@@ -150,10 +150,10 @@ const outOfDomain = (fn: string, value: Value) =>
     ['value', value],
   ]);
 
-const decOfValue = (v: Value): Dec => parseDec(v.asDecimal()!.toString());
+const decOfValue = (v: Value): Dec => decimalParts(v.asDecimal()!);
 // Arithmetic results already fit the limits, so they skip `dec`'s re-parse.
 export const numberValue = (d: Dec): Value =>
-  withinLimits(d) ? canonicalNumber(formatDec(d)) : dec(formatDec(d));
+  withinLimits(d) ? canonicalNumber(d) : dec(formatDec(d));
 export const integerValue = (n: bigint): Value => numberValue(decOf(n));
 const textOf = (v: Value) => v.asText()!;
 const utf8 = new TextEncoder();
@@ -443,7 +443,7 @@ const numberOperand = (v: Value): Dec => {
 // Quantities (chapter 3, Quantity arithmetic)
 // ---------------------------------------------------------------------------
 
-const numberOf = (q: QuantityRef): Dec => parseDec(q.number.toString());
+const numberOf = (q: QuantityRef): Dec => decimalParts(q.number);
 const inBase = (q: QuantityRef): Dec => toBase(numberOf(q), q.unit);
 const noUnit: UnitSpec = [];
 // A number takes part in `*` and `/` as a Quantity with no Unit.
@@ -451,9 +451,7 @@ const asQuantityRef = (v: Value): QuantityRef =>
   v.asQuantityRef() ?? { number: v.asDecimal()!, unit: noUnit };
 /** A value in a Unit, or the plain number a Unit with no slots leaves. */
 const inUnit = (d: Dec, unit: UnitSpec): Value =>
-  unit.length
-    ? quantityOf(dec(formatDec(d)).asDecimal()!, unit)
-    : numberValue(d);
+  unit.length ? quantityOf(numberValue(d).asDecimal()!, unit) : numberValue(d);
 // The fields name the two Units' display forms; a plain number's Unit is `1`.
 const incompatible = (left: UnitSpec, right: UnitSpec) =>
   new ScriptError('incompatible units', [

@@ -13,6 +13,15 @@ import version from '../../spec/data/version.toml';
 import { resolve } from 'node:path';
 import { parseSource } from '../../impl/ts/src/parser';
 import { generateGoCatalogues } from '../go/generate';
+import { compileCostModel } from '../costs/compile';
+
+const compiledCosts = compileCostModel(costs);
+const codes = (names: readonly string[]) =>
+  JSON.stringify(
+    Object.fromEntries(names.map((name, i) => [name, i])),
+    null,
+    2,
+  );
 
 // Parse the catalogue's call notation with the Core grammar, including defaults
 // containing nested expressions or commas in text. Constants have no contract.
@@ -208,20 +217,21 @@ const machineContent =
     {
       version: costs.version as number,
       sizes: Object.fromEntries(
-        (costs.size as { of: string; size: string }[]).map(({ of, size }) => [
-          of,
-          size,
-        ]),
+        compiledCosts.sizes.map(({ of, terms }) => [of, terms]),
       ),
-      rates: Object.fromEntries(
-        (costs.rate as { alloc?: string; fuel: string; key: string }[]).map(
-          ({ key, fuel, alloc }) => [key, { fuel, alloc: alloc ?? '0' }],
-        ),
-      ),
+      rates: compiledCosts.rates,
     },
     null,
     2,
-  )};\n`;
+  ).replaceAll(
+    // One line per term.
+    /\[\s+(\d+),\s+(\d+),\s+(\d+),\s+(\d+)\s+]/g,
+    '[$1, $2, $3, $4]',
+  )};\n` +
+  `/** Cost Model measure codes, as each compiled term's first element. */\n` +
+  `export const costMeasure = ${codes(compiledCosts.measures)} as const;\n` +
+  `/** Subject codes, the second; \`x1 + n - 1\` is a Built-in's nth argument. */\n` +
+  `export const costSubject = ${codes(compiledCosts.subjects)} as const;\n`;
 // The stdlib Libraries' normative source (chapter 7), so a Core carries it.
 const stdlibNames = [
   ...new Set(
