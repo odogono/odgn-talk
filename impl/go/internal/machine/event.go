@@ -134,7 +134,7 @@ func (r *Run) Observe(name string, args []value.Value, target value.Value, sende
 			if test.Status != Completed {
 				continue
 			}
-			bindings = test.Result.Items
+			bindings = test.Result.Items()
 		}
 		message, _ := value.NewMap([]value.Pair{{Key: "name", Val: text(name)}, {Key: "args", Val: value.NewList(args)}})
 		r.EventResume = &EventResume{Kind: w.Kind, Message: message, Bindings: bindings, Slots: b.Binds, Branch: j + 1}

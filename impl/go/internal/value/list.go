@@ -29,14 +29,14 @@ func NewList(vs []Value) Value {
 }
 
 func listWindow(buffer *listBuffer, start, end int) Value {
-	return Value{Kind: List, Items: buffer.items[start:end:end], list: &listView{buffer: buffer, start: start, end: end}}
+	return Fields{Kind: List, Items: buffer.items[start:end:end], list: &listView{buffer: buffer, start: start, end: end}}.Value()
 }
 
 // Internal transformations sometimes replace Items on a copied Value. Such a
 // detached slice cannot use the old window's storage or accounting cache.
 func (v Value) listWindowValid() bool {
-	return v.Kind == List && v.list != nil && len(v.Items) == v.list.end-v.list.start &&
-		(len(v.Items) == 0 || &v.Items[0] == &v.list.buffer.items[v.list.start])
+	return v.Kind == List && v.list != nil && len(v.Items()) == v.list.end-v.list.start &&
+		(len(v.Items()) == 0 || &v.Items()[0] == &v.list.buffer.items[v.list.start])
 }
 
 // ExtendList retains every existing item, including those visible through
@@ -65,15 +65,15 @@ func (v Value) ExtendList(vs []Value, prepend bool) Value {
 		}
 		buffer.mu.Unlock()
 	}
-	count := len(v.Items) + len(vs)
+	count := len(v.Items()) + len(vs)
 	items := make([]Value, max(8, 2*count))
 	start := (len(items) - count) / 2
 	if prepend {
 		copy(items[start:], vs)
-		copy(items[start+len(vs):], v.Items)
+		copy(items[start+len(vs):], v.Items())
 	} else {
-		copy(items[start:], v.Items)
-		copy(items[start+len(v.Items):], vs)
+		copy(items[start:], v.Items())
+		copy(items[start+len(v.Items()):], vs)
 	}
 	buffer := &listBuffer{items: items, start: start, end: start + count}
 	return listWindow(buffer, start, start+count)
@@ -89,7 +89,7 @@ func (v Value) ListContents(size func(Value) int64) int64 {
 		}
 	}
 	var total int64
-	for _, item := range v.Items {
+	for _, item := range v.Items() {
 		total += size(item)
 	}
 	if valid {

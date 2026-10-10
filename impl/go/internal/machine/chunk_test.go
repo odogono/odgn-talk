@@ -32,7 +32,7 @@ func TestItemsPropertyWrongKind(t *testing.T) {
 	} {
 		t.Run(tc.expr, func(t *testing.T) {
 			r := executeSource(t, "on go\n return the items of "+tc.expr+"\nend go\n")
-			if r.Status != Errored || r.Error.Get("code").Text != "wrong kind" || r.Error.Get("expected").Text != "list" || r.Error.Get("got").Text != tc.kind || r.Error.Get("value").Display() != tc.want {
+			if r.Status != Errored || r.Error.Get("code").Text() != "wrong kind" || r.Error.Get("expected").Text() != "list" || r.Error.Get("got").Text() != tc.kind || r.Error.Get("value").Display() != tc.want {
 				t.Fatalf("status=%v error=%s; want wrong kind, expected list, got %s, value %s", r.Status, r.Error.Display(), tc.kind, tc.want)
 			}
 		})

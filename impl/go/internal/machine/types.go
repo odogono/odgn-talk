@@ -17,10 +17,10 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 	switch target {
 	case "text":
 		if v.Kind == value.Bytes {
-			if !utf8.Valid(v.Bytes) {
+			if !utf8.Valid(v.Bytes()) {
 				return bad()
 			}
-			return text(string(v.Bytes)), nil
+			return text(string(v.Bytes())), nil
 		}
 		return text(textForm(v)), nil
 	case "bytes":
@@ -28,7 +28,7 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 			return v, nil
 		}
 		if v.Kind == value.Text {
-			return value.NewBytes([]byte(v.Text)), nil
+			return value.NewBytes([]byte(v.Text())), nil
 		}
 		return bad()
 	case "number":
@@ -36,9 +36,9 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 			return v, nil
 		}
 		if v.Kind == value.Text {
-			n, e := decimal.Parse(v.Text)
+			n, e := decimal.Parse(v.Text())
 			if e == nil {
-				return value.Value{Kind: value.Number, Number: n}, nil
+				return value.Fields{Kind: value.Number, Number: n}.Value(), nil
 			}
 		}
 		return bad()
@@ -50,9 +50,9 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 			var x value.Value
 			var e error
 			if target == "civil date" {
-				x, e = value.ParseCivil(v.Text)
+				x, e = value.ParseCivil(v.Text())
 			} else {
-				x, e = value.ParseInstant(v.Text)
+				x, e = value.ParseInstant(v.Text())
 			}
 			if e == nil {
 				return x, nil
@@ -69,7 +69,7 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 	}
 	x := v
 	if x.Kind == value.Text {
-		source := decimal.Trim(x.Text)
+		source := decimal.Trim(x.Text())
 		reader := value.Reader{Text: source}
 		x, e = reader.Value()
 		if e != nil || reader.At != len(source) {
@@ -77,16 +77,16 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 		}
 	}
 	if x.Kind == value.Number {
-		q, e := value.NewQuantity(x.Number, unit.String())
+		q, e := value.NewQuantity(x.Number(), unit.String())
 		if e == nil {
 			return q, nil
 		}
 		return bad()
 	}
-	if x.Kind != value.Quantity || !x.Unit.Compatible(unit) {
+	if x.Kind != value.Quantity || !x.Unit().Compatible(unit) {
 		return bad()
 	}
-	base, e := x.Unit.Convert(x.Number, true)
+	base, e := x.Unit().Convert(x.Number(), true)
 	if e != nil {
 		return bad()
 	}
@@ -94,14 +94,14 @@ func convert(v value.Value, target string) (value.Value, *value.Value) {
 	if e != nil {
 		return bad()
 	}
-	return value.Value{Kind: value.Quantity, Number: n, Unit: unit}, nil
+	return value.Fields{Kind: value.Quantity, Number: n, Unit: unit}.Value(), nil
 }
 func kindTest(v value.Value, kind string) bool {
 	if kind == "integer" {
 		if v.Kind != value.Number {
 			return false
 		}
-		_, ok := v.Number.Integer()
+		_, ok := v.Number().Integer()
 		return ok
 	}
 	return value.KindNames[v.Kind] == kind
@@ -109,49 +109,49 @@ func kindTest(v value.Value, kind string) bool {
 func empty(v value.Value) bool {
 	switch v.Kind {
 	case value.Text:
-		return v.Text == ""
+		return v.Text() == ""
 	case value.Bytes:
-		return len(v.Bytes) == 0
+		return len(v.Bytes()) == 0
 	case value.List:
-		return len(v.Items) == 0
+		return len(v.Items()) == 0
 	case value.Map:
-		return len(v.Entries) == 0
+		return len(v.Entries()) == 0
 	}
 	return false
 }
 func membership(a, b value.Value, folded bool) (bool, int64, *value.Value) {
 	switch b.Kind {
 	case value.List:
-		for j, x := range b.Items {
+		for j, x := range b.Items() {
 			if equal(a, x, folded) {
 				return true, int64(j + 1), nil
 			}
 		}
-		return false, int64(len(b.Items)), nil
+		return false, int64(len(b.Items())), nil
 	case value.Map:
 		if a.Kind != value.Text {
 			e := wrong("text", a)
 			return false, 0, &e
 		}
-		for j, p := range b.Entries {
+		for j, p := range b.Entries() {
 			key := p.Key
 			if folded {
-				key = fold(text(key)).Text
+				key = fold(text(key)).Text()
 			}
 			if equal(a, text(key), folded) {
 				return true, int64(j + 1), nil
 			}
 		}
-		return false, int64(len(b.Entries)), nil
+		return false, int64(len(b.Entries())), nil
 	case value.Range:
-		lo, e := a.Compare(b.Items[0])
+		lo, e := a.Compare(b.Items()[0])
 		if e != nil {
-			err := comparisonError(b.Items[0], a)
+			err := comparisonError(b.Items()[0], a)
 			return false, 2, &err
 		}
-		hi, e := a.Compare(b.Items[1])
+		hi, e := a.Compare(b.Items()[1])
 		if e != nil {
-			err := comparisonError(a, b.Items[1])
+			err := comparisonError(a, b.Items()[1])
 			return false, 2, &err
 		}
 		return lo >= 0 && hi <= 0, 2, nil
@@ -161,9 +161,9 @@ func membership(a, b value.Value, folded bool) (bool, int64, *value.Value) {
 }
 func comparisonError(a, b value.Value) value.Value {
 	if a.Kind == value.List && b.Kind == value.List {
-		for j := 0; j < min(len(a.Items), len(b.Items)); j++ {
-			if !a.Items[j].Equal(b.Items[j]) {
-				return comparisonError(a.Items[j], b.Items[j])
+		for j := 0; j < min(len(a.Items()), len(b.Items())); j++ {
+			if !a.Items()[j].Equal(b.Items()[j]) {
+				return comparisonError(a.Items()[j], b.Items()[j])
 			}
 		}
 	}
@@ -174,7 +174,7 @@ func mapWrite(whole value.Value, key string, part value.Value, deleting bool) (v
 		e := wrong("map", whole)
 		return value.Value{}, &e
 	}
-	pairs := slices.Clone(whole.Entries)
+	pairs := slices.Clone(whole.Entries())
 	for j, p := range pairs {
 		if p.Key == key {
 			if deleting {
@@ -198,11 +198,11 @@ func integerRange(v value.Value) bool {
 	if v.Kind != value.Range {
 		return false
 	}
-	for _, x := range v.Items {
+	for _, x := range v.Items() {
 		if x.Kind != value.Number {
 			return false
 		}
-		if _, ok := x.Number.Integer(); !ok {
+		if _, ok := x.Number().Integer(); !ok {
 			return false
 		}
 	}
@@ -220,11 +220,11 @@ func rangeListBig(v value.Value, first, last *big.Int) (value.Value, error) {
 	}
 	count := new(big.Int).Add(new(big.Int).Sub(last, first), big.NewInt(1))
 	items := make([]value.Value, count.Int64())
-	start, _ := v.Items[0].Number.Integer()
+	start, _ := v.Items()[0].Number().Integer()
 	start.Add(start, new(big.Int).Sub(first, big.NewInt(1)))
 	current, _ := decimal.Round(new(big.Rat).SetInt(start), 0, "+")
 	for j := range items {
-		items[j] = value.Value{Kind: value.Number, Number: current}
+		items[j] = value.Fields{Kind: value.Number, Number: current}.Value()
 		if j < len(items)-1 {
 			current, _ = decimal.Calculate("+", current, decimal.FromInt(1))
 		}

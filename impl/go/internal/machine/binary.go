@@ -16,7 +16,7 @@ func binaryInteger(v value.Value, bits int, signed bool, field string) (*big.Int
 		e := wrong("number", v)
 		return nil, &e
 	}
-	n, ok := v.Number.Integer()
+	n, ok := v.Number().Integer()
 	if !ok {
 		e := wrong("integer", v)
 		return nil, &e
@@ -65,9 +65,9 @@ func fieldBytes(v value.Value, field string, size *value.Value) ([]byte, *value.
 		}
 		var bytes []byte
 		if v.Kind == value.Text {
-			bytes = []byte(v.Text)
+			bytes = []byte(v.Text())
 		} else {
-			bytes = v.Bytes
+			bytes = v.Bytes()
 		}
 		n, e := binaryInteger(*size, 112, false, "bytes")
 		if e != nil {
@@ -82,9 +82,9 @@ func fieldBytes(v value.Value, field string, size *value.Value) ([]byte, *value.
 	if field == "" || field == "value" {
 		switch v.Kind {
 		case value.Text:
-			return []byte(v.Text), nil
+			return []byte(v.Text()), nil
 		case value.Bytes:
-			return slices.Clone(v.Bytes), nil
+			return slices.Clone(v.Bytes()), nil
 		case value.Number:
 			field = "byte"
 		default:
@@ -124,11 +124,11 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			vs := slices.Clone(f.Stack[len(f.Stack)-n:])
 			f.Stack = f.Stack[:len(f.Stack)-n]
 			whole = pop()
-			widths := s.Constants[args[0].Index].Items
+			widths := s.Constants[args[0].Index].Items()
 			number := new(big.Int)
 			total := 0
 			for j, v := range vs {
-				width, _ := widths[j].Number.Int64()
+				width, _ := widths[j].Number().Int64()
 				x, e := binaryInteger(v, int(width), false, strconv.FormatInt(width, 10)+" bits")
 				if e != nil {
 					return e
@@ -155,7 +155,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 				return e
 			}
 		}
-		result(value.NewBytes(append(slices.Clone(whole.Bytes), bytes...)))
+		result(value.NewBytes(append(slices.Clone(whole.Bytes()), bytes...)))
 		return nil
 	}
 	if i.Name == "bin-start" {
@@ -163,7 +163,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 		if v.Kind != value.Bytes {
 			jump()
 		} else {
-			push(value.Value{Kind: value.BinaryReader, Reader: &value.ReaderData{Snapshot: v}})
+			push(value.Fields{Kind: value.BinaryReader, Reader: &value.ReaderData{Snapshot: v}}.Value())
 		}
 		return nil
 	}
@@ -172,8 +172,8 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 		size = pop()
 	}
 	v := pop()
-	reader := *v.Reader
-	remaining := reader.Snapshot.Bytes[reader.Position:]
+	reader := *v.Reader()
+	remaining := reader.Snapshot.Bytes()[reader.Position:]
 	take := func(n int) []byte {
 		if n < 0 || n > len(remaining) {
 			return nil
@@ -203,7 +203,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			break
 		}
 		reader.Position += len(expected)
-		push(value.Value{Kind: value.BinaryReader, Reader: &reader})
+		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
 	case "bin-int":
 		bits, signed, little := fieldType(args[0].Text)
 		bytes := take(bits / 8)
@@ -220,16 +220,16 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			number.Sub(number, new(big.Int).Lsh(big.NewInt(1), uint(bits)))
 		}
 		n, _ := decimal.Round(new(big.Rat).SetInt(number), 0, "binary")
-		push(value.Value{Kind: value.BinaryReader, Reader: &reader})
-		result(value.Value{Kind: value.Number, Number: n})
+		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
+		result(value.Fields{Kind: value.Number, Number: n}.Value())
 	case "bin-bits":
-		widths := s.Constants[args[0].Index].Items
+		widths := s.Constants[args[0].Index].Items()
 		bits := new(big.Int)
 		for _, w := range widths {
-			n, _ := w.Number.Integer()
+			n, _ := w.Number().Integer()
 			bits.Add(bits, n)
 		}
-		available := new(big.Int).Mul(big.NewInt(int64(len(reader.Snapshot.Bytes)-reader.Position)), big.NewInt(8))
+		available := new(big.Int).Mul(big.NewInt(int64(len(reader.Snapshot.Bytes())-reader.Position)), big.NewInt(8))
 		if bits.Cmp(available) > 0 {
 			jump()
 			break
@@ -241,16 +241,16 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			break
 		}
 		number := new(big.Int).SetBytes(bytes)
-		push(value.Value{Kind: value.BinaryReader, Reader: &reader})
+		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
 		m.ResultValues = []value.Value{}
 		for _, w := range widths {
-			width, _ := w.Number.Int64()
+			width, _ := w.Number().Int64()
 			total -= int(width)
 			n := new(big.Int).Rsh(new(big.Int).Set(number), uint(total))
 			mask := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), uint(width)), big.NewInt(1))
 			n.And(n, mask)
 			dec, _ := decimal.Round(new(big.Rat).SetInt(n), 0, "binary")
-			x := value.Value{Kind: value.Number, Number: dec}
+			x := value.Fields{Kind: value.Number, Number: dec}.Value()
 			result(x)
 			m.ResultValues = append(m.ResultValues, x)
 		}
@@ -259,7 +259,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			jump()
 			break
 		}
-		n, e := size.Number.Int64()
+		n, e := size.Number().Int64()
 		if e != nil || n < 0 || n > int64(len(remaining)) {
 			jump()
 			break
@@ -270,7 +270,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 			jump()
 			break
 		}
-		push(value.Value{Kind: value.BinaryReader, Reader: &reader})
+		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
 		result(x)
 	case "bin-rest":
 		x, ok := finish(remaining, strings.Contains(args[0].Text, "text"))

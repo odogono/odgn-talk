@@ -85,7 +85,7 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipan
 			slot.grant.disabled = true
 			status := EffectStatus("failed")
 			detail := fmt.Sprint(err)
-			if failure.Get("code").Text == "host error" {
+			if failure.Get("code").Text() == "host error" {
 				status = "unknown"
 				detail = call.failureDetail
 			}

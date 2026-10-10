@@ -43,8 +43,8 @@ func (r *replayValues) construct(v value.Value) (talk.Value, error) {
 				return fn, nil
 			}
 		case value.Object:
-			if v.Object != nil {
-				if object := r.objects[objectRef{v.Object.Kind, v.Object.ID}]; object != nil {
+			if v.Object() != nil {
+				if object := r.objects[objectRef{v.Object().Kind, v.Object().ID}]; object != nil {
 					return object.Value(), nil
 				}
 			}
@@ -58,12 +58,12 @@ func (r *replayValues) hasReceivedFunction(v value.Value) bool {
 		_, received := r.functions[v.Display()]
 		return received
 	}
-	for _, item := range v.Items {
+	for _, item := range v.Items() {
 		if r.hasReceivedFunction(item) {
 			return true
 		}
 	}
-	for _, pair := range v.Entries {
+	for _, pair := range v.Entries() {
 		if r.hasReceivedFunction(pair.Val) {
 			return true
 		}

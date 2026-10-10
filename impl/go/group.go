@@ -404,7 +404,7 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		target = s.owner
 	}
 	if address.function != nil {
-		s = g.script(address.function.Function.Home)
+		s = g.script(address.function.Function().Home)
 		if s != nil {
 			target = s.owner
 		}
@@ -484,21 +484,21 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 }
 func validGroup(v corevalue.Value, g *Group) bool {
 	if v.Kind == corevalue.Function {
-		return v.Function != nil && v.Function.Group == g
+		return v.Function() != nil && v.Function().Group == g
 	}
 	if v.Kind == corevalue.Object {
-		if v.Object == nil {
+		if v.Object() == nil {
 			return false
 		}
-		o, ok := v.Object.Handle.(*Object)
+		o, ok := v.Object().Handle.(*Object)
 		return ok && o != nil && o.group == g
 	}
-	for _, x := range v.Items {
+	for _, x := range v.Items() {
 		if !validGroup(x, g) {
 			return false
 		}
 	}
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		if !validGroup(p.Val, g) {
 			return false
 		}
@@ -626,7 +626,7 @@ func overrideDisplay(o LimitOverride) string {
 		set LimitOverrideFields
 	}{{"fuelPerRun", o.FuelPerRun, OverrideFuelPerRun}, {"allocPerRun", o.AllocPerRun, OverrideAllocPerRun}, {"maxWait", int64(o.MaxWait / time.Millisecond), OverrideMaxWait}, {"maxJoin", int64(o.MaxJoin), OverrideMaxJoin}} {
 		if p.n != 0 || o.Set&p.set != 0 {
-			pairs = append(pairs, corevalue.Pair{Key: p.k, Val: corevalue.Value{Kind: corevalue.Number, Number: decimal.FromInt(p.n)}})
+			pairs = append(pairs, corevalue.Pair{Key: p.k, Val: corevalue.Fields{Kind: corevalue.Number, Number: decimal.FromInt(p.n)}.Value()})
 		}
 	}
 	v, _ := corevalue.NewMap(pairs)

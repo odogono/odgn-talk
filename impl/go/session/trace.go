@@ -80,7 +80,7 @@ func parseTime(s string) time.Time {
 	if v.Kind != value.Instant {
 		panic("Clock reading is not an Instant")
 	}
-	return time.Unix(v.Seconds, int64(v.Nanos)).UTC()
+	return time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
 }
 func formatTime(t time.Time) string { return talk.InstantFromTime(t).String() }
 func (h *Host) pump() []string {
@@ -176,12 +176,12 @@ func (h *Host) pump() []string {
 			case "errored":
 				err := displayField(e.line, "error")
 				kept := []value.Pair{}
-				for _, p := range err.Entries {
+				for _, p := range err.Entries() {
 					if p.Key != "message" && p.Key != "at" {
 						kept = append(kept, p)
 					}
 				}
-				err.Entries = kept
+				err = err.WithEntries(kept)
 				errors[e.run] = err.Display()
 				text = "! error " + err.Display() + " at " + h.location(end)
 			case "limit-fault":

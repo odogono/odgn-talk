@@ -14,7 +14,7 @@ import (
 func blockDeadline(stack []value.Value) *value.DeadlineData {
 	for i := len(stack) - 1; i >= 0; i-- {
 		if stack[i].Kind == value.Deadline {
-			return stack[i].Deadline
+			return stack[i].Deadline()
 		}
 	}
 	return nil

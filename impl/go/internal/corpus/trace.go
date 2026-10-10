@@ -140,7 +140,7 @@ func parseRecord(line string) (Record, error) {
 				// Ordinary Script Text Values still go through NewText below.
 				var source string
 				source, e = r.TextValue()
-				v = value.Value{Kind: value.Text, Text: source}
+				v = value.Fields{Kind: value.Text, Text: source}.Value()
 			} else {
 				v, e = r.Value()
 			}

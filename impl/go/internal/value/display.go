@@ -61,28 +61,28 @@ func (v Value) Display() string {
 	case Boolean:
 		return strconv.FormatBool(v.Bool)
 	case Number:
-		return v.Number.String()
+		return v.Number().String()
 	case Quantity:
-		return v.Number.String() + " " + v.Unit.Display(v.Number)
+		return v.Number().String() + " " + v.Unit().Display(v.Number())
 	case Text:
-		return DisplayText(v.Text)
+		return DisplayText(v.Text())
 	case Bytes:
-		pieces := make([]string, len(v.Bytes))
-		for i, b := range v.Bytes {
+		pieces := make([]string, len(v.Bytes()))
+		for i, b := range v.Bytes() {
 			pieces[i] = fmt.Sprintf("0x%02X", b)
 		}
 		return "<<" + strings.Join(pieces, ", ") + ">>"
 	case List:
-		pieces := make([]string, len(v.Items))
-		for i, item := range v.Items {
+		pieces := make([]string, len(v.Items()))
+		for i, item := range v.Items() {
 			pieces[i] = item.Display()
 		}
 		return "[" + strings.Join(pieces, ", ") + "]"
 	case Range:
-		return v.Items[0].Display() + ".." + v.Items[1].Display()
+		return v.Items()[0].Display() + ".." + v.Items()[1].Display()
 	case Map:
-		pieces := make([]string, len(v.Entries))
-		for i, p := range v.Entries {
+		pieces := make([]string, len(v.Entries()))
+		for i, p := range v.Entries() {
 			key := p.Key
 			// A Word key is bare, except offer, which source reserves as a key (chapter 2).
 			if !Word(key) || key == "offer" {
@@ -95,28 +95,28 @@ func (v Value) Display() string {
 		}
 		return "{" + strings.Join(pieces, ", ") + "}"
 	case CivilDate:
-		return civilText(v.Date)
+		return civilText(v.Date())
 	case Instant:
-		return time.Unix(v.Seconds, int64(v.Nanos)).UTC().Format(time.RFC3339Nano)
+		return time.Unix(v.Seconds(), int64(v.Nanos())).UTC().Format(time.RFC3339Nano)
 	case Pattern:
-		return v.Text
+		return v.Text()
 	case Object:
-		return "<object " + v.Object.Kind + " " + DisplayText(v.Object.ID) + ">"
+		return "<object " + v.Object().Kind + " " + DisplayText(v.Object().ID) + ">"
 	case Function:
-		place := v.Function.Home + ":" + v.Function.Code
+		place := v.Function().Home + ":" + v.Function().Code
 		// Named functions retain extension code identity internally, while
 		// their display names the Home Script and declaration.
-		if v.Function.Name != "" && strings.HasPrefix(v.Function.Code, v.Function.Home+"+") {
-			place = v.Function.Home + ":" + v.Function.Name
+		if v.Function().Name != "" && strings.HasPrefix(v.Function().Code, v.Function().Home+"+") {
+			place = v.Function().Home + ":" + v.Function().Name
 		}
 		// An extension Lambda's Code is unit:line:column. Keep the unit in
 		// its identity, but display it without repeating the Home Script.
-		if strings.HasPrefix(v.Function.Code, v.Function.Home+"+") && strings.Count(v.Function.Code, ":") == 2 {
-			place = v.Function.Code
+		if strings.HasPrefix(v.Function().Code, v.Function().Home+"+") && strings.Count(v.Function().Code, ":") == 2 {
+			place = v.Function().Code
 		}
 		s := "<function " + place
-		if len(v.Function.Captures) > 0 {
-			s += " " + (Value{Kind: Map, Entries: v.Function.Captures}).Display()
+		if len(v.Function().Captures) > 0 {
+			s += " " + (Fields{Kind: Map, Entries: v.Function().Captures}.Value()).Display()
 		}
 		return s + ">"
 	}

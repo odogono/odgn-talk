@@ -32,7 +32,7 @@ func spliceTemplate(source string, values []value.Value) (string, error) {
 			if v.Kind == value.Text {
 				out.WriteString("(" + v.Display() + ")")
 			} else {
-				out.WriteString(v.Text)
+				out.WriteString(v.Text())
 			}
 			at = last
 			return nil

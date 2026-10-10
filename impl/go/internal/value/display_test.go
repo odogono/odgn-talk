@@ -44,7 +44,7 @@ func TestFunctionDisplayPlaces(t *testing.T) {
 		{"weather", "weather+12:4:7", "<function weather+12:4:7>"},
 	} {
 		t.Run(tt.want, func(t *testing.T) {
-			v := Value{Kind: Function, Function: &FunctionData{Home: tt.home, Code: tt.code}}
+			v := Fields{Kind: Function, Function: &FunctionData{Home: tt.home, Code: tt.code}}.Value()
 			if got := v.Display(); got != tt.want {
 				t.Fatalf("display = %s, want %s", got, tt.want)
 			}
@@ -197,11 +197,11 @@ func TestDisplayRejectsMalformedCanonicalNumbersDatesAndFunctions(t *testing.T) 
 
 func TestNamedExtensionFunctionDisplayRetainsCodeIdentity(t *testing.T) {
 	fn := &FunctionData{Home: "session", Code: "session+3:plus", Name: "plus"}
-	v := Value{Kind: Function, Function: fn}
+	v := Fields{Kind: Function, Function: fn}.Value()
 	if v.Display() != `<function session:plus>` || fn.Code != "session+3:plus" {
 		t.Fatal(v.Display(), fn.Code)
 	}
-	other := Value{Kind: Function, Function: &FunctionData{Home: "session", Code: "session+4:plus", Name: "plus"}}
+	other := Fields{Kind: Function, Function: &FunctionData{Home: "session", Code: "session+4:plus", Name: "plus"}}.Value()
 	if v.Equal(other) {
 		t.Fatal("display name collapsed defining code identity")
 	}

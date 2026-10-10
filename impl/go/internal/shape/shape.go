@@ -63,12 +63,12 @@ func DeepFunction(v value.Value, path []value.Value) *Mismatch {
 	if v.Kind == value.Function {
 		return &Mismatch{Expected: "any", Got: "function", Value: v, Path: path, Unencodable: true}
 	}
-	for i, x := range v.Items {
-		if m := DeepFunction(x, child(path, value.Value{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))})); m != nil {
+	for i, x := range v.Items() {
+		if m := DeepFunction(x, child(path, value.Fields{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))}.Value())); m != nil {
 			return m
 		}
 	}
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		if m := DeepFunction(p.Val, child(path, pathKey(p.Key))); m != nil {
 			return m
 		}
@@ -78,7 +78,7 @@ func DeepFunction(v value.Value, path []value.Value) *Mismatch {
 func Check(v value.Value, s Shape, path []value.Value) *Mismatch {
 	got := value.KindNames[v.Kind]
 	if (s.Kind == "quantity" || s.Kind == "unitKind") && v.Kind == value.Quantity {
-		got = v.Unit.String()
+		got = v.Unit().String()
 	}
 	wrong := func() *Mismatch { return &Mismatch{Expected: s.Expected(), Got: got, Value: v, Path: path} }
 	switch s.Kind {
@@ -93,16 +93,16 @@ func Check(v value.Value, s Shape, path []value.Value) *Mismatch {
 			return nil
 		}
 	case "object":
-		if v.Kind == value.Object && v.Object.Kind == s.Name {
+		if v.Kind == value.Object && v.Object().Kind == s.Name {
 			return nil
 		}
 	case "quantity":
-		if v.Kind == value.Quantity && v.Unit.String() == s.Name {
+		if v.Kind == value.Quantity && v.Unit().String() == s.Name {
 			return nil
 		}
 	case "unitKind":
-		if v.Kind == value.Quantity && len(v.Unit.Slots) == 1 && v.Unit.Slots[0].Power.String() == "1" {
-			if generated.Units.Unit[v.Unit.Slots[0].Unit].Kind == s.Name {
+		if v.Kind == value.Quantity && len(v.Unit().Slots) == 1 && v.Unit().Slots[0].Power.String() == "1" {
+			if generated.Units.Unit[v.Unit().Slots[0].Unit].Kind == s.Name {
 				return nil
 			}
 		}
@@ -125,8 +125,8 @@ func Check(v value.Value, s Shape, path []value.Value) *Mismatch {
 		if v.Kind != value.List {
 			return wrong()
 		}
-		for i, x := range v.Items {
-			if m := Check(x, s.Of[0], child(path, value.Value{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))})); m != nil {
+		for i, x := range v.Items() {
+			if m := Check(x, s.Of[0], child(path, value.Fields{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))}.Value())); m != nil {
 				return m
 			}
 		}
@@ -139,7 +139,7 @@ func Check(v value.Value, s Shape, path []value.Value) *Mismatch {
 		for _, f := range s.Fields {
 			declared[f.Key] = true
 			found := false
-			for _, p := range v.Entries {
+			for _, p := range v.Entries() {
 				if p.Key == f.Key {
 					found = true
 					if m := Check(p.Val, f.Shape, child(path, pathKey(f.Key))); m != nil {
@@ -152,7 +152,7 @@ func Check(v value.Value, s Shape, path []value.Value) *Mismatch {
 				return &Mismatch{Expected: f.Shape.Expected(), Got: "nothing", Path: child(path, pathKey(f.Key))}
 			}
 		}
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if declared[p.Key] {
 				continue
 			}

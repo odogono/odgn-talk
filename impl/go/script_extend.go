@@ -145,8 +145,8 @@ func (s *Script) prepareExtension(source string) (*machine.State, error) {
 }
 
 func extensionHome(v corevalue.Value, from, to *machine.State) corevalue.Value {
-	if v.Function != nil {
-		fn := *v.Function
+	if v.Function() != nil {
+		fn := *v.Function()
 		if fn.Owner == from {
 			fn.Owner = to
 		}
@@ -157,15 +157,15 @@ func extensionHome(v corevalue.Value, from, to *machine.State) corevalue.Value {
 		for i := range fn.Captures {
 			fn.Captures[i].Val = extensionHome(fn.Captures[i].Val, from, to)
 		}
-		v.Function = &fn
+		v = v.WithFunction(&fn)
 	}
-	v.Items = slices.Clone(v.Items)
-	for i := range v.Items {
-		v.Items[i] = extensionHome(v.Items[i], from, to)
+	v = v.WithItems(slices.Clone(v.Items()))
+	for i := range v.Items() {
+		v.Items()[i] = extensionHome(v.Items()[i], from, to)
 	}
-	v.Entries = slices.Clone(v.Entries)
-	for i := range v.Entries {
-		v.Entries[i].Val = extensionHome(v.Entries[i].Val, from, to)
+	v = v.WithEntries(slices.Clone(v.Entries()))
+	for i := range v.Entries() {
+		v.Entries()[i].Val = extensionHome(v.Entries()[i].Val, from, to)
 	}
 	return v
 }

@@ -71,7 +71,7 @@ func TestFencedTextRuntimeValues(t *testing.T) {
 			}
 			run := machine.Start(state, 1, nil, machine.Limits{Fuel: 10000, Alloc: 10000, Depth: 200})
 			run.Execute(0)
-			if run.Status != machine.Completed || run.Result.Kind != value.Text || run.Result.Text != tc.want {
+			if run.Status != machine.Completed || run.Result.Kind != value.Text || run.Result.Text() != tc.want {
 				t.Fatalf("status=%v result=%s error=%s; want %q", run.Status, run.Result.Display(), run.Error.Display(), tc.want)
 			}
 		})
@@ -87,7 +87,7 @@ func TestFencedInterpolationHasConcatenationCosts(t *testing.T) {
 		}
 		run := machine.Start(state, 1, nil, machine.Limits{Fuel: 10000, Alloc: 10000, Depth: 200})
 		run.Execute(0)
-		if run.Status != machine.Completed || run.Result.Text != "12x" {
+		if run.Status != machine.Completed || run.Result.Text() != "12x" {
 			t.Fatalf("unexpected execution: %+v", run)
 		}
 		runs = append(runs, run)

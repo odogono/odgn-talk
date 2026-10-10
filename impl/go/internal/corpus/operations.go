@@ -409,11 +409,11 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 	if failed, ok := stub["error"]; ok {
 		v := failed.Value
 		code := v.Get("code")
-		if code.Text == "" {
+		if code.Text() == "" {
 			return talk.Nothing, fmt.Errorf("Stub is not a ScriptError")
 		}
 		var entries []talk.Pair
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if p.Key != "code" && p.Key != "message" {
 				x, e := o.values.construct(p.Val)
 				if e != nil {
@@ -423,7 +423,7 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 			}
 		}
 		data, _ := talk.Map(entries...)
-		return talk.Nothing, &talk.ScriptError{Code: code.Text, Message: v.Get("message").Text, Data: data}
+		return talk.Nothing, &talk.ScriptError{Code: code.Text(), Message: v.Get("message").Text(), Data: data}
 	}
 	if value, ok := stub["value"]; ok {
 		return o.values.construct(value.Value)

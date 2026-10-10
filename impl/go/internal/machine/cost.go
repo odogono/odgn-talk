@@ -28,22 +28,22 @@ func contents(v value.Value) int64 {
 	}
 	var n int64
 	if v.Kind == value.Replacement {
-		n = Size(v.Replacement.Subject)
-		for _, x := range v.Replacement.Matches {
+		n = Size(v.Replacement().Subject)
+		for _, x := range v.Replacement().Matches {
 			n += Size(x)
 		}
-		for _, s := range v.Replacement.Parts {
+		for _, s := range v.Replacement().Parts {
 			n += Size(text(s))
 		}
 	}
-	for _, x := range v.Items {
+	for _, x := range v.Items() {
 		n += Size(x)
 	}
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		n += int64(16+len(p.Key)) + Size(p.Val)
 	}
-	if v.Function != nil {
-		for _, p := range v.Function.Captures {
+	if v.Function() != nil {
+		for _, p := range v.Function().Captures {
 			n += Size(p.Val)
 		}
 	}
@@ -53,38 +53,38 @@ func measure(name string, v value.Value) int64 {
 	switch name {
 	case "size":
 		if v.Kind == value.Iterator {
-			return Size(v.Iterator.Snapshot)
+			return Size(v.Iterator().Snapshot)
 		}
 		if v.Kind == value.BinaryReader {
-			return Size(v.Reader.Snapshot)
+			return Size(v.Reader().Snapshot)
 		}
 		return Size(v)
 	case "contents":
 		return contents(v)
 	case "characters":
 		if v.Kind == value.Text {
-			b, _ := coreunicode.Boundaries(v.Text)
+			b, _ := coreunicode.Boundaries(v.Text())
 			return int64(len(b) - 1)
 		}
 	case "scalars":
 		if v.Kind == value.Text {
-			return int64(utf8.RuneCountInString(v.Text))
+			return int64(utf8.RuneCountInString(v.Text()))
 		}
 	case "utf8":
 		if v.Kind == value.Text {
-			return int64(len(v.Text))
+			return int64(len(v.Text()))
 		}
 	case "bytes":
 		if v.Kind == value.Bytes {
-			return int64(len(v.Bytes))
+			return int64(len(v.Bytes()))
 		}
 	case "items":
 		if v.Kind == value.List {
-			return int64(len(v.Items))
+			return int64(len(v.Items()))
 		}
-		if v.Kind == value.Range && v.Items[0].Kind == value.Number && v.Items[1].Kind == value.Number {
-			a, ok := v.Items[0].Number.Integer()
-			b, ok2 := v.Items[1].Number.Integer()
+		if v.Kind == value.Range && v.Items()[0].Kind == value.Number && v.Items()[1].Kind == value.Number {
+			a, ok := v.Items()[0].Number().Integer()
+			b, ok2 := v.Items()[1].Number().Integer()
 			if ok && ok2 && b.Cmp(a) >= 0 {
 				n := new(big.Int).Sub(b, a)
 				n.Add(n, big.NewInt(1))
@@ -95,17 +95,17 @@ func measure(name string, v value.Value) int64 {
 			}
 		}
 	case "entries":
-		return int64(len(v.Entries))
+		return int64(len(v.Entries()))
 	case "digits":
 		if v.Kind == value.Number || v.Kind == value.Quantity {
-			s := strings.TrimPrefix(v.Number.String(), "-")
+			s := strings.TrimPrefix(v.Number().String(), "-")
 			s = strings.ReplaceAll(s, ".", "")
 			s = strings.TrimLeft(s, "0")
 			return int64(max(1, len(s)))
 		}
 	case "program":
 		if v.Kind == value.Pattern {
-			return int64(patternSize(v.Text))
+			return int64(patternSize(v.Text()))
 		}
 	}
 	return 0

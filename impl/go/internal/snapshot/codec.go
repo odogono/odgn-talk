@@ -29,6 +29,7 @@ type Codec struct {
 }
 
 var valueType = reflect.TypeFor[value.Value]()
+var fieldsType = reflect.TypeFor[value.Fields]()
 var unitType = reflect.TypeFor[value.Unit]()
 var numberType = reflect.TypeFor[decimal.Number]()
 var objectType = reflect.TypeFor[*value.ObjectData]()
@@ -70,6 +71,9 @@ func (c Codec) encode(v reflect.Value) (any, error) {
 	}
 	if v.Type() == c.ValueType {
 		return c.encode(reflect.ValueOf(c.UnwrapValue(v.Interface())))
+	}
+	if v.Type() == valueType {
+		return c.encode(reflect.ValueOf(v.Interface().(value.Value).Fields()))
 	}
 	if c.Reference != nil {
 		if ref, ok := c.Reference(v.Interface()); ok {
@@ -179,6 +183,26 @@ func (c Codec) decode(data any, v reflect.Value) error {
 		v.Set(reflect.ValueOf(c.WrapValue(x)))
 		return nil
 	}
+	if v.Type() == valueType {
+		var fields value.Fields
+		if err := c.decode(data, reflect.ValueOf(&fields).Elem()); err != nil {
+			return err
+		}
+		x := fields.Value()
+		// Older dimensionless arithmetic results can retain an empty, non-nil
+		// Unit slice on a Number. It has no contents to preserve or validate.
+		if fields.Kind != value.Quantity && len(fields.Unit.Slots) == 0 {
+			fields.Unit = value.Unit{}
+		}
+		// Discarding forged inactive fields could make inconsistent recovery
+		// locals appear equal after compaction. Valid saves have empty fields
+		// outside the tagged kind; preserve that validation before packing.
+		if !reflect.DeepEqual(fields, x.Fields()) {
+			return fmt.Errorf("inactive Value fields")
+		}
+		v.Set(reflect.ValueOf(x))
+		return nil
+	}
 	if v.Type() == objectType {
 		m, ok := data.(map[string]any)
 		if !ok || c.Object == nil {
@@ -193,7 +217,7 @@ func (c Codec) decode(data any, v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		v.Set(reflect.ValueOf(x.Object))
+		v.Set(reflect.ValueOf(x.Object()))
 		return nil
 	}
 	if v.Type() == numberType {
@@ -274,31 +298,31 @@ func (c Codec) decode(data any, v reflect.Value) error {
 				}
 			}
 		}
-		if v.Type() == valueType {
-			x := v.Interface().(value.Value)
+		if v.Type() == fieldsType {
+			x := v.Interface().(value.Fields).Value()
 			if x.Kind < value.Nothing || x.Kind > value.Deadline {
 				return fmt.Errorf("invalid Value kind")
 			}
-			if x.Kind == value.Function && x.Function == nil || x.Kind == value.Object && x.Object == nil {
+			if x.Kind == value.Function && x.Function() == nil || x.Kind == value.Object && x.Object() == nil {
 				return fmt.Errorf("missing Value metadata")
 			}
 			if x.Kind == value.Function && c.Function != nil {
-				if err := c.Function(x.Function); err != nil {
+				if err := c.Function(x.Function()); err != nil {
 					return err
 				}
 			}
 			if x.Kind == value.Range {
-				if len(x.Items) != 2 {
+				if len(x.Items()) != 2 {
 					return fmt.Errorf("invalid Range")
 				}
-				if _, err := value.NewRange(x.Items[0], x.Items[1]); err != nil {
+				if _, err := value.NewRange(x.Items()[0], x.Items()[1]); err != nil {
 					return err
 				}
 			}
-			if x.Kind == value.Quantity && len(x.Unit.Slots) == 0 {
+			if x.Kind == value.Quantity && len(x.Unit().Slots) == 0 {
 				return fmt.Errorf("dimensionless Quantity")
 			}
-			if x.Kind == value.Iterator && x.Iterator == nil || x.Kind == value.BinaryReader && x.Reader == nil || x.Kind == value.Replacement && x.Replacement == nil || x.Kind == value.Deadline && (x.Deadline == nil || x.Deadline.At == nil) {
+			if x.Kind == value.Iterator && x.Iterator() == nil || x.Kind == value.BinaryReader && x.Reader() == nil || x.Kind == value.Replacement && x.Replacement() == nil || x.Kind == value.Deadline && (x.Deadline() == nil || x.Deadline().At == nil) {
 				return fmt.Errorf("missing internal Value state")
 			}
 		}

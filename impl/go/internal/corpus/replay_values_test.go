@@ -182,7 +182,7 @@ func TestReplayRefusesUnknownCallbackInStub(t *testing.T) {
 
 func TestSnapshotExclusionsUseReceivedFunctionHandles(t *testing.T) {
 	values := newReplayValues()
-	function := value.Value{Kind: value.Function, Function: &value.FunctionData{Home: "s", Code: "s.fn", Name: "fn"}}
+	function := value.Fields{Kind: value.Function, Function: &value.FunctionData{Home: "s", Code: "s.fn", Name: "fn"}}.Value()
 	if values.hasReceivedFunction(function) {
 		t.Fatal("future Function suppresses an earlier snapshot")
 	}

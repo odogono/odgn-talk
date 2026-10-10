@@ -302,7 +302,7 @@ func (h *Host) clock(rest string) []string {
 			if err != nil || v.Kind != value.Instant {
 				return refusal("bad arguments")
 			}
-			at = time.Unix(v.Seconds, int64(v.Nanos)).UTC()
+			at = time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
 		}
 		if h.hasClock && at.Before(h.lastClock) {
 			return refusal("clock backwards")
@@ -321,10 +321,10 @@ func (h *Host) clock(rest string) []string {
 			return refusal("bad arguments")
 		}
 		seconds, _ := value.ParseUnit("s")
-		if !v.Unit.Compatible(seconds) {
+		if !v.Unit().Compatible(seconds) {
 			return refusal("bad arguments")
 		}
-		n, err := v.Unit.Convert(v.Number, true)
+		n, err := v.Unit().Convert(v.Number(), true)
 		if err != nil {
 			return refusal("bad arguments")
 		}

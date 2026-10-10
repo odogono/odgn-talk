@@ -65,13 +65,13 @@ func init() {
 		size := -1
 		switch x.Kind() {
 		case KindText:
-			bs, err := unicode.Boundaries(x.inner.Text)
+			bs, err := unicode.Boundaries(x.inner.Text())
 			if err != nil {
 				panic(err)
 			}
 			size = len(bs) - 1
 		case KindBytes:
-			size = len(x.inner.Bytes)
+			size = len(x.inner.Bytes())
 		case KindList:
 			size = x.Len()
 		case KindMap:
@@ -96,7 +96,7 @@ func init() {
 			}
 		}
 		if x.Kind() == KindFunction {
-			fn := x.inner.Function
+			fn := x.inner.Function()
 			name := Nothing
 			arity := Nothing
 			if n, required, total, ok := docs.FunctionHead(x); ok {

@@ -19,7 +19,7 @@ func TestTraceSourceFieldsPreserveScalars(t *testing.T) {
 					t.Fatal(err)
 				}
 				field := record.Fields[len(record.Fields)-1]
-				if field.Raw != encoded || field.Value.Kind != value.Text || field.Value.Text != "e\u0301" {
+				if field.Raw != encoded || field.Value.Kind != value.Text || field.Value.Text() != "e\u0301" {
 					t.Fatalf("source scalars changed: %#v", field)
 				}
 			})
@@ -42,7 +42,7 @@ func TestTraceValueTextStillNormalizes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := record.Fields[0].Value.Text; got != "é" {
+		if got := record.Fields[0].Value.Text(); got != "é" {
 			t.Errorf("Value text was not normalized: %q", got)
 		}
 	}

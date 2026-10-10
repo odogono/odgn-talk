@@ -13,9 +13,11 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-func text(s string) value.Value   { v, _ := value.NewText(s); return v }
-func integer(n int64) value.Value { return value.Value{Kind: value.Number, Number: decimal.FromInt(n)} }
-func boolean(b bool) value.Value  { return value.Value{Kind: value.Boolean, Bool: b} }
+func text(s string) value.Value { v, _ := value.NewText(s); return v }
+func integer(n int64) value.Value {
+	return value.Fields{Kind: value.Number, Number: decimal.FromInt(n)}.Value()
+}
+func boolean(b bool) value.Value { return value.Value{Kind: value.Boolean, Bool: b} }
 func failure(code string, fields ...value.Pair) value.Value {
 	message := code
 	for _, entry := range generated.Errors.Error {
@@ -53,10 +55,10 @@ func constant(s string) (value.Value, error) {
 		return text(""), nil
 	case "pi":
 		n, _ := decimal.Parse("3.141592653589793238462643383279503")
-		return value.Value{Kind: value.Number, Number: n}, nil
+		return value.Fields{Kind: value.Number, Number: n}.Value(), nil
 	}
 	if strings.HasPrefix(s, "<") && !strings.HasPrefix(s, "<<") {
-		return value.Value{Kind: value.Pattern, Text: s}, nil
+		return value.Fields{Kind: value.Pattern, Text: s}.Value(), nil
 	}
 	r := value.Reader{Text: s}
 	v, e := r.Value()
@@ -106,7 +108,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	key := func(s string) string {
 		v, e := constant(s)
 		if e == nil && v.Kind == value.Text {
-			return v.Text
+			return v.Text()
 		}
 		return s
 	}
@@ -172,11 +174,11 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			// checked against the list's length, before the receiver
 			// (chapter 5, A spread; ADR 0064).
 			list, v := f.Stack[len(f.Stack)-2], f.Stack[len(f.Stack)-3]
-			n = len(list.Items)
+			n = len(list.Items())
 			if v.Kind != value.Text {
 				bad(wrong("text", v))
 				break
-			} else if !syntax.ValidComputedMessageName(v.Text, n) {
+			} else if !syntax.ValidComputedMessageName(v.Text(), n) {
 				bad(failure("bad message name", value.Pair{Key: "name", Val: v}, value.Pair{Key: "arguments", Val: integer(int64(n))}))
 				break
 			}
@@ -187,7 +189,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			if v := f.Stack[len(f.Stack)-n-2]; v.Kind != value.Text {
 				bad(wrong("text", v))
 				break
-			} else if !syntax.ValidComputedMessageName(v.Text, n) {
+			} else if !syntax.ValidComputedMessageName(v.Text(), n) {
 				bad(failure("bad message name", value.Pair{Key: "name", Val: v}, value.Pair{Key: "arguments", Val: integer(int64(n))}))
 				break
 			}
@@ -205,13 +207,13 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(failure("object gone", value.Pair{Key: "object", Val: text(name)}))
 				break
 			}
-			if v.Kind == value.Object && v.Object.Disposed != nil && v.Object.Disposed.Load() {
+			if v.Kind == value.Object && v.Object().Disposed != nil && v.Object().Disposed.Load() {
 				bad(failure("object gone", value.Pair{Key: "object", Val: v}))
 				break
 			}
 		}
 		if spreadSend(i.Name) {
-			m.Args = slices.Clone(pop().Items)
+			m.Args = slices.Clone(pop().Items())
 		} else {
 			m.Args = take(n)
 		}
@@ -343,7 +345,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			functionName = body.Checked.Name
 		}
 		required, total := functionArity(body)
-		push(value.Value{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Index, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName, Required: required, Total: total}})
+		push(value.Fields{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Index, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName, Required: required, Total: total}}.Value())
 	case "call-value", "call-value-wait":
 		n := idx(0)
 		vs := take(n)
@@ -353,7 +355,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(wrong("function", fn))
 			break
 		}
-		data := fn.Function
+		data := fn.Function()
 		home, _ := data.Owner.(*State)
 		if data.Owner == nil || data.Body < 0 || home != nil && home.Gone {
 			bad(failure("function gone"))
@@ -422,8 +424,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				break
 			}
 			found := offerLookup{}
-			if validOfferName(v.Text) {
-				found = r.lookupOffer(v.Text)
+			if validOfferName(v.Text()) {
+				found = r.lookupOffer(v.Text())
 			}
 			push(boolean(found.Offer != nil))
 			effect = func() { r.pay(int64(4*found.Frames), 0) }
@@ -449,7 +451,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if v.Kind != value.Number && v.Kind != value.Quantity {
 			bad(wrong("number or quantity", v))
 		} else {
-			v.Number = v.Number.Negate()
+			v = v.WithNumber(v.Number().Negate())
 			push(v)
 		}
 	case "concat":
@@ -467,7 +469,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		v, e := value.NewRange(a, b)
 		if e != nil {
-			bad(failure("incompatible units", value.Pair{Key: "left", Val: text(a.Unit.String())}, value.Pair{Key: "right", Val: text(b.Unit.String())}))
+			bad(failure("incompatible units", value.Pair{Key: "left", Val: text(a.Unit().String())}, value.Pair{Key: "right", Val: text(b.Unit().String())}))
 		} else {
 			push(v)
 		}
@@ -528,7 +530,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(wrong("text", v))
 				break
 			}
-			k = v.Text
+			k = v.Text()
 		} else {
 			k = key(k)
 		}
@@ -562,7 +564,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(wrong("list", v))
 				break
 			}
-			vs = v.Items
+			vs = v.Items()
 		}
 		push(extendList(list, vs, false))
 	case "map":
@@ -572,7 +574,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		keys := code.Constants[idx(0)]
 		pairs := make([]value.Pair, n)
 		for j := range pairs {
-			pairs[j] = value.Pair{Key: keys.Items[j].Text, Val: vs[j]}
+			pairs[j] = value.Pair{Key: keys.Items()[j].Text(), Val: vs[j]}
 		}
 		v, _ := value.NewMap(pairs)
 		push(v)
@@ -585,12 +587,12 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				bad(wrong("text", x))
 				break
 			}
-			k = x.Text
+			k = x.Text()
 		} else {
 			k = key(k)
 		}
 		if v.Kind == value.Object && k == "id" {
-			push(text(v.Object.ID))
+			push(text(v.Object().ID))
 		} else if v.Kind != value.Map {
 			bad(wrong("map", v))
 		} else {
@@ -659,7 +661,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "make-pattern":
 		n := idx(1)
 		vs := take(n)
-		source := code.Constants[idx(0)].Text
+		source := code.Constants[idx(0)].Text()
 		for _, v := range vs {
 			if v.Kind != value.Text && v.Kind != value.Pattern {
 				bad(wrong("pattern", v))
@@ -694,12 +696,12 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		if i.Name == "match-search" {
 			mode = "search"
 		}
-		match, steps := search(p, subject.Text, 0, mode, false)
+		match, steps := search(p, subject.Text(), 0, mode, false)
 		m.Steps = steps
 		if match == nil {
 			jump()
 		} else {
-			v, e := matchValue(p, subject.Text, match)
+			v, e := matchValue(p, subject.Text(), match)
 			if e != nil {
 				bad(*e)
 			} else {
@@ -719,10 +721,10 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		matches := value.NewList(nil)
 		if idx(0) == 1 {
-			match, steps := search(p, subject.Text, 0, "search", false)
+			match, steps := search(p, subject.Text(), 0, "search", false)
 			m.Steps = steps
 			if match != nil {
-				v, e := matchValue(p, subject.Text, match)
+				v, e := matchValue(p, subject.Text(), match)
 				if e != nil {
 					bad(*e)
 					break
@@ -730,7 +732,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				matches = value.NewList([]value.Value{v})
 			}
 		} else {
-			v, steps, e := allMatches(p, subject.Text)
+			v, steps, e := allMatches(p, subject.Text())
 			m.Steps = steps
 			if e != nil {
 				bad(*e)
@@ -738,10 +740,10 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			}
 			matches = v
 		}
-		push(value.Value{Kind: value.Replacement, Replacement: &value.ReplacementData{Subject: subject, Matches: matches.Items}})
+		push(value.Fields{Kind: value.Replacement, Replacement: &value.ReplacementData{Subject: subject, Matches: matches.Items()}}.Value())
 	case "replace-next":
 		v := pop()
-		replacement := *v.Replacement
+		replacement := *v.Replacement()
 		if replacement.Position >= len(replacement.Matches) {
 			push(v)
 			jump()
@@ -749,24 +751,24 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		match := replacement.Matches[replacement.Position]
 		replacement.Position++
-		push(value.Value{Kind: value.Replacement, Replacement: &replacement})
+		push(value.Fields{Kind: value.Replacement, Replacement: &replacement}.Value())
 		push(match)
 	case "replace-put":
 		part := pop()
 		v := pop()
-		replacement := *v.Replacement
+		replacement := *v.Replacement()
 		match := replacement.Matches[replacement.Position-1]
 		span := match.Get("range")
-		first, _ := span.Items[0].Number.Int64()
-		last, _ := span.Items[1].Number.Int64()
-		bounds, _ := coreunicode.Boundaries(replacement.Subject.Text)
-		replacement.Parts = append(slices.Clone(replacement.Parts), replacement.Subject.Text[replacement.At:bounds[first-1]], textForm(part))
+		first, _ := span.Items()[0].Number().Int64()
+		last, _ := span.Items()[1].Number().Int64()
+		bounds, _ := coreunicode.Boundaries(replacement.Subject.Text())
+		replacement.Parts = append(slices.Clone(replacement.Parts), replacement.Subject.Text()[replacement.At:bounds[first-1]], textForm(part))
 		replacement.At = bounds[last]
-		push(value.Value{Kind: value.Replacement, Replacement: &replacement})
+		push(value.Fields{Kind: value.Replacement, Replacement: &replacement}.Value())
 	case "replace-end":
 		v := pop()
-		replacement := v.Replacement
-		push(text(strings.Join(replacement.Parts, "") + replacement.Subject.Text[replacement.At:]))
+		replacement := v.Replacement()
+		push(text(strings.Join(replacement.Parts, "") + replacement.Subject.Text()[replacement.At:]))
 	case "contains", "begins-with", "ends-with", "matches", "match-all":
 		needle, subject := pop(), pop()
 		if i.Name == "match-all" {
@@ -778,12 +780,12 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 				break
 			}
 			p := patternProgram{}
-			for _, b := range needle.Bytes {
+			for _, b := range needle.Bytes() {
 				p.Code = append(p.Code, patternInstruction{Op: "char", Text: string([]byte{b})})
 			}
 			p.Code = append(p.Code, patternInstruction{Op: "match"})
-			chars := make([]string, len(subject.Bytes))
-			for j, b := range subject.Bytes {
+			chars := make([]string, len(subject.Bytes()))
+			for j, b := range subject.Bytes() {
 				chars[j] = string([]byte{b})
 			}
 			mode := map[string]string{"contains": "search", "begins-with": "prefix", "ends-with": "suffix"}[i.Name]
@@ -802,7 +804,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			break
 		}
 		if i.Name == "match-all" {
-			v, steps, e := allMatches(p, subject.Text)
+			v, steps, e := allMatches(p, subject.Text())
 			m.Steps = steps
 			if e != nil {
 				bad(*e)
@@ -811,7 +813,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			}
 		} else {
 			mode := map[string]string{"contains": "search", "begins-with": "prefix", "ends-with": "suffix", "matches": "whole"}[i.Name]
-			match, steps := search(p, subject.Text, 0, mode, true)
+			match, steps := search(p, subject.Text(), 0, mode, true)
 			m.Steps = steps
 			push(boolean(match != nil))
 		}
@@ -833,8 +835,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		it := value.IteratorData{Snapshot: v}
 		if v.Kind == value.Range {
-			for _, end := range v.Items {
-				if _, ok := end.Number.Integer(); end.Kind != value.Number || !ok {
+			for _, end := range v.Items() {
+				if _, ok := end.Number().Integer(); end.Kind != value.Number || !ok {
 					bad(wrong("integer range", v))
 					break
 				}
@@ -842,10 +844,10 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			if err != nil {
 				break
 			}
-			it.Current = v.Items[0].Number
-			it.Done = it.Current.Compare(v.Items[1].Number) > 0
+			it.Current = v.Items()[0].Number()
+			it.Done = it.Current.Compare(v.Items()[1].Number()) > 0
 		}
-		push(value.Value{Kind: value.Iterator, Iterator: &it})
+		push(value.Fields{Kind: value.Iterator, Iterator: &it}.Value())
 	case "timeout-start":
 		// The Pump's Clock reading plus `d`, unless an enclosing block's
 		// deadline is no later (ADR 0073).
@@ -856,10 +858,10 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		at := new(big.Int).Add(r.clock(), ns)
 		if enclosing := blockDeadline(f.Stack); enclosing != nil && enclosing.At.Cmp(at) <= 0 {
-			push(value.Value{Kind: value.Deadline, Deadline: &value.DeadlineData{At: new(big.Int).Set(enclosing.At), After: enclosing.After}})
+			push(value.Fields{Kind: value.Deadline, Deadline: &value.DeadlineData{At: new(big.Int).Set(enclosing.At), After: enclosing.After}}.Value())
 			break
 		}
-		push(value.Value{Kind: value.Deadline, Deadline: &value.DeadlineData{At: at, After: millis(ns)}})
+		push(value.Fields{Kind: value.Deadline, Deadline: &value.DeadlineData{At: at, After: millis(ns)}}.Value())
 	case "timeout-end":
 		pop()
 	case "iterate-times":
@@ -868,7 +870,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(wrong("integer", v))
 			break
 		}
-		n, ok := v.Number.Integer()
+		n, ok := v.Number().Integer()
 		if !ok {
 			bad(wrong("integer", v))
 			break
@@ -877,15 +879,15 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			bad(failure("out of range", value.Pair{Key: "field", Val: text("count")}, value.Pair{Key: "value", Val: v}))
 			break
 		}
-		push(value.Value{Kind: value.Iterator, Iterator: &value.IteratorData{Remaining: v.Number}})
+		push(value.Fields{Kind: value.Iterator, Iterator: &value.IteratorData{Remaining: v.Number()}}.Value())
 	case "next":
 		v := pop()
-		it, item, has := advanceIterator(*v.Iterator)
+		it, item, has := advanceIterator(*v.Iterator())
 		if !has {
 			push(v)
 			jump()
 		} else {
-			push(value.Value{Kind: value.Iterator, Iterator: &it})
+			push(value.Fields{Kind: value.Iterator, Iterator: &it}.Value())
 			push(item)
 		}
 	case "test-map":
@@ -894,20 +896,20 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 	case "test-list", "test-list-at-least":
 		v := pop()
-		if v.Kind != value.List || i.Name == "test-list" && len(v.Items) != idx(0) || len(v.Items) < idx(0) {
+		if v.Kind != value.List || i.Name == "test-list" && len(v.Items()) != idx(0) || len(v.Items()) < idx(0) {
 			jump()
 		}
 	case "list-item":
 		v := pop()
-		push(v.Items[idx(0)-1])
+		push(v.Items()[idx(0)-1])
 	case "list-rest":
 		v := pop()
-		push(value.NewList(v.Items[idx(0)-1:]))
+		push(value.NewList(v.Items()[idx(0)-1:]))
 	case "map-get":
 		v := pop()
 		k := key(name(0))
 		found := false
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if p.Key == k {
 				push(p.Val)
 				found = true
@@ -938,8 +940,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 		if code.Stdlib && !hasKey(v, "message") && !hasKey(v, "at") {
 			for _, entry := range generated.Errors.Error {
-				if entry.Code == v.Get("code").Text {
-					fields := slices.DeleteFunc(slices.Clone(v.Entries), func(p value.Pair) bool { return p.Key == "code" })
+				if entry.Code == v.Get("code").Text() {
+					fields := slices.DeleteFunc(slices.Clone(v.Entries()), func(p value.Pair) bool { return p.Key == "code" })
 					v = failure(entry.Code, fields...)
 					break
 				}
@@ -963,7 +965,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			c := f.Transfer
 			effect = func() {
 				if c.Pending.Kind == "error" {
-					r.Raises = append(r.Raises, Raised{Unit: r.CodeName(), Handler: enclosingHandler(r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: c.Error.Get("code").Text, PC: r.PC, Instruction: r.At})
+					r.Raises = append(r.Raises, Raised{Unit: r.CodeName(), Handler: enclosingHandler(r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: c.Error.Get("code").Text(), PC: r.PC, Instruction: r.At})
 				}
 				r.advanceTransfer(c)
 			}
@@ -996,23 +998,23 @@ func nameOrEmpty(args []lower.Operand) string {
 }
 func textForm(v value.Value) string {
 	if v.Kind == value.Text {
-		return v.Text
+		return v.Text()
 	}
 	return v.Display()
 }
 func fold(v value.Value) value.Value {
 	if v.Kind == value.Text {
-		s, _ := coreunicode.Fold(v.Text)
+		s, _ := coreunicode.Fold(v.Text())
 		return text(s)
 	} else if v.Kind == value.List || v.Kind == value.Range {
-		v.Items = slices.Clone(v.Items)
-		for j, x := range v.Items {
-			v.Items[j] = fold(x)
+		v = v.WithItems(slices.Clone(v.Items()))
+		for j, x := range v.Items() {
+			v.Items()[j] = fold(x)
 		}
 	} else if v.Kind == value.Map {
-		v.Entries = slices.Clone(v.Entries)
-		for j, p := range v.Entries {
-			v.Entries[j].Val = fold(p.Val)
+		v = v.WithEntries(slices.Clone(v.Entries()))
+		for j, p := range v.Entries() {
+			v.Entries()[j].Val = fold(p.Val)
 		}
 	}
 	return v
@@ -1026,28 +1028,28 @@ func compared(a, b value.Value, folded bool) int64 {
 	}
 	switch a.Kind {
 	case value.Text:
-		as, _ := coreunicode.Boundaries(a.Text)
-		bs, _ := coreunicode.Boundaries(b.Text)
+		as, _ := coreunicode.Boundaries(a.Text())
+		bs, _ := coreunicode.Boundaries(b.Text())
 		for j := 0; j < min(len(as), len(bs))-1; j++ {
-			if a.Text[as[j]:as[j+1]] != b.Text[bs[j]:bs[j+1]] {
+			if a.Text()[as[j]:as[j+1]] != b.Text()[bs[j]:bs[j+1]] {
 				return int64(j + 1)
 			}
 		}
 		return int64(min(len(as), len(bs)) - 1)
 	case value.Bytes:
-		for j := 0; j < min(len(a.Bytes), len(b.Bytes)); j++ {
-			if a.Bytes[j] != b.Bytes[j] {
+		for j := 0; j < min(len(a.Bytes()), len(b.Bytes())); j++ {
+			if a.Bytes()[j] != b.Bytes()[j] {
 				return int64(j + 1)
 			}
 		}
-		return int64(min(len(a.Bytes), len(b.Bytes)))
+		return int64(min(len(a.Bytes()), len(b.Bytes())))
 	case value.List:
-		for j := 0; j < min(len(a.Items), len(b.Items)); j++ {
-			if !equal(a.Items[j], b.Items[j], folded) {
+		for j := 0; j < min(len(a.Items()), len(b.Items())); j++ {
+			if !equal(a.Items()[j], b.Items()[j], folded) {
 				return int64(j + 1)
 			}
 		}
-		return int64(min(len(a.Items), len(b.Items)))
+		return int64(min(len(a.Items()), len(b.Items())))
 	case value.Map:
 		_, scanned := compareMap(a, b, folded)
 		return scanned
@@ -1062,10 +1064,10 @@ func waitNanos(v value.Value) (*big.Int, *value.Value) {
 		return fail(wrong("quantity", v))
 	}
 	seconds, _ := value.ParseUnit("s")
-	if !v.Unit.Compatible(seconds) {
-		return fail(failure("wrong kind", value.Pair{Key: "expected", Val: text("s")}, value.Pair{Key: "got", Val: text(v.Unit.String())}, value.Pair{Key: "value", Val: v}))
+	if !v.Unit().Compatible(seconds) {
+		return fail(failure("wrong kind", value.Pair{Key: "expected", Val: text("s")}, value.Pair{Key: "got", Val: text(v.Unit().String())}, value.Pair{Key: "value", Val: v}))
 	}
-	n, err := v.Unit.Convert(v.Number, true)
+	n, err := v.Unit().Convert(v.Number(), true)
 	if err != nil {
 		return fail(failure(err.(*decimal.Error).Code))
 	}

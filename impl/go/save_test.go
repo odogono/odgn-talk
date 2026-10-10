@@ -317,7 +317,7 @@ func TestReplaceLibraryFatalCleanupPublishesNoScript(t *testing.T) {
 	if !yes || host.Code != EffectStateUnknown {
 		t.Fatalf("fatal replacement: %v", err)
 	}
-	if a.state != oldA || b.state != oldB || g.libraries["lib"] != lib || a.state.Variables[0].Number.String() != "5" {
+	if a.state != oldA || b.state != oldB || g.libraries["lib"] != lib || a.state.Variables[0].Number().String() != "5" {
 		t.Fatal("replacement published before all cleanup succeeded")
 	}
 }

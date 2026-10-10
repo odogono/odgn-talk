@@ -10,18 +10,18 @@ import (
 func advanceIterator(it value.IteratorData) (value.IteratorData, value.Value, bool) {
 	switch it.Snapshot.Kind {
 	case value.List:
-		if it.Position >= len(it.Snapshot.Items) {
+		if it.Position >= len(it.Snapshot.Items()) {
 			return it, value.Value{}, false
 		}
-		item := it.Snapshot.Items[it.Position]
+		item := it.Snapshot.Items()[it.Position]
 		it.Position++
 		return it, item, true
 	case value.Range:
 		if it.Done {
 			return it, value.Value{}, false
 		}
-		item := value.Value{Kind: value.Number, Number: it.Current}
-		if it.Current.Compare(it.Snapshot.Items[1].Number) == 0 {
+		item := value.Fields{Kind: value.Number, Number: it.Current}.Value()
+		if it.Current.Compare(it.Snapshot.Items()[1].Number()) == 0 {
 			it.Done = true
 		} else {
 			it.Current, _ = decimal.Calculate("+", it.Current, decimal.FromInt(1))

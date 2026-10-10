@@ -166,7 +166,7 @@ func (g *Group) prepareHostResult(c *hostCrossing, result Value, err error) host
 		if e.Message != "" {
 			failed = append(failed, corevalue.Pair{Key: "message", Val: mustText(e.Message)})
 		}
-		failed = append(failed, data.Entries...)
+		failed = append(failed, data.Entries()...)
 		prepared := hostResult{failure: e, data: data, failed: failed}
 		if !validGroup(data, g) {
 			prepared.bad = "failure holds a value from another Group"
@@ -209,7 +209,7 @@ func (g *Group) classifyHostResult(c *hostCrossing, result hostResult, reports *
 				}
 			}
 		}
-		for _, p := range data.Entries {
+		for _, p := range data.Entries() {
 			if slices.Contains(generated.Errors.Reserved, p.Key) {
 				bad = "failure uses a reserved Data key"
 			}

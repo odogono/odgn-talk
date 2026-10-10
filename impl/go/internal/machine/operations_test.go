@@ -162,7 +162,7 @@ func TestDeleteChargesNoNewPartAndPowerDomainFields(t *testing.T) {
 		t.Fatalf("delete allocation=%d", r.Alloc-baseline.Alloc)
 	}
 	r = executeSource(t, "on go\n return (-8)^0.5\nend go\n")
-	if r.Error.Get("function").Text != "power" || r.Error.Get("value").Display() != "-8" {
+	if r.Error.Get("function").Text() != "power" || r.Error.Get("value").Display() != "-8" {
 		t.Fatal(r.Error.Display())
 	}
 }
@@ -212,7 +212,7 @@ func TestDelimitedRangeBoundsAndOperandErrors(t *testing.T) {
 					}
 				}
 			}
-			if r.Status != tc.status || r.Limit != tc.limit || r.Error.Get("code").Text != tc.code {
+			if r.Status != tc.status || r.Limit != tc.limit || r.Error.Get("code").Text() != tc.code {
 				t.Fatalf("status=%v limit=%s error=%s", r.Status, r.Limit, r.Error.Display())
 			}
 		})
@@ -234,9 +234,9 @@ func TestBytesPropertyRejectsUnaffordableConstructionBeforeEvaluation(t *testing
 		t.Fatal(err)
 	}
 	for _, limit := range []Limits{{Fuel: 100, Alloc: 1000000}, {Fuel: 1000000, Alloc: 100}, {Bounded: true, Fuel: 0, Alloc: 1000000}, {Bounded: true, Fuel: 1000000, Alloc: 0}} {
-		r := Start(s, 1, []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}, limit)
+		r := Start(s, 1, []value.Value{value.Fields{Kind: value.Bytes, Bytes: make([]byte, 4096)}.Value()}, limit)
 		f := &r.Frames[0]
-		f.Stack = []value.Value{{Kind: value.Bytes, Bytes: make([]byte, 4096)}}
+		f.Stack = []value.Value{value.Fields{Kind: value.Bytes, Bytes: make([]byte, 4096)}.Value()}
 		for _, i := range s.Unit.Bodies[1].Code {
 			if i.Name == "property" && i.Operands()[0].Text == "bytes" {
 				if r.preflight(f, i) || r.Status != Faulted || r.Fuel != 0 || r.Alloc != 0 {

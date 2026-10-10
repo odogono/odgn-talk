@@ -185,7 +185,7 @@ func (r *Reader) single() (Value, error) {
 		if r.Resolve != nil {
 			return r.Resolve(display)
 		}
-		return Value{Kind: Object, Object: &ObjectData{Kind: kind, ID: id, Handle: display}}, nil
+		return Fields{Kind: Object, Object: &ObjectData{Kind: kind, ID: id, Handle: display}}.Value(), nil
 	}
 	if r.peek("<function ") {
 		start := r.At
@@ -221,7 +221,7 @@ func (r *Reader) single() (Value, error) {
 			if e != nil || v.Kind != Map {
 				return Value{}, r.Error()
 			}
-			captures = v.Entries
+			captures = v.Entries()
 		}
 		if !r.Take(">") {
 			return Value{}, r.Error()
@@ -229,7 +229,7 @@ func (r *Reader) single() (Value, error) {
 		if r.Resolve != nil {
 			return r.Resolve(r.Text[start:r.At])
 		}
-		return Value{Kind: Function, Function: &FunctionData{Home: home, Code: code, Captures: captures}}, nil
+		return Fields{Kind: Function, Function: &FunctionData{Home: home, Code: code, Captures: captures}}.Value(), nil
 	}
 	if r.peek("<") {
 		p := patternReader{r: r, captures: map[string]bool{}}
@@ -237,7 +237,7 @@ func (r *Reader) single() (Value, error) {
 		if e != nil {
 			return Value{}, e
 		}
-		return Value{Kind: Pattern, Text: node.text}, nil
+		return Fields{Kind: Pattern, Text: node.text}.Value(), nil
 	}
 	if s := datePrefix.FindString(r.Text[r.At:]); s != "" {
 		r.At += len(s)
@@ -276,7 +276,7 @@ func (r *Reader) single() (Value, error) {
 			return NewQuantity(n, r.Text[start:end])
 		}
 	}
-	return Value{Kind: Number, Number: n}, nil
+	return Fields{Kind: Number, Number: n}.Value(), nil
 }
 
 // TextValue joins raw code points before normalization, so NFC can compose

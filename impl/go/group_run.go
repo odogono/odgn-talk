@@ -352,7 +352,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.cancel == "" {
-			if d.function != nil && (d.function.Function.Owner != d.script.state || d.script.state.Gone) {
+			if d.function != nil && (d.function.Function().Owner != d.script.state || d.script.state.Gone) {
 				g.release(d.script)
 				g.record("note", false, []string{string(d.id)}, map[string]string{"kind": "function-gone"})
 				if d.pending != nil {
@@ -918,7 +918,7 @@ func sendFailure(reason string, e *ScriptError) *ScriptError {
 	fields := []Pair{KV("reason", Value{mustText(reason)})}
 	if e != nil {
 		vs := []corevalue.Pair{{Key: "code", Val: mustText(e.Code)}, {Key: "message", Val: mustText(e.Message)}}
-		for _, p := range e.Data.inner.Entries {
+		for _, p := range e.Data.inner.Entries() {
 			vs = append(vs, p)
 		}
 		errorMap, _ := corevalue.NewMap(vs)
@@ -930,13 +930,13 @@ func sendFailure(reason string, e *ScriptError) *ScriptError {
 func mustText(s string) corevalue.Value { v, _ := corevalue.NewText(s); return v }
 func scriptError(v corevalue.Value) *ScriptError {
 	var fields []corevalue.Pair
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		if p.Key != "code" && p.Key != "message" {
 			fields = append(fields, p)
 		}
 	}
 	data, _ := corevalue.NewMap(fields)
-	return &ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: Value{data}}
+	return &ScriptError{Code: v.Get("code").Text(), Message: v.Get("message").Text(), Data: Value{data}}
 }
 func (g *Group) finish(s *Script, x *execution, common map[string]string, reports *[]Report, seal func()) *RunEnd {
 	r := x.run

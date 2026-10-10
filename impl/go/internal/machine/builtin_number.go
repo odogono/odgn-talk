@@ -24,7 +24,7 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 			}
 			return fail(failure(e.Code))
 		}
-		v.Number = n
+		v = v.WithNumber(n)
 		return v, nil
 	}
 	switch name {
@@ -43,7 +43,7 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 				if p.Kind != value.Number {
 					return fail(wrong("number", p))
 				}
-				n, ok := p.Number.Integer()
+				n, ok := p.Number().Integer()
 				if !ok || n.Sign() < 0 {
 					return domain(p)
 				}
@@ -57,7 +57,7 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 				if p.Kind != value.Text {
 					return fail(wrong("text", p))
 				}
-				mode = p.Text
+				mode = p.Text()
 				switch mode {
 				case "half up", "half even", "up", "down", "floor", "ceiling":
 				default:
@@ -65,7 +65,7 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 				}
 			}
 		}
-		n, e := decimal.Integral(v.Number, places, mode, name)
+		n, e := decimal.Integral(v.Number(), places, mode, name)
 		return numeric(n, e)
 	case "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2":
 		if v.Kind != value.Number {
@@ -76,13 +76,13 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 			if args[1].Kind != value.Number {
 				return fail(wrong("number", args[1]))
 			}
-			y = args[1].Number
+			y = args[1].Number()
 		}
 		if name == "power" {
-			n, e := decimal.Calculate("^", v.Number, y)
+			n, e := decimal.Calculate("^", v.Number(), y)
 			return numeric(n, e)
 		}
-		n, e := decimal.Function(name, v.Number, y)
+		n, e := decimal.Function(name, v.Number(), y)
 		return numeric(n, e)
 	}
 	order := binary.ByteOrder(binary.BigEndian)
@@ -90,7 +90,7 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 		if args[1].Kind != value.Text {
 			return fail(wrong("text", args[1]))
 		}
-		switch args[1].Text {
+		switch args[1].Text() {
 		case "big":
 		case "little":
 			order = binary.LittleEndian
@@ -106,14 +106,14 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 		if v.Kind != value.Bytes {
 			return fail(wrong("bytes", v))
 		}
-		if len(v.Bytes) != bits/8 {
+		if len(v.Bytes()) != bits/8 {
 			return domain(v)
 		}
 		var f float64
 		if bits == 32 {
-			f = float64(math.Float32frombits(order.Uint32(v.Bytes)))
+			f = float64(math.Float32frombits(order.Uint32(v.Bytes())))
 		} else {
-			f = math.Float64frombits(order.Uint64(v.Bytes))
+			f = math.Float64frombits(order.Uint64(v.Bytes()))
 		}
 		if math.IsNaN(f) || math.IsInf(f, 0) || math.Abs(f) >= 1e34 {
 			return fail(failure("can't convert", value.Pair{Key: "value", Val: v}, value.Pair{Key: "to", Val: text("number")}))
@@ -125,17 +125,17 @@ func builtinNumber(name string, args []value.Value) (value.Value, *value.Value) 
 		if e != nil {
 			return fail(failure("can't convert", value.Pair{Key: "value", Val: v}, value.Pair{Key: "to", Val: text("number")}))
 		}
-		return value.Value{Kind: value.Number, Number: n}, nil
+		return value.Fields{Kind: value.Number, Number: n}.Value(), nil
 	}
 	if v.Kind != value.Number {
 		return fail(wrong("number", v))
 	}
 	b := make([]byte, bits/8)
 	if bits == 32 {
-		f, _ := v.Number.Rat().Float32()
+		f, _ := v.Number().Rat().Float32()
 		order.PutUint32(b, math.Float32bits(f))
 	} else {
-		f, _ := v.Number.Rat().Float64()
+		f, _ := v.Number().Rat().Float64()
 		order.PutUint64(b, math.Float64bits(f))
 	}
 	return value.NewBytes(b), nil

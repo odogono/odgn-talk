@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	sessionio.FunctionIdentity = func(raw any) any { return raw.(Value).inner.Function }
+	sessionio.FunctionIdentity = func(raw any) any { return raw.(Value).inner.Function() }
 	sessionio.Shape = func(raw any) any {
 		b, err := json.Marshal(shapeData(raw.(Shape).inner))
 		if err != nil {

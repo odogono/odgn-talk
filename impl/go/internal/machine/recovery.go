@@ -220,7 +220,7 @@ func (c *RecoveryContext) excludeEntry(f Frame, e lower.UnwindEntry) {
 func (r *Run) escapePolicy(c *RecoveryContext) {
 	outer := c.Boundary.Outer
 	if !hasKey(c.Error, "during") {
-		c.Error.Entries = append(slices.Clone(c.Error.Entries), value.Pair{Key: "during", Val: outer.Error})
+		c.Error = c.Error.WithEntries(append(slices.Clone(c.Error.Entries()), value.Pair{Key: "during", Val: outer.Error}))
 	}
 	// The failed original scopes remain for cleanup, but their catches and
 	// offers cannot handle a failure escaping their selecting policy.
@@ -296,7 +296,7 @@ func (r *Run) escapeCleanup(c, outer *RecoveryContext) {
 		return
 	}
 	if !hasKey(c.Error, "during") {
-		c.Error.Entries = append(slices.Clone(c.Error.Entries), value.Pair{Key: "during", Val: outer.Error})
+		c.Error = c.Error.WithEntries(append(slices.Clone(c.Error.Entries()), value.Pair{Key: "during", Val: outer.Error}))
 	}
 	for id, entries := range outer.Excluded {
 		if c.Excluded[id] == nil {

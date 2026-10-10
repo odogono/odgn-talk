@@ -320,25 +320,25 @@ func constructWith(v value.Value, resolve func(value.Value) (talk.Value, error))
 	case value.Boolean:
 		return talk.Bool(v.Bool), nil
 	case value.Number:
-		return talk.Dec(v.Number.String())
+		return talk.Dec(v.Number().String())
 	case value.Quantity:
-		n, e := talk.Dec(v.Number.String())
+		n, e := talk.Dec(v.Number().String())
 		if e != nil {
 			return talk.Nothing, e
 		}
 		d, _ := n.AsDec()
-		return talk.Quantity(d, v.Unit.String())
+		return talk.Quantity(d, v.Unit().String())
 	case value.Text:
-		return talk.Text(v.Text)
+		return talk.Text(v.Text())
 	case value.Bytes:
-		return talk.Bytes(v.Bytes), nil
+		return talk.Bytes(v.Bytes()), nil
 	case value.CivilDate:
-		return talk.CivilDate(talk.DateFields(v.Date))
+		return talk.CivilDate(talk.DateFields(v.Date()))
 	case value.Instant:
-		return talk.Instant(v.Seconds, v.Nanos)
+		return talk.Instant(v.Seconds(), v.Nanos())
 	case value.List, value.Range:
-		items := make([]talk.Value, len(v.Items))
-		for i, item := range v.Items {
+		items := make([]talk.Value, len(v.Items()))
+		for i, item := range v.Items() {
 			var e error
 			items[i], e = constructWith(item, resolve)
 			if e != nil {
@@ -350,8 +350,8 @@ func constructWith(v value.Value, resolve func(value.Value) (talk.Value, error))
 		}
 		return talk.List(items...), nil
 	case value.Map:
-		pairs := make([]talk.Pair, len(v.Entries))
-		for i, p := range v.Entries {
+		pairs := make([]talk.Pair, len(v.Entries()))
+		for i, p := range v.Entries() {
 			item, e := constructWith(p.Val, resolve)
 			if e != nil {
 				return talk.Nothing, e
@@ -360,7 +360,7 @@ func constructWith(v value.Value, resolve func(value.Value) (talk.Value, error))
 		}
 		return talk.Map(pairs...)
 	case value.Pattern:
-		return talk.DecodeValue([]byte(`{"$pattern":`+value.JSONString(v.Text, false)+`}`), nil)
+		return talk.DecodeValue([]byte(`{"$pattern":`+value.JSONString(v.Text(), false)+`}`), nil)
 	}
 	if resolve != nil {
 		return resolve(v)

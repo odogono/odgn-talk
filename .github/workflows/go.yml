@@ -66,6 +66,9 @@ jobs:
           GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi
           python -m pip install wasmtime==49.0.0 brotli==1.2.0
           python tools/wasi/check.py .cache/messagelayer.wasm
+      - name: Check WASI List memory at conformance minimums
+        timeout-minutes: 10
+        run: python tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm --profile minimum
       # The sqlite Host is its own module, so the runs above skip it.
       - run: go vet ./... && go test -v ./... && go test -race ./...
         working-directory: impl/go/sqlite

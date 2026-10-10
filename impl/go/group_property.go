@@ -10,7 +10,7 @@ import (
 )
 
 func (g *Group) property(s *Script, x *execution, object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value) {
-	o := object.Object.Handle.(*Object) // only Group-checked Values reach execution
+	o := object.Object().Handle.(*Object) // only Group-checked Values reach execution
 	key := "get-key"
 	if set {
 		key = "set-property"
