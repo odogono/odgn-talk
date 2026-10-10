@@ -1182,6 +1182,10 @@ with `go -C impl/go test ./internal/messagelayer`.
 
 ### WASI reactor
 
+The [C Host measurement harness](../../bench/message-layer-c/) drives the
+reactor through Wasmtime's C API and measures Pump and Capability exchanges,
+instantiation and memory, with Script-fault reuse checks.
+
 `cmd/messagelayer-wasi` builds with standard Go as a WASI Preview 1 reactor.
 From the repository root:
 
