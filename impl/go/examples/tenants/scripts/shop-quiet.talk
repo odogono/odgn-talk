@@ -1,0 +1,19 @@
+-- shop-quiet.talk: the Reload for a tenant whose mail Grant was revoked.
+-- It only prices and counts orders. Script Variables carry over.
+
+script variable revenue = 0.00 GBP
+script variable orders = 0
+script variable problems = []
+
+on order {sku: sku, qty: qty, to: recipients}
+  try
+    ask catalog to lookUp sku
+  catch {code: code}
+    put code after problems
+    return code
+  end try
+  put it * qty into total
+  add total to revenue
+  add 1 to orders
+  return total
+end order

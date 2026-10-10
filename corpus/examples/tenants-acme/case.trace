@@ -1,0 +1,66 @@
+# Unblessed: the multi-tenant Example Host's acme tenant (#143); first blessing awaits human review.
+# tenants-acme: the acme tenant of the multi-tenant Go Example Host
+# (impl/go/examples/tenants), recorded by `go run ./examples/tenants record`.
+# The Host recorded the `stub` lines from what its Host functions did.
+# Its Fuel, allocation and state figures are Cost Model 0's.
+
+> load shop identity=1b256e1a1e3cfccf9024a6dc179ff0b6a276aa9c4d367c0ecf8ce8ce2269c853
+
+# An order is priced from acme's own catalog binding, and `notify` Charges
+# 50 Fuel for its one recipient.
+> stub catalog.lookUp value=2.50 GBP
+> stub mail.notify charge=50
+> request d1 to=shop message=order args=[{sku: "A1", qty: 4, to: ["ops@acme.example"]}]
+> pump clock=2026-10-10T09:00:00Z
+call shop/r1.c1 op=catalog.lookUp args=["A1"] result=2.50 GBP
+call shop/r1.c2 op=mail.notify args=[["ops@acme.example"], "order A1 x4: 10.00 GBP"] charged=50
+seg shop/r1 start delivery=d1 handler=order clause=1 fuel=198 alloc=232 state=56 end=return
+run shop/r1 outcome=completed delivery=d1 handler=order value=10.00 GBP fuel=198 alloc=232
+pumped state=idle fuel=198
+
+# The catalog fails `unknown sku`, which the Script catches.
+> stub catalog.lookUp error={code: "unknown sku", sku: "Z9"}
+> request d2 to=shop message=order args=[{sku: "Z9", qty: 1, to: ["ops@acme.example"]}]
+> pump clock=2026-10-10T09:00:01Z
+call shop/r2.c1 op=catalog.lookUp args=["Z9"] error={code: "unknown sku", sku: "Z9"}
+raise shop/r2 code="unknown sku" at=shop:20 pos=11:5
+seg shop/r2 start delivery=d2 handler=order clause=1 fuel=78 alloc=96 state=91 end=return
+run shop/r2 outcome=completed delivery=d2 handler=order value="unknown sku" fuel=78 alloc=96
+pumped state=idle fuel=78
+
+# A reminder waits 10 minutes on the Group's Clock.
+> deliver d3 to=shop message=remind args=[["ops@acme.example"], "restock B2"]
+> pump clock=2026-10-10T09:00:02Z
+seg shop/r3 start delivery=d3 handler=remind clause=1 fuel=15 alloc=0 state=365 end=wait until=2026-10-10T09:10:02Z
+pumped state=idle fuel=15 next=2026-10-10T09:10:02Z
+
+# The Pool's timer for acme's Group fires at the deadline, and the reminder
+# is sent.
+> stub mail.notify charge=50
+> pump clock=2026-10-10T09:10:02Z
+call shop/r3.c1 op=mail.notify args=[["ops@acme.example"], "reminder: restock B2"] charged=50
+seg shop/r3 resume fuel=91 alloc=36 state=91 end=return
+run shop/r3 outcome=completed delivery=d3 handler=remind fuel=106 alloc=36
+pumped state=idle fuel=91
+
+# acme uploads new code, which keeps its Script Variables.
+> reload shop carry=yes source="-- shop-v2.talk: the Reload a tenant uploads. Ten or more of a line take" & newline & "-- 10% off. Script Variables carry over." & newline & newline & "script variable revenue = 0.00 GBP" & newline & "script variable orders = 0" & newline & "script variable problems = []" & newline & newline & "on order {sku: sku, qty: qty, to: recipients}" & newline & "  try" & newline & "    ask catalog to lookUp sku" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "    return code" & newline & "  end try" & newline & "  put it * qty into total" & newline & "  if qty >= 10 then" & newline & "    put total * 0.9 into total" & newline & "  end if" & newline & "  add total to revenue" & newline & "  add 1 to orders" & newline & "  try" & newline & "    tell mail to notify recipients, " & quote & "order " & quote & " & sku & " & quote & " x" & quote & " & qty & " & quote & ": " & quote & " & total" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "  end try" & newline & "  return total" & newline & "end order" & newline & newline & "on remind recipients, note" & newline & "  wait 10 min" & newline & "  tell mail to notify recipients, " & quote & "reminder: " & quote & " & note" & newline & "end remind" & newline identity=bc8f18804a362af4c966c47fc5c1764a33ec8f0c5b688ef5727eeff2c14395d2
+stopped shop reason="reload"
+
+# The new code takes 10% off ten or more.
+> stub catalog.lookUp value=12.00 GBP
+> stub mail.notify charge=100
+> request d4 to=shop message=order args=[{sku: "B2", qty: 10, to: ["ops@acme.example", "buyer@acme.example"]}]
+> pump clock=2026-10-10T09:10:04Z
+call shop/r4.c1 op=catalog.lookUp args=["B2"] result=12.00 GBP
+call shop/r4.c2 op=mail.notify args=[["ops@acme.example", "buyer@acme.example"], "order B2 x10: 108.000 GBP"] charged=100
+seg shop/r4 start delivery=d4 handler=order clause=1 fuel=260 alloc=261 state=91 end=return
+run shop/r4 outcome=completed delivery=d4 handler=order value=108.000 GBP fuel=260 alloc=261
+pumped state=idle fuel=260
+
+# The Host bills from the Script's lifetime counters, and the case ends by
+# inspecting the Group.
+> counters shop
+counters shop fuel=642 alloc=625 runs=4 faults=0 state=91 mailbox=0
+> vars
+vars shop revenue=118.000 GBP orders=2 problems=["unknown sku"]

@@ -94,7 +94,10 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
   foreground/background Runs and Session Commands. It consumes Trace records
   to present output; inspection occurs only for explicit inspection commands.
 - `driver/` owns Transcript parsing, recording/replay and terminal interaction;
-  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C.
+  `cmd/northtalk/` connects it to filesystem I/O, stdin and Ctrl-C. Its
+  [Pool](#driver-pool) pumps many Groups on a set of workers.
+- `examples/tenants/` is the [multi-tenant Example Host](examples/tenants/README.md),
+  an HTTP server with a Group per tenant, and the recorder of its Trace Cases.
 - `internal/corpus/` reads setups and runs encoding, disassembly, Trace and
   Session Transcript backends. `cmd/corpus/` provides selection, first-divergence output and the gate.
 - `internal/fuzz/` runs differential fuzz cases through the corpus runner's
@@ -534,6 +537,28 @@ property or Capability function, in ordinary and save/restore modes.
 An interrupted current Run ends its Stretch as `stop` before the
 Stop report, without a RunEnd or cleanup. Cancelling a crossing also skips
 conversion of the discarded result; cleanup crossings retain their own charges.
+
+### Driver Pool
+
+`driver.Pool` pumps many Groups on a fixed set of worker goroutines, with a run
+queue and one deadline timer per Group, as chapter 9's helpers describe. It is
+built on the public interface alone and is outside parity. `Pool.NewGroup`
+makes a Group whose `OnReady` queues it, so it is queued once however many
+inputs arrive. A Group is pumped by one worker at a time, with the Pool's
+`PumpOptions` and a reading of its `Clock`. A `Sliced` or `Rewound` Pump, or an
+input queued during the Pump, sends the Group to the back of the queue, so a
+Fuel Slice shares the workers between tenants. A Pump's `NextDeadline` arms the
+Group's timer; any other Pump of that Group replaces it.
+
+Make worker calls (`Load`, `Reload`, `Inspect`, `Counters`, `Save` and the rest)
+through `Member.Do`, which holds the Group as a Pump does. `OnPump` receives each
+result on its worker while the Group is still held, so it may Reload after a
+`Rewound` Pump. `Pool.Wait` returns once no Group is queued or being pumped;
+Groups waiting only on a deadline count as settled. `RealClock` reads the wall
+clock. `ManualClock` moves only on `Advance`, which fires due timers earliest
+first; the Pool reads the Clock when it pumps, so a Host that needs each
+deadline's own reading advances to it and waits. `Member.Remove` and
+`Pool.Close` stop timers and leave queued Groups unpumped; nothing is saved.
 
 ### Function Value calls
 

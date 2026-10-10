@@ -49,7 +49,7 @@ Before pushing, run `bun run corpus:check` and `go -C impl/go run ./cmd/corpus -
 | Directory | What its cases pin |
 | --- | --- |
 | [`load-diagnostics/`](load-diagnostics/) | rejected loads: each step 1 diagnostic family and its source position ([chapter 2](../spec/02-grammar.md#load-time-diagnostics)); first blessings approved for #141 ([record](../docs/reviews/milestone-one-blessings/README.md)) |
-| [`examples/`](examples/) | worked examples of the format |
+| [`examples/`](examples/) | worked examples of the format, and the Trace Cases the Example Hosts record: `tenants-acme` and `tenants-globex`, from the [multi-tenant Go Host](../impl/go/examples/tenants/README.md), cover Grant bindings, `Charge` faults, per-plan limits, revocation and Reload (first blessings await human review for #143) |
 | [`save-restore/`](save-restore/) | save and restore: mid-Segment preemption, including inside a Join, pending-call settlements, cross-Script `send … and wait` pairs, variables-only restores, Grants and Libraries the Host no longer has, overdue `wait`s after a restore, and reissue Fuel charges, debt and cutoff ([chapter 10](../spec/10-save-and-restore.md)) |
 | [`counters/`](counters/) | lifetime work and current state through preemption, faults, cleanup, Stop, code changes and both restore policies ([chapter 9](../spec/09-embedding.md#script-counters)) |
 | [`limits/`](limits/) | exhaustion points, at dispatch too, Segment rollback, virtual-Clock deadlines, and each counted limit at its conformance minimum ([chapter 6](../spec/06-errors-and-limits.md)) |
