@@ -1,0 +1,14 @@
+# Unblessed: Whose Clauses over a list of maps (#547); first blessing awaits human review.
+> load s identity=cef6bcc13a6ebdfb184e99004bc50ea7e13f3020251178ae3fa9c08ea06aecd8
+> request d1 to=s message=big
+> pump clock=2026-10-10T12:00:01Z
+seg s/r1 start delivery=d1 handler=big clause=1 fuel=69 alloc=1600 state=772 end=return
+run s/r1 outcome=completed delivery=d1 handler=big value=[{id: 1, amount: 150 GBP, price: {currency: "GBP"}, paid: true}, {id: 3, amount: 120 GBP, price: {currency: "GBP"}, paid: false}] fuel=69 alloc=1600
+pumped state=idle fuel=69
+> request d2 to=s message=picks
+> pump clock=2026-10-10T12:00:02Z
+seg s/r2 start delivery=d2 handler=picks clause=1 fuel=206 alloc=2508 state=772 end=return
+run s/r2 outcome=completed delivery=d2 handler=picks value=[2, 3, 3] fuel=206 alloc=2508
+pumped state=idle fuel=206
+> vars
+vars s orders=[{id: 1, amount: 150 GBP, price: {currency: "GBP"}, paid: true}, {id: 2, amount: 80 GBP, price: {currency: "EUR"}, paid: false}, {id: 3, amount: 120 GBP, price: {currency: "GBP"}, paid: false}]

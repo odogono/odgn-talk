@@ -1,9 +1,10 @@
-use filter, map, reduce, sortBy, sum from list
+use map, reduce, sortBy, sum from list
 
 -- `given x: …` makes a Function Value you can pass to another function.
 on main
   put [5, 3, 8, 1, 9, 2] into numbers
-  say "evens: " & filter(numbers, given n: n mod 2 = 0)
+  -- A Whose Clause picks items without a Lambda: `it` is each item.
+  say "evens: " & (every item of numbers whose it mod 2 = 0)
   say "doubled: " & map(numbers, given n: n * 2)
   say "total: " & reduce(numbers, given total, n: total + n, 0)
   say "sum: " & sum(numbers)

@@ -55,7 +55,25 @@ export type Expr =
   | { k: 'match-all'; pat: Expr; pos: Pos; src: Expr }
   | Replace
   | { args: Expr[]; k: 'call'; name: SemanticName; pos: Pos }
-  | Lambda;
+  | Lambda
+  | Whose
+  | { k: 'whose-it'; pos: Pos };
+
+/**
+ * `every K of x whose c`, or `the o K of x whose c` (ADR 0074). `index` is
+ * the ordinal's, -1 for `last`, or null for `every`; `at` is the chunk word.
+ */
+export type Whose = {
+  at: Pos;
+  cond: Expr;
+  delimiter: Expr | null;
+  index: number | null;
+  k: 'whose';
+  kind: string;
+  pos: Pos;
+  src: Expr;
+};
+type EveryHead = Pick<Whose, 'at' | 'delimiter' | 'kind' | 'src'>;
 
 export type Replace = {
   first: boolean;
@@ -683,6 +701,54 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
               : [],
         end: colon >= 0 ? null : pos(children[end]!),
       } satisfies Lambda;
+    }
+    case 'Whose': {
+      const cond = of<Expr>(children[2]);
+      const whose = pos(children[1]!);
+      if (first?.kind !== 'node' || first.rule !== 'EveryHead') {
+        const head = of<Expr>(first);
+        if (head.k !== 'chunk' || typeof head.index !== 'number') {
+          return shape(node);
+        }
+        return {
+          k: 'whose',
+          pos: whose,
+          at: head.pos,
+          kind: head.kind,
+          index: head.index,
+          src: head.base,
+          delimiter: head.delimiter,
+          cond,
+        } satisfies Whose;
+      }
+      return {
+        k: 'whose',
+        pos: whose,
+        index: null,
+        ...of<EveryHead>(first),
+        cond,
+      } satisfies Whose;
+    }
+    case 'EveryHead': {
+      const ofAt = children.findIndex(child => isToken(child, 'of'));
+      const kind = children
+        .slice(1, ofAt)
+        .map(child => (child as Leaf).text)
+        .join(' ');
+      return {
+        at: pos(children[1]!),
+        kind: singular.get(kind) ?? shape(node),
+        src: of<Expr>(children[ofAt + 1]),
+        delimiter: children[ofAt + 4] ? of<Expr>(children[ofAt + 4]) : null,
+      } satisfies EveryHead;
+    }
+    case 'WhoseKey': {
+      // A key or property of the chunk being tested.
+      const key = (first as Leaf).text;
+      const base: Expr = { k: 'whose-it', pos: at };
+      return properties.has(key)
+        ? { k: 'property', pos: at, name: key, base, delimiter: null }
+        : { k: 'key', pos: at, key, base };
     }
     case 'Or':
     case 'And':

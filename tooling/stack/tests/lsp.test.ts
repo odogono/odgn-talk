@@ -526,6 +526,42 @@ describe('language server', () => {
       setup('', false).request('northtalk/dictionary', { format: 'plaintext' }),
     ).toBe('No Host Manifest, so no Grants to show.\n');
   });
+  test("explains a Whose Clause's names, and reports its load errors", () => {
+    const { sent, request } = setup(
+      'on demo xs\n put 1 into amount\n return every item of xs whose amount > amount and it is not empty\nend demo\n',
+    );
+    expect((sent.at(-1)!.params as Published).diagnostics).toEqual([]);
+    expect(request('textDocument/hover', at(2, 31)).contents.value).toBe(
+      'Whose Key: the key `amount` of the chunk being tested, as `the amount of it`',
+    );
+    expect(request('textDocument/hover', at(2, 51)).contents.value).toBe(
+      'it: the chunk this Whose Clause is testing',
+    );
+    // Renaming the local leaves the Whose Key, which isn't a name.
+    const rename = request('textDocument/rename', {
+      ...at(1, 13),
+      newName: 'limit',
+    });
+    expect(rename.changes[uri]!.map(edit => edit.range.start)).toEqual([
+      { line: 1, character: 12 },
+      { line: 2, character: 40 },
+    ]);
+    const bad = setup(
+      'function f x\n return x\nend f\non demo xs\n return every item of xs whose f(it) and region is "EU"\nend demo\n',
+    );
+    expect(
+      (bad.sent.at(-1)!.params as Published).diagnostics
+        .filter(d => d.severity === 1)
+        .map(d => [d.code, d.range.start, d.message]),
+    ).toEqual([
+      ['not in a whose', { line: 4, character: 31 }, 'not in a whose: f'],
+      [
+        'unknown name',
+        { line: 4, character: 41 },
+        "unknown name: region; a key of the chunk is `it's region`",
+      ],
+    ]);
+  });
   test('navigates and renames through imports while preserving aliases and lexical scopes', () => {
     const { request } = setup(
       'use twice from maths as double\non demo x\n put double(x) into y\nend demo\n',

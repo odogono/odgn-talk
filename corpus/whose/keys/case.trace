@@ -1,0 +1,14 @@
+# Unblessed: Whose Keys, locals of the same name, later Names and brackets (#547); first blessing awaits human review.
+> load s identity=5aeb61f1da800d900251c69b60514e867cad0e6be1e27866fe33294b0dbce372
+> request d1 to=s message=keys
+> pump clock=2026-10-10T12:00:01Z
+seg s/r1 start delivery=d1 handler=keys clause=1 fuel=308 alloc=4236 state=364 end=return
+run s/r1 outcome=completed delivery=d1 handler=keys value=[[{amount: 9, length: 7}], [{amount: 5, length: 2}, {amount: 9, length: 7}], ["abcd"], [{amount: 1, length: 9}, {amount: 5, length: 2}, {amount: 9, length: 7}], [{amount: 1, length: 9}]] fuel=308 alloc=4236
+pumped state=idle fuel=308
+> request d2 to=s message=currencies
+> pump clock=2026-10-10T12:00:02Z
+seg s/r2 start delivery=d2 handler=currencies clause=1 fuel=82 alloc=1053 state=364 end=return
+run s/r2 outcome=completed delivery=d2 handler=currencies value=[{amount: {currency: "GBP"}}] fuel=82 alloc=1053
+pumped state=idle fuel=82
+> vars
+vars s orders=[{amount: 1, length: 9}, {amount: 5, length: 2}, {amount: 9, length: 7}]

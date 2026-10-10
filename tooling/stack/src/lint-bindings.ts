@@ -748,6 +748,66 @@ const lintCollecting = (block: SemanticNode, emit: Emit) => {
   }
 };
 
+// `filter(xs, given o: …)` is a Whose Clause when its Lambda's body would be
+// a valid condition: it calls only Built-ins, holds no Lambda and doesn't read
+// the body's `it`, which a Whose Clause rebinds (ADR 0074).
+const lintWhose = (
+  all: SemanticElement[],
+  suppliedLibraries: Set<string>,
+  emit: Emit,
+) => {
+  for (const call of all) {
+    if (call.kind !== 'node' || call.rule !== 'Call') {
+      continue;
+    }
+    const fn = first(call);
+    const imported = fn?.kind === 'name' && fn.binding?.importedFrom;
+    if (
+      !imported ||
+      imported.library !== 'list' ||
+      imported.name !== 'filter' ||
+      suppliedLibraries.has('list')
+    ) {
+      continue;
+    }
+    const args = child(call, 'ExpressionList');
+    const operands = args ? nodes(args) : [];
+    const lambda = operands.length === 2 ? unwrap(operands[1]!) : undefined;
+    if (lambda?.kind !== 'node' || lambda.rule !== 'Lambda') {
+      continue;
+    }
+    // One plain parameter: a Pattern of one PatternPrimary holding a name.
+    const params = nodes(lambda).filter(n => n.rule === 'Pattern');
+    const [primary] = params.length === 1 ? params[0]!.children : [];
+    const param =
+      primary?.kind === 'node' &&
+      primary.rule === 'PatternPrimary' &&
+      primary.children.length === 1
+        ? primary.children[0]
+        : undefined;
+    const body = child(lambda, 'Expression');
+    if (
+      param?.kind !== 'name' ||
+      !leaves(lambda).some(t => t.text === ':') ||
+      !body ||
+      elements(body, true).some(
+        e =>
+          (e.kind === 'node' &&
+            (e.rule === 'Lambda' ||
+              e.rule === 'Error' ||
+              (e.rule === 'Call' &&
+                first(e)?.kind === 'name' &&
+                (first(e) as SemanticName).binding?.kind !==
+                  'builtin function'))) ||
+          (e.kind === 'name' && e.text === 'it'),
+      )
+    ) {
+      continue;
+    }
+    emit('suggest-whose', fn.span, { name: param.text });
+  }
+};
+
 // List nesting is valid, so this is optional beginner advice, not a bug claim.
 // Track only straight-line local values. Each body starts afresh; branches,
 // recovery and loop back edges do not inherit facts from another body.
@@ -1058,15 +1118,12 @@ export const lintBindings = (
       }
     }
   }
-  lintListAppend(
-    all,
-    parents,
-    new Set([
-      ...suppliedLibraries,
-      ...(manifest?.libraries ?? []).map(library => library.name),
-    ]),
-    emit,
-  );
+  const supplied = new Set([
+    ...suppliedLibraries,
+    ...(manifest?.libraries ?? []).map(library => library.name),
+  ]);
+  lintListAppend(all, parents, supplied, emit);
+  lintWhose(all, supplied, emit);
   const patterns = patternIndex(all);
   const constantKeys = new Map<number, Set<string>>();
   for (const e of all) {

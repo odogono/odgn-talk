@@ -148,6 +148,10 @@ type builder struct {
 	join      int
 	// deadlines counts the Timeout Blocks whose deadlines are on the stack.
 	deadlines int
+	// iterators counts the Whose Clause walks on the stack, and whoseIt holds
+	// the temps of the chunks they test, innermost last.
+	iterators int
+	whoseIt   []int
 	moves     []bindingMove
 }
 
@@ -422,7 +426,7 @@ func (u *Unit) hasPatternParams(n *syntax.Node) bool {
 
 // depth is the number of iterators and deadlines on the operand stack.
 func (u *Unit) depth() int {
-	n := u.state.deadlines
+	n := u.state.deadlines + u.state.iterators
 	for _, loop := range u.state.loops {
 		if loop.iterator {
 			n++

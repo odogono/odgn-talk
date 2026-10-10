@@ -2,7 +2,7 @@
 
 A Chunk Expression may end with a Whose Clause, `whose c`, which keeps only the chunks for which `c` is `true`. Inside `c`, `it` is the chunk being tested, and a Name that is `c`'s first token is a Whose Key, a key or property of `it`, as the possessive _whose_ reads in English. `every item of orders whose amount > 100 GBP` gives the list of elements whose `amount` is over 100 GBP. `the first item of tickets whose status is "open"` gives the first match, or Nothing when there is none. Any ordinal works this way, and `last` gives the last match. For example:
 
-```
+```talk
 put every item of orders whose amount > 100 GBP into big
 put the first item of tickets whose status is "open" into next
 put every line of report whose length > 80 into long
@@ -58,5 +58,5 @@ This narrows ADR 0025, which removed Comprehensions as a second spelling of `map
   - Inside `c`, `it` is `load t`, and a Whose Key lowers as `the K of it`. Every step is charged as its instructions are (ADR 0021).
 - **Surface:** Beginner Surface, with no `[[advanced]]` tag (ADR 0027).
 - **Tooling:** an `unknown name` in a Whose Clause's condition, other than its first token, suggests `it's` with the name. A `suggest-whose` hint, at the `beginner` level, for a `filter` call whose Lambda has one plain parameter and a body that would be a valid condition. It ships with the Cores' implementation. Adding it isn't a language change.
-- **Delivery:** the rules land with this ADR (ADR 0032): the grammar in chapter 2, `grammar.ebnf` and `grammar.toml`, chapters 4 and 8, `diagnostics.toml`, and the reference parser with its sketch and broken cases under `tools/grammar/whose/`. The examples stay in plain code blocks until both Cores parse them, since the TS Core's tests parse every `talk` block in `docs/` and `spec/`. The implementation follow-up supplies both Cores' parsers, checkers and lowerings, the Disassembly and Trace Cases, and the Lint. Its cases cover maps, text chunks, no match, the ordinal and `last` forms, `not in a whose`, a Whose Key with a local of the same name, which the clause doesn't read, and a later Name that is a local, which it does.
+- **Delivery:** the rules land with this ADR (ADR 0032): the grammar in chapter 2, `grammar.ebnf` and `grammar.toml`, chapters 4 and 8, `diagnostics.toml`, and the reference parser with its sketch and broken cases, staged under `tools/grammar/whose/` until both Cores parsed them (#547). The implementation follow-up supplies both Cores' parsers, checkers and lowerings, the Disassembly and Trace Cases, and the Lint. Its cases cover maps, text chunks, no match, the ordinal and `last` forms, `not in a whose`, a Whose Key with a local of the same name, which the clause doesn't read, and a later Name that is a local, which it does.
 - **A breaking change, with no version bump.** A chunk index that is a variable named `whose`, as in `item whose of xs`, no longer parses and needs brackets: `item (whose) of xs`. No source in the corpus, the stdlib or the docs is affected.

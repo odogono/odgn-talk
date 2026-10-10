@@ -129,7 +129,10 @@ const checkMap = (node: SemanticNode, report: ConstructReport) => {
   }
 };
 
-/** Follow a `delimited by` chain through its Chunk Expressions to an `item` chunk. */
+/**
+ * Follow a `delimited by` chain through its Chunk Expressions to an `item`
+ * chunk. An Every Head is the chain's outermost level (ADR 0074).
+ */
 const checkDelimited = (node: SemanticNode, report: ConstructReport) => {
   const delimited = node.children.find(
     child => child.kind !== 'node' && child.text === 'delimited',
@@ -137,7 +140,15 @@ const checkDelimited = (node: SemanticNode, report: ConstructReport) => {
   if (!delimited) {
     return;
   }
-  let base: SemanticNode | undefined = unwrap(node.children[0] as SemanticNode);
+  const head = node.rule === 'EveryHead';
+  if (head && leaves(node)[1]?.text === 'item') {
+    return;
+  }
+  let base: SemanticNode | undefined = unwrap(
+    node.children[
+      head ? node.children.indexOf(delimited) - 1 : 0
+    ] as SemanticNode,
+  );
   while (base) {
     const words = leaves(base).map(leaf => leaf.text);
     if (base.rule === 'Chunk') {
@@ -427,6 +438,7 @@ export const checkConstructs = (
         checkMap(node, report);
         break;
       case 'ChunkLevel':
+      case 'EveryHead':
         checkDelimited(node, report);
         break;
       case 'PatternPrimary':

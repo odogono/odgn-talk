@@ -227,3 +227,35 @@ end play`
 		t.Fatal(tree.Declarations[0].Text)
 	}
 }
+
+// A Whose Clause's head is an ordinal chunk, `every` for an Every Head, and a
+// Name first in its condition is a key of `it` (ADR 0074).
+func TestWhoseClauseShape(t *testing.T) {
+	var shape func(*Node) string
+	shape = func(n *Node) string {
+		parts := []string{n.Kind + ":" + n.Text}
+		for _, child := range n.Children {
+			parts = append(parts, shape(child))
+		}
+		return "(" + strings.Join(parts, " ") + ")"
+	}
+	for _, tc := range []struct{ expression, want string }{
+		{"every item of xs whose amount > n", "(whose:item (chunk:item (ordinal:every) (name:xs)) (binary:> (key:amount (literal:it)) (name:n)))"},
+		{"the third line of s delimited by d whose length > 1", "(whose:line (delimited:delimited (chunk:line (ordinal:third) (name:s)) (name:d)) (binary:> (key:length (literal:it)) (literal:1)))"},
+		{"every code point of s delimited by d whose it is not n", "(whose:code point (delimited:delimited (chunk:code point (ordinal:every) (name:s)) (name:d)) (binary:is not (literal:it) (name:n)))"},
+		{"every item of xs whose f(it)", "(whose:item (chunk:item (ordinal:every) (name:xs)) (call:f (literal:it)))"},
+		{"every item of xs whose item 1 of it", "(whose:item (chunk:item (ordinal:every) (name:xs)) (chunk:item (literal:1) (literal:it)))"},
+	} {
+		tree, err := Parse("on t\n return " + tc.expression + "\nend t")
+		if err != nil {
+			t.Fatalf("%s: %v", tc.expression, err)
+		}
+		n := tree.Declarations[0].Body[0].Children[0]
+		if got := shape(n); got != tc.want {
+			t.Errorf("%s: got %s, want %s", tc.expression, got, tc.want)
+		}
+		if n.Token.Raw != "whose" {
+			t.Errorf("%s: at %q", tc.expression, n.Token.Raw)
+		}
+	}
+}

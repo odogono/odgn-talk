@@ -1,0 +1,14 @@
+-- Text chunks give lists of texts (ADR 0074).
+script variable report = "WARN disk" & newline & "ok" & newline & "WARN fan speed"
+
+on lines
+ return [every line of report whose it begins with "WARN", every line of report whose length > 2]
+end lines
+
+on words
+ put every word of line 3 of report whose length = 3 into short
+ put the last word of report whose it is not "WARN" into lastWord
+ put every item of "a;;b;c" delimited by ";" whose it is not empty into fields
+ put every character of "banana" whose it is "a" into as
+ return [short, lastWord, fields, as]
+end words

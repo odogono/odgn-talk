@@ -1,0 +1,15 @@
+# Unblessed: the first, n-th and last forms, and stopping at the n-th match (#547); first blessing awaits human review.
+> load s identity=53c9b23eaa51f07ac52874f0e4fe2d7c3872a5f3403241ce55962b7550a70fc8
+> request d1 to=s message=nth
+> pump clock=2026-10-10T12:00:01Z
+seg s/r1 start delivery=d1 handler=nth clause=1 fuel=633 alloc=1936 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=nth value=[4, 2, 7, 20] fuel=633 alloc=1936
+pumped state=idle fuel=633
+> request d2 to=s message=lastMatch
+> pump clock=2026-10-10T12:00:02Z
+raise s/r2 code="division by zero" at=s:131 pos=8:44
+seg s/r2 start delivery=d2 handler=lastMatch clause=1 fuel=67 alloc=232 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=lastMatch error={code: "division by zero", at: {unit: "s", handler: "lastMatch", line: 8, column: 44}} fuel=67 alloc=232
+pumped state=idle fuel=67
+> vars
+vars s

@@ -648,6 +648,8 @@ export class BodyCompiler {
   inFinally: number[] = [];
   join = 0;
   iterators = 0; // iterators and deadlines on the operand stack: the static depth
+  // The temps holding the chunk each open Whose Clause tests, innermost last.
+  whoseIt: number[] = [];
   line = 1;
   col = 1;
   capturedFrom: BodyCompiler | null;
@@ -2699,7 +2701,7 @@ export class BodyCompiler {
         return void this.constant(textConstant(n.v));
       case 'Const':
         if (n.v === 'it') {
-          return void this.emit('load', [0], ['it']);
+          return void this.emit('load', [this.whoseIt.at(-1) ?? 0], ['it']);
         }
         if (n.v === 'me') {
           return void this.emit('me');
@@ -2797,6 +2799,8 @@ export class BodyCompiler {
       case 'Chunk':
       case 'OrdinalChunk':
         return this.chunkRead(n);
+      case 'Whose':
+        return this.whose(n);
       case 'List':
         return this.list(n);
       case 'Map': {
@@ -2869,7 +2873,90 @@ export class BodyCompiler {
     this.place(end);
   }
 
-  chunkRead(n: Node) {
+  // `every K of x whose c`, or `the o K of x whose c` (chapter 8, Whose
+  // Clauses): a walk over `the Ks of x` that keeps the chunks where `c` holds.
+  whose(n: Node) {
+    const head: Node = n.every ? n : n.of;
+    const word = n.every ? n.at : n.of;
+    const index: number | null = n.every ? null : ORDINAL_INDEX[n.of.ord]!;
+    const src: Node = n.every ? n.src : n.of.of;
+    const delimiter: Node | undefined = head.delimiter;
+    this.at(n);
+    const r = this.temp();
+    if (index === null) {
+      this.emit('list', [0]);
+    } else {
+      this.constant('nothing');
+    }
+    this.emit('store', [r]);
+    let k: number | null = null;
+    if (index !== null && index > 1) {
+      this.pos(word, () => this.constant(String(index)));
+      k = this.temp();
+      this.emit('store', [k]);
+    }
+    // Every chunk kind's plural adds an `s`, `code points` included.
+    const plural = `${head.kind}s`;
+    let d: number | null = null;
+    if (delimiter && (src.k === 'Chunk' || src.k === 'OrdinalChunk')) {
+      d = this.chunkRead({ ...src, delimiter }, true);
+      this.at(n);
+      this.emit('load', [d!]);
+      this.pos(word, () => this.emit('property-delimited', [plural]));
+    } else {
+      this.expr(src);
+      if (delimiter) {
+        this.expr(delimiter);
+      }
+      this.at(n);
+      this.pos(word, () =>
+        this.emit(delimiter ? 'property-delimited' : 'property', [plural]),
+      );
+    }
+    this.emit('iterate');
+    this.iterators++;
+    const top = this.label();
+    const done = this.label();
+    this.place(top);
+    this.emit('next', [done]);
+    const t = this.temp();
+    this.emit('store', [t]);
+    this.whoseIt.push(t);
+    this.expr(n.cond);
+    this.whoseIt.pop();
+    this.at(n);
+    this.emit('branch-false', [top]);
+    if (index === null) {
+      this.emit('load', [r]);
+      this.emit('load', [t]);
+      this.emit('list-append');
+      this.emit('store', [r]);
+      this.emit('jump', [top]);
+    } else {
+      if (k !== null) {
+        this.emit('load', [k]);
+        this.constant('1');
+        this.emit('subtract');
+        this.emit('store', [k]);
+        this.emit('load', [k]);
+        this.constant('0');
+        this.emit('equal');
+        this.emit('branch-false', [top]);
+      }
+      this.emit('load', [t]);
+      this.emit('store', [r]);
+      this.emit('jump', [index === -1 ? top : done]);
+    }
+    this.place(done);
+    this.emit('pop');
+    this.iterators--;
+    this.emit('load', [r]);
+    this.release(r, t, ...(k === null ? [] : [k]), ...(d === null ? [] : [d]));
+  }
+
+  // With `keep`, the delimiter's temp outlives the read, for a Whose
+  // Clause's walk, which returns it.
+  chunkRead(n: Node, keep = false): number | null {
     // The chain, outermost level first, down to the value it reads from.
     const levels: Node[] = [];
     let e: Node = n;
@@ -2901,9 +2988,10 @@ export class BodyCompiler {
         this.emit('chunk-get', [kind]);
       }
     }
-    if (d !== null) {
+    if (d !== null && !keep) {
       this.release(d);
     }
+    return d;
   }
 
   list(n: Node) {

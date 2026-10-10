@@ -1,0 +1,21 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "call"
+source = "call.talk"
+
+[[scripts]]
+name = "shadow"
+source = "shadow.talk"
+
+[[scripts]]
+name = "lambda"
+source = "lambda.talk"
+
+[[scripts]]
+name = "later"
+source = "later.talk"

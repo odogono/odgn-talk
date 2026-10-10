@@ -90,6 +90,18 @@ on collectingScalers
   return fs
 end collectingScalers
 
+-- Whose Clauses (ADR 0074): every match, the first, the last and an n-th,
+-- and walks with `delimited by`, over a plain value and over a chunk.
+on picking orders, report, limit
+  put every item of orders whose amount > limit into big
+  put the first item of orders whose it's paid into paid
+  put the last line of report whose length > limit into longest
+  put the third word of report whose it begins with "a" into third
+  put every item of report delimited by ";" whose it is not empty into fields
+  put the tenth item of line 2 of report delimited by ";" whose it contains "x" into tenth
+  return every item of orders whose (every item of it whose it > limit) is not empty
+end picking
+
 on spreading next, rest
   send log with "seen", ...rest to me
   send (next) with ...rest, 1 to me and wait

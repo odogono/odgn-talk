@@ -33,6 +33,11 @@ export const fixtures: readonly {
     ),
   },
   {
+    id: 'suggest-whose',
+    positive: `use filter from list\n${script('put filter([1, 5], given n: n > 2) into big')}`,
+    negative: `use filter from list\n${script('put filter([1, 5], given n: n > it) into big')}`,
+  },
+  {
     id: 'store-race',
     positive: script(
       'ask scores to get "best", 0\nput it + 1 into best\nask scores to set "best", best',

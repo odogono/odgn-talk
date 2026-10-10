@@ -1389,7 +1389,7 @@ export class Parser {
     if (this.isWord(t, 'every')) {
       const n = this.la2('every-chunk', 'operator');
       if (this.isWord(n) && (SINGULAR.has(n.v) || n.v === 'code')) {
-        return this.at(t, this.everyHead());
+        return this.everyHead();
       }
     }
     const e = this.or();
@@ -1925,7 +1925,8 @@ export class Parser {
   // (ADR 0074).
   everyHead(): Node {
     this.next();
-    let kind = this.next().v;
+    const word = this.next();
+    let kind = word.v;
     if (kind === 'code') {
       this.expectWord('point');
       kind = 'code point';
@@ -1943,15 +1944,16 @@ export class Parser {
       this.next();
       delimiter = this.postfix(this.primary());
     }
-    this.expectWord('whose', 'operator');
-    return {
+    const op = this.expectWord('whose', 'operator');
+    return this.at(op, {
       k: 'Whose',
       every: true,
+      at: { line: word.line, col: word.col },
       kind,
       src,
       delimiter,
       cond: this.whoseCondition(),
-    };
+    });
   }
 
   // A Name operand that is the condition's first token is a Whose Key, a key

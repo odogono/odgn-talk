@@ -160,7 +160,12 @@ func (u *Unit) expression(n *syntax.Node) {
 	switch n.Kind {
 	case "literal":
 		if n.Text == "it" {
-			u.load(pos, 0)
+			// In a Whose Clause's condition, `it` is the chunk being tested.
+			slot := 0
+			if len(u.state.whoseIt) > 0 {
+				slot = u.state.whoseIt[len(u.state.whoseIt)-1]
+			}
+			u.load(pos, slot)
 		} else if n.Text == "me" {
 			u.emit(pos, "me")
 		} else {
@@ -245,10 +250,12 @@ func (u *Unit) expression(n *syntax.Node) {
 		u.expression(n.Children[1])
 		u.emit(pos, "get-key-computed")
 	case "chunk":
-		u.chunk(n, nil)
+		u.chunk(n, nil, false)
+	case "whose":
+		u.whose(n)
 	case "delimited":
 		if n.Children[0].Kind == "chunk" {
-			u.chunk(n.Children[0], n.Children[1])
+			u.chunk(n.Children[0], n.Children[1], false)
 		} else {
 			whole := n.Children[0]
 			u.expression(whole.Children[0])
@@ -319,7 +326,107 @@ func (u *Unit) expression(n *syntax.Node) {
 		panic("unhandled expression " + n.Kind)
 	}
 }
-func (u *Unit) chunk(n, delimiter *syntax.Node) {
+
+// whose lowers `every K of x whose c`, or `the o K of x whose c` (chapter 8,
+// Whose Clauses): a walk over `the Ks of x` that keeps the chunks where `c`
+// holds. Its head is an ordinal chunk, perhaps delimited, whose ordinal is
+// `every` for an Every Head.
+func (u *Unit) whose(n *syntax.Node) {
+	at, word := n.Pos(), n.NameToken.Pos
+	head := n.Children[0]
+	var delimiter *syntax.Node
+	if head.Kind == "delimited" {
+		head, delimiter = head.Children[0], head.Children[1]
+	}
+	ordinal, src := head.Children[0].Text, head.Children[1]
+	index := slices.Index(generated.Grammar.Ordinals, ordinal) + 1
+	if ordinal == "last" {
+		index = -1
+	}
+	r := u.temp()
+	if ordinal == "every" {
+		u.emit(at, "list", number(0))
+	} else {
+		u.value(at, "nothing")
+	}
+	u.store(at, r)
+	k := -1
+	if index > 1 {
+		u.value(word, strconv.Itoa(index))
+		k = u.temp()
+		u.store(at, k)
+	}
+	plural := ""
+	for _, c := range generated.Grammar.Chunk {
+		if c.Singular == n.Text {
+			plural = c.Plural
+		}
+	}
+	d := -1
+	if delimiter != nil && src.Kind == "chunk" {
+		d = u.chunk(src, delimiter, true)
+		u.load(at, d)
+		u.emit(word, "property-delimited", text(plural))
+	} else {
+		u.expression(src)
+		if delimiter != nil {
+			u.expression(delimiter)
+			u.emit(word, "property-delimited", text(plural))
+		} else {
+			u.emit(word, "property", text(plural))
+		}
+	}
+	u.emit(at, "iterate")
+	u.state.iterators++
+	top, done := &label{}, &label{}
+	u.mark(top)
+	u.emit(at, "next", target(done))
+	t := u.temp()
+	u.store(at, t)
+	u.state.whoseIt = append(u.state.whoseIt, t)
+	u.expression(n.Children[1])
+	u.state.whoseIt = u.state.whoseIt[:len(u.state.whoseIt)-1]
+	u.emit(at, "branch-false", target(top))
+	switch {
+	case ordinal == "every":
+		u.load(at, r)
+		u.load(at, t)
+		u.emit(at, "list-append")
+		u.store(at, r)
+		u.emit(at, "jump", target(top))
+	default:
+		if k >= 0 {
+			u.load(at, k)
+			u.value(at, "1")
+			u.emit(at, "subtract")
+			u.store(at, k)
+			u.load(at, k)
+			u.value(at, "0")
+			u.emit(at, "equal")
+			u.emit(at, "branch-false", target(top))
+		}
+		u.load(at, t)
+		u.store(at, r)
+		if ordinal == "last" {
+			u.emit(at, "jump", target(top))
+		} else {
+			u.emit(at, "jump", target(done))
+		}
+	}
+	u.mark(done)
+	u.emit(at, "pop")
+	u.state.iterators--
+	u.load(at, r)
+	for _, slot := range []int{r, t, k, d} {
+		if slot >= 0 {
+			u.release(slot)
+		}
+	}
+}
+
+// chunk reads a Chunk Expression. With keep, the delimiter's temp outlives
+// the read and is returned, for a Whose Clause's walk.
+func (u *Unit) chunk(n, delimiter *syntax.Node, keep bool) int {
 	levels := []*syntax.Node{}
 	whole := n
 	for whole.Kind == "chunk" {
@@ -343,9 +450,10 @@ func (u *Unit) chunk(n, delimiter *syntax.Node) {
 			u.emit(level.Pos(), "chunk-get", text(level.Text))
 		}
 	}
-	if slot >= 0 {
+	if slot >= 0 && !keep {
 		u.release(slot)
 	}
+	return slot
 }
 func (u *Unit) call(n *syntax.Node, wait bool) {
 	s, ok := u.checked.Resolve(u.state.body.Checked, n.Text)

@@ -1,0 +1,14 @@
+-- A condition that isn't a boolean raises `wrong kind`, as for `if`, and an
+-- error in the condition is raised in the Run (ADR 0074).
+on go
+ try
+  put every item of [1, 2] whose it into xs
+ catch e
+  put the code of e into code
+ end try
+ return [code, every item of [{n: 1}] whose missing is nothing]
+end go
+
+on raises
+ return every item of [{n: 1}, {n: "x"}] whose n > 0
+end raises

@@ -656,6 +656,35 @@ export const completion = (
   ];
 };
 
+// Inside a Whose Clause's condition, `it` and the Whose Key read the chunk
+// being tested, not a local (ADR 0074).
+const whoseHover = (analysis: Analysis, offset: number) => {
+  const within = (n: { span: { end: number; start: number } }) =>
+    n.span.start <= offset && offset < n.span.end;
+  const key = analysis.nodes.find(n => n.rule === 'WhoseKey' && within(n));
+  const it = key ? undefined : nameAt(analysis, offset);
+  const condition =
+    it?.text === 'it' &&
+    analysis.nodes.some(n => {
+      const c = n.rule === 'Whose' ? n.children[2] : undefined;
+      return c?.kind === 'node' && within(c);
+    });
+  const word = key ? leaf(key) : condition ? it : undefined;
+  if (!word) {
+    return null;
+  }
+  const property = grammar.properties.includes(word.text);
+  return {
+    contents: {
+      kind: 'plaintext',
+      value: key
+        ? `Whose Key: the ${property ? 'property' : 'key'} \`${word.text}\` of the chunk being tested, as \`the ${word.text} of it\``
+        : 'it: the chunk this Whose Clause is testing',
+    },
+    range: rangeAt(analysis.document.text, word.span.start, word.span.end),
+  };
+};
+
 export const hover = (
   all: Map<string, Analysis>,
   analysis: Analysis,
@@ -663,6 +692,10 @@ export const hover = (
   manifest: HostManifest | null,
   client: ClientFeatures = { markdown: false, snippets: false },
 ) => {
+  const whose = whoseHover(analysis, offset);
+  if (whose) {
+    return whose;
+  }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;
   const node = analysis.nodes.find(

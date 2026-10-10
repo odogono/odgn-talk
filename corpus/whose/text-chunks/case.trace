@@ -1,0 +1,14 @@
+# Unblessed: Whose Clauses over lines, words, items and Characters (#547); first blessing awaits human review.
+> load s identity=a7808ddc125133a6f4613411acb6c0bb1cbc44e0c2a7e0c6073f5c0828bcedc1
+> request d1 to=s message=lines
+> pump clock=2026-10-10T12:00:01Z
+seg s/r1 start delivery=d1 handler=lines clause=1 fuel=158 alloc=832 state=43 end=return
+run s/r1 outcome=completed delivery=d1 handler=lines value=[["WARN disk", "WARN fan speed"], ["WARN disk", "WARN fan speed"]] fuel=158 alloc=832
+pumped state=idle fuel=158
+> request d2 to=s message=words
+> pump clock=2026-10-10T12:00:02Z
+seg s/r2 start delivery=d2 handler=words clause=1 fuel=349 alloc=1582 state=43 end=return
+run s/r2 outcome=completed delivery=d2 handler=words value=[["fan"], "speed", ["a", "b", "c"], ["a", "a", "a"]] fuel=349 alloc=1582
+pumped state=idle fuel=349
+> vars
+vars s report="WARN disk" & newline & "ok" & newline & "WARN fan speed"

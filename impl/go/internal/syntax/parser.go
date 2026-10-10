@@ -17,6 +17,9 @@ type parser struct {
 	buildDepth   int
 	pinSizeDepth int
 	continuation bool
+	// whoseKey is one past the offset of a Whose Clause condition's first
+	// token, or zero (ADR 0074).
+	whoseKey int
 }
 
 // Parse is predictive, uses at most two pending tokens, and stops at the first
@@ -885,7 +888,75 @@ func (p *parser) expression() *Node {
 	if p.atOperand("given") {
 		return p.lambda()
 	}
-	return p.binary(1)
+	// A Whose Clause is a whole Expression, as a Lambda is (ADR 0074): an
+	// Every Head is decided at the start of one, and an ordinal Chunk
+	// Expression takes `whose` only when it is the whole operand.
+	if p.atOperand("every") {
+		if c := p.second(Operator); c.Kind == Word && (singular(c.Raw) || c.Raw == "code") {
+			return p.everyHead()
+		}
+	}
+	e := p.binary(1)
+	if ordinalChunk(e) && p.at("whose") {
+		return p.whose(e)
+	}
+	return e
+}
+
+func singular(s string) bool {
+	for _, c := range generated.Grammar.Chunk {
+		if s == c.Singular {
+			return true
+		}
+	}
+	return false
+}
+
+// ordinalChunk reports `the first item of x`, with or without `delimited by`.
+func ordinalChunk(n *Node) bool {
+	if n.Kind == "delimited" {
+		n = n.Children[0]
+	}
+	return n.Kind == "chunk" && n.Children[0].Kind == "ordinal"
+}
+
+// everyHead reads `every item of xs`, which a Whose Clause must follow. It is
+// shaped as an ordinal chunk whose ordinal is `every`; as the outermost Chunk
+// Expression, it takes the chain's `delimited by`.
+func (p *parser) everyHead() *Node {
+	every := node("ordinal", p.take(Operand))
+	c := p.take(Operand)
+	kind := c.Raw
+	if kind == "code" {
+		p.expect("point")
+		kind = "code point"
+	}
+	p.expect("of")
+	every.Text = "every"
+	head := node("chunk", c, every, p.postfix())
+	head.Text = kind
+	if p.pair("delimited", "by") {
+		t := p.take(Operator)
+		p.expect("by")
+		head = node("delimited", t, head, p.postfix())
+	}
+	return p.whose(head)
+}
+
+// whose reads `whose c` after an Every Head or an ordinal chunk: a node with
+// the head and the condition as Children, at the `whose` token, whose
+// NameToken is the chunk word and Text the chunk kind.
+func (p *parser) whose(head *Node) *Node {
+	n := node("whose", p.expect("whose"), head)
+	chunk := head
+	if chunk.Kind == "delimited" {
+		chunk = chunk.Children[0]
+	}
+	n.NameToken = chunk.Token
+	n.Text = chunk.Text
+	p.whoseKey = p.peek(Operand).Start + 1
+	n.Children = append(n.Children, p.expression())
+	return n
 }
 func (p *parser) lambda() *Node {
 	n := node("lambda", p.take(Operand))
@@ -1184,6 +1255,15 @@ func (p *parser) primary() *Node {
 			n.Text = kind
 			p.expect("of")
 			n.Children = append(n.Children, p.postfix())
+			return n
+		}
+		// A Name that is a condition's first token is a Whose Key, a key or
+		// property of the chunk being tested: `whose amount > 100 GBP`.
+		if t.Start+1 == p.whoseKey {
+			it := node("literal", t)
+			it.Text = "it"
+			n := node("key", t, it)
+			n.Params = []*Node{node("key-name", t)}
 			return n
 		}
 		return node("name", t)

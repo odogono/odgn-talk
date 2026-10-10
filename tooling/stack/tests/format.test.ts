@@ -152,6 +152,16 @@ test("indents a Timeout Block's body and keeps its ending", () => {
   );
 });
 
+test('spaces a Whose Clause like any other expression', () => {
+  expect(
+    formatSource(
+      'on t xs\nput   every  item of xs   whose   amount>1 into ys\n  return the  first item of xs delimited by ";"  whose (every item of it whose it>1) is not empty\nend t\n',
+    ).source,
+  ).toBe(
+    'on t xs\n  put every item of xs whose amount > 1 into ys\n  return the first item of xs delimited by ";" whose (every item of it whose it > 1) is not empty\nend t\n',
+  );
+});
+
 test('treats punctuation inside text as text', () => {
   for (const punctuation of [
     '[',
