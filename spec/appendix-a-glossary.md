@@ -67,7 +67,7 @@ The Host object that begins, commits and rolls back the Segment-bound effects of
 _Avoid_: participant (for the Host object), transaction manager, resource manager
 
 **Operation Declaration**:
-The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional Capability Scope and Segment-bound behavior. The same form serves Hosts, the Conformance Corpus and tooling.
+The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional Capability Scope and Segment-bound behavior. A Host may add a description and examples, which only tooling reads. The same form serves Hosts, the Conformance Corpus and tooling.
 _Avoid_: signature, schema, spec (unqualified)
 
 **Value Encoding**:

@@ -311,6 +311,8 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl // immediate only
 	SegmentBound bool       // immediate only; false by default
+	Description  string     // plain text for tooling; only the Host Manifest carries it
+	Examples     []string   // NorthTalk source, each calling this Operation; manifest only
 
 	Do    func(c *Call, args []Value) (Value, error) // Immediate: a *ScriptError, ErrLimit, or anything else as `host error`
 	Start func(c *Call, args []Value) error          // Suspending: answer later through c

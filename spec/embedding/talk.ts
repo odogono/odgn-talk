@@ -184,6 +184,9 @@ interface OpBase {
   result?: Shape;
   cost: Cost;
   errors?: ErrorDecl[];
+  /** Plain text for tooling only: the Host Manifest carries these, and nothing else reads them. */
+  description?: string;
+  examples?: string[]; // NorthTalk source, each calling this Operation
 }
 export type ScopeDecl =
   | { opens: string; abandon: string; closes?: never }

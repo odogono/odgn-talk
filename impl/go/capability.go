@@ -38,6 +38,8 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl
 	SegmentBound bool
+	Description  string   // tooling only; nothing in the Core reads it (ADR 0076)
+	Examples     []string // tooling only
 	Do           func(c *Call, args []Value) (Value, error)
 	Start        func(c *Call, args []Value) error
 	Fire         func(c *Call, args []Value) error

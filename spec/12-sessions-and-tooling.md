@@ -303,7 +303,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 
 - **Diagnostics:** the normative errors and the Lints.
 - **Completion:** Operations from the Grants, `catch` patterns from declared error codes, names from imports, message names from the Host Manifest, and Units and chunk words where the grammar allows them.
-- **Hover:** the declaration's [Declaration Documentation](session-observation.md#declaration-documentation), plus a Constant's value in the display form, an Operation's Declaration, and a Function Value's Home Script.
+- **Hover:** the declaration's [Declaration Documentation](session-observation.md#declaration-documentation), plus a Constant's value in the display form, an Operation's Declaration with its `description` and `examples`, and a Function Value's Home Script.
 - **Navigation:** go to definition and find references across imports, and rename.
 - **Recovery diagnostics:** use the grammar/checker rules and Advanced tags for offers, Recovery Catches and choices. A choice need not have a statically visible offer; dynamic availability alone is not a load error or LSP diagnostic. Beginner wording suggests a local catch with an explicitly supplied policy callback.
 - **Suspension marks:** a mark on every Suspension Point and every Handler or Lambda that may suspend. They add to the `wait` the source must already have, including a Join's `wait for all` head, and never replace it.
@@ -325,7 +325,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 
 ### The Host Manifest
 
-Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, the Libraries a Script may import, the messages it may receive with their argument Shapes, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). The Core never reads it, so a stale manifest can only mislead tooling. The Playground builds its manifest from its own Grants.
+Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, with any `description` and `examples` the Host wrote for them, the Libraries a Script may import, the messages it may receive with their argument Shapes, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). The Core never reads it, so a stale manifest can only mislead tooling. The Playground builds its manifest from its own Grants.
 
 ### The Playground
 
