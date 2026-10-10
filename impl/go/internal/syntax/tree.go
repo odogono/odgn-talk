@@ -6,7 +6,8 @@ import "strings"
 // hold operands, entries or fields; Params, Body, Branches, Guard and Collect preserve
 // the grammar's distinct regions. Token and End retain their source positions.
 type Node struct {
-	NameToken                        Token
+	// NameToken is optional; most expression nodes have no binding name.
+	NameToken                        *Token
 	Kind                             string
 	Text                             string
 	Token, End                       Token
@@ -99,7 +100,7 @@ func (n *Node) cachePositions() {
 }
 
 func (n *Node) BindingPos() Position {
-	if n.NameToken.Kind == Word {
+	if n.NameToken != nil && n.NameToken.Kind == Word {
 		return n.NameToken.Pos
 	}
 	return n.Pos()

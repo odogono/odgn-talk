@@ -223,6 +223,8 @@ func (p *parser) word() Token {
 	}
 	return p.take(Operand)
 }
+func tokenRef(t Token) *Token { return &t }
+
 func node(kind string, t Token, children ...*Node) *Node {
 	return &Node{Kind: kind, Token: t, Text: t.Raw, Children: children}
 }
@@ -254,7 +256,7 @@ func (p *parser) declaration() *Node {
 		n.Kind = "variable"
 		name := p.name()
 		n.Text = name.Raw
-		n.NameToken = name
+		n.NameToken = tokenRef(name)
 		n.Params = []*Node{node("name", name)}
 		if p.accept("=") {
 			n.Children = []*Node{p.expression()}
@@ -263,7 +265,7 @@ func (p *parser) declaration() *Node {
 	case "constant":
 		name := p.name()
 		n.Text = name.Raw
-		n.NameToken = name
+		n.NameToken = tokenRef(name)
 		n.Params = []*Node{node("name", name)}
 		p.expect("=")
 		n.Children = []*Node{p.expression()}
@@ -277,7 +279,7 @@ func (p *parser) declaration() *Node {
 			n.Params = append(n.Params, node("name", p.name()))
 		}
 		p.expect("from")
-		n.NameToken = p.name()
+		n.NameToken = tokenRef(p.name())
 		n.Text = n.NameToken.Raw
 		if len(n.Params) == 1 && p.accept("as") {
 			n.Children = append(n.Children, node("name", p.name()))
@@ -297,7 +299,7 @@ func (p *parser) declaration() *Node {
 			name = p.take(Operand)
 			p.take(Operand)
 			n.Text = FallbackName
-			n.NameToken = name
+			n.NameToken = tokenRef(name)
 			n.Params = []*Node{p.bindingPattern()}
 		} else {
 			name = p.name()
@@ -305,7 +307,7 @@ func (p *parser) declaration() *Node {
 				p.fail(name)
 			}
 			n.Text = name.Raw
-			n.NameToken = name
+			n.NameToken = tokenRef(name)
 		}
 		for !fallback && !p.atOperand("\n") && !p.at("where") && !p.at(",") && (n.Kind != "handler" || !p.suffixStart()) {
 			if n.Kind == "function" {
@@ -440,7 +442,7 @@ func (p *parser) andWait(n *Node) {
 // operation reads an Operation name, which may be any word, then its
 // arguments, and `and wait` where waits allows it.
 func (p *parser) operation(n *Node, waits bool) {
-	n.NameToken = p.word()
+	n.NameToken = tokenRef(p.word())
 	n.Text = n.NameToken.Raw
 	if !p.atOperand("\n") && !p.at("else") && !p.pair("and", "wait") {
 		n.Children = p.expressionList()
@@ -509,7 +511,7 @@ func (p *parser) statement(inline bool) *Node {
 	if t.Raw == "choose" && p.second(Operand).Raw == "offer" {
 		n := node("choose-offer", p.take(Operand))
 		p.expect("offer")
-		n.NameToken = p.name()
+		n.NameToken = tokenRef(p.name())
 		n.Text = n.NameToken.Raw
 		if open := p.peek(Operator); open.Raw == "(" && open.Leading == "" {
 			p.take(Operator)
@@ -571,9 +573,9 @@ func (p *parser) statement(inline bool) *Node {
 			p.take(Operand)
 			n.Params = []*Node{p.expression()}
 			p.expect(":")
-			n.NameToken = p.name()
+			n.NameToken = tokenRef(p.name())
 			if n.NameToken.Raw == "all" {
-				p.fail(n.NameToken)
+				p.fail(*n.NameToken)
 			}
 			n.Text = n.NameToken.Raw
 			p.commandPhrase(n)
@@ -592,7 +594,7 @@ func (p *parser) statement(inline bool) *Node {
 				p.fail(name)
 			}
 			n.Text = name.Raw
-			n.NameToken = name
+			n.NameToken = tokenRef(name)
 		}
 		if p.accept("with") {
 			n.Children = p.sendList()
@@ -624,13 +626,13 @@ func (p *parser) statement(inline bool) *Node {
 	case "pass":
 		if p.atAnyMessage() {
 			// `pass any message`: the Fallback Handler's pass (ADR 0064).
-			n.NameToken = p.take(Operand)
+			n.NameToken = tokenRef(p.take(Operand))
 			p.take(Operand)
 			n.Text = FallbackName
 			break
 		}
 		name := p.name()
-		n.NameToken = name
+		n.NameToken = tokenRef(name)
 		if name.Raw == "all" {
 			p.fail(name)
 		}
@@ -794,7 +796,7 @@ func (p *parser) tryStatement() *Node {
 	n.Body = p.block("offer", "catch", "finally", "end")
 	for p.at("offer") {
 		b := node("offer", p.take(Operand))
-		b.NameToken = p.name()
+		b.NameToken = tokenRef(p.name())
 		b.Text = b.NameToken.Raw
 		if !p.atOperand("\n") && p.peek(Operand).Kind != EOF {
 			b.Params = append(b.Params, node("offer-parameter", p.name()))
@@ -991,7 +993,7 @@ func (p *parser) whose(head *Node) *Node {
 	if chunk.Kind == "delimited" {
 		chunk = chunk.Children[0]
 	}
-	n.NameToken = chunk.Token
+	n.NameToken = tokenRef(chunk.Token)
 	n.Text = chunk.Text
 	p.whoseKey = p.peek(Operand).Start + 1
 	n.Children = append(n.Children, p.expression())
@@ -1261,7 +1263,7 @@ func (p *parser) primary() *Node {
 	case t.Raw == "^" && p.pinSizeDepth > 0:
 		p.take(Operand)
 		n := node("pin", t)
-		n.NameToken = p.name()
+		n.NameToken = tokenRef(p.name())
 		n.Text = n.NameToken.Raw
 		return n
 	case t.Raw == "<<":
@@ -1493,7 +1495,7 @@ func (p *parser) bindingPattern() *Node {
 		name := p.name()
 		n = node("pin", t)
 		n.Text = name.Raw
-		n.NameToken = name
+		n.NameToken = tokenRef(name)
 	case "_":
 		n = node("wildcard", p.take(Operand))
 	case "-":
@@ -1517,7 +1519,7 @@ func (p *parser) bindingPattern() *Node {
 		n.Flags = append(n.Flags, as)
 		alias := p.name()
 		n.Text = alias.Raw
-		n.NameToken = alias
+		n.NameToken = tokenRef(alias)
 	}
 	return n
 }
@@ -1653,7 +1655,7 @@ func (p *parser) fieldType(n *Node) {
 	var size *Node
 	if p.accept("^") {
 		size = node("pin", t)
-		size.NameToken = p.name()
+		size.NameToken = tokenRef(p.name())
 		size.Text = size.NameToken.Raw
 	} else if p.accept("(") {
 		p.pinSizeDepth++
@@ -1742,13 +1744,14 @@ func (p *parser) binaryPattern(pattern bool) *Node {
 // Walk visits each syntax node in source order, excluding token trivia.
 func Walk(n *Node, visit func(*Node) bool) {
 	stack := []*Node{n}
+	var children []*Node
 	for len(stack) > 0 {
 		n := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if n == nil || !visit(n) {
 			continue
 		}
-		children := SourceChildren(n)
+		children = sourceChildren(n, children[:0])
 		for i := len(children) - 1; i >= 0; i-- {
 			stack = append(stack, children[i])
 		}
@@ -1772,6 +1775,11 @@ func TextOf(t Token) string {
 
 // SourceChildren gives the immediate syntax regions in source order.
 func SourceChildren(n *Node) []*Node {
+	return sourceChildren(n, nil)
+}
+
+// Walk reuses this scratch slice instead of allocating one for every node.
+func sourceChildren(n *Node, children []*Node) []*Node {
 	count := len(n.Params) + len(n.Children) + len(n.Body) + len(n.Branches)
 	if n.Guard != nil {
 		count++
@@ -1780,9 +1788,11 @@ func SourceChildren(n *Node) []*Node {
 		count++
 	}
 	if count == 0 {
-		return nil
+		return children
 	}
-	children := make([]*Node, 0, count)
+	if cap(children) < count {
+		children = make([]*Node, 0, count)
+	}
 	for _, group := range [][]*Node{n.Params, n.Children, n.Body, n.Branches} {
 		children = append(children, group...)
 	}

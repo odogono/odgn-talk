@@ -4,6 +4,11 @@ defmodule TalkHost.SessionTest do
 
   @now "2026-10-10T12:00:00Z"
 
+  test "fresh WASI instances stay within 16 MiB after a small Script and Pump" do
+    memory = TalkHost.Measure.memory(fn -> Transport.Wasi.start(opt_level: :speed) end, 3)
+    assert memory["maxBytes"] <= 16 * 1024 * 1024, inspect(memory)
+  end
+
   for mod <- [TalkHost.Transport.Sidecar, TalkHost.Transport.Wasi] do
     test "#{inspect(mod)} answers an Operation inside a Pump" do
       {:ok, t} = unquote(mod).start([])

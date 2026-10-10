@@ -80,6 +80,24 @@ def run_end(reply):
     return ends[0]
 
 
+def check_instance_memory(engine, module):
+    # #585: compiling the stdlib on the first Group used to permanently grow
+    # each fresh instance past 16 MiB, even for an empty Handler.
+    measurements = []
+    for _ in range(3):
+        h = Host(engine, module)
+        h.ok("hello", protocol=1)
+        h.ok("new-group", group="g", name="g")
+        h.ok("load", group="g", name="s", source="on ping\nend ping\n")
+        h.ok("deliver", group="g", to={"script": "s"}, message={"name": "ping"})
+        end = run_end(h.send("pump", group="g", now="2026-10-10T12:00:00Z"))
+        assert end["outcome"] == "completed", end
+        size = h.memory.data_len(h.store)
+        assert size <= 16 << 20, f"fresh instance holds {size} bytes (>16 MiB)"
+        measurements.append(size)
+    return measurements
+
+
 def check(engine, module):
     # The reactor has only WASI imports; Host operations need no callbacks.
     assert all(i.module == "wasi_snapshot_preview1" for i in module.imports)
@@ -308,6 +326,7 @@ def main():
     payload = path.read_bytes()
     engine = wasmtime.Engine()
     module = wasmtime.Module(engine, payload)
+    instance_memory = check_instance_memory(engine, module)
     hello = check(engine, module)
     hostile_loads = check_hostile_loads(engine, module)
     compressed = brotli.compress(payload, quality=11)
@@ -325,6 +344,7 @@ def main():
                 "zlib": zlib.ZLIB_RUNTIME_VERSION,
                 "hello": hello,
                 "checks": "passed",
+                "instanceMemoryBytes": instance_memory,
                 "hostileLoads": hostile_loads,
                 "bytes": {
                     "raw": len(payload),

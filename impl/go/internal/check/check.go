@@ -113,7 +113,7 @@ func (u *Unit) clash(n *syntax.Node) {
 func (u *Unit) declaration(n *syntax.Node, s Symbol) {
 	if previous, ok := u.Symbols[s.Name]; ok && !(s.Kind == "handler" && previous.Kind == "handler" && previous.Import == "" && s.Import == "") {
 		pos := n.Pos()
-		if n.NameToken.Kind == syntax.Word {
+		if n.NameToken != nil && n.NameToken.Kind == syntax.Word {
 			pos = n.NameToken.Pos
 		}
 		u.add("name clash", pos)
