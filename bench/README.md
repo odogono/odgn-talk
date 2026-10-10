@@ -76,10 +76,10 @@ Then port it to each Peer Language under `peers/`: Lua, Starlark, JavaScript, Py
 `bun test` in `ts/` and `go test ./...` in `go/` check every Benchmark's smoke output on their Core and every port on their Host's Peer Languages. `uv run --no-project --managed-python python -m unittest` in `peers/python/` checks the Python ports. On macOS, `bun test` in `ts/` also checks the AppleScript ports.
 
 `go -C bench/go test -run TestCoreRunAllocationBudgets` checks the four full-size
-core workloads against host-allocation ceilings one tenth of the pre-#322
-baseline, and pins their output and Fuel. It also checks `collections/list-build`
-and `collections/list-append` against 8 MB and 16 MB ceilings respectively, with
-their output, Fuel and logical allocation pinned.
+core workloads against host-allocation ceilings about 1.5 times their bytes per
+Run after #592, and pins their output and Fuel. It also checks `collections/list-build`,
+`collections/list-append` and `collections/map-build` against 8 MB, 16 MB and
+4.2 MB ceilings respectively, with their output, Fuel and logical allocation pinned.
 The full-size `lifecycle/restore` Run is also held below 20 MB of Host
 allocation, with 8,015 Fuel and 8,024 bytes of logical allocation pinned (#504).
 Timing comparisons remain advisory.

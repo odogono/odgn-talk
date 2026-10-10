@@ -3,6 +3,7 @@ package decimal
 import (
 	"math"
 	"strconv"
+	"strings"
 )
 
 func (n Number) coefficientOrZero() string {
@@ -75,4 +76,10 @@ func scaleSmall(x int64, places int) (int64, bool) {
 		x *= 10
 	}
 	return x, true
+}
+
+// Digits counts the coefficient's digits after leading zeros, as the Cost
+// Model's digits measure does.
+func (n Number) Digits() int {
+	return len(strings.TrimLeft(strings.TrimPrefix(n.coefficient, "-"), "0"))
 }

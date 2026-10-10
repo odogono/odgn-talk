@@ -3,6 +3,7 @@ package machine
 import (
 	"fmt"
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
 	"slices"
@@ -174,23 +175,22 @@ func mapWrite(whole value.Value, key string, part value.Value, deleting bool) (v
 		e := wrong("map", whole)
 		return value.Value{}, &e
 	}
-	pairs := slices.Clone(whole.Entries())
-	for j, p := range pairs {
-		if p.Key == key {
-			if deleting {
-				pairs = append(pairs[:j], pairs[j+1:]...)
-			} else {
-				pairs[j].Val = part
-			}
-			v, _ := value.NewMap(pairs)
-			v.CoreMessage = whole.CoreMessage && key != "message"
-			return v, nil
-		}
+	// The whole Map's keys are already normal and distinct, so only the
+	// written key needs normalising.
+	if nfc, e := coreunicode.NFC(key); e == nil {
+		key = nfc
 	}
-	if !deleting {
+	pairs := slices.Clone(whole.Entries())
+	at := slices.IndexFunc(pairs, func(p value.Pair) bool { return p.Key == key })
+	switch {
+	case at >= 0 && deleting:
+		pairs = slices.Delete(pairs, at, at+1)
+	case at >= 0:
+		pairs[at].Val = part
+	case !deleting:
 		pairs = append(pairs, value.Pair{Key: key, Val: part})
 	}
-	v, _ := value.NewMap(pairs)
+	v := whole.WithEntries(pairs)
 	v.CoreMessage = whole.CoreMessage && key != "message"
 	return v, nil
 }
