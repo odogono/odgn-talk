@@ -4,11 +4,13 @@
 // debugger holds it paused, and wakes it at its deadlines. It is not
 // normative: everything a session prints and records comes from the Session
 // Host. The caller supplies the Clock and the timers, and reads its events.
-import type { Waiting } from '@odgn/northtalk/session';
+import type { Value } from '@odgn/northtalk';
+import type { UserPrompt, Waiting } from '@odgn/northtalk/session';
 import { sessionCommands } from './generated/session';
 
 /** What the driver needs of a Session Host, or of a Host wrapped by Tooling. */
 export type DrivenSession = {
+  answerPrompt(answer: Value): string[];
   incomplete(source: string): boolean;
   input(source: string): string[];
   readonly nextDeadline: bigint | undefined;
@@ -26,6 +28,8 @@ export type DriverPrompt =
   | 'continue'
   /** A line for the Foreground Run's `read`. */
   | 'read'
+  /** An answer to the Foreground Run's `user` prompt, from its `question`. */
+  | 'user'
   /** The Foreground Run waits for a deadline; typed lines wait their turn. */
   | 'sleeping'
   /** A debugger holds the session; typed lines are refused. */
@@ -38,6 +42,11 @@ export type DriverEvent =
   | { k: 'output'; lines: string[] }
   /** The driver's own message, such as `:help` or a refused line. */
   | { k: 'note'; level: 'info' | 'warning'; text: string }
+  /**
+   * A `user` prompt to show: once when the Foreground Run starts waiting on
+   * it, and again when a typed line answered nothing.
+   */
+  | { call: string; k: 'question'; prompt: UserPrompt }
   /** The prompt after the driver settles; `closed` comes once. */
   | { k: 'prompt'; prompt: DriverPrompt };
 
@@ -45,6 +54,12 @@ export type DriverEvent =
 export type DriverTimer = (ms: number, fire: () => void) => () => void;
 
 export type SessionDriverOptions = {
+  /**
+   * The answer a typed line gives to a `user` prompt, or undefined when it
+   * answers nothing and the question is asked again. Without it, a typed line
+   * is refused while a prompt waits, and the caller answers with `answer`.
+   */
+  answerLine?(prompt: UserPrompt, line: string): Value | undefined;
   /** Receives every event, in order. */
   emit(event: DriverEvent): void;
   /** What `:help` prints before the Session Commands. */
@@ -92,6 +107,8 @@ export class SessionDriver {
   private background: (() => void) | null = null;
   private closing = false;
   private closed = false;
+  // The `user` prompt whose question was last shown, by call.
+  private asked: string | null = null;
 
   constructor(
     private readonly session: DrivenSession,
@@ -109,6 +126,9 @@ export class SessionDriver {
     }
     if (waiting === 'read') {
       return 'read';
+    }
+    if (waiting === 'user') {
+      return 'user';
     }
     if (this.sleeping || waiting === 'deadline') {
       return 'sleeping';
@@ -139,6 +159,20 @@ export class SessionDriver {
       return;
     }
     this.handle(line);
+  }
+
+  /** Answers the Foreground Run's `user` prompt, as a dialog does. */
+  answer(value: Value): void {
+    if (this.closed) {
+      return;
+    }
+    if (this.session.waiting.k !== 'user') {
+      this.note('No prompt is waiting for an answer.', 'warning');
+      this.settle();
+      return;
+    }
+    this.output(this.session.answerPrompt(value));
+    this.settle();
   }
 
   /**
@@ -221,6 +255,10 @@ export class SessionDriver {
         this.background = null;
       });
     }
+    if (waiting.k === 'user' && this.asked !== waiting.call) {
+      this.asked = waiting.call;
+      this.emit({ k: 'question', call: waiting.call, prompt: waiting.prompt });
+    }
     this.emit({ k: 'prompt', prompt: this.prompt });
   }
 
@@ -230,6 +268,23 @@ export class SessionDriver {
     }
     if (this.session.waiting.k === 'read') {
       this.output(this.session.read(line));
+      this.settle();
+      return;
+    }
+    const waiting = this.session.waiting;
+    if (waiting.k === 'user') {
+      const answer = this.options.answerLine?.(waiting.prompt, line);
+      if (!this.options.answerLine) {
+        this.note('Answer the prompt first, or cancel the Run.', 'warning');
+      } else if (answer === undefined) {
+        this.emit({
+          k: 'question',
+          call: waiting.call,
+          prompt: waiting.prompt,
+        });
+      } else {
+        this.output(this.session.answerPrompt(answer));
+      }
       this.settle();
       return;
     }

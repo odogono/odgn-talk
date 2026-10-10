@@ -210,7 +210,13 @@ func ReplayTranscript(recorded []session.Item, trace func(string)) (host *sessio
 		case "comment":
 			items = append(items, item)
 		case "answer":
-			return host, items, fmt.Errorf("built-in answers are not offered by this Go Session Host")
+			// A prompt's answer is a Host Input of its own, which causes a Pump.
+			if w := host.Waiting(); w.Kind == "user" && w.Call == item.Call {
+				prepare(n)
+			}
+			if ok, _ := host.ReplayAnswer(item); !ok {
+				return host, items, fmt.Errorf("built-in answers are not offered by this Go Session Host")
+			}
 		}
 	}
 	host.FinishObjectReplay()

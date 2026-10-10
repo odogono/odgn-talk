@@ -60,10 +60,11 @@ type Token struct {
 }
 
 type Lexer struct {
-	source string
-	offset int
-	pos    Position
-	err    error
+	nesting int
+	source  string
+	offset  int
+	pos     Position
+	err     error
 }
 
 func NewLexer(source string) (*Lexer, error) {

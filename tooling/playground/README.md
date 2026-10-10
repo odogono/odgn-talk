@@ -32,7 +32,7 @@ The [Playground workflow](../../.github/workflows/playground.yml) builds `dist/`
 
 A leading `--|` block keeps the prompt open until its declaration is complete. Blank lines and ordinary comments break attachment; a block directly before an expression, statement or Import is refused. Cancel drops unsubmitted input without recording an Entry. Pasting multiple lines submits each completed physical line through the same prompt rules and leaves the final line for Enter.
 
-- **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Inspect, Canvas, Debug, Replay, Setup and Dictionary. **Dictionary** lists the session's Grants, including `console` and `canvas`, with each Operation's call, mode, result, cost, errors, Scope and Segment binding, from the session's Host Manifest ([#526](https://github.com/odogono/odgn-talk/issues/526)). Editor completion of an Operation shows the same entry and inserts `and wait` for a suspending one. Preferences persist locally; narrow screens stack the panes.
+- **Workbench:** resizable editor and inspector, a collapsible console drawer, and light/dark/system themes. Inspector tabs expose Syntax, Inspect, Canvas, Debug, Replay, Setup and Dictionary. **Dictionary** lists the session's Grants, including `console`, `canvas` and `user`, with each Operation's call, mode, result, cost, errors, Scope and Segment binding, from the session's Host Manifest ([#526](https://github.com/odogono/odgn-talk/issues/526)). Editor completion of an Operation shows the same entry and inserts `and wait` for a suspending one. Preferences persist locally; narrow screens stack the panes.
 - **Run fresh** loads current tabs into a replacement session, then evaluates the visible Launch Entry. Invalid source or Libraries leave the old session intact. After loading succeeds, execution errors belong to the new session. An empty Launch Entry only loads.
 - **Evaluate** runs the Launch Entry against the currently loaded session, without applying pending edits. **Apply** retains the live workflow below.
 - **Do it, Print it, Inspect it** (Ctrl/Cmd-D, -P, -I) run the editor's selection, or the cursor's line, against the live session as an ordinary Entry, so the console and the Session Transcript show it like one typed at the prompt. The selection's shared indentation is dropped.
@@ -102,6 +102,15 @@ This serves a page at http://127.0.0.1:3928/. Open it in a browser and it runs e
 - **The same checks:** it uses [`case-checks.ts`](../../impl/ts/tools/case-checks.ts), which the Bun runner uses too. For a Trace Case it replays twice, the second time restoring between Pumps. For a Transcript it compares the replayed lines, then replays the Trace as a Trace Case.
 - **Results:** the page reports each case and a summary. `document.body.dataset.done` is `pass` or `fail` once it finishes.
 - **What it leaves out:** Value Encoding and Disassembly Cases run only under Bun, and CI doesn't open the page.
+
+## Prompts
+
+A new session also grants `user` by default, so a script can ask questions straight away ([ADR 0077](../../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)). While the foreground Run waits on `confirm`, `choose` or `enter`, the Playground shows a dialog and the console prompt shows `?`. **OK** answers it, and **Cancel** or Escape cancels, which gives `false` for `confirm` and Nothing otherwise. The Transcript records each answer as a `~` line, so a Shared Link replays without anyone answering. A prompt from a Run in the background waits until a deadline abandons it or `:cancel` stops its Run.
+
+```text
+ask user to choose ["Small", "Medium", "Large"], {prompt: "Pick a size"} and wait
+say "got " & it
+```
 
 ## Static canvas
 

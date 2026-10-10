@@ -8,13 +8,16 @@ import (
 )
 
 type operationReplay struct {
-	crossing     func(string)
-	values       *replayValues
-	calls        map[talk.CallID]*talk.Call
-	defs         map[string]*talk.CapabilityDef
-	stubs        map[string][]map[string]Field
-	effectStubs  map[string][]map[string]Field
-	declarations talk.GrantDecls
+	crossing    func(string)
+	values      *replayValues
+	calls       map[talk.CallID]*talk.Call
+	defs        map[string]*talk.CapabilityDef
+	stubs       map[string][]map[string]Field
+	effectStubs map[string][]map[string]Field
+	// startFailures holds a recorded suspending call's failure as it started,
+	// by call id, for a Session Trace replayed without a person.
+	startFailures map[string]Field
+	declarations  talk.GrantDecls
 	// strict makes a missing lifecycle Stub a malformed case, as in the TS
 	// replay Host, rather than an unknown outcome.
 	strict    bool
@@ -28,6 +31,7 @@ type operationReplay struct {
 func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 	out := &operationReplay{values: newReplayValues(), calls: map[talk.CallID]*talk.Call{}, defs: map[string]*talk.CapabilityDef{}, stubs: map[string][]map[string]Field{}, declarations: talk.GrantDecls{}}
 	out.effectStubs = map[string][]map[string]Field{}
+	out.startFailures = map[string]Field{}
 	out.coordinators = map[string]*talk.SegmentLifecycle{}
 	byName := map[string][]talk.Operation{}
 	rawOps, _ := setup["operations"].([]any)
@@ -407,28 +411,33 @@ func (o *operationReplay) invoke(key string, mode talk.Mode, c *talk.Call) (talk
 		}
 	}
 	if failed, ok := stub["error"]; ok {
-		v := failed.Value
-		code := v.Get("code")
-		if code.Text() == "" {
-			return talk.Nothing, fmt.Errorf("Stub is not a ScriptError")
-		}
-		var entries []talk.Pair
-		for _, p := range v.Entries() {
-			if p.Key != "code" && p.Key != "message" {
-				x, e := o.values.construct(p.Val)
-				if e != nil {
-					return talk.Nothing, e
-				}
-				entries = append(entries, talk.KV(p.Key, x))
-			}
-		}
-		data, _ := talk.Map(entries...)
-		return talk.Nothing, &talk.ScriptError{Code: code.Text(), Message: v.Get("message").Text(), Data: data}
+		return talk.Nothing, o.failure(failed)
 	}
 	if value, ok := stub["value"]; ok {
 		return o.values.construct(value.Value)
 	}
 	return talk.Nothing, nil
+}
+
+// failure is the ScriptError a Stub's or record's `error` stands for.
+func (o *operationReplay) failure(failed Field) error {
+	v := failed.Value
+	code := v.Get("code")
+	if code.Text() == "" {
+		return fmt.Errorf("Stub is not a ScriptError")
+	}
+	var entries []talk.Pair
+	for _, p := range v.Entries() {
+		if p.Key != "code" && p.Key != "message" {
+			x, e := o.values.construct(p.Val)
+			if e != nil {
+				return e
+			}
+			entries = append(entries, talk.KV(p.Key, x))
+		}
+	}
+	data, _ := talk.Map(entries...)
+	return &talk.ScriptError{Code: code.Text(), Message: v.Get("message").Text(), Data: data}
 }
 
 func setupStandardCosts(row Setup, names []string) (talk.Costs, error) {
@@ -588,6 +597,12 @@ type replayUser struct{ replay *operationReplay }
 // prompt starts a suspending user call, which a Stub fails at once, or an
 // `answer` line settles later.
 func (h replayUser) prompt(operation string, c *talk.Call) error {
+	if failed, ok := h.replay.startFailures[string(c.ID())]; ok {
+		if h.replay.crossing != nil {
+			h.replay.crossing(string(c.ID()))
+		}
+		return h.replay.failure(failed)
+	}
 	h.replay.calls[c.ID()] = c
 	if len(h.replay.stubs[operation]) == 0 {
 		return nil

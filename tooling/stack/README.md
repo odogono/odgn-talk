@@ -16,7 +16,7 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 ## Session Driver
 
-`@odgn/northtalk-tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. The caller supplies the Clock and timers and reads its output, note and prompt events.
+`@odgn/northtalk-tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
 
 ## Formatter
 

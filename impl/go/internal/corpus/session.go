@@ -107,6 +107,13 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 		if cap == "clock" {
 			standard = append(standard, Setup{"capability": "clock", "costs": Setup{"now": Setup{"fuel": int64(0)}}})
 		}
+		if cap == "user" {
+			costs := Setup{}
+			for _, name := range []string{"confirm", "choose", "enter", "notify"} {
+				costs[name] = Setup{"fuel": int64(0)}
+			}
+			standard = append(standard, Setup{"capability": "user", "costs": costs})
+		}
 		if cap == "store" {
 			costs := Setup{}
 			for _, name := range []string{"get", "keys", "set", "delete", "increment", "swap"} {
@@ -150,6 +157,10 @@ func sessionStoreReplies(h *session.Host, records []Record) func(*operationRepla
 			}
 			if r.Name == "call" {
 				grant, op, ok := strings.Cut(fields["op"].Raw, ".")
+				if failure, failed := fields["error"]; ok && failed && grants[grant] == "user" {
+					o.startFailures[r.IDs[0]] = failure
+					continue
+				}
 				if !ok || grants[grant] != "store" {
 					continue
 				}

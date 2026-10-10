@@ -1,0 +1,49 @@
+# Unblessed: user prompts in a session (#527); first blessing awaits human review.
+# Under a real Clock, the Session Host asks the person for the Foreground Run's
+# prompt, and records each answer as a `~` line: a choice, a cancel, and a
+# prompt a Timeout Block abandons. A prompt while another waits is `user busy`,
+# and `notify` prints after `* `.
+> :grant user user
+> on size
+|   ask user to choose ["S", "M", "L"], {prompt: "Size?"} and wait
+|   say "got " & it
+| end size
+> size and wait
+@ 2026-10-10T10:00:00Z
+~ session/r1.c1 "M"
+@ 2026-10-10T10:00:03Z
+got M
+> on name
+|   ask user to enter "Name?" and wait
+|   if it is nothing then say "no name"
+| end name
+> name and wait
+@ 2026-10-10T10:00:04Z
+~ session/r2.c1 nothing
+@ 2026-10-10T10:00:05Z
+no name
+> on hurry
+|   try
+|     with timeout of 5 s
+|       ask user to confirm "Quick?" and wait
+|     end timeout
+|   catch {code: code}
+|     say code
+|   end try
+| end hurry
+> hurry and wait
+@ 2026-10-10T10:00:06Z
+@ 2026-10-10T10:00:11Z
+timeout
+> on later
+|   ask user to confirm "Later?" and wait
+| end later
+> send later to session
+@ 2026-10-10T10:00:12Z
+> tell user to notify "Backup finished", {title: "Backup"}
+@ 2026-10-10T10:00:13Z
+* Backup: Backup finished
+> ask user to confirm "Now?" and wait
+@ 2026-10-10T10:00:14Z
+~ session/r7.c1 fail {code: "user busy", message: "Another prompt is waiting for an answer"}
+! error {code: "user busy", capability: "user", operation: "confirm"} at 1:1

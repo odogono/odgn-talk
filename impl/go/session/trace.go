@@ -127,6 +127,12 @@ func (h *Host) pump() []string {
 			h.segments[e.run] = e.seg
 		case "call":
 			id := strings.Fields(e.line)[1]
+			if note, ok := h.notes[id]; ok {
+				delete(h.notes, id)
+				for _, s := range strings.Split(note, "\n") {
+					out = append(out, h.prefix(e.run)+s)
+				}
+			}
 			if v, ok := h.writes[id]; ok {
 				delete(h.writes, id)
 				text := v.String()
@@ -234,6 +240,13 @@ func (h *Host) settleForeground() {
 				return
 			}
 		}
+		for id, p := range h.prompts {
+			if callRun(id) == run && p.call.Context().Err() == nil {
+				shown := p.prompt
+				h.waiting = Waiting{Kind: "user", Call: id, Prompt: &shown}
+				return
+			}
+		}
 		if !h.virtualOn && !s.calls && !s.until.IsZero() && (s.end == "wait" || s.end == "wait-for" || s.end == "wait-for-any") {
 			h.waiting = Waiting{Kind: "deadline", At: s.until}
 			return
@@ -250,6 +263,7 @@ func (h *Host) pruneCalls() {
 			delete(h.pending, id)
 		}
 	}
+	h.prunePrompts()
 	active := h.readOrder[:0]
 	for _, id := range h.readOrder {
 		c := h.reads[id]

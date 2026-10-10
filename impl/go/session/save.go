@@ -66,6 +66,8 @@ func (h *Host) restore(name string) []string {
 	h.waiting = Waiting{Kind: "prompt"}
 	h.writes = map[string]talk.Value{}
 	h.reads = map[string]*talk.Call{}
+	h.prompts = map[string]*prompt{}
+	h.notes = map[string]string{}
 	h.pending = map[string]*talk.Call{}
 	h.readOrder = nil
 	for _, p := range result.Pending {
@@ -74,6 +76,8 @@ func (h *Host) restore(name string) []string {
 		if p.Grant == "console" {
 			h.reads[string(p.ID)] = c
 			h.readOrder = append(h.readOrder, string(p.ID))
+		} else if p.Operation.Capability == "user" {
+			h.prompts[string(p.ID)] = &prompt{call: c, prompt: promptOf(p.Operation.Operation, p.Args)}
 		} else {
 			h.pending[string(p.ID)] = c
 		}
@@ -124,7 +128,7 @@ func (h *Host) library(rest string) []string {
 			imports = append(imports, h.libraries[key].compiled)
 		}
 	}
-	definitions := talk.GrantDecls{"console": {"write": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.AnyShape}}, "read": {Mode: talk.Suspending}}, "clock": {"now": {Mode: talk.Immediate}}}
+	definitions := talk.GrantDecls{"console": {"write": {Mode: talk.FireAndForget, Args: []talk.Shape{talk.AnyShape}}, "read": {Mode: talk.Suspending}}, "clock": {"now": {Mode: talk.Immediate}}, "user": userDecls()}
 	for _, m := range h.mocks {
 		if definitions[m.capability] == nil {
 			definitions[m.capability] = map[string]talk.OperationCheck{}

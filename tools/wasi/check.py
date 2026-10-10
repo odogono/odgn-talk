@@ -97,6 +97,22 @@ def check(engine, module):
     assert h.frame(b"{")["err"]["kind"] == "protocol error"
     assert h.ok("add", a=20, b=22)["value"] == 42
 
+    # Hostile nesting must be refused before it exhausts wasmtime's stack.
+    # A good request after each refusal proves the same instance remains usable.
+    for opening, closing in (("[", "]"), ('{"a":', "}")):
+        for depth in (63, 64, 100_000):
+            value = opening * depth + "1" + closing * depth
+            frame = ('{"m":"hello","ref":1,"protocol":1,"ignored":' + value + '}').encode()
+            reply = h.frame(frame)
+            if depth == 63:  # The envelope is the 64th level.
+                assert "ok" in reply, reply
+                frame = ('{"m":"add","ref":1,"a":' + value + ',"b":1}').encode()
+                decoded = h.frame(frame)  # Decode the value, then refuse its kind.
+                assert decoded["ok"]["fail"]["code"] == "wrong kind", decoded
+            else:
+                assert reply["err"]["kind"] == "protocol error", reply
+            assert h.ok("add", a=20, b=22)["value"] == 42
+
     # Force memory growth while keeping a reply reachable through Go's GC.
     # JSON whitespace pads a valid frame without growing Script state.
     retained = h.exports["talk_send"](h.store, 0)
@@ -132,6 +148,45 @@ def check(engine, module):
     )
     grant = h.ok("grant", capability="api", ops="all")["grant"]
     h.ok("new-group", group="g", name="g", trace=True)
+    expressions = [
+        "(" * 100_000 + "1" + ")" * 100_000,
+        "[" * 100_000 + "1" + "]" * 100_000,
+        "{a:" * 100_000 + "1" + "}" * 100_000,
+        "f(" * 100_000 + "1" + ")" * 100_000,
+        "- " * 100_000 + "1",
+        "not " * 100_000 + "true",
+        "1 ^ " * 100_000 + "1",
+        "1 + " * 100_000 + "1",
+        "the a of " * 100_000 + "1",
+        "1" + "'s a" * 100_000,
+        "given x: " * 100_000 + "1",
+        "`" + "${`" * 1000 + "x" + "`}" * 1000 + "`",
+        "<" + "1 " * 100_000 + "digit>",
+        "<" + "x:" * 100_000 + "digit>",
+        "<" * 100_000 + "digit" + ">" * 100_000,
+    ]
+    sources = ["on deep\nreturn " + e + "\nend deep\n" for e in expressions]
+    for opening, closing in (
+        ("if true then\n", "end if\n"),
+        ("repeat forever\n", "end repeat\n"),
+    ):
+        sources.append("on deep\n" + opening * 10_000 + closing * 10_000 + "end deep\n")
+    sources.append("on deep\nlet " + "[" * 100_000 + "x" + "]" * 100_000 + " be []\nend deep\n")
+    for source in sources:
+        reply = h.send("load", group="g", name="deep", source=source)
+        assert reply["err"]["kind"] == "load error", reply
+        diagnostic = reply["err"]["diagnostics"][0]
+        assert diagnostic["code"] == "source nesting too deep", reply
+        assert diagnostic["unit"] == "deep" and diagnostic["line"] > 0 and diagnostic["col"] > 0, reply
+        assert h.ok("add", a=20, b=22)["value"] == 42
+    # Ordinary nesting still reaches checking, lowering and execution.
+    h.ok(
+        "load", group="g", name="deep",
+        source="on go\nreturn " + "(" * 61 + "42" + ")" * 61 + "\nend go\n",
+    )
+    h.ok("request", group="g", to={"script": "deep"}, message={"name": "go"})
+    nested = run_end(h.send("pump", group="g", now="2026-10-10T12:00:00Z"))
+    assert nested["outcome"] == "completed" and nested["result"] == 42, nested
     h.ok(
         "load",
         group="g",
