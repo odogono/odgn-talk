@@ -151,6 +151,7 @@ disassembly/whose
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
+errors/items-delimiter
 errors/lambda-capture-parity
 errors/queued-error-before-parked-run
 examples/orders-pricing

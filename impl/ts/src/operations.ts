@@ -952,11 +952,10 @@ export const property = (
       return listValues(
         v.entries().map(([k, value]) => (name === 'keys' ? text(k) : value)),
       );
-    case 'items':
+    case 'items': {
+      const d = delimiterText(delimiter);
       if (v.kind === 'text') {
-        return texts(
-          spans(textOf(v), 'item', delimiterText(delimiter)).map(s => s.text),
-        );
+        return texts(spans(textOf(v), 'item', d).map(s => s.text));
       }
       if (v.kind === 'list') {
         return v;
@@ -965,6 +964,7 @@ export const property = (
         return listValues(integersOf(v));
       }
       throw wrongKind('list', v);
+    }
     case 'lines':
     case 'words':
     case 'characters':

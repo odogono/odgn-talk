@@ -1,0 +1,65 @@
+# Unblessed: items delimiter validation (#566); first blessing awaits human review.
+# Pins the error code, delimiter field/value and property source position on
+# lists, integer ranges and text, plus valid text/range reads.
+
+> load items identity=8d6e517fdfd5fa650f36e462999a81bba239cf78dde6dcc3af97a958cba87210
+> deliver d1 to=items message=readItems args=[[1, 2], ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r1 code="out of range" at=items:4 pos=4:10
+seg items/r1 start delivery=d1 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r1 outcome=errored delivery=d1 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d2 to=items message=readItems args=[[], ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r2 code="out of range" at=items:4 pos=4:10
+seg items/r2 start delivery=d2 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r2 outcome=errored delivery=d2 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d3 to=items message=readItems args=[1..3, ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r3 code="out of range" at=items:4 pos=4:10
+seg items/r3 start delivery=d3 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r3 outcome=errored delivery=d3 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d4 to=items message=readItems args=[3..1, ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r4 code="out of range" at=items:4 pos=4:10
+seg items/r4 start delivery=d4 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r4 outcome=errored delivery=d4 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d5 to=items message=readItems args=["a,b", ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r5 code="out of range" at=items:4 pos=4:10
+seg items/r5 start delivery=d5 handler=readItems clause=1 fuel=14 alloc=0 state=0 end=error
+run items/r5 outcome=errored delivery=d5 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=14 alloc=0
+pumped state=idle fuel=14
+> deliver d6 to=items message=readItems args=["", ""]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r6 code="out of range" at=items:4 pos=4:10
+seg items/r6 start delivery=d6 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r6 outcome=errored delivery=d6 handler=readItems error={code: "out of range", field: "delimiter", value: "", at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d7 to=items message=readItems args=[[1, 2], 42]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r7 code="wrong kind" at=items:4 pos=4:10
+seg items/r7 start delivery=d7 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r7 outcome=errored delivery=d7 handler=readItems error={code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d8 to=items message=readItems args=[1..3, 42]
+> pump clock=2026-10-10T09:00:00Z
+raise items/r8 code="wrong kind" at=items:4 pos=4:10
+seg items/r8 start delivery=d8 handler=readItems clause=1 fuel=13 alloc=0 state=0 end=error
+run items/r8 outcome=errored delivery=d8 handler=readItems error={code: "wrong kind", expected: "text", got: "number", value: 42, at: {unit: "items", handler: "readItems", line: 4, column: 10}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> deliver d9 to=items message=readItems args=[1..3, ";"]
+> pump clock=2026-10-10T09:00:00Z
+seg items/r9 start delivery=d9 handler=readItems clause=1 fuel=14 alloc=88 state=0 end=return
+run items/r9 outcome=completed delivery=d9 handler=readItems value=[1, 2, 3] fuel=14 alloc=88
+pumped state=idle fuel=14
+> deliver d10 to=items message=readItems args=["a;b;c", ";"]
+> pump clock=2026-10-10T09:00:00Z
+seg items/r10 start delivery=d10 handler=readItems clause=1 fuel=15 alloc=91 state=0 end=return
+run items/r10 outcome=completed delivery=d10 handler=readItems value=["a", "b", "c"] fuel=15 alloc=91
+pumped state=idle fuel=15
+> vars
+vars items
