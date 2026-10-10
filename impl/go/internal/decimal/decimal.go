@@ -108,6 +108,11 @@ func ParseJSON(s string) (Number, error) {
 		exponent -= len(s) - i - 1
 		s = s[:i] + s[i+1:]
 	}
+	// checked rejects these anyway; rejecting them first keeps a long digit
+	// string from Host input out of big.Int's quadratic conversions.
+	if len(strings.TrimLeft(strings.TrimPrefix(s, "-"), "0")) > Precision {
+		return Number{}, invalid
+	}
 	c, _ := new(big.Int).SetString(s, 10)
 	// A positive exponent must be rescaled even for zero, but never allocate
 	// a giant power for malformed Host input.

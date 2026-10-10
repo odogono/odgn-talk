@@ -142,3 +142,17 @@ func TestConversionTrimsWholeWhitespaceCharacters(t *testing.T) {
 		}
 	}
 }
+func TestJSONNumberDigits(t *testing.T) {
+	nines := strings.Repeat("9", Precision)
+	for _, s := range []string{nines, "-" + nines, "0." + strings.Repeat("0", 100) + "1", "1." + strings.Repeat("0", Precision-1), "0." + nines, "0.00" + nines + "e2"} {
+		if _, e := ParseJSON(s); e != nil {
+			t.Errorf("rejected %q: %v", s, e)
+		}
+	}
+	// Refused by counting digits, before any big.Int conversion (#608).
+	for _, s := range []string{nines + "9", "1." + strings.Repeat("0", Precision), strings.Repeat("9", 1_000_000), "-" + strings.Repeat("9", 1_000_000) + "e-999"} {
+		if _, e := ParseJSON(s); e == nil {
+			t.Errorf("accepted %.40q", s)
+		}
+	}
+}
