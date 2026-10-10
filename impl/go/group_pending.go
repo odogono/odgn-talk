@@ -117,8 +117,8 @@ func (g *Group) resumeOperation(p machine.SendResume, reports *[]Report) (coreva
 			err = &ScriptError{Code: p.FailureCode, Message: p.FailureMessage, Data: Value{p.FailureData}}
 		}
 	}
-	v, e, _ := g.completeOperation(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, nil, Value{p.Answer}, err, map[string]string{}, nil, p.Fuel, reports, pending.x.run.Cancelling)
-	return v, e
+	crossing := operationHostCrossing(pending.s, pending.x, pending.call.grantName, pending.name, pending.op, pending.call, nil)
+	return g.resumeHost(crossing, Value{p.Answer}, err, p.Fuel, reports)
 }
 func (g *Group) abandonOperation(id string) {
 	if p := g.calls[CallID(id)]; p != nil {

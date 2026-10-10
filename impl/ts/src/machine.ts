@@ -2652,7 +2652,7 @@ export class Run {
         ctx,
         error instanceof HostScriptError ? error : null,
         failed =>
-          this.recordCrossing({
+          this.hostCrossing({
             kind: 'prop',
             object: v,
             name,
@@ -2667,7 +2667,7 @@ export class Run {
       !functionsBelongTo([result], this.script.functionGroup) ||
       (prop.shape && mismatch(result, prop.shape))
     ) {
-      this.recordCrossing({
+      this.hostCrossing({
         kind: 'prop',
         object: v,
         name,
@@ -2679,7 +2679,7 @@ export class Run {
         resultDetail(result, prop.shape, this.script.functionGroup),
       );
     }
-    this.recordCrossing({
+    this.hostCrossing({
       kind: 'prop',
       object: v,
       name,
@@ -2725,7 +2725,7 @@ export class Run {
         ctx,
         error instanceof HostScriptError ? error : null,
         failed =>
-          this.recordCrossing({
+          this.hostCrossing({
             kind: 'prop',
             object: v,
             name,
@@ -2736,7 +2736,7 @@ export class Run {
         hostDetail(error),
       );
     }
-    this.recordCrossing({ kind: 'prop', object: v, name, op: 'set', value });
+    this.hostCrossing({ kind: 'prop', object: v, name, op: 'set', value });
   }
 
   // A property call's context, for its failures and conversion: as an
@@ -3799,7 +3799,7 @@ export class Run {
       starting = false;
       if (reached) {
         // Cut off by its own `Charge`: neither a result nor a failure.
-        this.recordCrossing({ ...record, charged });
+        this.hostCrossing({ ...record, charged });
         throw new LimitFaultError(
           this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
           this.frame.pc,
@@ -3808,7 +3808,7 @@ export class Run {
       throw this.failure(
         ctx,
         error instanceof HostScriptError ? error : null,
-        failed => this.recordCrossing({ ...record, charged, error: failed }),
+        failed => this.hostCrossing({ ...record, charged, error: failed }),
         hostDetail(error),
       );
     }
@@ -3837,14 +3837,14 @@ export class Run {
       };
     }
     if (reached) {
-      this.recordCrossing({ ...record, charged }, acknowledgement);
+      this.hostCrossing({ ...record, charged }, acknowledgement);
       throw new LimitFaultError(
         this.cancelling ? 'cleanupBudget' : 'fuelPerRun',
         this.frame.pc,
       );
     }
     if (op.mode === 'suspending') {
-      this.recordCrossing({ ...record, charged });
+      this.hostCrossing({ ...record, charged });
       const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
       if (member) {
         this.join!.members.push({ id, call: ctx, abort, ms });
@@ -3857,7 +3857,7 @@ export class Run {
       return nothing;
     }
     if (op.mode === 'fire-and-forget') {
-      this.recordCrossing({ ...record, charged });
+      this.hostCrossing({ ...record, charged });
       return nothing;
     }
     if (
@@ -3866,7 +3866,7 @@ export class Run {
       (op.result && mismatch(result, op.result)) ||
       standardChecks(op)?.result?.(result, args) === false
     ) {
-      this.recordCrossing(
+      this.hostCrossing(
         { ...record, charged, error: map([]) },
         acknowledgement,
       );
@@ -3875,7 +3875,7 @@ export class Run {
         resultDetail(result, op.result, this.script.functionGroup),
       );
     }
-    this.recordCrossing({ ...record, charged, result }, acknowledgement);
+    this.hostCrossing({ ...record, charged, result }, acknowledgement);
     this.payConversion(ctx, result, 0);
     return result;
   }
@@ -3896,7 +3896,9 @@ export class Run {
       );
   }
 
-  private recordCrossing(
+  // A Host Crossing records the call/property and acknowledgement before
+  // landing queued inputs and checking whether they interrupted the Run.
+  private hostCrossing(
     record: Extract<RunRecord, { kind: 'call' | 'prop' }>,
     acknowledgement?: Extract<RunRecord, { kind: 'scope' }>,
   ) {

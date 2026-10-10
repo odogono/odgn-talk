@@ -2,10 +2,7 @@ package northtalk
 
 import (
 	"fmt"
-	"slices"
-	"unicode/utf8"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
@@ -13,7 +10,6 @@ import (
 )
 
 func (g *Group) property(s *Script, x *execution, object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value) {
-	wasCancelling := x.run.Cancelling
 	o := object.Object.Handle.(*Object) // only Group-checked Values reach execution
 	key := "get-key"
 	if set {
@@ -64,97 +60,20 @@ func (g *Group) property(s *Script, x *execution, object corevalue.Value, name s
 		return corevalue.Value{}, nil
 	}
 	g.writeRaises(x, x.raisesWritten)
-	result, err := invokeProperty(prop, o, set, Value{input})
-	fields := map[string]string{"object": coretrace.Display(object), "name": name, "op": "get"}
-	if set {
-		fields["op"] = "set"
-		fields["value"] = coretrace.Display(input)
-	}
-	record := func() { g.record("prop", false, []string{string(x.id)}, fields); boundary() }
-	interrupted := func() bool {
-		return x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling
-	}
-	named := []corevalue.Pair{{Key: "capability", Val: mustText(o.kind.name)}, {Key: "operation", Val: mustText(name)}}
-	hostError := func(detail string) (corevalue.Value, *corevalue.Value) {
-		if interrupted() {
-			return corevalue.Value{}, nil
-		}
-		*reports = append(*reports, &CallFailed{Script: s.name, Operation: OperationRef{Capability: o.kind.name, Operation: name}, Detail: detail})
-		return fail("host error", named...)
-	}
-	conversion := func(v corevalue.Value) bool {
-		if interrupted() {
-			return false
-		}
-		fuel, alloc := machine.Charge("capability", machine.Measures{Result: v, ResultPresent: true})
-		return x.run.PayHost(fuel-10, alloc)
-	}
-	if err != nil {
-		e, ok := err.(*ScriptError)
-		if !ok || e == nil || !utf8.ValidString(e.Code) || !utf8.ValidString(e.Message) {
-			fields["error"] = "{}"
-			record()
-			return hostError(fmt.Sprint(err))
-		}
-		data := e.Data.inner
-		if data.Kind != corevalue.Map && data.Kind != corevalue.Nothing {
-			fields["error"] = "{}"
-			record()
-			return hostError("failure Data is neither a map nor Nothing")
-		}
-		if data.Kind == corevalue.Nothing {
-			data, _ = corevalue.NewMap(nil)
-		}
-		failed := []corevalue.Pair{{Key: "code", Val: mustText(e.Code)}}
-		if e.Message != "" {
-			failed = append(failed, corevalue.Pair{Key: "message", Val: mustText(e.Message)})
-		}
-		failed = append(failed, data.Entries...)
-		if !validGroup(data, g) {
-			fields["error"] = "{}"
-			record()
-			return hostError("failure holds a value from another Group")
-		}
-		v, mapError := corevalue.NewMap(failed)
-		if mapError != nil {
-			fields["error"] = "{}"
-			record()
-			return hostError("failure uses a reserved Data key")
-		}
-		fields["error"] = coretrace.Display(v)
-		record()
-		for _, d := range generated.Errors.Error {
-			if d.Code == e.Code {
-				return hostError("failure uses a catalogue code")
-			}
-		}
-		for _, p := range data.Entries {
-			if slices.Contains(generated.Errors.Reserved, p.Key) {
-				return hostError("failure uses a reserved Data key")
-			}
-		}
-		if !conversion(data) {
-			return corevalue.Value{}, nil
-		}
-		failed = append(failed, named...)
-		v, _ = corevalue.NewMap(failed)
-		return corevalue.Value{}, &v
+	crossing := &hostCrossing{
+		script: s, execution: x,
+		operation: OperationRef{Capability: o.kind.name, Operation: name},
+		fields:    map[string]string{"object": coretrace.Display(object), "name": name, "op": "get"},
+		resultKey: "value", ignoreResult: set,
+		convert: func(v corevalue.Value) bool { return shape.Check(v, prop.Shape.inner, nil) == nil },
 	}
 	if set {
-		record()
-		return corevalue.Value{}, nil
+		crossing.fields["op"] = "set"
+		crossing.fields["value"] = coretrace.Display(input)
 	}
-	if !validGroup(result.inner, g) || shape.Check(result.inner, prop.Shape.inner, nil) != nil {
-		fields["error"] = "{}"
-		record()
-		return hostError("result violates its Shape or Group ownership")
-	}
-	fields["value"] = coretrace.Display(result.inner)
-	record()
-	if !conversion(result.inner) {
-		return corevalue.Value{}, nil
-	}
-	return result.inner, nil
+	return g.crossHost(crossing, func() (Value, error) {
+		return invokeProperty(prop, o, set, Value{input})
+	}, boundary, reports)
 }
 
 func invokeProperty(prop Prop, o *Object, set bool, input Value) (v Value, err error) {
