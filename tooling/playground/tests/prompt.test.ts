@@ -5,7 +5,7 @@ import type {
   SessionResponse,
 } from '../src/protocol';
 
-test('the worker collects, detaches, refuses and cancels documentation Entries', async () => {
+test('the worker collects, detaches, refuses and cancels documentation Entries, and queues lines while it sleeps', async () => {
   const worker = new Worker(
     new URL('../src/session.worker.ts', import.meta.url),
   );
@@ -74,6 +74,34 @@ test('the worker collects, detaches, refuses and cancels documentation Entries',
     expect(transcript.t === 'transcript' && transcript.text).toContain(
       '> --| Docs.\n| --|\n| function inc n',
     );
+
+    // A line typed while the session sleeps waits its turn, and runs when
+    // the session wakes.
+    await line('on nap\n wait 50 ms\n say "awake"\nend nap');
+    expect((await line('nap and wait')).prompt).toBe('sleeping');
+    const queued = await line('say "queued"');
+    expect(queued.prompt).toBe('sleeping');
+    expect(queued.lines).toEqual([]);
+    const woke = await new Promise<FromSession>(resolve => {
+      worker.onmessage = ({ data }: MessageEvent<FromSession>) => {
+        if (data.id === undefined && data.response.t === 'state') {
+          resolve(data);
+        }
+      };
+    });
+    if (woke.response.t !== 'state') {
+      throw new Error(`expected state, got ${woke.response.t}`);
+    }
+    expect(woke.response.state.prompt).toBe('entry');
+    expect(
+      woke.response.state.lines.flatMap(l =>
+        l.k === 'item' && l.item.k === 'output'
+          ? [l.item.text]
+          : l.k === 'item' && l.item.k === 'input'
+            ? [`> ${l.item.source}`]
+            : [],
+      ),
+    ).toEqual(['awake', '> say "queued"', 'queued']);
   } finally {
     worker.terminate();
   }

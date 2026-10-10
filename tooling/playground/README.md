@@ -51,6 +51,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
 - **Examples** opens a menu of example scripts by topic, from first steps to drawing and classic puzzles. Choosing one replaces the tabs, sets Launch and runs fresh. It asks first unless the tabs are as the welcome or the last example left them.
   - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete, including labelled calls whose arguments continue inside brackets.
   - A `console` `read` is answered at the `<` prompt.
+  - While the Run the prompt waits for sleeps until a deadline, lines typed at the prompt wait their turn and run once it wakes.
   - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
   - **Copy result as source** copies the latest value an Entry echoed in source form, which pastes into a Script or test as an equal value: `("2026-09-27" as civil date)` rather than `2026-09-27`. A value holding a Function Value or Host Object has none, and the button says so.
   - The **@ ~** box shows the Clock readings and Capability answers the Transcript records.

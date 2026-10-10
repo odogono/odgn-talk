@@ -9,12 +9,13 @@
     "./lint": "./src/lint.ts",
     "./lsp": "./src/lsp.ts",
     "./debug": "./src/debug.ts",
-    "./dictionary": "./src/dictionary.ts"
+    "./dictionary": "./src/dictionary.ts",
+    "./session-driver": "./src/session-driver.ts"
   },
   "scripts": {
     "typecheck": "tsc",
     "test": "bun test tests",
-    "build": "bun build src/canvas.ts src/builtins.ts src/format.ts src/lint.ts src/lsp.ts src/debug.ts src/dictionary.ts --target browser --outdir dist && cp ../../impl/ts/src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
+    "build": "bun build src/canvas.ts src/builtins.ts src/format.ts src/lint.ts src/lsp.ts src/debug.ts src/dictionary.ts src/session-driver.ts --target browser --outdir dist && cp ../../impl/ts/src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
     "test:node": "bun build tests/runtime.ts --target node --outfile dist/runtime.mjs && node dist/runtime.mjs",
     "test:browser": "bun tools/browser-smoke.ts"
   },

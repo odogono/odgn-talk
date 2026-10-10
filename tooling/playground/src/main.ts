@@ -489,8 +489,8 @@ const render = (state: SessionState) => {
     sleeping: '(waiting)',
     paused: '(paused)',
   }[state.prompt];
-  ($('prompt') as HTMLInputElement).disabled =
-    state.prompt === 'paused' || state.prompt === 'sleeping';
+  // Lines typed while the session sleeps wait their turn.
+  ($('prompt') as HTMLInputElement).disabled = state.prompt === 'paused';
   savedLibraries = state.savedLibraries;
   syncScript(state.source);
   renderSetup(state);
