@@ -32,12 +32,13 @@ test('the worker collects, detaches, refuses and cancels documentation Entries, 
     const opened = await call({ t: 'open' });
     expect(opened.t === 'state' && opened.state.setup).toEqual([
       ':grant canvas canvas',
+      ':grant user user',
     ]);
     expect((await line('--| abandoned')).prompt).toBe('continue');
     await call({ t: 'cancel' });
     expect(await call({ t: 'transcript' })).toEqual({
       t: 'transcript',
-      text: '> :grant canvas canvas\n',
+      text: '> :grant canvas canvas\n> :grant user user\n',
       ended: false,
     });
     for (const text of [

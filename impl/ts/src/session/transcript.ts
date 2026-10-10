@@ -150,8 +150,8 @@ export type Replayed = {
 
 /**
  * Replay a Transcript through a fresh Session Host (chapter 12, Replaying):
- * each `@` reading is that Pump's Clock reading, and each `<` line answers
- * `read`. The result has the lines it printed in place of the recorded ones.
+ * each `@` reading is that Pump's Clock reading, each `<` line answers
+ * `read`, and each `~` line answers its call, a `user` prompt's included. The result has the lines it printed in place of the recorded ones.
  */
 export const replayTranscript = (
   recorded: readonly TranscriptItem[],
@@ -310,6 +310,13 @@ export const replayTranscript = (
         items.push(item);
         break;
       case 'answer':
+        // A prompt's answer is a Host Input of its own; any other `~` line
+        // answered its call inside the Pump that made it.
+        if (host.waiting.k === 'user' && host.waiting.call === item.call) {
+          prepare(i);
+          host.answerPrompt(readDisplay(item.answer));
+        }
+        break;
       case 'output':
         break;
     }

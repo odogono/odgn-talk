@@ -317,6 +317,7 @@ sessions/real-clock
 sessions/refusals
 sessions/save-restore
 sessions/store-bindings
+sessions/user-prompts
 sessions/virtual-clock
 stdlib/calls
 stdlib/errors-name-the-call

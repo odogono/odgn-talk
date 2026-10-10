@@ -2,7 +2,9 @@ package northtalk
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"runtime"
 	"strings"
 	"testing"
@@ -65,8 +67,8 @@ func TestLoadSourceAllocation(t *testing.T) {
 	}
 }
 
-func TestLoadLongOperatorChain(t *testing.T) {
-	const terms = 8000
+func TestLoadOperatorChainsWithinNestingLimit(t *testing.T) {
+	const terms = syntax.MaxNesting - 3
 	for _, kind := range []string{"chain", "distinct-chain", "power-chain"} {
 		t.Run(kind, func(t *testing.T) {
 			g := New().NewGroup(GroupOptions{})
@@ -101,6 +103,29 @@ func TestLoadLongOperatorChain(t *testing.T) {
 	}
 }
 
+func TestLoadLongOperatorChainsRespectNestingLimit(t *testing.T) {
+	for _, kind := range []string{"chain", "distinct-chain", "power-chain"} {
+		t.Run(kind, func(t *testing.T) {
+			g := New().NewGroup(GroupOptions{})
+			_, err := g.Load(LoadOptions{Name: "chain", Source: hostileSource(kind, 8000)})
+			if !isSourceNestingError(err) {
+				t.Fatalf("want source nesting refusal, got %v", err)
+			}
+			if g.Script("chain") != nil {
+				t.Fatal("refused Script was registered")
+			}
+			if _, err := g.Load(LoadOptions{Name: "chain", Source: hostileSource(kind, 3)}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func isSourceNestingError(err error) bool {
+	var rejected *LoadError
+	return errors.As(err, &rejected) && len(rejected.Diagnostics) == 1 && rejected.Diagnostics[0].Code == "source nesting too deep"
+}
+
 func BenchmarkLoadHostileSource(b *testing.B) {
 	for _, kind := range []string{"blank", "handlers", "chain", "distinct-chain", "power-chain"} {
 		for _, size := range []int{1000, 2000, 4000, 8000, 100000} {
@@ -112,7 +137,7 @@ func BenchmarkLoadHostileSource(b *testing.B) {
 				b.SetBytes(int64(len(source)))
 				b.ResetTimer()
 				for b.Loop() {
-					if _, err := New().NewGroup(GroupOptions{}).Load(LoadOptions{Name: "hostile", Source: source}); err != nil {
+					if _, err := New().NewGroup(GroupOptions{}).Load(LoadOptions{Name: "hostile", Source: source}); err != nil && !isSourceNestingError(err) {
 						b.Fatal(err)
 					}
 				}

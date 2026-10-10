@@ -1,7 +1,11 @@
 // Messages between the page and its workers. The session worker runs the
 // Core, the Session Host and the debuggers; the LSP worker runs the language
 // server, the formatter and the Lints.
-import type { DebugAction, TranscriptItem } from '@odgn/northtalk/session';
+import type {
+  DebugAction,
+  TranscriptItem,
+  UserPrompt,
+} from '@odgn/northtalk/session';
 import type {
   RpcMessage,
   WorkspaceConfiguration,
@@ -24,6 +28,8 @@ export type Prompt =
   | 'continue'
   /** The Foreground Run waits on `console`'s `read`. */
   | 'read'
+  /** The Foreground Run waits on a `user` prompt, in `question`. */
+  | 'user'
   /** The Host sleeps until a deadline the Foreground Run waits for. */
   | 'sleeping'
   /** A debugger paused the session. */
@@ -51,6 +57,8 @@ export type SessionState = {
   manifest: unknown;
   pause: PauseView | null;
   prompt: Prompt;
+  /** The `user` prompt the Foreground Run waits on, while `prompt` is user. */
+  question?: UserPrompt & { call: string };
   /**
    * The latest value an Entry echoed in source form, for copying; null when
    * it is not readable as source. Absent until an Entry echoes one.
@@ -81,6 +89,12 @@ export type SessionRequest =
       t: 'open';
     }
   | { t: 'line'; text: string }
+  /**
+   * The answer to the `user` prompt: a boolean for `confirm`, the chosen
+   * item or items for `choose`, the entered text for `enter`, or null for a
+   * cancel.
+   */
+  | { answer: boolean | string | readonly string[] | null; t: 'answer' }
   | { t: 'cancel' }
   /** Setup commands an example needs, for the next Run fresh. */
   | { setup: string[]; t: 'exampleSetup' }

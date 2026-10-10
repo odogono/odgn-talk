@@ -135,3 +135,40 @@ func TestSessionChoosesLibraryRecoveryOffer(t *testing.T) {
 		t.Fatalf("choice/entry pairing: %d/%d", chosen, entered)
 	}
 }
+
+func TestREPLAsksUserPromptsAndReplaysTheirAnswers(t *testing.T) {
+	var items []session.Item
+	var out, questions bytes.Buffer
+	env := session.Environment{Now: func() time.Time { return time.Unix(0, 0).UTC() }, Record: func(i session.Item) { items = append(items, i) }}
+	input := strings.Join([]string{
+		":grant user user",
+		"on size",
+		`ask user to choose ["S", "M", "L"], {multiple: true} and wait`,
+		"say it",
+		"end size",
+		"size and wait",
+		"4",
+		"3, 1",
+		`ask user to enter "Name?", {default: "Ann"} and wait`,
+		"",
+		`tell user to notify "Done", {title: "Backup"}`,
+		":quit",
+	}, "\n") + "\n"
+	if err := RunREPL(context.Background(), strings.NewReader(input), &out, REPLOptions{Environment: env, Questions: &questions}); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "[\"S\", \"L\"]\n* Backup: Done\n" {
+		t.Fatal(out.String())
+	}
+	choose := "? Choose any\n  1. S\n  2. M\n  3. L\n  numbers separated by commas, \"none\" for none, or an empty line to cancel\n"
+	if questions.String() != choose+choose+"? Name? [Ann]\n  an empty line gives the default\n" {
+		t.Fatal(questions.String())
+	}
+	transcript := WriteTranscript(items)
+	if !strings.Contains(transcript, "~ session/r1.c1 [\"S\", \"L\"]\n") || !strings.Contains(transcript, "~ session/r2.c1 \"Ann\"\n") {
+		t.Fatal(transcript)
+	}
+	if _, _, err := ReplayTranscript(items, nil); err != nil {
+		t.Fatal(err)
+	}
+}

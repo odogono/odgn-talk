@@ -25,6 +25,9 @@ func (l *Lexer) positionAt(at int) Position {
 // scanFenced keeps source offsets separate from cooked text, including through
 // margins, CRLF normalization, escapes and nested interpolation expressions.
 func (l *Lexer) scanFenced(open int) (Token, error) {
+	if l.nesting >= MaxNesting {
+		return Token{}, nestingError(l.positionAt(open))
+	}
 	s := l.source
 	raw := s[open] == '"'
 	width := 1
@@ -83,7 +86,7 @@ func (l *Lexer) scanFenced(open int) (Token, error) {
 		}
 		if !raw && strings.HasPrefix(s[i:], "${") {
 			at := i
-			inner := &Lexer{source: s, pos: Position{1, 1}}
+			inner := &Lexer{source: s, pos: Position{1, 1}, nesting: l.nesting + 1}
 			inner.advance(i + 2)
 			depth := 0
 			for {

@@ -45,7 +45,7 @@ func TestCompactParsePreservesDeclarationsAndDocumentation(t *testing.T) {
 }
 
 func TestParsedFirstPositionsAreCachedAndPreserveOperatorPositions(t *testing.T) {
-	tree, err := ParseCompact("on sum where 1" + strings.Repeat(" + 1", 8000) + "\nreturn 1\nend sum\n")
+	tree, err := ParseCompact("on sum where 1" + strings.Repeat(" + 1", MaxNesting-4) + "\nreturn 1\nend sum\n")
 	if err != nil {
 		t.Fatal(err)
 	}

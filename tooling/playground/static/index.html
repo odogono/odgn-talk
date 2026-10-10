@@ -10,34 +10,95 @@
     <header>
       <h1>NorthTalk <span>Playground</span></h1>
       <div class="examples">
-        <button id="examples-button" aria-haspopup="menu" aria-expanded="false" aria-controls="examples-menu" title="Load and run an example script">Examples ▾</button>
+        <button
+          id="examples-button"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="examples-menu"
+          title="Load and run an example script"
+        >
+          Examples ▾
+        </button>
         <ul id="examples-menu" role="menu" aria-label="Examples" hidden></ul>
       </div>
       <div class="toolbar">
-        <button id="apply" title="Enter the Script tab into the session (Ctrl/Cmd-S)">Apply</button>
-        <button id="restart" title="A fresh session from the setup and the tabs">Restart</button>
+        <button
+          id="apply"
+          title="Enter the Script tab into the session (Ctrl/Cmd-S)"
+        >
+          Apply
+        </button>
+        <button
+          id="restart"
+          title="A fresh session from the setup and the tabs"
+        >
+          Restart
+        </button>
         <button id="format" title="Format the current tab">Format</button>
         <button id="share" title="Make a Shared Link">Share</button>
-        <button id="download" title="Download the Session Transcript">Transcript</button>
-        <label>Theme <select id="theme" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <label>Lints
+        <button id="download" title="Download the Session Transcript">
+          Transcript
+        </button>
+        <label
+          >Theme
+          <select id="theme" aria-label="Theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select></label
+        >
+        <label
+          >Lints
           <select id="profile">
             <option value="beginner">beginner</option>
             <option value="standard">standard</option>
           </select>
         </label>
-        <label title="Show Clock readings and Capability answers"><input type="checkbox" id="readings" /> @ ~</label>
+        <label title="Show Clock readings and Capability answers"
+          ><input type="checkbox" id="readings" /> @ ~</label
+        >
       </div>
     </header>
     <div id="banner" hidden></div>
     <div class="runbar">
-      <button id="fresh" class="primary" title="Load a fresh session, then evaluate the launch expression">▶ Run fresh</button>
-      <label for="launch">Launch</label><input id="launch" placeholder="Handler or expression" spellcheck="false" />
-      <button id="evaluate" title="Evaluate against the loaded session without applying edits">Evaluate</button>
+      <button
+        id="fresh"
+        class="primary"
+        title="Load a fresh session, then evaluate the launch expression"
+      >
+        ▶ Run fresh
+      </button>
+      <label for="launch">Launch</label
+      ><input
+        id="launch"
+        placeholder="Handler or expression"
+        spellcheck="false"
+      />
+      <button
+        id="evaluate"
+        title="Evaluate against the loaded session without applying edits"
+      >
+        Evaluate
+      </button>
       <span class="selection-actions">
-        <button id="do-it" title="Run the selection, or the cursor's line, against the live session (Ctrl/Cmd-D)">Do it</button>
-        <button id="print-it" title="Run the selection and show what it printed beside it (Ctrl/Cmd-P)">Print it</button>
-        <button id="inspect-it" title="Run :inspect on the selected expression and show it in the inspector (Ctrl/Cmd-I)">Inspect it</button>
+        <button
+          id="do-it"
+          title="Run the selection, or the cursor's line, against the live session (Ctrl/Cmd-D)"
+        >
+          Do it
+        </button>
+        <button
+          id="print-it"
+          title="Run the selection and show what it printed beside it (Ctrl/Cmd-P)"
+        >
+          Print it
+        </button>
+        <button
+          id="inspect-it"
+          title="Run :inspect on the selected expression and show it in the inspector (Ctrl/Cmd-I)"
+        >
+          Inspect it
+        </button>
       </span>
       <span id="source-status" role="status">Unapplied edits</span>
     </div>
@@ -46,24 +107,131 @@
         <nav id="tabs"></nav>
         <div id="editor"></div>
       </section>
-      <div id="column-resize" class="resize column" role="separator" aria-label="Editor width" aria-orientation="vertical" aria-valuemin="25" aria-valuemax="75" tabindex="0"></div>
+      <div
+        id="column-resize"
+        class="resize column"
+        role="separator"
+        aria-label="Editor width"
+        aria-orientation="vertical"
+        aria-valuemin="25"
+        aria-valuemax="75"
+        tabindex="0"
+      ></div>
       <section id="side">
         <nav class="inspector-tabs" role="tablist" aria-label="Inspector">
-          <button role="tab" id="tab-syntax" aria-controls="syntax" data-inspector="syntax">Syntax</button>
-          <button role="tab" id="tab-inspect" aria-controls="inspect" data-inspector="inspect">Inspect</button>
-          <button role="tab" id="tab-canvas" aria-controls="canvas" data-inspector="canvas">Canvas</button>
-          <button role="tab" id="tab-debugger" aria-controls="debugger" data-inspector="debugger">Debug</button>
-          <button role="tab" id="tab-replay" aria-controls="replay" data-inspector="replay">Replay</button>
-          <button role="tab" id="tab-grants" aria-controls="grants" data-inspector="grants">Setup</button>
-          <button role="tab" id="tab-dictionary" aria-controls="dictionary" data-inspector="dictionary">Dictionary</button>
+          <button
+            role="tab"
+            id="tab-syntax"
+            aria-controls="syntax"
+            data-inspector="syntax"
+          >
+            Syntax
+          </button>
+          <button
+            role="tab"
+            id="tab-inspect"
+            aria-controls="inspect"
+            data-inspector="inspect"
+          >
+            Inspect
+          </button>
+          <button
+            role="tab"
+            id="tab-canvas"
+            aria-controls="canvas"
+            data-inspector="canvas"
+          >
+            Canvas
+          </button>
+          <button
+            role="tab"
+            id="tab-debugger"
+            aria-controls="debugger"
+            data-inspector="debugger"
+          >
+            Debug
+          </button>
+          <button
+            role="tab"
+            id="tab-replay"
+            aria-controls="replay"
+            data-inspector="replay"
+          >
+            Replay
+          </button>
+          <button
+            role="tab"
+            id="tab-grants"
+            aria-controls="grants"
+            data-inspector="grants"
+          >
+            Setup
+          </button>
+          <button
+            role="tab"
+            id="tab-dictionary"
+            aria-controls="dictionary"
+            data-inspector="dictionary"
+          >
+            Dictionary
+          </button>
         </nav>
-        <section id="syntax" role="tabpanel" aria-labelledby="tab-syntax"><p class="hint">Current source · select a node to explore its code</p><div id="syntax-tree"></div></section>
-        <section id="inspect" role="tabpanel" aria-labelledby="tab-inspect" hidden><p class="hint">Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).</p><p id="inspect-source"></p><button id="copy-inspect" disabled>Copy as source</button><pre id="inspect-view"></pre></section>
-        <section id="canvas" role="tabpanel" aria-labelledby="tab-canvas" hidden><div class="canvas-heading"><span id="canvas-size">400 × 400</span><span>Static canvas</span></div><div class="canvas-stage"><canvas id="drawing" width="400" height="400" aria-label="Script drawing"></canvas></div><p class="hint">Draw from your script with <code>tell canvas</code>. <button id="canvas-example">Run drawing example</button></p></section>
-        <section id="dictionary" role="tabpanel" aria-labelledby="tab-dictionary" hidden><p class="hint">The session's Grants and how to call each Operation, from its Host Manifest.</p><div id="dictionary-view"></div></section>
+        <section id="syntax" role="tabpanel" aria-labelledby="tab-syntax">
+          <p class="hint">Current source · select a node to explore its code</p>
+          <div id="syntax-tree"></div>
+        </section>
+        <section
+          id="inspect"
+          role="tabpanel"
+          aria-labelledby="tab-inspect"
+          hidden
+        >
+          <p class="hint">
+            Select an expression in a tab, then Inspect it (Ctrl/Cmd-I).
+          </p>
+          <p id="inspect-source"></p>
+          <button id="copy-inspect" disabled>Copy as source</button>
+          <pre id="inspect-view"></pre>
+        </section>
+        <section
+          id="canvas"
+          role="tabpanel"
+          aria-labelledby="tab-canvas"
+          hidden
+        >
+          <div class="canvas-heading">
+            <span id="canvas-size">400 × 400</span><span>Static canvas</span>
+          </div>
+          <div class="canvas-stage">
+            <canvas
+              id="drawing"
+              width="400"
+              height="400"
+              aria-label="Script drawing"
+            ></canvas>
+          </div>
+          <p class="hint">
+            Draw from your script with <code>tell canvas</code>.
+            <button id="canvas-example">Run drawing example</button>
+          </p>
+        </section>
+        <section
+          id="dictionary"
+          role="tabpanel"
+          aria-labelledby="tab-dictionary"
+          hidden
+        >
+          <p class="hint">
+            The session's Grants and how to call each Operation, from its Host
+            Manifest.
+          </p>
+          <div id="dictionary-view"></div>
+        </section>
         <details role="tabpanel" aria-labelledby="tab-grants" id="grants" open>
           <summary>Grants</summary>
-          <p class="hint">Before the session starts. <code>console</code> is always granted.</p>
+          <p class="hint">
+            Before the session starts. <code>console</code> is always granted.
+          </p>
           <ul id="setup"></ul>
           <form id="grant-form" class="row">
             <input id="grant-name" placeholder="name" size="8" required />
@@ -73,11 +241,20 @@
               <option value="calendar">calendar</option>
               <option value="locale">locale</option>
             </select>
-            <input id="grant-binding" placeholder="binding (zone or tag)" size="14" />
+            <input
+              id="grant-binding"
+              placeholder="binding (zone or tag)"
+              size="14"
+            />
             <button>Grant</button>
           </form>
           <form id="mock-form" class="row">
-            <input id="mock-target" placeholder="capability.operation" size="18" required />
+            <input
+              id="mock-target"
+              placeholder="capability.operation"
+              size="18"
+              required
+            />
             <select id="mock-mode">
               <option value="immediate">immediate</option>
               <option value="suspending">suspending</option>
@@ -86,12 +263,25 @@
             <button>Mock</button>
           </form>
         </details>
-        <details role="tabpanel" aria-labelledby="tab-debugger" id="debugger" open>
+        <details
+          role="tabpanel"
+          aria-labelledby="tab-debugger"
+          id="debugger"
+          open
+        >
           <summary>Debugger</summary>
-          <p class="hint">Click the gutter to set a breakpoint. A pause holds the whole session.</p>
+          <p class="hint">
+            Click the gutter to set a breakpoint. A pause holds the whole
+            session.
+          </p>
           <div class="row">
-            <label><input type="checkbox" id="break-error" /> break on error</label>
-            <label><input type="checkbox" id="break-limit" /> break on Limit Fault</label>
+            <label
+              ><input type="checkbox" id="break-error" /> break on error</label
+            >
+            <label
+              ><input type="checkbox" id="break-limit" /> break on Limit
+              Fault</label
+            >
           </div>
           <div class="row">
             <button id="debug-resume" disabled>Continue</button>
@@ -111,9 +301,20 @@
         </details>
         <details role="tabpanel" aria-labelledby="tab-replay" id="replay" open>
           <summary>Replay debugger</summary>
-          <p class="hint">Replays a Trace on the TS Core. Leave the Trace empty to replay this session; a pasted Trace from another Host needs its Setup as JSON.</p>
-          <textarea id="replay-trace" rows="4" placeholder="Paste a Trace (optional)"></textarea>
-          <textarea id="replay-setup" rows="2" placeholder="Setup as JSON (optional)"></textarea>
+          <p class="hint">
+            Replays a Trace on the TS Core. Leave the Trace empty to replay this
+            session; a pasted Trace from another Host needs its Setup as JSON.
+          </p>
+          <textarea
+            id="replay-trace"
+            rows="4"
+            placeholder="Paste a Trace (optional)"
+          ></textarea>
+          <textarea
+            id="replay-setup"
+            rows="2"
+            placeholder="Setup as JSON (optional)"
+          ></textarea>
           <div id="replay-need" hidden>
             <label id="replay-need-label"></label>
             <textarea id="replay-source" rows="4"></textarea>
@@ -122,7 +323,9 @@
           <div class="row">
             <input id="replay-breaks" placeholder="unit:line, …" size="20" />
             <label><input type="checkbox" id="replay-error" /> errors</label>
-            <label><input type="checkbox" id="replay-limit" /> Limit Faults</label>
+            <label
+              ><input type="checkbox" id="replay-limit" /> Limit Faults</label
+            >
           </div>
           <div class="row">
             <button id="replay-resume">Continue</button>
@@ -137,20 +340,69 @@
         </details>
       </section>
     </main>
-    <div id="console-resize" class="resize horizontal" role="separator" aria-label="Console height" aria-orientation="horizontal" aria-valuemin="12" aria-valuemax="55" tabindex="0"></div>
-        <div id="console-pane"><div class="console-heading"><button id="console-toggle" aria-controls="console-body" aria-expanded="true">Console</button><span>Live session · :help for commands</span><button id="copy-result" disabled>Copy result as source</button></div><div id="console-body">
-          <div id="console" aria-live="polite"></div>
-          <div id="pending"></div>
-          <form id="prompt-form" autocomplete="off">
-            <span id="prompt-label">&gt;</span>
-            <input id="prompt" spellcheck="false" aria-label="Entry or Session Command" />
-            <button type="button" id="cancel" title="Cancel the Run the prompt waits for (Esc)">Cancel</button>
-          </form>
-        </div></div>
+    <div
+      id="console-resize"
+      class="resize horizontal"
+      role="separator"
+      aria-label="Console height"
+      aria-orientation="horizontal"
+      aria-valuemin="12"
+      aria-valuemax="55"
+      tabindex="0"
+    ></div>
+    <div id="console-pane">
+      <div class="console-heading">
+        <button
+          id="console-toggle"
+          aria-controls="console-body"
+          aria-expanded="true"
+        >
+          Console</button
+        ><span>Live session · :help for commands</span
+        ><button id="copy-result" disabled>Copy result as source</button>
+      </div>
+      <div id="console-body">
+        <div id="console" aria-live="polite"></div>
+        <div id="pending"></div>
+        <form id="prompt-form" autocomplete="off">
+          <span id="prompt-label">&gt;</span>
+          <input
+            id="prompt"
+            spellcheck="false"
+            aria-label="Entry or Session Command"
+          />
+          <button
+            type="button"
+            id="cancel"
+            title="Cancel the Run the prompt waits for (Esc)"
+          >
+            Cancel
+          </button>
+        </form>
+      </div>
+    </div>
+    <dialog id="user-dialog" aria-labelledby="user-message">
+      <form method="dialog">
+        <p id="user-message"></p>
+        <div id="user-choices"></div>
+        <input
+          id="user-text"
+          spellcheck="false"
+          aria-labelledby="user-message"
+        />
+        <div class="row">
+          <button value="cancel" id="user-cancel">Cancel</button>
+          <button value="ok" id="user-ok">OK</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="share-dialog">
       <form method="dialog">
         <h2>Share</h2>
-        <label><input type="checkbox" id="share-transcript" checked /> Include the Session Transcript, which replays on opening</label>
+        <label
+          ><input type="checkbox" id="share-transcript" checked /> Include the
+          Session Transcript, which replays on opening</label
+        >
         <input id="share-url" readonly />
         <p id="share-size" class="hint"></p>
         <div class="row">

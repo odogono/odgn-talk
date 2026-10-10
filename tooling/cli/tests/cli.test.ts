@@ -130,6 +130,56 @@ test('the REPL reads Entries a line at a time and records a Transcript that repl
   expect(run(['replay', transcript]).code).toBe(0);
 });
 
+test('the REPL asks user prompts, records their answers and replays them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
+  const transcript = join(dir, 'session.transcript');
+  const { code, stdout, stderr } = run(
+    ['--transcript', transcript],
+    [
+      ':grant user user',
+      'on size',
+      '  ask user to choose ["S", "M", "L"], {multiple: true} and wait',
+      '  say it',
+      'end size',
+      'size and wait',
+      '4',
+      '3, 1',
+      'ask user to enter "Name?", {default: "Ann"} and wait',
+      '',
+      'ask user to confirm "Sure?" and wait',
+      'yes',
+      'tell user to notify "Done", {title: "Backup"}',
+      ':quit',
+      '',
+    ].join('\n'),
+  );
+  expect(code).toBe(0);
+  expect(stdout).toBe('["S", "L"]\n* Backup: Done\n');
+  // The questions aren't Session output, and a bad answer asks again.
+  expect(stderr).toBe(
+    [
+      '? Choose any',
+      '  1. S',
+      '  2. M',
+      '  3. L',
+      '  numbers separated by commas, "none" for none, or an empty line to cancel',
+      '? Choose any',
+      '  1. S',
+      '  2. M',
+      '  3. L',
+      '  numbers separated by commas, "none" for none, or an empty line to cancel',
+      '? Name? [Ann]',
+      '  an empty line gives the default',
+      '? Sure? [y/N]',
+      '',
+    ].join('\n'),
+  );
+  const recorded = readFileSync(transcript, 'utf8');
+  expect(recorded).toContain('~ session/r1.c1 ["S", "L"]\n');
+  expect(recorded).toContain('~ session/r2.c1 "Ann"\n');
+  expect(run(['replay', transcript]).code).toBe(0);
+});
+
 test('replay reports the first line that differs', () => {
   const dir = mkdtempSync(join(tmpdir(), 'northtalk-'));
   const transcript = join(dir, 'changed.transcript');

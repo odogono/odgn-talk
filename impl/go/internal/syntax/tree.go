@@ -48,8 +48,15 @@ func (n *Node) FirstPos() Position {
 		return n.first
 	}
 	pos := n.Pos()
-	for _, child := range n.Children {
-		p := child.FirstPos()
+	pending := append([]*Node(nil), n.Children...)
+	for len(pending) > 0 {
+		child := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		p := child.first
+		if p.Line == 0 {
+			p = child.Pos()
+			pending = append(pending, child.Children...)
+		}
 		if p.Line < pos.Line || p.Line == pos.Line && p.Column < pos.Column {
 			pos = p
 		}

@@ -33,6 +33,18 @@ format and reconstructs independent storage.
 
 Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests and root-relative check commands.
 
+## Source nesting
+
+The Go Core bounds recursive parser regions and the resulting syntax-tree
+depth to 64, on native and WASI builds. This safety limit covers expressions,
+blocks, binding and Text Patterns, Interpolation Holes, and operator or
+property chains built without parser recursion. Load, Library compilation and
+Session Entries refuse excessive nesting with a positioned
+`source nesting too deep` diagnostic; a refused Load leaves the Group usable.
+The diagnostic and bound are Go implementation limits, outside the Spec's
+shared diagnostic catalogue; the Spec does not currently set a source nesting
+bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
+
 ## Layout
 
 - The root package implements the available declarations of the
@@ -1179,8 +1191,16 @@ Frames over 64 MiB are drained with bounded buffering and answered with a
 `protocol error` under `ref: -1`, since the rejected JSON isn't parsed. The
 same Session then answers the next frame. A truncated header or body ends the
 transport with an error. The WASI check also loads 1 MiB of blank lines,
-100,000 empty Handlers and 100,000-term addition and exponentiation chains in
-separate instances with a 1 GiB memory cap.
+100,000 empty Handlers in separate instances with a 1 GiB memory cap.
+100,000-term addition and exponentiation chains receive a Load nesting
+diagnostic, and each instance continues answering requests.
+
+Incoming frames may nest JSON arrays and objects at most 64 levels, including
+the envelope object. `Send` checks this iteratively before JSON or Value
+Encoding decoding, including ignored fields and declaration Shapes. Deeper
+frames receive a protocol error with `ref: -1`; the Session remains usable,
+including any pending Host exchange. Quoted delimiters do not count. This
+transport limit is identical on native and WASI builds.
 
 A `pump` runs on its own goroutine. Each Operation or property it reaches
 returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's
@@ -1246,7 +1266,8 @@ that arrive while an export runs, and a Host needing prompt interruption pumps
 with a Fuel Slice. Supported messages and limitations are the same on both
 transports; `wasip1` adds no embedding API.
 
-The check exercises `hello`, invalid lengths and malformed frames, memory
+The check exercises `hello`, invalid lengths and malformed frames, hostile
+source and JSON nesting with instance reuse, memory
 growth and reply retention, immediate and suspending Operations across exports,
 charging, a Script error followed by more requests, save, fingerprint and
 independent instances. It also prints the artifact's SHA-256 and raw, gzip

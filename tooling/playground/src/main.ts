@@ -4,7 +4,7 @@ import { createCanvasView } from './canvas';
 // controls are tooling freedom (chapter 12); everything a session prints and
 // records comes from the Session Host in the session worker.
 import { createWorkbench } from './workbench';
-import { writeTranscript } from '@odgn/northtalk/session';
+import { writeTranscript, type UserPrompt } from '@odgn/northtalk/session';
 import { libraryUri, type Position } from '@odgn/northtalk-tooling/lsp';
 import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
 import type { EditorState } from '@codemirror/state';
@@ -455,6 +455,83 @@ const receive = (response: SessionResponse) => {
   }
 };
 
+// The `user` prompt the Foreground Run waits on, as a dialog. OK answers it,
+// and Cancel or Escape cancels: `false` for `confirm`, Nothing otherwise.
+let asked: (UserPrompt & { call: string }) | null = null;
+const userDialog = $('user-dialog') as HTMLDialogElement;
+const userText = $('user-text') as HTMLInputElement;
+const renderQuestion = (
+  question: (UserPrompt & { call: string }) | undefined,
+) => {
+  if (!question) {
+    asked = null;
+    if (userDialog.open) {
+      userDialog.close('stale');
+    }
+    return;
+  }
+  if (asked?.call === question.call) {
+    return;
+  }
+  asked = question;
+  $('user-message').textContent =
+    question.k === 'choose'
+      ? question.prompt ||
+        (question.multiple ? 'Choose any of these.' : 'Choose one of these.')
+      : question.message;
+  const choices = $('user-choices');
+  choices.replaceChildren(
+    ...(question.k === 'choose' ? question.items : []).map((item, i) => {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.type =
+        question.k === 'choose' && question.multiple ? 'checkbox' : 'radio';
+      input.name = 'user-choice';
+      input.value = String(i);
+      input.checked = i === 0 && input.type === 'radio';
+      label.append(input, ` ${item}`);
+      return label;
+    }),
+  );
+  userText.hidden = question.k !== 'enter';
+  userText.value = question.k === 'enter' ? question.fallback : '';
+  $('user-ok').textContent = question.k === 'confirm' ? 'Yes' : 'OK';
+  $('user-cancel').textContent = question.k === 'confirm' ? 'No' : 'Cancel';
+  userDialog.returnValue = '';
+  userDialog.showModal();
+  if (question.k === 'enter') {
+    userText.select();
+  }
+};
+userDialog.onclose = () => {
+  const question = asked;
+  const how = userDialog.returnValue;
+  if (!question || how === 'stale') {
+    return;
+  }
+  asked = null;
+  const picked = [
+    ...$('user-choices').querySelectorAll<HTMLInputElement>('input:checked'),
+  ].map(input =>
+    question.k === 'choose' ? question.items[Number(input.value)]! : '',
+  );
+  void call({
+    t: 'answer',
+    answer:
+      how !== 'ok'
+        ? question.k === 'confirm'
+          ? false
+          : null
+        : question.k === 'confirm'
+          ? true
+          : question.k === 'enter'
+            ? userText.value
+            : question.multiple
+              ? picked
+              : (picked[0] ?? null),
+  });
+};
+
 const render = (state: SessionState) => {
   if (generation !== state.generation) {
     generation = state.generation;
@@ -486,11 +563,15 @@ const render = (state: SessionState) => {
     entry: '>',
     continue: '|',
     read: '<',
+    user: '?',
     sleeping: '(waiting)',
     paused: '(paused)',
   }[state.prompt];
-  // Lines typed while the session sleeps wait their turn.
-  ($('prompt') as HTMLInputElement).disabled = state.prompt === 'paused';
+  // Lines typed while the session sleeps wait their turn; a prompt is
+  // answered in its dialog.
+  ($('prompt') as HTMLInputElement).disabled =
+    state.prompt === 'paused' || state.prompt === 'user';
+  renderQuestion(state.question);
   savedLibraries = state.savedLibraries;
   syncScript(state.source);
   renderSetup(state);
