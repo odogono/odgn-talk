@@ -27,6 +27,9 @@ The [first results with AppleScript](results/2026-10-09-darwin-arm64-apple-m5.md
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
+The [Go Save and Restore optimization measurements](results/2026-10-10-go-save-restore.md)
+record before/after timings and allocations for [#504](https://github.com/odogono/odgn-talk/issues/504).
+
 ## Workloads
 
 The categories are `core`, `numbers`, `text`, `collections`, `messaging`, `host`, `lifecycle` and `macro`.
@@ -77,6 +80,8 @@ core workloads against host-allocation ceilings one tenth of the pre-#322
 baseline, and pins their output and Fuel. It also checks `collections/list-build`
 and `collections/list-append` against 8 MB and 16 MB ceilings respectively, with
 their output, Fuel and logical allocation pinned.
+The full-size `lifecycle/restore` Run is also held below 20 MB of Host
+allocation, with 8,015 Fuel and 8,024 bytes of logical allocation pinned (#504).
 Timing comparisons remain advisory.
 
 ## Peer Languages

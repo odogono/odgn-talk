@@ -551,3 +551,21 @@ func TestReissueFuelFaultSkipsSiblingHostCalls(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveEnvelopePreservesBytes(t *testing.T) {
+	// Payload strings have already received the Codec's HTML/JavaScript escaping.
+	for _, payload := range []string{`null`, `{"Text":"quotes \" and backslash \\"}`, `{"Text":"\u003c\u003e\u0026\u2028\u2029\n\u0000"}`, `[0,255,9223372036854775807]`} {
+		hash := sha256.Sum256([]byte(payload))
+		want := jsonData(struct {
+			Hash    string `json:"hash"`
+			Payload string `json:"payload"`
+		}{fmt.Sprintf("%x", hash), payload})
+		got := saveEnvelope([]byte(payload), hash)
+		if !bytes.Equal(got, want) {
+			t.Fatalf("envelope bytes differ:\n%s\n%s", got, want)
+		}
+		if cap(got) != len(got) {
+			t.Fatalf("envelope capacity = %d, length = %d", cap(got), len(got))
+		}
+	}
+}

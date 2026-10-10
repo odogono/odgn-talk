@@ -9,7 +9,9 @@ import (
 
 // The core ceilings are one tenth of the pre-#322 bytes per full-size Run.
 // List construction also guards against the quadratic copying from #503.
-// Measure allocation, not timing, so machine speed cannot make CI flaky.
+// Save/Restore guards the direct Codec path from #504 below a third of its
+// original allocation. Measure bytes, not timing, so machine speed cannot
+// make CI flaky.
 func TestCoreRunAllocationBudgets(t *testing.T) {
 	budgets := map[string]struct {
 		bytes uint64
@@ -22,6 +24,7 @@ func TestCoreRunAllocationBudgets(t *testing.T) {
 		"core/lambdas":            {10_443_816, 58_027, 0},
 		"collections/list-build":  {8_000_000, 19_091, 3_022_112},
 		"collections/list-append": {16_000_000, 52_056, 80_200},
+		"lifecycle/restore":       {20_000_000, 8_015, 8_024},
 	}
 	for _, bench := range manifest(t, "go") {
 		budget, ok := budgets[bench.Name]
