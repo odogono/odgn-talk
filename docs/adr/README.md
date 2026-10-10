@@ -78,3 +78,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0074: A `whose` clause picks the chunks whose condition holds](0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)
 - [0075: English comparison words spell the existing comparisons](0075-english-comparison-words-spell-the-existing-comparisons.md)
 - [0076: Operation Declarations carry documentation that only tooling reads](0076-operation-declarations-carry-documentation-that-only-tooling-reads.md)
+- [0077: `user` is an optional Standard Capability that asks the person running a Script](0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)

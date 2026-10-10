@@ -156,8 +156,8 @@ message = "A {kind} can't be encoded as plain data"
 [[error]]
 code = "out of domain"
 fields = ["function", "value"]
-raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, or a Standard Capability option word that isn't listed; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name"
-sources = ["ADR 0002", "ADR 0021", "ADR 0025", "ADR 0033"]
+raised_when = "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, or an empty list of `user` `choose` items; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name"
+sources = ["ADR 0002", "ADR 0021", "ADR 0025", "ADR 0033", "ADR 0077"]
 message = "{value} is outside the domain of {function}"
 
 [[error]]
@@ -333,3 +333,10 @@ fields = ["column"]
 raised_when = "A `sqlite` result holds a value Talk can't hold exactly: a NaN, an infinity, a `REAL` of magnitude 10^34 or more, or `TEXT` that isn't valid UTF-8; `column` is its column's name, and the Core raises it, except that a TS Host raises it for `TEXT`"
 sources = ["ADR 0070", "#466"]
 message = "The value in {column} can't be represented"
+
+[[error]]
+code = "user busy"
+fields = []
+raised_when = "A `user` `confirm`, `choose` or `enter` comes from a Script that already has one the Host hasn't answered; the Host raises it before showing anything"
+sources = ["ADR 0077", "#527"]
+message = "Another prompt is waiting for an answer"

@@ -554,6 +554,24 @@ type SqliteImpl interface {
 // SqliteBinding.
 func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*CapabilityDef, error)
 
+// user is optional (chapter 7, ADR 0077), and has no binding. The Core has
+// checked the Shapes and refused an empty items with `out of domain`; an
+// omitted prompt, default or title is "". Confirm, Choose and Enter start a
+// suspending call with maxPending 2147483647 ms. Confirm answers a boolean,
+// false for a dismissal; Choose one of items, or with multiple a list of them
+// in list order; Enter text. Choose and Enter answer Nothing for a cancel.
+// Fail with ScriptError `user busy` while the Script has another prompt
+// unanswered. Notify is fire-and-forget.
+type UserImpl interface {
+	Confirm(c *Call, message string) error
+	Choose(c *Call, items []string, prompt string, multiple bool) error
+	Enter(c *Call, message string, fallback string) error
+	Notify(c *Call, message string, title string) error
+}
+
+// UserCapability is optional for Hosts.
+func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error)
+
 // ---------------------------------------------------------------------------
 // Host Objects (ADRs 0012, 0016)
 // ---------------------------------------------------------------------------

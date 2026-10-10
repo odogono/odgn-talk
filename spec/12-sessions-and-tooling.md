@@ -15,7 +15,7 @@ The normative [Session observation contract](session-observation.md) defines Dec
 - **Limits:** the default limit profile ([chapter 6](06-errors-and-limits.md#limits)). `:limits` tightens it for later Entries.
 - **Libraries:** the stdlib Libraries are always registered, so `use pad from text` works at the prompt ([chapter 7](07-libraries-and-the-standard-library.md#imports)). User Libraries come in with `:library`.
 - **Pumps** have no Fuel Slice and no Fuel cap, so a Segment always runs to its end within one Pump.
-- **Costs:** `console`'s Operations and every mock Operation cost nothing. `store`'s `get` and `keys` cost 2 Fuel, and its `set`, `delete`, `increment` and `swap` 4, with no declared allocation.
+- **Costs:** `console`'s and `user`'s Operations and every mock Operation cost nothing. `store`'s `get` and `keys` cost 2 Fuel, and its `set`, `delete`, `increment` and `swap` 4, with no declared allocation.
 - **The Clock** is real by default, and virtual under `:clock virtual`.
 - **The end of the Message Path:** a message that reaches it is reported, not an error, since the Session Script's path is flat.
 
@@ -38,6 +38,31 @@ The normative [Session observation contract](session-observation.md) defines Dec
 - **`say`:** a Command Call named `say` with one argument, and no `and wait`, is short for `tell console to write` with that argument, whatever Handlers the Script has ([ADR 0019](../docs/adr/0019-one-predictive-grammar-with-contextual-keywords.md)). It lowers to `tell console write 1` ([chapter 8](08-the-abstract-machine-and-the-cost-model.md#statements)). `say` with no argument, more than one, or `and wait`, is a load error. A Script without a `console` Grant can't use it, as with any `tell`.
 - **Writing:** the Session Host prints the text form of the value, then ends the line. A line break inside the text starts a new line, so `say "a" & newline` prints `a` and then an empty line.
 - **Reading:** the Session Host answers `read` with the next line the user types.
+
+### Prompts
+
+`user` is an optional Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#user)), and every REPL and Playground builds it in ([ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)).
+
+- **Granting:** `:grant user user` grants it under the name `user`, with all four Operations. It takes no binding, and isn't granted unless asked for. The Playground asks for it in each new session that doesn't replay a Transcript, as it does `canvas`.
+- **Asking:** when the foreground Run waits on `confirm`, `choose` or `enter`, the Session Host asks the person, answers the call with what they give, and pumps. The Transcript records the answer as a `~` line. How a REPL or Playground shows the prompt, and how the person answers or cancels, is its own, and prints nothing.
+- **Background prompts** wait, as a background `read` does, until their Run is cancelled or a deadline abandons the call.
+- **One at a time:** while the Session Script has a prompt unanswered, the Session Host fails its next one with `user busy`, recorded as a `~` line with `fail`.
+- **`notify`** prints `* `, then the title and `: ` when the title isn't empty, then the message, as `console`'s `write` prints a text, with `[<run>] ` before it for a Run in the background.
+
+> **Example.**
+>
+> ```text
+> > :grant user user
+> > on size
+> |   ask user to choose ["S", "M", "L"] and wait
+> |   say "got " & it
+> | end size
+> > size and wait
+> @ 2026-09-30T10:00:00Z
+> ~ session/r1.c1 "M"
+> @ 2026-09-30T10:00:03Z
+> got M
+> ```
 
 ## Entries
 
@@ -77,6 +102,7 @@ A statement or an expression runs as a Run of an implicit Handler:
 After it pumps, while the Entry's Run hasn't ended, the Session Host:
 
 - **answers `console`'s `read`,** if the Run waits on it, with the line the user types, and pumps again.
+- **asks the person,** if the Run waits on a `user` prompt, and answers it with what they give, and pumps again ([Prompts](#prompts)).
 - **under a real Clock,** if the Run waits only for a deadline (a `wait`, or a `wait for` or block `wait for` with no call pending), sleeps until the Pump's next deadline, and pumps again.
 - **otherwise returns the prompt,** and the Run goes on in the background. Under a virtual Clock, a deadline wait returns the prompt at once.
 
@@ -94,6 +120,7 @@ Ordinary execution prints the lines below; [observation commands](session-observ
 | --- | --- |
 | a value, in the display form | the result of an expression Entry |
 | the text, line by line | a `console` write by the foreground Run |
+| `* `, then the title and `: `, then the text, line by line | a `user` notify by the foreground Run ([Prompts](#prompts)) |
 | `[<run>] ` and any line in this table | the same, for a Run in the background, or one not started by an Entry |
 | `! error <map> at <where>` | an uncaught error, as its map without `message` and `at` |
 | `! limit fault <limit> at <where>` | a Limit Fault, with the `fault` record's limit word |
@@ -146,7 +173,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **Stubs in the Trace:** `:stub` writes its `stub` line into the Trace where it was entered, as a Trace Case's runner does, so a Session Transcript's `case.trace` replays as a Trace Case.
 - **`:grant`** names a Capability the REPL or Playground Host has built in, or one `:mock` defined. Which Capabilities are built in is the Host's choice.
   - **`<binding>`** is the Grant's binding, which the Core reads when it checks a call ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)): a default IANA zone id for `calendar`, a default BCP 47 tag for `locale`, and a Store name for `store`. With none, they bind `UTC`, `und` and `default`, so a Transcript replays with the binding it was recorded with. A binding for any other Capability is refused with `bad arguments`.
-  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar`, `locale` or `store`, or the name of a registered Host capability.
+  - **A mock** can't take the name of a Standard Capability a REPL or Playground may build in: `clock`, `calendar`, `locale`, `store` or `user`, or the name of a registered Host capability.
 - **`:clock`:**
   - `:clock` prints `real <instant>`, the last Pump's reading, or `real` alone before the first Pump, or `virtual <instant>`, the virtual Clock's instant, which the next Pump reads.
   - `:clock virtual` starts a virtual Clock at the instant given, or else at the current reading. A Transcript always records the instant. One earlier than the last Pump's reading is refused with `clock backwards`, since the Clock never goes backwards.
@@ -239,7 +266,7 @@ OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
 - **Replaying** first restores the recorded object setup, consumes `%` crossings at their specified positions, and gives each Entry and recorded Session Command, in order, to a fresh Session Host, with each `@` reading as that Pump's Clock reading, each `<` line as the answer to `read`, and each `~` line as the answer of its call, in place of the built-in Capability. It never writes a file: `:export` with a directory writes to a scratch one.
 - **Both must match:** the printed lines must equal the Transcript's output lines, and the Group's Trace must equal `case.trace` ([chapter 11](11-the-trace-and-conformance.md#running-a-case)).
 - **Deterministic Host extensions:** a Host may register additional immediate Capabilities whose implementation uses only arguments and session-owned state. A Transcript replays these through the same implementation and declarations; they do not read external I/O and need no `~` answers. Each fresh session receives fresh extension state. Trace replay carries their Operation Declarations and uses the recorded call outcomes. This does not make them Standard Capabilities.
-- **In the Corpus,** a Transcript may include recorded object setup/crossings and grants only `console` and mock Capabilities, since which Capabilities a REPL has built in, and what they cost, is each Host's own.
+- **In the Corpus,** a Transcript may include recorded object setup/crossings and grants only `console`, `user` and mock Capabilities, since which other Capabilities a REPL has built in, and what they cost, is each Host's own. Every REPL builds `user` in, at no cost.
 - **Bless** writes `case.trace` and fills in the output lines, only when every available REPL agrees, as for a Trace Case.
 
 ## Tooling

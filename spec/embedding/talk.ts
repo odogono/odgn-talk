@@ -378,6 +378,22 @@ export interface SqliteImpl {
   commit(call: Call<SqliteBinding>): void;
   rollback(call: Call<SqliteBinding>): void;
 }
+/**
+ * user is optional (chapter 7, ADR 0077), and has no binding. The Core has
+ * checked the Shapes and refused an empty items with `out of domain`; an
+ * omitted prompt, default or title is "". confirm, choose and enter start a
+ * suspending call with maxPendingMs 2147483647. confirm answers a boolean,
+ * false for a dismissal; choose one of items, or with multiple a list of them
+ * in list order; enter text. choose and enter answer Nothing for a cancel.
+ * Throw ScriptError `user busy` while the Script has another prompt
+ * unanswered. notify is fire-and-forget.
+ */
+export interface UserImpl {
+  confirm(call: Call<unknown>, message: string): void;
+  choose(call: Call<unknown>, items: readonly string[], prompt: string, multiple: boolean): void;
+  enter(call: Call<unknown>, message: string, fallback: string): void;
+  notify(call: Call<unknown>, message: string, title: string): void;
+}
 /** Write shows the Value's text form. Read answers with text, without its line break. */
 export interface ConsoleImpl {
   write(call: Call<unknown>, value: Value): void;
@@ -483,6 +499,8 @@ export interface Core {
   storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name; impl coordinates every binding
   /** Optional for Hosts. perRow is whole Fuel charged per row of max; a bad one throws "invalid value". */
   sqliteCapability(impl: SqliteImpl, costs: Costs, perRow: number): CapabilityDef<SqliteBinding>;
+  /** Optional for Hosts. */
+  userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
   compileLibrary(src: LibrarySource, imports?: Library[], declarations?: GrantDecls): Library;
   newGroup(o: GroupOptions): Group;

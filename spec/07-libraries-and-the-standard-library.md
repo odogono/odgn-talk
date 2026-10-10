@@ -656,11 +656,11 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 ## Standard Capabilities
 
-A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md)).
+A Standard Capability is a Capability whose Operation Declarations this chapter fixes, so every Host offers the same shapes, while each Host supplies the answers ([ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0024](../docs/adr/0024-locale-data-comes-from-a-standard-capability.md), [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [ADR 0070](../docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md), [ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)).
 
 <!-- generated: stdlib.capabilities -->
 
-The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store` and `sqlite`. `sqlite` is optional: a Host may choose not to offer it, but a Host that offers it follows every rule this chapter gives for it.
+The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`, `store`, `sqlite` and `user`. `sqlite` and `user` are optional: a Host may choose not to offer them, but a Host that offers one follows every rule this chapter gives for it.
 
 <!-- end -->
 
@@ -668,9 +668,9 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 - **Ordinary Capabilities otherwise:** a Script reaches one only through a Grant, under the name it is granted as, and calls it with `ask` or `tell` ([ADR 0012](../docs/adr/0012-capabilities-are-called-through-tell-and-ask.md)). A Script that calls one it wasn't granted fails to load, and there is no silent fallback. A Grant may still limit a Script to some of its Operations.
 - **The Host** implements each Operation, with any library it likes, except `clock.now`, and sets each one's per-call cost ([chapter 9](09-embedding.md)).
 - **Parity:** the Trace records each answer. A Trace Case supplies Host answers as Stubs; `clock.now` reads the Pump's Clock without a Stub ([chapter 11](11-the-trace-and-conformance.md)).
-- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations and `console`'s `write` are fire-and-forget, and `console`'s `read` is suspending.
+- **Modes:** every `clock`, `calendar`, `locale`, `store` and `sqlite` Operation is immediate, both `timer` Operations, `console`'s `write` and `user`'s `notify` are fire-and-forget, and `console`'s `read` and `user`'s `confirm`, `choose` and `enter` are suspending.
 - **Arguments** are checked against the fixed Shapes before the Host function runs, and a mismatch raises `wrong kind` ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)). Where an Operation takes a word from a fixed list, the Core checks the word too, and any other raises `out of domain`, with `function` the Operation's name.
-- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. Chapter 6 says how both kinds are checked.
+- **Error codes:** the `calendar` Operations declare `unknown zone` and `ambiguous time`, and the Host fails with them. The Core raises `bad locale` itself. The `store` Operations declare `can't store`, `store full` and `store busy`, which the Host fails with, and `invalid key`, which the Core raises. The `sqlite` Operations declare `sql`, `constraint`, `sqlite busy`, `not read-only`, `too many rows` and `unrepresentable`, which the Host fails with, and the Core raises `out of range`, `unrepresentable` and `sql` for the checks it makes itself. The `user` Operations declare `user busy`, which the Host fails with, and the Core raises `out of domain` for an empty `choose` list. Chapter 6 says how both kinds are checked.
 
 ### `clock`
 
@@ -904,9 +904,49 @@ All five Operations are immediate: a Segment-bound Operation must be, and SQLite
 >
 > The `throw` abandons the open `transaction`, which discards the debit, and the Segment commits nothing else.
 
+### `user`
+
+<!-- generated: stdlib.capability.user -->
+
+| Operation | Mode | Gives | Errors |
+| --- | --- | --- | --- |
+| `confirm message` | suspending | `true` when the person accepts the question `message`, and `false` when they decline or dismiss it | `user busy` |
+| `choose items [, options]` | suspending | The item of the list of texts `items` the person chose, or with `multiple: true` a list of those they chose, in list order; Nothing if they cancel | `user busy`, `out of domain` |
+| `enter message [, options]` | suspending | The text the person entered for `message`, starting from `options`' `default`; Nothing if they cancel | `user busy` |
+| `notify message [, options]` | fire-and-forget | Shows `message`, with `options`' `title`, without waiting for anyone |  |
+
+<!-- end -->
+
+`user` asks the person running the Script, for a Host that has someone to ask ([ADR 0077](../docs/adr/0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)). It is optional: a Host need not offer it, and many server Hosts have no person to ask, but a Host that does follows every rule here. The Host supplies the UI, such as a dialog, a terminal prompt or a form in its client, and the Trace records each answer, so a replay needs nobody there.
+
+- **The binding:** none. The Host knows whom it asks.
+- **Shapes:** `message` is text. `items` is a list of texts. Each `options` is an Optional closed map: `{prompt, multiple}` for `choose`, with `prompt` text and `multiple` a boolean, `{default}` for `enter`, with `default` text, and `{title}` for `notify`, with `title` text. Every key is optional, and any other key raises `wrong kind`, as a closed map's Shape check does.
+- **`confirm message`** gives `true` when the person accepts the question, and `false` when they decline or dismiss it.
+- **`choose items [, options]`** shows `items`, under the `prompt` when given, and gives the item the person chose. With `multiple: true`, the person may choose any number of them, none included, and it gives a list of the chosen items in the order they appear in `items`. An empty `items` raises `out of domain`, with `value` the list, before the Host is called.
+- **`enter message [, options]`** gives the text the person entered. The Host offers `default`, when given, as the starting answer. It never converts the text, and a Script converts it explicitly ([ADR 0003](../docs/adr/0003-no-implicit-coercion.md)).
+- **Cancelling** isn't an error: a cancelled `choose` or `enter` gives Nothing. `confirm` has no separate cancel, and dismissing it gives `false`.
+- **`notify message [, options]`** shows `message`, with the `title` when given, and waits for nobody.
+- **One prompt at a time:** while a Script has a `confirm`, `choose` or `enter` the Host hasn't answered, the Host fails that Script's next one with `user busy`, before it shows anything. This holds inside a Join too. Prompts from different Scripts may queue. A prompt abandoned by a timeout, a cancellation or a Stop is no longer pending, and the Host takes it down.
+- **Waiting:** `confirm`, `choose` and `enter` each have a `maxPending` of 2,147,483,647 ms, the largest `MaxWait` every Core honours, as `console`'s `read` does. A Script that wants a deadline writes a [Timeout Block](05-handlers-messages-and-scheduling.md#timeout-blocks), and a deadline that runs out raises `timeout` as for any call.
+- **Answers the Core checks:** a `confirm` answer is a boolean, and an `enter` answer is text or Nothing. A `choose` answer is Nothing, or one of `items`, or with `multiple: true` a list that is a subsequence of `items`: each item in it is one of `items`, in their order, and no position of `items` is taken twice. Any other answer is the Host's fault, and the call ends as `host error` ([chapter 9](09-embedding.md#capabilities)).
+
+> **Example.**
+>
+> ```talk
+> on tidy files
+>   ask user to confirm "Delete " & the length of files & " files?" and wait
+>   if not it then return
+>   ask user to choose ["Small", "Medium", "Large"], {prompt: "Pick a size"} and wait
+>   if it is nothing then return
+>   put it into size
+>   tell user to notify "Tidied", {title: size}
+> end tidy
+> ```
+
 ## Outside parity
 
 - **Standard Capability answers:** each Host's zone rules, Locale data and supported Locales are its own. The Trace records every answer, so a replay follows the Host it came from.
 - **Per-call costs** of Standard Capability Operations are set by each Host.
 - **Store contents** are each Host's own, like its zone and Locale data. The Trace records what each `store` call gave.
 - **`sqlite` results** are each Host's own SQLite's, which a newer version can change, as can the `reason` of an `sql` error. The Trace records what each `sqlite` call gave.
+- **`user` answers** are the person's, and how a Host shows a prompt or a notification is its own. The Trace records what each `user` call gave.

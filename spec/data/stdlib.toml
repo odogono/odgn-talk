@@ -37,8 +37,8 @@
 #   errors       optional: the Error Codes it declares or the Core raises for it
 
 libraries = ["text", "list", "map", "bytes", "json", "date", "units"]
-capabilities = ["clock", "calendar", "locale", "timer", "console", "store", "sqlite"]
-optional = ["sqlite"]
+capabilities = ["clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user"]
+optional = ["sqlite", "user"]
 
 # ---------------------------------------------------------------------------
 # Built-ins
@@ -1083,3 +1083,34 @@ mode = "immediate"
 call = "rollback"
 gives = "Nothing; closes the scope `transaction`, discarding its changes"
 errors = ["scope not open"]
+
+[[operation]]
+capability = "user"
+name = "confirm"
+mode = "suspending"
+call = "confirm message"
+gives = "`true` when the person accepts the question `message`, and `false` when they decline or dismiss it"
+errors = ["user busy"]
+
+[[operation]]
+capability = "user"
+name = "choose"
+mode = "suspending"
+call = "choose items [, options]"
+gives = "The item of the list of texts `items` the person chose, or with `multiple: true` a list of those they chose, in list order; Nothing if they cancel"
+errors = ["user busy", "out of domain"]
+
+[[operation]]
+capability = "user"
+name = "enter"
+mode = "suspending"
+call = "enter message [, options]"
+gives = "The text the person entered for `message`, starting from `options`' `default`; Nothing if they cancel"
+errors = ["user busy"]
+
+[[operation]]
+capability = "user"
+name = "notify"
+mode = "fire-and-forget"
+call = "notify message [, options]"
+gives = "Shows `message`, with `options`' `title`, without waiting for anyone"
