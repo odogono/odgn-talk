@@ -1,0 +1,10 @@
+# Chapter 4: items reads text, lists and integer ranges; other values expect a list.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "items"
+source = "items.talk"

@@ -13,8 +13,8 @@ import (
 
 func TestTextModelExecution(t *testing.T) {
 	files, _ := filepath.Glob("../../../../corpus/text-model/*/*.talk")
-	if len(files) != 11 {
-		t.Fatalf("expected eleven execution cases, got %d", len(files))
+	if len(files) != 12 {
+		t.Fatalf("expected twelve execution cases, got %d", len(files))
 	}
 	figures := regexp.MustCompile(`clause=1 fuel=([0-9]+) alloc=([0-9]+) state=([0-9]+)`)
 	for _, file := range files {

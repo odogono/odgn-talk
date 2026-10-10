@@ -1,0 +1,16 @@
+-- Chapter 4's items property preserves list elements, splits text and walks
+-- integer ranges. Invalid subjects raise wrong kind with expected "list" (#565).
+script variable results
+script variable errors
+
+on go
+  put [the items of [1, 2], the items of [], the items of [nothing, {amount: 2}, [3]], the items of [1, 2] delimited by ";", the items of "a, b", the items of "a;b" delimited by ";", the items of "", the items of (2..4), the items of (3..1)] into results
+  put [] into errors
+  repeat for each subject in [42, true, nothing, {a: 1}, <<1, 2>>, 1.5..3.5]
+    try
+      get the items of subject
+    catch e
+      put [the code of e, the expected of e, the got of e, the value of e] after errors
+    end try
+  end repeat
+end go
