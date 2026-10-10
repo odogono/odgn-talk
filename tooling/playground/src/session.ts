@@ -23,6 +23,7 @@ import {
   type DebugAction,
   type SessionEnvironment,
   type TranscriptItem,
+  type Waiting,
 } from '@odgn/northtalk/session';
 import type { Setup } from '@odgn/northtalk/setup';
 import { renderDebugView } from '@odgn/northtalk-tooling/debug';
@@ -253,7 +254,7 @@ export class PlaygroundSession {
   }
 
   /** A real Clock reading less the time the debugger held the session paused. */
-  private now(): bigint {
+  now(): bigint {
     return this.env.now() - this.pausedNs;
   }
 
@@ -271,6 +272,19 @@ export class PlaygroundSession {
   /** Whether `source` is an unfinished Entry, so the prompt goes on at `|`. */
   incomplete(source: string): boolean {
     return this.host.incomplete(source);
+  }
+
+  /** What the Session Host waits for, for the Session Driver. */
+  get waiting(): Waiting {
+    return this.host.waiting;
+  }
+
+  get nextDeadline(): bigint | undefined {
+    return this.host.nextDeadline;
+  }
+
+  get virtualClock(): boolean {
+    return this.host.virtualClock;
   }
 
   // ------------------------------------------------------------- input

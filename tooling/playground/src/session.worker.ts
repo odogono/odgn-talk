@@ -9,7 +9,7 @@ import {
   renderDebugView,
   type ReplayResult,
 } from '@odgn/northtalk-tooling/debug';
-import commands from '../../../spec/data/session.toml';
+import { SessionDriver } from '@odgn/northtalk-tooling/session-driver';
 import type {
   ConsoleLine,
   FromSession,
@@ -54,13 +54,11 @@ const env = {
   },
 };
 
-let session = new PlaygroundSession(env);
 // How much of the session's Transcript the page has been sent.
 let sent = 0;
 let notes: ConsoleLine[] = [];
-let entry: string[] = [];
-let sleeping: ReturnType<typeof setTimeout> | null = null;
-let background: ReturnType<typeof setTimeout> | null = null;
+// Whether a page request is being handled; its response carries the state.
+let handling = false;
 let replay: ReplayDebugger | null = null;
 let revision = 0;
 let generation = 0;
@@ -79,36 +77,39 @@ const canvasNames = () =>
 const note = (text: string, level: 'info' | 'warning' | 'error' = 'info') =>
   notes.push({ k: 'note', level, text });
 
-type Command = { does: string; name: string; usage: string };
-const help = (name: string | undefined): string[] => {
-  const all = (commands as { command: Command[] }).command;
-  if (name) {
-    const c = all.find(
-      c => c.name === (name.startsWith(':') ? name : `:${name}`),
-    );
-    return c ? [c.usage, `  ${c.does}`] : [`No Session Command ${name}`];
-  }
-  return [
-    'Enter a declaration, a statement or an expression. An unfinished one goes on',
-    'at the next line until the whole Entry is complete. Cancel stops the Run the prompt',
-    'waits for. Apply enters the Script tab; saving a Library tab adds or replaces it.',
-    '',
-    ...all.filter(c => c.name !== ':quit').map(c => `  ${c.usage}`),
-  ];
-};
+const help = [
+  'Enter a declaration, a statement or an expression. An unfinished one goes on',
+  'at the next line until the whole Entry is complete. Cancel stops the Run the prompt',
+  'waits for. Apply enters the Script tab; saving a Library tab adds or replaces it.',
+];
+
+// The session's driver: what it prints the page reads from the Transcript, so
+// only its notes and the Pumps it makes at a deadline are posted from here.
+const drive = (session: PlaygroundSession) =>
+  new SessionDriver(session, {
+    now: () => session.now(),
+    help,
+    noQuit:
+      'A Playground session ends when you close the page, or with Restart.',
+    timer: (ms, fire) => {
+      const timer = setTimeout(fire, ms);
+      return () => clearTimeout(timer);
+    },
+    emit: event => {
+      if (event.k === 'note') {
+        note(event.text, event.level);
+      } else if (event.k === 'prompt' && !handling) {
+        post({ t: 'state', state: state() });
+      }
+    },
+  });
+
+let session = new PlaygroundSession(env);
+let driver = drive(session);
 
 const prompt = (): Prompt => {
-  const waiting = session.host.waiting;
-  if (waiting.k === 'paused') {
-    return 'paused';
-  }
-  if (waiting.k === 'read') {
-    return 'read';
-  }
-  if (sleeping || waiting.k === 'deadline') {
-    return 'sleeping';
-  }
-  return entry.length ? 'continue' : 'entry';
+  const prompt = driver.prompt;
+  return prompt === 'closed' ? 'entry' : prompt;
 };
 
 const state = (): SessionState => {
@@ -148,100 +149,14 @@ const state = (): SessionState => {
 const post = (response: SessionResponse, id?: number) =>
   scope.postMessage({ ...(id === undefined ? {} : { id }), response });
 
-// After each Host call: sleep while the Foreground Run waits only for a
-// deadline, and otherwise pump at the next background deadline.
-const settle = () => {
-  for (const timer of [sleeping, background]) {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-  sleeping = background = null;
-  if (session.paused) {
-    return;
-  }
-  const waiting = session.host.waiting;
-  const wake = (at: bigint, foreground: boolean) => {
-    const timer = setTimeout(
-      () => {
-        if (foreground) {
-          sleeping = null;
-        } else {
-          background = null;
-        }
-        session.tick();
-        settle();
-        post({ t: 'state', state: state() });
-      },
-      Math.max(0, Number((at - now()) / 1_000_000n)),
-    );
-    if (foreground) {
-      sleeping = timer;
-    } else {
-      background = timer;
-    }
-  };
-  if (waiting.k === 'deadline') {
-    wake(waiting.at, true);
-    return;
-  }
-  const next = session.host.nextDeadline;
-  if (next !== undefined && !session.host.virtualClock) {
-    wake(next, false);
-  }
-};
-
 const replace = (next: PlaygroundSession) => {
   generation++;
+  driver.dispose();
   session = next;
+  driver = drive(next);
   sent = 0;
-  entry = [];
   selection = null;
-  settle();
-};
-
-const line = (text: string) => {
-  if (session.paused || sleeping) {
-    note(
-      'The session is busy: continue the debugger or cancel the Run first.',
-      'warning',
-    );
-    return;
-  }
-  if (session.host.waiting.k === 'read') {
-    session.read(text);
-    return;
-  }
-  if (!entry.length) {
-    const command = /^:(\S*)\s*(.*)$/su.exec(text);
-    if (command?.[1] === 'help') {
-      for (const l of help(command[2] || undefined)) {
-        note(l);
-      }
-      return;
-    }
-    if (command?.[1] === 'quit') {
-      note(
-        'A Playground session ends when you close the page, or with Restart.',
-      );
-      return;
-    }
-    // `:fuel` collects a multiline Entry like any other.
-    if (command && !session.incomplete(text)) {
-      session.input(text);
-      return;
-    }
-    if (!text.trim()) {
-      return;
-    }
-  }
-  entry.push(text);
-  const source = entry.join('\n');
-  if (session.incomplete(source)) {
-    return;
-  }
-  entry = [];
-  session.input(source);
+  driver.settle();
 };
 
 const replayView = (result: ReplayResult | null): ReplayView => {
@@ -313,11 +228,6 @@ const handle = (request: SessionRequest): SessionResponse => {
       for (const [slot, text] of Object.entries(request.slots ?? {})) {
         slots.set(slot, text);
       }
-      for (const timer of [sleeping, background]) {
-        if (timer) {
-          clearTimeout(timer);
-        }
-      }
       if (request.shared?.transcript) {
         const opened = PlaygroundSession.replay(env, request.shared.transcript);
         if ('difference' in opened) {
@@ -347,7 +257,7 @@ const handle = (request: SessionRequest): SessionResponse => {
       return { t: 'state', state: state() };
     }
     case 'line':
-      line(request.text);
+      driver.input(request.text);
       break;
     case 'exampleSetup':
       // Setup is fixed once execution starts, so the next Run fresh,
@@ -366,12 +276,12 @@ const handle = (request: SessionRequest): SessionResponse => {
         if (request.launch.trim()) {
           session.input(request.launch);
         }
-        settle();
+        driver.settle();
       }
       return { t: 'applied', result: prepared.result, state: state() };
     }
     case 'evaluate':
-      if (session.host.waiting.k !== 'prompt' || entry.length) {
+      if (driver.prompt !== 'entry') {
         note(
           'Finish or cancel the current Entry before evaluating.',
           'warning',
@@ -381,7 +291,7 @@ const handle = (request: SessionRequest): SessionResponse => {
       }
       break;
     case 'selection': {
-      if (session.paused || sleeping || entry.length) {
+      if (session.paused || driver.prompt === 'sleeping' || driver.collecting) {
         note(
           'Finish or cancel the current Entry before running a selection.',
           'warning',
@@ -399,7 +309,7 @@ const handle = (request: SessionRequest): SessionResponse => {
       );
       if ('refused' in ran) {
         note(ran.refused, 'warning');
-        settle();
+        driver.settle();
         return { t: 'selected', id: null, state: state() };
       }
       if (request.how !== 'do') {
@@ -409,18 +319,11 @@ const handle = (request: SessionRequest): SessionResponse => {
           source: request.source.trim(),
         };
       }
-      settle();
+      driver.settle();
       return { t: 'selected', id: ran.selection, state: state() };
     }
     case 'cancel':
-      if (session.paused) {
-        note('Continue the debugger first.', 'warning');
-      } else if (entry.length) {
-        entry = [];
-        note('(Entry dropped)');
-      } else if (session.host.waiting.k !== 'prompt' || sleeping) {
-        session.input(':cancel');
-      }
+      driver.interrupt();
       break;
     case 'apply': {
       if (session.paused) {
@@ -428,7 +331,7 @@ const handle = (request: SessionRequest): SessionResponse => {
         break;
       }
       const result = session.apply(request.script);
-      settle();
+      driver.settle();
       return { t: 'applied', result, state: state() };
     }
     case 'fix': {
@@ -448,7 +351,7 @@ const handle = (request: SessionRequest): SessionResponse => {
             : 'The Script tab has no new or changed declarations to fix.',
         );
       }
-      settle();
+      driver.settle();
       return { t: 'applied', result, state: state() };
     }
     case 'saveLibrary':
@@ -547,7 +450,7 @@ const handle = (request: SessionRequest): SessionResponse => {
       return { t: 'replay', replay: replayView(result) };
     }
   }
-  settle();
+  driver.settle();
   return { t: 'state', state: state() };
 };
 
@@ -557,12 +460,15 @@ let lastReplayed: { setup: Setup; trace: string[] } | null = null;
 scope.onmessage = ({ data: { id, request } }) => {
   let response: SessionResponse;
   try {
+    handling = true;
     response = handle(request);
   } catch (error) {
     response = {
       t: 'error',
       message: error instanceof Error ? error.message : String(error),
     };
+  } finally {
+    handling = false;
   }
   post(response, id);
 };

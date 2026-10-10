@@ -17,7 +17,7 @@ northtalk test [--manifest <file>] [--only <text>] [<path>…]
 ```
 
 - **Entries:** a line that parses as a whole Entry runs at once. One that runs out of source, such as `on greet name`, goes on at a `|` prompt until the whole Entry is complete. This includes unfinished fences and interpolation holes, with blank literal lines preserved as content; final EOF reports the innermost unfinished construct at its opener.
-- **The foreground:** while the latest Entry's Run waits only for a deadline under the real Clock, the REPL sleeps until it. While it waits on `console`'s `read`, the next line answers it. Otherwise the prompt returns, and the REPL pumps at each background deadline.
+- **The foreground:** while the latest Entry's Run waits only for a deadline under the real Clock, the REPL sleeps until it, and lines typed meanwhile run in turn once it wakes. While it waits on `console`'s `read`, the next line answers it. Otherwise the prompt returns, and the REPL pumps at each background deadline.
 - **Ctrl-C** is `:cancel` of the Run the prompt waits for, and a Transcript records it as `:cancel`. At the prompt it drops an unfinished Entry.
 - **`:store load <path>` and `:store save <path>`** read and write a Session Store's contents as a JSON file, relative to the working directory. The Store itself is in memory and starts empty each session.
 - **`--transcript <file>`** records the session as it goes: each Entry and recorded Session Command, each real Clock reading, each line typed for `read`, and each line printed.

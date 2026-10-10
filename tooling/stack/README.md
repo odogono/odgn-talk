@@ -14,6 +14,10 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 `@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
 
+## Session Driver
+
+`@odgn/northtalk-tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. The caller supplies the Clock and timers and reads its output, note and prompt events.
+
 ## Formatter
 
 ```ts
