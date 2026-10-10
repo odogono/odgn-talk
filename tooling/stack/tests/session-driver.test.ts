@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseInstant } from '@odgn/northtalk';
+import { bool, parseInstant, text } from '@odgn/northtalk';
 import { SessionHost } from '@odgn/northtalk/session';
 import {
   SessionDriver,
@@ -191,4 +191,45 @@ test('end() enters an unfinished Entry once the session wakes, and closes', () =
     '! unexpected token at 1:11',
   ]);
   expect(lines()).toEqual([]);
+});
+
+test('asks a user prompt once, and takes its answer from a line or a dialog', () => {
+  const { driver, take, lines } = driven({
+    answerLine: (_prompt, line) =>
+      line === '?' ? undefined : line === 'y' ? bool(true) : bool(false),
+  });
+  driver.input(':grant user user');
+  driver.input(
+    'on sure\n ask user to confirm "Sure?" and wait\n say it\nend sure',
+  );
+  take();
+  driver.input('sure and wait');
+  const question = {
+    k: 'question',
+    call: 'session/r1.c1',
+    prompt: { k: 'confirm', message: 'Sure?' },
+  };
+  expect(take()).toEqual([question, { k: 'prompt', prompt: 'user' }]);
+  driver.input('?');
+  expect(take()).toEqual([question, { k: 'prompt', prompt: 'user' }]);
+  driver.input('y');
+  expect(lines()).toEqual(['true']);
+  expect(driver.prompt).toBe('entry');
+  driver.input('sure and wait');
+  take();
+  driver.answer(bool(false));
+  expect(lines()).toEqual(['false']);
+});
+
+test('without a line parser, a typed line is refused while a prompt waits', () => {
+  const { driver, take, lines } = driven();
+  driver.input(':grant user user');
+  driver.input('ask user to enter "Name?" and wait');
+  take();
+  driver.input('Ann');
+  expect(lines()).toEqual(['Answer the prompt first, or cancel the Run.']);
+  driver.answer(text('Ann'));
+  expect(driver.prompt).toBe('entry');
+  driver.answer(text('again'));
+  expect(lines()).toEqual(['No prompt is waiting for an answer.']);
 });

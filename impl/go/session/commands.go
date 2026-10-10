@@ -73,7 +73,7 @@ func (h *Host) command(source string) []string {
 			if len(words) == 3 && words[1] != "store" {
 				return refusal("bad arguments")
 			}
-			found := words[1] == "clock" || words[1] == "store"
+			found := words[1] == "clock" || words[1] == "store" || words[1] == "user"
 			for _, m := range h.mocks {
 				found = found || m.capability == words[1]
 			}
@@ -104,7 +104,7 @@ func (h *Host) command(source string) []string {
 		case "fire-and-forget":
 			mode = talk.FireAndForget
 		}
-		if slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" {
+		if slices.Contains([]string{"ask", "tell", "send", "wait", "end"}, op) || !ok || !nameText.MatchString(cap) || !nameText.MatchString(op) || mode < 0 || cap == "console" || cap == "clock" || cap == "calendar" || cap == "locale" || cap == "store" || cap == "user" {
 			return refusal("bad arguments")
 		}
 		m := mock{cap, op, mode}

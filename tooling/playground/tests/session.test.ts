@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseInstant } from '@odgn/northtalk';
+import { parseInstant, text } from '@odgn/northtalk';
 import { writeTranscript } from '@odgn/northtalk/session';
 import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
 import { PlaygroundSession, SESSION_TAB } from '../src/session';
@@ -556,4 +556,30 @@ test("the Dictionary panel lists the session's Grants from its Host Manifest", (
     mode: 'immediate',
     facts: expect.arrayContaining([expect.stringMatching(/^Cost per call: /u)]),
   });
+});
+
+test('a user prompt waits in the foreground, takes its answer and replays', () => {
+  const { env } = environment();
+  const s = new PlaygroundSession(env);
+  expect(s.input(':grant user user')).toEqual([]);
+  expect(
+    s.input('ask user to choose ["S", "M"], {prompt: "Size?"} and wait'),
+  ).toEqual([]);
+  expect(s.host.waiting).toMatchObject({
+    k: 'user',
+    prompt: {
+      k: 'choose',
+      items: ['S', 'M'],
+      prompt: 'Size?',
+      multiple: false,
+    },
+  });
+  expect(s.answerPrompt(text('M'))).toEqual([]);
+  expect(s.host.waiting.k).toBe('prompt');
+  expect(s.transcriptText).toContain('~ session/r1.c1 "M"\n');
+  const opened = PlaygroundSession.replay(env, s.transcriptText);
+  if (!('session' in opened)) {
+    throw new Error('The prompt Transcript did not replay');
+  }
+  expect(opened.session.trace).toEqual(s.trace);
 });
