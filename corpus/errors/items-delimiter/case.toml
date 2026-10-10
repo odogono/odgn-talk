@@ -1,0 +1,12 @@
+# items-delimiter: the items property validates its delimiter before reading
+# text, lists or integer ranges (chapter 4, delimited by; #566).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "items"
+source = "items.talk"

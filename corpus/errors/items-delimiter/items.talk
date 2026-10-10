@@ -1,0 +1,5 @@
+-- Empty and non-text delimiters raise at the items property, including when
+-- the list or integer range has no elements.
+on readItems xs, d
+  return the items of xs delimited by d
+end readItems

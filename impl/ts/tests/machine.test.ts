@@ -229,6 +229,50 @@ describe('values and operators', () => {
     ).toBe('[3, 5, [1, 2, 3], true, 3..1]');
   });
 
+  test.each(['[1, 2]', '[]', '(1..3)', '(3..1)', '"a,b"', '""'])(
+    'the items of %s rejects an empty delimiter',
+    source => {
+      const { outcome } = run(
+        `on go\n  return the items of ${source} delimited by ""\nend go`,
+      );
+      expect(outcome.kind).toBe('errored');
+      if (outcome.kind !== 'errored') {
+        throw new Error('expected an empty-delimiter error');
+      }
+      expect(outcome.error.get('code').asText()).toBe('out of range');
+      expect(outcome.error.get('field').asText()).toBe('delimiter');
+      expect(outcome.error.get('value').asText()).toBe('');
+      expect(outcome.error.get('at').toString()).toBe(
+        '{unit: "test", handler: "go", line: 2, column: 10}',
+      );
+    },
+  );
+
+  test.each(['[1, 2]', '(1..3)'])(
+    'the items of %s rejects a non-text delimiter',
+    source => {
+      const { outcome } = run(
+        `on go\n  return the items of ${source} delimited by 42\nend go`,
+      );
+      expect(outcome.kind).toBe('errored');
+      if (outcome.kind !== 'errored') {
+        throw new Error('expected a delimiter kind error');
+      }
+      expect(outcome.error.get('code').asText()).toBe('wrong kind');
+      expect(outcome.error.get('expected').asText()).toBe('text');
+      expect(outcome.error.get('got').asText()).toBe('number');
+      expect(outcome.error.get('value').toString()).toBe('42');
+    },
+  );
+
+  test('the items property accepts nonempty delimiters on lists and ranges', () => {
+    expect(
+      value(
+        '  return [the items of [1, 2] delimited by ";", the items of [] delimited by ";", the items of (1..3) delimited by ";", the items of (3..1) delimited by ";"]',
+      ),
+    ).toBe('[[1, 2], [], [1, 2, 3], []]');
+  });
+
   test('chunk reads and writes', () => {
     expect(
       value(
