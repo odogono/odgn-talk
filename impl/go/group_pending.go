@@ -61,11 +61,8 @@ func hostFailureValue(e *ScriptError) corevalue.Value {
 func (g *Group) settleOperation(d delivery) {
 	pending := g.calls[d.reply]
 	if pending == nil || !pending.pending {
-		kind := "late-answer"
-		if d.kind == "fail" {
-			kind = "late-fail"
-		}
-		g.record("note", false, []string{string(d.reply)}, map[string]string{"kind": kind})
+		// A late answer and a late failure are both `late-answer` (chapter 11).
+		g.record("note", false, []string{string(d.reply)}, map[string]string{"kind": "late-answer"})
 		return
 	}
 	pending.pending = false

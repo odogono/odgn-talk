@@ -116,7 +116,7 @@ func TestSuspendingOperationWorkerSettlementsAndRevocation(t *testing.T) {
 		t.Fatalf("%+v", end)
 	}
 	records := strings.Join(*trace, "\n")
-	if !strings.Contains(records, "note s/r1.c1 kind=late-answer") || !strings.Contains(records, "note s/r1.c1 kind=late-fail") {
+	if strings.Count(records, "note s/r1.c1 kind=late-answer") != 2 || strings.Contains(records, "late-fail") {
 		t.Fatal(records)
 	}
 	s.Deliver(Message{Name: "go"})
