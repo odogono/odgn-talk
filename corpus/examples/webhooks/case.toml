@@ -1,0 +1,41 @@
+# webhooks: the Bun webhook rules Example Host (impl/ts/examples/webhooks,
+# spec Appendix B milestone 2). Its database and fetch bindings never appear
+# here: the immediate `rules` calls replay from Stubs, and `post` from the
+# recorded answers and failures.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "outbound"
+name = "post"
+mode = "suspending"
+args = ["text", "any"]
+result = "number"
+cost = { fuel = 40 }
+maxPending = 2000
+errors = [{ code = "rejected", fields = [{ key = "status", shape = "number" }] }, { code = "unknown target" }, { code = "unreachable" }]
+
+[[operations]]
+capability = "rules"
+name = "match"
+mode = "immediate"
+args = ["text"]
+result = { oneOf = ["nothing", { map = [{ key = "target", shape = "text" }, { key = "retries", shape = "number" }] }] }
+cost = { fuel = 25 }
+
+[[operations]]
+capability = "rules"
+name = "record"
+mode = "immediate"
+args = ["text", { oneOf = ["text", "number"] }]
+result = "number"
+cost = { fuel = 25 }
+
+[[scripts]]
+name = "rules"
+source = "rules.talk"
+grants = { outbound = { ops = ["post"] }, rules = { ops = ["match", "record"] } }
