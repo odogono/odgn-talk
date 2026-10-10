@@ -1,7 +1,9 @@
 package northtalk
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/json/jsontext"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -246,7 +248,7 @@ func objectRef(o *Object) *ObjectRef {
 	}
 	return &ObjectRef{o.kind.name, o.id}
 }
-func (g *Group) codec(ref func(any) (string, bool), resolve func(string) (any, bool)) snapshot.Codec {
+func (g *Group) codec(ref func(reflect.Value) (string, bool), resolve func(string) (any, bool)) snapshot.Codec {
 	return snapshot.Codec{Reference: ref, Resolve: resolve, Function: func(fn *corevalue.FunctionData) error {
 		code, codeOK := fn.CodeState.(*machine.State)
 		home, homeOK := fn.Owner.(*machine.State)
@@ -407,11 +409,15 @@ func (g *Group) Save() ([]byte, error) {
 		data.Deferred = append(data.Deferred, *d)
 	}
 	g.mu.Unlock()
-	codec := g.codec(func(v any) (string, bool) {
-		if reflect.TypeOf(v).Comparable() {
-			if key, ok := refs[v]; ok {
-				return key, true
-			}
+	codec := g.codec(func(rv reflect.Value) (string, bool) {
+		// All external references are pointers. Inspect the kind before boxing;
+		// ordinary scalar and struct fields never need a reference lookup.
+		if rv.Kind() != reflect.Pointer {
+			return "", false
+		}
+		v := rv.Interface()
+		if key, ok := refs[v]; ok {
+			return key, true
 		}
 		if state, ok := v.(*machine.State); ok {
 			key := "stale/" + strconv.Itoa(len(data.Stale))
@@ -421,20 +427,34 @@ func (g *Group) Save() ([]byte, error) {
 		}
 		return "", false
 	}, nil)
-	// References discovered while encoding are included in a second pass.
+	// A newly discovered stale Function Home changes the Stale table. Only
+	// those saves need a second pass; ordinary saves already contain all refs.
+	stale := len(data.Stale)
 	payload, err := codec.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	payload, err = codec.Marshal(data)
-	if err != nil {
-		return nil, err
+	if len(data.Stale) != stale {
+		payload, err = codec.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
 	}
 	hash := sha256.Sum256(payload)
-	return jsonData(struct {
-		Hash    string `json:"hash"`
-		Payload string `json:"payload"`
-	}{fmt.Sprintf("%x", hash), string(payload)}), nil
+	return saveEnvelope(payload, hash), nil
+}
+
+// The payload is already compact JSON with HTML and JavaScript characters
+// escaped by the Codec. Quoting it adds only escapes for quotes/backslashes;
+// reserve the exact envelope size to avoid copying its large buffer on growth.
+func saveEnvelope(payload []byte, hash [32]byte) []byte {
+	size := len(payload) + bytes.Count(payload, []byte{'"'}) + bytes.Count(payload, []byte{'\\'}) + 88
+	out := make([]byte, 0, size)
+	out = append(out, `{"hash":"`...)
+	out = fmt.Appendf(out, "%x", hash)
+	out = append(out, `","payload":`...)
+	out, _ = jsontext.AppendQuote(out, payload)
+	return append(out, '}')
 }
 func sortedKeys[V any](m map[string]V) []string {
 	keys := []string{}

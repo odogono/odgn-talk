@@ -56,12 +56,13 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	if e := json.Unmarshal(save, &envelope); e != nil {
 		return nil, result, invalid(e.Error())
 	}
-	hash := sha256.Sum256([]byte(envelope.Payload))
+	payload := []byte(envelope.Payload)
+	hash := sha256.Sum256(payload)
 	if envelope.Hash != fmt.Sprintf("%x", hash) {
 		return nil, result, invalid("snapshot checksum differs")
 	}
 	var header saveHeader
-	if e := json.Unmarshal([]byte(envelope.Payload), &header); e != nil {
+	if e := json.Unmarshal(payload, &header); e != nil {
 		return nil, result, invalid(e.Error())
 	}
 	if header.Family != "northtalk-go" || header.Format != CoreVersions().SaveFormat || header.Save <= 0 {
@@ -225,7 +226,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	}
 	codec := g.codec(nil, func(key string) (any, bool) { v, ok := refs[key]; return v, ok })
 	var data savedGroup
-	if e := codec.Unmarshal([]byte(envelope.Payload), &data); e != nil {
+	if e := codec.Unmarshal(payload, &data); e != nil {
 		return nil, result, invalid(e.Error())
 	}
 	if e := validateSavedAccounting(data); e != nil {

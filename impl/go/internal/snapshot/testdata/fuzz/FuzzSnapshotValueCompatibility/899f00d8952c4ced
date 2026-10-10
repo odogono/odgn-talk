@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"Bool\":false,\"Bytes\":false,\"Bytes\":null,\"CoreMessage\":false,\"Date\":{\"Day\":0,\"HasTime\":false,\"Hour\":0,\"Minute\":0,\"Month\":0,\"Nanosecond\":0,\"Second\":0,\"Year\":0},\"Deadline\":null,\"Entries\":null,\"Function\":null,\"Items\":null,\"Iterator\":null,\"Kind\":0,\"Nanos\":0,\"Number\":\"[\\\"\\\",0,\\\"\\\"]\",\"Object\":null,\"Reader\":null,\"Replacement\":null,\"Seconds\":0,\"Text\":\"\",\"Unit\":{\"Slots\":null}}")
