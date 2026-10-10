@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
@@ -318,7 +319,7 @@ func TestRangeMeasuresAreEmptyOrSaturating(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if got := measure("items", v); got != tc.want {
+		if got := measure(generated.MeasureItems, v); got != tc.want {
 			t.Fatalf("%s: %d", tc.source, got)
 		}
 	}

@@ -23,6 +23,7 @@ import type {
   UnwindEntry,
 } from './code-unit';
 import { instructionSpec } from './code-unit';
+import { rateOf } from './costs';
 import { statementStarts } from './debug';
 import type { ParseError } from './parser';
 import type {
@@ -330,6 +331,12 @@ class UnitLowering {
           op: ins.op,
           line: ins.line,
           col: ins.col,
+          // A Built-in call is charged by that Built-in's rate, when it raises too.
+          rate: rateOf(
+            ins.op === 'call-builtin'
+              ? `builtin.${ins.operands[0] as string}`
+              : instructionSpec.get(ins.op)!.cost,
+          ),
           operands: ins.operands.map(operand => {
             if (typeof operand !== 'object') {
               return operand;

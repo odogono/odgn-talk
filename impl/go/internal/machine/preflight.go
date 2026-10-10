@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
@@ -69,7 +70,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		}
 		v := f.Stack[n-1]
 		if integerRange(v) {
-			count := measure("items", v)
+			count := measure(generated.MeasureItems, v)
 			return bounded(saturatingAdd(3, count), saturatingAdd(16, saturatingMultiply(24, count)))
 		}
 	}

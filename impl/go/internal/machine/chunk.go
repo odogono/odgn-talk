@@ -2,6 +2,7 @@ package machine
 
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"math/big"
 	"slices"
 	"strings"
@@ -136,16 +137,16 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 		empty := lo > hi
 		scanned := int64(count)
 		if whole.Kind == value.Text {
-			scanned = measure("characters", whole)
+			scanned = measure(generated.MeasureCharacters, whole)
 			if kind == "code point" {
-				scanned = measure("scalars", whole)
+				scanned = measure(generated.MeasureScalars, whole)
 			}
 			if !empty {
 				end := chunks[hi-1][1]
 				if kind == "code point" {
 					scanned = int64(utf8.RuneCountInString(whole.Text()[:end]))
 				} else {
-					scanned = measure("characters", text(whole.Text()[:end]))
+					scanned = measure(generated.MeasureCharacters, text(whole.Text()[:end]))
 				}
 			}
 			if empty {
@@ -304,7 +305,7 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 		}
 		switch v.Kind {
 		case value.Text:
-			return integer(measure("characters", v)), nil
+			return integer(measure(generated.MeasureCharacters, v)), nil
 		case value.Bytes:
 			return integer(int64(len(v.Bytes()))), nil
 		case value.List:
@@ -349,7 +350,7 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 			return v, nil
 		}
 		if name == "items" && integerRange(v) {
-			result, _ := rangeList(v, 1, measure("items", v))
+			result, _ := rangeList(v, 1, measure(generated.MeasureItems, v))
 			return result, nil
 		}
 		if v.Kind != value.Text {

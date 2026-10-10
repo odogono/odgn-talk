@@ -9,6 +9,8 @@ export type Instruction = {
   line: number;
   op: string;
   operands: Operand[];
+  /** The Cost Model rate it charges, from `rateOf`, or -1 if none. */
+  rate: number;
 };
 export type BodyKind =
   'init' | 'function' | 'handler' | 'fallback' | 'lambda' | 'event';

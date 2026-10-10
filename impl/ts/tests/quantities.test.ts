@@ -11,7 +11,7 @@ import {
   range,
   readDisplay,
 } from '../src/index';
-import { charge } from '../src/costs';
+import { charge, rateOf } from '../src/costs';
 import { parseUnit, unitText } from '../src/units';
 
 // The value a `go` Handler returns, or its error map without `message` and `at`.
@@ -256,5 +256,8 @@ describe("chapter 3's Quantity arithmetic", () => {
 
 test('`digits` counts a Quantity’s number, and a Quantity is 24 bytes', () => {
   const q = quantity(dec('5.250'), 'kg');
-  expect(charge('arithmetic', { result: q })).toEqual({ fuel: 4, alloc: 24 });
+  expect(charge(rateOf('arithmetic'), { result: q })).toEqual({
+    fuel: 4,
+    alloc: 24,
+  });
 });
