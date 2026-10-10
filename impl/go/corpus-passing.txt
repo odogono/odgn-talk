@@ -160,6 +160,8 @@ errors/items-delimiter
 errors/lambda-capture-parity
 errors/queued-error-before-parked-run
 examples/orders-pricing
+examples/tenants-acme
+examples/tenants-globex
 fallback/exclusions
 fallback/forwarding
 fallback/message-path

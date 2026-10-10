@@ -1,0 +1,31 @@
+-- shop.talk: a tenant's order Script in the multi-tenant Example Host.
+-- Grants: catalog (lookUp, immediate, bound to the tenant's price list) and
+-- mail (notify, fire-and-forget, bound to the tenant's sender address).
+
+script variable revenue = 0.00 GBP
+script variable orders = 0
+script variable problems = []
+
+on order {sku: sku, qty: qty, to: recipients}
+  try
+    ask catalog to lookUp sku
+  catch {code: code}
+    put code after problems
+    return code
+  end try
+  put it * qty into total
+  add total to revenue
+  add 1 to orders
+  try
+    tell mail to notify recipients, "order " & sku & " x" & qty & ": " & total
+  catch {code: code}
+    put code after problems
+  end try
+  return total
+end order
+
+-- A deadline on the Group's Clock: the driver Pool's timer pumps it.
+on remind recipients, note
+  wait 10 min
+  tell mail to notify recipients, "reminder: " & note
+end remind

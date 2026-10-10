@@ -1,5 +1,6 @@
 // Package driver supplies deterministic transcript replay and the terminal
-// driver around the ordinary Session Host. It is separate from the Core.
+// driver around the ordinary Session Host, and a Pool that pumps many Groups
+// in parallel. It is separate from the Core.
 package driver
 
 import (

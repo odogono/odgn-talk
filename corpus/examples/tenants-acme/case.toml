@@ -1,0 +1,33 @@
+# tenants-acme: the acme tenant of the multi-tenant Go Example Host
+# (impl/go/examples/tenants, spec Appendix B milestone 2). Its Group is one
+# of several the Host pumps in parallel through the driver Pool. Grant
+# bindings (the tenant's price list and sender address) never appear here.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[operations]]
+capability = "catalog"
+name = "lookUp"
+mode = "immediate"
+args = ["text"]
+result = { quantity = "GBP" }
+cost = { fuel = 30 }
+errors = [{ code = "unknown sku", fields = [{ key = "sku", shape = "text" }] }]
+
+[[operations]]
+capability = "mail"
+name = "notify"
+mode = "fire-and-forget"
+args = [{ list = "text" }, "text"]
+cost = { fuel = 20 }
+
+# The pro plan's limits.
+[[scripts]]
+name = "shop"
+source = "shop.talk"
+grants = { catalog = { ops = ["lookUp"] }, mail = { ops = ["notify"] } }
+limits = { fuelPerRun = 50000, mailboxDepth = 64 }

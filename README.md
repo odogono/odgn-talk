@@ -16,6 +16,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`corpus/`](corpus/): the Conformance Corpus, which every Core runs.
 - [`impl/ts/`](impl/ts/): the TS Core, `@odgn/northtalk`, with its Session Host and tests.
 - [`impl/ts/examples/files/`](impl/ts/examples/files/): a runnable Bun Example Host for file cleanup and staged single-file publication in private temporary directories.
+- [`impl/go/examples/tenants/`](impl/go/examples/tenants/): a runnable multi-tenant Go Example Host, an HTTP server with a Group per tenant pumped in parallel by the driver Pool.
 - [`impl/go/`](impl/go/): the Go Core, module `github.com/odogono/odgn-talk/impl/go`, with immutable values, decimal arithmetic, Value Encoding, Unicode text primitives, source lowering, standalone machine execution, the Group embedding interface, a Message Layer sidecar and WASI reactor, a Session Host, REPL, Transcript replay and a corpus runner.
 - [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server) and its [VS Code and Cursor extension](tooling/vscode/), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), and the [Playground](tooling/playground/)), none of it normative.
 - [`bench/`](bench/): the Benchmark Suite, which times the same Scripts on each Core and checks their Fuel agrees, none of it normative.

@@ -1,0 +1,32 @@
+-- shop-v2.talk: the Reload a tenant uploads. Ten or more of a line take
+-- 10% off. Script Variables carry over.
+
+script variable revenue = 0.00 GBP
+script variable orders = 0
+script variable problems = []
+
+on order {sku: sku, qty: qty, to: recipients}
+  try
+    ask catalog to lookUp sku
+  catch {code: code}
+    put code after problems
+    return code
+  end try
+  put it * qty into total
+  if qty >= 10 then
+    put total * 0.9 into total
+  end if
+  add total to revenue
+  add 1 to orders
+  try
+    tell mail to notify recipients, "order " & sku & " x" & qty & ": " & total
+  catch {code: code}
+    put code after problems
+  end try
+  return total
+end order
+
+on remind recipients, note
+  wait 10 min
+  tell mail to notify recipients, "reminder: " & note
+end remind
