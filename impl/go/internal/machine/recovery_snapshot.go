@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"reflect"
 	"slices"
 
@@ -169,7 +170,7 @@ func (r *Run) ValidateSnapshot(code map[*State]bool) error {
 					return invalid()
 				}
 				if p.Kind == "catch" {
-					if p.Owner != c.Owner || c.Activation == nil || p.PC != c.Activation.PC || !reflect.DeepEqual(p.Stack, c.Activation.Stack) || p.PC == 0 || b.Code[p.PC-1].Name != "catch-accept" {
+					if p.Owner != c.Owner || c.Activation == nil || p.PC != c.Activation.PC || !reflect.DeepEqual(p.Stack, c.Activation.Stack) || p.PC == 0 || b.Code[p.PC-1].Op != generated.OpCatchAccept {
 						return invalid()
 					}
 				} else {

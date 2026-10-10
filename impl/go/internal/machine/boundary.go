@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 )
 
@@ -34,34 +35,34 @@ func QueuePolicy(b *lower.Body) string {
 // Supported identifies the standalone execution instructions implemented here.
 func Supported(i lower.Instruction) bool {
 
-	switch i.Name {
-	case "call-import", "make-imported-function", "ask-wait", "join-ask", "ask", "tell", "const", "pop", "load", "store", "move", "load-var", "store-var", "load-definition", "store-definition", "load-object":
+	switch i.Op {
+	case generated.OpCallImport, generated.OpMakeImportedFunction, generated.OpAskWait, generated.OpJoinAsk, generated.OpAsk, generated.OpTell, generated.OpConst, generated.OpPop, generated.OpLoad, generated.OpStore, generated.OpMove, generated.OpLoadVar, generated.OpStoreVar, generated.OpLoadDefinition, generated.OpStoreDefinition, generated.OpLoadObject:
 		return true
-	case "jump", "branch-false", "branch-true", "check-boolean", "not", "return", "veto", "pass", "call", "call-handler", "call-handler-wait", "call-value-wait", "wait", "wait-for", "wait-for-any", "send", "send-wait", "send-up", "send-up-wait", "join-start", "join-send", "join-end", "send-named", "send-named-wait", "join-send-named", "send-spread", "send-spread-wait", "join-send-spread":
+	case generated.OpJump, generated.OpBranchFalse, generated.OpBranchTrue, generated.OpCheckBoolean, generated.OpNot, generated.OpReturn, generated.OpVeto, generated.OpPass, generated.OpCall, generated.OpCallHandler, generated.OpCallHandlerWait, generated.OpCallValueWait, generated.OpWait, generated.OpWaitFor, generated.OpWaitForAny, generated.OpSend, generated.OpSendWait, generated.OpSendUp, generated.OpSendUpWait, generated.OpJoinStart, generated.OpJoinSend, generated.OpJoinEnd, generated.OpSendNamed, generated.OpSendNamedWait, generated.OpJoinSendNamed, generated.OpSendSpread, generated.OpSendSpreadWait, generated.OpJoinSendSpread:
 		return true
-	case "add", "subtract", "multiply", "divide", "div", "mod", "power", "negate", "concat", "range":
+	case generated.OpAdd, generated.OpSubtract, generated.OpMultiply, generated.OpDivide, generated.OpDiv, generated.OpMod, generated.OpPower, generated.OpNegate, generated.OpConcat, generated.OpRange:
 		return true
-	case "equal", "not-equal", "less", "greater", "less-or-equal", "greater-or-equal":
+	case generated.OpEqual, generated.OpNotEqual, generated.OpLess, generated.OpGreater, generated.OpLessOrEqual, generated.OpGreaterOrEqual:
 		return true
-	case "list", "list-append", "list-extend", "map", "get-key", "get-key-computed", "set-property", "set-property-computed", "property", "property-delimited":
+	case generated.OpList, generated.OpListAppend, generated.OpListExtend, generated.OpMap, generated.OpGetKey, generated.OpGetKeyComputed, generated.OpSetProperty, generated.OpSetPropertyComputed, generated.OpProperty, generated.OpPropertyDelimited:
 		return true
-	case "chunk-get", "chunk-get-delimited", "chunk-set", "chunk-set-delimited", "chunk-delete", "chunk-delete-delimited", "test-chunk", "test-chunk-delimited":
+	case generated.OpChunkGet, generated.OpChunkGetDelimited, generated.OpChunkSet, generated.OpChunkSetDelimited, generated.OpChunkDelete, generated.OpChunkDeleteDelimited, generated.OpTestChunk, generated.OpTestChunkDelimited:
 		return true
-	case "make-pattern", "contains", "begins-with", "ends-with", "matches", "match-all":
+	case generated.OpMakePattern, generated.OpContains, generated.OpBeginsWith, generated.OpEndsWith, generated.OpMatches, generated.OpMatchAll:
 		return true
-	case "append", "prepend", "append-all", "prepend-all", "iterate", "iterate-times", "next", "timeout-start", "timeout-end":
+	case generated.OpAppend, generated.OpPrepend, generated.OpAppendAll, generated.OpPrependAll, generated.OpIterate, generated.OpIterateTimes, generated.OpNext, generated.OpTimeoutStart, generated.OpTimeoutEnd:
 		return true
-	case "test-map", "test-list", "test-list-at-least", "list-item", "list-rest", "map-get", "test-constant", "test-equal":
+	case generated.OpTestMap, generated.OpTestList, generated.OpTestListAtLeast, generated.OpListItem, generated.OpListRest, generated.OpMapGet, generated.OpTestConstant, generated.OpTestEqual:
 		return true
-	case "throw", "catch-accept", "catch-next", "choose-offer", "raise", "end-cleanup", "clause-fail":
+	case generated.OpThrow, generated.OpCatchAccept, generated.OpCatchNext, generated.OpChooseOffer, generated.OpRaise, generated.OpEndCleanup, generated.OpClauseFail:
 		return true
-	case "me", "target", "make-function", "make-closure", "call-value", "match-whole", "match-search", "replace-start", "replace-next", "replace-put", "replace-end":
+	case generated.OpMe, generated.OpTarget, generated.OpMakeFunction, generated.OpMakeClosure, generated.OpCallValue, generated.OpMatchWhole, generated.OpMatchSearch, generated.OpReplaceStart, generated.OpReplaceNext, generated.OpReplacePut, generated.OpReplaceEnd:
 		return true
-	case "member", "is-kind", "is-empty", "can-convert", "convert", "test-key", "test-key-computed", "set-key", "set-key-computed", "delete-key", "delete-key-computed":
+	case generated.OpMember, generated.OpIsKind, generated.OpIsEmpty, generated.OpCanConvert, generated.OpConvert, generated.OpTestKey, generated.OpTestKeyComputed, generated.OpSetKey, generated.OpSetKeyComputed, generated.OpDeleteKey, generated.OpDeleteKeyComputed:
 		return true
-	case "bytes-field", "bytes-sized", "bytes-bits", "bin-start", "bin-literal", "bin-int", "bin-bits", "bin-bytes", "bin-rest", "bin-end":
+	case generated.OpBytesField, generated.OpBytesSized, generated.OpBytesBits, generated.OpBinStart, generated.OpBinLiteral, generated.OpBinInt, generated.OpBinBits, generated.OpBinBytes, generated.OpBinRest, generated.OpBinEnd:
 		return true
-	case "call-builtin":
+	case generated.OpCallBuiltin:
 		switch i.Operands()[0].Text {
 		case "offerAvailable", "upper", "lower", "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32", "year", "month", "day", "hour", "minute", "second", "nanosecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant", "fromCodePoint", "codePoint", "offset", "kindOf", "objectKind", "isDisposed", "rangeStart", "rangeEnd", "abs", "min", "max", "functionArity", "functionName":
 			return true

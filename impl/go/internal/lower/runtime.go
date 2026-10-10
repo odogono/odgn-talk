@@ -47,13 +47,9 @@ func (b *Body) UnwindEntries() []UnwindEntry {
 // prepare resolves labels only after lowering has finished assigning PCs.
 func (i *Instruction) prepare() {
 	i.operands = i.Operands()
-	for _, op := range generated.Machine.Instruction {
-		if op.Name == i.Name {
-			i.Cost, i.Suspends = op.Cost, op.Suspends
-			break
-		}
-	}
-	if i.Name == "call-builtin" && len(i.operands) > 0 {
+	op := generated.Machine.Instruction[i.Op]
+	i.Cost, i.Suspends = op.Cost, op.Suspends
+	if i.Op == generated.OpCallBuiltin && len(i.operands) > 0 {
 		i.Cost = "builtin." + i.operands[0].Text
 	}
 	i.Rate = -1

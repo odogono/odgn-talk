@@ -110,24 +110,24 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		return s
 	}
-	switch i.Name {
-	case "const":
+	switch i.Op {
+	case generated.OpConst:
 		push(code.Constants[idx(0)])
-	case "pop":
+	case generated.OpPop:
 		pop()
-	case "load":
+	case generated.OpLoad:
 		push(f.Locals[idx(0)])
-	case "store":
+	case generated.OpStore:
 		t.setLocal(f, idx(0), pop())
-	case "move":
+	case generated.OpMove:
 		t.setLocal(f, idx(1), f.Locals[idx(0)])
-	case "load-var":
+	case generated.OpLoadVar:
 		push(r.State.Variables[idx(0)])
-	case "store-var":
+	case generated.OpStoreVar:
 		v := pop()
 		slot := idx(0)
 		effect = func() { r.State.Variables[slot] = v }
-	case "load-definition":
+	case generated.OpLoadDefinition:
 		definition := name(0)
 		if library, exported, ok := strings.Cut(definition, ":"); ok {
 			lib := code.Libraries[library]
@@ -135,29 +135,29 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(BindLibraryValue(code.Definitions[slices.Index(code.Unit.Definitions, definition)], r.State))
 		}
-	case "store-definition":
+	case generated.OpStoreDefinition:
 		v := pop()
 		slot := slices.Index(code.Unit.Definitions, name(0))
 		effect = func() { code.Definitions[slot] = v }
-	case "load-object":
+	case generated.OpLoadObject:
 		if v, ok := r.State.Objects[name(0)]; ok {
 			push(v)
-		} else if next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name; slices.Contains(r.State.ScriptNames, name(0)) || namedSend(next) || spreadSend(next) {
+		} else if next := code.Unit.Bodies[f.Body].Code[f.PC+1].Op; slices.Contains(r.State.ScriptNames, name(0)) || namedSend(next) || spreadSend(next) {
 			// A computed name is checked first, so its send raises `object gone`.
 			receiver(name(0))
 		} else {
 			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
 		}
-	case "me":
-		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Name
-		if r.State.Me.Kind == value.Nothing && (next == "send" || next == "send-wait" || next == "join-send" || namedSend(next) || spreadSend(next)) {
+	case generated.OpMe:
+		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Op
+		if r.State.Me.Kind == value.Nothing && (next == generated.OpSend || next == generated.OpSendWait || next == generated.OpJoinSend || namedSend(next) || spreadSend(next)) {
 			receiver(r.State.Unit.Name)
 		} else {
 			push(r.State.Me)
 		}
-	case "join-start":
+	case generated.OpJoinStart:
 		effect = func() { r.Join = &Join{Frame: len(r.Frames) - 1, Start: r.Frames[len(r.Frames)-1].PC - 1} }
-	case "join-end":
+	case generated.OpJoinEnd:
 		if len(r.Join.Members) == 0 {
 			m.Result = value.NewList(nil)
 			push(m.Result)
@@ -165,9 +165,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			effect = func() { r.Status = Suspended }
 		}
-	case "send", "send-wait", "join-send", "send-named", "send-named-wait", "join-send-named", "send-spread", "send-spread-wait", "join-send-spread", "send-up", "send-up-wait":
+	case generated.OpSend, generated.OpSendWait, generated.OpJoinSend, generated.OpSendNamed, generated.OpSendNamedWait, generated.OpJoinSendNamed, generated.OpSendSpread, generated.OpSendSpreadWait, generated.OpJoinSendSpread, generated.OpSendUp, generated.OpSendUpWait:
 		n := 0
-		if spreadSend(i.Name) {
+		if spreadSend(i.Op) {
 			// The name, the argument list and the receiver: the name is
 			// checked against the list's length, before the receiver
 			// (chapter 5, A spread; ADR 0064).
@@ -180,7 +180,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				bad(failure("bad message name", value.Pair{Key: "name", Val: v}, value.Pair{Key: "arguments", Val: integer(int64(n))}))
 				break
 			}
-		} else if namedSend(i.Name) {
+		} else if namedSend(i.Op) {
 			// A computed name, below the arguments, is checked before the
 			// receiver (chapter 5, A computed name).
 			n = idx(0)
@@ -194,14 +194,14 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			n = idx(1)
 		}
-		if i.Name != "send-up" && i.Name != "send-up-wait" {
+		if i.Op != generated.OpSendUp && i.Op != generated.OpSendUpWait {
 			name := f.ReceiverNames[len(f.Stack)-1]
 			v := pop()
 			if name == "" && v.Kind != value.Object {
 				bad(wrong("object", v))
 				break
 			}
-			if (namedSend(i.Name) || spreadSend(i.Name)) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
+			if (namedSend(i.Op) || spreadSend(i.Op)) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
 				bad(failure("object gone", value.Pair{Key: "object", Val: text(name)}))
 				break
 			}
@@ -210,48 +210,48 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				break
 			}
 		}
-		if spreadSend(i.Name) {
+		if spreadSend(i.Op) {
 			m.Args = slices.Clone(pop().Items())
 		} else {
 			m.Args = take(n)
 		}
-		if namedSend(i.Name) || spreadSend(i.Name) {
+		if namedSend(i.Op) || spreadSend(i.Op) {
 			pop()
 		}
 		m.InputSize = 32
 		for _, v := range m.Args {
 			m.InputSize = saturatingAdd(m.InputSize, Size(v))
 		}
-		if i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" {
+		if i.Op == generated.OpSendWait || i.Op == generated.OpSendNamedWait || i.Op == generated.OpSendSpreadWait || i.Op == generated.OpSendUpWait {
 			effect = func() { r.SendWait = true; r.Status = Suspended }
 		}
-	case "target":
+	case generated.OpTarget:
 		push(r.Target)
-	case "jump":
+	case generated.OpJump:
 		jump()
-	case "branch-false", "branch-true", "check-boolean", "not":
+	case generated.OpBranchFalse, generated.OpBranchTrue, generated.OpCheckBoolean, generated.OpNot:
 		v := pop()
 		if v.Kind != value.Boolean {
 			bad(wrong("boolean", v))
 			break
 		}
-		switch i.Name {
-		case "branch-false":
+		switch i.Op {
+		case generated.OpBranchFalse:
 			if !v.Bool {
 				jump()
 			}
-		case "branch-true":
+		case generated.OpBranchTrue:
 			if v.Bool {
 				jump()
 			}
-		case "not":
+		case generated.OpNot:
 			push(boolean(!v.Bool))
 		default:
 			push(v)
 		}
-	case "pass":
+	case generated.OpPass:
 		effect = func() { r.setFrames(nil); r.Passed = true; r.Status = Completed }
-	case "return", "veto":
+	case generated.OpReturn, generated.OpVeto:
 		v := pop()
 		effect = func() {
 			retired := r.popFrame()
@@ -259,7 +259,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			clear(retired.Locals[:cap(retired.Locals)])
 			r.spareFrames = append(r.spareFrames, Frame{Stack: retired.Stack[:0], Locals: retired.Locals[:0]})
 			if len(r.Frames) == 0 {
-				if i.Name == "veto" {
+				if i.Op == generated.OpVeto {
 					r.Vetoed, r.VetoReason = true, v
 					r.Result = value.Value{}
 				} else {
@@ -272,9 +272,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				caller.Waiting = false
 			}
 		}
-	case "call", "call-import":
+	case generated.OpCall, generated.OpCallImport:
 		callee, body, n := code, idx(0), idx(1)
-		if i.Name == "call-import" {
+		if i.Op == generated.OpCallImport {
 			library, exported, _ := strings.Cut(name(0), ":")
 			callee = code.Libraries[library]
 			for _, b := range callee.Unit.Bodies {
@@ -294,7 +294,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			vs = append(vs, BindLibraryValue(callee.Definitions[slot], r.State))
 		}
 		effect = func() { r.pushCodeFrame(callee, body, vs) }
-	case "call-handler", "call-handler-wait":
+	case generated.OpCallHandler, generated.OpCallHandlerWait:
 		n := idx(1)
 		vs := take(n)
 		m.Count = int64(n)
@@ -317,9 +317,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			r.pushCodeFrame(callee, bodies[0], vs)
 			r.Frames[len(r.Frames)-1].Dispatch = &handlerDispatch{Bodies: bodies[1:], Args: vs}
 		}
-	case "make-function", "make-closure", "make-imported-function":
+	case generated.OpMakeFunction, generated.OpMakeClosure, generated.OpMakeImportedFunction:
 		callee, bodyIndex := code, idx(0)
-		if i.Name == "make-imported-function" {
+		if i.Op == generated.OpMakeImportedFunction {
 			library, exported, _ := strings.Cut(name(0), ":")
 			callee = code.Libraries[library]
 			for _, b := range callee.Unit.Bodies {
@@ -331,7 +331,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		body := callee.Unit.Bodies[bodyIndex]
 		captures := []value.Pair{}
-		if i.Name == "make-closure" {
+		if i.Op == generated.OpMakeClosure {
 			m.Count = int64(idx(1))
 			vs := take(idx(1))
 			for j, v := range vs {
@@ -344,7 +344,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		required, total := functionArity(body)
 		push(value.Fields{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Index, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName, Required: required, Total: total}}.Value())
-	case "call-value", "call-value-wait":
+	case generated.OpCallValue, generated.OpCallValueWait:
 		n := idx(0)
 		vs := take(n)
 		fn := pop()
@@ -360,7 +360,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		if data.Owner != r.State {
-			if i.Name == "call-value" {
+			if i.Op == generated.OpCallValue {
 				bad(failure("would suspend"))
 				break
 			}
@@ -386,7 +386,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				break
 			}
 		}
-		if maySuspend && i.Name == "call-value" {
+		if maySuspend && i.Op == generated.OpCallValue {
 			bad(failure("would suspend"))
 			break
 		}
@@ -398,14 +398,14 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		f.Waiting = true
 		effect = func() { r.pushFunction(callee, fn, vs) }
 
-	case "wait":
+	case generated.OpWait:
 		ns, err := waitNanos(pop())
 		if err != nil {
 			bad(*err)
 			break
 		}
 		effect = func() { r.WaitNS = ns; r.Status = Suspended }
-	case "wait-for", "wait-for-any":
+	case generated.OpWaitFor, generated.OpWaitForAny:
 		entry := code.Unit.Events[idx(0)]
 		w, err := r.eventWait(i.Name, entry, take(eventValueCount(entry)))
 		if err != nil {
@@ -413,7 +413,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		effect = func() { r.EventWait = w; r.Status = Suspended }
-	case "call-builtin":
+	case generated.OpCallBuiltin:
 		m.Args = take(idx(1))
 		if name(0) == "offerAvailable" {
 			v := m.Args[0]
@@ -435,7 +435,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(v)
 		}
-	case "add", "subtract", "multiply", "divide", "div", "mod", "power":
+	case generated.OpAdd, generated.OpSubtract, generated.OpMultiply, generated.OpDivide, generated.OpDiv, generated.OpMod, generated.OpPower:
 		b, a := pop(), pop()
 		op := arithmeticOps[i.Name]
 		v, e := arithmetic(op, a, b)
@@ -444,7 +444,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(v)
 		}
-	case "negate":
+	case generated.OpNegate:
 		v := pop()
 		if v.Kind != value.Number && v.Kind != value.Quantity {
 			bad(wrong("number or quantity", v))
@@ -452,10 +452,10 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			v = v.WithNumber(v.Number().Negate())
 			push(v)
 		}
-	case "concat":
+	case generated.OpConcat:
 		b, a := pop(), pop()
 		push(text(textForm(a) + textForm(b)))
-	case "range":
+	case generated.OpRange:
 		b, a := pop(), pop()
 		if a.Kind != value.Number && a.Kind != value.Quantity {
 			bad(wrong("number or quantity", a))
@@ -471,13 +471,13 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(v)
 		}
-	case "equal", "not-equal", "less", "greater", "less-or-equal", "greater-or-equal":
+	case generated.OpEqual, generated.OpNotEqual, generated.OpLess, generated.OpGreater, generated.OpLessOrEqual, generated.OpGreaterOrEqual:
 		b, a := pop(), pop()
 		folded := len(args) > 0
 		m.Scanned = compared(a, b, folded)
-		if i.Name == "equal" || i.Name == "not-equal" {
+		if i.Op == generated.OpEqual || i.Op == generated.OpNotEqual {
 			eq := equal(a, b, folded)
-			push(boolean(eq == (i.Name == "equal")))
+			push(boolean(eq == (i.Op == generated.OpEqual)))
 		} else {
 			c, e := fold(a).Compare(fold(b))
 			if !folded {
@@ -486,25 +486,25 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			if e != nil {
 				bad(comparisonError(a, b))
 			} else {
-				push(boolean(i.Name == "less" && c < 0 || i.Name == "greater" && c > 0 || i.Name == "less-or-equal" && c <= 0 || i.Name == "greater-or-equal" && c >= 0))
+				push(boolean(i.Op == generated.OpLess && c < 0 || i.Op == generated.OpGreater && c > 0 || i.Op == generated.OpLessOrEqual && c <= 0 || i.Op == generated.OpGreaterOrEqual && c >= 0))
 			}
 		}
-	case "is-kind":
+	case generated.OpIsKind:
 		push(boolean(kindTest(pop(), name(0))))
-	case "is-empty":
+	case generated.OpIsEmpty:
 		push(boolean(empty(pop())))
-	case "convert", "can-convert":
+	case generated.OpConvert, generated.OpCanConvert:
 		m.Input = pop()
 		m.InputPresent = true
 		v, e := convert(m.Input, name(0))
-		if i.Name == "can-convert" {
+		if i.Op == generated.OpCanConvert {
 			push(boolean(e == nil))
 		} else if e != nil {
 			bad(*e)
 		} else {
 			push(v)
 		}
-	case "member":
+	case generated.OpMember:
 		b, a := pop(), pop()
 		yes, scanned, e := membership(a, b, len(args) > 0)
 		m.Scanned = scanned
@@ -513,16 +513,16 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(boolean(yes))
 		}
-	case "test-key", "test-key-computed", "set-key", "set-key-computed", "delete-key", "delete-key-computed":
+	case generated.OpTestKey, generated.OpTestKeyComputed, generated.OpSetKey, generated.OpSetKeyComputed, generated.OpDeleteKey, generated.OpDeleteKeyComputed:
 		part := value.Value{}
-		if strings.HasPrefix(i.Name, "set-key") {
+		if i.Op == generated.OpSetKey || i.Op == generated.OpSetKeyComputed {
 			part = pop()
 			m.Input = part
 			m.InputPresent = true
 		}
 		whole := pop()
 		k := nameOrEmpty(args)
-		if strings.HasSuffix(i.Name, "-computed") {
+		if i.Op == generated.OpTestKeyComputed || i.Op == generated.OpSetKeyComputed || i.Op == generated.OpDeleteKeyComputed {
 			v := pop()
 			if v.Kind != value.Text {
 				bad(wrong("text", v))
@@ -532,7 +532,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			k = key(k)
 		}
-		if strings.HasPrefix(i.Name, "test-key") {
+		if i.Op == generated.OpTestKey || i.Op == generated.OpTestKeyComputed {
 			if whole.Kind != value.Map {
 				bad(wrong("map", whole))
 			} else if !hasKey(whole, k) {
@@ -540,24 +540,24 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			}
 			break
 		}
-		v, e := mapWrite(whole, k, part, strings.HasPrefix(i.Name, "delete-key"))
+		v, e := mapWrite(whole, k, part, i.Op == generated.OpDeleteKey || i.Op == generated.OpDeleteKeyComputed)
 		if e != nil {
 			bad(*e)
 		} else {
 			push(v)
 		}
-	case "list":
+	case generated.OpList:
 		n := idx(0)
 		m.Count = int64(n)
 		push(value.NewList(take(n)))
-	case "list-append", "list-extend":
+	case generated.OpListAppend, generated.OpListExtend:
 		v, list := pop(), pop()
 		if list.Kind != value.List {
 			bad(wrong("list", list))
 			break
 		}
 		vs := []value.Value{v}
-		if i.Name == "list-extend" {
+		if i.Op == generated.OpListExtend {
 			if v.Kind != value.List {
 				bad(wrong("list", v))
 				break
@@ -565,7 +565,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			vs = v.Items()
 		}
 		push(extendList(list, vs, false))
-	case "map":
+	case generated.OpMap:
 		n := idx(1)
 		m.Count = int64(n)
 		vs := take(n)
@@ -576,10 +576,10 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		v, _ := value.NewMap(pairs)
 		push(v)
-	case "get-key", "get-key-computed":
+	case generated.OpGetKey, generated.OpGetKeyComputed:
 		v := pop()
 		k := nameOrEmpty(args)
-		if i.Name == "get-key-computed" {
+		if i.Op == generated.OpGetKeyComputed {
 			x := pop()
 			if x.Kind != value.Text {
 				bad(wrong("text", x))
@@ -596,10 +596,10 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(v.Get(k))
 		}
-	case "set-property", "set-property-computed":
+	case generated.OpSetProperty, generated.OpSetPropertyComputed:
 		pop() // input
 		v := pop()
-		if i.Name == "set-property-computed" {
+		if i.Op == generated.OpSetPropertyComputed {
 			x := pop()
 			if x.Kind != value.Text {
 				bad(wrong("text", x))
@@ -607,9 +607,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			}
 		}
 		bad(wrong("object", v)) // Object writes take the Host crossing path.
-	case "property", "property-delimited":
+	case generated.OpProperty, generated.OpPropertyDelimited:
 		d := text(",")
-		if i.Name == "property-delimited" {
+		if i.Op == generated.OpPropertyDelimited {
 			d = pop()
 		}
 		v := pop()
@@ -621,13 +621,14 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(result)
 		}
-	case "chunk-get", "chunk-get-delimited", "chunk-set", "chunk-set-delimited", "chunk-delete", "chunk-delete-delimited", "test-chunk", "test-chunk-delimited":
+	case generated.OpChunkGet, generated.OpChunkGetDelimited, generated.OpChunkSet, generated.OpChunkSetDelimited, generated.OpChunkDelete, generated.OpChunkDeleteDelimited, generated.OpTestChunk, generated.OpTestChunkDelimited:
 		d := text(",")
-		if strings.HasSuffix(i.Name, "-delimited") {
+		if i.Op == generated.OpChunkGetDelimited || i.Op == generated.OpChunkSetDelimited || i.Op == generated.OpChunkDeleteDelimited || i.Op == generated.OpTestChunkDelimited {
 			d = pop()
 		}
+		set := i.Op == generated.OpChunkSet || i.Op == generated.OpChunkSetDelimited
 		part := value.Value{}
-		if strings.HasPrefix(i.Name, "chunk-set") {
+		if set {
 			part = pop()
 		}
 		whole, index := pop(), pop()
@@ -635,17 +636,17 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		m.Scanned = scanned
 		m.Input = whole
 		m.InputPresent = true
-		if strings.HasPrefix(i.Name, "chunk-delete") {
+		if i.Op == generated.OpChunkDelete || i.Op == generated.OpChunkDeleteDelimited {
 			m.Input = value.Value{}
 			m.InputPresent = false
 		}
-		if strings.HasPrefix(i.Name, "chunk-set") {
+		if set {
 			m.Input = part
 			m.InputPresent = true
 		}
 		if e != nil {
 			bad(*e)
-		} else if strings.HasPrefix(i.Name, "test-chunk") {
+		} else if i.Op == generated.OpTestChunk || i.Op == generated.OpTestChunkDelimited {
 			m.Result = result
 			m.ResultPresent = true
 			if !exists {
@@ -654,9 +655,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		} else {
 			push(result)
 		}
-	case "bytes-field", "bytes-sized", "bytes-bits", "bin-start", "bin-literal", "bin-int", "bin-bits", "bin-bytes", "bin-rest", "bin-end":
+	case generated.OpBytesField, generated.OpBytesSized, generated.OpBytesBits, generated.OpBinStart, generated.OpBinLiteral, generated.OpBinInt, generated.OpBinBits, generated.OpBinBytes, generated.OpBinRest, generated.OpBinEnd:
 		err = binaryInstruction(f, t, i, code, &m)
-	case "make-pattern":
+	case generated.OpMakePattern:
 		n := idx(1)
 		vs := take(n)
 		source := code.Constants[idx(0)].Text()
@@ -679,7 +680,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				push(v)
 			}
 		}
-	case "match-whole", "match-search":
+	case generated.OpMatchWhole, generated.OpMatchSearch:
 		needle, subject := pop(), pop()
 		if subject.Kind != value.Text {
 			jump()
@@ -691,7 +692,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		mode := "whole"
-		if i.Name == "match-search" {
+		if i.Op == generated.OpMatchSearch {
 			mode = "search"
 		}
 		match, steps := search(p, subject.Text(), 0, mode, false)
@@ -706,7 +707,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				push(v.Get("captures"))
 			}
 		}
-	case "replace-start":
+	case generated.OpReplaceStart:
 		subject, needle := pop(), pop()
 		if subject.Kind != value.Text {
 			bad(wrong("text", subject))
@@ -739,7 +740,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			matches = v
 		}
 		push(value.Fields{Kind: value.Replacement, Replacement: &value.ReplacementData{Subject: subject, Matches: matches.Items()}}.Value())
-	case "replace-next":
+	case generated.OpReplaceNext:
 		v := pop()
 		replacement := *v.Replacement()
 		if replacement.Position >= len(replacement.Matches) {
@@ -751,7 +752,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		replacement.Position++
 		push(value.Fields{Kind: value.Replacement, Replacement: &replacement}.Value())
 		push(match)
-	case "replace-put":
+	case generated.OpReplacePut:
 		part := pop()
 		v := pop()
 		replacement := *v.Replacement()
@@ -763,16 +764,16 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		replacement.Parts = append(slices.Clone(replacement.Parts), replacement.Subject.Text()[replacement.At:bounds[first-1]], textForm(part))
 		replacement.At = bounds[last]
 		push(value.Fields{Kind: value.Replacement, Replacement: &replacement}.Value())
-	case "replace-end":
+	case generated.OpReplaceEnd:
 		v := pop()
 		replacement := v.Replacement()
 		push(text(strings.Join(replacement.Parts, "") + replacement.Subject.Text()[replacement.At:]))
-	case "contains", "begins-with", "ends-with", "matches", "match-all":
+	case generated.OpContains, generated.OpBeginsWith, generated.OpEndsWith, generated.OpMatches, generated.OpMatchAll:
 		needle, subject := pop(), pop()
-		if i.Name == "match-all" {
+		if i.Op == generated.OpMatchAll {
 			needle, subject = subject, needle
 		}
-		if subject.Kind == value.Bytes && i.Name != "match-all" && i.Name != "matches" {
+		if subject.Kind == value.Bytes && i.Op != generated.OpMatchAll && i.Op != generated.OpMatches {
 			if needle.Kind != value.Bytes {
 				bad(wrong("bytes", needle))
 				break
@@ -801,7 +802,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			bad(wrong("pattern", needle))
 			break
 		}
-		if i.Name == "match-all" {
+		if i.Op == generated.OpMatchAll {
 			v, steps, e := allMatches(p, subject.Text())
 			m.Steps = steps
 			if e != nil {
@@ -815,17 +816,17 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			m.Steps = steps
 			push(boolean(match != nil))
 		}
-	case "append", "prepend", "append-all", "prepend-all":
+	case generated.OpAppend, generated.OpPrepend, generated.OpAppendAll, generated.OpPrependAll:
 		part, whole := pop(), pop()
 		m.Input = part
 		m.InputPresent = true
-		v, e := appendValue(whole, part, strings.HasPrefix(i.Name, "prepend"), strings.HasSuffix(i.Name, "-all"))
+		v, e := appendValue(whole, part, i.Op == generated.OpPrepend || i.Op == generated.OpPrependAll, i.Op == generated.OpAppendAll || i.Op == generated.OpPrependAll)
 		if e != nil {
 			bad(*e)
 		} else {
 			push(v)
 		}
-	case "iterate":
+	case generated.OpIterate:
 		v := pop()
 		if v.Kind != value.List && v.Kind != value.Range {
 			bad(wrong("list or integer range", v))
@@ -846,7 +847,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			it.Done = it.Current.Compare(v.Items()[1].Number()) > 0
 		}
 		push(value.Fields{Kind: value.Iterator, Iterator: &it}.Value())
-	case "timeout-start":
+	case generated.OpTimeoutStart:
 		// The Pump's Clock reading plus `d`, unless an enclosing block's
 		// deadline is no later (ADR 0073).
 		ns, err := waitNanos(pop())
@@ -860,9 +861,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		push(value.Fields{Kind: value.Deadline, Deadline: &value.DeadlineData{At: at, After: millis(ns)}}.Value())
-	case "timeout-end":
+	case generated.OpTimeoutEnd:
 		pop()
-	case "iterate-times":
+	case generated.OpIterateTimes:
 		v := pop()
 		if v.Kind != value.Number {
 			bad(wrong("integer", v))
@@ -878,7 +879,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		push(value.Fields{Kind: value.Iterator, Iterator: &value.IteratorData{Remaining: v.Number()}}.Value())
-	case "next":
+	case generated.OpNext:
 		v := pop()
 		it, item, has := advanceIterator(*v.Iterator())
 		if !has {
@@ -888,22 +889,22 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			push(value.Fields{Kind: value.Iterator, Iterator: &it}.Value())
 			push(item)
 		}
-	case "test-map":
+	case generated.OpTestMap:
 		if pop().Kind != value.Map {
 			jump()
 		}
-	case "test-list", "test-list-at-least":
+	case generated.OpTestList, generated.OpTestListAtLeast:
 		v := pop()
-		if v.Kind != value.List || i.Name == "test-list" && len(v.Items()) != idx(0) || len(v.Items()) < idx(0) {
+		if v.Kind != value.List || i.Op == generated.OpTestList && len(v.Items()) != idx(0) || len(v.Items()) < idx(0) {
 			jump()
 		}
-	case "list-item":
+	case generated.OpListItem:
 		v := pop()
 		push(v.Items()[idx(0)-1])
-	case "list-rest":
+	case generated.OpListRest:
 		v := pop()
 		push(value.NewList(v.Items()[idx(0)-1:]))
-	case "map-get":
+	case generated.OpMapGet:
 		v := pop()
 		k := key(name(0))
 		found := false
@@ -917,18 +918,18 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		if !found {
 			jump()
 		}
-	case "test-constant":
+	case generated.OpTestConstant:
 		v := pop()
 		c := code.Constants[idx(0)]
 		if !equal(v, c, len(args) == 3) {
 			jump()
 		}
-	case "test-equal":
+	case generated.OpTestEqual:
 		b, a := pop(), pop()
 		if !a.Equal(b) {
 			jump()
 		}
-	case "throw":
+	case generated.OpThrow:
 		v := pop()
 		if v.Kind == value.Text {
 			v, _ = value.NewMap([]value.Pair{{Key: "code", Val: v}})
@@ -946,16 +947,16 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			}
 		}
 		bad(v)
-	case "catch-accept":
+	case generated.OpCatchAccept:
 		effect = func() { r.acceptCatch() }
-	case "catch-next":
+	case generated.OpCatchNext:
 		effect = func() { r.nextCatch() }
-	case "choose-offer":
+	case generated.OpChooseOffer:
 		args := slices.Clone(f.Stack[len(f.Stack)-idx(1):])
 		m.Count = int64(idx(1))
 		offer := name(0)
 		effect = func() { r.Frames[len(r.Frames)-1].PC--; r.chooseOffer(offer, args) }
-	case "end-cleanup":
+	case generated.OpEndCleanup:
 		if r.Cancelling {
 			effect = func() { r.nextCancellationCleanup() }
 			break
@@ -980,9 +981,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				r.raise(c.Error)
 			}
 		}
-	case "raise":
+	case generated.OpRaise:
 		bad(failure(name(0)))
-	case "clause-fail":
+	case generated.OpClauseFail:
 		effect = func() { r.failClause() }
 	default:
 		bad(failure("host error", value.Pair{Key: "operation", Val: text("unsupported instruction " + i.Name)}))

@@ -25,7 +25,9 @@ func ref(kind string, i int) operand { return operand{kind: kind, index: i} }
 func target(l *label) operand        { return operand{kind: "label", target: l} }
 
 type Instruction struct {
-	Name     string
+	Name string
+	// Op is Name's opcode. Interpreter loops dispatch on it.
+	Op       generated.Opcode
 	Pos      syntax.Position
 	args     []operand
 	operands []Operand
@@ -158,8 +160,20 @@ type builder struct {
 	moves     []bindingMove
 }
 
+var opcodes = func() map[string]generated.Opcode {
+	out := make(map[string]generated.Opcode, len(generated.Machine.Instruction))
+	for i, entry := range generated.Machine.Instruction {
+		out[entry.Name] = generated.Opcode(i)
+	}
+	return out
+}()
+
 func (u *Unit) emit(pos syntax.Position, name string, args ...operand) {
-	u.state.body.Code = append(u.state.body.Code, Instruction{Name: name, Pos: pos, args: args})
+	op, ok := opcodes[name]
+	if !ok {
+		panic("unknown lowering opcode: " + name)
+	}
+	u.state.body.Code = append(u.state.body.Code, Instruction{Name: name, Op: op, Pos: pos, args: args})
 }
 func (u *Unit) pc() int       { return len(u.state.body.Code) }
 func (u *Unit) mark(l *label) { l.pc = u.pc() }
@@ -515,10 +529,8 @@ func (u *Unit) Disassemble() string {
 		fmt.Fprintf(&out, " locals %d", len(b.Locals))
 		suspends := b.MaySuspend
 		for _, ins := range body.Code {
-			for _, op := range generated.Machine.Instruction {
-				if ins.Name == op.Name && op.Suspends {
-					suspends = true
-				}
+			if generated.Machine.Instruction[ins.Op].Suspends {
+				suspends = true
 			}
 		}
 		if suspends {

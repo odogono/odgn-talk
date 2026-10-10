@@ -2,6 +2,7 @@ package machine
 
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
@@ -116,10 +117,10 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 	push := func(v value.Value) { f.Stack = append(f.Stack, v) }
 	result := func(v value.Value) { push(v); m.Result = v; m.ResultPresent = true }
 	jump := func() { f.PC = args[len(args)-1].Index - 1 }
-	if strings.HasPrefix(i.Name, "bytes-") {
+	if i.Op == generated.OpBytesField || i.Op == generated.OpBytesSized || i.Op == generated.OpBytesBits {
 		var whole value.Value
 		var bytes []byte
-		if i.Name == "bytes-bits" {
+		if i.Op == generated.OpBytesBits {
 			n := args[1].Index
 			vs := slices.Clone(f.Stack[len(f.Stack)-n:])
 			t.shrink(f, len(f.Stack)-n)
@@ -141,7 +142,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 			number.FillBytes(bytes)
 		} else {
 			var size *value.Value
-			if i.Name == "bytes-sized" {
+			if i.Op == generated.OpBytesSized {
 				n := pop()
 				size = &n
 			}
@@ -158,7 +159,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		result(value.NewBytes(append(slices.Clone(whole.Bytes()), bytes...)))
 		return nil
 	}
-	if i.Name == "bin-start" {
+	if i.Op == generated.OpBinStart {
 		v := pop()
 		if v.Kind != value.Bytes {
 			jump()
@@ -168,7 +169,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		return nil
 	}
 	var size value.Value
-	if i.Name == "bin-bytes" {
+	if i.Op == generated.OpBinBytes {
 		size = pop()
 	}
 	v := pop()
@@ -191,12 +192,12 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		}
 		return value.NewBytes(bytes), true
 	}
-	switch i.Name {
-	case "bin-end":
+	switch i.Op {
+	case generated.OpBinEnd:
 		if len(remaining) != 0 {
 			jump()
 		}
-	case "bin-literal":
+	case generated.OpBinLiteral:
 		expected, e := fieldBytes(s.Constants[args[0].Index], "", nil)
 		if e != nil || len(remaining) < len(expected) || !slices.Equal(remaining[:len(expected)], expected) {
 			jump()
@@ -204,7 +205,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		}
 		reader.Position += len(expected)
 		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
-	case "bin-int":
+	case generated.OpBinInt:
 		bits, signed, little := fieldType(args[0].Text)
 		bytes := take(bits / 8)
 		if bytes == nil {
@@ -222,7 +223,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		n, _ := decimal.Round(new(big.Rat).SetInt(number), 0, "binary")
 		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
 		result(value.Fields{Kind: value.Number, Number: n}.Value())
-	case "bin-bits":
+	case generated.OpBinBits:
 		widths := s.Constants[args[0].Index].Items()
 		bits := new(big.Int)
 		for _, w := range widths {
@@ -254,7 +255,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 			result(x)
 			m.ResultValues = append(m.ResultValues, x)
 		}
-	case "bin-bytes":
+	case generated.OpBinBytes:
 		if size.Kind != value.Number {
 			jump()
 			break
@@ -272,7 +273,7 @@ func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m
 		}
 		push(value.Fields{Kind: value.BinaryReader, Reader: &reader}.Value())
 		result(x)
-	case "bin-rest":
+	case generated.OpBinRest:
 		x, ok := finish(remaining, strings.Contains(args[0].Text, "text"))
 		if !ok {
 			jump()

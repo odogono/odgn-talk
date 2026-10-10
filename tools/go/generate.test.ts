@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { emitCatalogue, emitStandardLibraries } from './generate';
+import { emitCatalogue, emitOpcodes, emitStandardLibraries } from './generate';
 import { writeOutput } from './output';
 
 test('Go catalogues preserve heterogeneous counts and optional fields', () => {
@@ -17,6 +17,14 @@ test('Go catalogues preserve heterogeneous counts and optional fields', () => {
   expect(result).toContain('"count"');
   expect(result).toContain('Jumps: 1');
   expect(result).toContain('[]string');
+});
+
+test('Go opcodes follow the machine table order', () => {
+  const result = emitOpcodes([{ name: 'const' }, { name: 'call-value-wait' }]);
+  expect(result).toMatch(/OpConst Opcode = iota\n\tOpCallValueWait\n\)/);
+  expect(() =>
+    emitOpcodes(Array.from({ length: 257 }, (_, i) => ({ name: `op${i}` }))),
+  ).toThrow('uint8');
 });
 
 test('checks refuse missing and stale Go output without overwriting it', async () => {

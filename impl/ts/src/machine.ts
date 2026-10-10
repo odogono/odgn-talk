@@ -23,6 +23,7 @@ import {
   limitDefaults,
   reservedErrorKeys,
 } from './generated/machine';
+import { Op } from './generated/opcodes';
 import { builtins, grammar } from './generated/syntax';
 import {
   appendTo,
@@ -355,7 +356,7 @@ export const loadScript = (
     if (c.k === 'value' && c.value.kind === 'pattern') {
       if (c.value.asPattern()!.program > script.limits.patternSize) {
         const at = unit.code.find(
-          ins => ins.op === 'const' && ins.operands[0] === i,
+          ins => ins.opcode === Op.Const && ins.operands[0] === i,
         );
         throw new UnitLoadError(
           'pattern too large',
@@ -833,15 +834,15 @@ const keyValue = (k: string | number): Value =>
 // The sends that pop a computed message name (ADR 0057).
 // A spreading send pops its name, as text, and its arguments as one list
 // (ADR 0064).
-const spreadSends = new Set([
-  'send-spread',
-  'send-spread-wait',
-  'join-send-spread',
+const spreadSends = new Set<number>([
+  Op.SendSpread,
+  Op.SendSpreadWait,
+  Op.JoinSendSpread,
 ]);
-const namedSends = new Set([
-  'send-named',
-  'send-named-wait',
-  'join-send-named',
+const namedSends = new Set<number>([
+  Op.SendNamed,
+  Op.SendNamedWait,
+  Op.JoinSendNamed,
   ...spreadSends,
 ]);
 // The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
@@ -1637,7 +1638,7 @@ export class Run {
               p.frame === c.owner &&
                 c.activation &&
                 p.pc === c.activation.pc + 1 &&
-                p.frame.code.unit.code[p.pc - 1]?.op === 'catch-accept',
+                p.frame.code.unit.code[p.pc - 1]?.opcode === Op.CatchAccept,
             );
           } else {
             requireSnapshot(
@@ -2862,7 +2863,7 @@ export class Run {
     if (handler === at && target !== undefined) {
       const code = join.frame.code.unit.code;
       let end = join.start;
-      while (end < code.length && code[end]!.op !== 'join-end') {
+      while (end < code.length && code[end]!.opcode !== Op.JoinEnd) {
         end++;
       }
       if (target > join.start && target <= end) {
@@ -2992,7 +2993,7 @@ export class Run {
     // A Guard that gives something other than a boolean is a skip with its value.
     const notBoolean =
       skip &&
-      (ins.op === 'branch-false' || ins.op === 'branch-true') &&
+      (ins.opcode === Op.BranchFalse || ins.opcode === Op.BranchTrue) &&
       textForm(error.get('code')) === 'wrong kind';
     const at: CodePosition = {
       unit: this.frame.code.name,
@@ -4043,39 +4044,39 @@ export class Run {
     };
     const code = frame.code;
     const unit = code.unit;
-    switch (ins.op) {
+    switch (ins.opcode) {
       // Values and slots
-      case 'const': {
+      case Op.Const: {
         const value = code.constant(a as number);
         this.pay(rate);
         frame.stack.push(value);
         return next();
       }
-      case 'pop':
+      case Op.Pop:
         this.pay(rate);
         frame.stack.pop();
         return next();
-      case 'load':
+      case Op.Load:
         this.pay(rate);
         frame.stack.push(frame.locals[a as number]!);
         return next();
-      case 'store':
+      case Op.Store:
         this.pay(rate);
         frame.locals[a as number] = this.pop();
         return next();
-      case 'move':
+      case Op.Move:
         this.pay(rate);
         frame.locals[b as number] = frame.locals[a as number]!;
         return next();
-      case 'load-var':
+      case Op.LoadVar:
         this.pay(rate);
         frame.stack.push(this.script.variables[a as number]!);
         return next();
-      case 'store-var':
+      case Op.StoreVar:
         this.pay(rate);
         this.script.variables[a as number] = this.pop();
         return next();
-      case 'load-definition':
+      case Op.LoadDefinition:
         this.pay(rate);
         frame.stack.push(
           homeConstant(
@@ -4084,32 +4085,32 @@ export class Run {
           ),
         );
         return next();
-      case 'store-definition':
+      case Op.StoreDefinition:
         this.pay(rate);
         code.definitions[a as number] = this.pop();
         return next();
 
       // Control
-      case 'jump':
+      case Op.Jump:
         this.pay(rate);
         return jump(a as number);
-      case 'branch-false':
-      case 'branch-true':
-      case 'check-boolean': {
+      case Op.BranchFalse:
+      case Op.BranchTrue:
+      case Op.CheckBoolean: {
         const v = this.peek();
         if (v.kind !== 'boolean') {
           throw wrongKind('boolean', v);
         }
         this.pay(rate);
-        if (ins.op === 'check-boolean') {
+        if (ins.opcode === Op.CheckBoolean) {
           return next();
         }
         this.pop();
-        return v.asBool() === (ins.op === 'branch-true')
+        return v.asBool() === (ins.opcode === Op.BranchTrue)
           ? jump(a as number)
           : next();
       }
-      case 'not': {
+      case Op.Not: {
         const v = this.peek();
         if (v.kind !== 'boolean') {
           throw wrongKind('boolean', v);
@@ -4119,59 +4120,59 @@ export class Run {
       }
 
       // Operators
-      case 'add':
-      case 'subtract':
-      case 'multiply':
-      case 'divide':
-      case 'div':
-      case 'mod':
-      case 'power':
+      case Op.Add:
+      case Op.Subtract:
+      case Op.Multiply:
+      case Op.Divide:
+      case Op.Div:
+      case Op.Mod:
+      case Op.Power:
         m.result = arithmetic(ins.op, this.peek(1), this.peek());
         return this.replace(2, rate);
-      case 'negate':
+      case Op.Negate:
         m.result = negated(this.peek());
         return this.replace(1, rate);
-      case 'concat':
+      case Op.Concat:
         m.result = concat(this.peek(1), this.peek());
         return this.replace(2, rate);
-      case 'range':
+      case Op.Range:
         m.result = makeRange(this.peek(1), this.peek());
         return this.replace(2, rate);
-      case 'equal':
-      case 'not-equal':
-      case 'less':
-      case 'greater':
-      case 'less-or-equal':
-      case 'greater-or-equal': {
+      case Op.Equal:
+      case Op.NotEqual:
+      case Op.Less:
+      case Op.Greater:
+      case Op.LessOrEqual:
+      case Op.GreaterOrEqual: {
         const out = comparison(ins.op, this.peek(1), this.peek(), a === 'fold');
         m.scanned = out.scanned;
         m.result = out.result;
         return this.replace(2, rate);
       }
-      case 'member': {
+      case Op.Member: {
         const out = member(this.peek(1), this.peek(), a === 'fold');
         m.scanned = out.scanned;
         m.result = out.result;
         return this.replace(2, rate);
       }
-      case 'is-kind':
+      case Op.IsKind:
         m.result = isKind(this.peek(), a as string);
         return this.replace(1, rate);
-      case 'is-empty':
+      case Op.IsEmpty:
         m.result = isEmpty(this.peek());
         return this.replace(1, rate);
-      case 'can-convert':
-      case 'convert':
+      case Op.CanConvert:
+      case Op.Convert:
         m.input = this.peek();
         m.result =
-          ins.op === 'convert'
+          ins.opcode === Op.Convert
             ? convert(m.input, a as string)
             : canConvert(m.input, a as string);
         return this.replace(1, rate);
-      case 'contains':
-      case 'begins-with':
-      case 'ends-with':
-      case 'matches': {
+      case Op.Contains:
+      case Op.BeginsWith:
+      case Op.EndsWith:
+      case Op.Matches: {
         m.input = this.peek(1);
         const out = search(ins.op, m.input, this.peek(), a === 'fold');
         m.steps = out.steps;
@@ -4180,7 +4181,7 @@ export class Run {
       }
 
       // Keys, properties and chunks
-      case 'get-key':
+      case Op.GetKey:
         if (this.peek().kind === 'object') {
           m.result = this.getProperty(this.peek(), a as string, rate);
           frame.stack.pop();
@@ -4189,9 +4190,9 @@ export class Run {
         }
         m.result = getKey(this.peek(), a as string);
         return this.replace(1, rate);
-      case 'set-property':
-      case 'set-property-computed': {
-        const computed = ins.op === 'set-property-computed';
+      case Op.SetProperty:
+      case Op.SetPropertyComputed: {
+        const computed = ins.opcode === Op.SetPropertyComputed;
         // Deepest first: the key, if computed, the object, then the value.
         const o = this.peek(1);
         const v = this.peek();
@@ -4200,7 +4201,7 @@ export class Run {
         this.popN(computed ? 3 : 2);
         return next();
       }
-      case 'get-key-computed':
+      case Op.GetKeyComputed:
         if (this.peek().kind === 'object') {
           m.result = this.getProperty(this.peek(), keyText(this.peek(1)), rate);
           frame.stack.length -= 2;
@@ -4209,17 +4210,17 @@ export class Run {
         }
         m.result = getKey(this.peek(), keyText(this.peek(1)));
         return this.replace(2, rate);
-      case 'property':
+      case Op.Property:
         m.input = this.peek();
         m.result = property(a as string, m.input);
         return this.replace(1, rate);
-      case 'property-delimited':
+      case Op.PropertyDelimited:
         m.input = this.peek(1);
         m.result = property(a as string, m.input, this.peek());
         return this.replace(2, rate);
-      case 'chunk-get':
-      case 'chunk-get-delimited': {
-        const delimited = ins.op === 'chunk-get-delimited';
+      case Op.ChunkGet:
+      case Op.ChunkGetDelimited: {
+        const delimited = ins.opcode === Op.ChunkGetDelimited;
         const d = delimited ? this.peek() : null;
         const whole = this.peek(delimited ? 1 : 0);
         const index = this.peek(delimited ? 2 : 1);
@@ -4229,9 +4230,9 @@ export class Run {
         m.result = out.result;
         return this.replace(delimited ? 3 : 2, rate);
       }
-      case 'chunk-set':
-      case 'chunk-set-delimited': {
-        const delimited = ins.op === 'chunk-set-delimited';
+      case Op.ChunkSet:
+      case Op.ChunkSetDelimited: {
+        const delimited = ins.opcode === Op.ChunkSetDelimited;
         const d = delimited ? this.peek() : null;
         const part = this.peek(delimited ? 1 : 0);
         const whole = this.peek(delimited ? 2 : 1);
@@ -4240,18 +4241,18 @@ export class Run {
         m.result = chunkSet(a as string, index, whole, part, d);
         return this.replace(delimited ? 4 : 3, rate);
       }
-      case 'chunk-delete':
-      case 'chunk-delete-delimited': {
-        const delimited = ins.op === 'chunk-delete-delimited';
+      case Op.ChunkDelete:
+      case Op.ChunkDeleteDelimited: {
+        const delimited = ins.opcode === Op.ChunkDeleteDelimited;
         const d = delimited ? this.peek() : null;
         const whole = this.peek(delimited ? 1 : 0);
         const index = this.peek(delimited ? 2 : 1);
         m.result = chunkDelete(a as string, index, whole, d);
         return this.replace(delimited ? 3 : 2, rate);
       }
-      case 'test-chunk':
-      case 'test-chunk-delimited': {
-        const delimited = ins.op === 'test-chunk-delimited';
+      case Op.TestChunk:
+      case Op.TestChunkDelimited: {
+        const delimited = ins.opcode === Op.TestChunkDelimited;
         const d = delimited ? this.peek() : null;
         const whole = this.peek(delimited ? 1 : 0);
         const index = this.peek(delimited ? 2 : 1);
@@ -4262,9 +4263,9 @@ export class Run {
         this.popN(delimited ? 3 : 2);
         return there ? next() : jump(b as number);
       }
-      case 'test-key':
-      case 'test-key-computed': {
-        const computed = ins.op === 'test-key-computed';
+      case Op.TestKey:
+      case Op.TestKeyComputed: {
+        const computed = ins.opcode === Op.TestKeyComputed;
         const there = hasKey(
           this.peek(),
           computed ? keyText(this.peek(1)) : (a as string),
@@ -4273,30 +4274,34 @@ export class Run {
         this.popN(computed ? 2 : 1);
         return there ? next() : jump((computed ? a : b) as number);
       }
-      case 'set-key':
+      case Op.SetKey:
         m.input = this.peek();
         m.result = setKey(this.peek(1), a as string, m.input);
         return this.replace(2, rate);
-      case 'set-key-computed':
+      case Op.SetKeyComputed:
         m.input = this.peek();
         m.result = setKey(this.peek(1), keyText(this.peek(2)), m.input);
         return this.replace(3, rate);
-      case 'delete-key':
+      case Op.DeleteKey:
         m.result = deleteKey(this.peek(), a as string);
         return this.replace(1, rate);
-      case 'delete-key-computed':
+      case Op.DeleteKeyComputed:
         m.result = deleteKey(this.peek(), keyText(this.peek(1)));
         return this.replace(2, rate);
-      case 'append':
-      case 'prepend':
-      case 'append-all':
-      case 'prepend-all':
+      case Op.Append:
+      case Op.Prepend:
+      case Op.AppendAll:
+      case Op.PrependAll:
         m.input = this.peek();
-        m.result = appendTo(this.peek(1), m.input, ins.op);
+        m.result = appendTo(
+          this.peek(1),
+          m.input,
+          ins.op as Parameters<typeof appendTo>[2],
+        );
         return this.replace(2, rate);
 
       // Building values
-      case 'list': {
+      case Op.List: {
         const n = a as number;
         m.count = n;
         m.result = listValues(
@@ -4304,10 +4309,10 @@ export class Run {
         );
         return this.replace(n, rate);
       }
-      case 'list-append':
+      case Op.ListAppend:
         m.result = appendTo(this.peek(1), this.peek(), 'append');
         return this.replace(2, rate);
-      case 'list-extend': {
+      case Op.ListExtend: {
         const e = this.peek();
         if (e.kind !== 'list') {
           throw wrongKind('list', e);
@@ -4315,7 +4320,7 @@ export class Run {
         m.result = appendTo(this.peek(1), e, 'append-all');
         return this.replace(2, rate);
       }
-      case 'map': {
+      case Op.Map: {
         const keys = code.constant(a as number);
         const n = b as number;
         m.count = n;
@@ -4326,15 +4331,15 @@ export class Run {
         return this.replace(n, rate);
       }
       // Building Bytes
-      case 'bytes-field':
+      case Op.BytesField:
         m.input = this.peek();
         m.result = buildField(this.peek(1), m.input, a as string);
         return this.replace(2, rate);
-      case 'bytes-sized':
+      case Op.BytesSized:
         m.input = this.peek(1);
         m.result = buildSized(this.peek(2), m.input, this.peek(), a as string);
         return this.replace(3, rate);
-      case 'bytes-bits': {
+      case Op.BytesBits: {
         const n = b as number;
         const values = this.frame.stack.slice(-n) as Value[];
         m.result = buildBits(
@@ -4346,7 +4351,7 @@ export class Run {
       }
 
       // Binary Patterns: a jump pops the reader, and the subject or size.
-      case 'bin-start': {
+      case Op.BinStart: {
         const v = this.peek();
         this.pay(rate);
         this.pop();
@@ -4356,7 +4361,7 @@ export class Run {
         frame.stack.push({ k: 'reader', bytes: v.bytesView()!, at: 0 });
         return next();
       }
-      case 'bin-literal': {
+      case Op.BinLiteral: {
         const r = this.reader();
         this.pay(rate);
         if (!readLiteral(r, code.constant(a as number))) {
@@ -4365,7 +4370,7 @@ export class Run {
         }
         return next();
       }
-      case 'bin-int': {
+      case Op.BinInt: {
         const r = this.reader();
         m.result = readInt({ ...r }, a as string);
         this.pay(rate);
@@ -4377,7 +4382,7 @@ export class Run {
         frame.stack.push(m.result);
         return next();
       }
-      case 'bin-bits': {
+      case Op.BinBits: {
         const r = this.reader();
         const widths = widthsOf(code.constant(a as number));
         const values = readBits({ ...r }, widths);
@@ -4391,7 +4396,7 @@ export class Run {
         frame.stack.push(...values);
         return next();
       }
-      case 'bin-bytes': {
+      case Op.BinBytes: {
         const size = this.peek();
         const r = this.frame.stack.at(-2) as Reader;
         const probe = { ...r };
@@ -4406,7 +4411,7 @@ export class Run {
         frame.stack.push(m.result);
         return next();
       }
-      case 'bin-rest': {
+      case Op.BinRest: {
         const r = this.reader();
         m.result = readRest(r, a as string);
         this.pay(rate);
@@ -4417,14 +4422,14 @@ export class Run {
         frame.stack.push(m.result);
         return next();
       }
-      case 'bin-end': {
+      case Op.BinEnd: {
         const r = this.reader();
         this.pay(rate);
         frame.stack.pop();
         return r.at === r.bytes.length ? next() : jump(a as number);
       }
 
-      case 'make-pattern': {
+      case Op.MakePattern: {
         const template = code.constants[a as number]!;
         if (template.k !== 'template') {
           throw new Error('make-pattern of a constant that is not a template');
@@ -4441,13 +4446,13 @@ export class Run {
         m.result = pattern;
         return this.replace(n, rate);
       }
-      case 'match-all': {
+      case Op.MatchAll: {
         const out = matchesOf(this.peek(1), this.peek());
         m.steps = out.steps;
         m.result = listValues(out.matches);
         return this.replace(2, rate);
       }
-      case 'replace-start': {
+      case Op.ReplaceStart: {
         const pattern = this.peek(1);
         const subject = this.peek();
         const out = matchesOf(pattern, subject, a === 1 ? 1 : Infinity);
@@ -4471,7 +4476,7 @@ export class Run {
         frame.stack.push(replacement);
         return next();
       }
-      case 'replace-next': {
+      case Op.ReplaceNext: {
         const r = frame.stack.at(-1) as Replacement;
         this.pay(rate);
         if (r.at >= r.matches.length) {
@@ -4480,7 +4485,7 @@ export class Run {
         frame.stack.push(r.matches[r.at]!);
         return next();
       }
-      case 'replace-put': {
+      case Op.ReplacePut: {
         const piece = this.peek();
         const r = frame.stack.at(-2) as Replacement;
         this.pay(rate);
@@ -4489,7 +4494,7 @@ export class Run {
         r.at++;
         return next();
       }
-      case 'replace-end': {
+      case Op.ReplaceEnd: {
         const r = frame.stack.at(-1) as Replacement;
         const out: string[] = [];
         let from = 0;
@@ -4504,7 +4509,7 @@ export class Run {
         frame.stack.push(m.result);
         return next();
       }
-      case 'make-closure': {
+      case Op.MakeClosure: {
         const body = unit.bodies[a as number]!;
         const n = b as number;
         m.count = n;
@@ -4516,10 +4521,10 @@ export class Run {
         );
         return this.replace(n, rate);
       }
-      case 'make-function':
+      case Op.MakeFunction:
         m.result = this.functionValue(code, unit.bodies[a as number]!, [], ins);
         return this.replace(0, rate);
-      case 'make-imported-function': {
+      case Op.MakeImportedFunction: {
         const target = code.library(a as string);
         m.result = this.functionValue(
           target.code,
@@ -4531,7 +4536,7 @@ export class Run {
       }
 
       // Effects
-      case 'load-object': {
+      case Op.LoadObject: {
         const name = unit.objects[a as number]!;
         const object = this.host?.object(name);
         if (object) {
@@ -4541,7 +4546,7 @@ export class Run {
         }
         // A receiver that names no Script of the Group (chapter 5, Sending).
         // A computed name is checked first, so its send raises this.
-        const named = namedSends.has(unit.code[frame.pc + 1]?.op ?? '');
+        const named = namedSends.has(unit.code[frame.pc + 1]?.opcode ?? -1);
         if (!named && !this.host?.isScript(name)) {
           throw new ScriptError('object gone', [['object', text(name)]]);
         }
@@ -4549,35 +4554,35 @@ export class Run {
         frame.stack.push({ k: 'receiver', name });
         return next();
       }
-      case 'me': {
+      case Op.Me: {
         // The object the Script owns, or Nothing (chapter 5, `me`). A Script
         // that owns none is its own receiver in `send … to me`.
         this.pay(rate);
         const me = this.host?.me ?? nothing;
-        const then = unit.code[frame.pc + 1]?.op;
+        const then = unit.code[frame.pc + 1]?.opcode ?? -1;
         frame.stack.push(
           me.kind === 'nothing' &&
-            (then === 'send' ||
-              then === 'send-wait' ||
-              then === 'join-send' ||
-              namedSends.has(then ?? ''))
+            (then === Op.Send ||
+              then === Op.SendWait ||
+              then === Op.JoinSend ||
+              namedSends.has(then))
             ? { k: 'receiver', name: this.script.name }
             : me,
         );
         return next();
       }
-      case 'ask':
-      case 'tell': {
+      case Op.Ask:
+      case Op.Tell: {
         const n = c as number;
         const args = this.popArgs(n);
         const result = this.capability(a as string, b as string, args, rate);
         frame.stack.length -= n;
-        if (ins.op === 'ask') {
+        if (ins.opcode === Op.Ask) {
           frame.stack.push(result);
         }
         return next();
       }
-      case 'wait': {
+      case Op.Wait: {
         const ns = waitNs(this.peek());
         this.checkDeadline();
         this.checkScopeBoundary();
@@ -4586,14 +4591,14 @@ export class Run {
         this.suspend({ k: 'wait', ns });
         return;
       }
-      case 'ask-wait': {
+      case Op.AskWait: {
         const n = c as number;
         const args = this.popArgs(n);
         this.capability(a as string, b as string, args, rate);
         return;
       }
-      case 'wait-for':
-      case 'wait-for-any': {
+      case Op.WaitFor:
+      case Op.WaitForAny: {
         // Deepest first: each branch's `from` and captures, or duration,
         // then the timeout (chapter 8, The event table).
         const entry = unit.events[a as number]!;
@@ -4608,7 +4613,7 @@ export class Run {
         const sus: WaitFor = {
           code,
           k: 'wait-for',
-          any: ins.op === 'wait-for-any',
+          any: ins.opcode === Op.WaitForAny,
           whens: [],
           afters: [],
           timeout: null,
@@ -4654,19 +4659,19 @@ export class Run {
         this.suspend(sus);
         return;
       }
-      case 'join-start':
+      case Op.JoinStart:
         this.checkScopeBoundary();
         this.pay(rate);
         this.join = { frame, members: [], replies: [], start: frame.pc };
         return next();
-      case 'join-ask': {
+      case Op.JoinAsk: {
         this.joinWidth();
         const n = c as number;
         this.capability(a as string, b as string, this.popArgs(n), rate, true);
         frame.stack.length -= n;
         return next();
       }
-      case 'join-end': {
+      case Op.JoinEnd: {
         const members = this.join!.members;
         if (!members.length) {
           // No members: `[]` at once, with no Segment boundary.
@@ -4682,28 +4687,28 @@ export class Run {
         this.suspend({ k: 'join', members });
         return;
       }
-      case 'send':
-      case 'send-wait':
-      case 'join-send':
-      case 'send-named':
-      case 'send-named-wait':
-      case 'join-send-named':
-      case 'send-spread':
-      case 'send-spread-wait':
-      case 'join-send-spread':
-      case 'send-up':
-      case 'send-up-wait': {
+      case Op.Send:
+      case Op.SendWait:
+      case Op.JoinSend:
+      case Op.SendNamed:
+      case Op.SendNamedWait:
+      case Op.JoinSendNamed:
+      case Op.SendSpread:
+      case Op.SendSpreadWait:
+      case Op.JoinSendSpread:
+      case Op.SendUp:
+      case Op.SendUpWait: {
         const join =
-          ins.op === 'join-send' ||
-          ins.op === 'join-send-named' ||
-          ins.op === 'join-send-spread';
+          ins.opcode === Op.JoinSend ||
+          ins.opcode === Op.JoinSendNamed ||
+          ins.opcode === Op.JoinSendSpread;
         if (join) {
           this.joinWidth();
         }
-        const up = ins.op === 'send-up' || ins.op === 'send-up-wait';
-        const named = namedSends.has(ins.op);
+        const up = ins.opcode === Op.SendUp || ins.opcode === Op.SendUpWait;
+        const named = namedSends.has(ins.opcode);
         // A spread's arguments are one list, below the receiver (ADR 0064).
-        const spread = spreadSends.has(ins.op)
+        const spread = spreadSends.has(ins.opcode)
           ? listItems(frame.stack.at(-2) as Value)
           : null;
         const n = (spread ? spread.length : named ? a : b) as number;
@@ -4756,10 +4761,10 @@ export class Run {
         m.inputSize = size;
         // A send that waits is a call, with an id of its own.
         const waits =
-          ins.op !== 'send' &&
-          ins.op !== 'send-named' &&
-          ins.op !== 'send-spread' &&
-          ins.op !== 'send-up';
+          ins.opcode !== Op.Send &&
+          ins.opcode !== Op.SendNamed &&
+          ins.opcode !== Op.SendSpread &&
+          ins.opcode !== Op.SendUp;
         if (waits) {
           if (!join) {
             this.checkDeadline();
@@ -4814,7 +4819,7 @@ export class Run {
         this.suspend({ k: 'send', id, to: reached, message, args });
         return;
       }
-      case 'veto': {
+      case Op.Veto: {
         const reason = this.peek();
         this.checkState();
         this.pay(rate);
@@ -4822,20 +4827,20 @@ export class Run {
         this.outcome = { kind: 'completed', result: nothing, veto: reason };
         return;
       }
-      case 'pass':
+      case Op.Pass:
         // Ends the Run as `completed`; its Group sends the message on up.
         this.checkState();
         this.pay(rate);
         this.frames = [];
         this.outcome = { kind: 'completed', result: nothing, passed: true };
         return;
-      case 'target':
+      case Op.Target:
         this.pay(rate);
         frame.stack.push(this.target);
         return next();
 
       // Calls
-      case 'call': {
+      case Op.Call: {
         const body = unit.bodies[a as number]!;
         const args = this.frame.stack.slice(
           this.frame.stack.length - (b as number),
@@ -4844,7 +4849,7 @@ export class Run {
         frame.stack.length -= b as number;
         return;
       }
-      case 'call-import': {
+      case Op.CallImport: {
         const target = code.library(a as string);
         const body = target.code.function(target.name);
         const args = this.frame.stack.slice(
@@ -4858,8 +4863,8 @@ export class Run {
         frame.stack.length -= b as number;
         return;
       }
-      case 'call-handler':
-      case 'call-handler-wait': {
+      case Op.CallHandler:
+      case Op.CallHandlerWait: {
         // An imported Handler's clauses are its Library's.
         const target = code.clauses.has(a as string)
           ? { code, name: a as string }
@@ -4880,7 +4885,7 @@ export class Run {
         this.dispatch({ clauses, code: target.code, next: 0, args });
         return;
       }
-      case 'call-builtin': {
+      case Op.CallBuiltin: {
         const n = b as number;
         const given = this.frame.stack.slice(
           this.frame.stack.length - n,
@@ -4917,8 +4922,8 @@ export class Run {
         m.steps = out.steps;
         return this.replace(n, rate);
       }
-      case 'call-value':
-      case 'call-value-wait': {
+      case Op.CallValue:
+      case Op.CallValueWait: {
         const n = a as number;
         const fn = this.peek(n);
         const args = this.frame.stack.slice(
@@ -4932,7 +4937,7 @@ export class Run {
           throw new ScriptError('function gone');
         }
         const foreign = (ref.code as FunctionCode).home !== this.script;
-        if (ins.op === 'call-value' && (foreign || ref.maySuspend)) {
+        if (ins.opcode === Op.CallValue && (foreign || ref.maySuspend)) {
           throw new ScriptError('would suspend');
         }
         const { code: home, body } = ref.code as FunctionCode;
@@ -4961,7 +4966,7 @@ export class Run {
         });
         return;
       }
-      case 'return': {
+      case Op.Return: {
         const value = this.peek();
         if (this.frames.length === 1) {
           this.checkState();
@@ -4969,7 +4974,7 @@ export class Run {
         this.pay(rate);
         return this.returnFrom(value);
       }
-      case 'clause-fail': {
+      case Op.ClauseFail: {
         if (this.frames.length === 1 && !Run.more(frame.dispatch)) {
           this.checkState();
         }
@@ -4989,7 +4994,7 @@ export class Run {
       }
 
       // Destructuring
-      case 'test-constant': {
+      case Op.TestConstant: {
         const fold = b === 'fold';
         const target = (fold ? c : b) as number;
         const ok = equals(this.peek(), code.constant(a as number), fold).equal;
@@ -4997,27 +5002,27 @@ export class Run {
         this.pop();
         return ok ? next() : jump(target);
       }
-      case 'test-equal': {
+      case Op.TestEqual: {
         const ok = equals(this.peek(1), this.peek(), false).equal;
         this.pay(rate);
         this.popN(2);
         return ok ? next() : jump(a as number);
       }
-      case 'test-list':
-      case 'test-list-at-least': {
+      case Op.TestList:
+      case Op.TestListAtLeast: {
         const v = this.peek();
         const n = a as number;
         const ok =
           v.kind === 'list' &&
-          (ins.op === 'test-list' ? v.length === n : v.length >= n);
+          (ins.opcode === Op.TestList ? v.length === n : v.length >= n);
         this.pay(rate);
         this.pop();
         return ok ? next() : jump(b as number);
       }
-      case 'list-item':
+      case Op.ListItem:
         m.result = this.peek().index(a as number);
         return this.replace(1, rate);
-      case 'list-rest': {
+      case Op.ListRest: {
         const v = this.peek();
         const from = a as number;
         m.result = listValues(
@@ -5027,13 +5032,13 @@ export class Run {
         );
         return this.replace(1, rate);
       }
-      case 'test-map': {
+      case Op.TestMap: {
         const ok = this.peek().kind === 'map';
         this.pay(rate);
         this.pop();
         return ok ? next() : jump(a as number);
       }
-      case 'map-get': {
+      case Op.MapGet: {
         const v = this.peek();
         const there = hasKey(v, a as string);
         this.pay(rate);
@@ -5044,12 +5049,12 @@ export class Run {
         frame.stack.push(v.get(a as string));
         return next();
       }
-      case 'match-whole':
-      case 'match-search': {
+      case Op.MatchWhole:
+      case Op.MatchSearch: {
         const fold = a === 'fold';
         const target = (fold ? b : a) as number;
         const out = matchCaptures(
-          ins.op === 'match-whole',
+          ins.opcode === Op.MatchWhole,
           this.peek(1),
           this.peek(),
           fold,
@@ -5066,7 +5071,7 @@ export class Run {
       }
 
       // Loops
-      case 'timeout-start': {
+      case Op.TimeoutStart: {
         // The Pump's Clock reading plus `d`, unless an enclosing block's
         // deadline is no later (ADR 0073).
         const ns = waitNs(this.peek());
@@ -5081,11 +5086,11 @@ export class Run {
         );
         return next();
       }
-      case 'timeout-end':
+      case Op.TimeoutEnd:
         this.pay(rate);
         frame.stack.pop();
         return next();
-      case 'iterate': {
+      case Op.Iterate: {
         const v = this.peek();
         let iterator: Iterator;
         if (v.kind === 'list') {
@@ -5116,7 +5121,7 @@ export class Run {
         frame.stack.push(iterator);
         return next();
       }
-      case 'iterate-times': {
+      case Op.IterateTimes: {
         const v = this.peek();
         if (v.kind !== 'number' || !isKind(v, 'integer').asBool()) {
           throw wrongKind('integer', v);
@@ -5138,7 +5143,7 @@ export class Run {
         });
         return next();
       }
-      case 'next': {
+      case Op.Next: {
         const it = frame.stack.at(-1) as Iterator;
         this.pay(rate);
         if (it.at >= it.count) {
@@ -5150,7 +5155,7 @@ export class Run {
       }
 
       // Errors
-      case 'throw': {
+      case Op.Throw: {
         const v = this.peek();
         let error: Value;
         if (v.kind === 'text') {
@@ -5180,19 +5185,19 @@ export class Run {
         this.pop();
         throw new ThrownError(error);
       }
-      case 'catch-accept':
+      case Op.CatchAccept:
         this.pay(rate);
         return this.acceptCatch();
-      case 'catch-next':
+      case Op.CatchNext:
         this.pay(rate);
         return this.nextCatch();
-      case 'choose-offer':
+      case Op.ChooseOffer:
         return this.chooseOffer(a as string, b as number, ins);
-      case 'raise': {
+      case Op.Raise: {
         this.pay(rate);
         throw new ThrownError(this.errorMap(a as string, [], ins));
       }
-      case 'end-cleanup': {
+      case Op.EndCleanup: {
         this.pay(rate);
         if (this.cancelling) {
           this.checkState();
@@ -5271,7 +5276,7 @@ const cleanupEnd = (unit: CodeUnit, start: number): number => {
     if (pc !== start && starts.has(pc)) {
       depth++;
     }
-    if (unit.code[pc]!.op === 'end-cleanup') {
+    if (unit.code[pc]!.opcode === Op.EndCleanup) {
       if (!depth) {
         return pc + 1;
       }

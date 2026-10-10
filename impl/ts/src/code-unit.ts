@@ -8,6 +8,8 @@ export type Instruction = {
   col: number;
   line: number;
   op: string;
+  /** `op`'s index in the instruction table. The machine dispatches on it. */
+  opcode: number;
   operands: Operand[];
   /** The Cost Model rate it charges, from `rateOf`, or -1 if none. */
   rate: number;
@@ -110,6 +112,9 @@ export type CodeUnit = {
 type Spec = (typeof instructions)[number];
 export const instructionSpec = new Map<string, Spec>(
   instructions.map(spec => [spec.name, spec]),
+);
+export const opcodes = new Map<string, number>(
+  instructions.map((spec, i) => [spec.name, i]),
 );
 
 /** The operand kinds an instruction has, its optional `fold` only when present. */

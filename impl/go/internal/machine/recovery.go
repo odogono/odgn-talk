@@ -529,7 +529,7 @@ func cleanupEnd(f Frame, start int) int {
 		if pc != start && starts[pc] {
 			depth++
 		}
-		if body.Code[pc].Name == "end-cleanup" {
+		if body.Code[pc].Op == generated.OpEndCleanup {
 			if depth == 0 {
 				return pc + 1
 			}
