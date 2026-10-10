@@ -104,7 +104,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	}
 	var effect func()
 	var err *value.Value
-	bad := func(v value.Value) { err = &v }
+	bad := func(v value.Value) { err = new(value.Value); *err = v }
 	key := func(s string) string {
 		v, e := constant(s)
 		if e == nil && v.Kind == value.Text {
@@ -439,7 +439,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 		}
 	case "add", "subtract", "multiply", "divide", "div", "mod", "power":
 		b, a := pop(), pop()
-		op := map[string]string{"add": "+", "subtract": "-", "multiply": "*", "divide": "/", "div": "div", "mod": "mod", "power": "^"}[i.Name]
+		op := arithmeticOps[i.Name]
 		v, e := arithmetic(op, a, b)
 		if e != nil {
 			bad(*e)
@@ -955,7 +955,8 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "choose-offer":
 		args := slices.Clone(f.Stack[len(f.Stack)-idx(1):])
 		m.Count = int64(idx(1))
-		effect = func() { r.Frames[len(r.Frames)-1].PC--; r.chooseOffer(name(0), args) }
+		offer := name(0)
+		effect = func() { r.Frames[len(r.Frames)-1].PC--; r.chooseOffer(offer, args) }
 	case "end-cleanup":
 		if r.Cancelling {
 			effect = func() { r.nextCancellationCleanup() }
@@ -1073,3 +1074,5 @@ func waitNanos(v value.Value) (*big.Int, *value.Value) {
 	}
 	return roundInteger(new(big.Rat).Mul(n.Rat(), big.NewRat(1e9, 1))), nil
 }
+
+var arithmeticOps = map[string]string{"add": "+", "subtract": "-", "multiply": "*", "divide": "/", "div": "div", "mod": "mod", "power": "^"}

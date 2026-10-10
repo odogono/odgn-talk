@@ -7,8 +7,9 @@ import (
 	northtalk "github.com/odogono/odgn-talk/impl/go"
 )
 
-// The core ceilings are one tenth of the pre-#322 bytes per full-size Run.
-// List construction also guards against the quadratic copying from #503.
+// The core ceilings are about 1.5 times the bytes per full-size Run after
+// #592, which stopped per-instruction formula parsing and escapes. List and
+// Map construction also guard against the copying from #503 and #592.
 // Save/Restore guards the direct Codec path from #504 below a third of its
 // original allocation. Measure bytes, not timing, so machine speed cannot
 // make CI flaky.
@@ -18,12 +19,13 @@ func TestCoreRunAllocationBudgets(t *testing.T) {
 		fuel  int64
 		alloc int64 // zero leaves the existing core workload's allocation unpinned
 	}{
-		"core/loop":               {8_750_662, 48_016, 0},
-		"core/fib":                {4_066_059, 46_365, 0},
-		"core/calls":              {6_343_266, 46_018, 0},
-		"core/lambdas":            {10_443_816, 58_027, 0},
+		"core/loop":               {400_000, 48_016, 0},
+		"core/fib":                {1_000_000, 46_365, 0},
+		"core/calls":              {1_600_000, 46_018, 0},
+		"core/lambdas":            {2_000_000, 58_027, 0},
 		"collections/list-build":  {8_000_000, 19_091, 3_022_112},
 		"collections/list-append": {16_000_000, 52_056, 80_200},
+		"collections/map-build":   {4_200_000, 14_094, 24_920},
 		"lifecycle/restore":       {20_000_000, 8_015, 8_024},
 	}
 	for _, bench := range manifest(t, "go") {
