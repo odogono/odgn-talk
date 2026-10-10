@@ -88,7 +88,8 @@ type Unit struct {
 	codeName                                   string
 	// staleDocs holds each body's documentation for a restored stale unit,
 	// which keeps no bodies.
-	staleDocs []string
+	staleDocs     []string
+	constantIndex map[string]int
 }
 
 // StaleUnit is a restored unit that kept only its name and each body's
@@ -177,10 +178,17 @@ func (u *Unit) release(slot int) {
 	u.state.temps[slot-base] = false
 }
 func (u *Unit) constant(value string) operand {
-	i := slices.Index(u.Constants, value)
-	if i < 0 {
+	if u.constantIndex == nil {
+		u.constantIndex = make(map[string]int, len(u.Constants))
+		for i, value := range u.Constants {
+			u.constantIndex[value] = i
+		}
+	}
+	i, found := u.constantIndex[value]
+	if !found {
 		i = len(u.Constants)
 		u.Constants = append(u.Constants, value)
+		u.constantIndex[value] = i
 	}
 	return ref("constant", i)
 }
@@ -253,7 +261,7 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	if len(checked.Diagnostics) != 0 {
 		return nil, fmt.Errorf("cannot lower rejected unit: %v", checked.Diagnostics)
 	}
-	u := &Unit{Name: name, codeName: name, Kind: "script", checked: checked, Definitions: checked.Definitions, Variables: checked.Variables, byNode: map[*syntax.Node]*Body{}}
+	u := &Unit{Name: name, codeName: name, Kind: "script", checked: checked, Definitions: checked.Definitions, Variables: checked.Variables, byNode: make(map[*syntax.Node]*Body, len(checked.Bodies)), Bodies: make([]*Body, 0, len(checked.Bodies))}
 	if checked.Options.Library {
 		u.Kind = "library"
 	}
@@ -273,7 +281,7 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 	initial := &check.Body{Node: initNode, Kind: "init", Name: "initialiser", Locals: []string{"it"}}
 	u.Bodies = append(u.Bodies, &Body{CodeName: u.codeName, Checked: initial, Index: first})
 	u.byNode[initNode] = u.Bodies[first]
-	clauses := map[string]int{}
+	clauses := make(map[string]int, len(checked.Tree.Declarations))
 	for _, n := range checked.Tree.Declarations {
 		if b := checked.Bodies[n]; b != nil {
 			lowered := &Body{CodeName: u.codeName, Checked: cloneBody(b), Index: len(u.Bodies), Doc: checked.Tree.Documentation(n)}
@@ -334,6 +342,9 @@ func compile(checked *check.Unit, name string, previous *Unit) (*Unit, error) {
 			u.Offers = append(u.Offers, offer)
 		}
 	}
+	// The index is compilation scratch; Constants preserve the stable order
+	// used by execution and by the next extension's fresh index.
+	u.constantIndex = nil
 	return u, nil
 }
 func cloneBody(b *check.Body) *check.Body {
@@ -360,6 +371,10 @@ func (u *Unit) compileBody(body *Body) {
 	u.state = &builder{body: body, overrides: map[string]int{}}
 	defer func() { u.state = parent }()
 	n := body.Checked.Node
+	// Even an empty body emits its return and (for Handlers) clause-fail.
+	// Reserve those instructions together rather than growing 1, 2, 4 for
+	// every empty Handler in a hostile source.
+	body.Code = make([]Instruction, 0, 3)
 	fail := &label{}
 	direct := body.Checked.Kind != "function"
 	start := u.pc()

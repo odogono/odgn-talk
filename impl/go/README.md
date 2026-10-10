@@ -459,6 +459,14 @@ Owning Object. Owners and well-known Objects are checked for Group ownership and
 retained through Reload. Each live Object has at most one Owning Script. Other
 unimplemented public declarations are omitted.
 
+Load shares one compact parse between code identity, checking and lowering.
+It preserves source and Declaration Documentation without retaining a token
+for every blank line. Parsed nodes cache their first source position, and
+lowering indexes constants, so long operator chains with repeated or distinct
+literals don't repeatedly scan earlier work. Run
+`go -C impl/go test . -run '^$' -bench BenchmarkLoadHostileSource -benchmem`
+to measure blank lines, empty Handlers and operator chains at increasing sizes.
+
 Any-goroutine deliveries reserve mailbox capacity before joining the input
 queue. A Pump takes one Clock reading, drains accepted inputs in order, and
 visits Scripts in load order, one Run per turn. Fuel Slice overrun becomes debt
@@ -1167,6 +1175,12 @@ Go embedding interface, for a Host that isn't Go or TS
 one JSON frame and returns one reply frame; the framing is the transport's.
 `cmd/messagelayer` is the sidecar: each frame is a 4-byte big-endian length
 and then the JSON, both ways on stdio.
+Frames over 64 MiB are drained with bounded buffering and answered with a
+`protocol error` under `ref: -1`, since the rejected JSON isn't parsed. The
+same Session then answers the next frame. A truncated header or body ends the
+transport with an error. The WASI check also loads 1 MiB of blank lines,
+100,000 empty Handlers and 100,000-term addition and exponentiation chains in
+separate instances with a 1 GiB memory cap.
 
 A `pump` runs on its own goroutine. Each Operation or property it reaches
 returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's

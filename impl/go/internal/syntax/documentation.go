@@ -42,11 +42,36 @@ func (t *Tree) Documentation(n *Node) string {
 	if n.Kind == "use" {
 		return ""
 	}
+	if t.source != nil {
+		return t.docs[n.Token.Start]
+	}
 	at := sort.Search(len(t.Tokens), func(i int) bool { return t.Tokens[i].Start >= n.Token.Start })
 	if at == len(t.Tokens) || t.Tokens[at].Start != n.Token.Start {
 		return ""
 	}
 	return strings.Join(docBlock(t.Tokens, at), "\n")
+}
+
+// The compact parser retains only contiguous marked whole-line comments.
+// Lexical line breaks count even when the parser ignores a continuation.
+func (p *parser) recordDocumentation(t Token) {
+	if t.Kind == LineBreak {
+		if text, ok := docLine(t.Leading); p.lineStart && ok {
+			p.docLines = append(p.docLines, text)
+		} else {
+			p.docLines = p.docLines[:0]
+		}
+		p.lineStart = true
+		return
+	}
+	if len(p.docLines) > 0 {
+		if p.docs == nil {
+			p.docs = map[int]string{}
+		}
+		p.docs[t.Start] = strings.Join(p.docLines, "\n")
+		p.docLines = p.docLines[:0]
+	}
+	p.lineStart = false
 }
 
 // EntryDoc is how an Entry's leading documentation block attaches.

@@ -48,5 +48,6 @@ func ParseEntry(source string, isHandler func(string) bool) (kind string, entry 
 		p.fail(p.peek(Operand))
 	}
 	p.take(Operand)
+	entry.cachePositions()
 	return
 }

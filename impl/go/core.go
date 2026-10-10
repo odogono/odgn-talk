@@ -8,6 +8,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"io"
 	"reflect"
 	"slices"
 	"strings"
@@ -89,22 +90,47 @@ func identity(name, source string) [32]byte {
 	return codeIdentity("script", name, source, nil)
 }
 func codeIdentity(kind, name, source string, imports map[string][32]byte) [32]byte {
-	text := "odgn-talk code identity 1\n" + generated.Version.Language + "\n" + fmt.Sprint(generated.Costs.Version) + "\n" + kind + "\n" + name + "\n"
+	var tree *syntax.Tree
+	if len(imports) > 0 {
+		tree, _ = syntax.ParseCompact(source)
+	}
+	return parsedIdentity(kind, name, source, imports, tree)
+}
+
+func parsedIdentity(kind, name, source string, imports map[string][32]byte, tree *syntax.Tree) [32]byte {
+	hash := sha256.New()
+	io.WriteString(hash, "odgn-talk code identity 1\n"+generated.Version.Language+"\n"+fmt.Sprint(generated.Costs.Version)+"\n"+kind+"\n"+name+"\n")
 	seen := map[string]bool{}
-	if tree, err := syntax.Parse(source); err == nil {
+	if tree != nil {
 		for _, n := range tree.Declarations {
 			if n.Kind == "use" && !seen[n.Text] {
 				seen[n.Text] = true
 				if id, ok := imports[n.Text]; ok {
-					text += fmt.Sprintf("%x\n", id)
+					fmt.Fprintf(hash, "%x\n", id)
 				}
 			}
 		}
 	}
-	return sha256.Sum256([]byte(text + "source\n" + source))
+	io.WriteString(hash, "source\n")
+	io.WriteString(hash, source)
+	return [32]byte(hash.Sum(nil))
 }
 func (e *LoadError) Error() string { return fmt.Sprintf("source rejected: %v", e.Diagnostics) }
 func (c *Core) compile(name, source string, options check.Options, imports ...map[string][32]byte) (*lower.Unit, *LoadError) {
+	var ids map[string][32]byte
+	if len(imports) > 0 {
+		ids = imports[0]
+	}
+	tree, err := syntax.ParseCompact(source)
+	kind := "script"
+	if options.Library {
+		kind = "library"
+	}
+	return c.compileParsed(name, options, parsedIdentity(kind, name, source, ids, tree), tree, err)
+}
+
+// Load shares its compact parse between identity, checking and lowering.
+func (c *Core) compileParsed(name string, options check.Options, id [32]byte, tree *syntax.Tree, parseErr error) (*lower.Unit, *LoadError) {
 	objects := slices.Clone(options.Objects)
 	slices.Sort(objects)
 	declarations, _ := json.Marshal(options.Grants)
@@ -112,15 +138,7 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 		Objects map[string]map[string]bool
 		Owner   map[string]bool
 	}{options.ObjectProperties, options.OwnerProperties})
-	kind := "script"
-	if options.Library {
-		kind = "library"
-	}
-	var ids map[string][32]byte
-	if len(imports) > 0 {
-		ids = imports[0]
-	}
-	key := compileKey{codeIdentity(kind, name, source, ids), strings.Join(objects, "\x00"), string(properties), options.PatternSize, string(declarations)}
+	key := compileKey{id, strings.Join(objects, "\x00"), string(properties), options.PatternSize, string(declarations)}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.units == nil {
@@ -129,9 +147,8 @@ func (c *Core) compile(name, source string, options check.Options, imports ...ma
 	if unit := c.units[key]; unit != nil {
 		return unit, nil
 	}
-	tree, err := syntax.Parse(source)
-	if err != nil {
-		p := err.(*syntax.Error)
+	if parseErr != nil {
+		p := parseErr.(*syntax.Error)
 		return nil, &LoadError{[]Diagnostic{{Code: p.Code, Message: p.Error(), Unit: name, Line: p.Pos.Line, Col: p.Pos.Column}}}
 	}
 	checked := check.Check(tree, options)
