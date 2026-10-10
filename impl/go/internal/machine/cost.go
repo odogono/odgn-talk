@@ -98,10 +98,7 @@ func measure(name string, v value.Value) int64 {
 		return int64(len(v.Entries()))
 	case "digits":
 		if v.Kind == value.Number || v.Kind == value.Quantity {
-			s := strings.TrimPrefix(v.Number().String(), "-")
-			s = strings.ReplaceAll(s, ".", "")
-			s = strings.TrimLeft(s, "0")
-			return int64(max(1, len(s)))
+			return int64(max(1, v.Number().Digits()))
 		}
 	case "program":
 		if v.Kind == value.Pattern {
@@ -110,90 +107,147 @@ func measure(name string, v value.Value) int64 {
 	}
 	return 0
 }
+
+// Size evaluates the logical size formula for the value's kind.
 func Size(v value.Value) int64 {
-	for _, s := range generated.Costs.Size {
-		if s.Of == value.KindNames[v.Kind] {
-			return formula(s.Size, Measures{}, v)
-		}
+	if int(v.Kind) < len(sizes) && sizes[v.Kind].known {
+		return evaluate(sizes[v.Kind].terms, Measures{}, v)
 	}
 	panic("missing logical size")
 }
-func formula(s string, m Measures, v value.Value) int64 {
+
+// term is one "factor * token / divisor" part of a Cost Model formula. Its
+// token is a constant, a measure of a subject such as size(result), or a count.
+type term struct {
+	factor, divisor  int64
+	constant         int64
+	measure, subject string
+	arg              int // n in an xn subject
+	counter          string
+}
+
+// parseFormula splits a Data File formula into terms. The tables below parse
+// each formula once, so a charge only evaluates.
+func parseFormula(s string) []term {
 	if s == "" {
-		return 0
+		return nil
 	}
-	if s[0] >= '0' && s[0] <= '9' && !strings.Contains(s, " ") {
-		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return n
-		}
-	}
-	var total int64
-	for _, term := range strings.Split(s, " + ") {
-		parts := strings.Fields(term)
-		factor := int64(1)
-		divisor := int64(1)
+	var terms []term
+	for _, text := range strings.Split(s, " + ") {
+		parts := strings.Fields(text)
+		t := term{factor: 1, divisor: 1}
 		if len(parts) > 2 && parts[1] == "*" {
-			factor, _ = strconv.ParseInt(parts[0], 10, 64)
+			t.factor, _ = strconv.ParseInt(parts[0], 10, 64)
 			parts = parts[2:]
 		}
 		if len(parts) > 2 && parts[1] == "/" {
-			divisor, _ = strconv.ParseInt(parts[2], 10, 64)
+			t.divisor, _ = strconv.ParseInt(parts[2], 10, 64)
 		}
 		token := parts[0]
+		at := strings.IndexByte(token, '(')
+		switch {
+		case token[0] >= '0' && token[0] <= '9':
+			t.constant, _ = strconv.ParseInt(token, 10, 64)
+		case at >= 0:
+			t.measure, t.subject = token[:at], token[at+1:len(token)-1]
+			if strings.HasPrefix(t.subject, "x") {
+				t.arg, _ = strconv.Atoi(t.subject[1:])
+			}
+		default:
+			switch token {
+			case "scanned", "steps", "frames", "clauses", "count", "declared":
+				t.counter = token
+			default:
+				panic("unknown cost measure: " + token)
+			}
+		}
+		terms = append(terms, t)
+	}
+	return terms
+}
+
+type rate struct{ fuel, alloc []term }
+
+var rates = func() map[string]rate {
+	out := make(map[string]rate, len(generated.Costs.Rate))
+	for _, r := range generated.Costs.Rate {
+		out[r.Key] = rate{parseFormula(r.Fuel), parseFormula(r.Alloc)}
+	}
+	return out
+}()
+
+type sizeFormula struct {
+	terms []term
+	known bool
+}
+
+// sizes holds each kind's logical size formula, indexed by value.Kind.
+var sizes = func() []sizeFormula {
+	out := make([]sizeFormula, len(value.KindNames))
+	for k, name := range value.KindNames {
+		for _, s := range generated.Costs.Size {
+			if s.Of == name {
+				out[k] = sizeFormula{parseFormula(s.Size), true}
+			}
+		}
+	}
+	return out
+}()
+
+func formula(s string, m Measures, v value.Value) int64 {
+	return evaluate(parseFormula(s), m, v)
+}
+func evaluate(terms []term, m Measures, v value.Value) int64 {
+	var total int64
+	for _, t := range terms {
+		factor, divisor := t.factor, t.divisor
 		var n int64
-		if token[0] >= '0' && token[0] <= '9' {
-			n, _ = strconv.ParseInt(token, 10, 64)
-		} else {
-			if at := strings.IndexByte(token, '('); at >= 0 {
-				subject := token[at+1 : len(token)-1]
-				x := v
-				switch subject {
-				case "input":
-					x = m.Input
-					if !m.InputPresent && m.InputSize == 0 && m.Input.Kind == value.Nothing {
-						continue
-					}
-				case "result":
-					x = m.Result
-					if !m.ResultPresent && m.Result.Kind == value.Nothing {
-						continue
-					}
-				default:
-					if strings.HasPrefix(subject, "x") {
-						i, _ := strconv.Atoi(subject[1:])
-						if i > 0 && i <= len(m.Args) {
-							x = m.Args[i-1]
-						}
-					}
+		switch {
+		case t.measure != "":
+			x := v
+			switch t.subject {
+			case "input":
+				x = m.Input
+				if !m.InputPresent && m.InputSize == 0 && m.Input.Kind == value.Nothing {
+					continue
 				}
-				n = measure(token[:at], x)
-				if subject == "input" && token[:at] == "size" && m.InputSize > 0 {
-					n = m.InputSize
+			case "result":
+				x = m.Result
+				if !m.ResultPresent && m.Result.Kind == value.Nothing {
+					continue
 				}
-				if subject == "result" && m.ResultValues != nil {
-					n = 0
-					for _, result := range m.ResultValues {
-						n += measure(token[:at], result)
-					}
-				}
-			} else {
-				switch token {
-				case "scanned":
-					n = m.Scanned
-				case "steps":
-					n = m.Steps
-				case "frames":
-					n = m.Frames
-				case "clauses":
-					n = m.Clauses
-				case "count":
-					n = m.Count
-				case "declared":
-					n = m.Declared
-				default:
-					panic("unknown cost measure: " + token)
+			default:
+				if t.arg > 0 && t.arg <= len(m.Args) {
+					x = m.Args[t.arg-1]
 				}
 			}
+			n = measure(t.measure, x)
+			if t.subject == "input" && t.measure == "size" && m.InputSize > 0 {
+				n = m.InputSize
+			}
+			if t.subject == "result" && m.ResultValues != nil {
+				n = 0
+				for _, result := range m.ResultValues {
+					n += measure(t.measure, result)
+				}
+			}
+		case t.counter != "":
+			switch t.counter {
+			case "scanned":
+				n = m.Scanned
+			case "steps":
+				n = m.Steps
+			case "frames":
+				n = m.Frames
+			case "clauses":
+				n = m.Clauses
+			case "count":
+				n = m.Count
+			case "declared":
+				n = m.Declared
+			}
+		default:
+			n = t.constant
 		}
 		// Evaluate each rounded term exactly, then saturate the internal
 		// counter. Overflow must never turn an unaffordable charge negative.
@@ -216,11 +270,10 @@ func formula(s string, m Measures, v value.Value) int64 {
 	}
 	return total
 }
+
 func Charge(key string, m Measures) (int64, int64) {
-	for _, r := range generated.Costs.Rate {
-		if r.Key == key {
-			return formula(r.Fuel, m, value.Value{}), formula(r.Alloc, m, value.Value{})
-		}
+	if r, ok := rates[key]; ok {
+		return evaluate(r.fuel, m, value.Value{}), evaluate(r.alloc, m, value.Value{})
 	}
 	panic("missing Cost Model key: " + key)
 }
