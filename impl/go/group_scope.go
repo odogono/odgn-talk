@@ -71,9 +71,11 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipan
 			err = &HostError{InvalidValue, "automatic abandonment attempted a budget or settlement call"}
 		}
 		fields := map[string]string{"op": slot.grantName + "." + slot.abandon, "args": "[]", "automatic": "yes"}
-		_, failure, _ := g.completeOperation(s, x, slot.grantName, slot.abandon, op, call, nil, v, err, fields, func() {
-			g.record("call", false, []string{string(call.id)}, fields)
-		}, 0, reports, x.run.Cancelling)
+		crossing := operationHostCrossing(s, x, slot.grantName, slot.abandon, op, call, nil)
+		crossing.fields = fields
+		prepared := g.prepareHostResult(crossing, v, err)
+		g.record("call", false, []string{string(call.id)}, fields)
+		_, failure := g.classifyHostResult(crossing, prepared, reports)
 		action := "abandoned"
 		if failure != nil {
 			action = "failed"

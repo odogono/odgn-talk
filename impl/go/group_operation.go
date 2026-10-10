@@ -7,10 +7,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
-	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -24,7 +22,6 @@ type CallFailed struct {
 
 func (*CallFailed) isReport() {}
 func (g *Group) operation(s *Script, x *execution, grantName, opName string, args []corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value, bool) {
-	wasCancelling := x.run.Cancelling
 	grant := s.grants[grantName]
 	op := grant.definition.ops[opName]
 	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
@@ -116,184 +113,43 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	for i, v := range args {
 		vs[i] = Value{v}
 	}
-	result, err := invokeOperation(op, call, vs)
-	call.finish()
-	action := ""
-	if err == nil {
-		action = x.acknowledgeScope(grantName, grant, op)
-	}
-	fields := map[string]string{"op": grantName + "." + opName, "args": coretrace.Display(corevalue.NewList(args))}
-	if call.charged != 0 {
-		fields["charged"] = fmt.Sprint(call.charged)
-	}
-	record := func() {
-		g.record("call", false, []string{string(call.id)}, fields)
-		if action != "" {
-			g.record("scope", false, []string{string(call.id)}, map[string]string{"grant": grantName, "name": call.scopeName, "action": action})
+	crossing := operationHostCrossing(s, x, grantName, opName, op, call, args)
+	v, failure := g.crossHost(crossing, func() (Value, error) {
+		result, err := invokeOperation(op, call, vs)
+		call.finish()
+		if err == nil {
+			crossing.scopeAction = x.acknowledgeScope(grantName, grant, op)
 		}
-		boundary()
-	}
-	if call.reached || errors.Is(err, ErrLimit) {
-		record()
-		cancel()
-		if x.run.Status != machine.Stopped {
-			x.run.FaultHostFuel()
+		if call.charged != 0 {
+			crossing.fields["charged"] = fmt.Sprint(call.charged)
 		}
-		return corevalue.Value{}, nil, false
-	}
-	if op.Mode == Suspending && err == nil {
-		if g.calls == nil {
-			g.calls = map[CallID]*operationCall{}
+		if call.reached || errors.Is(err, ErrLimit) {
+			crossing.fuelExhausted = true
+			crossing.cancel = cancel
+			return result, err
 		}
-		g.calls[call.id] = &operationCall{call: call, cancel: cancel, s: s, x: x, op: op, name: opName, pending: true, args: slices.Clone(vs), rebound: true}
-		if x.run.Join != nil {
-			x.run.AddJoinMember(string(call.id))
-			x.run.Join.Members[len(x.run.Join.Members)-1].WaitMS = int64(operationWait(op, x) / time.Millisecond)
-		} else {
-			x.waitCall = call.id
-			x.run.SendWait = true
-			x.run.OperationWait = true
+		if op.Mode == Suspending && err == nil {
+			if g.calls == nil {
+				g.calls = map[CallID]*operationCall{}
+			}
+			g.calls[call.id] = &operationCall{call: call, cancel: cancel, s: s, x: x, op: op, name: opName, pending: true, args: slices.Clone(vs), rebound: true}
+			if x.run.Join != nil {
+				x.run.AddJoinMember(string(call.id))
+				x.run.Join.Members[len(x.run.Join.Members)-1].WaitMS = int64(operationWait(op, x) / time.Millisecond)
+			} else {
+				x.waitCall = call.id
+				x.run.SendWait = true
+				x.run.OperationWait = true
+			}
+			crossing.pending = true
+		} else if op.Mode == Suspending {
+			cancel()
 		}
-		record()
-		return corevalue.Value{}, nil, false
-	}
-	if op.Mode == Suspending {
-		cancel()
-	}
-	return g.completeOperation(s, x, grantName, opName, op, call, args, result, err, fields, record, 0, reports, wasCancelling)
+		return result, err
+	}, boundary, reports)
+	return v, failure, false
 }
 
-// completeOperation runs on the Run's turn, so validation and conversion belong
-// to the resuming Segment, including a failure's Data.
-func (g *Group) completeOperation(s *Script, x *execution, grantName, opName string, op Operation, call *Call, args []corevalue.Value, result Value, err error, fields map[string]string, record func(), lateFuel int64, reports *[]Report, wasCancelling bool) (corevalue.Value, *corevalue.Value, bool) {
-	grant := s.grants[grantName]
-	named := []corevalue.Pair{{Key: "capability", Val: mustText(grantName)}, {Key: "operation", Val: mustText(opName)}}
-	fail := func(code string, fields ...corevalue.Pair) (corevalue.Value, *corevalue.Value, bool) {
-		e := operationError(code, fields)
-		return corevalue.Value{}, &e, false
-	}
-	hostError := func(detail string) (corevalue.Value, *corevalue.Value, bool) {
-		if call.automatic {
-			call.failureDetail = detail
-			return fail("host error", named...)
-		}
-		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
-			return corevalue.Value{}, nil, false
-		}
-		g.record("call-failed", false, []string{string(call.id)}, map[string]string{"op": grantName + "." + opName})
-		*reports = append(*reports, &CallFailed{Script: s.name, Call: call.id, Operation: OperationRef{Capability: grant.definition.name, Operation: opName}, Detail: detail})
-		return fail("host error", named...)
-	}
-	conversion := func(v corevalue.Value, late int64) bool {
-		if call.automatic {
-			return true
-		}
-		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
-			return false
-		}
-		after, alloc := machine.Charge("capability", machine.Measures{Declared: op.Cost.Fuel, Result: v, ResultPresent: true})
-		return x.run.PayHost(after-10-op.Cost.Fuel+late, alloc)
-	}
-	if err != nil {
-		e, ok := err.(*ScriptError)
-		if !ok || e == nil {
-			fields["error"] = "{}"
-			if record != nil {
-				record()
-			}
-			return hostError(fmt.Sprint(err))
-		}
-		data := e.Data.inner
-		if data.Kind != corevalue.Map && data.Kind != corevalue.Nothing {
-			fields["error"] = "{}"
-			if record != nil {
-				record()
-			}
-			return hostError("failure Data is neither a map nor Nothing")
-		}
-		if data.Kind == corevalue.Nothing {
-			data, _ = corevalue.NewMap(nil)
-		}
-		failed := []corevalue.Pair{{Key: "code", Val: mustText(e.Code)}}
-		if e.Message != "" {
-			failed = append(failed, corevalue.Pair{Key: "message", Val: mustText(e.Message)})
-		}
-		failed = append(failed, data.Entries...)
-		bad := ""
-		if !validGroup(data, g) {
-			bad = "failure holds a value from another Group"
-		}
-		if bad != "" {
-			fields["error"] = "{}"
-		} else {
-			v, mapError := corevalue.NewMap(failed)
-			if mapError != nil {
-				fields["error"] = "{}"
-				bad = "failure uses a reserved Data key"
-			} else {
-				fields["error"] = coretrace.Display(v)
-			}
-		}
-		if record != nil {
-			record()
-		}
-		for _, d := range generated.Errors.Error {
-			if d.Code == e.Code {
-				check := grant.definition.checks[opName].failure
-				if check == nil || !check(e.Code, data) {
-					bad = "failure uses an undeclared or malformed catalogue code"
-				}
-			}
-		}
-		for _, p := range data.Entries {
-			if slices.Contains(generated.Errors.Reserved, p.Key) {
-				bad = "failure uses a reserved Data key"
-			}
-		}
-		if op.Errors != nil {
-			found := false
-			for _, d := range op.Errors {
-				if d.Code == e.Code {
-					found = true
-				}
-			}
-			if !found {
-				bad = "failure is outside the declared codes"
-			}
-		}
-		if bad != "" {
-			return hostError(bad)
-		}
-		if !conversion(data, 0) {
-			return corevalue.Value{}, nil, false
-		}
-		failed = append(failed, named...)
-		v, _ := corevalue.NewMap(failed)
-		return corevalue.Value{}, &v, false
-	}
-	if op.Mode == FireAndForget {
-		if record != nil {
-			record()
-		}
-		return corevalue.Value{}, nil, false
-	}
-	checkResult := grant.definition.checks[opName].result
-	if !validGroup(result.inner, g) || shape.Check(result.inner, op.Result.inner, nil) != nil || checkResult != nil && !checkResult(result.inner, args) {
-		fields["error"] = "{}"
-		if record != nil {
-			record()
-		}
-		return hostError("result violates its Shape or Group ownership")
-	}
-	fields["result"] = coretrace.Display(result.inner)
-	if record != nil {
-		record()
-	}
-	if !conversion(result.inner, lateFuel) {
-		return corevalue.Value{}, nil, false
-	}
-	return result.inner, nil, false
-}
 func invokeOperation(op Operation, c *Call, args []Value) (v Value, err error) {
 	if c.group.sessionExpose != nil {
 		c.group.sessionExpose(List(args...))
