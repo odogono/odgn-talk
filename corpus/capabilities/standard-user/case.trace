@@ -1,0 +1,36 @@
+# Unblessed: user answers (#527); first blessing awaits human review.
+> load s identity=49854587d98d30df1079a43a3fe4f617858446a565d8bfb8fe5cc99574587575
+> deliver d1 to=s message=confirmIt
+> deliver d2 to=s message=chooseOne
+> deliver d3 to=s message=chooseMany
+> deliver d4 to=s message=enterName
+> deliver d5 to=s message=tellDone
+> pump clock=2026-10-10T12:00:00Z
+call s/r1.c1 op=user.confirm args=["Delete 12 files?"]
+seg s/r1 start delivery=d1 handler=confirmIt clause=1 fuel=18 alloc=0 state=384 end=ask-wait
+call s/r2.c1 op=user.choose args=[["Small", "Medium", "Large"], {prompt: "Pick a size"}]
+seg s/r2 start delivery=d2 handler=chooseOne clause=1 fuel=33 alloc=177 state=592 end=ask-wait
+call s/r3.c1 op=user.choose args=[["Small", "Medium", "Large"], {multiple: true}]
+seg s/r3 start delivery=d3 handler=chooseMany clause=1 fuel=33 alloc=160 state=800 end=ask-wait
+call s/r4.c1 op=user.enter args=["Your name?", {default: "Ann"}]
+seg s/r4 start delivery=d4 handler=enterName clause=1 fuel=27 alloc=66 state=1008 end=ask-wait
+call s/r5.c1 op=user.notify args=["Backup finished", {title: "Backup"}]
+seg s/r5 start delivery=d5 handler=tellDone clause=1 fuel=34 alloc=99 state=1008 end=return
+run s/r5 outcome=completed delivery=d5 handler=tellDone fuel=34 alloc=99
+pumped state=idle fuel=145 next=2026-11-04T08:31:23.647Z
+> answer s/r1.c1 value=true
+> answer s/r2.c1 value="Medium"
+> answer s/r3.c1 value=["Small", "Large"]
+> answer s/r4.c1 value="Bea"
+> pump clock=2026-10-10T12:00:01Z
+seg s/r1 resume fuel=14 alloc=24 state=755 end=return
+run s/r1 outcome=completed delivery=d1 handler=confirmIt fuel=32 alloc=24
+seg s/r2 resume fuel=14 alloc=52 state=571 end=return
+run s/r2 outcome=completed delivery=d2 handler=chooseOne fuel=47 alloc=229
+seg s/r3 resume fuel=16 alloc=156 state=387 end=return
+run s/r3 outcome=completed delivery=d3 handler=chooseMany fuel=49 alloc=316
+seg s/r4 resume fuel=14 alloc=46 state=203 end=return
+run s/r4 outcome=completed delivery=d4 handler=enterName fuel=41 alloc=112
+pumped state=idle fuel=58
+> vars
+vars s got=["notified", true, "Medium", ["Small", "Large"], "Bea"]

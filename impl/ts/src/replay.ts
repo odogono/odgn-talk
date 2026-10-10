@@ -25,6 +25,7 @@ import {
   sqliteCapability,
   storeCapability,
   timerCapability,
+  userCapability,
   defineObjectKind,
   type HostObject,
   ScriptError,
@@ -578,6 +579,35 @@ const capabilitiesOf = (
           costs,
           standard.perRow ?? 0,
         ) as CapabilityDef<unknown>,
+      );
+    } else if (capability === 'user') {
+      const prompt = (operation: string, call: Call<unknown>) =>
+        startStub(
+          stubs,
+          `user.${operation}`,
+          call,
+          calls,
+          crossing,
+          recordedCall(call),
+        );
+      out.set(
+        capability,
+        userCapability(
+          {
+            confirm: call => prompt('confirm', call),
+            choose: call => prompt('choose', call),
+            enter: call => prompt('enter', call),
+            notify: call =>
+              fireStub(
+                stubs,
+                'user.notify',
+                call,
+                crossing,
+                recordedCall(call),
+              ),
+          },
+          costs,
+        ),
       );
     } else {
       throw new DeferredCaseError(`the Standard Capability ${capability}`);

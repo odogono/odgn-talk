@@ -489,7 +489,7 @@ var Corpus = CorpusTable{
 			Ids: []string{
 				"operation",
 			},
-			Is: "queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, and any call's charge; the runner writes it, and the Core never sees it",
+			Is: "queues what the Host function returns at the next call of an Operation, named `<capability>.<operation>`: an immediate call's result or error, a suspending call's error, which fails it as it starts, and any call's charge; the runner writes it, and the Core never sees it",
 			Key: []CorpusTableRecordEntryKeyEntry{
 				CorpusTableRecordEntryKeyEntry{
 					Key:      "value",

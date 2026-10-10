@@ -1,0 +1,50 @@
+# Unblessed: user answer checks (#527); first blessing awaits human review.
+> load s identity=4f733bf96ad834c2646b97a13db4b6280f5d471eb15e4dd5f1fb652c113bd91f
+> deliver d1 to=s message=pick args=[[], nothing]
+> deliver d2 to=s message=pick args=[["S", "M"], nothing]
+> deliver d3 to=s message=pick args=[["S", "M"], {multiple: true}]
+> deliver d4 to=s message=pick args=[["S", "M"], {multiple: true}]
+> deliver d5 to=s message=pick args=[["S", "S"], {multiple: true}]
+> deliver d6 to=s message=pick args=[["S", "M"], nothing]
+> pump clock=2026-10-10T12:00:00Z
+raise s/r1 code="out of domain" at=s:6 pos=4:5
+seg s/r1 start delivery=d1 handler=pick clause=1 fuel=27 alloc=37 state=727 end=return
+run s/r1 outcome=completed delivery=d1 handler=pick fuel=27 alloc=37
+call s/r2.c1 op=user.choose args=[["S", "M"], nothing]
+seg s/r2 start delivery=d2 handler=pick clause=1 fuel=21 alloc=0 state=999 end=ask-wait
+call s/r3.c1 op=user.choose args=[["S", "M"], {multiple: true}]
+seg s/r3 start delivery=d3 handler=pick clause=1 fuel=21 alloc=0 state=1271 end=ask-wait
+call s/r4.c1 op=user.choose args=[["S", "M"], {multiple: true}]
+seg s/r4 start delivery=d4 handler=pick clause=1 fuel=21 alloc=0 state=1543 end=ask-wait
+call s/r5.c1 op=user.choose args=[["S", "S"], {multiple: true}]
+seg s/r5 start delivery=d5 handler=pick clause=1 fuel=21 alloc=0 state=1815 end=ask-wait
+call s/r6.c1 op=user.choose args=[["S", "M"], nothing]
+seg s/r6 start delivery=d6 handler=pick clause=1 fuel=21 alloc=0 state=2087 end=ask-wait
+pumped state=idle fuel=132 next=2026-11-04T08:31:23.647Z
+> answer s/r2.c1 value="X"
+> answer s/r3.c1 value=["M", "S"]
+> answer s/r4.c1 value="S"
+> answer s/r5.c1 value=["S", "S"]
+> answer s/r6.c1 value=["S"]
+> pump clock=2026-10-10T12:00:01Z
+call-failed s/r2.c1 op=user.choose
+raise s/r2 code="host error" at=s:6 pos=4:5
+seg s/r2 resume fuel=21 alloc=34 state=1741 end=return
+run s/r2 outcome=completed delivery=d2 handler=pick fuel=42 alloc=34
+call-failed s/r3.c1 op=user.choose
+raise s/r3 code="host error" at=s:6 pos=4:5
+seg s/r3 resume fuel=21 alloc=34 state=1331 end=return
+run s/r3 outcome=completed delivery=d3 handler=pick fuel=42 alloc=34
+call-failed s/r4.c1 op=user.choose
+raise s/r4 code="host error" at=s:6 pos=4:5
+seg s/r4 resume fuel=21 alloc=34 state=970 end=return
+run s/r4 outcome=completed delivery=d4 handler=pick fuel=42 alloc=34
+seg s/r5 resume fuel=17 alloc=140 state=600 end=return
+run s/r5 outcome=completed delivery=d5 handler=pick fuel=38 alloc=140
+call-failed s/r6.c1 op=user.choose
+raise s/r6 code="host error" at=s:6 pos=4:5
+seg s/r6 resume fuel=21 alloc=34 state=263 end=return
+run s/r6 outcome=completed delivery=d6 handler=pick fuel=42 alloc=34
+pumped state=idle fuel=101
+> vars
+vars s got=["out of domain", "host error", "host error", "host error", ["S", "S"], "host error"]

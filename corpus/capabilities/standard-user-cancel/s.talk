@@ -1,0 +1,13 @@
+script variable got = []
+on confirmIt
+  ask user to confirm "Delete 12 files?" and wait
+  if not it then put "kept" after got
+end confirmIt
+on chooseOne
+  ask user to choose ["Small", "Medium"], {multiple: true} and wait
+  if it is nothing then put "no size" after got
+end chooseOne
+on enterName
+  ask user to enter "Your name?" and wait
+  if it is nothing then put "no name" after got
+end enterName
