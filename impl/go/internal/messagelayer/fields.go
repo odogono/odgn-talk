@@ -1,6 +1,7 @@
 package messagelayer
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"strconv"
@@ -59,7 +60,9 @@ func (f fields) optionalInt(key string) (int64, error) {
 
 func parseInteger(key string, raw json.RawMessage) (int64, error) {
 	var text string
-	if json.Unmarshal(raw, &text) == nil {
+	// Only a string or null decodes as text; trying a number would build an
+	// error on every frame.
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && (trimmed[0] == '"' || trimmed[0] == 'n') && json.Unmarshal(raw, &text) == nil {
 		n, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
 			return 0, protocolErrorf("field %q is not an integer", key)

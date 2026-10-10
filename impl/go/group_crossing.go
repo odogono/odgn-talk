@@ -37,11 +37,17 @@ type hostCrossing struct {
 func operationHostCrossing(s *Script, x *execution, grantName, opName string, op Operation, call *Call, args []corevalue.Value) *hostCrossing {
 	grant := s.grants[grantName]
 	checks := grant.definition.checks[opName]
+	fields := map[string]string{"op": grantName + "." + opName}
+	// The fields only reach the Trace, so their display text is built only
+	// when there is one.
+	if s.group.options.Trace != nil {
+		fields["args"] = coretrace.Display(corevalue.NewList(args))
+	}
 	return &hostCrossing{
 		script: s, execution: x,
 		operation: OperationRef{Capability: grant.definition.name, Operation: opName},
 		call:      call, op: op, checks: checks,
-		fields:    map[string]string{"op": grantName + "." + opName, "args": coretrace.Display(corevalue.NewList(args))},
+		fields:    fields,
 		resultKey: "result", ignoreResult: op.Mode == FireAndForget,
 		convert: func(v corevalue.Value) bool {
 			return shape.Check(v, op.Result.inner, nil) == nil && (checks.result == nil || checks.result(v, args))
@@ -172,7 +178,7 @@ func (g *Group) prepareHostResult(c *hostCrossing, result Value, err error) host
 			prepared.bad = "failure holds a value from another Group"
 		} else if v, mapError := corevalue.NewMap(failed); mapError != nil {
 			prepared.bad = "failure uses a reserved Data key"
-		} else {
+		} else if g.options.Trace != nil {
 			c.fields["error"] = coretrace.Display(v)
 		}
 		return prepared
@@ -184,7 +190,9 @@ func (g *Group) prepareHostResult(c *hostCrossing, result Value, err error) host
 		c.fields["error"] = "{}"
 		return hostResult{detail: "result violates its Shape or Group ownership", invalid: true}
 	}
-	c.fields[c.resultKey] = coretrace.Display(result.inner)
+	if g.options.Trace != nil {
+		c.fields[c.resultKey] = coretrace.Display(result.inner)
+	}
 	return hostResult{value: result.inner}
 }
 
