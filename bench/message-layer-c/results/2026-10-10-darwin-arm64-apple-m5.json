@@ -1,0 +1,172 @@
+{
+  "wasmtime": "49.0.2",
+  "compile_ms": 1178.3339999965392,
+  "instantiate_initialize_hello_ms": [
+    1.075000036507845,
+    1.1079999967478216,
+    1.0969999711960554,
+    0.9790000040084124,
+    0.960000033956021,
+    0.9399999980814755,
+    0.9739999659359455,
+    0.9670000290498137
+  ],
+  "instances": 8,
+  "rss_before_bytes": 539164672,
+  "rss_with_instances_bytes": 589774848,
+  "rss_delta_per_instance_bytes": 6326272,
+  "linear_memory_per_instance_bytes": 7340032,
+  "core_versions": {
+    "core": "go/0.1.0",
+    "costModel": "0",
+    "language": "1.0-rc.2",
+    "saveFormat": "go/6",
+    "unicode": "18.0.0"
+  },
+  "idle_pump_us": [
+    27.79799996642396,
+    23.81400001468137,
+    28.732999984640628,
+    23.96200003568083,
+    28.537999955005944,
+    24.487000016961247,
+    28.067999985069036
+  ],
+  "empty_handler_pump_us": [
+    62.492999888490885,
+    62.717000022530556,
+    62.683000054676086,
+    63.05299937957898,
+    62.299999641254544,
+    60.4960000491701,
+    61.08700076583773
+  ],
+  "calls_per_pump": 1000,
+  "number": [
+    36.3200000138022,
+    36.39600001042709,
+    35.8610000112094,
+    30.790000048000365,
+    36.07000003103167,
+    36.2829999648966,
+    35.98200000124052
+  ],
+  "nested_value": [
+    95.56200000224635,
+    91.52600000379607,
+    90.88999999221414,
+    96.2990000261925,
+    91.3109999964945,
+    90.75899998424575,
+    95.89100000448525
+  ],
+  "fault_checks": {
+    "spin": {
+      "alloc": 0,
+      "at": {
+        "col": 3,
+        "handler": "spin",
+        "line": 5,
+        "pc": 11,
+        "unit": "faults"
+      },
+      "delivery": "d8017",
+      "fuel": 5000,
+      "handler": "spin",
+      "kind": "run end",
+      "limit": "fuel",
+      "outcome": "limit fault",
+      "run": "faults/r1",
+      "script": "faults"
+    },
+    "boom": {
+      "alloc": 48,
+      "at": {
+        "col": 3,
+        "handler": "boom",
+        "line": 9,
+        "pc": 16,
+        "unit": "faults"
+      },
+      "delivery": "d8037",
+      "error": {
+        "code": "deliberate",
+        "data": {
+          "at": {
+            "unit": "faults",
+            "handler": "boom",
+            "line": 9,
+            "column": 3
+          }
+        },
+        "message": ""
+      },
+      "fuel": 19,
+      "handler": "boom",
+      "kind": "run end",
+      "outcome": "errored",
+      "run": "faults/r11",
+      "script": "faults"
+    },
+    "dive": {
+      "alloc": 3184,
+      "at": {
+        "col": 10,
+        "handler": "down",
+        "line": 2,
+        "pc": 5,
+        "unit": "faults"
+      },
+      "delivery": "d8057",
+      "fuel": 2791,
+      "handler": "dive",
+      "kind": "run end",
+      "limit": "depth",
+      "outcome": "limit fault",
+      "run": "faults/r21",
+      "script": "faults"
+    },
+    "script_faults_checked": 30,
+    "hostile_frames_checked": 4,
+    "same_instance_healthy_after_each": true
+  },
+  "linear_memory_after_workloads_bytes": 32505856,
+  "payload": {
+    "sha256": "803151709641c3d9783a74972440b0e3dcaee362b55119b1edf8a3ba4c056080",
+    "raw_bytes": 12299060,
+    "gzip_9_bytes": 2943787,
+    "brotli_11_bytes": 2090654,
+    "brotli_lgwin": 22
+  },
+  "provenance": {
+    "date_utc": "2026-10-10T08:17:36.944066+00:00",
+    "checkout_commit": "4d076d8bebc82c84369acd959ed8ea89ac649c27",
+    "checkout_status": "M ../README.md\n M ../../impl/go/README.md\n?? ./",
+    "go_source_status": "M impl/go/README.md",
+    "reactor_revision": "4d076d8bebc82c84369acd959ed8ea89ac649c27",
+    "host_sha256": "b1c39f8f419cd7eb86f2ad931956091d85a2672c74b2eb03a2a835cb7bd72eba",
+    "runner_sha256": "bb10df0a1311dd2bc0158a657e7a69ea0d1f364fd308071a132bd10083e84bab",
+    "metadata_sha256": "122d1fb8445a288bc836b4adb0a86ce9dbfa9797f2d41b53dfaf73de33cc2475",
+    "executable_sha256": "57b0dac5e79a96105151546a29075676199371453167bbc3f7afffb0d450a7be",
+    "cjson_c_sha256": "298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d",
+    "cjson_h_sha256": "25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "go": "go version go1.27.2 darwin/arm64",
+    "python": "3.14.8",
+    "zlib": "1.2.12",
+    "brotli": "brotli 1.2.0",
+    "cjson": "1.7.19",
+    "samples": 7,
+    "iterations": 1000,
+    "memory_backstop_bytes": 268435456,
+    "reactor_build_flags": "GOOS=wasip1 GOARCH=wasm -buildmode=c-shared -trimpath -buildvcs=false -ldflags=\"-s -w\"",
+    "cflags": "",
+    "ldflags": "",
+    "wasmtime_prefix": "/opt/homebrew/opt/wasmtime",
+    "threshold_decision": "Descriptive only; no pass/fail thresholds applied (#532).",
+    "reactor_source_sha256": "a6474237abd606c2bc6fee5d9b445d3c21a4d431bc6385505e8bd335f44cf6d2"
+  }
+}

@@ -1,5 +1,9 @@
 # Benchmark Suite
 
+The standalone [Message Layer C Host](message-layer-c/) measures WASI embedding
+through Wasmtime, including Pump and Capability exchanges, startup, memory and
+fault isolation. Its measurements are separate from the Core/Peer suite below.
+
 Measures how fast each Core runs the same Scripts, to find slow paths and to compare NorthTalk with its Peer Languages. Nothing here is normative. [ADR 0054](../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md) records why the suite lives outside the Cores and only advises the Cost Model.
 
 ```sh
