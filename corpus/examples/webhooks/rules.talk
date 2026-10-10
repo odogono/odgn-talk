@@ -1,0 +1,36 @@
+-- rules.talk: the webhook rules Script of the Bun Example Host.
+-- Grants: rules (match and record, immediate, on the Host's SQLite
+-- database) and outbound (post, suspending, a fetch the Host answers when
+-- its Promise settles).
+
+script variable delivered = 0
+script variable failed = []
+
+on event {type: kind, data: data}
+  ask rules to match kind
+  put it into rule
+  if rule is nothing then
+    ask rules to record kind, "ignored"
+    return {status: "ignored"}
+  end if
+  put 0 into attempt
+  put nothing into status
+  repeat forever
+    add 1 to attempt
+    try
+      ask outbound to post the target of rule, data and wait
+      put it into status
+    catch {code: code}
+      put code into status
+    end try
+    if status is a number or attempt > the retries of rule then exit repeat
+    wait 1 s                       -- a deadline on the real Clock
+  end repeat
+  ask rules to record kind, status
+  if status is a number then
+    add 1 to delivered
+  else
+    put kind after failed
+  end if
+  return {status: status, attempts: attempt}
+end event

@@ -1,0 +1,134 @@
+# Unblessed: the Bun webhook rules Example Host (#144); first blessing awaits human review.
+# webhooks: the Bun webhook rules Example Host
+# (impl/ts/examples/webhooks), recorded by `bun impl/ts/examples/webhooks/main.ts record`.
+# The Host recorded the `stub` lines from what its immediate Host functions
+# returned. Its Fuel, allocation and state figures are Cost Model 0's.
+
+> load rules identity=9de921247d5e79d4a88a1ae4a046a8b102f20d38c8277f1ed8b21ce797864c4d
+
+# No rule matches, so the Run records the event and replies at once.
+> stub rules.match
+> stub rules.record value=1
+> request d1 to=rules message=event args=[{type: "user.signup", data: {id: 7}}]
+> pump clock=2026-10-10T12:00:01Z
+call rules/r1.c1 op=rules.match args=["user.signup"] result=nothing
+call rules/r1.c2 op=rules.record args=["user.signup", "ignored"] result=1
+seg rules/r1 start delivery=d1 handler=event clause=1 fuel=103 alloc=93 state=32 end=return
+run rules/r1 outcome=completed delivery=d1 handler=event value={status: "ignored"} fuel=103 alloc=93
+pumped state=idle fuel=103
+
+# A match posts to `fulfilment`: a suspending call whose fetch is still
+# running when the Pump ends.
+> stub rules.match value={target: "fulfilment", retries: 1}
+> request d2 to=rules message=event args=[{type: "order.created", data: {id: 41, total: 12}}]
+> pump clock=2026-10-10T12:00:02Z
+call rules/r2.c1 op=rules.match args=["order.created"] result={target: "fulfilment", retries: 1}
+call rules/r2.c2 op=outbound.post args=["fulfilment", {id: 41, total: 12}]
+seg rules/r2 start delivery=d2 handler=event clause=1 fuel=128 alloc=135 state=966 end=ask-wait
+pumped state=idle fuel=128 next=2026-10-10T12:00:04Z
+
+# The fetch's Promise resolves with 202, which answers the call and resumes
+# the Run.
+> stub rules.record value=2
+> answer rules/r2.c2 value=202
+> pump clock=2026-10-10T12:00:03Z
+call rules/r2.c3 op=rules.record args=["order.created", 202] result=2
+seg rules/r2 resume fuel=76 alloc=174 state=32 end=return
+run rules/r2 outcome=completed delivery=d2 handler=event value={status: 202, attempts: 1} fuel=204 alloc=309
+pumped state=idle fuel=76
+
+# `accounts` answers 500: the Promise rejects with `rejected`, which fails
+# the call. The rule allows no retry.
+> stub rules.match value={target: "accounts", retries: 0}
+> request d3 to=rules message=event args=[{type: "invoice.paid", data: {id: 9}}]
+> pump clock=2026-10-10T12:00:04Z
+call rules/r3.c1 op=rules.match args=["invoice.paid"] result={target: "accounts", retries: 0}
+call rules/r3.c2 op=outbound.post args=["accounts", {id: 9}]
+seg rules/r3 start delivery=d3 handler=event clause=1 fuel=128 alloc=133 state=870 end=ask-wait
+pumped state=idle fuel=128 next=2026-10-10T12:00:06Z
+> stub rules.record value=3
+> fail rules/r3.c2 error={code: "rejected", status: 500}
+> pump clock=2026-10-10T12:00:04Z
+raise rules/r3 code="rejected" at=rules:43 pos=21:7
+call rules/r3.c3 op=rules.record args=["invoice.paid", "rejected"] result=3
+seg rules/r3 resume fuel=90 alloc=248 state=68 end=return
+run rules/r3 outcome=completed delivery=d3 handler=event value={status: "rejected", attempts: 1} fuel=218 alloc=381
+pumped state=idle fuel=90
+
+# The connection is refused: the call fails `unreachable`, and the Run waits
+# 1 s on the Clock to retry.
+> stub rules.match value={target: "fulfilment", retries: 1}
+> request d4 to=rules message=event args=[{type: "order.created", data: {id: 42, total: 30}}]
+> pump clock=2026-10-10T12:00:05Z
+call rules/r4.c1 op=rules.match args=["order.created"] result={target: "fulfilment", retries: 1}
+call rules/r4.c2 op=outbound.post args=["fulfilment", {id: 42, total: 30}]
+seg rules/r4 start delivery=d4 handler=event clause=1 fuel=128 alloc=135 state=1002 end=ask-wait
+pumped state=idle fuel=128 next=2026-10-10T12:00:07Z
+> fail rules/r4.c2 error={code: "unreachable"}
+> pump clock=2026-10-10T12:00:05Z
+raise rules/r4 code="unreachable" at=rules:43 pos=21:7
+seg rules/r4 resume fuel=37 alloc=24 state=1418 end=wait until=2026-10-10T12:00:06Z
+pumped state=idle fuel=37 next=2026-10-10T12:00:06Z
+
+# The driver's deadline Pumps the retry, and it succeeds.
+> pump clock=2026-10-10T12:00:06Z
+call rules/r4.c3 op=outbound.post args=["fulfilment", {id: 42, total: 30}]
+seg rules/r4 resume fuel=65 alloc=16 state=1466 end=ask-wait
+pumped state=idle fuel=65 next=2026-10-10T12:00:08Z
+> stub rules.record value=4
+> answer rules/r4.c3 value=200
+> pump clock=2026-10-10T12:00:06Z
+call rules/r4.c4 op=rules.record args=["order.created", 200] result=4
+seg rules/r4 resume fuel=76 alloc=174 state=68 end=return
+run rules/r4 outcome=completed delivery=d4 handler=event value={status: 200, attempts: 2} fuel=306 alloc=349
+pumped state=idle fuel=76
+
+# `accounts` never answers.
+> stub rules.match value={target: "accounts", retries: 0}
+> request d5 to=rules message=event args=[{type: "invoice.paid", data: {id: 10}}]
+> pump clock=2026-10-10T12:00:07Z
+call rules/r5.c1 op=rules.match args=["invoice.paid"] result={target: "accounts", retries: 0}
+call rules/r5.c2 op=outbound.post args=["accounts", {id: 10}]
+seg rules/r5 start delivery=d5 handler=event clause=1 fuel=128 alloc=133 state=906 end=ask-wait
+pumped state=idle fuel=128 next=2026-10-10T12:00:09Z
+
+# Past `post`'s 2 s maxPending the call fails `timeout`, and its signal
+# aborts the fetch; the fetch's late rejection is recorded and ignored.
+> stub rules.record value=5
+> pump clock=2026-10-10T12:00:09Z
+raise rules/r5 code="timeout" at=rules:43 pos=21:7
+abandon rules/r5.c2
+call rules/r5.c3 op=rules.record args=["invoice.paid", "timeout"] result=5
+seg rules/r5 resume fuel=88 alloc=185 state=104 end=return
+run rules/r5 outcome=completed delivery=d5 handler=event value={status: "timeout", attempts: 1} fuel=216 alloc=318
+pumped state=idle fuel=88
+> fail rules/r5.c2 error={code: "unreachable"}
+> pump clock=2026-10-10T12:00:09Z
+note rules/r5.c2 kind=late-answer
+pumped state=idle fuel=0
+
+# The webhook client hangs up: aborting the Request cancels its Run, and the
+# abandoned call aborts its fetch.
+> stub rules.match value={target: "fulfilment", retries: 1}
+> request d6 to=rules message=event args=[{type: "order.created", data: {id: 43, total: 5}}]
+> pump clock=2026-10-10T12:00:10Z
+call rules/r6.c1 op=rules.match args=["order.created"] result={target: "fulfilment", retries: 1}
+call rules/r6.c2 op=outbound.post args=["fulfilment", {id: 43, total: 5}]
+seg rules/r6 start delivery=d6 handler=event clause=1 fuel=128 alloc=135 state=1038 end=ask-wait
+pumped state=idle fuel=128 next=2026-10-10T12:00:12Z
+> cancel-delivery d6
+> pump clock=2026-10-10T12:00:10Z
+seg rules/r6 resume fuel=0 alloc=0 state=104 end=cancel
+abandon rules/r6.c2
+run rules/r6 outcome=cancelled delivery=d6 handler=event fuel=128 alloc=135
+pumped state=idle fuel=0
+> fail rules/r6.c2 error={code: "unreachable"}
+> pump clock=2026-10-10T12:00:10Z
+note rules/r6.c2 kind=late-answer
+pumped state=idle fuel=0
+
+# The case ends by reading the counters and inspecting the Group.
+> counters rules
+counters rules fuel=1175 alloc=1585 runs=6 faults=0 state=104 mailbox=0
+> vars
+vars rules delivered=2 failed=["invoice.paid", "invoice.paid"]

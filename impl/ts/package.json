@@ -9,7 +9,8 @@
     "./sqlite": "./src/sqlite/index.ts",
     "./replay": "./src/replay.ts",
     "./setup": "./src/setup.ts",
-    "./debug": "./src/debug-api.ts"
+    "./debug": "./src/debug-api.ts",
+    "./driver": "./src/driver.ts"
   },
   "scripts": {
     "typecheck": "tsc",
