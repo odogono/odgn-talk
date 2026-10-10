@@ -260,6 +260,15 @@ var Diagnostics = DiagnosticsTable{
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
+			Code:       "not in a whose",
+			RaisedWhen: "A Whose Clause's condition calls anything but a Built-in, a call through a name that shadows a Built-in included, or holds a Lambda",
+			At:         "the call's name, or the Lambda's `given`",
+			Sources: []string{
+				"ADR 0074",
+				"#525",
+			},
+		},
+		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a join",
 			RaisedWhen: "A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try`",
 			At:         "its first token, or the member's",

@@ -57,6 +57,8 @@ A Name that is none of these is a load error, except as a `send`'s receiver or a
 
 Nothing else sets it. A Join Member leaves it unchanged inside the Join's body.
 
+Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tested, not the body's `it`.
+
 ## Evaluation
 
 - **Source order:** an expression's operands are evaluated left to right, then its operator runs. A call's arguments, a list's items, a map's values and a chunk's index are evaluated in the order they are written.
@@ -172,6 +174,31 @@ A Chunk Expression reads part of a value by kind and position: `word 2 of line 3
 > put item 5 of "a,b" into gone            -- ""
 > put item 5 of ["a", "b"] into none       -- nothing
 > put word 1 of "12 apples" as number * 2 into dozens   -- 24
+> ```
+
+### Whose Clauses
+
+A Whose Clause, `whose c`, keeps only the chunks for which `c` is `true` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). It may end an Every Head, `every K of x`, or an ordinal Chunk Expression, `the first K of x`. It is a whole expression, as a Lambda is, so inside an operand it needs brackets: `the length of (every item of xs whose it > 1)` ([chapter 2](02-grammar.md#operands)).
+
+- **The walk:** `every K of x whose c` and `the first K of x whose c` walk `the Ks of x`, the plural property of the chunk kind `K` ([Keys and properties](#keys-and-properties)), with the chain's `delimited by` if there is one. So they walk the elements of a list, the integers of an integer range, the items, lines, words, Characters or code points of text as texts, and the bytes of Bytes as numbers. Any other value raises `wrong kind`, as the property does. The walk is over a snapshot taken when it starts.
+- **`it`** is the chunk being tested, and the body's own `it` can't be read in `c`. A Whose Clause inside `c` has its own `it`.
+- **A Whose Key:** a Name operand that is `c`'s first token, not a call and not the start of a Chunk Expression, is the key or property of `it` with that name, as the possessive _whose_ reads. `whose amount > 100 GBP` means `whose the amount of it > 100 GBP`, and `whose length > 80` means `whose the length of it > 80`. A local of the same name isn't read there. A Reserved Word can't be a Whose Key, and in brackets the first Name is a plain one: `whose (limit) > 3`.
+- **Other names** in `c` resolve as they do outside the clause. In `whose amount > 100 GBP and region is "EU"`, `region` is a local, or the load error `unknown name` if there is none, and the key is `it's region`.
+- **The condition** must give a boolean, or `wrong kind` is raised with `expected` `"boolean"`, as for `if`. An error in `c` is raised in the Run.
+- **What `c` may use:** anything an expression may, except a call to anything but a Built-in and a Lambda. A call to a Script or Library function, a Handler or a Function Value, including one through a name that shadows a Built-in, and a Lambda, are the load error `not in a whose`. Keys and Host Object properties are read as anywhere else.
+- **`every K of x whose c`** gives a new list of the chunks for which `c` is `true`, in order, or `[]` if there are none. It is a list for chunks of text too.
+- **`the n-th K of x whose c`** gives the n-th chunk for which `c` is `true`, and stops there, so `c` isn't evaluated on the chunks after it. **`the last K of x whose c`** tests every chunk and gives the last one for which `c` is `true`. Either gives Nothing when there is no such chunk, for text too.
+- **Not a Container:** a Whose Clause can be read but not written ([Containers](#containers)).
+
+> **Example.**
+>
+> ```
+> put every item of [3, 8, 1, 12] whose it > 5 into big          -- [8, 12]
+> put every item of orders whose amount > 100 GBP into large
+> put the first item of tickets whose status is "open" and it's owner is empty into next
+> put the last word of "a bb ccc dd" whose length = 2 into w     -- "dd"
+> put every line of report whose it begins with "WARN" into warnings
+> put the first item of [1, 3] whose it > 5 into none            -- nothing
 > ```
 
 ## Lists and maps
@@ -388,6 +415,8 @@ In operand position, `<< … >>` builds Bytes from its fields, in order:
 ## Containers
 
 A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 of totals`, `the age of person` ([chapter 2](02-grammar.md#statements) has the syntax).
+
+A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first item of xs whose it < 0` is a syntax error at `whose`, and `put 0 into every item of xs whose it < 0` one at `item`. A `repeat for each` over the positions writes chunks one by one.
 
 - **The root** is a local or a Script Variable. A root that is a Constant is a load error. A Built-in Constant's name as a root makes a local that shadows it.
 - **One store:** a write reads the root's value, builds the new value with the named part replaced, and stores it into the root once ([ADR 0001](../docs/adr/0001-value-semantics.md)). A write that fails leaves the root unchanged.

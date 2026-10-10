@@ -58,7 +58,7 @@ reserved = [
 
 follow = [
   "as", "before", "begins", "by", "can", "collecting", "contains", "delimited",
-  "div", "ends", "from", "ignoring", "matches", "mod", "times", "with",
+  "div", "ends", "from", "ignoring", "matches", "mod", "times", "whose", "with",
 ]
 
 ordinals = [
@@ -179,7 +179,7 @@ positions = ["operator position, before `with`"]
 
 [[contextual]]
 word = "every"
-positions = ["operand position, before `match` (the Match Search)"]
+positions = ["operand position, before `match` (the Match Search)", "at the start of an expression, before a chunk kind's singular or `code` (an Every Head)"]
 
 [[contextual]]
 word = "forever"
@@ -248,6 +248,10 @@ positions = ["at the start of a top-level declaration"]
 [[contextual]]
 word = "variable"
 positions = ["after `script` at the start of a top-level declaration"]
+
+[[contextual]]
+word = "whose"
+positions = ["after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause)"]
 
 [[contextual]]
 word = "with"
@@ -368,6 +372,10 @@ name = "delimited by"
 attaches = "the outermost Chunk Expression of an `of` chain"
 
 [[modifier]]
+name = "whose"
+attaches = "an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does"
+
+[[modifier]]
 name = "lazily"
 attaches = "a Text Pattern element"
 
@@ -428,8 +436,12 @@ name = "during"
 rule = "after a comma in a Handler head, `during` followed by a word is the modifier"
 
 [[decision]]
+name = "every-chunk"
+rule = "at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head"
+
+[[decision]]
 name = "every-match"
-rule = "`every` followed by `match` starts a Match Search; otherwise `every` is a name"
+rule = "`every` followed by `match` starts a Match Search; otherwise `every` is a name, unless `every-chunk` applies"
 
 [[decision]]
 name = "ignoring-case"

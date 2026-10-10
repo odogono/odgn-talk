@@ -1,0 +1,39 @@
+-- Whose Clauses (ADR 0074): the chunks whose condition holds.
+
+-- Lists of maps, by a Whose Key or a key of `it`.
+on sort orders, tickets, amount
+  put every item of orders whose amount > 100 GBP into big
+  put the first item of tickets whose status is "open" into next
+  put the last item of tickets whose it's status is "closed" into done
+  put the third item of orders whose amount > 10 GBP and it's paid into third
+  put every item of orders whose amount's currency is "GBP" into pounds
+  put every item of orders whose (amount) > 1 into all
+  put every item of orders whose the amount of it > amount into larger
+end sort
+
+-- Text chunks give lists of texts, and every ordinal is a match position.
+on scan report
+  put every line of report whose length > 80 into long
+  put every word of line 2 of report whose it begins with "a" into aWords
+  put every item of report delimited by ";" whose it is not empty into fields
+  put the first item of report delimited by ";" whose it contains "x" into firstX
+  put every character of report whose it is in "aeiou" into vowels
+  put every code point of report whose it is not " " into points
+end scan
+
+-- A Whose Clause is a whole Expression, and its condition runs to the next
+-- top-level comma, bracket or `into`.
+on shapes xs, n
+  put [every item of xs whose it > n, the last item of xs whose it < 0] into pair
+  put the length of (every item of xs whose it > n) into count
+  if (the first item of xs whose it > n) is empty then put 0 into count
+  put every item of xs whose (every item of it whose it > 0) is not empty into nested
+  return every item of (1..n) whose it mod 2 = 0
+end shapes
+
+-- `whose` is a Name elsewhere, and a chunk index named `whose` needs brackets.
+on names whose
+  put whose + 1 into every
+  put item (whose) of [1, 2] into one
+  put every into item
+end names

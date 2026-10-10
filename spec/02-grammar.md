@@ -69,7 +69,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `each` | after `repeat for` |
 | `empty` | after `is` or `is not` |
 | `ends` | operator position, before `with` |
-| `every` | operand position, before `match` (the Match Search) |
+| `every` | operand position, before `match` (the Match Search); at the start of an expression, before a chunk kind's singular or `code` (an Every Head) |
 | `forever` | straight after `repeat` |
 | `from` | after the value in `subtract`; after the event in `wait for`; after the imported names in `use` |
 | `ignoring` | after a comparison, a `match` subject or a Text Pattern element, before `case` |
@@ -88,6 +88,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `unwind` | after `before` in a catch head |
 | `use` | at the start of a top-level declaration |
 | `variable` | after `script` at the start of a top-level declaration |
+| `whose` | after an Every Head, or an ordinal Chunk Expression that is a whole operand (a Whose Clause) |
 | `with` | after the message name in `send`; after the Container in `replace`; after `begins` or `ends`; at the start of a statement, before `timeout` (a Timeout Block) |
 
 <!-- end -->
@@ -98,7 +99,7 @@ The chunk kinds, the ordinals, the Built-in property names, the Text Pattern key
 
 <!-- generated: grammar.follow -->
 
-`as`, `before`, `begins`, `by`, `can`, `collecting`, `contains`, `delimited`, `div`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `with`
+`as`, `before`, `begins`, `by`, `can`, `collecting`, `contains`, `delimited`, `div`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `whose`, `with`
 
 <!-- end -->
 
@@ -379,7 +380,8 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 <!-- generated: ebnf.expressions -->
 
 ```ebnf
-Expression     ::= Lambda | Or
+Expression     ::= Lambda | EveryHead Whose | Or Whose?
+                   /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
@@ -426,6 +428,7 @@ The operators, lowest precedence first:
 <!-- end -->
 
 - **Lambdas** have the lowest precedence of all. The body of `given r: …` runs to the next top-level comma or closing bracket, so `map(xs, given r: r * 2, 2)` passes `2` as a third argument. A block Lambda (`given r` at the end of a line) ends with `end` or `end given`. Zero parameters are written `given: e`, or `given` alone at the end of a line.
+- **Whose Clauses** are whole expressions too, as Lambdas are. The condition after `whose` runs to the next top-level comma, closing bracket or word that ends an expression, such as `into` or `then`. Inside an operand a Whose Clause needs brackets: `the length of (every item of xs whose it > 1)`, and `(the first item of xs whose it > 3) is empty`. Without them, `1 + every item of xs whose …` is a syntax error at `item`, and `if the first item of xs whose it > 3 is empty then …` one at `is`, since comparisons don't chain.
 - **Comparisons don't chain:** `a = b = c` is a syntax error at the second `=`.
 - **`is`:** after `is` or `is not`, `in` tests membership, `a` or `an` before a kind tests the kind, `empty` tests emptiness, and anything else is equality. So `x is a number` is a kind test, and `x is a then …` compares `x` with a variable `a`.
 - **Kinds:** a kind or Unit after `is a`, `can be` or `as` is a Name, `civil date`, or `function`, the one Reserved Word that names a kind, so `f is a function` works. Which names are kinds is a load rule ([chapter 3](03-values.md)).
@@ -440,6 +443,7 @@ Each trailing modifier attaches to its own construct:
 | `as` | the operand before it, as a postfix operator above every binary operator and below chunk `of`, `'s` and calls |
 | `ignoring case` | the nearest comparison before it, a `match` subject, or a Text Pattern element |
 | `delimited by` | the outermost Chunk Expression of an `of` chain |
+| `whose` | an Every Head, or an ordinal Chunk Expression that is a whole operand, and ends the expression, as a Lambda does |
 | `lazily` | a Text Pattern element |
 | `and wait` | a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement |
 | `little, big` | an integer field of a Binary Pattern or build |
@@ -470,6 +474,10 @@ The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix |
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
+EveryHead      ::= 'every' ( 'code' 'point' | Name ) 'of' Postfix ( 'delimited' 'by' Postfix )?
+                   /* the Name after `every` is a chunk kind's singular */
+Whose          ::= 'whose' Expression
+                   /* a Name operand that is the Expression's first token is a Whose Key, a key or property of `it` */
 ReplaceExpression ::= 'replace' 'first'? ChunkLevel 'in' Or 'with' Concat
 List           ::= '[' ( ListItem ( ',' ListItem )* )? ']'
 ListItem       ::= '...'? Expression
@@ -485,7 +493,8 @@ MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 - **`the target`** is the object a message was sent to. `the target of x` is a key named `target`.
 - **Calls need a name:** `name(` with no space is the only call. A call's result can't be called again, so `times(3)(14)` is a syntax error at the second `(`.
 - **Lists and maps:** `...` spreads a list into a list literal. In a map literal, a Word other than `offer` or a Text followed by `:` is a key, other Reserved Words included. A map literal has no computed keys.
-- **The Match Search** is `every match of <p> in s`. Any other `every` is a Name.
+- **The Match Search** is `every match of <p> in s`.
+- **Whose Clauses:** at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head, `every item of xs`, which must be followed by `whose` ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)). An ordinal Chunk Expression that is a whole operand may be followed by `whose` too, after its `delimited by` if it has one: `the first item of s delimited by ";" whose it is empty`. `whose` after any other operand is a syntax error, and so is `whose` in a Container. A Name operand that is the condition's first token is a Whose Key, a key or property of `it` ([chapter 4](04-expressions-and-statements.md#whose-clauses)), so `whose amount > 1` parses as `whose the amount of it > 1`, and `whose (amount) > 1` reads the name `amount`. Any other `every` is a Name.
 
 The chunk kinds:
 
@@ -651,7 +660,8 @@ These are the only places where the parser reads a second token before it choose
 | `code-point` | `code` followed by `point` or `points` is the chunk kind |
 | `delimited-by` | `delimited` followed by `by` is the modifier |
 | `during` | after a comma in a Handler head, `during` followed by a word is the modifier |
-| `every-match` | `every` followed by `match` starts a Match Search; otherwise `every` is a name |
+| `every-chunk` | at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head |
+| `every-match` | `every` followed by `match` starts a Match Search; otherwise `every` is a name, unless `every-chunk` applies |
 | `ignoring-case` | `ignoring` followed by `case` is the modifier |
 | `is-a` | after `is` or `is not`, `a` or `an` followed by a word that isn't reserved, or by `function`, starts a kind test; otherwise it is a name |
 | `kind` | `civil` followed by `date` is the kind `civil date` |
@@ -752,6 +762,7 @@ Source that parses is then checked, and each rule it breaks is a load error: the
 | `not in a script` | A Script's declaration starts with `private` | `private` | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a lambda` | `pass` or `the target` is inside a Lambda | `pass` or `the` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a guard` | A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id | the call's name, the Lambda's `given`, or the key's `the` or `'s` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `not in a whose` | A Whose Clause's condition calls anything but a Built-in, a call through a name that shadows a Built-in included, or holds a Lambda | the call's name, or the Lambda's `given` | [ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md), [#525](https://github.com/odogono/odgn-talk/issues/525) |
 | `not in a join` | A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try` | its first token, or the member's | [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `empty join` | A Join has no member in its source | its `wait` | [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a timeout` | A Timeout Block's body holds `name … and wait` or `f(x) and wait` outside a Lambda | the call's first token | [ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md), [#524](https://github.com/odogono/odgn-talk/issues/524) |

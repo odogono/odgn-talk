@@ -129,6 +129,7 @@ export const grammar = {
     "matches",
     "mod",
     "times",
+    "whose",
     "with"
   ],
   "decision": [
@@ -144,6 +145,7 @@ export const grammar = {
     "code-point",
     "delimited-by",
     "during",
+    "every-chunk",
     "every-match",
     "ignoring-case",
     "is-a",
@@ -666,6 +668,7 @@ export const diagnosticCodes = [
   "not in a script",
   "not in a lambda",
   "not in a guard",
+  "not in a whose",
   "not in a join",
   "empty join",
   "not in a timeout",
