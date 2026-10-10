@@ -478,7 +478,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("depth")
 			break
 		}
-		if i.Name == "make-pattern" && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text) > r.Limits.Pattern {
+		if i.Name == "make-pattern" && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text()) > r.Limits.Pattern {
 			r.fault("pattern")
 			break
 		}
@@ -533,9 +533,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			var message string
 			switch {
 			case namedSend(i.Name):
-				message = f.Stack[len(f.Stack)-len(m.Args)-2].Text
+				message = f.Stack[len(f.Stack)-len(m.Args)-2].Text()
 			case spreadSend(i.Name):
-				message = f.Stack[len(f.Stack)-3].Text
+				message = f.Stack[len(f.Stack)-3].Text()
 			default:
 				message = i.Operands()[0].Text
 			}
@@ -592,11 +592,11 @@ func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
 	n := i.Operands()[0].Index
 	fn := f.Stack[len(f.Stack)-n-1]
 	if fn.Kind == value.Function {
-		if home, ok := fn.Function.Owner.(*State); ok && home.Gone {
+		if home, ok := fn.Function().Owner.(*State); ok && home.Gone {
 			return false
 		}
 	}
-	return fn.Kind == value.Function && fn.Function.Owner != nil && fn.Function.Body >= 0 && fn.Function.Owner != r.State
+	return fn.Kind == value.Function && fn.Function().Owner != nil && fn.Function().Body >= 0 && fn.Function().Owner != r.State
 }
 
 // Resume begins a new Segment at the Script state present when its turn starts.
@@ -661,7 +661,7 @@ func (r *Run) Drop() {
 }
 
 func (r *Run) raise(err value.Value) {
-	code := err.Get("code").Text
+	code := err.Get("code").Text()
 	raised := Raised{Unit: r.CodeName(), Handler: enclosingHandler(r.CurrentCode().Unit.Bodies[r.Frames[len(r.Frames)-1].Body].Checked), Code: code, PC: r.PC, Instruction: r.At}
 	// The first applicable unwind entry decides whether this is a Guard skip.
 search:
@@ -712,7 +712,7 @@ func (r *Run) positionedError(err value.Value) value.Value {
 			}
 		}
 		at, _ := value.NewMap([]value.Pair{{Key: "unit", Val: text(codeName(code, f.Body))}, {Key: "handler", Val: text(enclosingHandler(code.Unit.Bodies[f.Body].Checked))}, {Key: "line", Val: integer(int64(pos.Line))}, {Key: "column", Val: integer(int64(pos.Column))}})
-		err.Entries = append(slices.Clone(err.Entries), value.Pair{Key: "at", Val: at})
+		err = err.WithEntries(append(slices.Clone(err.Entries()), value.Pair{Key: "at", Val: at}))
 	}
 	return err
 }
@@ -775,14 +775,14 @@ func (r *Run) replaceCleanupError(err value.Value, frame, entry int) value.Value
 		}
 		r.Cleanup = r.Cleanup[:len(r.Cleanup)-1]
 		if !hasKey(err, "during") {
-			err.Entries = append(slices.Clone(err.Entries), value.Pair{Key: "during", Val: c.Error})
+			err = err.WithEntries(append(slices.Clone(err.Entries()), value.Pair{Key: "during", Val: c.Error}))
 		}
 	}
 	return err
 }
 
 func hasKey(v value.Value, key string) bool {
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		if p.Key == key {
 			return true
 		}

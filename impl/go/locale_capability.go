@@ -72,9 +72,9 @@ func (c *Core) LocaleCapability(impl LocaleImpl, costs Costs) (*CapabilityDef, e
 		{"upper", []Shape{TextShape}, TextShape, Nothing, func(c *Call, a []Value, _ Value, t string) (Value, error) { return impl.Upper(c, a[0], t) }, nil},
 		{"lower", []Shape{TextShape}, TextShape, Nothing, func(c *Call, a []Value, _ Value, t string) (Value, error) { return impl.Lower(c, a[0], t) }, nil},
 		{"numberSymbols", nil, symbols, Nothing, func(c *Call, _ []Value, _ Value, t string) (Value, error) { return impl.NumberSymbols(c, t) }, localeSymbolsResult},
-		{"monthNames", nil, textList, nameDefaults, func(c *Call, _ []Value, o Value, t string) (Value, error) { return impl.MonthNames(c, o, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return len(v.Items) == 12 }},
-		{"dayNames", nil, textList, nameDefaults, func(c *Call, _ []Value, o Value, t string) (Value, error) { return impl.DayNames(c, o, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return len(v.Items) == 7 }},
-		{"tag", nil, TextShape, Nothing, func(c *Call, _ []Value, _ Value, t string) (Value, error) { return impl.Tag(c, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return wellFormedLocale(v.Text) }},
+		{"monthNames", nil, textList, nameDefaults, func(c *Call, _ []Value, o Value, t string) (Value, error) { return impl.MonthNames(c, o, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return len(v.Items()) == 12 }},
+		{"dayNames", nil, textList, nameDefaults, func(c *Call, _ []Value, o Value, t string) (Value, error) { return impl.DayNames(c, o, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return len(v.Items()) == 7 }},
+		{"tag", nil, TextShape, Nothing, func(c *Call, _ []Value, _ Value, t string) (Value, error) { return impl.Tag(c, t) }, func(v corevalue.Value, _ []corevalue.Value) bool { return wellFormedLocale(v.Text()) }},
 	} {
 		if err := add(row.name, row.args, row.result, row.defaults, row.do, row.check); err != nil {
 			return nil, err
@@ -131,7 +131,7 @@ func localeArguments(name string, required int, options bool) func([]corevalue.V
 				}
 			} else {
 				tagIndex++
-				for _, p := range first.Entries {
+				for _, p := range first.Entries() {
 					var words []string
 					switch p.Key {
 					case "sensitivity":
@@ -141,7 +141,7 @@ func localeArguments(name string, required int, options bool) func([]corevalue.V
 					case "form":
 						words = []string{"format", "standalone"}
 					}
-					if words != nil && !slices.Contains(words, p.Val.Text) {
+					if words != nil && !slices.Contains(words, p.Val.Text()) {
 						return domain(p.Val)
 					}
 				}
@@ -149,7 +149,7 @@ func localeArguments(name string, required int, options bool) func([]corevalue.V
 		}
 		tag, _ := binding.(string)
 		if tagIndex < len(args) && args[tagIndex].Kind == corevalue.Text {
-			tag = args[tagIndex].Text
+			tag = args[tagIndex].Text()
 		}
 		if !wellFormedLocale(tag) {
 			err := machine.ErrorValue("bad locale", corevalue.Pair{Key: "locale", Val: mustText(tag)})
@@ -159,23 +159,23 @@ func localeArguments(name string, required int, options bool) func([]corevalue.V
 	}
 }
 func localeCompareResult(v corevalue.Value, _ []corevalue.Value) bool {
-	n, err := v.Number.Int64()
+	n, err := v.Number().Int64()
 	return err == nil && n >= -1 && n <= 1
 }
 func localeRankResult(v corevalue.Value, args []corevalue.Value) bool {
 	wanted := map[string]bool{}
-	for _, text := range args[0].Items {
-		wanted[text.Text] = true
+	for _, text := range args[0].Items() {
+		wanted[text.Text()] = true
 	}
-	if len(v.Entries) != len(wanted) {
+	if len(v.Entries()) != len(wanted) {
 		return false
 	}
 	ranks := map[int64]bool{}
-	for _, p := range v.Entries {
+	for _, p := range v.Entries() {
 		if !wanted[p.Key] || p.Val.Kind != corevalue.Number {
 			return false
 		}
-		n, err := p.Val.Number.Int64()
+		n, err := p.Val.Number().Int64()
 		if err != nil || n < 1 || n > int64(len(wanted)) {
 			return false
 		}
@@ -190,21 +190,21 @@ func localeRankResult(v corevalue.Value, args []corevalue.Value) bool {
 }
 func localeSymbolsResult(v corevalue.Value, _ []corevalue.Value) bool {
 	for _, key := range []string{"decimal", "group", "minus"} {
-		if v.Get(key).Text == "" {
+		if v.Get(key).Text() == "" {
 			return false
 		}
 	}
 	digits := v.Get("digits")
-	if len(digits.Items) != 10 {
+	if len(digits.Items()) != 10 {
 		return false
 	}
-	for _, digit := range digits.Items {
-		if digit.Text == "" {
+	for _, digit := range digits.Items() {
+		if digit.Text() == "" {
 			return false
 		}
 	}
 	for _, key := range []string{"primaryGroup", "secondaryGroup", "minGrouping"} {
-		n, ok := v.Get(key).Number.Integer()
+		n, ok := v.Get(key).Number().Integer()
 		if !ok || n.Sign() <= 0 {
 			return false
 		}

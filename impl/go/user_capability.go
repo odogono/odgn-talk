@@ -58,7 +58,7 @@ func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error
 				for i := range items {
 					items[i], _ = args[0].Index(i + 1).AsText()
 				}
-				return impl.Choose(call, items, userOption(args, 1, "prompt").Text, userMultiple(args))
+				return impl.Choose(call, items, userOption(args, 1, "prompt").Text(), userMultiple(args))
 			},
 		},
 		Operation{Name: "enter", Mode: Suspending,
@@ -66,7 +66,7 @@ func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error
 			Result: optionalText, Cost: cost["enter"], Errors: busy, MaxPending: userMaxPending,
 			Start: func(call *Call, args []Value) error {
 				message, _ := args[0].AsText()
-				return impl.Enter(call, message, userOption(args, 1, "default").Text)
+				return impl.Enter(call, message, userOption(args, 1, "default").Text())
 			},
 		},
 		Operation{Name: "notify", Mode: FireAndForget,
@@ -74,7 +74,7 @@ func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error
 			Cost: cost["notify"], Errors: []ErrorDecl{},
 			Fire: func(call *Call, args []Value) error {
 				message, _ := args[0].AsText()
-				return impl.Notify(call, message, userOption(args, 1, "title").Text)
+				return impl.Notify(call, message, userOption(args, 1, "title").Text())
 			},
 		},
 	)
@@ -87,7 +87,7 @@ func (c *Core) UserCapability(impl UserImpl, costs Costs) (*CapabilityDef, error
 	}
 	checks := def.checks["choose"]
 	checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
-		if len(a[0].Items) == 0 {
+		if len(a[0].Items()) == 0 {
 			e := machine.ErrorValue("out of domain", corevalue.Pair{Key: "function", Val: mustText("choose")}, corevalue.Pair{Key: "value", Val: a[0]})
 			return &e
 		}
@@ -115,7 +115,7 @@ func userChosen(answer corevalue.Value, args []corevalue.Value) bool {
 	if answer.Kind == corevalue.Nothing {
 		return true
 	}
-	items := args[0].Items
+	items := args[0].Items()
 	multiple := len(args) > 1 && args[1].Get("multiple").Bool
 	if !multiple {
 		if answer.Kind != corevalue.Text {
@@ -132,7 +132,7 @@ func userChosen(answer corevalue.Value, args []corevalue.Value) bool {
 		return false
 	}
 	at := 0
-	for _, item := range answer.Items {
+	for _, item := range answer.Items() {
 		for at < len(items) && !items[at].Equal(item) {
 			at++
 		}

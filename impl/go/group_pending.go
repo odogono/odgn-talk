@@ -49,7 +49,7 @@ func hostFailureValue(e *ScriptError) corevalue.Value {
 		if e.Message != "" {
 			fields = append(fields, corevalue.Pair{Key: "message", Val: mustText(e.Message)})
 		}
-		fields = append(fields, e.Data.inner.Entries...)
+		fields = append(fields, e.Data.inner.Entries()...)
 	}
 	v, err := corevalue.NewMap(fields)
 	if err != nil {

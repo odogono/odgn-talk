@@ -38,10 +38,10 @@ func propertyRequest(f *Frame, i lower.Instruction) *propertyCall {
 		if k.Kind != value.Text {
 			return nil
 		} // ordinary instruction raises wrong kind
-		name = k.Text
+		name = k.Text()
 	} else {
 		v, _ := constant(i.Operands()[0].Text)
-		name = v.Text
+		name = v.Text()
 	}
 	if !set && name == "id" {
 		return nil

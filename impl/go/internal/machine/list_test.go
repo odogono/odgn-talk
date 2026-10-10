@@ -61,23 +61,23 @@ func TestListGrowthNestedContentsAndDetachedSlices(t *testing.T) {
 	for i := range 2000 {
 		current = extendList(current, []value.Value{nested}, i%2 != 0)
 	}
-	if Size(current) != Size(retained)+2000*(8+Size(nested)) || len(retained.Items) != 1 {
+	if Size(current) != Size(retained)+2000*(8+Size(nested)) || len(retained.Items()) != 1 {
 		t.Fatal("growth changed logical size or the retained view")
 	}
 	sibling := extendList(retained, []value.Value{integer(9)}, false)
-	if sibling.Display() != `[["é", [7]], 9]` || !current.Items[0].Equal(nested) || !current.Items[2000].Equal(nested) {
+	if sibling.Display() != `[["é", [7]], 9]` || !current.Items()[0].Equal(nested) || !current.Items()[2000].Equal(nested) {
 		t.Fatal("growth changed shared nested values")
 	}
 	// Folding, Trace display and Library binding replace Items on a Value
 	// copy. Their new slices must not inherit the old window's cached size.
 	detached := current
-	detached.Items = slices.Clone(current.Items)
-	detached.Items[0] = text("a different length")
-	if Size(detached) != Size(value.NewList(detached.Items)) {
+	detached = detached.WithItems(slices.Clone(current.Items()))
+	detached.Items()[0] = text("a different length")
+	if Size(detached) != Size(value.NewList(detached.Items())) {
 		t.Fatal("detached slice used stale contents")
 	}
 	grown := extendList(detached, []value.Value{integer(10)}, false)
-	if !grown.Items[0].Equal(detached.Items[0]) || !current.Items[0].Equal(nested) {
+	if !grown.Items()[0].Equal(detached.Items()[0]) || !current.Items()[0].Equal(nested) {
 		t.Fatal("detached slice grew the old buffer")
 	}
 }

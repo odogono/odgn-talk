@@ -25,25 +25,25 @@ func functionCode(code *State, body int, name string) string {
 // BindLibraryValue copies Function metadata without changing a shared Library
 // Constant. Nested values and captured functions take the reading Script's Home.
 func BindLibraryValue(v value.Value, home *State) value.Value {
-	if v.Kind == value.Function && v.Function != nil {
-		fn := *v.Function
+	if v.Kind == value.Function && v.Function() != nil {
+		fn := *v.Function()
 		fn.Home, fn.Owner, fn.Group = home.Unit.Name, home, home.Group
 		fn.Captures = slices.Clone(fn.Captures)
 		for j := range fn.Captures {
 			fn.Captures[j].Val = BindLibraryValue(fn.Captures[j].Val, home)
 		}
-		v.Function = &fn
+		v = v.WithFunction(&fn)
 	}
 	if v.Kind == value.List {
-		v.Items = slices.Clone(v.Items)
-		for j := range v.Items {
-			v.Items[j] = BindLibraryValue(v.Items[j], home)
+		v = v.WithItems(slices.Clone(v.Items()))
+		for j := range v.Items() {
+			v.Items()[j] = BindLibraryValue(v.Items()[j], home)
 		}
 	}
 	if v.Kind == value.Map {
-		v.Entries = slices.Clone(v.Entries)
-		for j := range v.Entries {
-			v.Entries[j].Val = BindLibraryValue(v.Entries[j].Val, home)
+		v = v.WithEntries(slices.Clone(v.Entries()))
+		for j := range v.Entries() {
+			v.Entries()[j].Val = BindLibraryValue(v.Entries()[j].Val, home)
 		}
 	}
 	return v

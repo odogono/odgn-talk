@@ -341,7 +341,7 @@ func (g *Group) Save() ([]byte, error) {
 	for _, s := range g.scripts {
 		row := savedScript{Name: s.name, Source: s.source, Extensions: s.extensions, Identity: s.identity, Limits: s.limits, Owner: objectRef(s.owner), Objects: map[string]ObjectRef{}, VariableNames: s.state.Unit.Variables, Docs: s.state.Unit.Docs(), Variables: s.state.Variables, Definitions: s.state.Definitions, Counters: s.counters, Stopped: s.stopped, StopReason: s.stopReason, Reserved: s.reserved, Debt: s.debt}
 		for n, v := range s.state.Objects {
-			row.Objects[n] = ObjectRef{v.Object.Kind, v.Object.ID}
+			row.Objects[n] = ObjectRef{v.Object().Kind, v.Object().ID}
 		}
 		for _, name := range sortedKeys(s.grants) {
 			grant := s.grants[name]

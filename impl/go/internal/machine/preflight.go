@@ -33,17 +33,17 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		return true
 	}
 	if i.Name == "bytes-bits" {
-		widths := f.Code.Constants[i.Operands()[0].Index].Items
+		widths := f.Code.Constants[i.Operands()[0].Index].Items()
 		count := i.Operands()[1].Index
 		values := f.Stack[len(f.Stack)-count:]
 		total := new(big.Int)
 		for j, w := range widths {
-			width, _ := w.Number.Integer()
+			width, _ := w.Number().Integer()
 			v := values[j]
 			if v.Kind != value.Number {
 				return true
 			}
-			n, ok := v.Number.Integer()
+			n, ok := v.Number().Integer()
 			if !ok || n.Sign() < 0 || big.NewInt(int64(n.BitLen())).Cmp(width) > 0 {
 				return true
 			}
@@ -51,18 +51,18 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		}
 		total.Quo(total, big.NewInt(8))
 		whole := f.Stack[len(f.Stack)-count-1]
-		alloc := saturatingAdd(16, saturatingAdd(int64(len(whole.Bytes)), saturated(total)))
+		alloc := saturatingAdd(16, saturatingAdd(int64(len(whole.Bytes())), saturated(total)))
 		return bounded(3, alloc)
 	}
 	n := len(f.Stack)
 	if i.Name == "property" && i.Operands()[0].Text == "bytes" && f.Stack[n-1].Kind == value.Bytes {
-		count := int64(len(f.Stack[n-1].Bytes))
+		count := int64(len(f.Stack[n-1].Bytes()))
 		return bounded(saturatingAdd(3, count), saturatingAdd(16, saturatingMultiply(24, count)))
 	}
 	if (i.Name == "property" || i.Name == "property-delimited") && i.Operands()[0].Text == "items" {
 		if i.Name == "property-delimited" {
 			d := f.Stack[n-1]
-			if d.Kind != value.Text || d.Text == "" {
+			if d.Kind != value.Text || d.Text() == "" {
 				return true
 			}
 			n--
@@ -76,15 +76,15 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 	if strings.HasPrefix(i.Name, "chunk-get") || strings.HasPrefix(i.Name, "test-chunk") {
 		if strings.HasSuffix(i.Name, "-delimited") {
 			d := f.Stack[n-1]
-			if d.Kind != value.Text || d.Text == "" {
+			if d.Kind != value.Text || d.Text() == "" {
 				return true
 			}
 			n--
 		}
 		whole, index := f.Stack[n-1], f.Stack[n-2]
 		if i.Operands()[0].Text == "item" && integerRange(whole) {
-			a, _ := whole.Items[0].Number.Integer()
-			b, _ := whole.Items[1].Number.Integer()
+			a, _ := whole.Items()[0].Number().Integer()
+			b, _ := whole.Items()[1].Number().Integer()
 			count := new(big.Int).Add(new(big.Int).Sub(b, a), big.NewInt(1))
 			if count.Sign() < 0 {
 				count.SetInt64(0)
@@ -93,7 +93,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 				if v.Kind != value.Number {
 					return nil, false
 				}
-				n, ok := v.Number.Integer()
+				n, ok := v.Number().Integer()
 				if ok && n.Sign() < 0 {
 					n.Add(n, count)
 					n.Add(n, big.NewInt(1))
@@ -102,7 +102,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 			}
 			start, end := index, index
 			if index.Kind == value.Range {
-				start, end = index.Items[0], index.Items[1]
+				start, end = index.Items()[0], index.Items()[1]
 			}
 			lo, ok := resolve(start)
 			if !ok {
@@ -145,7 +145,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		d = f.Stack[n-1]
 		n--
 	}
-	if d.Kind != value.Text || d.Text == "" {
+	if d.Kind != value.Text || d.Text() == "" {
 		return true
 	}
 	whole, index, part := f.Stack[n-2], f.Stack[n-3], f.Stack[n-1]
@@ -153,17 +153,17 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		if index.Kind == value.Range && part.Kind != value.List {
 			return true
 		}
-		a, b, e := indices(index, len(whole.Items))
+		a, b, e := indices(index, len(whole.Items()))
 		if e != nil || a < 1 || a > b {
 			return true
 		}
 		retained := max(int64(0), a-1)
-		if b <= int64(len(whole.Items)) {
-			retained = int64(len(whole.Items)) - (b - a + 1)
+		if b <= int64(len(whole.Items())) {
+			retained = int64(len(whole.Items())) - (b - a + 1)
 		}
 		count := int64(1)
 		if index.Kind == value.Range {
-			count = int64(len(part.Items))
+			count = int64(len(part.Items()))
 		}
 		items := saturatingAdd(retained, count)
 		return bounded(4+items/8+boolInt(items%8 != 0), Size(part))
@@ -171,7 +171,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 	if whole.Kind != value.Text || (kind != "item" && kind != "line") {
 		return true
 	}
-	count := len(spans(kind, whole.Text, d.Text))
+	count := len(spans(kind, whole.Text(), d.Text()))
 	a, b, e := indices(index, count)
 	if e != nil || a < 1 || a > b || b <= int64(count) {
 		return true

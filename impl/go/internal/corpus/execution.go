@@ -406,7 +406,7 @@ func (x *executionReplay) control(r Record) error {
 	}
 	for _, f := range r.Fields {
 		if f.Key == "reason" {
-			s.Stop(f.Value.Text)
+			s.Stop(f.Value.Text())
 			return nil
 		}
 	}
@@ -439,12 +439,12 @@ func (x *executionReplay) apply(i int) error {
 			return err
 		}
 	case "set-parent":
-		ref := fields["object"].Value.Object
+		ref := fields["object"].Value.Object()
 		if ref == nil {
 			return fmt.Errorf("set-parent requires Object")
 		}
 		var parent *talk.Object
-		if p := fields["parent"].Value.Object; p != nil {
+		if p := fields["parent"].Value.Object(); p != nil {
 			parent = x.objects[objectRef{p.Kind, p.ID}]
 		}
 		if err := x.g.SetParent(x.objects[objectRef{ref.Kind, ref.ID}], parent); err != nil {
@@ -453,7 +453,7 @@ func (x *executionReplay) apply(i int) error {
 			}
 		}
 	case "call-value":
-		ref := fields["fn"].Value.Function
+		ref := fields["fn"].Value.Function()
 		if ref == nil {
 			return fmt.Errorf("call-value requires Function")
 		}
@@ -462,7 +462,7 @@ func (x *executionReplay) apply(i int) error {
 			return err
 		}
 		var args []talk.Value
-		for _, v := range fields["args"].Value.Items {
+		for _, v := range fields["args"].Value.Items() {
 			x, err := values.construct(v)
 			if err != nil {
 				return err
@@ -485,7 +485,7 @@ func (x *executionReplay) apply(i int) error {
 			}
 		}
 	case "dispose":
-		ref := fields["object"].Value.Object
+		ref := fields["object"].Value.Object()
 		if ref == nil {
 			return fmt.Errorf("dispose requires Object")
 		}
@@ -512,11 +512,11 @@ func (x *executionReplay) apply(i int) error {
 			call.AnswerWithCost(v, fuel)
 		} else {
 			v := fields["error"].Value
-			if v.Get("code").Text == "" {
+			if v.Get("code").Text() == "" {
 				call.Fail(nil)
 			} else {
 				var data []talk.Pair
-				for _, p := range v.Entries {
+				for _, p := range v.Entries() {
 					if p.Key != "code" && p.Key != "message" {
 						value, e := values.construct(p.Val)
 						if e != nil {
@@ -526,7 +526,7 @@ func (x *executionReplay) apply(i int) error {
 					}
 				}
 				m, _ := talk.Map(data...)
-				call.Fail(&talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m})
+				call.Fail(&talk.ScriptError{Code: v.Get("code").Text(), Message: v.Get("message").Text(), Data: m})
 			}
 		}
 	case "stub":
@@ -584,14 +584,14 @@ func (x *executionReplay) apply(i int) error {
 			unbound[name] = true
 		}
 		unresolved := map[objectRef]bool{}
-		for _, v := range fields["disposed"].Value.Items {
-			if v.Object != nil {
-				unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+		for _, v := range fields["disposed"].Value.Items() {
+			if v.Object() != nil {
+				unresolved[objectRef{v.Object().Kind, v.Object().ID}] = true
 			}
 		}
-		for _, v := range fields["unresolved"].Value.Items {
-			if v.Object != nil {
-				unresolved[objectRef{v.Object.Kind, v.Object.ID}] = true
+		for _, v := range fields["unresolved"].Value.Items() {
+			if v.Object() != nil {
+				unresolved[objectRef{v.Object().Kind, v.Object().ID}] = true
 			}
 		}
 		policy := talk.RejectMismatch
@@ -651,7 +651,7 @@ func (x *executionReplay) apply(i int) error {
 		case "fail":
 			v := fields["error"].Value
 			data := []talk.Pair{}
-			for _, p := range v.Entries {
+			for _, p := range v.Entries() {
 				if p.Key != "code" && p.Key != "message" {
 					x, err := values.construct(p.Val)
 					if err != nil {
@@ -661,7 +661,7 @@ func (x *executionReplay) apply(i int) error {
 				}
 			}
 			m, _ := talk.Map(data...)
-			settlement.Fail = &talk.ScriptError{Code: v.Get("code").Text, Message: v.Get("message").Text, Data: m}
+			settlement.Fail = &talk.ScriptError{Code: v.Get("code").Text(), Message: v.Get("message").Text(), Data: m}
 		case "adopt":
 			settlement.Adopt = true
 		case "reissue":
@@ -682,7 +682,7 @@ func (x *executionReplay) apply(i int) error {
 				imports = append(imports, l)
 			}
 		}
-		l, err := core.CompileLibrary(talk.LibrarySource{Name: r.IDs[0], Source: fields["source"].Value.Text}, imports, operations.declarations)
+		l, err := core.CompileLibrary(talk.LibrarySource{Name: r.IDs[0], Source: fields["source"].Value.Text()}, imports, operations.declarations)
 		if err != nil {
 			return err
 		}
@@ -704,7 +704,7 @@ func (x *executionReplay) apply(i int) error {
 			}
 		}
 	case "extend":
-		if e := x.g.Script(r.IDs[0]).Extend(fields["source"].Value.Text); e != nil {
+		if e := x.g.Script(r.IDs[0]).Extend(fields["source"].Value.Text()); e != nil {
 			if _, ok := e.(*talk.HostError); !ok {
 				if _, ok := e.(*talk.LoadError); !ok {
 					return e
@@ -720,7 +720,7 @@ func (x *executionReplay) apply(i int) error {
 		if fields["carry"].Raw == "yes" {
 			carry = talk.CarryVariables
 		}
-		_, e := s.Reload(fields["source"].Value.Text, carry, talk.ReloadOptions{KeepMailbox: fields["mailbox"].Raw == "keep"})
+		_, e := s.Reload(fields["source"].Value.Text(), carry, talk.ReloadOptions{KeepMailbox: fields["mailbox"].Raw == "keep"})
 		if e != nil {
 			if _, ok := e.(*talk.LoadError); !ok {
 				if _, ok := e.(*talk.HostError); !ok {
@@ -764,7 +764,7 @@ func (x *executionReplay) apply(i int) error {
 	case "deliver", "request", "decide", "broadcast", "decide-broadcast":
 		s := x.g.Script(fields["to"].Raw)
 		var target *talk.Object
-		if ref := fields["to"].Value.Object; ref != nil {
+		if ref := fields["to"].Value.Object(); ref != nil {
 			target = x.objects[objectRef{ref.Kind, ref.ID}]
 		}
 		if s == nil && target == nil && r.Name != "broadcast" && r.Name != "decide-broadcast" {
@@ -775,7 +775,7 @@ func (x *executionReplay) apply(i int) error {
 			o := setupOverride(raw)
 			m.Limits = &o
 		}
-		for _, v := range fields["args"].Value.Items {
+		for _, v := range fields["args"].Value.Items() {
 			x, e := values.construct(v)
 			if e != nil {
 				return e
@@ -821,7 +821,7 @@ func (x *executionReplay) apply(i int) error {
 		}
 	case "pump":
 		clock := fields["clock"].Value
-		now := time.Unix(clock.Seconds, int64(clock.Nanos))
+		now := time.Unix(clock.Seconds(), int64(clock.Nanos()))
 		opts := talk.PumpOptions{}
 		opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
 		opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)
@@ -1020,8 +1020,8 @@ func setupLimits(raw any) talk.Limits {
 }
 func setupOverride(f Field) talk.LimitOverride {
 	o := talk.LimitOverride{}
-	for _, p := range f.Value.Entries {
-		n, _ := p.Val.Number.Int64()
+	for _, p := range f.Value.Entries() {
+		n, _ := p.Val.Number().Int64()
 		switch p.Key {
 		case "fuelPerRun":
 			o.FuelPerRun = n

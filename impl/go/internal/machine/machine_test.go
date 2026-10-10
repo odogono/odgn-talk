@@ -99,7 +99,7 @@ func TestBuiltinDomainErrorsAndFields(t *testing.T) {
 	}{{"codePoint", text("")}, {"codePoint", text("q\u0301")}, {"fromCodePoint", integer(0xd800)}, {"fromCodePoint", func() value.Value { n, _ := constant("1.5"); return n }()}, {"min", value.NewList(nil)}} {
 		t.Run(tc.name+tc.input.Display(), func(t *testing.T) {
 			_, e := builtin(tc.name, []value.Value{tc.input}, &Measures{})
-			if e == nil || e.Get("code").Text != "out of domain" || e.Get("function").Text != tc.name || !e.Get("value").Equal(tc.input) {
+			if e == nil || e.Get("code").Text() != "out of domain" || e.Get("function").Text() != tc.name || !e.Get("value").Equal(tc.input) {
 				t.Fatalf("%v", e)
 			}
 		})
@@ -107,7 +107,7 @@ func TestBuiltinDomainErrorsAndFields(t *testing.T) {
 }
 func TestWrongKindRetainsOffendingValue(t *testing.T) {
 	e := wrong("number", text("3"))
-	if e.Get("value").Text != "3" || e.Get("got").Text != "text" {
+	if e.Get("value").Text() != "3" || e.Get("got").Text() != "text" {
 		t.Fatal(e)
 	}
 }
@@ -137,7 +137,7 @@ func TestNormativePatternStepsAndCaptures(t *testing.T) {
 		if scriptErr != nil {
 			t.Fatal(scriptErr)
 		}
-		if got.Get("text").Text != tc.matched || tc.steps > 0 && steps != tc.steps {
+		if got.Get("text").Text() != tc.matched || tc.steps > 0 && steps != tc.steps {
 			t.Fatalf("%s %d", got.Display(), steps)
 		}
 		if tc.steps == 0 && got.Get("captures").Get("n").Display() != "-12.5" {
@@ -166,7 +166,7 @@ func TestFinallyReplacementKeepsTheOriginalError(t *testing.T) {
 	}
 	r := Start(s, 1, nil, Limits{Fuel: 10000, Alloc: 10000, Depth: 200})
 	r.Execute(0)
-	if r.Status != Errored || r.Error.Get("code").Text != "second" || r.Error.Get("during").Get("code").Text != "first" || len(r.Cleanup) != 0 {
+	if r.Status != Errored || r.Error.Get("code").Text() != "second" || r.Error.Get("during").Get("code").Text() != "first" || len(r.Cleanup) != 0 {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -242,7 +242,7 @@ func executeSource(t *testing.T, source string) *Run {
 }
 func TestTemplatePlaceholdersOnlyReplaceOriginalSplices(t *testing.T) {
 	r := executeSource(t, "on go\n return \"(1)\"\nend go\n")
-	if r.Status != Completed || r.Result.Kind != value.Text || r.Result.Text != "(1)" {
+	if r.Status != Completed || r.Result.Kind != value.Text || r.Result.Text() != "(1)" {
 		t.Fatalf("%+v", r)
 	}
 	for _, source := range []string{
@@ -264,7 +264,7 @@ func TestRangeIterationAndNegativeRepeat(t *testing.T) {
 		}
 	}
 	r := executeSource(t, "on go\n repeat -1 times\n end repeat\nend go\n")
-	if r.Status != Errored || r.Error.Get("code").Text != "out of range" || r.Error.Get("field").Text != "count" {
+	if r.Status != Errored || r.Error.Get("code").Text() != "out of range" || r.Error.Get("field").Text() != "count" {
 		t.Fatalf("%+v", r)
 	}
 	r = executeSource(t, "on go\n repeat 999999999999999999999999999999999 times\n  return 7\n end repeat\nend go\n")
@@ -286,7 +286,7 @@ func TestLinesRecognizeCRAndCRLF(t *testing.T) {
 		t.Fatalf("%s %v", v.Display(), e)
 	}
 	v, _, _, e = chunk("chunk-delete", "line", integer(2), text("a\r\nb\rc"), value.Value{}, text(","))
-	if e != nil || v.Text != "a\r\nc" {
+	if e != nil || v.Text() != "a\r\nc" {
 		t.Fatalf("%s %v", v.Display(), e)
 	}
 }
@@ -299,7 +299,7 @@ func TestDeferredOperandsRemainUntouched(t *testing.T) {
 }
 func TestWrongPatternKindRaisesRatherThanPanics(t *testing.T) {
 	r := executeSource(t, "on go\n return \"abc\" matches 3\nend go\n")
-	if r.Status != Errored || r.Error.Get("code").Text != "wrong kind" {
+	if r.Status != Errored || r.Error.Get("code").Text() != "wrong kind" {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -325,7 +325,7 @@ func TestRangeMeasuresAreEmptyOrSaturating(t *testing.T) {
 }
 func TestThrowPreservesAnExistingAtKey(t *testing.T) {
 	r := executeSource(t, "on go\n throw {code: \"example\", at: nothing}\nend go\n")
-	if r.Status != Errored || len(r.Error.Entries) != 2 || r.Error.Get("at").Kind != value.Nothing {
+	if r.Status != Errored || len(r.Error.Entries()) != 2 || r.Error.Get("at").Kind != value.Nothing {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -349,7 +349,7 @@ func TestPaddingPreflightCountsOnlyRetainedPadding(t *testing.T) {
 	}
 	r := Start(s, 1, nil, Limits{Fuel: 100, Alloc: 1000, Depth: 200})
 	r.Execute(0)
-	if r.Status != Completed || r.Result.Text != "z" {
+	if r.Status != Completed || r.Result.Text() != "z" {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -395,7 +395,7 @@ func TestLineAnchorsRecognizeAllLineEndings(t *testing.T) {
 func TestLinePaddingPreservesAnExistingTrailingBreak(t *testing.T) {
 	for _, separator := range []string{"\r", "\n", "\r\n"} {
 		v, _, _, e := chunk("chunk-set", "line", integer(2), text("a"+separator), text("b"), text(","))
-		if e != nil || v.Text != "a"+separator+"b" {
+		if e != nil || v.Text() != "a"+separator+"b" {
 			t.Fatalf("%s %v", v.Display(), e)
 		}
 	}

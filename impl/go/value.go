@@ -67,21 +67,21 @@ func hostValue(v corevalue.Value, e error) (Value, error) {
 func Bool(b bool) Value { return Value{corevalue.Value{Kind: corevalue.Boolean, Bool: b}} }
 func Text(s string) (Value, error) {
 	s, e := normalizeHostText(s)
-	return hostValue(corevalue.Value{Kind: corevalue.Text, Text: s}, e)
+	return hostValue(corevalue.Fields{Kind: corevalue.Text, Text: s}.Value(), e)
 }
 func Int(i int64) Value {
-	return Value{corevalue.Value{Kind: corevalue.Number, Number: decimal.FromInt(i)}}
+	return Value{corevalue.Fields{Kind: corevalue.Number, Number: decimal.FromInt(i)}.Value()}
 }
 func Uint(u uint64) Value {
-	return Value{corevalue.Value{Kind: corevalue.Number, Number: decimal.FromUint(u)}}
+	return Value{corevalue.Fields{Kind: corevalue.Number, Number: decimal.FromUint(u)}.Value()}
 }
 func FromFloat(f float64) (Value, error) {
 	n, e := decimal.FromFloat(f)
-	return hostValue(corevalue.Value{Kind: corevalue.Number, Number: n}, e)
+	return hostValue(corevalue.Fields{Kind: corevalue.Number, Number: n}.Value(), e)
 }
 func Dec(s string) (Value, error) {
 	n, e := decimal.Parse(s)
-	return hostValue(corevalue.Value{Kind: corevalue.Number, Number: n}, e)
+	return hostValue(corevalue.Fields{Kind: corevalue.Number, Number: n}.Value(), e)
 }
 func Quantity(n Decimal, unit string) (Value, error) {
 	return hostValue(corevalue.NewQuantity(n.inner, unit))
@@ -130,55 +130,55 @@ func (v Value) AsText() (string, bool) {
 	if v.Kind() != KindText {
 		return "", false
 	}
-	return v.inner.Text, true
+	return v.inner.Text(), true
 }
 func (v Value) AsDec() (Decimal, bool) {
 	if v.Kind() != KindNumber {
 		return Decimal{}, false
 	}
-	return Decimal{v.inner.Number}, true
+	return Decimal{v.inner.Number()}, true
 }
 func (v Value) AsQuantity() (Decimal, string, bool) {
 	if v.Kind() != KindQuantity {
 		return Decimal{}, "", false
 	}
-	return Decimal{v.inner.Number}, v.inner.Unit.String(), true
+	return Decimal{v.inner.Number()}, v.inner.Unit().String(), true
 }
 func (v Value) AsCivilDate() (DateFields, bool) {
 	if v.Kind() != KindCivilDate {
 		return DateFields{}, false
 	}
-	return DateFields(v.inner.Date), true
+	return DateFields(v.inner.Date()), true
 }
 func (v Value) AsInstant() (seconds int64, nanos int32, ok bool) {
 	if v.Kind() != KindInstant {
 		return 0, 0, false
 	}
-	return v.inner.Seconds, v.inner.Nanos, true
+	return v.inner.Seconds(), v.inner.Nanos(), true
 }
 func (v Value) AsBytes() ([]byte, bool) {
 	if v.Kind() != KindBytes {
 		return nil, false
 	}
-	return slices.Clone(v.inner.Bytes), true
+	return slices.Clone(v.inner.Bytes()), true
 }
 func (v Value) AsRange() (from, to Value, ok bool) {
 	if v.Kind() != KindRange {
 		return Nothing, Nothing, false
 	}
-	return Value{v.inner.Items[0]}, Value{v.inner.Items[1]}, true
+	return Value{v.inner.Items()[0]}, Value{v.inner.Items()[1]}, true
 }
 func (v Value) Len() int {
 	if v.Kind() != KindList {
 		return 0
 	}
-	return len(v.inner.Items)
+	return len(v.inner.Items())
 }
 func (v Value) Index(i int) Value {
-	if v.Kind() != KindList || i < 1 || i > len(v.inner.Items) {
+	if v.Kind() != KindList || i < 1 || i > len(v.inner.Items()) {
 		return Nothing
 	}
-	return Value{v.inner.Items[i-1]}
+	return Value{v.inner.Items()[i-1]}
 }
 func (v Value) Get(key string) Value {
 	if v.Kind() != KindMap {
@@ -190,8 +190,8 @@ func (v Value) Entries() []Pair {
 	if v.Kind() != KindMap {
 		return nil
 	}
-	out := make([]Pair, len(v.inner.Entries))
-	for i, p := range v.inner.Entries {
+	out := make([]Pair, len(v.inner.Entries()))
+	for i, p := range v.inner.Entries() {
 		out[i] = Pair{p.Key, Value{p.Val}}
 	}
 	return out
@@ -200,13 +200,13 @@ func (v Value) PatternSource() (string, bool) {
 	if v.Kind() != KindPattern {
 		return "", false
 	}
-	return v.inner.Text, true
+	return v.inner.Text(), true
 }
 func (v Value) HomeScript() (string, bool) {
 	if v.Kind() != KindFunction {
 		return "", false
 	}
-	return v.inner.Function.Home, true
+	return v.inner.Function().Home, true
 }
 func (v Value) String() string { return v.inner.Display() }
 
@@ -250,12 +250,12 @@ func (o *Object) ID() string        { return o.id }
 func (o *Object) Kind() *ObjectKind { return o.kind }
 func (o *Object) Native() any       { return o.native }
 func (o *Object) Value() Value {
-	return Value{corevalue.Value{Kind: corevalue.Object, Object: &corevalue.ObjectData{Kind: o.kind.name, ID: o.id, Handle: o, Disposed: &o.disposed}}}
+	return Value{corevalue.Fields{Kind: corevalue.Object, Object: &corevalue.ObjectData{Kind: o.kind.name, ID: o.id, Handle: o, Disposed: &o.disposed}}.Value()}
 }
 func (v Value) AsObject() (*Object, bool) {
 	if v.Kind() != KindObject {
 		return nil, false
 	}
-	o, ok := v.inner.Object.Handle.(*Object)
+	o, ok := v.inner.Object().Handle.(*Object)
 	return o, ok
 }

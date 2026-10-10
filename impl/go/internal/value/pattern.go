@@ -29,7 +29,7 @@ func ParsePattern(s string) (Value, error) {
 	if r.At != len(s) {
 		return Value{}, r.Error()
 	}
-	return Value{Kind: Pattern, Text: node.text}, nil
+	return Fields{Kind: Pattern, Text: node.text}.Value(), nil
 }
 func (p *patternReader) space() {
 	for p.r.At < len(p.r.Text) && strings.ContainsRune(" \t\r\n", rune(p.r.Text[p.r.At])) {
@@ -166,16 +166,16 @@ func (p *patternReader) atom() (patternNode, error) {
 		if e != nil {
 			return patternNode{}, e
 		}
-		text := DisplayText(v.Text)
+		text := DisplayText(v.Text())
 		complex := false
-		for _, cp := range v.Text {
+		for _, cp := range v.Text() {
 			complex = complex || cp == '"' || hidden(cp)
 		}
 		if complex {
 			text = "(" + text + ")"
 		}
-		digits := v.Text != ""
-		for _, c := range v.Text {
+		digits := v.Text() != ""
+		for _, c := range v.Text() {
 			digits = digits && c >= '0' && c <= '9'
 		}
 		return patternNode{text, digits, false}, nil

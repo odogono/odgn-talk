@@ -1260,12 +1260,70 @@ level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
 of the stripped module, including Go's runtime; they aren't compiled-module
 cache sizes or per-instance memory measurements.
 
-Measured on 2026-10-10 with Go 1.27.2 and the command above: **12,299,060
-bytes raw**, **2,943,787 bytes gzip**, **2,090,654 bytes Brotli**. The check ran
-under wasmtime 49.0.0 with Python 3.14.8, zlib 1.2.12 and Brotli 1.2.0.
-The module's SHA-256 was
-`803151709641c3d9783a74972440b0e3dcaee362b55119b1edf8a3ba4c056080`.
+Measured on 2026-10-10 with Go 1.27.2 and the reactor build command above:
+**12,457,777 bytes raw**, **2,980,976 bytes gzip**, **2,106,513 bytes Brotli**.
+The check ran under Wasmtime 49.0.0 with Python 3.14.8, zlib 1.2.12 and
+Brotli 1.2.0. The module's SHA-256 was
+`68a8eaa630d1799d47bfaa379f0ce2dd437ebb176ae568b5330757e2ec250421`.
 These sizes are evidence for this build, not a fixed limit on later builds.
+
+#### List memory and Host caps
+
+The Allocation Budget and Persistent State measure **logical size**, rather
+than physical Go heap or WASI linear memory. Container slots use a 32-byte
+tagged Value on 64-bit Hosts (16 bytes on `wasip1`), with kind-specific payloads
+shared across immutable copies. List growth still needs spare capacity, old
+buffers during copying, Segment checkpoints and Go's garbage-collection
+headroom. Sharing changes neither Fuel nor logical accounting; the public
+Value API and `go/6` saves remain compatible.
+
+For a fresh Message Layer Session running one of the flat List-growth
+workloads below, set a memory backstop of **64 MiB + 12 × Allocation Budget**:
+**256 MiB** with the default 16 MiB budget, or **3,136 MiB (3.0625 GiB)** with
+the conformance-minimum 256 MiB budget. Both leave room for the runtime and
+reach a Script Limit Fault within the tested cap. A 128 MiB default cap does
+not cover the cheapest List elements: `nothing` costs only 16 logical bytes
+per item. Additional Scripts, retained state, simultaneous Runs, Host-held
+Values, large protocol frames and Trace recording need additional provision;
+the formula is measured guidance for these workloads, not a universal bound
+on arbitrary Sessions. A physical memory backstop is separate from Script
+limits, and exhausting it can terminate the process or WASI instance.
+
+Measured on 2026-10-10 with Go 1.27.2, macOS arm64 and Wasmtime 49.0.0,
+using a fresh process/instance per case, default Go GC settings and no Trace:
+
+| Growth workload | Limits | Sidecar peak RSS | `wasip1` peak linear memory |
+| --- | --- | --- | --- |
+| Run-local List, repeated 64-byte text | default | 57.30 MiB | 66.19 MiB |
+| Run-local List, `nothing` | default | 171.69 MiB | 212.00 MiB |
+| Run-local List, repeated 64-byte text | conformance minimums | 518.84 MiB | 563.00 MiB |
+| Run-local List, `nothing` | conformance minimums | 2,518.23 MiB | 2,452.88 MiB |
+| Script Variable List, repeated 64-byte text | conformance minimums | 392.16 MiB | 395.50 MiB |
+| Script Variable List, `nothing` | conformance minimums | 761.62 MiB | 818.00 MiB |
+
+The Run-local workloads fault on allocation; Script Variable workloads
+commit every 1,000 additions and fault on Persistent State (64 MiB at the
+minimums), retaining the last committed window after rollback. Every case
+then runs a healthy Handler on the same Session. At conformance minimums,
+even the cheapest-element List faults below wasm32's 4 GiB ceiling. RSS and
+linear memory are distinct metrics; these are single-run observations, not
+cgroup peaks or measurements from the Elixir Host in #553. The
+[raw reports and artifact hashes](../../tools/wasi/results/2026-10-10-list-memory.json)
+record all eight cases per transport for [#584](https://github.com/odogono/odgn-talk/issues/584).
+
+Reproduce the measurements after building the reactor as above:
+
+```sh
+go -C impl/go build -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer ./cmd/messagelayer
+uv run tools/wasi/list_memory.py --sidecar .cache/messagelayer
+uv run tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm
+```
+
+The WASI check enforces the stated linear-memory backstop; the sidecar check
+asserts the child's OS-reported peak RSS. CI runs the conformance-minimum
+WASI cases, including rollback and post-fault reuse. Native regression tests
+check slot size, sampled heap growth, aliases and concurrent List branches.
+
 
 ## Corpus runner
 

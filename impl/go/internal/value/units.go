@@ -290,38 +290,38 @@ func (u Unit) magnitudeBounds(n decimal.Number) (lo, hi *big.Rat, ok bool) {
 	return lo, hi, e == nil
 }
 func quantityOrder(a, b Value) int {
-	as, bs := a.Number.Sign(), b.Number.Sign()
+	as, bs := a.Number().Sign(), b.Number().Sign()
 	if as == 0 && bs == 0 {
 		return 0
 	}
 	if as != bs {
 		// A normal-prefix proof also proves that conversion cannot erase a
 		// sign. Otherwise retain the exact steps for subnormal rounding to zero.
-		_, _, ao := a.Unit.magnitudeBounds(a.Number)
-		_, _, bo := b.Unit.magnitudeBounds(b.Number)
+		_, _, ao := a.Unit().magnitudeBounds(a.Number())
+		_, _, bo := b.Unit().magnitudeBounds(b.Number())
 		if (as == 0 || ao) && (bs == 0 || bo) {
 			if as < bs {
 				return -1
 			}
 			return 1
 		}
-		return a.Unit.comparisonMagnitude(a.Number).Compare(b.Unit.comparisonMagnitude(b.Number))
+		return a.Unit().comparisonMagnitude(a.Number()).Compare(b.Unit().comparisonMagnitude(b.Number()))
 	}
 	// Equal inputs traverse exactly the same rounded conversion steps.
-	if a.Unit.String() == b.Unit.String() && a.Number.Compare(b.Number) == 0 {
+	if a.Unit().String() == b.Unit().String() && a.Number().Compare(b.Number()) == 0 {
 		return 0
 	}
 	large := false
-	for _, u := range []Unit{a.Unit, b.Unit} {
+	for _, u := range []Unit{a.Unit(), b.Unit()} {
 		for _, s := range u.Slots {
 			large = large || new(big.Int).Abs(s.Power).Cmp(big.NewInt(128)) > 0
 		}
 	}
 	if !large {
-		return a.Unit.comparisonMagnitude(a.Number).Compare(b.Unit.comparisonMagnitude(b.Number))
+		return a.Unit().comparisonMagnitude(a.Number()).Compare(b.Unit().comparisonMagnitude(b.Number()))
 	}
-	al, ah, ao := a.Unit.magnitudeBounds(a.Number)
-	bl, bh, bo := b.Unit.magnitudeBounds(b.Number)
+	al, ah, ao := a.Unit().magnitudeBounds(a.Number())
+	bl, bh, bo := b.Unit().magnitudeBounds(b.Number())
 	if ao && bo {
 		if ah.Cmp(bl) < 0 {
 			return -as
@@ -330,10 +330,10 @@ func quantityOrder(a, b Value) int {
 			return as
 		}
 	}
-	if a.Unit.String() == b.Unit.String() {
-		an, bn := a.Number, b.Number
+	if a.Unit().String() == b.Unit().String() {
+		an, bn := a.Number(), b.Number()
 		merged := false
-		_ = a.Unit.factors(true, func(f decimal.Number, power *big.Int, denominator bool) error {
+		_ = a.Unit().factors(true, func(f decimal.Number, power *big.Int, denominator bool) error {
 			if merged {
 				return nil
 			}
@@ -349,5 +349,5 @@ func quantityOrder(a, b Value) int {
 		}
 		return an.Compare(bn)
 	}
-	return a.Unit.comparisonMagnitude(a.Number).Compare(b.Unit.comparisonMagnitude(b.Number))
+	return a.Unit().comparisonMagnitude(a.Number()).Compare(b.Unit().comparisonMagnitude(b.Number()))
 }

@@ -16,7 +16,7 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 	if to.Function.Kind == corevalue.Function {
 		d.function = &to.Function
 		d.message.Name = Value{to.Function}.String()
-		d.script = g.script(to.Function.Function.Home)
+		d.script = g.script(to.Function.Function().Home)
 		d.target = d.script.owner
 		label = d.script.name
 	} else if to.Up {
@@ -27,7 +27,7 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 			d.script = g.nearestOwner(d.after.parent)
 		}
 	} else if to.Object.Kind == corevalue.Object {
-		d.target = to.Object.Object.Handle.(*Object)
+		d.target = to.Object.Object().Handle.(*Object)
 		d.path = true
 		d.script = g.nearestOwner(d.target)
 		label = Value{to.Object}.String()

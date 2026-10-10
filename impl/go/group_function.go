@@ -16,7 +16,7 @@ func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitO
 		fields["limits"] = overrideDisplay(*limits)
 	}
 	code := HostErrorCode("")
-	if fn.inner.Kind != corevalue.Function || fn.inner.Function == nil {
+	if fn.inner.Kind != corevalue.Function || fn.inner.Function() == nil {
 		code = InvalidValue
 	} else if !validGroup(fn.inner, g) {
 		code = WrongGroup

@@ -87,7 +87,7 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 		}}
 		if op.Name != "keys" {
 			checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
-				if a[0].Text == "" {
+				if a[0].Text() == "" {
 					e := machine.ErrorValue("invalid key")
 					return &e
 				}
@@ -124,11 +124,11 @@ func storeFailure(code string, data corevalue.Value) bool {
 	case "can't store":
 		return text("kind")
 	case "store full":
-		return text("limit") && slices.Contains([]string{"size", "keys", "value"}, data.Get("limit").Text)
+		return text("limit") && slices.Contains([]string{"size", "keys", "value"}, data.Get("limit").Text())
 	case "store busy":
 		return text("key")
 	case "wrong kind":
-		return text("expected") && text("got") && slices.ContainsFunc(data.Entries, func(p corevalue.Pair) bool { return p.Key == "value" })
+		return text("expected") && text("got") && slices.ContainsFunc(data.Entries(), func(p corevalue.Pair) bool { return p.Key == "value" })
 	case "incompatible units":
 		return text("left") && text("right")
 	case "overflow":

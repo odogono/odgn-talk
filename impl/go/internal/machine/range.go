@@ -22,8 +22,8 @@ func rangeChunk(op, kind string, index, whole value.Value) (value.Value, int64, 
 	if !strings.HasPrefix(op, "chunk-get") && !strings.HasPrefix(op, "test-chunk") {
 		return bad(wrong("list", whole))
 	}
-	start, _ := whole.Items[0].Number.Integer()
-	end, _ := whole.Items[1].Number.Integer()
+	start, _ := whole.Items()[0].Number().Integer()
+	end, _ := whole.Items()[1].Number().Integer()
 	count := new(big.Int).Sub(end, start)
 	count.Add(count, big.NewInt(1))
 	if count.Sign() < 0 {
@@ -34,7 +34,7 @@ func rangeChunk(op, kind string, index, whole value.Value) (value.Value, int64, 
 			e := wrong("number", v)
 			return nil, &e
 		}
-		n, ok := v.Number.Integer()
+		n, ok := v.Number().Integer()
 		if !ok {
 			e := wrong("integer", v)
 			return nil, &e
@@ -48,9 +48,9 @@ func rangeChunk(op, kind string, index, whole value.Value) (value.Value, int64, 
 	first, e := one(index)
 	var last *big.Int
 	if index.Kind == value.Range {
-		first, e = one(index.Items[0])
+		first, e = one(index.Items()[0])
 		if e == nil {
-			last, e = one(index.Items[1])
+			last, e = one(index.Items()[1])
 		}
 	} else {
 		last = new(big.Int)
@@ -68,7 +68,7 @@ func rangeChunk(op, kind string, index, whole value.Value) (value.Value, int64, 
 		}
 		n := new(big.Int).Add(start, new(big.Int).Sub(first, big.NewInt(1)))
 		number, _ := decimal.Round(new(big.Rat).SetInt(n), 0, "+")
-		return value.Value{Kind: value.Number, Number: number}, saturated(first), true, nil
+		return value.Fields{Kind: value.Number, Number: number}.Value(), saturated(first), true, nil
 	}
 	lo, hi := new(big.Int).Set(first), new(big.Int).Set(last)
 	if lo.Sign() <= 0 {

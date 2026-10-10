@@ -27,7 +27,7 @@ func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		return bad(failure(code))
 	}
 	incompatible := func() (value.Value, *value.Value) {
-		return bad(failure("incompatible units", value.Pair{Key: "left", Val: text(a.Unit.String())}, value.Pair{Key: "right", Val: text(b.Unit.String())}))
+		return bad(failure("incompatible units", value.Pair{Key: "left", Val: text(a.Unit().String())}, value.Pair{Key: "right", Val: text(b.Unit().String())}))
 	}
 	if a.Kind == value.Instant || a.Kind == value.CivilDate {
 		return dateArithmetic(op, a, b)
@@ -54,30 +54,30 @@ func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 			return bad(wrong("number", b))
 		}
 		if a.Kind == value.Quantity {
-			n, ok := b.Number.Integer()
+			n, ok := b.Number().Integer()
 			if !ok || n.Sign() <= 0 {
 				return bad(wrong("integer", b))
 			}
-			u := value.Unit{Slots: slices.Clone(a.Unit.Slots)}
+			u := value.Unit{Slots: slices.Clone(a.Unit().Slots)}
 			for j, s := range u.Slots {
 				u.Slots[j].Power = new(big.Int).Mul(s.Power, n)
 			}
 			if !u.ValidCalendar() {
 				return incompatible()
 			}
-			x, e := decimal.Calculate(op, a.Number, b.Number)
+			x, e := decimal.Calculate(op, a.Number(), b.Number())
 			if e != nil {
 				return numericError(e)
 			}
-			return value.Value{Kind: value.Quantity, Number: x, Unit: u}, nil
+			return value.Fields{Kind: value.Quantity, Number: x, Unit: u}.Value(), nil
 		}
 	}
 	if a.Kind == value.Number && b.Kind == value.Number {
-		n, e := decimal.Calculate(op, a.Number, b.Number)
+		n, e := decimal.Calculate(op, a.Number(), b.Number())
 		if e != nil {
 			return numericError(e)
 		}
-		return value.Value{Kind: value.Number, Number: n}, nil
+		return value.Fields{Kind: value.Number, Number: n}.Value(), nil
 	}
 	if op == "+" || op == "-" {
 		if a.Kind != value.Quantity {
@@ -86,25 +86,25 @@ func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		if b.Kind != value.Quantity {
 			return bad(wrong("quantity", b))
 		}
-		if !a.Unit.Compatible(b.Unit) {
+		if !a.Unit().Compatible(b.Unit()) {
 			return incompatible()
 		}
-		n, e := b.Unit.Convert(b.Number, true)
+		n, e := b.Unit().Convert(b.Number(), true)
 		if e != nil {
 			return numericError(e)
 		}
-		n, e = a.Unit.Convert(n, false)
+		n, e = a.Unit().Convert(n, false)
 		if e != nil {
 			return numericError(e)
 		}
-		n, de := decimal.Calculate(op, a.Number, n)
+		n, de := decimal.Calculate(op, a.Number(), n)
 		if de != nil {
 			return numericError(de)
 		}
-		return value.Value{Kind: value.Quantity, Number: n, Unit: a.Unit}, nil
+		return value.Fields{Kind: value.Quantity, Number: n, Unit: a.Unit()}.Value(), nil
 	}
-	u := value.Unit{Slots: slices.Clone(a.Unit.Slots)}
-	for _, right := range b.Unit.Slots {
+	u := value.Unit{Slots: slices.Clone(a.Unit().Slots)}
+	for _, right := range b.Unit().Slots {
 		power := new(big.Int).Set(right.Power)
 		if op == "/" {
 			power.Neg(power)
@@ -136,11 +136,11 @@ func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 	if !u.ValidCalendar() {
 		return incompatible()
 	}
-	an, e := a.Unit.Convert(a.Number, true)
+	an, e := a.Unit().Convert(a.Number(), true)
 	if e != nil {
 		return numericError(e)
 	}
-	bn, e := b.Unit.Convert(b.Number, true)
+	bn, e := b.Unit().Convert(b.Number(), true)
 	if e != nil {
 		return numericError(e)
 	}
@@ -156,7 +156,7 @@ func arithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 	if len(u.Slots) == 0 {
 		kind = value.Number
 	}
-	return value.Value{Kind: kind, Number: n, Unit: u}, nil
+	return value.Fields{Kind: kind, Number: n, Unit: u}.Value(), nil
 }
 
 func roundInteger(r *big.Rat) *big.Int {
@@ -178,17 +178,17 @@ func floorDiv(n, d *big.Int) *big.Int {
 	return q
 }
 func civilTime(v value.Value) time.Time {
-	f := v.Date
+	f := v.Date()
 	return time.Date(f.Year, time.Month(f.Month), f.Day, f.Hour, f.Minute, f.Second, f.Nanosecond, time.UTC)
 }
 func instantNanos(v value.Value) *big.Int {
+	seconds, nanos := v.Seconds(), v.Nanos()
 	if v.Kind == value.CivilDate {
 		t := civilTime(v)
-		v.Seconds = t.Unix()
-		v.Nanos = int32(t.Nanosecond())
+		seconds, nanos = t.Unix(), int32(t.Nanosecond())
 	}
-	n := new(big.Int).Mul(big.NewInt(v.Seconds), big.NewInt(1e9))
-	return n.Add(n, big.NewInt(int64(v.Nanos)))
+	n := new(big.Int).Mul(big.NewInt(seconds), big.NewInt(1e9))
+	return n.Add(n, big.NewInt(int64(nanos)))
 }
 func yearAtDays(days *big.Int) *big.Int {
 	cycles := floorDiv(days, big.NewInt(146097))
@@ -209,7 +209,7 @@ func yearAtDays(days *big.Int) *big.Int {
 }
 func yearError(year *big.Int) *value.Value {
 	n, _ := decimal.Round(new(big.Rat).SetInt(year), 0, "+")
-	e := failure("out of range", value.Pair{Key: "field", Val: text("year")}, value.Pair{Key: "value", Val: value.Value{Kind: value.Number, Number: n}})
+	e := failure("out of range", value.Pair{Key: "field", Val: text("year")}, value.Pair{Key: "value", Val: value.Fields{Kind: value.Number, Number: n}.Value()})
 	return &e
 }
 func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
@@ -218,13 +218,13 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		return bad(wrong("number", a))
 	}
 	if op == "-" && (b.Kind == value.Instant || b.Kind == value.CivilDate) {
-		if a.Kind != b.Kind || a.Kind == value.CivilDate && a.Date.HasTime != b.Date.HasTime {
+		if a.Kind != b.Kind || a.Kind == value.CivilDate && a.Date().HasTime != b.Date().HasTime {
 			return bad(wrong(value.KindNames[a.Kind], b))
 		}
 		n := new(big.Int).Sub(instantNanos(a), instantNanos(b))
 		r := new(big.Rat).SetFrac(n, big.NewInt(1e9))
 		unit := "s"
-		if a.Kind == value.CivilDate && !a.Date.HasTime {
+		if a.Kind == value.CivilDate && !a.Date().HasTime {
 			r.Quo(r, big.NewRat(86400, 1))
 			unit = "day"
 		}
@@ -236,19 +236,19 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		return bad(wrong("quantity", b))
 	}
 	left := "s"
-	if a.Kind == value.CivilDate && !a.Date.HasTime {
+	if a.Kind == value.CivilDate && !a.Date().HasTime {
 		left = "day"
 	}
 	incompatible := func() (value.Value, *value.Value) {
-		return bad(failure("incompatible units", value.Pair{Key: "left", Val: text(left)}, value.Pair{Key: "right", Val: text(b.Unit.String())}))
+		return bad(failure("incompatible units", value.Pair{Key: "left", Val: text(left)}, value.Pair{Key: "right", Val: text(b.Unit().String())}))
 	}
 	monthUnit, _ := value.ParseUnit("month")
 	secondsUnit, _ := value.ParseUnit("s")
-	if b.Unit.Compatible(monthUnit) {
+	if b.Unit().Compatible(monthUnit) {
 		if a.Kind != value.CivilDate {
 			return incompatible()
 		}
-		n, e := b.Unit.Convert(b.Number, true)
+		n, e := b.Unit().Convert(b.Number(), true)
 		if e != nil {
 			return incompatible()
 		}
@@ -260,28 +260,28 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		if op == "-" {
 			months.Neg(months)
 		}
-		months.Add(months, big.NewInt(int64(a.Date.Year*12+a.Date.Month-1)))
+		months.Add(months, big.NewInt(int64(a.Date().Year*12+a.Date().Month-1)))
 		year := floorDiv(months, big.NewInt(12))
 		month := new(big.Int).Sub(months, new(big.Int).Mul(year, big.NewInt(12))).Int64() + 1
 		if year.Sign() <= 0 || year.Cmp(big.NewInt(9999)) > 0 {
 			return value.Value{}, yearError(year)
 		}
-		f := a.Date
+		f := a.Date()
 		f.Year = int(year.Int64())
 		f.Month = int(month)
 		f.Day = min(f.Day, time.Date(f.Year, time.Month(f.Month)+1, 0, 0, 0, 0, 0, time.UTC).Day())
 		v, _ := value.NewCivil(f)
 		return v, nil
 	}
-	if !b.Unit.Compatible(secondsUnit) {
+	if !b.Unit().Compatible(secondsUnit) {
 		return incompatible()
 	}
-	n, e := b.Unit.Convert(b.Number, true)
+	n, e := b.Unit().Convert(b.Number(), true)
 	if e != nil {
 		return incompatible()
 	}
 	seconds := n.Rat()
-	if a.Kind == value.CivilDate && !a.Date.HasTime {
+	if a.Kind == value.CivilDate && !a.Date().HasTime {
 		days := new(big.Rat).Quo(seconds, big.NewRat(86400, 1))
 		if !days.IsInt() {
 			return incompatible()
@@ -303,7 +303,7 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		return v, nil
 	}
 	t := time.Unix(sec.Int64(), nano).UTC()
-	f := a.Date
+	f := a.Date()
 	f.Year, f.Month, f.Day = t.Year(), int(t.Month()), t.Day()
 	f.Hour, f.Minute, f.Second, f.Nanosecond = t.Hour(), t.Minute(), t.Second(), t.Nanosecond()
 	v, _ := value.NewCivil(f)

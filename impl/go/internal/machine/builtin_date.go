@@ -20,7 +20,7 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 		if v.Kind != kind {
 			return fail(wrong(expected, v))
 		}
-		if name == "toInstant" && !v.Date.HasTime {
+		if name == "toInstant" && !v.Date().HasTime {
 			return domain(v)
 		}
 		offset := args[1]
@@ -28,10 +28,10 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 		if offset.Kind != value.Quantity {
 			return fail(wrong("quantity", offset))
 		}
-		if !offset.Unit.Compatible(s) {
+		if !offset.Unit().Compatible(s) {
 			return domain(offset)
 		}
-		n, e := offset.Unit.Convert(offset.Number, true)
+		n, e := offset.Unit().Convert(offset.Number(), true)
 		if e != nil {
 			return domain(offset)
 		}
@@ -41,7 +41,7 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 		}
 		t := civilTime(v)
 		if name == "toCivil" {
-			t = time.Unix(v.Seconds, int64(v.Nanos)).UTC()
+			t = time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
 		}
 		d := time.Duration(minutes.Num().Int64()) * time.Minute
 		if name == "toInstant" {
@@ -61,7 +61,7 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 	if v.Kind != value.CivilDate {
 		return fail(wrong("civil date", v))
 	}
-	f := v.Date
+	f := v.Date()
 	t := civilTime(v)
 	n := 0
 	switch name {

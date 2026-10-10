@@ -217,7 +217,7 @@ func sqliteRowsAllowed(max corevalue.Value, binding SqliteBinding) (int64, *core
 	if max.Kind == corevalue.Nothing {
 		return binding.MaxRows, nil
 	}
-	whole, fraction, _ := strings.Cut(max.Number.String(), ".")
+	whole, fraction, _ := strings.Cut(max.Number().String(), ".")
 	n, err := strconv.ParseInt(whole, 10, 64)
 	if strings.HasPrefix(whole, "-") || strings.ContainsAny(fraction, "123456789") || err != nil || n > binding.MaxRows {
 		failure := machine.ErrorValue("out of range", corevalue.Pair{Key: "field", Val: mustText("max")}, corevalue.Pair{Key: "value", Val: max})
@@ -244,12 +244,12 @@ func sqliteCheckParams(params corevalue.Value, named []corevalue.Pair) *corevalu
 		}
 		return wrongKind(sqliteValueShape.inner.Expected(), item, corevalue.Pair{Key: "path", Val: corevalue.NewList([]corevalue.Value{at})})
 	}
-	for i, item := range params.Items {
+	for i, item := range params.Items() {
 		if failure := check(Int(int64(i+1)).inner, item); failure != nil {
 			return failure
 		}
 	}
-	for _, p := range params.Entries {
+	for _, p := range params.Entries() {
 		if failure := check(mustText(p.Key), p.Val); failure != nil {
 			return failure
 		}
@@ -267,11 +267,11 @@ func sqlValueOf(v corevalue.Value) SqlValue {
 		}
 		return int64(0)
 	case corevalue.Text:
-		return v.Text
+		return v.Text()
 	case corevalue.Bytes:
-		return slices.Clone(v.Bytes)
+		return slices.Clone(v.Bytes())
 	case corevalue.Number:
-		canonical := v.Number.String()
+		canonical := v.Number().String()
 		if !strings.Contains(canonical, ".") {
 			if n, err := strconv.ParseInt(canonical, 10, 64); err == nil {
 				return n
@@ -285,14 +285,14 @@ func sqlValueOf(v corevalue.Value) SqlValue {
 
 func sqliteParamsOf(params corevalue.Value) SqlParams {
 	if params.Kind == corevalue.Map {
-		named := make(map[string]SqlValue, len(params.Entries))
-		for _, p := range params.Entries {
+		named := make(map[string]SqlValue, len(params.Entries()))
+		for _, p := range params.Entries() {
 			named[p.Key] = sqlValueOf(p.Val)
 		}
 		return SqlParams{Named: named}
 	}
-	list := make([]SqlValue, len(params.Items))
-	for i, item := range params.Items {
+	list := make([]SqlValue, len(params.Items()))
+	for i, item := range params.Items() {
 		list[i] = sqlValueOf(item)
 	}
 	return SqlParams{List: list}
@@ -359,7 +359,7 @@ func sqliteValueOf(v SqlValue, column string) (corevalue.Value, error) {
 		if err != nil {
 			return corevalue.Value{}, unrepresentable()
 		}
-		return corevalue.Value{Kind: corevalue.Number, Number: n}, nil
+		return corevalue.Fields{Kind: corevalue.Number, Number: n}.Value(), nil
 	case string:
 		if !utf8.ValidString(x) {
 			return corevalue.Value{}, unrepresentable()
@@ -384,7 +384,7 @@ func sqliteFailure(code string, data corevalue.Value) bool {
 	case "sql":
 		return text("reason")
 	case "constraint":
-		return text("kind") && slices.Contains(sqliteConstraint, data.Get("kind").Text)
+		return text("kind") && slices.Contains(sqliteConstraint, data.Get("kind").Text())
 	case "sqlite busy", "not read-only":
 		return true
 	case "too many rows":

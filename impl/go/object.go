@@ -110,7 +110,7 @@ func (g *Group) Dispose(o *Object) error {
 func objectProperties(bindings map[string]corevalue.Value) map[string]map[string]bool {
 	out := map[string]map[string]bool{}
 	for name, v := range bindings {
-		o := v.Object.Handle.(*Object)
+		o := v.Object().Handle.(*Object)
 		props := map[string]bool{}
 		for key, prop := range o.kind.props {
 			props[key] = prop.Set != nil

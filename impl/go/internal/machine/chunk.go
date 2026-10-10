@@ -71,7 +71,7 @@ func indices(index value.Value, count int) (int64, int64, *value.Value) {
 			e := wrong("number", v)
 			return 0, &e
 		}
-		n, ok := v.Number.Integer()
+		n, ok := v.Number().Integer()
 		if !ok {
 			e := wrong("integer", v)
 			return 0, &e
@@ -92,11 +92,11 @@ func indices(index value.Value, count int) (int64, int64, *value.Value) {
 		return i, nil
 	}
 	if index.Kind == value.Range {
-		a, e := one(index.Items[0])
+		a, e := one(index.Items()[0])
 		if e != nil {
 			return 0, 0, e
 		}
-		b, e := one(index.Items[1])
+		b, e := one(index.Items()[1])
 		return a, b, e
 	}
 	a, e := one(index)
@@ -107,7 +107,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 	if delimiter.Kind != value.Text {
 		return fail(wrong("text", delimiter))
 	}
-	if delimiter.Text == "" {
+	if delimiter.Text() == "" {
 		return fail(failure("out of range", value.Pair{Key: "field", Val: text("delimiter")}, value.Pair{Key: "value", Val: delimiter}))
 	}
 	var chunks [][2]int
@@ -116,12 +116,12 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 		return rangeChunk(op, kind, index, whole)
 	}
 	if whole.Kind == value.Text && kind != "byte" {
-		chunks = spans(kind, whole.Text, delimiter.Text)
+		chunks = spans(kind, whole.Text(), delimiter.Text())
 		count = len(chunks)
 	} else if kind == "item" && whole.Kind == value.List {
-		count = len(whole.Items)
+		count = len(whole.Items())
 	} else if kind == "byte" && whole.Kind == value.Bytes {
-		count = len(whole.Bytes)
+		count = len(whole.Bytes())
 	} else {
 		return fail(wrong("text", whole))
 	}
@@ -143,15 +143,15 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 			if !empty {
 				end := chunks[hi-1][1]
 				if kind == "code point" {
-					scanned = int64(utf8.RuneCountInString(whole.Text[:end]))
+					scanned = int64(utf8.RuneCountInString(whole.Text()[:end]))
 				} else {
-					scanned = measure("characters", text(whole.Text[:end]))
+					scanned = measure("characters", text(whole.Text()[:end]))
 				}
 			}
 			if empty {
 				return text(""), scanned, exists, nil
 			}
-			return text(whole.Text[chunks[lo-1][0]:chunks[hi-1][1]]), scanned, exists, nil
+			return text(whole.Text()[chunks[lo-1][0]:chunks[hi-1][1]]), scanned, exists, nil
 		}
 		if !empty {
 			scanned = hi
@@ -161,23 +161,23 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 				if empty {
 					return value.NewList(nil), scanned, exists, nil
 				}
-				return value.NewList(whole.Items[lo-1 : hi]), scanned, exists, nil
+				return value.NewList(whole.Items()[lo-1 : hi]), scanned, exists, nil
 			}
 			if !exists {
 				return value.Value{}, scanned, false, nil
 			}
-			return whole.Items[a-1], scanned, true, nil
+			return whole.Items()[a-1], scanned, true, nil
 		}
 		if index.Kind == value.Range {
 			if empty {
 				return value.NewBytes(nil), scanned, exists, nil
 			}
-			return value.NewBytes(whole.Bytes[lo-1 : hi]), scanned, exists, nil
+			return value.NewBytes(whole.Bytes()[lo-1 : hi]), scanned, exists, nil
 		}
 		if !exists {
 			return value.Value{}, scanned, false, nil
 		}
-		return integer(int64(whole.Bytes[a-1])), scanned, true, nil
+		return integer(int64(whole.Bytes()[a-1])), scanned, true, nil
 	}
 	deleting := strings.HasPrefix(op, "chunk-delete")
 	if deleting && !exists {
@@ -187,13 +187,13 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 	if a < 1 || a > b || (!pad && b > int64(count)) {
 		v := index
 		if index.Kind == value.Range {
-			v = value.NewList(index.Items)
+			v = value.NewList(index.Items())
 		}
 		return fail(failure("out of range", value.Pair{Key: "field", Val: text(kind)}, value.Pair{Key: "value", Val: v}))
 	}
 	if whole.Kind == value.Text {
-		s := whole.Text
-		d := delimiter.Text
+		s := whole.Text()
+		d := delimiter.Text()
 		if kind == "line" {
 			d = "\n"
 		}
@@ -233,7 +233,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 		return text(s[:start] + textForm(part) + s[end:]), 0, true, nil
 	}
 	if whole.Kind == value.List {
-		vs := slices.Clone(whole.Items)
+		vs := slices.Clone(whole.Items())
 		if !deleting && b > int64(len(vs)) {
 			vs = append(vs, make([]value.Value, max(0, int(a)-1-len(vs)))...)
 			b = int64(len(vs))
@@ -244,7 +244,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 				if part.Kind != value.List {
 					return fail(wrong("list", part))
 				}
-				replacement = part.Items
+				replacement = part.Items()
 			} else {
 				replacement = []value.Value{part}
 			}
@@ -260,7 +260,7 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 				if part.Kind != value.Bytes {
 					return fail(wrong("bytes", part))
 				}
-				replacement = part.Bytes
+				replacement = part.Bytes()
 			} else {
 				n, e := binaryInteger(part, 8, false, "byte")
 				if e != nil {
@@ -272,8 +272,8 @@ func chunk(op, kind string, index, whole, part, delimiter value.Value) (value.Va
 				}
 			}
 		}
-		out := append(slices.Clone(whole.Bytes[:a-1]), replacement...)
-		out = append(out, whole.Bytes[b:]...)
+		out := append(slices.Clone(whole.Bytes()[:a-1]), replacement...)
+		out = append(out, whole.Bytes()[b:]...)
 		return value.NewBytes(out), 0, true, nil
 	}
 	return fail(wrong("text", whole))
@@ -285,11 +285,11 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 		if v.Kind != value.Object {
 			return bad("object")
 		}
-		return text(v.Object.ID), nil
+		return text(v.Object().ID), nil
 	case "length":
 		if integerRange(v) {
-			a, _ := v.Items[0].Number.Integer()
-			b, _ := v.Items[1].Number.Integer()
+			a, _ := v.Items()[0].Number().Integer()
+			b, _ := v.Items()[1].Number().Integer()
 			n := new(big.Int).Sub(b, a)
 			n.Add(n, big.NewInt(1))
 			if n.Sign() < 0 {
@@ -300,25 +300,25 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 				err := failure("overflow", value.Pair{Key: "operator", Val: text("length")})
 				return value.Value{}, &err
 			}
-			return value.Value{Kind: value.Number, Number: number}, nil
+			return value.Fields{Kind: value.Number, Number: number}.Value(), nil
 		}
 		switch v.Kind {
 		case value.Text:
 			return integer(measure("characters", v)), nil
 		case value.Bytes:
-			return integer(int64(len(v.Bytes))), nil
+			return integer(int64(len(v.Bytes()))), nil
 		case value.List:
-			return integer(int64(len(v.Items))), nil
+			return integer(int64(len(v.Items()))), nil
 		case value.Map:
-			return integer(int64(len(v.Entries))), nil
+			return integer(int64(len(v.Entries()))), nil
 		}
 		return bad("text, bytes, list or map")
 	case "bytes":
 		if v.Kind != value.Bytes {
 			return bad("bytes")
 		}
-		vs := make([]value.Value, len(v.Bytes))
-		for j, b := range v.Bytes {
+		vs := make([]value.Value, len(v.Bytes()))
+		for j, b := range v.Bytes() {
 			vs[j] = integer(int64(b))
 		}
 		return value.NewList(vs), nil
@@ -327,7 +327,7 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 			return bad("map")
 		}
 		var vs []value.Value
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if name == "keys" {
 				vs = append(vs, text(p.Key))
 			} else {
@@ -340,7 +340,7 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 			e := wrong("text", d)
 			return value.Value{}, &e
 		}
-		if d.Text == "" {
+		if d.Text() == "" {
 			e := failure("out of range", value.Pair{Key: "field", Val: text("delimiter")}, value.Pair{Key: "value", Val: d})
 			return value.Value{}, &e
 		}
@@ -360,8 +360,8 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 		}
 		kind := strings.TrimSuffix(name, "s")
 		var vs []value.Value
-		for _, s := range spans(kind, v.Text, d.Text) {
-			vs = append(vs, text(v.Text[s[0]:s[1]]))
+		for _, s := range spans(kind, v.Text(), d.Text()) {
+			vs = append(vs, text(v.Text()[s[0]:s[1]]))
 		}
 		return value.NewList(vs), nil
 	}
@@ -370,9 +370,9 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 func appendValue(whole, part value.Value, prepend, all bool) (value.Value, *value.Value) {
 	if whole.Kind == value.Text {
 		if prepend {
-			return text(textForm(part) + whole.Text), nil
+			return text(textForm(part) + whole.Text()), nil
 		}
-		return text(whole.Text + textForm(part)), nil
+		return text(whole.Text() + textForm(part)), nil
 	}
 	if whole.Kind == value.List {
 		vs := []value.Value{part}
@@ -381,7 +381,7 @@ func appendValue(whole, part value.Value, prepend, all bool) (value.Value, *valu
 				e := wrong("list", part)
 				return value.Value{}, &e
 			}
-			vs = part.Items
+			vs = part.Items()
 		}
 		return extendList(whole, vs, prepend), nil
 	}

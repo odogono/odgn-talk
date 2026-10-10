@@ -45,9 +45,9 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 		}
 	}
 	if v.Kind == value.Text {
-		literal(v.Text, fold)
+		literal(v.Text(), fold)
 	} else {
-		tree, e := syntax.Parse("on pattern\n put " + v.Text + " into result\nend pattern\n")
+		tree, e := syntax.Parse("on pattern\n put " + v.Text() + " into result\nend pattern\n")
 		if e != nil {
 			return p, e
 		}
@@ -104,7 +104,7 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 				if e != nil {
 					panic(e)
 				}
-				literal(v.Text, f)
+				literal(v.Text(), f)
 			case "pattern-fold":
 				compile(n.Children[0], true, l, singular)
 			case "pattern-lazy":
@@ -205,7 +205,7 @@ func compilePattern(v value.Value, fold bool) (patternProgram, error) {
 	return p, nil
 }
 func patternSize(s string) int {
-	p, e := compilePattern(value.Value{Kind: value.Pattern, Text: s}, false)
+	p, e := compilePattern(value.Fields{Kind: value.Pattern, Text: s}.Value(), false)
 	if e != nil {
 		return 100001
 	}
@@ -372,12 +372,12 @@ func matchValue(p patternProgram, s string, m *patternMatch) (value.Value, *valu
 		if a >= 0 && b >= 0 {
 			v = text(s[bounds[a]:bounds[b]])
 			if p.Numeric[j] {
-				n, e := decimal.Parse(v.Text)
+				n, e := decimal.Parse(v.Text())
 				if e != nil {
 					err := failure("can't convert", value.Pair{Key: "value", Val: v}, value.Pair{Key: "to", Val: text("number")})
 					return value.Value{}, &err
 				}
-				v = value.Value{Kind: value.Number, Number: n}
+				v = value.Fields{Kind: value.Number, Number: n}.Value()
 			}
 			w = rangeOf(a, b)
 		}

@@ -33,7 +33,7 @@ func NewCivil(f DateFields) (Value, error) {
 	if t.Day() != f.Day || int(t.Month()) != f.Month {
 		return Value{}, fmt.Errorf("nonexistent Civil Date")
 	}
-	return Value{Kind: CivilDate, Date: f}, nil
+	return Fields{Kind: CivilDate, Date: f}.Value(), nil
 }
 func ParseCivil(s string) (Value, error) {
 	m := civilSyntax.FindStringSubmatch(decimal.Trim(s))
@@ -54,7 +54,7 @@ func NewInstant(seconds int64, nanos int32) (Value, error) {
 	if nanos < 0 || nanos >= 1e9 {
 		return Value{}, fmt.Errorf("invalid Instant")
 	}
-	return Value{Kind: Instant, Seconds: seconds, Nanos: nanos}, nil
+	return Fields{Kind: Instant, Seconds: seconds, Nanos: nanos}.Value(), nil
 }
 func ParseInstant(s string) (Value, error) {
 	m := instantSyntax.FindStringSubmatch(decimal.Trim(s))
@@ -65,7 +65,7 @@ func ParseInstant(s string) (Value, error) {
 	if e != nil {
 		return Value{}, e
 	}
-	f := civil.Date
+	f := civil.Date()
 	offset := 0
 	if m[2] != "Z" {
 		h, _ := strconv.Atoi(m[2][1:3])

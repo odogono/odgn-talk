@@ -105,7 +105,7 @@ func (r *Run) ResumeJoinOperation(resume ResumeOperationFunc) {
 		}
 		err = r.positionedError(err)
 		if !hasKey(err, "index") {
-			err.Entries = append(err.Entries, value.Pair{Key: "index", Val: integer(int64(j.Index))})
+			err = err.WithEntries(append(err.Entries(), value.Pair{Key: "index", Val: integer(int64(j.Index))}))
 		}
 		r.raise(err)
 		return
@@ -120,7 +120,7 @@ func (r *Run) ResumeJoinOperation(resume ResumeOperationFunc) {
 			}
 			if err != nil {
 				e := r.positionedError(*err)
-				e.Entries = append(e.Entries, value.Pair{Key: "index", Val: integer(int64(n + 1))})
+				e = e.WithEntries(append(e.Entries(), value.Pair{Key: "index", Val: integer(int64(n + 1))}))
 				r.raise(e)
 				return
 			}

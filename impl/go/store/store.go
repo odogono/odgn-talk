@@ -183,7 +183,7 @@ func failure(code string, pairs ...talk.Pair) *talk.ScriptError {
 		fields[i] = corevalue.Pair{Key: p.Key, Val: v}
 	}
 	e := machine.ErrorValue(code, fields...)
-	return &talk.ScriptError{Code: code, Message: e.Get("message").Text, Data: data}
+	return &talk.ScriptError{Code: code, Message: e.Get("message").Text(), Data: data}
 }
 func text(s string) talk.Value { v, _ := talk.Text(s); return v }
 func size(v talk.Value) int64 {

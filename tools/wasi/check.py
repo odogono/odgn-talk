@@ -24,8 +24,10 @@ import wasmtime
 
 
 class Host:
-    def __init__(self, engine, module):
+    def __init__(self, engine, module, *, memory_limit=None):
         self.store = wasmtime.Store(engine)
+        if memory_limit is not None:
+            self.store.set_limits(memory_size=memory_limit)
         wasi = wasmtime.WasiConfig()
         wasi.inherit_stderr()
         self.store.set_wasi(wasi)

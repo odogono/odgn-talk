@@ -59,22 +59,22 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 	case Boolean:
 		out.WriteString(strconv.FormatBool(v.Bool))
 	case Number:
-		n := v.Number.String()
-		integer, integerError := v.Number.Int64()
-		if plain || v.Number.Exponent() == 0 && integerError == nil && integer > -9007199254740992 && integer < 9007199254740992 {
+		n := v.Number().String()
+		integer, integerError := v.Number().Int64()
+		if plain || v.Number().Exponent() == 0 && integerError == nil && integer > -9007199254740992 && integer < 9007199254740992 {
 			out.WriteString(n)
 		} else {
 			tag("$dec", n)
 		}
 	case Text:
-		str(v.Text)
+		str(v.Text())
 	case List:
 		out.WriteByte('[')
-		for i, item := range v.Items {
+		for i, item := range v.Items() {
 			if i > 0 {
 				out.WriteByte(',')
 			}
-			next := appendPath(path, Value{Kind: Number, Number: decimal.FromInt(int64(i + 1))})
+			next := appendPath(path, Fields{Kind: Number, Number: decimal.FromInt(int64(i + 1))}.Value())
 			if e := encode(out, item, plain, next); e != nil {
 				return e
 			}
@@ -82,7 +82,7 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 		out.WriteByte(']')
 	case Map:
 		wrapped := false
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if strings.HasPrefix(p.Key, "$") && !plain {
 				wrapped = true
 				break
@@ -93,7 +93,7 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 		} else {
 			out.WriteByte('{')
 		}
-		for i, p := range v.Entries {
+		for i, p := range v.Entries() {
 			if i > 0 {
 				out.WriteByte(',')
 			}
@@ -106,7 +106,7 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 			} else {
 				out.WriteByte(':')
 			}
-			if e := encode(out, p.Val, plain, appendPath(path, Value{Kind: Text, Text: p.Key})); e != nil {
+			if e := encode(out, p.Val, plain, appendPath(path, Fields{Kind: Text, Text: p.Key}.Value())); e != nil {
 				return e
 			}
 			if wrapped {
@@ -124,20 +124,20 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 		}
 		switch v.Kind {
 		case Bytes:
-			tag("$bytes", base64.StdEncoding.EncodeToString(v.Bytes))
+			tag("$bytes", base64.StdEncoding.EncodeToString(v.Bytes()))
 		case Quantity:
 			out.WriteString(`{"$quantity":[`)
-			str(v.Number.String())
+			str(v.Number().String())
 			out.WriteByte(',')
-			str(v.Unit.String())
+			str(v.Unit().String())
 			out.WriteString("]}")
 		case Range:
 			out.WriteString(`{"$range":[`)
-			if e := encode(out, v.Items[0], false, path); e != nil {
+			if e := encode(out, v.Items()[0], false, path); e != nil {
 				return e
 			}
 			out.WriteByte(',')
-			if e := encode(out, v.Items[1], false, path); e != nil {
+			if e := encode(out, v.Items()[1], false, path); e != nil {
 				return e
 			}
 			out.WriteString("]}")
@@ -146,12 +146,12 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 		case CivilDate:
 			tag("$date", v.Display())
 		case Pattern:
-			tag("$pattern", v.Text)
+			tag("$pattern", v.Text())
 		case Object:
 			out.WriteString(`{"$object":[`)
-			str(v.Object.Kind)
+			str(v.Object().Kind)
 			out.WriteByte(',')
-			str(v.Object.ID)
+			str(v.Object().ID)
 			out.WriteString("]}")
 		default:
 			return fmt.Errorf("unknown value kind")
@@ -210,7 +210,7 @@ func DecodeMembers(b []byte) ([]Pair, error) {
 	if r.at != len(r.text) || v.Kind != Map {
 		return nil, fmt.Errorf("Expected one JSON object")
 	}
-	return v.Entries, nil
+	return v.Entries(), nil
 }
 
 func (r *jsonReader) error() error { return fmt.Errorf("invalid JSON at byte %d", r.at) }
@@ -299,7 +299,7 @@ func (r *jsonReader) value() (Value, error) {
 			return v, nil
 		}
 		hasTag := false
-		for _, p := range v.Entries {
+		for _, p := range v.Entries() {
 			if strings.HasPrefix(p.Key, "$") {
 				hasTag = true
 			}
@@ -307,10 +307,10 @@ func (r *jsonReader) value() (Value, error) {
 		if !hasTag {
 			return v, nil
 		}
-		if len(v.Entries) != 1 {
+		if len(v.Entries()) != 1 {
 			return Value{}, fmt.Errorf("tag object must have exactly one key")
 		}
-		return r.tag(v.Entries[0])
+		return r.tag(v.Entries()[0])
 	case 'n':
 		if r.take("null") {
 			return Value{}, nil
@@ -332,7 +332,7 @@ func (r *jsonReader) value() (Value, error) {
 		if e != nil {
 			return Value{}, r.error()
 		}
-		return Value{Kind: Number, Number: n}, nil
+		return Fields{Kind: Number, Number: n}.Value(), nil
 	}
 	return Value{}, r.error()
 }
@@ -418,70 +418,70 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if v.Kind != Text || r.function == nil {
 			return bad()
 		}
-		return r.function(v.Text)
+		return r.function(v.Text())
 	case "$dec":
 		if v.Kind != Text {
 			return bad()
 		}
-		n, e := decimal.Parse(v.Text)
+		n, e := decimal.Parse(v.Text())
 		if e != nil {
 			return Value{}, e
 		}
-		return Value{Kind: Number, Number: n}, nil
+		return Fields{Kind: Number, Number: n}.Value(), nil
 	case "$bytes":
 		if v.Kind != Text {
 			return bad()
 		}
-		b, e := base64.StdEncoding.Strict().DecodeString(v.Text)
-		if e != nil || base64.StdEncoding.EncodeToString(b) != v.Text {
+		b, e := base64.StdEncoding.Strict().DecodeString(v.Text())
+		if e != nil || base64.StdEncoding.EncodeToString(b) != v.Text() {
 			return bad()
 		}
 		return NewBytes(b), nil
 	case "$quantity":
-		if v.Kind != List || len(v.Items) != 2 || v.Items[0].Kind != Text || v.Items[1].Kind != Text {
+		if v.Kind != List || len(v.Items()) != 2 || v.Items()[0].Kind != Text || v.Items()[1].Kind != Text {
 			return bad()
 		}
-		n, e := decimal.Parse(v.Items[0].Text)
+		n, e := decimal.Parse(v.Items()[0].Text())
 		if e != nil {
 			return Value{}, e
 		}
-		return NewQuantity(n, v.Items[1].Text)
+		return NewQuantity(n, v.Items()[1].Text())
 	case "$range":
-		if v.Kind != List || len(v.Items) != 2 {
+		if v.Kind != List || len(v.Items()) != 2 {
 			return bad()
 		}
-		return NewRange(v.Items[0], v.Items[1])
+		return NewRange(v.Items()[0], v.Items()[1])
 	case "$date":
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParseCivil(v.Text)
+		return ParseCivil(v.Text())
 	case "$instant":
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParseInstant(v.Text)
+		return ParseInstant(v.Text())
 	case "$map":
 		if v.Kind != List {
 			return bad()
 		}
-		pairs := make([]Pair, len(v.Items))
-		for i, item := range v.Items {
-			if item.Kind != List || len(item.Items) != 2 || item.Items[0].Kind != Text {
+		pairs := make([]Pair, len(v.Items()))
+		for i, item := range v.Items() {
+			if item.Kind != List || len(item.Items()) != 2 || item.Items()[0].Kind != Text {
 				return bad()
 			}
-			pairs[i] = Pair{item.Items[0].Text, item.Items[1]}
+			pairs[i] = Pair{item.Items()[0].Text(), item.Items()[1]}
 		}
 		return NewMap(pairs)
 	case "$object":
-		if v.Kind != List || len(v.Items) != 2 || v.Items[0].Kind != Text || v.Items[1].Kind != Text || r.resolve == nil {
+		if v.Kind != List || len(v.Items()) != 2 || v.Items()[0].Kind != Text || v.Items()[1].Kind != Text || r.resolve == nil {
 			return bad()
 		}
-		o, e := r.resolve(v.Items[0].Text, v.Items[1].Text)
+		o, e := r.resolve(v.Items()[0].Text(), v.Items()[1].Text())
 		if e != nil {
 			return Value{}, e
 		}
-		if o.Kind != Object || o.Object.Kind != v.Items[0].Text || o.Object.ID != v.Items[1].Text {
+		if o.Kind != Object || o.Object().Kind != v.Items()[0].Text() || o.Object().ID != v.Items()[1].Text() {
 			return bad()
 		}
 		return o, nil
@@ -489,7 +489,7 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParsePattern(v.Text)
+		return ParsePattern(v.Text())
 	}
 	return bad()
 }
