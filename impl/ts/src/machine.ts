@@ -3114,6 +3114,18 @@ export class Run {
     return frame;
   }
 
+  // Distinct owners never outnumber the frames they come from, so a shallow
+  // Run skips counting them.
+  private callWouldExceedDepth() {
+    const limit = this.limits.callDepth;
+    const frames =
+      this.frames.length +
+      this.recoveries.reduce((n, c) => n + c.retained.length, 0) +
+      (this.cancellation?.length ?? 0) +
+      this.cancellationOwners.length;
+    return frames + 1 > limit && this.realDepth() + 1 > limit;
+  }
+
   private realDepth() {
     return new Set(
       [
@@ -3526,7 +3538,7 @@ export class Run {
   }
 
   private callBody(code: Code, body: Body, args: Value[]) {
-    if (this.realDepth() + 1 > this.limits.callDepth) {
+    if (this.callWouldExceedDepth()) {
       throw new LimitFaultError('callDepth', this.frame.pc);
     }
     this.pay('call');
@@ -4854,7 +4866,7 @@ export class Run {
         if (!clauses.some(body => body.params.length === n)) {
           throw new ScriptError('no match');
         }
-        if (this.realDepth() + 1 > this.limits.callDepth) {
+        if (this.callWouldExceedDepth()) {
           throw new LimitFaultError('callDepth', frame.pc);
         }
         this.pay('call');

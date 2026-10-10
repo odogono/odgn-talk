@@ -38,7 +38,17 @@ export const formatDec = ({ coefficient, exponent, negative }: Dec): string => {
 };
 
 const digitCount = (n: bigint) => (n === 0n ? 0 : n.toString().length);
-const pow10 = (n: number) => 10n ** BigInt(n);
+const POWERS = Array.from({ length: 70 }, (_, i) => 10n ** BigInt(i));
+const pow10 = (n: number) => POWERS[n] ?? 10n ** BigInt(n);
+/** Whether a Dec fits chapter 3's limits, so it needs no further checks. */
+export const withinLimits = (d: Dec): boolean =>
+  d.coefficient < LIMIT && d.exponent >= MIN_EXPONENT && d.exponent <= 0;
+// An exact value that already fits 34 digits keeps its ideal exponent, which
+// lies between its finest and coarsest exact writings: `result` would pick it.
+const exact = (negative: boolean, c: bigint, ideal: number): Dec | null =>
+  c < LIMIT && ideal >= MIN_EXPONENT && ideal <= 0
+    ? { negative: negative && c !== 0n, coefficient: c, exponent: ideal }
+    : null;
 
 // The exact value n/d × 10^e rounded half-even to t: round(n/d × 10^(e-t)).
 const roundAt = (n: bigint, d: bigint, e: number, t: number): bigint => {
@@ -131,10 +141,16 @@ export const roundRatio = (num: bigint, den: bigint, exponent: number): Dec =>
 
 export const add = (a: Dec, b: Dec): Dec => {
   const { sa, sb, e } = aligned(a, b);
-  return signed(sa + sb, 1n, e, e);
+  const sum = sa + sb;
+  return exact(sum < 0n, sum < 0n ? -sum : sum, e) ?? signed(sum, 1n, e, e);
 };
 export const subtract = (a: Dec, b: Dec): Dec => add(a, negate(b));
 export const multiply = (a: Dec, b: Dec): Dec =>
+  exact(
+    a.negative !== b.negative,
+    a.coefficient * b.coefficient,
+    a.exponent + b.exponent,
+  ) ??
   result(
     a.negative !== b.negative,
     a.coefficient * b.coefficient,

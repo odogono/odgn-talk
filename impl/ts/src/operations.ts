@@ -16,6 +16,7 @@ import {
   parseDec,
   powerInteger,
   subtract,
+  withinLimits,
   ArithmeticError,
   type Dec,
 } from './decimal';
@@ -92,6 +93,8 @@ import {
   trimWhiteSpace,
   Value,
   type QuantityRef,
+  canonicalNumber,
+  mapWithEntry,
 } from './values';
 import {
   combine,
@@ -142,7 +145,9 @@ const outOfDomain = (fn: string, value: Value) =>
   ]);
 
 const decOfValue = (v: Value): Dec => parseDec(v.asDecimal()!.toString());
-export const numberValue = (d: Dec): Value => dec(formatDec(d));
+// Arithmetic results already fit the limits, so they skip `dec`'s re-parse.
+export const numberValue = (d: Dec): Value =>
+  withinLimits(d) ? canonicalNumber(formatDec(d)) : dec(formatDec(d));
 export const integerValue = (n: bigint): Value => numberValue(decOf(n));
 const textOf = (v: Value) => v.asText()!;
 const utf8 = new TextEncoder();
@@ -883,22 +888,13 @@ export const setKey = (m: Value, key: string, value: Value): Value => {
   if (m.kind !== 'map') {
     throw wrongKind('map', m);
   }
-  const nfc = normalizeNFC(key);
-  const entries = m.entries();
-  const at = entries.findIndex(([k]) => k === nfc);
-  if (at >= 0) {
-    entries[at] = [nfc, value];
-  } else {
-    entries.push([nfc, value]);
-  }
-  return map(entries);
+  return mapWithEntry(m, normalizeNFC(key), value);
 };
 export const deleteKey = (m: Value, key: string): Value => {
   if (m.kind !== 'map') {
     throw wrongKind('map', m);
   }
-  const nfc = normalizeNFC(key);
-  return map(m.entries().filter(([k]) => k !== nfc));
+  return mapWithEntry(m, normalizeNFC(key), undefined);
 };
 
 const integersOf = (r: Value): Value[] => {
