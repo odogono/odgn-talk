@@ -121,6 +121,7 @@ type Run struct {
 	depthValid    bool
 	depthRetained map[int]bool // real frames still owned by recovery or cancellation
 	spareFrames   []Frame      // empty buffers reused only within ExecuteHosted
+	trial         frameTrial   // undo state for the instruction ExecuteHosted is evaluating
 	Base          []value.Value
 	Limits        Limits
 	Status        Status
@@ -350,9 +351,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		return
 	}
 	r.Status = Running
-	defer func() { r.spareFrames = nil }()
+	defer func() { r.spareFrames, r.trial = nil, frameTrial{} }()
 	start := r.Fuel
-	var stack, locals []value.Value
 	for r.Status == Running {
 		if len(boundary) > 0 {
 			boundary[0]()
@@ -365,7 +365,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
-		if !Supported(i) || r.foreignWaitCall(f, i) && send == nil || r.unrepresentableWait(f, i) || sends(i.Name) && send == nil {
+		foreign := r.foreignWaitCall(f, i)
+		if !Supported(i) || foreign && send == nil || r.unrepresentableWait(f, i) || sends(i.Name) && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -467,24 +468,29 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			r.fault("persistent")
 			break
 		}
-		// Reuse detached trial buffers within this turn. They never become
-		// live frame storage: copy back only after the whole charge succeeds.
-		trial := *f
-		trial.Stack = append(stack[:0], f.Stack...)
-		trial.Locals = append(locals[:0], f.Locals...)
-		trial.ReceiverNames = maps.Clone(f.ReceiverNames)
-		m, effect, err := r.evaluate(&trial, i)
-		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !r.foreignWaitCall(f, i) && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
+		late := r.pastDeadline(f, i.Name)
+		if len(r.Recoveries) > 0 {
+			// Retained continuations can share the old operand buffer.
+			// Keep their failed/control stack intact while active control advances.
+			f.Stack = slices.Clone(f.Stack)
+		}
+		t := &r.trial
+		t.begin(f)
+		m, effect, err := r.evaluate(f, t, i)
+		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !foreign && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
+			t.restore(f)
 			r.fault("depth")
 			break
 		}
 		if i.Name == "make-pattern" && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text()) > r.Limits.Pattern {
+			t.restore(f)
 			r.fault("pattern")
 			break
 		}
 		// A Suspension Point reached after its Timeout Block's deadline raises
 		// at once, before `scope open`, and charges nothing (ADR 0073).
-		if err == nil && r.pastDeadline(f, i.Name) {
+		if err == nil && late {
+			t.restore(f)
 			if f.Clause {
 				if !r.pay(4, 0) {
 					break
@@ -497,7 +503,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" || r.foreignWaitCall(f, i)) {
+		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" || foreign) {
+			t.restore(f)
 			if f.Clause {
 				if !r.pay(4, 0) {
 					break
@@ -515,6 +522,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			fuel += 4
 		}
 		if !r.pay(fuel, alloc) {
+			t.restore(f)
 			break
 		}
 		if f.Clause && f.Accepted && len(r.Frames) == 1 && paid != nil {
@@ -523,34 +531,36 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			notify()
 		}
 		f.Clause = false
-		trial.Clause = false
+		// Sends read the operands the instruction popped.
 		if err == nil && sends(i.Name) {
+			top := len(t.stack) - 1
 			recipient := Receiver{Up: i.Name == "send-up" || i.Name == "send-up-wait"}
 			if !recipient.Up {
-				recipient.Name = f.ReceiverNames[len(f.Stack)-1]
-				recipient.Object = f.Stack[len(f.Stack)-1]
+				recipient.Name = t.names[top]
+				recipient.Object = t.operand(top)
 			}
 			var message string
 			switch {
 			case namedSend(i.Name):
-				message = f.Stack[len(f.Stack)-len(m.Args)-2].Text()
+				message = t.operand(top - len(m.Args) - 1).Text()
 			case spreadSend(i.Name):
-				message = f.Stack[len(f.Stack)-3].Text()
+				message = t.operand(top - 2).Text()
 			default:
 				message = i.Operands()[0].Text
 			}
 			err = send(recipient, message, m.Args, i.Name != "send" && i.Name != "send-named" && i.Name != "send-spread" && i.Name != "send-up")
 		}
-		if err == nil && r.foreignWaitCall(f, i) {
-			n := i.Operands()[0].Index
-			fn := f.Stack[len(f.Stack)-n-1]
+		if err == nil && foreign {
+			fn := t.operand(len(t.stack) - i.Operands()[0].Index - 1)
 			err = send(Receiver{Function: fn}, "", m.Args, true)
 		}
 
 		if err != nil {
+			popped := f.Stack
+			t.restore(f)
 			if i.Name == "throw" {
-				// Raising retains this frame while policy uses the trial buffer.
-				f.Stack = slices.Clone(trial.Stack)
+				// Raising retains this frame without the thrown value.
+				f.Stack = popped
 			}
 			r.raise(*err)
 			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
@@ -558,18 +568,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		trial.PC++
-		stack, locals = trial.Stack, trial.Locals
-		if len(r.Recoveries) > 0 {
-			// Retained continuations can share the old operand buffer.
-			// Keep their failed/control stack intact while active control advances.
-			trial.Stack = slices.Clone(trial.Stack)
-		} else {
-			trial.Stack = append(f.Stack[:0], trial.Stack...)
-		}
-		copy(f.Locals, trial.Locals)
-		trial.Locals = f.Locals
-		*f = trial
+		f.PC++
 		if effect != nil {
 			effect()
 		}
@@ -736,6 +735,7 @@ func (r *Run) unwindLegacy(err value.Value) {
 			f = &r.Frames[frame]
 			f.Waiting = false
 			f.Stack = slices.Clone(f.Stack[:u.Depth])
+			f.ReceiverNames = maps.Clone(f.ReceiverNames) // retained frames may share the map
 			for slot := range f.ReceiverNames {
 				if slot >= len(f.Stack) {
 					delete(f.ReceiverNames, slot)

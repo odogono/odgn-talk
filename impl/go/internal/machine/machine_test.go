@@ -1,7 +1,10 @@
 package machine
 
 import (
+	"maps"
 	"os"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
@@ -50,6 +53,48 @@ func TestLimitFaultChargesNeitherInstructionNorPartialWrite(t *testing.T) {
 	run.Execute(0)
 	if run.Status != Faulted || run.Limit != "fuel" || run.Fuel != 9 || state.Variables[0].Display() != "9" {
 		t.Fatalf("%+v vars=%v", run, state.Variables)
+	}
+}
+
+// An instruction that can't pay leaves its frame as it found it, whatever it
+// popped, pushed, stored or jumped before the charge.
+func TestFailedChargeLeavesTheFrameUnchanged(t *testing.T) {
+	unit := compile(t, "function step acc, i\n return acc + i\nend step\non go n\n put 0 into total\n repeat for each i in 1..n\n  put step(total, i) into total\n end repeat\n return total\nend go\n")
+	state, err := Initialize(unit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type snapshot struct {
+		depth, pc     int
+		waiting       bool
+		stack, locals []value.Value
+		names         map[int]string
+	}
+	take := func(r *Run) snapshot {
+		f := r.Frames[len(r.Frames)-1]
+		return snapshot{len(r.Frames), f.PC, f.Waiting, slices.Clone(f.Stack), slices.Clone(f.Locals), maps.Clone(f.ReceiverNames)}
+	}
+	faults := 0
+	for fuel := int64(0); ; fuel++ {
+		r := Start(state, 2, []value.Value{integer(3)}, Limits{Fuel: fuel, Alloc: 1000, Depth: 200, Bounded: true})
+		var before snapshot
+		for r.Status == Running || r.Status == Preempted {
+			before = take(r)
+			r.Execute(1)
+		}
+		if r.Status == Completed {
+			break
+		}
+		if r.Status != Faulted || r.Limit != "fuel" {
+			t.Fatalf("fuel %d: %v %q", fuel, r.Status, r.Limit)
+		}
+		if after := take(r); !reflect.DeepEqual(before, after) {
+			t.Fatalf("fuel %d at %s: frame changed from %+v to %+v", fuel, r.At.Name, before, after)
+		}
+		faults++
+	}
+	if faults < 20 {
+		t.Fatalf("only %d faults", faults)
 	}
 }
 func TestGeneratedRatesAndSizes(t *testing.T) {

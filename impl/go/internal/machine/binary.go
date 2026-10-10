@@ -110,9 +110,9 @@ func fieldBytes(v value.Value, field string, size *value.Value) ([]byte, *value.
 	}
 	return out, nil
 }
-func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *value.Value {
+func binaryInstruction(f *Frame, t *frameTrial, i lower.Instruction, s *State, m *Measures) *value.Value {
 	args := i.Operands()
-	pop := func() value.Value { v := f.Stack[len(f.Stack)-1]; f.Stack = f.Stack[:len(f.Stack)-1]; return v }
+	pop := func() value.Value { v := f.Stack[len(f.Stack)-1]; t.shrink(f, len(f.Stack)-1); return v }
 	push := func(v value.Value) { f.Stack = append(f.Stack, v) }
 	result := func(v value.Value) { push(v); m.Result = v; m.ResultPresent = true }
 	jump := func() { f.PC = args[len(args)-1].Index - 1 }
@@ -122,7 +122,7 @@ func binaryInstruction(f *Frame, i lower.Instruction, s *State, m *Measures) *va
 		if i.Name == "bytes-bits" {
 			n := args[1].Index
 			vs := slices.Clone(f.Stack[len(f.Stack)-n:])
-			f.Stack = f.Stack[:len(f.Stack)-n]
+			t.shrink(f, len(f.Stack)-n)
 			whole = pop()
 			widths := s.Constants[args[0].Index].Items()
 			number := new(big.Int)

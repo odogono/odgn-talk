@@ -67,16 +67,21 @@ func constant(s string) (value.Value, error) {
 	}
 	return v, nil
 }
-func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.Value) {
+
+// evaluate runs i on the live frame f, recording in t what it overwrites.
+func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, func(), *value.Value) {
 	code := f.Code
 	m := Measures{}
 	args := i.Operands()
 	idx := func(n int) int { return args[n].Index }
 	name := func(n int) string { return args[n].Text }
 	pop := func() value.Value {
-		v := f.Stack[len(f.Stack)-1]
-		delete(f.ReceiverNames, len(f.Stack)-1)
-		f.Stack = f.Stack[:len(f.Stack)-1]
+		n := len(f.Stack) - 1
+		v := f.Stack[n]
+		if _, ok := f.ReceiverNames[n]; ok {
+			delete(t.writeNames(f), n)
+		}
+		t.shrink(f, n)
 		return v
 	}
 	push := func(v value.Value) {
@@ -86,21 +91,14 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	}
 	take := func(n int) []value.Value {
 		vs := slices.Clone(f.Stack[len(f.Stack)-n:])
-		f.Stack = f.Stack[:len(f.Stack)-n]
-		for slot := range f.ReceiverNames {
-			if slot >= len(f.Stack) {
-				delete(f.ReceiverNames, slot)
-			}
-		}
+		t.shrink(f, len(f.Stack)-n)
+		t.dropNames(f, len(f.Stack))
 		return vs
 	}
 	jump := func() { f.PC = args[len(args)-1].Index - 1 }
 	receiver := func(name string) {
 		push(value.Value{})
-		if f.ReceiverNames == nil {
-			f.ReceiverNames = map[int]string{}
-		}
-		f.ReceiverNames[len(f.Stack)-1] = name
+		t.writeNames(f)[len(f.Stack)-1] = name
 	}
 	var effect func()
 	var err *value.Value
@@ -120,9 +118,9 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 	case "load":
 		push(f.Locals[idx(0)])
 	case "store":
-		f.Locals[idx(0)] = pop()
+		t.setLocal(f, idx(0), pop())
 	case "move":
-		f.Locals[idx(1)] = f.Locals[idx(0)]
+		t.setLocal(f, idx(1), f.Locals[idx(0)])
 	case "load-var":
 		push(r.State.Variables[idx(0)])
 	case "store-var":
@@ -657,7 +655,7 @@ func (r *Run) evaluate(f *Frame, i lower.Instruction) (Measures, func(), *value.
 			push(result)
 		}
 	case "bytes-field", "bytes-sized", "bytes-bits", "bin-start", "bin-literal", "bin-int", "bin-bits", "bin-bytes", "bin-rest", "bin-end":
-		err = binaryInstruction(f, i, code, &m)
+		err = binaryInstruction(f, t, i, code, &m)
 	case "make-pattern":
 		n := idx(1)
 		vs := take(n)
