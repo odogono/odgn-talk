@@ -9,12 +9,12 @@ import {
   type Shape,
 } from './capabilities';
 import { HostError } from './errors';
-import { isInteger, integerOf, parseDec } from './decimal';
+import { isInteger, integerOf } from './decimal';
 import { wellFormedLocale } from './locale-tag';
 import { ScriptError } from './operations';
 import { costOf, fixed, type Costs } from './standard-capabilities';
 import { registerStandardChecks } from './standard-capability-checks';
-import { bool, map, text, type Value } from './values';
+import { bool, decimalParts, map, text, type Value } from './values';
 
 export type LocaleImpl = {
   compare(
@@ -126,9 +126,7 @@ const withDefaults = (given: Value | undefined, defaults: Value): Value =>
   );
 const integer = (value: Value): bigint | undefined => {
   const n =
-    value.kind === 'number'
-      ? parseDec(value.asDecimal()!.toString())
-      : undefined;
+    value.kind === 'number' ? decimalParts(value.asDecimal()!) : undefined;
   return n && isInteger(n) ? integerOf(n) : undefined;
 };
 const validRank = (value: Value, args: readonly Value[]): boolean => {

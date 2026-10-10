@@ -59,9 +59,12 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
 - `internal/decimal/` supplies exact-input decimals, arithmetic, integral
   rounding and elementary functions. Outward-rounded intervals increase
   precision until both bounds select the same 34-digit half-even result.
-  Exact addition, subtraction and multiplication use checked `int64`
-  coefficients when possible, preserving the decimal quantum and falling back
-  to `math/big` for overflow or rounding.
+  Numbers cache their coefficient as an `int64` when it fits, alongside the
+  canonical text; copies remain immutable and restore rebuilds the cache.
+  Exact addition, subtraction, multiplication and same-exponent comparison
+  use the cached coefficients, preserving the decimal quantum and falling
+  back to `math/big` for larger coefficients, overflow or rounding. Display,
+  Value Encoding and the save format are unchanged.
 - `internal/value/` owns values, Units, comparison, display and strict JSON.
   Containers copy input slices; public accessors return copies.
 - `internal/syntax/` owns lossless UTF-8 lexing and parsing. `Tree.Source()`
