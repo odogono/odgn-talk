@@ -185,7 +185,8 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
 	exports, ids, states, calls := libraryOptions(g.libraries)
-	id := codeIdentity("script", o.Name, o.Source, ids)
+	tree, parseErr := syntax.ParseCompact(o.Source)
+	id := parsedIdentity("script", o.Name, o.Source, ids, tree)
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("load", []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)}, ReentrantCall)
 		return nil, e
@@ -246,7 +247,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	if o.Owner != nil {
 		me = o.Owner.Value().inner
 	}
-	unit, loadError := g.core.compile(o.Name, o.Source, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), OwnerProperties: ownerProperties(o.Owner), PatternSize: limits.PatternSize, Grants: declarations}, ids)
+	unit, loadError := g.core.compileParsed(o.Name, check.Options{Imports: exports, ImportCalls: calls, Objects: objects, ObjectProperties: objectProperties(bindings), OwnerProperties: ownerProperties(o.Owner), PatternSize: limits.PatternSize, Grants: declarations}, id, tree, parseErr)
 	if loadError != nil {
 		g.diagnostics(loadError)
 		return nil, loadError
@@ -260,7 +261,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 	}
 	if o.GrantsAsUsed {
 		used := map[string]map[string]bool{}
-		tree, _ := syntax.Parse(o.Source)
+		tree := unit.Checked().Tree
 		for _, decl := range tree.Declarations {
 			syntax.Walk(decl, func(n *syntax.Node) bool {
 				name, op := "", ""

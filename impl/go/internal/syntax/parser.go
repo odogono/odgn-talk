@@ -3,7 +3,6 @@ package syntax
 import (
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -11,7 +10,12 @@ type parser struct {
 	nesting      int
 	lexer        *Lexer
 	pending      []Token
+	lookahead    [2]Token
 	tokens       []Token
+	compact      bool
+	docs         map[int]string
+	docLines     []string
+	lineStart    bool
 	depth        int
 	base         []int
 	patternDepth int
@@ -27,11 +31,22 @@ type parser struct {
 // syntax error. Lexing is lazy so a later lexical error cannot hide an earlier
 // error in the parse (chapter 2).
 func Parse(source string) (tree *Tree, err error) {
+	return parse(source, false)
+}
+
+// ParseCompact keeps source and Declaration Documentation, without the full
+// token tape needed by editor tooling. Compilation doesn't need that tape;
+// retaining a Token for every blank line amplifies hostile source's memory.
+func ParseCompact(source string) (*Tree, error) {
+	return parse(source, true)
+}
+
+func parse(source string, compact bool) (tree *Tree, err error) {
 	l, err := NewLexer(source)
 	if err != nil {
 		return nil, err
 	}
-	p := &parser{lexer: l, base: []int{0}}
+	p := &parser{lexer: l, base: []int{0}, compact: compact, lineStart: true}
 	defer func() {
 		if value := recover(); value != nil {
 			if e, ok := value.(*Error); ok {
@@ -53,6 +68,13 @@ func Parse(source string) (tree *Tree, err error) {
 	p.take(Operand)
 	checkNesting(tree.Declarations)
 	tree.Tokens = p.tokens
+	if compact {
+		tree.source = &source
+		tree.docs = p.docs
+	}
+	for _, n := range tree.Declarations {
+		n.cachePositions()
+	}
 	return tree, nil
 }
 
@@ -60,6 +82,13 @@ func (p *parser) peek(mode Mode) Token   { return p.look(0, mode) }
 func (p *parser) second(mode Mode) Token { return p.look(1, mode) }
 func (p *parser) look(index int, mode Mode) Token {
 	for len(p.pending) <= index {
+		// Taking a token used to consume the pending slice's capacity, so
+		// nearly every token allocated another backing array. Lookahead is
+		// bounded to two tokens; reuse that storage after each take.
+		if len(p.pending) == cap(p.pending) {
+			copy(p.lookahead[:], p.pending)
+			p.pending = p.lookahead[:len(p.pending)]
+		}
 		lexicalMode := mode
 		if p.patternDepth > 0 && mode != AfterNumber && mode != AfterAs {
 			lexicalMode = Pattern
@@ -82,7 +111,11 @@ func (p *parser) look(index int, mode Mode) Token {
 			}
 			panic(err)
 		}
-		p.tokens = append(p.tokens, token)
+		if p.compact {
+			p.recordDocumentation(token)
+		} else {
+			p.tokens = append(p.tokens, token)
+		}
 		pendingContinuation := len(p.pending) > 0 && slices.Contains([]string{"and", "or", "+", "-", "*", "/", "^", "&", "=", ",", "..", "is", "contains", "matches", "mod", "div", "with", "be"}, p.pending[len(p.pending)-1].Raw)
 		if token.Kind == LineBreak && (p.depth > p.base[len(p.base)-1] || p.continuation || pendingContinuation) {
 			continue
@@ -1708,11 +1741,17 @@ func (p *parser) binaryPattern(pattern bool) *Node {
 
 // Walk visits each syntax node in source order, excluding token trivia.
 func Walk(n *Node, visit func(*Node) bool) {
-	if n == nil || !visit(n) {
-		return
-	}
-	for _, child := range SourceChildren(n) {
-		Walk(child, visit)
+	stack := []*Node{n}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if n == nil || !visit(n) {
+			continue
+		}
+		children := SourceChildren(n)
+		for i := len(children) - 1; i >= 0; i-- {
+			stack = append(stack, children[i])
+		}
 	}
 }
 
@@ -1733,7 +1772,17 @@ func TextOf(t Token) string {
 
 // SourceChildren gives the immediate syntax regions in source order.
 func SourceChildren(n *Node) []*Node {
-	children := []*Node{}
+	count := len(n.Params) + len(n.Children) + len(n.Body) + len(n.Branches)
+	if n.Guard != nil {
+		count++
+	}
+	if n.Collect != nil {
+		count++
+	}
+	if count == 0 {
+		return nil
+	}
+	children := make([]*Node, 0, count)
 	for _, group := range [][]*Node{n.Params, n.Children, n.Body, n.Branches} {
 		children = append(children, group...)
 	}
@@ -1743,9 +1792,12 @@ func SourceChildren(n *Node) []*Node {
 	if n.Collect != nil {
 		children = append(children, n.Collect)
 	}
-	sort.SliceStable(children, func(i, j int) bool {
-		a, b := children[i].FirstPos(), children[j].FirstPos()
-		return a.Line < b.Line || a.Line == b.Line && a.Column < b.Column
+	slices.SortStableFunc(children, func(a, b *Node) int {
+		x, y := a.FirstPos(), b.FirstPos()
+		if x.Line != y.Line {
+			return x.Line - y.Line
+		}
+		return x.Column - y.Column
 	})
 
 	return children

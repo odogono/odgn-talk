@@ -49,5 +49,6 @@ func ParseEntry(source string, isHandler func(string) bool) (kind string, entry 
 	}
 	p.take(Operand)
 	checkNesting([]*Node{entry})
+	entry.cachePositions()
 	return
 }

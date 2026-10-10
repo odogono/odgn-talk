@@ -16,6 +16,7 @@ import hashlib
 import importlib.metadata
 import json
 import sys
+import time
 import zlib
 from pathlib import Path
 
@@ -266,6 +267,40 @@ end bad
     return hello
 
 
+def check_hostile_loads(engine, module):
+    # #583: these inputs exhausted a 1 GiB instance, or held it for minutes.
+    # Use a fresh instance for each so memory growth measures that Load.
+    sources = {
+        "blank": "\n" * (1 << 20),
+        "handlers": "".join(f"on h{i}\nend h{i}\n" for i in range(100_000)),
+        "chain": "on sum\nreturn 1" + " + 1" * 99_999 + "\nend sum\n",
+        "powers": "on sum\nreturn 1" + " ^ 1" * 99_999 + "\nend sum\n",
+    }
+    measurements = {}
+    for name, source in sources.items():
+        h = Host(engine, module, memory_limit=1 << 30)
+        h.ok("new-group", group="g", name="g")
+        before = h.memory.data_len(h.store)
+        start = time.perf_counter()
+        reply = h.send("load", group="g", name=name, source=source)
+        if name in ("chain", "powers"):
+            assert reply["err"]["kind"] == "load error", reply
+            diagnostics = reply["err"]["diagnostics"]
+            assert len(diagnostics) == 1, reply
+            assert diagnostics[0]["code"] == "source nesting too deep", reply
+        else:
+            assert "ok" in reply, reply
+        elapsed = time.perf_counter() - start
+        assert h.ok("add", a=20, b=22)["value"] == 42
+        measurements[name] = {
+            "sourceBytes": len(source.encode()),
+            "outcome": "source nesting too deep" if "err" in reply else "loaded",
+            "seconds": round(elapsed, 3),
+            "memoryGrowthBytes": h.memory.data_len(h.store) - before,
+        }
+    return measurements
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: uv run tools/wasi/check.py path/to/messagelayer.wasm")
@@ -274,6 +309,7 @@ def main():
     engine = wasmtime.Engine()
     module = wasmtime.Module(engine, payload)
     hello = check(engine, module)
+    hostile_loads = check_hostile_loads(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -289,6 +325,7 @@ def main():
                 "zlib": zlib.ZLIB_RUNTIME_VERSION,
                 "hello": hello,
                 "checks": "passed",
+                "hostileLoads": hostile_loads,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),

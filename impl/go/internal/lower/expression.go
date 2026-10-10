@@ -191,31 +191,7 @@ func (u *Unit) expression(n *syntax.Node) {
 		}
 		u.emit(pos, op)
 	case "binary":
-		u.expression(n.Children[0])
-		if n.Text == "and" || n.Text == "or" {
-			short, end := &label{}, &label{}
-			branch, value := "branch-false", "false"
-			if n.Text == "or" {
-				branch, value = "branch-true", "true"
-			}
-			u.emit(pos, branch, target(short))
-			u.expression(n.Children[1])
-			u.emit(pos, "check-boolean")
-			u.emit(pos, "jump", target(end))
-			u.mark(short)
-			u.value(pos, value)
-			u.mark(end)
-		} else {
-			u.expression(n.Children[1])
-			args := []operand{}
-			if len(n.Flags) > 0 {
-				args = append(args, text("fold"))
-			}
-			u.emit(pos, binaryOps[n.Text], args...)
-			if strings.HasPrefix(n.Text, "is not ") || strings.HasPrefix(n.Text, "does not ") {
-				u.emit(pos, "not")
-			}
-		}
+		u.binaryExpression(n)
 	case "kind-test":
 		u.expression(n.Children[0])
 		op := "is-kind"
@@ -593,6 +569,61 @@ func (u *Unit) build(n *syntax.Node) {
 				u.emit(field.Pos(), "bytes-sized", text(field.Text))
 			} else {
 				u.emit(field.Pos(), "bytes-field", text(field.Text))
+			}
+		}
+	}
+}
+
+// Binary expression actions preserve left-to-right evaluation and short-circuit
+// labels without recursive calls for long operator chains (including ^).
+func (u *Unit) binaryExpression(n *syntax.Node) {
+	type action struct {
+		node       *syntax.Node
+		stage      uint8
+		short, end *label
+	}
+	stack := []action{{node: n}}
+	for len(stack) > 0 {
+		a := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		n, pos := a.node, a.node.Pos()
+		switch a.stage {
+		case 0:
+			if n.Kind != "binary" {
+				u.expression(n)
+			} else {
+				stack = append(stack, action{node: n, stage: 1}, action{node: n.Children[0]})
+			}
+		case 1:
+			if n.Text == "and" || n.Text == "or" {
+				short, end := &label{}, &label{}
+				branch := "branch-false"
+				if n.Text == "or" {
+					branch = "branch-true"
+				}
+				u.emit(pos, branch, target(short))
+				stack = append(stack, action{node: n, stage: 2, short: short, end: end}, action{node: n.Children[1]})
+			} else {
+				stack = append(stack, action{node: n, stage: 3}, action{node: n.Children[1]})
+			}
+		case 2:
+			u.emit(pos, "check-boolean")
+			u.emit(pos, "jump", target(a.end))
+			u.mark(a.short)
+			value := "false"
+			if n.Text == "or" {
+				value = "true"
+			}
+			u.value(pos, value)
+			u.mark(a.end)
+		case 3:
+			args := []operand{}
+			if len(n.Flags) > 0 {
+				args = append(args, text("fold"))
+			}
+			u.emit(pos, binaryOps[n.Text], args...)
+			if strings.HasPrefix(n.Text, "is not ") || strings.HasPrefix(n.Text, "does not ") {
+				u.emit(pos, "not")
 			}
 		}
 	}

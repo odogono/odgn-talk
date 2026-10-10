@@ -123,7 +123,7 @@ func (u *Unit) declaration(n *syntax.Node, s Symbol) {
 	u.Symbols[s.Name] = s
 }
 func Check(tree *syntax.Tree, options Options) *Unit {
-	u := &Unit{Tree: tree, Options: options, Symbols: map[string]Symbol{}, Bodies: map[*syntax.Node]*Body{}}
+	u := &Unit{Tree: tree, Options: options, Symbols: make(map[string]Symbol, len(tree.Declarations)), Bodies: make(map[*syntax.Node]*Body, len(tree.Declarations)+1)}
 	if previous := options.Existing; previous != nil {
 		for node, body := range previous.Bodies {
 			u.Bodies[node] = body
@@ -477,12 +477,13 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 	if existing := u.Bodies[n]; existing != nil {
 		return existing
 	}
-	analysisNode := *n
+	analysis := n
 	if kind == "event" {
+		analysisNode := *n
 		analysisNode.Body = nil
 		analysisNode.Children = nil
+		analysis = &analysisNode
 	}
-	analysis := &analysisNode
 	b := &Body{Node: n, Kind: kind, Name: name, Parent: parent, Locals: []string{"it"}}
 	u.Bodies[n] = b
 	add := func(x *syntax.Node) {
@@ -736,6 +737,21 @@ func convertible(name string) bool {
 }
 func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	if n == nil {
+		return
+	}
+	// Binary nodes add no checking context of their own. Traverse a whole
+	// operator tree iteratively so hostile chains don't consume the WASI stack.
+	if n.Kind == "binary" {
+		stack := []*syntax.Node{n}
+		for len(stack) > 0 {
+			x := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if x.Kind == "binary" {
+				stack = append(stack, x.Children[1], x.Children[0])
+			} else {
+				u.validate(x, b, ctx)
+			}
+		}
 		return
 	}
 	if n.Kind == "lambda" {
