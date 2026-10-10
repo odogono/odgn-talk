@@ -31,7 +31,7 @@ func ParseEntry(source string, isHandler func(string) bool) (kind string, entry 
 	}
 	if slices.Contains([]string{"on", "function", "private", "use", "constant"}, t.Raw) || t.Raw == "script" && p.second(Operand).Raw == "variable" {
 		kind, entry = "declaration", p.declaration()
-	} else if slices.Contains([]string{"if", "repeat", "match", "try", "wait", "add", "ask", "delete", "divide", "exit", "let", "multiply", "pass", "put", "replace", "return", "send", "set", "subtract", "tell", "throw", "veto"}, t.Raw) || t.Raw == "next" && p.second(Operand).Raw == "repeat" || isName(t) && (t.Raw == "say" || isHandler != nil && isHandler(t.Raw)) {
+	} else if slices.Contains([]string{"if", "repeat", "match", "try", "wait", "add", "ask", "delete", "divide", "exit", "let", "multiply", "pass", "put", "replace", "return", "send", "set", "subtract", "tell", "throw", "veto"}, t.Raw) || t.Raw == "next" && p.second(Operand).Raw == "repeat" || t.Raw == "with" && p.second(Operand).Raw == "timeout" || isName(t) && (t.Raw == "say" || isHandler != nil && isHandler(t.Raw)) {
 		kind, entry = "statement", p.statement(false)
 		complete = true
 		p.nl()

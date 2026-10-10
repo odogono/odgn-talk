@@ -547,7 +547,7 @@ type Rec = {
 
 type Loop = {
   exit: Label;
-  finallies: number; // the number of `finally` blocks open when the loop began
+  finallies: number; // the number of `finallies` entries open when the loop began
   top: Label;
 };
 
@@ -633,7 +633,9 @@ export class BodyCompiler {
   locals: string[] = ['it'];
   free: number[] = []; // released temp slots
   loops: Loop[] = [];
-  finallies: Node[][] = [];
+  // The open `finally` blocks and, as `'timeout'`, Timeout Blocks, whose
+  // deadlines `exit repeat` and `next repeat` pop as they leave (chapter 8).
+  finallies: (Node[] | 'timeout')[] = [];
   // The open `try`s, outermost first: the spans their catch and finally
   // entries protect, and the index of their `finally` in `finallies`.
   tries: {
@@ -645,7 +647,7 @@ export class BodyCompiler {
   // For each `finally` block being lowered, the loop depth where it began.
   inFinally: number[] = [];
   join = 0;
-  iterators = 0; // loop iterators on the operand stack: the static depth
+  iterators = 0; // iterators and deadlines on the operand stack: the static depth
   line = 1;
   col = 1;
   capturedFrom: BodyCompiler | null;
@@ -907,6 +909,7 @@ export class BodyCompiler {
           }
           return;
         case 'Join':
+        case 'TimeoutBlock':
           s.body.forEach(walk);
           return;
       }
@@ -1319,6 +1322,8 @@ export class BodyCompiler {
         return this.waitForBlock(s);
       case 'Join':
         return this.joinBlock(s);
+      case 'TimeoutBlock':
+        return this.timeoutBlock(s);
       case 'veto':
         if (s.value) {
           this.expr(s.value);
@@ -1869,7 +1874,8 @@ export class BodyCompiler {
         `\`${s.k === 'Pass' ? 'pass' : s.k}\` can't leave a \`finally\` block`,
       );
     }
-    if (!this.finallies.length) {
+    // A Timeout Block's deadline leaves with the frame.
+    if (!this.finallies.some(f => f !== 'timeout')) {
       return op();
     }
     let t = -1;
@@ -1877,12 +1883,16 @@ export class BodyCompiler {
       t = this.temp();
       this.emit('store', [t]);
     }
-    this.leave(0, () => {
-      if (value) {
-        this.emit('load', [t]);
-      }
-      op();
-    });
+    this.leave(
+      0,
+      () => {
+        if (value) {
+          this.emit('load', [t]);
+        }
+        op();
+      },
+      false,
+    );
     if (value) {
       this.release(t);
     }
@@ -1891,24 +1901,37 @@ export class BodyCompiler {
   // Leaves the `finally` blocks from `depth` in: runs each, innermost
   // first, then `tail` (the jump or `return` that leaves). The copies and the
   // tail are outside the spans of those `try`s and of every `try` inside
-  // them (chapter 8).
-  leave(depth: number, tail: () => void) {
+  // them (chapter 8). With `deadlines`, each Timeout Block left pops its
+  // deadline in turn.
+  leave(depth: number, tail: () => void, deadlines = true) {
     if (depth >= this.finallies.length) {
       return tail();
     }
-    const from = this.tries.findIndex(t => t.finally === depth);
-    const paused = this.tries
-      .slice(from)
-      .flatMap(t => [t.catchRec, t.offerRec, t.finRec])
-      .filter((r): r is Rec => !!r && r.open !== null);
+    const from = this.tries.findIndex(
+      t => t.finally !== null && t.finally >= depth,
+    );
+    const paused =
+      from < 0
+        ? []
+        : this.tries
+            .slice(from)
+            .flatMap(t => [t.catchRec, t.offerRec, t.finRec])
+            .filter((r): r is Rec => !!r && r.open !== null);
     for (const r of paused) {
       this.closeSpan(r);
     }
     const saved = this.finallies;
     for (let i = saved.length - 1; i >= depth; i--) {
+      const left = saved[i]!;
+      if (left === 'timeout') {
+        if (deadlines) {
+          this.emit('timeout-end');
+        }
+        continue;
+      }
       this.finallies = saved.slice(0, i);
       this.inFinally.push(this.loops.length);
-      this.block(saved[i]!);
+      this.block(left);
       this.inFinally.pop();
     }
     this.finallies = saved;
@@ -2377,6 +2400,19 @@ export class BodyCompiler {
     });
     this.place(end);
     this.release(which);
+  }
+
+  // `with timeout of d`: its deadline stays on the stack below the body, as
+  // an iterator does (ADR 0073).
+  timeoutBlock(s: Node) {
+    this.expr(s.duration);
+    this.emit('timeout-start');
+    this.iterators++;
+    this.finallies.push('timeout');
+    this.block(s.body);
+    this.finallies.pop();
+    this.iterators--;
+    this.emit('timeout-end');
   }
 
   joinBlock(s: Node) {

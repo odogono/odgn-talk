@@ -794,7 +794,7 @@ var Corpus = CorpusTable{
 				CorpusTableRecordEntryKeyEntry{
 					Key:      "until",
 					Type:     "instant",
-					Is:       "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in",
+					Is:       "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's",
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{

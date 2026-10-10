@@ -58,6 +58,13 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			return corevalue.Value{}, err, false
 		}
 	}
+	// An `ask … and wait` reached after its Timeout Block's deadline raises
+	// at once (ADR 0073). A Join Member isn't a Suspension Point.
+	if op.Mode == Suspending && x.run.At.Name == "ask-wait" {
+		if err := x.run.DeadlineError(named...); err != nil {
+			return corevalue.Value{}, err, false
+		}
+	}
 	if op.Mode == Suspending && x.run.OpenScope != nil {
 		err := x.run.OpenScope.Error()
 		return corevalue.Value{}, &err, false
@@ -98,7 +105,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	}
 	x.calls++
 	ctx, cancel := operationContext(op.Mode)
-	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost}
+	call := &Call{group: g, scriptName: s.name, runID: x.id, grantName: grantName, binding: grant.binding, id: CallID(fmt.Sprintf("%s.c%d", x.id, x.calls)), segmentID: fmt.Sprintf("%s.s%d", x.id, x.segment), now: g.clock, context: ctx, starting: true, charge: x.run.ChargeHost, fuelLeft: x.run.HostFuelLeft}
 	if op.Scope != nil {
 		call.scopeName = op.Scope.Closes
 		if op.Scope.Opens != "" {
@@ -169,6 +176,9 @@ func (g *Group) completeOperation(s *Script, x *execution, grantName, opName str
 		if call.automatic {
 			call.failureDetail = detail
 			return fail("host error", named...)
+		}
+		if x.run.Status == machine.Stopped || !wasCancelling && x.run.Cancelling {
+			return corevalue.Value{}, nil, false
 		}
 		g.record("call-failed", false, []string{string(call.id)}, map[string]string{"op": grantName + "." + opName})
 		*reports = append(*reports, &CallFailed{Script: s.name, Call: call.id, Operation: OperationRef{Capability: grant.definition.name, Operation: opName}, Detail: detail})

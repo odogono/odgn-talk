@@ -511,6 +511,18 @@ const lintTry = (body: SemanticNode, emit: Emit) => {
         }
         return;
       }
+      // A Timeout Block's duration, then its body, in sequence (ADR 0073).
+      if (node.rule === 'TimeoutBlock') {
+        const duration = children.find(c => c.rule === 'Expression');
+        if (duration && mayFail(duration)) {
+          fail(flow);
+        }
+        const body = children.find(c => c.rule === 'Block');
+        if (body) {
+          schedule(body, flow);
+        }
+        return;
+      }
       if (node.rule === 'Try') {
         const protectedFlow = flowFrom(flow.writes);
         const finallyIndex = node.children.findIndex(

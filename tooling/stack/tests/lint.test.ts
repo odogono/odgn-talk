@@ -200,6 +200,22 @@ test("a tell block's bare ending is advised, and its waiting line in a condition
   ).toContainEqual(['conditional-join-member', 5]);
 });
 
+test("a Timeout Block's bare ending is advised as `end timeout`", () => {
+  const block = 'on demo\nwith timeout of 1 s\nwait 1 s\nend\nend demo';
+  expect(lint(block, { profile: 'beginner' }).lints).toMatchObject([
+    {
+      id: 'prefer-explicit-end',
+      span: { line: 4, col: 1 },
+      message: expect.stringContaining('end timeout'),
+    },
+  ]);
+  expect(
+    lint(block.replace('\nend\nend demo', '\nend timeout\nend demo'), {
+      profile: 'beginner',
+    }).lints,
+  ).toEqual([]);
+});
+
 test('recovering nodes retain bare endings and advice in later blocks', () => {
   const source =
     'on demo\nif true then\nput + into x\nend\nput {length: 3} into x\nend';

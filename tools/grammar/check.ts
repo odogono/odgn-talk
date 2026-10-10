@@ -236,14 +236,8 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// Timeout Blocks (ADR 0073), which the Cores' tests don't read until both
+// Whose Clauses (ADR 0074), which the Cores' tests don't read until both
 // Cores parse them.
-mustParse(
-  readFileSync(join(import.meta.dir, 'timeout-block/sketch.talk'), 'utf8'),
-  'tools/grammar/timeout-block/sketch.talk',
-);
-broken(join(import.meta.dir, 'timeout-block/broken.talk'));
-// Whose Clauses (ADR 0074), staged the same way.
 mustParse(
   readFileSync(join(import.meta.dir, 'whose/sketch.talk'), 'utf8'),
   'tools/grammar/whose/sketch.talk',

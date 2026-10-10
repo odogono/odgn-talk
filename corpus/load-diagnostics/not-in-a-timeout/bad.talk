@@ -1,0 +1,11 @@
+on blink
+  wait 1 s
+end blink
+
+on t f
+  with timeout of 5 s
+    blink and wait
+    f(1) and wait
+    send blink to me and wait
+  end timeout
+end t

@@ -61,7 +61,7 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.repeat(n)
 	case "exit", "next":
 		loop := u.state.loops[len(u.state.loops)-1]
-		paused := u.inlineFinally(loop.finally)
+		paused := u.inlineFinally(loop.finally, pos)
 		dest := loop.end
 		if n.Kind == "next" {
 			dest = loop.start
@@ -88,7 +88,7 @@ func (u *Unit) statement(n *syntax.Node) {
 		}
 		var paused []*region
 		slot := -1
-		if len(u.state.finally) > 0 {
+		if u.hasFinally() {
 			slot = u.temp()
 			u.store(pos, slot)
 			paused = u.inlineFinally(0)
@@ -192,6 +192,17 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.state.join--
 		u.emit(n.End.Pos, "join-end")
 		u.store(pos, 0)
+	case "timeout-block":
+		// The deadline stays on the stack below the body, as an iterator
+		// does (ADR 0073).
+		u.expression(n.Children[0])
+		u.emit(pos, "timeout-start")
+		u.state.deadlines++
+		u.state.finally = append(u.state.finally, &finalizer{scope: len(u.state.regions)})
+		u.statements(n.Body)
+		u.state.finally = u.state.finally[:len(u.state.finally)-1]
+		u.state.deadlines--
+		u.emit(pos, "timeout-end")
 	case "wait-for", "wait-any":
 		u.wait(n)
 	default:

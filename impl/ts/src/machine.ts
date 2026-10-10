@@ -18,7 +18,11 @@ import {
 import { charge, partSize, sizeOf, type Measured } from './costs';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf, instructionSpec } from './code-unit';
-import { errorMessages, limitDefaults } from './generated/machine';
+import {
+  errorMessages,
+  limitDefaults,
+  reservedErrorKeys,
+} from './generated/machine';
 import { builtins, grammar } from './generated/syntax';
 import {
   appendTo,
@@ -399,7 +403,26 @@ type Replacement = {
   pieces: string[];
   subject: Value;
 };
-type Item = Value | Iterator | Replacement | Reader | Receiver;
+type Item = Value | Iterator | Replacement | Reader | Receiver | Deadline;
+/**
+ * A Timeout Block's deadline, kept on the stack below its body: the Instant
+ * in Clock nanoseconds, and the block's duration in `ms` (ADR 0073).
+ */
+export type Deadline = { after: Value; at: bigint; k: 'deadline' };
+// A duration in nanoseconds as a Quantity in `ms`, with no more decimal
+// places than it needs.
+const msOf = (ns: bigint): Value => {
+  const sign = ns < 0n ? '-' : '';
+  const n = ns < 0n ? -ns : ns;
+  const fraction = (n % 1_000_000n)
+    .toString()
+    .padStart(6, '0')
+    .replace(/0+$/, '');
+  return quantity(
+    dec(`${sign}${n / 1_000_000n}${fraction ? `.${fraction}` : ''}`),
+    'ms',
+  );
+};
 // A Library Constant's Function Values are templates until used by a Script.
 // Walk explicitly so nested constants and captures do not grow the JS stack.
 const homeConstant = (root: Value, home: Script): Value => {
@@ -635,13 +658,17 @@ type CallContext = {
   opName: string;
 };
 /** Why a Run suspended, which its Group waits on (chapter 5, Suspension Points). */
-export type Suspension =
+export type Suspension = (
   | { k: 'wait'; ns: bigint }
   | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
   | { args: Value[]; id: string; k: 'send'; message: string; to: string }
   | { args: Value[]; fn: Value; id: string; k: 'call-value'; to: string }
   | { k: 'join'; members: Member[] }
-  | WaitFor;
+  | WaitFor
+) & {
+  /** The Timeout Block deadline it is written in, if any (ADR 0073). */
+  deadline?: Deadline;
+};
 /**
  * A `wait for`, one-line or block: its `when` branches with their `from`
  * Scripts or objects and captures, its `after` branches' durations and its timeout,
@@ -679,7 +706,10 @@ export type Resumption =
   | { code: 'call lost' | 'capability revoked'; k: 'restore-fail' }
   | { fuel: number; k: 'answer'; value: Value }
   | { detail?: string; error: HostScriptError | null; k: 'fail' }
-  | { after: number; k: 'timeout' }
+  /** With `deadline`, a Timeout Block's deadline ended it, after that long. */
+  | { after: number; deadline?: Value; k: 'timeout' }
+  /** A Timeout Block's deadline ended a wait or Join, abandoning these. */
+  | { abandon: string[]; after: Value; k: 'deadline' }
   | { k: 'reply'; value: Value }
   | { error: Value | null; k: 'send failed'; reason: string }
   | { answers: Resumption[]; k: 'joined' }
@@ -754,6 +784,8 @@ const itemSize = (item: Item): number => {
       );
     case 'receiver':
       return 0;
+    case 'deadline':
+      return partSize('deadline', 0, 0);
   }
 };
 
@@ -786,7 +818,6 @@ const resultDetail = (
 // A path's step: a map key, or a 1-based list index.
 const keyValue = (k: string | number): Value =>
   typeof k === 'number' ? dec(String(k)) : text(k);
-// The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
 // The sends that pop a computed message name (ADR 0057).
 // A spreading send pops its name, as text, and its arguments as one list
 // (ADR 0064).
@@ -801,15 +832,8 @@ const namedSends = new Set([
   'join-send-named',
   ...spreadSends,
 ]);
-const reservedKeys = new Set([
-  'code',
-  'message',
-  'at',
-  'capability',
-  'operation',
-  'index',
-  'during',
-]);
+// The keys a Host `Fail`'s Data may not use (chapter 6, the catalogue).
+const reservedKeys = new Set<string>(reservedErrorKeys);
 
 // A Script named as a `send`'s receiver; a Script isn't a value (chapter 5).
 type Receiver = { k: 'receiver'; name: string };
@@ -2341,7 +2365,34 @@ export class Run {
       }
       throw new LimitFaultError('persistentState', this.frame.pc);
     }
-    this.suspended = s;
+    const deadline = this.blockDeadline();
+    this.suspended = deadline ? { ...s, deadline } : s;
+  }
+
+  // The deadline of the innermost Timeout Block a Suspension Point is written
+  // in: the topmost on its frame's stack (chapter 8, Waiting).
+  private blockDeadline(): Deadline | undefined {
+    const stack = this.frame.stack;
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const item = stack[i]!;
+      if (!isValue(item) && item.k === 'deadline') {
+        return item;
+      }
+    }
+    return undefined;
+  }
+
+  // A Suspension Point reached after its block's deadline raises `timeout`
+  // at once, starting nothing (chapter 5, Timeout Blocks).
+  private checkDeadline(named: [string, Value][] = []) {
+    const deadline = this.blockDeadline();
+    if (deadline && deadline.at <= this.host!.now) {
+      throw new ScriptError(
+        'timeout',
+        [['after', deadline.after], ...named, ['deadline', bool(true)]],
+        true,
+      );
+    }
   }
 
   /**
@@ -2355,6 +2406,21 @@ export class Run {
     this.segment++;
     this.segmentBase = [...this.script.variables];
     const frame = this.frame;
+    if (r.k === 'deadline') {
+      // What it waited on is abandoned, as a timeout's is (ADR 0073).
+      if (s.k === 'join') {
+        this.join = null;
+      }
+      this.abandoning = r.abandon;
+      throw new ScriptError(
+        'timeout',
+        [
+          ['after', r.after],
+          ['deadline', bool(true)],
+        ],
+        true,
+      );
+    }
     if (s.k === 'wait-for') {
       // The message, or Nothing, and for a block its branch's number.
       if (r.k === 'event') {
@@ -2436,8 +2502,11 @@ export class Run {
         throw new ScriptError(
           'timeout',
           [
-            ['after', quantity(dec(String(r.after)), 'ms')],
+            ['after', r.deadline ?? quantity(dec(String(r.after)), 'ms')],
             ...(call?.named ?? []),
+            ...(r.deadline
+              ? [['deadline', bool(true)] as [string, Value]]
+              : []),
           ],
           true,
         );
@@ -3586,6 +3655,9 @@ export class Run {
     });
     standardChecks(op)?.arguments?.(args, grant.binding, named);
     if (op.mode === 'suspending') {
+      if (!member) {
+        this.checkDeadline(named);
+      }
       this.checkScopeBoundary();
     }
     const scope = op.mode === 'immediate' ? op.scope : undefined;
@@ -4476,6 +4548,7 @@ export class Run {
       }
       case 'wait': {
         const ns = waitNs(this.peek());
+        this.checkDeadline();
         this.checkScopeBoundary();
         this.pay(key);
         this.pop();
@@ -4543,6 +4616,7 @@ export class Run {
         if (entry.timeout) {
           sus.timeout = waitNs(items[i++] as Value);
         }
+        this.checkDeadline();
         this.checkScopeBoundary();
         this.pay(key);
         frame.stack.length -= count;
@@ -4571,6 +4645,8 @@ export class Run {
           frame.stack.push(m.result);
           return next();
         }
+        // Raising here, with the Join open, abandons its members.
+        this.checkDeadline();
         this.pay(key);
         this.suspend({ k: 'join', members });
         return;
@@ -4654,6 +4730,9 @@ export class Run {
           ins.op !== 'send-spread' &&
           ins.op !== 'send-up';
         if (waits) {
+          if (!join) {
+            this.checkDeadline();
+          }
           this.checkScopeBoundary();
         }
         this.pay(key);
@@ -4956,6 +5035,25 @@ export class Run {
       }
 
       // Loops
+      case 'timeout-start': {
+        // The Pump's Clock reading plus `d`, unless an enclosing block's
+        // deadline is no later (ADR 0073).
+        const ns = waitNs(this.peek());
+        const enclosing = this.blockDeadline();
+        const at = this.host!.now + ns;
+        this.pay(key);
+        this.pop();
+        frame.stack.push(
+          enclosing && enclosing.at <= at
+            ? { ...enclosing }
+            : { k: 'deadline', at, after: msOf(ns) },
+        );
+        return next();
+      }
+      case 'timeout-end':
+        this.pay(key);
+        frame.stack.pop();
+        return next();
       case 'iterate': {
         const v = this.peek();
         let iterator: Iterator;

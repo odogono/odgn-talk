@@ -23,6 +23,8 @@ type Context = {
   message: string | null;
   /** Loop depth at the Recovery Catch granting lexical choice permission. */
   recovery: number | null;
+  /** Inside a Timeout Block's body, outside any Lambda in it. */
+  timeout: boolean;
 };
 // A Fallback Handler's message, as its `pass` names it (ADR 0064).
 const FALLBACK = 'any message';
@@ -36,6 +38,7 @@ const outside: Context = {
   lambda: false,
   loops: 0,
   message: null,
+  timeout: false,
 };
 
 const word = (
@@ -68,6 +71,28 @@ const hasMember = (join: SemanticNode): boolean => {
         e.rule === 'OperationLine' ||
         e.rule === 'Send') &&
       waits(e)
+    ) {
+      return true;
+    }
+    work.push(...e.children);
+  }
+  return false;
+};
+// Whether a Timeout Block's body holds a Suspension Point outside any Lambda
+// in it. A Join is one, at its closing `end`, and its members aren't.
+const hasSuspension = (block: SemanticNode): boolean => {
+  const work = [...block.children];
+  while (work.length) {
+    const e = work.pop()!;
+    if (e.kind !== 'node' || e.rule === 'Lambda') {
+      continue;
+    }
+    if (
+      e.rule === 'Wait' ||
+      ((e.rule === 'AskTell' ||
+        e.rule === 'OperationLine' ||
+        e.rule === 'Send') &&
+        waits(e))
     ) {
       return true;
     }
@@ -323,6 +348,14 @@ export const checkControl = (
         }
         break;
       }
+      case 'TimeoutBlock':
+        // In a Join's body, every wait is a member or a load error, so the
+        // block bounds nothing (ADR 0073).
+        if (context.join !== null || !hasSuspension(node)) {
+          report('empty timeout', node.children[0] as Leaf);
+        }
+        context = { ...context, timeout: true };
+        break;
       case 'ChooseOffer':
         if (context.recovery === null) {
           report('not in recovery', firstLeafOf(node));
@@ -413,6 +446,16 @@ export const checkControl = (
         }
         if (unit === 'library' && (word(head, 'pass') || word(head, 'veto'))) {
           report('not in a library', head);
+        }
+        // `name … and wait` and `f(x) and wait` wait in code written
+        // elsewhere, which the block can't bound (ADR 0073).
+        if (
+          context.timeout &&
+          waits(node) &&
+          (head?.kind === 'name' ||
+            (head?.kind === 'node' && head.rule === 'Call'))
+        ) {
+          report('not in a timeout', firstLeafOf(head));
         }
         if (context.join !== null) {
           const call = head?.kind === 'node' ? firstLeafOf(head) : head;

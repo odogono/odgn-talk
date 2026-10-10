@@ -147,6 +147,12 @@ describe('Entries', () => {
     expect(incomplete('tell canvas')).toBe(true);
     expect(incomplete('tell canvas\n  fill 1')).toBe(true);
     expect(incomplete('tell canvas\n  fill 1\nend tell')).toBe(null);
+    // `with` before `timeout` starts a Timeout Block (ADR 0073).
+    expect(incomplete('with timeout of 1 s')).toBe(true);
+    expect(incomplete('with timeout of 1 s\n  wait 1 s')).toBe(true);
+    expect(incomplete('with timeout of 1 s\n  wait 1 s\nend timeout')).toBe(
+      null,
+    );
   });
 });
 

@@ -336,6 +336,35 @@ describe('language server', () => {
       character: 3,
     });
   });
+  test("marks a Timeout Block's waits, and reports its load errors", () => {
+    const { sent, request } = setup(
+      'on demo\n with timeout of 5 s\n   wait 1 s\n   send ping to me and wait\n end timeout\nend demo\n',
+    );
+    expect((sent.at(-1)!.params as Published).diagnostics).toEqual([]);
+    const hints = request('textDocument/inlayHint', {
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 6, character: 0 },
+      },
+    });
+    // The Handler, which may suspend, then each wait in the block.
+    expect(hints.map(hint => hint.position)).toEqual([
+      { line: 0, character: 0 },
+      { line: 2, character: 3 },
+      { line: 3, character: 3 },
+    ]);
+    const bad = setup(
+      'on blink\n wait 1 s\nend blink\non demo\n with timeout of 5 s\n   blink and wait\n end timeout\nend demo\n',
+    );
+    expect(
+      (bad.sent.at(-1)!.params as Published).diagnostics
+        .filter(d => d.severity === 1)
+        .map(d => [d.code, d.range.start]),
+    ).toEqual([
+      ['empty timeout', { line: 4, character: 1 }],
+      ['not in a timeout', { line: 5, character: 3 }],
+    ]);
+  });
   test('navigates and renames through imports while preserving aliases and lexical scopes', () => {
     const { request } = setup(
       'use twice from maths as double\non demo x\n put double(x) into y\nend demo\n',

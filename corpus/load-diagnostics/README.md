@@ -27,6 +27,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [duplicate-key](duplicate-key/bad.talk) | `duplicate key` at `2:15` | [Trace](duplicate-key/case.trace) |
 | [duplicate-name](duplicate-name/bad.talk) | `duplicate name` at `2:9` | [Trace](duplicate-name/case.trace) |
 | [empty-join](empty-join/bad.talk) | `empty join` at `2:1` | [Trace](empty-join/case.trace) |
+| [empty-timeout](empty-timeout/bad.talk) | `empty timeout` at `2:3`, for a block whose only wait is in a Lambda, and `8:5`, for a block in a Join's body (first blessing pending, #542) | [Trace](empty-timeout/case.trace) |
 | [initialiser-failed](initialiser-failed/bad.talk) | `initialiser failed` at `1:16` | [Trace](initialiser-failed/case.trace) |
 | [leaves-finally](leaves-finally/bad.talk) | `leaves finally` at `4:1` | [Trace](leaves-finally/case.trace) |
 | [name-clash](name-clash/bad.talk) | `name clash` at `2:6` | [Trace](name-clash/case.trace) |
@@ -40,6 +41,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [not-in-a-join](not-in-a-join/bad.talk) | `empty join` at `2:1`, `not in a join` at `3:1` | [Trace](not-in-a-join/case.trace) |
 | [not-in-a-join-try](not-in-a-join-try/bad.talk) | `not in a join` at `4:1`, `5:1` and `7:1`; [a `try` around the Join](not-in-a-join-try/good.talk) loads | [Trace](not-in-a-join-try/case.trace) |
 | [not-in-a-lambda](not-in-a-lambda/bad.talk) | `not in a lambda` at `2:12` | [Trace](not-in-a-lambda/case.trace) |
+| [not-in-a-timeout](not-in-a-timeout/bad.talk) | `not in a timeout` at `7:5` and `8:5`; `send … to me and wait` loads (first blessing pending, #542) | [Trace](not-in-a-timeout/case.trace) |
 | [not-in-a-script](not-in-a-script/bad.talk) | `not in a script` at `1:1` | [Trace](not-in-a-script/case.trace) |
 | [nothing-to-fold](nothing-to-fold/bad.talk) | `nothing to fold` at `2:22` | [Trace](nothing-to-fold/case.trace) |
 | [outside-a-loop](outside-a-loop/bad.talk) | `outside a loop` at `2:1` | [Trace](outside-a-loop/case.trace) |

@@ -73,6 +73,7 @@ func TestOperationMalformedFailureData(t *testing.T) {
 			{"code collision", localeMap(t, KV("code", mustPublicText("replacement"))), true, false},
 			{"message collision", localeMap(t, KV("message", mustPublicText("replacement"))), true, false},
 			{"reserved location", localeMap(t, KV("at", Int(9))), false, false},
+			{"reserved deadline", localeMap(t, KV("deadline", Bool(true))), false, false},
 			{"reserved message without envelope collision", localeMap(t, KV("message", mustPublicText("replacement"))), false, true},
 		} {
 			t.Run(completion+"/"+test.name, func(t *testing.T) {

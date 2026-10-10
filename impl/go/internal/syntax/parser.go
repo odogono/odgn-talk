@@ -452,6 +452,18 @@ func (p *parser) statement(inline bool) *Node {
 	if t.Raw == "wait" {
 		return p.waitStatement(inline)
 	}
+	// At the start of a statement where a block may go, `with` then `timeout`
+	// opens a Timeout Block (ADR 0073); otherwise `with` is a Command Call.
+	if t.Raw == "with" && !inline && p.second(Operand).Raw == "timeout" {
+		n := node("timeout-block", p.take(Operand))
+		p.take(Operand)
+		p.expect("of")
+		n.Children = []*Node{p.expression()}
+		p.nl()
+		n.Body = p.block("end")
+		n.End = p.closing("timeout")
+		return n
+	}
 	if t.Raw == "choose" && p.second(Operand).Raw == "offer" {
 		n := node("choose-offer", p.take(Operand))
 		p.expect("offer")

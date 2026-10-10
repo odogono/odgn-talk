@@ -9,6 +9,8 @@ Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and C
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
+A Timeout Block, `with timeout of d … end timeout`, bounds the waits written inside it ([ADR 0073](../../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)). `timeout-start` pushes a deadline, the Clock reading plus `d` or the enclosing block's when that is no later, which stays on the stack below the body as an iterator does, so Unwind depths count it and a catch outside the block drops it. `exit repeat` and `next repeat` emit `timeout-end` for each block they leave. Each Suspension Point reads the topmost deadline on its frame's stack: past it, the instruction raises `timeout` with `deadline: true` at once, and otherwise the block's deadline replaces the wait's own timer when it is no later, or for a Join, is a timer of its own set before its members'. The checker reports `not in a timeout` and `empty timeout`, and a Host `Fail` may not use the reserved key `deadline`.
+
 A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). The parser reads `end` as the block's close and any other first word as an Operation name. Each line is an `ask` until the checker resolves it against the unit's Grants: a fire-and-forget Operation's line without `and wait` becomes a `tell`, once, so an importing Script's recheck tests the Library's lines as compiled. Lines then lower, check suspension and join as the one-line calls they stand for, at their Operation names. A Grant the unit doesn't hold is one `unknown operation` at the block's receiver. With no Grants, as in Disassembly Cases, every line lowers as an `ask`. `DefineCapability` refuses `end` as an Operation name.
 
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
@@ -79,6 +81,9 @@ Use the [Go task map](NAVIGATION.md) for implementation files, Spec links, tests
   incremental replay Host, resolving symbolic Host Inputs as the fuzzer's TS
   runner does. `cmd/fuzzworker/` serves it over the
   [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
+- `internal/messagelayer/` is the [Message Layer](#message-layer) over the
+  root package's embedding interface; `cmd/messagelayer/` serves it as a
+  sidecar on stdio.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -554,6 +559,10 @@ invalid results, plain errors and panics also become `host error`, with Host-onl
 detail in `CallFailed`. Returned failures and queued `Call.Fail` inputs retain
 Error maps in the Trace even when Data collides with the error envelope. Valid
 Nothing/map failures retain their ordinary conversion costs and budget checks.
+If Stop or a newly landed cancellation interrupts the Run at an Operation
+crossing, the Host failure raises no `host error` and emits no `CallFailed`;
+the `call` error record is still written. Operation failures during cancellation's
+`finally` cleanup still raise and report normally.
 Calls carry the named Grant, binding, Pump Clock, Run and Segment identity.
 Caught raises precede subsequent Host call records. Host inputs accepted during
 a call join the next Pump; worker reentry is refused.
@@ -1135,6 +1144,40 @@ observers before Handler dispatch.
 
 Inspection and counters are worker calls; a refused call with no error return
 panics with `HostError`. Trace callbacks run without the input queue lock.
+
+## Message Layer
+
+`internal/messagelayer` carries the
+[Message Layer](../../spec/09-embedding.md#the-message-layer) over the ordinary
+Go embedding interface, for a Host that isn't Go or TS
+([#532](https://github.com/odogono/odgn-talk/issues/532)). A `Session` takes
+one JSON frame and returns one reply frame; the framing is the transport's.
+`cmd/messagelayer` is the sidecar: each frame is a 4-byte big-endian length
+and then the JSON, both ways on stdio.
+
+A `pump` runs on its own goroutine. Each Operation or property it reaches
+returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's
+`op-result` or `prop-result` arrives under the same `ref`. Any other message
+sent meanwhile is a protocol error. So the Core never calls the Host, and the
+same `Session` can sit behind `wasip1` exports, where a goroutine parks across
+exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
+Fuel the Run can still be charged; the reply's `charged` goes through
+`Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
+reply lists the started calls the Core has abandoned under `abandoned`.
+
+It carries `hello`, `define-capability`, the `clock` Standard Capability,
+`add`, `define-object-kind`, `grant`, `new-group`, `load`, `object`,
+`set-parent`, `dispose`, `deliver`, `request`, `cancel-delivery`, `broadcast`,
+`answer`, `fail`, `pump`, `save`, `fingerprint`, `stop`, `cancel-run`,
+`rewind-run`, `revoke`, `counters` and `grants`. It doesn't yet carry
+Libraries, `call`, `decide`, `inspect`, `restore` and `settle`, `reload`,
+`extend`, `export-manifest`, Segment lifecycles and Coordinators, the other
+Standard Capabilities, or the `$function` form of Function Values. Those
+messages reply with a protocol error that says so. A protocol error,
+`{"kind": "protocol error", "detail"}`, is the transport's, outside parity.
+
+A panic in the Core or a Host callback becomes an error reply, so no fault
+ends the `Session`. Check it with `go -C impl/go test ./internal/messagelayer`.
 
 ## Corpus runner
 

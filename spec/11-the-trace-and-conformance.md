@@ -366,7 +366,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `alloc` | `count` | the allocation the stretch made |
 | `seg` | `state` | `count` | the Script's Persistent State at the Segment's end |
 | `seg` | `end` | `word` | why the stretch ended ([End reasons](#end-reasons)) |
-| `seg` | `until` | `instant` | the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in |
+| `seg` | `until` | `instant` | the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's |
 | `seg` | `n` | `count` | for `join-end`, the number of members |
 | `seg` | `value` | `value` | for `veto`, the reason |
 | `preempt` | `delivery` | `id` | for a start, its Delivery |
@@ -536,6 +536,7 @@ A `seg` record's `end` says why its stretch ended. A suspending end reason is th
 `Stop`, `CancelRun` and `RewindRun` made during a Pump land at the latest at the running Pump's next Host crossing, or at its end ([chapter 9](09-embedding.md#threads-and-the-input-queue)).
 
 - **Where it lands** is where its line is written: after the `call` or `prop` record of the crossing it landed at, or before the `pumped` record if it landed at the Pump's end.
+- **A failed interrupted crossing:** when Stop or cancellation interrupts the Run at an Operation or property crossing, the `call` or `prop` error record is still written, but the Host failure neither raises `host error` nor emits `call-failed` ([chapter 9](09-embedding.md#time-and-reports)). Operations and properties called during cancellation's `finally` cleanup still raise and report their failures normally.
 - **An early landing,** between instructions elsewhere, adds `pc`, the instruction of the running Run it landed before. Only a native Core lands early, from a call made on another thread, and replay debugging lands it there through the TS Core's tooling hooks ([chapter 12](12-sessions-and-tooling.md#the-debugger)).
 - **Replaying** a line written after a crossing, the runner makes the call from inside that crossing's Host function, so it lands at the same place. Corpus cases make calls inside a Pump only that way.
 

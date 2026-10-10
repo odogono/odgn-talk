@@ -276,7 +276,7 @@ func (c Codec) decode(data any, v reflect.Value) error {
 		}
 		if v.Type() == valueType {
 			x := v.Interface().(value.Value)
-			if x.Kind < value.Nothing || x.Kind > value.Replacement {
+			if x.Kind < value.Nothing || x.Kind > value.Deadline {
 				return fmt.Errorf("invalid Value kind")
 			}
 			if x.Kind == value.Function && x.Function == nil || x.Kind == value.Object && x.Object == nil {
@@ -298,7 +298,7 @@ func (c Codec) decode(data any, v reflect.Value) error {
 			if x.Kind == value.Quantity && len(x.Unit.Slots) == 0 {
 				return fmt.Errorf("dimensionless Quantity")
 			}
-			if x.Kind == value.Iterator && x.Iterator == nil || x.Kind == value.BinaryReader && x.Reader == nil || x.Kind == value.Replacement && x.Replacement == nil {
+			if x.Kind == value.Iterator && x.Iterator == nil || x.Kind == value.BinaryReader && x.Reader == nil || x.Kind == value.Replacement && x.Replacement == nil || x.Kind == value.Deadline && (x.Deadline == nil || x.Deadline.At == nil) {
 				return fmt.Errorf("missing internal Value state")
 			}
 		}

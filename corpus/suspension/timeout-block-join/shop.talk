@@ -1,0 +1,5 @@
+-- shop.talk: the timeout-block-join case's receiver.
+
+on price k
+  return k & "!"
+end price

@@ -1,0 +1,5 @@
+# Unblessed: `empty timeout` and its source positions (#542); first blessing awaits human review.
+> load bad identity=5b640e7b6f3b0ad91b8b753531b385c98c73eab45af05c5749bac01e3bc3a73c
+diag bad code="empty timeout" pos=2:3
+diag bad code="empty timeout" pos=8:5
+> vars

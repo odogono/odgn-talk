@@ -267,6 +267,7 @@ type Call struct {
 	reached          bool
 	charged          int64
 	charge           func(int64) bool // valid only during this Host crossing
+	fuelLeft         func() (int64, bool)
 	scopeName        string
 	automatic        bool
 	invalidAutomatic bool
@@ -304,7 +305,13 @@ func (c *Call) Charge(fuel int64) error {
 	c.charged += fuel
 	return nil
 }
-func (c *Call) finish() { c.mu.Lock(); defer c.mu.Unlock(); c.starting = false; c.charge = nil }
+func (c *Call) finish() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.starting = false
+	c.charge = nil
+	c.fuelLeft = nil
+}
 func (s *Script) Grants() map[string][]string {
 	if e := s.group.beginWorker(); e != nil {
 		panic(e)

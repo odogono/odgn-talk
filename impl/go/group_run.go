@@ -137,11 +137,39 @@ func (g *Group) fireTimers() {
 				pending.cancel()
 			}
 			if t.x.run.SettleJoin(t.member.id, p) {
+				t.x.deadline, t.x.deadlineAfter = nil, nil
 				g.cancelPendingAbandons(t.x)
 				t.x.memberTimers = nil
 				t.x.how = "resume"
 				t.s.queue = append(t.s.queue, workItem{run: t.x})
 			}
+			continue
+		}
+		if after := t.x.deadlineAfter; after != nil {
+			// A Timeout Block's deadline: what the Run waits on is abandoned,
+			// as a timeout's is (ADR 0073).
+			t.x.deadlineAfter = nil
+			if t.x.run.SendWait {
+				p := machine.SendResume{Timeout: true, Deadline: after}
+				if t.x.run.OperationWait {
+					pending := g.calls[t.x.waitCall]
+					p.Capability = true
+					p.Call = string(t.x.waitCall)
+					pending.pending = false
+					pending.cancel()
+				}
+				g.abandonSend(t.x)
+				t.x.run.SettleSend(p)
+			} else {
+				t.x.run.Expire(*after)
+				if t.x.run.Join != nil {
+					g.cancelPendingAbandons(t.x)
+					t.x.memberTimers = nil
+				}
+			}
+			t.x.deadline, t.x.deadlineAfter = nil, nil
+			t.x.how = "resume"
+			t.s.queue = append(t.s.queue, workItem{run: t.x})
 			continue
 		}
 		if t.x.run.EventWait != nil {
@@ -161,7 +189,7 @@ func (g *Group) fireTimers() {
 			g.abandonSend(t.x)
 			t.x.run.SettleSend(p)
 		}
-		t.x.deadline = nil
+		t.x.deadline, t.x.deadlineAfter = nil, nil
 		t.x.how = "resume"
 		t.s.queue = append(t.s.queue, workItem{run: t.x})
 	}
@@ -523,6 +551,11 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
+				if r.Expired != nil {
+					r.ResumeExpired()
+					g.writeRaises(x, raised)
+					raised = len(r.Raises)
+				}
 				if r.SendResume != nil || r.Join != nil && r.Join.Ready {
 					resume := func(p machine.SendResume) (corevalue.Value, *corevalue.Value) {
 						return g.resumeOperation(p, &result.Reports)
@@ -675,8 +708,17 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 					x.deadline = new(big.Int).Add(clockNanos(g.clock), r.WaitNS)
 					common["end"] = "wait"
 				}
+				// A Timeout Block's deadline wins over the wait's own when it
+				// is no later. A Join's is the Run's timer, ordered before its
+				// members' (ADR 0073).
+				block := r.BlockDeadline()
+				if block != nil && (r.Join != nil && !r.Join.Ready || r.Join == nil && (x.deadline == nil || block.At.Cmp(x.deadline) <= 0)) {
+					x.deadline, x.deadlineAfter = new(big.Int).Set(block.At), &block.After
+				}
 				common["state"] = fmt.Sprint(s.persistent())
-				if x.deadline != nil && !r.SendWait && r.Join == nil {
+				if r.Join != nil && block != nil {
+					common["until"] = deadlineTime(block.At).Format(time.RFC3339Nano)
+				} else if x.deadline != nil && (!r.SendWait && r.Join == nil || block != nil) {
 					common["until"] = deadlineTime(x.deadline).Format(time.RFC3339Nano)
 				}
 				g.record("seg", false, []string{string(x.id), x.how}, common)
@@ -1067,7 +1109,7 @@ func (g *Group) cancelExecution(s *Script, x *execution, reports *[]Report) {
 		}
 	}
 	x.segment++
-	x.deadline = nil
+	x.deadline, x.deadlineAfter = nil, nil
 	x.memberTimers = nil
 	x.parked = false
 	g.abandonSend(x)

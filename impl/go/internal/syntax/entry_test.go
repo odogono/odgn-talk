@@ -11,6 +11,9 @@ func TestEntryParsingAndContinuation(t *testing.T) {
 		{"on go", "", true}, {"[1,", "", true}, {"`first\nsecond", "", true}, {"put 1 + into n", "", false},
 		// A `tell` block reads lines until its `end` (ADR 0063).
 		{"tell canvas", "", true}, {"tell canvas\nfill 1", "", true}, {"tell canvas\nfill 1\nend tell", "statement", false},
+		// `with` before `timeout` starts a Timeout Block (ADR 0073), and
+		// `with` alone is still an expression.
+		{"with timeout of 1 s", "", true}, {"with timeout of 1 s\nwait 1 s", "", true}, {"with timeout of 1 s\nwait 1 s\nend timeout", "statement", false}, {"with", "expression", false},
 	} {
 		kind, _, err := ParseEntry(tc.source, nil)
 		if err == nil {

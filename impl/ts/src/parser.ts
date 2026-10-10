@@ -67,7 +67,15 @@ const BYTE_ORDERS = new Set<string>(grammar.binary_patterns.byte_orders);
 const HEAD_SUFFIXES = new Set(['queued', 'dropping', 'replacing', 'deciding']);
 const COMPARISONS = new Set(['=', '<>', '<', '>', '<=', '>=']);
 // Statement blocks' ending keywords, which never follow a Lambda's `end`.
-const BLOCK_KEYWORDS = ['if', 'repeat', 'match', 'try', 'wait', 'tell'];
+const BLOCK_KEYWORDS = [
+  'if',
+  'repeat',
+  'match',
+  'try',
+  'wait',
+  'tell',
+  'timeout',
+];
 // The Fallback Handler's name, in its body table and its `pass` (ADR 0064).
 const FALLBACK = 'any message';
 const endSuffixExpected = (name: string, at: Token) =>
@@ -676,6 +684,8 @@ class Parser {
         t.t === 'word' &&
         (STATEMENT_WORDS.has(t.v) ||
           (t.v === 'next' && this.isWord(this.la2('next-repeat'), 'repeat')) ||
+          (t.v === 'with' &&
+            this.isWord(this.la2('with-timeout'), 'timeout')) ||
           (this.isName(t) && (t.v === 'say' || isHandler(t.v))))
       ) {
         kind = 'statement';
@@ -1018,6 +1028,12 @@ class Parser {
       }
       if (this.isWord(t, 'tell')) {
         return (yield this.tell()) as Node;
+      }
+      if (
+        this.isWord(t, 'with') &&
+        this.isWord(this.la2('with-timeout'), 'timeout')
+      ) {
+        return this.at(t, (yield this.timeoutBlock()) as Node);
       }
       return (yield this.simpleStatement()) as Node;
     } finally {
@@ -1431,6 +1447,28 @@ class Parser {
       }
       this.endBlock('tell', at);
       return this.at(at, { k: 'TellBlock', target, lines });
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // `with timeout of d`, then a block, closed by `end` or `end timeout`
+  // (ADR 0073). There is no one-line form.
+  *timeoutBlock(): ParseTask<Node> {
+    const frame = this.enter('TimeoutBlock');
+    try {
+      const at = this.next();
+      this.next();
+      this.expectWord('of');
+      const duration = (yield this.expr()) as Node;
+      const t = this.peek(0, 'operator');
+      if (t.t !== 'nl' && t.t !== 'eof') {
+        this.fail(t, 'end of line after the duration of `with timeout of`');
+      }
+      this.endOfStatement();
+      const body = (yield this.block(['end'])) as Node[];
+      this.endBlock('timeout', at);
+      return { k: 'TimeoutBlock', duration, body };
     } finally {
       this.leave(frame);
     }

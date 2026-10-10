@@ -1,0 +1,10 @@
+# Pins the load diagnostic `not in a timeout` (chapter 2, ADR 0073).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "bad"
+source = "bad.talk"
