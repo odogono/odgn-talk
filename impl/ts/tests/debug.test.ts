@@ -236,7 +236,7 @@ test('debug state is absent from saves and Fingerprints, including restored Grou
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { debugParitySkips, replay } from '../tools/trace-case';
+import { replay } from '../tools/trace-case';
 
 test('a recorded early landing Trace replays in both replay modes', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'northtalk-debug-'));
@@ -278,9 +278,7 @@ const corpusTraceCases = [
     ) as {
       kind: string;
     };
-    return setup.kind === 'trace' && !debugParitySkips.has(path)
-      ? [{ path, setup }]
-      : [];
+    return setup.kind === 'trace' ? [{ path, setup }] : [];
   });
 
 test('debug pause comparisons discover the corpus Trace Cases', () => {

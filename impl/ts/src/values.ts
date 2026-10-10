@@ -760,7 +760,14 @@ export const hiddenCodePoint = (cp: number): boolean =>
   (cp >= 0x20_28 && cp <= 0x20_2e) ||
   (cp >= 0x20_66 && cp <= 0x20_69) ||
   cp === 0xfe_ff;
+// Matches each code point `hiddenCodePoint` accepts, and the quote.
+const quoteOrHidden =
+  // eslint-disable-next-line no-control-regex -- C0 controls are hidden code points.
+  /[\u0000-\u001f"\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069\ufeff]/;
 export const displayText = (s: string): string => {
+  if (!quoteOrHidden.test(s)) {
+    return `"${s}"`;
+  }
   const pieces: string[] = [];
   let run = '';
   const flush = () => {

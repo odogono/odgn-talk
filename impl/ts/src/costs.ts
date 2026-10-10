@@ -2,6 +2,7 @@
 // formulas, the logical sizes of values, and the measures they're taken over.
 import { costModel } from './generated/machine';
 import { characters } from './text';
+import { scalarCount } from './unicode';
 import { integerOf, isInteger, parseDec } from './decimal';
 import type { Value } from './values';
 
@@ -78,7 +79,7 @@ const measureOf = (measure: string, v: Value | undefined): number => {
     case 'characters':
       return v.kind === 'text' ? characters(v.asText()!).length : 0;
     case 'scalars':
-      return v.kind === 'text' ? Array.from(v.asText()!).length : 0;
+      return v.kind === 'text' ? scalarCount(v.asText()!) : 0;
     case 'utf8':
       return v.kind === 'text' ? encoder.encode(v.asText()!).length : 0;
     case 'items':

@@ -2123,13 +2123,17 @@ export class Run {
     role?: 'retained' | 'dispatch';
   }[] {
     const retained = new Set(this.recoveries.flatMap(c => c.retained));
+    const active = new Set(this.frames);
+    // Each frame's index in `frames`, so deep stacks stay linear.
+    const index = new Map<Frame, number>();
     const frames: Frame[] = [];
     // Transfer cleanup can execute after its owner leaves the active stack.
     const add = (frame: Frame) => {
-      if (!frames.includes(frame)) {
+      if (!index.has(frame)) {
         if (frame.owner) {
           add(frame.owner);
         }
+        index.set(frame, frames.length);
         frames.push(frame);
       }
     };
@@ -2138,8 +2142,8 @@ export class Run {
     }
     return frames.map(frame => ({
       frame,
-      ...(frame.owner ? { owner: frames.indexOf(this.realOwner(frame)) } : {}),
-      ...(retained.has(frame) || !this.frames.includes(frame)
+      ...(frame.owner ? { owner: index.get(this.realOwner(frame)) ?? -1 } : {}),
+      ...(retained.has(frame) || !active.has(frame)
         ? { role: 'retained' as const }
         : frame.owner
           ? { role: 'dispatch' as const }

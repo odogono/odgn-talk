@@ -3,11 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
 import type { Setup } from '@odgn/northtalk/setup';
-import {
-  debugParitySkips,
-  replay,
-  same,
-} from '../../../impl/ts/tools/trace-case';
+import { replay, same } from '../../../impl/ts/tools/trace-case';
 import { ReplayDebugger } from '../src/debug';
 
 const root = resolve(import.meta.dir, '../../../corpus');
@@ -19,10 +15,7 @@ for (const path of [
   const setup = Bun.TOML.parse(
     readFileSync(resolve(root, path), 'utf8'),
   ) as Setup & { kind: string };
-  if (
-    !['trace', 'transcript'].includes(setup.kind) ||
-    debugParitySkips.has(path)
-  ) {
+  if (!['trace', 'transcript'].includes(setup.kind)) {
     continue;
   }
   count++;
