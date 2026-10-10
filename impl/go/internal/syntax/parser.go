@@ -8,6 +8,7 @@ import (
 )
 
 type parser struct {
+	nesting      int
 	lexer        *Lexer
 	pending      []Token
 	tokens       []Token
@@ -50,6 +51,7 @@ func Parse(source string) (tree *Tree, err error) {
 		tree.Declarations = append(tree.Declarations, p.declaration())
 	}
 	p.take(Operand)
+	checkNesting(tree.Declarations)
 	tree.Tokens = p.tokens
 	return tree, nil
 }
@@ -66,9 +68,9 @@ func (p *parser) look(index int, mode Mode) Token {
 		if err != nil {
 			if e, ok := err.(*Error); ok {
 				for _, hole := range e.Earlier {
-					lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}}
+					lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}, nesting: p.nesting}
 					lex.advance(hole.Start)
-					inner := &parser{lexer: lex, depth: 1, base: []int{0}}
+					inner := &parser{lexer: lex, depth: 1, base: []int{0}, nesting: p.nesting}
 					if inner.peek(Operand).Start == hole.End {
 						panic(&Error{Code: "empty interpolation", Pos: lex.positionAt(hole.At)})
 					}
@@ -438,6 +440,8 @@ func (p *parser) operationLines(receiver *Node) []*Node {
 	}
 }
 func (p *parser) statement(inline bool) *Node {
+	p.enter()
+	defer p.leave()
 	t := p.peek(Operand)
 	if slices.Contains([]string{"if", "repeat", "match", "try"}, t.Raw) && inline {
 		p.fail(t)
@@ -947,6 +951,8 @@ func (p *parser) everyHead() *Node {
 // the head and the condition as Children, at the `whose` token, whose
 // NameToken is the chunk word and Text the chunk kind.
 func (p *parser) whose(head *Node) *Node {
+	p.enter()
+	defer p.leave()
 	n := node("whose", p.expect("whose"), head)
 	chunk := head
 	if chunk.Kind == "delimited" {
@@ -959,6 +965,8 @@ func (p *parser) whose(head *Node) *Node {
 	return n
 }
 func (p *parser) lambda() *Node {
+	p.enter()
+	defer p.leave()
 	n := node("lambda", p.take(Operand))
 	p.base = append(p.base, p.depth)
 	for !p.atOperand(":") && !p.at("\n") {
@@ -981,6 +989,8 @@ func (p *parser) binary(level int) *Node {
 	if level == 3 {
 		if p.atOperand("not") {
 			t := p.take(Operand)
+			p.enter()
+			defer p.leave()
 			return node("unary", t, p.binary(3))
 		}
 		return p.binary(4)
@@ -988,6 +998,8 @@ func (p *parser) binary(level int) *Node {
 	if level == 10 {
 		if p.atOperand("-") {
 			t := p.take(Operand)
+			p.enter()
+			defer p.leave()
 			return node("unary", t, p.binary(10))
 		}
 		return p.conversion()
@@ -1021,6 +1033,8 @@ func (p *parser) binary(level int) *Node {
 		rightLevel := level + 1
 		if level == 9 {
 			rightLevel = level
+			p.enter()
+			defer p.leave()
 		}
 		left = node("binary", t, left, p.binary(rightLevel))
 		if level == 6 || level == 9 {
@@ -1176,6 +1190,8 @@ func (p *parser) key() *Node {
 	return n
 }
 func (p *parser) primary() *Node {
+	p.enter()
+	defer p.leave()
 	t := p.peek(Operand)
 	switch {
 	case t.Kind == Number:
@@ -1387,6 +1403,8 @@ func (p *parser) collection(mapping bool) *Node {
 	return n
 }
 func (p *parser) bindingPattern() *Node {
+	p.enter()
+	defer p.leave()
 	t := p.peek(Operand)
 	var n *Node
 	switch t.Raw {
@@ -1517,6 +1535,8 @@ func (p *parser) element() *Node {
 	return n
 }
 func (p *parser) atom() *Node {
+	p.enter()
+	defer p.leave()
 	t := p.peek(Operand)
 	if t.Kind == Text {
 		p.take(Operand)
@@ -1744,9 +1764,9 @@ func (p *parser) interpolated(t Token) *Node {
 			break
 		}
 		hole := part.Hole
-		lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}}
+		lex := &Lexer{source: p.lexer.source, pos: Position{1, 1}, nesting: p.nesting}
 		lex.advance(hole.Start)
-		inner := &parser{lexer: lex, depth: 1, base: []int{0}}
+		inner := &parser{lexer: lex, depth: 1, base: []int{0}, nesting: p.nesting}
 		at := lex.positionAt(hole.At)
 		if inner.peek(Operand).Start == hole.End {
 			panic(&Error{Code: "empty interpolation", Pos: at})

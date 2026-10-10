@@ -39,8 +39,12 @@ func (t *Tree) Source() string {
 // operator at its own token for that operator's instructions.
 func (n *Node) FirstPos() Position {
 	pos := n.Pos()
-	for _, child := range n.Children {
-		p := child.FirstPos()
+	pending := append([]*Node(nil), n.Children...)
+	for len(pending) > 0 {
+		child := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		pending = append(pending, child.Children...)
+		p := child.Pos()
 		if p.Line < pos.Line || p.Line == pos.Line && p.Column < pos.Column {
 			pos = p
 		}
