@@ -583,7 +583,7 @@ A Trace Case is a directory under [`corpus/`](../corpus/) holding `case.toml`, t
 
 ### `case.toml`
 
-`case.toml` holds a case's setup, in TOML. Its keys are camelCase, since its Operation Declarations and Shapes are the Host Manifest's data model, which the manifest writes as JSON ([chapter 9](09-embedding.md#the-host-manifest-format)).
+`case.toml` holds a case's setup, in TOML. Its keys are camelCase, since its Operation Declarations and Shapes are the Host Manifest's data model, which the manifest writes as JSON ([chapter 9](09-embedding.md#the-host-manifest-format)). It has no `description` or `examples`, since no Core behavior depends on them.
 
 A Standard Capability supplies its fixed declarations, including when compiling a Library's calls. In a Trace Case, its `costs` must name every Operation, with each cost component zero if absent. Declaring the same Capability more than once through `standard`, or through both `standard` and `operations`, is refused with Host Error `invalid value`.
 

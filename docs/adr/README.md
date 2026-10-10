@@ -77,3 +77,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0073: A Timeout Block sets one deadline for the waits written inside it](0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)
 - [0074: A `whose` clause picks the chunks whose condition holds](0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)
 - [0075: English comparison words spell the existing comparisons](0075-english-comparison-words-spell-the-existing-comparisons.md)
+- [0076: Operation Declarations carry documentation that only tooling reads](0076-operation-declarations-carry-documentation-that-only-tooling-reads.md)
