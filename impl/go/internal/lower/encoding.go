@@ -15,17 +15,7 @@ func (b *Body) Bytecode() []byte {
 	out := binary.AppendUvarint([]byte{1}, uint64(len(b.Code)))
 	appendText := func(s string) { out = binary.AppendUvarint(out, uint64(len(s))); out = append(out, s...) }
 	for _, instruction := range b.Code {
-		opcode := -1
-		for i, entry := range generated.Machine.Instruction {
-			if entry.Name == instruction.Name {
-				opcode = i
-				break
-			}
-		}
-		if opcode < 0 {
-			panic("unknown lowering opcode: " + instruction.Name)
-		}
-		for _, value := range []int{opcode, instruction.Pos.Line, instruction.Pos.Column, len(instruction.args)} {
+		for _, value := range []int{int(instruction.Op), instruction.Pos.Line, instruction.Pos.Column, len(instruction.args)} {
 			out = binary.AppendUvarint(out, uint64(value))
 		}
 		for _, arg := range instruction.args {
@@ -91,7 +81,7 @@ func decodeBytecode(data []byte) ([]Instruction, error) {
 		if !ok || argc > len(data) {
 			return nil, invalid
 		}
-		instruction := Instruction{Name: generated.Machine.Instruction[opcode].Name, Pos: syntax.Position{Line: line, Column: column}}
+		instruction := Instruction{Name: generated.Machine.Instruction[opcode].Name, Op: generated.Opcode(opcode), Pos: syntax.Position{Line: line, Column: column}}
 		for range argc {
 			if len(data) == 0 {
 				return nil, invalid

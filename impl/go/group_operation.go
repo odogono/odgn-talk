@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
@@ -57,7 +58,7 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 	}
 	// An `ask … and wait` reached after its Timeout Block's deadline raises
 	// at once (ADR 0073). A Join Member isn't a Suspension Point.
-	if op.Mode == Suspending && x.run.At.Name == "ask-wait" {
+	if op.Mode == Suspending && x.run.At.Op == generated.OpAskWait {
 		if err := x.run.DeadlineError(named...); err != nil {
 			return corevalue.Value{}, err, false
 		}

@@ -22,7 +22,7 @@ import type {
   OfferEntry,
   UnwindEntry,
 } from './code-unit';
-import { instructionSpec } from './code-unit';
+import { instructionSpec, opcodes } from './code-unit';
 import { rateOf } from './costs';
 import { statementStarts } from './debug';
 import type { ParseError } from './parser';
@@ -327,8 +327,13 @@ class UnitLowering {
         body.acceptedAt += body.start;
       }
       for (const ins of this.code.get(body.index) ?? []) {
+        const opcode = opcodes.get(ins.op);
+        if (opcode === undefined) {
+          throw new Error(`\`${ins.op}\` isn't an instruction`);
+        }
         code.push({
           op: ins.op,
+          opcode,
           line: ins.line,
           col: ins.col,
           // A Built-in call is charged by that Built-in's rate, when it raises too.

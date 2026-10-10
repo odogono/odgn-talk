@@ -1,6 +1,9 @@
 package machine
 
-import "github.com/odogono/odgn-talk/impl/go/internal/value"
+import (
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"github.com/odogono/odgn-talk/impl/go/internal/value"
+)
 
 // Join retains calls in start order, including replies received while its body
 // was preempted. Waiting starts only at the closing instruction.
@@ -162,7 +165,7 @@ func (r *Run) leaveJoin(frame, target int) {
 	if frame == j.Frame && target > j.Start {
 		code := r.Frames[frame].Code.Unit.Bodies[r.Frames[frame].Body].Code
 		end := j.Start
-		for end < len(code) && code[end].Name != "join-end" {
+		for end < len(code) && code[end].Op != generated.OpJoinEnd {
 			end++
 		}
 		if target <= end {

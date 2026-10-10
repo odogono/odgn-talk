@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"maps"
 	"math"
 	"math/big"
@@ -366,7 +367,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		r.At = i
 		r.PC = b.First + f.PC
 		foreign := r.foreignWaitCall(f, i)
-		if !Supported(i) || foreign && send == nil || r.unrepresentableWait(f, i) || sends(i.Name) && send == nil {
+		if !Supported(i) || foreign && send == nil || r.unrepresentableWait(f, i) || sends(i.Op) && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -378,8 +379,8 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		if prop != nil && inGuard(f) {
 			prop = nil // ordinary key evaluation raises wrong kind without a Host call
 		}
-		if prop != nil || i.Name == "ask" || i.Name == "tell" || i.Name == "ask-wait" || i.Name == "join-ask" {
-			if i.Name == "join-ask" && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
+		if prop != nil || i.Op == generated.OpAsk || i.Op == generated.OpTell || i.Op == generated.OpAskWait || i.Op == generated.OpJoinAsk {
+			if i.Op == generated.OpJoinAsk && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 				r.fault("join")
 				break
 			}
@@ -442,11 +443,11 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 				r.raise(*err)
 			} else {
 				f.Stack = f.Stack[:len(f.Stack)-n]
-				if i.Name == "ask" || prop != nil && !prop.set {
+				if i.Op == generated.OpAsk || prop != nil && !prop.set {
 					f.Stack = append(f.Stack, result)
 				}
 				f.PC++
-				if i.Name == "ask-wait" {
+				if i.Op == generated.OpAskWait {
 					r.Status = Suspended
 					r.checkRetainedState()
 				}
@@ -456,7 +457,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if (i.Name == "join-send" || i.Name == "join-send-named" || i.Name == "join-send-spread") && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
+		if (i.Op == generated.OpJoinSend || i.Op == generated.OpJoinSendNamed || i.Op == generated.OpJoinSendSpread) && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 			r.fault("join")
 			break
 		}
@@ -464,11 +465,11 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			break
 		}
 
-		if (i.Name == "return" || i.Name == "veto" || i.Name == "pass") && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
+		if (i.Op == generated.OpReturn || i.Op == generated.OpVeto || i.Op == generated.OpPass) && len(r.Frames) == 1 && r.Limits.Persistent > 0 && r.persistentSize() > r.Limits.Persistent {
 			r.fault("persistent")
 			break
 		}
-		late := r.pastDeadline(f, i.Name)
+		late := r.pastDeadline(f, i.Op)
 		if len(r.Recoveries) > 0 {
 			// Retained continuations can share the old operand buffer.
 			// Keep their failed/control stack intact while active control advances.
@@ -477,12 +478,12 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		t := &r.trial
 		t.begin(f)
 		m, effect, err := r.evaluate(f, t, i)
-		if (i.Name == "call-import" || i.Name == "call" || i.Name == "call-value" || i.Name == "call-handler" || i.Name == "call-value-wait" || i.Name == "call-handler-wait") && !foreign && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
+		if (i.Op == generated.OpCallImport || i.Op == generated.OpCall || i.Op == generated.OpCallValue || i.Op == generated.OpCallHandler || i.Op == generated.OpCallValueWait || i.Op == generated.OpCallHandlerWait) && !foreign && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
 			t.restore(f)
 			r.fault("depth")
 			break
 		}
-		if i.Name == "make-pattern" && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text()) > r.Limits.Pattern {
+		if i.Op == generated.OpMakePattern && err == nil && r.Limits.Pattern > 0 && patternSize(m.Result.Text()) > r.Limits.Pattern {
 			t.restore(f)
 			r.fault("pattern")
 			break
@@ -503,7 +504,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			}
 			continue
 		}
-		if err == nil && r.OpenScope != nil && (i.Name == "wait" || i.Name == "wait-for" || i.Name == "wait-for-any" || i.Name == "join-start" || i.Name == "send-wait" || i.Name == "send-named-wait" || i.Name == "send-spread-wait" || i.Name == "send-up-wait" || foreign) {
+		if err == nil && r.OpenScope != nil && (i.Op == generated.OpWait || i.Op == generated.OpWaitFor || i.Op == generated.OpWaitForAny || i.Op == generated.OpJoinStart || i.Op == generated.OpSendWait || i.Op == generated.OpSendNamedWait || i.Op == generated.OpSendSpreadWait || i.Op == generated.OpSendUpWait || foreign) {
 			t.restore(f)
 			if f.Clause {
 				if !r.pay(4, 0) {
@@ -532,23 +533,23 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		}
 		f.Clause = false
 		// Sends read the operands the instruction popped.
-		if err == nil && sends(i.Name) {
+		if err == nil && sends(i.Op) {
 			top := len(t.stack) - 1
-			recipient := Receiver{Up: i.Name == "send-up" || i.Name == "send-up-wait"}
+			recipient := Receiver{Up: i.Op == generated.OpSendUp || i.Op == generated.OpSendUpWait}
 			if !recipient.Up {
 				recipient.Name = t.names[top]
 				recipient.Object = t.operand(top)
 			}
 			var message string
 			switch {
-			case namedSend(i.Name):
+			case namedSend(i.Op):
 				message = t.operand(top - len(m.Args) - 1).Text()
-			case spreadSend(i.Name):
+			case spreadSend(i.Op):
 				message = t.operand(top - 2).Text()
 			default:
 				message = i.Operands()[0].Text
 			}
-			err = send(recipient, message, m.Args, i.Name != "send" && i.Name != "send-named" && i.Name != "send-spread" && i.Name != "send-up")
+			err = send(recipient, message, m.Args, i.Op != generated.OpSend && i.Op != generated.OpSendNamed && i.Op != generated.OpSendSpread && i.Op != generated.OpSendUp)
 		}
 		if err == nil && foreign {
 			fn := t.operand(len(t.stack) - i.Operands()[0].Index - 1)
@@ -558,7 +559,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		if err != nil {
 			popped := f.Stack
 			t.restore(f)
-			if i.Name == "throw" {
+			if i.Op == generated.OpThrow {
 				// Raising retains this frame without the thrown value.
 				f.Stack = popped
 			}
@@ -585,7 +586,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 
 // A foreign wait uses a Group adapter; standalone execution leaves it untouched.
 func (r *Run) foreignWaitCall(f *Frame, i lower.Instruction) bool {
-	if i.Name != "call-value-wait" {
+	if i.Op != generated.OpCallValueWait {
 		return false
 	}
 	n := i.Operands()[0].Index
@@ -673,7 +674,7 @@ search:
 		for _, u := range f.Code.Unit.Bodies[f.Body].UnwindEntries() {
 			if place >= u.First && place <= u.Last && u.Kind != "offer" {
 				raised.Guard = u.Kind == "guard"
-				if raised.Guard && frame == len(r.Frames)-1 && (r.At.Name == "branch-false" || r.At.Name == "branch-true") && code == "wrong kind" {
+				if raised.Guard && frame == len(r.Frames)-1 && (r.At.Op == generated.OpBranchFalse || r.At.Op == generated.OpBranchTrue) && code == "wrong kind" {
 					v := f.Stack[len(f.Stack)-1]
 					raised.Value = &v
 					raised.Code = ""
@@ -977,14 +978,14 @@ func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
 		return false
 	}
 	var deadline *big.Int
-	switch i.Name {
-	case "wait":
+	switch i.Op {
+	case generated.OpWait:
 		ns, err := waitNanos(f.Stack[len(f.Stack)-1])
 		if err != nil {
 			return false
 		}
 		deadline = new(big.Int).Add(r.ClockNS, ns)
-	case "wait-for", "wait-for-any":
+	case generated.OpWaitFor, generated.OpWaitForAny:
 		entry := f.Code.Unit.Events[i.Operands()[0].Index]
 		w, err := r.eventWait(i.Name, entry, f.Stack[len(f.Stack)-eventValueCount(entry):])
 		if err != nil || w.Deadline == nil {
@@ -1009,21 +1010,21 @@ func (r *Run) CurrentCode() *State {
 }
 
 // sends reports whether an instruction puts a message in a mailbox.
-func sends(name string) bool {
-	switch name {
-	case "send", "send-wait", "join-send", "send-up", "send-up-wait":
+func sends(op generated.Opcode) bool {
+	switch op {
+	case generated.OpSend, generated.OpSendWait, generated.OpJoinSend, generated.OpSendUp, generated.OpSendUpWait:
 		return true
 	}
-	return namedSend(name) || spreadSend(name)
+	return namedSend(op) || spreadSend(op)
 }
 
 // namedSend reports whether a send pops a computed message name (ADR 0057).
-func namedSend(name string) bool {
-	return name == "send-named" || name == "send-named-wait" || name == "join-send-named"
+func namedSend(op generated.Opcode) bool {
+	return op == generated.OpSendNamed || op == generated.OpSendNamedWait || op == generated.OpJoinSendNamed
 }
 
 // spreadSend reports whether a send pops its name, its arguments as one list
 // and its receiver (ADR 0064).
-func spreadSend(name string) bool {
-	return name == "send-spread" || name == "send-spread-wait" || name == "join-send-spread"
+func spreadSend(op generated.Opcode) bool {
+	return op == generated.OpSendSpread || op == generated.OpSendSpreadWait || op == generated.OpJoinSendSpread
 }

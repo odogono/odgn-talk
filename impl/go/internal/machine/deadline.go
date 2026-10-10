@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"math/big"
 	"strings"
 
@@ -84,10 +85,10 @@ func DeadlineTimeout(after value.Value, named ...value.Pair) value.Value {
 // pastDeadline reports whether a Suspension Point other than a Capability
 // call is reached after its block's deadline. A Join's members aren't
 // Suspension Points, and a Join with none doesn't suspend.
-func (r *Run) pastDeadline(f *Frame, name string) bool {
-	switch name {
-	case "wait", "wait-for", "wait-for-any", "send-wait", "send-named-wait", "send-spread-wait", "send-up-wait":
-	case "join-end":
+func (r *Run) pastDeadline(f *Frame, op generated.Opcode) bool {
+	switch op {
+	case generated.OpWait, generated.OpWaitFor, generated.OpWaitForAny, generated.OpSendWait, generated.OpSendNamedWait, generated.OpSendSpreadWait, generated.OpSendUpWait:
+	case generated.OpJoinEnd:
 		if r.Join == nil || len(r.Join.Members) == 0 {
 			return false
 		}

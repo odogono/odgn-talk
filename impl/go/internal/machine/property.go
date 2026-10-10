@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
@@ -18,8 +19,8 @@ type propertyCall struct {
 }
 
 func propertyRequest(f *Frame, i lower.Instruction) *propertyCall {
-	set := i.Name == "set-property" || i.Name == "set-property-computed"
-	if !set && i.Name != "get-key" && i.Name != "get-key-computed" {
+	set := i.Op == generated.OpSetProperty || i.Op == generated.OpSetPropertyComputed
+	if !set && i.Op != generated.OpGetKey && i.Op != generated.OpGetKeyComputed {
 		return nil
 	}
 	pops := 1
@@ -30,7 +31,7 @@ func propertyRequest(f *Frame, i lower.Instruction) *propertyCall {
 	if object.Kind != value.Object {
 		return nil
 	}
-	computed := i.Name == "get-key-computed" || i.Name == "set-property-computed"
+	computed := i.Op == generated.OpGetKeyComputed || i.Op == generated.OpSetPropertyComputed
 	name := ""
 	if computed {
 		pops++

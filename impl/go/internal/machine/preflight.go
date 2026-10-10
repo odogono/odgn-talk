@@ -5,7 +5,6 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 	"math/big"
-	"strings"
 )
 
 // Construction bounds reject unaffordable work before materializing its
@@ -33,7 +32,7 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		}
 		return true
 	}
-	if i.Name == "bytes-bits" {
+	if i.Op == generated.OpBytesBits {
 		widths := f.Code.Constants[i.Operands()[0].Index].Items()
 		count := i.Operands()[1].Index
 		values := f.Stack[len(f.Stack)-count:]
@@ -56,12 +55,12 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 		return bounded(3, alloc)
 	}
 	n := len(f.Stack)
-	if i.Name == "property" && i.Operands()[0].Text == "bytes" && f.Stack[n-1].Kind == value.Bytes {
+	if i.Op == generated.OpProperty && i.Operands()[0].Text == "bytes" && f.Stack[n-1].Kind == value.Bytes {
 		count := int64(len(f.Stack[n-1].Bytes()))
 		return bounded(saturatingAdd(3, count), saturatingAdd(16, saturatingMultiply(24, count)))
 	}
-	if (i.Name == "property" || i.Name == "property-delimited") && i.Operands()[0].Text == "items" {
-		if i.Name == "property-delimited" {
+	if (i.Op == generated.OpProperty || i.Op == generated.OpPropertyDelimited) && i.Operands()[0].Text == "items" {
+		if i.Op == generated.OpPropertyDelimited {
 			d := f.Stack[n-1]
 			if d.Kind != value.Text || d.Text() == "" {
 				return true
@@ -74,8 +73,8 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 			return bounded(saturatingAdd(3, count), saturatingAdd(16, saturatingMultiply(24, count)))
 		}
 	}
-	if strings.HasPrefix(i.Name, "chunk-get") || strings.HasPrefix(i.Name, "test-chunk") {
-		if strings.HasSuffix(i.Name, "-delimited") {
+	if i.Op == generated.OpChunkGet || i.Op == generated.OpChunkGetDelimited || i.Op == generated.OpTestChunk || i.Op == generated.OpTestChunkDelimited {
+		if i.Op == generated.OpChunkGetDelimited || i.Op == generated.OpTestChunkDelimited {
 			d := f.Stack[n-1]
 			if d.Kind != value.Text || d.Text() == "" {
 				return true
@@ -137,12 +136,12 @@ func (r *Run) preflight(f *Frame, i lower.Instruction) bool {
 			return bounded(saturatingAdd(3, saturated(scanned)), alloc)
 		}
 	}
-	if i.Name != "chunk-set" && i.Name != "chunk-set-delimited" {
+	if i.Op != generated.OpChunkSet && i.Op != generated.OpChunkSetDelimited {
 		return true
 	}
 	kind := i.Operands()[0].Text
 	d := text(",")
-	if i.Name == "chunk-set-delimited" {
+	if i.Op == generated.OpChunkSetDelimited {
 		d = f.Stack[n-1]
 		n--
 	}
