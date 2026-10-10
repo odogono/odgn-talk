@@ -1,0 +1,14 @@
+# Unblessed: Whose Clause walks, matches, temps and positions for every, first, last, an n-th ordinal, `delimited by` and nesting (#547); first blessing awaits human review.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "whose"
+source = "whose.talk"
+
+[[disassembly]]
+unit = "whose"
+expected = "whose.dis"

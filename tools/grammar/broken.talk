@@ -807,3 +807,58 @@ on t
     wait 1 s
   end timeout
 end t
+-- case: an Every Head without `whose`
+-- expect: unexpected token at 2:24
+on t xs
+  put every item of xs into ys
+end t
+-- case: `whose` after a Chunk Expression that isn't ordinal
+-- expect: unexpected token at 2:20
+on t xs
+  put item 2 of xs whose it > 1 into y
+end t
+-- case: `whose` after a conversion
+-- expect: unexpected token at 2:36
+on t xs
+  put the first item of xs as text whose it > 1 into y
+end t
+-- case: `whose` in a Container
+-- expect: unexpected token at 2:35
+on t xs
+  put 0 into the first item of xs whose it < 0
+end t
+-- case: an Every Head as a Container
+-- expect: unexpected token at 2:20
+on t xs
+  put 0 into every item of xs whose it < 0
+end t
+-- case: an Every Head inside an operand
+-- expect: unexpected token at 2:17
+on t xs
+  put 1 + every item of xs whose it > 1 into ys
+end t
+-- case: an ordinal Whose Clause inside an operand
+-- expect: unexpected token at 2:42
+on t xs
+  put the length of the first item of xs whose it > 1 into n
+end t
+-- case: an operator after the condition is not re-read outside it
+-- expect: unexpected token at 2:40
+on t xs
+  if the first item of xs whose it > 3 is empty then put 0 into n
+end t
+-- case: a chunk index named `whose` needs brackets
+-- expect: unexpected token at 2:12
+on t whose
+  put item whose of [1, 2] into one
+end t
+-- case: an Every Head over a plural chunk word
+-- expect: unexpected token at 2:13
+on t xs
+  put every items of xs whose it > 1 into ys
+end t
+-- case: a Reserved Word can't be a Whose Key
+-- expect: unexpected token at 2:30
+on t xs
+  put every item of xs whose end > 1 into ys
+end t

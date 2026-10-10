@@ -1,0 +1,3 @@
+on go xs
+ return every item of xs whose (given: it) is not empty
+end go

@@ -430,7 +430,7 @@ The temp is released at the end. A plural chunk word lowers as its singular.
 `every K of x whose c`, and `the o K of x whose c` for an ordinal `o`, lower to ([ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)):
 
 1. the result's start: `list 0` `store r` for `every`, and `const nothing` `store r` for an ordinal; then, for `second` to `tenth`, `const n` `store k`, where `n` is the ordinal's index,
-2. the walk: ⟦x⟧ `property P`, where `P` is the plural of `K`. With `delimited by d`, it is ⟦x⟧ ⟦d⟧ `property-delimited items` when `x` has no chunk level, and otherwise `x` lowered as a [Chunk Expression](#chunk-expressions) with `delimited by d`, keeping its delimiter temp, then that temp's `load` and `property-delimited items`,
+2. the walk: ⟦x⟧ `property P`, where `P` is the plural of `K`. With `delimited by d`, it is ⟦x⟧ ⟦d⟧ `property-delimited P` when `x` has no chunk level, and otherwise `x` lowered as a [Chunk Expression](#chunk-expressions) with `delimited by d`, keeping its delimiter temp, then that temp's `load` and `property-delimited P`,
 3. `iterate`, then L1: `next L2` `store t`, ⟦c⟧ `branch-false L1`,
 4. the match:
    - for `every`: `load r` `load t` `list-append` `store r` `jump L1`

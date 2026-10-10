@@ -24,10 +24,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-two implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(22);
+test('ships twenty-three implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(23);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(22);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(23);
 });
 
 test('the Host or user selects the profile; default is standard', () => {
@@ -570,6 +570,40 @@ test('collecting advice respects profiles, suppression, splices and shadowing', 
         l => l.id === 'suggest-collecting',
       ),
     ).toEqual([]);
+  }
+});
+
+const whose = (text: string, profile?: 'beginner') =>
+  lint(text, profile ? { profile } : {}).lints.filter(
+    l => l.id === 'suggest-whose',
+  );
+
+test('whose advice needs list filter, one plain parameter and a valid condition', () => {
+  const source =
+    'use filter from list\non demo orders\nput filter(orders, given o: the amount of o > 1) into big\nend demo';
+  expect(whose(source)).toEqual([]);
+  expect(whose(source, 'beginner')).toMatchObject([
+    {
+      level: 'hint',
+      span: { line: 3, col: 5 },
+      message:
+        'Consider `every item of … whose …`, with `it` for o, in place of `filter` and a Lambda.',
+    },
+  ]);
+  for (const negative of [
+    source.replace('put filter', '-- lint: ignore suggest-whose\nput filter'),
+    source.replace('given o:', 'given o, i:'),
+    source.replace('given o:', 'given [o]:'),
+    source.replace('> 1)', '> f(1))') + '\nfunction f x\nreturn x\nend f',
+    source.replace('> 1)', '> it)'),
+    source.replace('> 1)', '> 1 and [given p: p] is not empty)'),
+    source.replace(
+      'given o: the amount of o > 1)',
+      'given o\nreturn the amount of o > 1\nend given)',
+    ),
+    source.replace('use filter from list', 'use filter from mine'),
+  ]) {
+    expect(whose(negative, 'beginner')).toEqual([]);
   }
 });
 

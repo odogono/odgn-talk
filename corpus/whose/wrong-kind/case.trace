@@ -1,0 +1,16 @@
+# Unblessed: a Whose Clause condition that isn't a boolean, and an error in one (#547); first blessing awaits human review.
+> load s identity=0283ecb052424d418466a8e3438e90f2c84b7ef74b135971dfa757298df71d8e
+> request d1 to=s message=go
+> pump clock=2026-10-10T12:00:01Z
+raise s/r1 code="wrong kind" at=s:12 pos=5:28
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=85 alloc=647 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=["wrong kind", [{n: 1}]] fuel=85 alloc=647
+pumped state=idle fuel=85
+> request d2 to=s message=raises
+> pump clock=2026-10-10T12:00:02Z
+raise s/r2 code="can't compare" at=s:73 pos=13:50
+seg s/r2 start delivery=d2 handler=raises clause=1 fuel=61 alloc=530 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=raises error={code: "can't compare", left: "x", right: 0, at: {unit: "s", handler: "raises", line: 13, column: 50}} fuel=61 alloc=530
+pumped state=idle fuel=61
+> vars
+vars s

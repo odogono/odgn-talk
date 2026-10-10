@@ -146,6 +146,7 @@ disassembly/messages-and-waiting
 disassembly/recovery-offers
 disassembly/tell-block
 disassembly/timeout-block
+disassembly/whose
 errors/fail-error-map
 errors/handler-backstop
 errors/handler-delivery
@@ -364,3 +365,10 @@ text-patterns/pattern-size-literal-limit
 text-patterns/pattern-size-made-at-run-time
 text-patterns/replace-all-empty-matches
 text-patterns/splice-wrong-kind
+whose/keys
+whose/maps
+whose/no-match
+whose/not-in-a-whose
+whose/ordinals
+whose/text-chunks
+whose/wrong-kind

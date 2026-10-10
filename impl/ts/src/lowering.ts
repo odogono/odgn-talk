@@ -53,7 +53,9 @@ import {
   type Stmt,
   type TextPattern,
   type Try,
+  type Whose,
 } from './view';
+import { grammar } from './generated/syntax';
 
 /** A construct whose lowering the Spec leaves unsettled; not a load diagnostic. */
 export class LoweringError extends Error {
@@ -74,6 +76,8 @@ const errorPattern = (p: Pattern): Pattern =>
     : p;
 
 type Label = { pc: number | null };
+// A Whose Clause walks the plural property of its chunk kind (ADR 0074).
+const PLURAL = new Map(grammar.chunk.map(c => [c.singular, c.plural]));
 const pendingStatements = new WeakSet<Pending>();
 type Pending = {
   col: number;
@@ -408,6 +412,9 @@ class BodyLowering {
   join = 0;
   // The iterators and deadlines on the operand stack: the static depth.
   iterators = 0;
+  // The temps holding the chunk each open Whose Clause is testing, innermost
+  // last: `it` in a condition loads the innermost one.
+  whoseIt: number[] = [];
   private starts = new Set<number>();
 
   constructor(
@@ -531,7 +538,7 @@ class BodyLowering {
 
   slotOf(binding: Binding): number | undefined {
     if (this.isIt(binding)) {
-      return 0;
+      return this.whoseIt.at(-1) ?? 0;
     }
     return this.overrides.get(binding) ?? this.slots.get(binding);
   }
@@ -2094,7 +2101,7 @@ class BodyLowering {
         }
         return void this.emit(at, 'property', e.name);
       case 'chunk':
-        return yield* this.chunkRead(e);
+        return void (yield* this.chunkRead(e));
       case 'list':
         if (!e.items.some(item => item.spread)) {
           for (const item of e.items) {
@@ -2136,7 +2143,83 @@ class BodyLowering {
         return yield* this.call(e, false);
       case 'lambda':
         return yield* this.makeLambda(e);
+      case 'whose':
+        return yield* this.whose(e);
+      case 'whose-it':
+        return void this.emit(at, 'load', this.whoseIt.at(-1)!);
     }
+  }
+
+  // `every K of x whose c`, or `the o K of x whose c` (chapter 8, Whose
+  // Clauses): a walk over `the Ks of x` that keeps the chunks where `c` holds.
+  *whose(e: Whose): Task {
+    const at = e.pos;
+    const r = this.temp();
+    if (e.index === null) {
+      this.emit(at, 'list', 0);
+    } else {
+      this.constant(at, 'nothing');
+    }
+    this.emit(at, 'store', r);
+    let k: number | null = null;
+    if (e.index !== null && e.index > 1) {
+      this.constant(e.at, String(e.index));
+      k = this.temp();
+      this.emit(at, 'store', k);
+    }
+    const plural = PLURAL.get(e.kind)!;
+    let d: number | null = null;
+    if (e.delimiter && e.src.k === 'chunk') {
+      d = yield* this.chunkRead({ ...e.src, delimiter: e.delimiter }, true);
+      this.emit(at, 'load', d!);
+      this.emit(e.at, 'property-delimited', plural);
+    } else {
+      yield this.expr(e.src);
+      if (e.delimiter) {
+        yield this.expr(e.delimiter);
+        this.emit(e.at, 'property-delimited', plural);
+      } else {
+        this.emit(e.at, 'property', plural);
+      }
+    }
+    this.emit(at, 'iterate');
+    this.iterators++;
+    const top = this.label();
+    const done = this.label();
+    this.place(top);
+    this.emit(at, 'next', done);
+    const t = this.temp();
+    this.emit(at, 'store', t);
+    this.whoseIt.push(t);
+    yield this.expr(e.cond);
+    this.whoseIt.pop();
+    this.emit(at, 'branch-false', top);
+    if (e.index === null) {
+      this.emit(at, 'load', r);
+      this.emit(at, 'load', t);
+      this.emit(at, 'list-append');
+      this.emit(at, 'store', r);
+      this.emit(at, 'jump', top);
+    } else {
+      if (k !== null) {
+        this.emit(at, 'load', k);
+        this.constant(at, '1');
+        this.emit(at, 'subtract');
+        this.emit(at, 'store', k);
+        this.emit(at, 'load', k);
+        this.constant(at, '0');
+        this.emit(at, 'equal');
+        this.emit(at, 'branch-false', top);
+      }
+      this.emit(at, 'load', t);
+      this.emit(at, 'store', r);
+      this.emit(at, 'jump', e.index === -1 ? top : done);
+    }
+    this.place(done);
+    this.emit(at, 'pop');
+    this.iterators--;
+    this.emit(at, 'load', r);
+    this.release(r, t, ...(k === null ? [] : [k]), ...(d === null ? [] : [d]));
   }
 
   // A Text Pattern as a value: a constant, or its template and its splices.
@@ -2154,7 +2237,9 @@ class BodyLowering {
     this.emit(at, 'make-pattern', index, splices.length);
   }
 
-  *chunkRead(e: Expr & { k: 'chunk' }): Task {
+  // With `keep`, the delimiter's temp outlives the read, for a Whose
+  // Clause's walk, which returns it.
+  *chunkRead(e: Expr & { k: 'chunk' }, keep = false): Task<number | null> {
     // The chain, outermost level first, down to the value it reads from.
     const levels: (Expr & { k: 'chunk' })[] = [];
     let base: Expr = e;
@@ -2184,9 +2269,10 @@ class BodyLowering {
         this.emit(level.pos, 'chunk-get', level.kind);
       }
     }
-    if (d !== null) {
+    if (d !== null && !keep) {
       this.release(d);
     }
+    return d;
   }
 
   *build(fields: BuildField[], at: Pos): Task {

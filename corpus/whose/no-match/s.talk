@@ -1,0 +1,6 @@
+-- No match gives `[]` for `every` and Nothing for an ordinal or `last`,
+-- for text too, so a matching empty line is told apart from none (ADR 0074).
+on go
+ put "a" & newline & newline & "b" into s
+ return [every item of [1, 2] whose it > 5, the first item of [1, 2] whose it > 5, the last line of s whose length > 3, the first line of s whose it is empty, every item of [] whose it]
+end go

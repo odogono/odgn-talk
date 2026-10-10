@@ -1279,3 +1279,80 @@ describe('Timeout Blocks', () => {
     ).toEqual([]);
   });
 });
+
+describe('Whose Clauses', () => {
+  test('a Whose Key is no name read, and a later name is a local', () => {
+    expect(
+      diagnostics(
+        'on t xs\n put 1 into amount\n return every item of xs whose amount > amount\nend t',
+      ),
+    ).toEqual([]);
+    expect(
+      diagnostics('on t xs\n return every item of xs whose amount > 1\nend t'),
+    ).toEqual([]);
+    expect(
+      diagnostics(
+        'on t xs\n return every item of xs whose amount > 1 and region is "EU"\nend t',
+      ),
+    ).toEqual([['unknown name', 2, 47]]);
+    expect(
+      diagnostics('on t xs\n return every item of xs whose (limit) > 1\nend t'),
+    ).toEqual([['unknown name', 2, 33]]);
+  });
+  test('an unknown name in a condition suggests `it’s`', () => {
+    const result = checkSource(
+      'on t xs\n return the first item of xs whose it > 1 and region is "EU"\nend t',
+    );
+    expect(result.diagnostics.map(d => d.message)).toEqual([
+      "unknown name: region; a key of the chunk is `it's region`",
+    ]);
+    expect(
+      checkSource('on t\n return region\nend t').diagnostics[0]!.message,
+    ).toBe('unknown name: region');
+  });
+  test('a condition calls only Built-ins and holds no Lambda', () => {
+    expect(
+      diagnostics(
+        'function f x\n return x\nend f\non t xs\n return every item of xs whose f(it) and abs(it) > 1\nend t',
+      ),
+    ).toEqual([['not in a whose', 5, 32]]);
+    expect(
+      diagnostics(
+        'on t xs\n put 1 into abs\n return every item of xs whose abs(it) > 1\nend t',
+      ),
+    ).toEqual([['not in a whose', 3, 32]]);
+    expect(
+      diagnostics(
+        'function f x\n return x\nend f\non t xs\n return every item of xs whose (given: f(1)) is empty\nend t',
+      ),
+    ).toEqual([['not in a whose', 5, 33]]);
+    // A nested clause's call is reported once, and its source is the outer
+    // condition's.
+    expect(
+      diagnostics(
+        'function f x\n return x\nend f\non t xs\n return every item of xs whose (every item of f(it) whose f(it)) is empty\nend t',
+      ),
+    ).toEqual([
+      ['not in a whose', 5, 47],
+      ['not in a whose', 5, 59],
+    ]);
+    // Only the condition is restricted.
+    expect(
+      diagnostics(
+        'function f x\n return x\nend f\non t xs\n return every item of f(xs) whose it > 1\nend t',
+      ),
+    ).toEqual([]);
+  });
+  test('an Every Head with `delimited by` needs an `item` chunk', () => {
+    expect(
+      diagnostics(
+        'on t s\n return every line of s delimited by ";" whose it is empty\nend t',
+      ),
+    ).toEqual([['no item chunk', 2, 25]]);
+    expect(
+      diagnostics(
+        'on t s\n return every line of item 2 of s delimited by ";" whose it is empty\nend t',
+      ),
+    ).toEqual([]);
+  });
+});

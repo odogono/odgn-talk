@@ -344,11 +344,18 @@ func property(name string, v, d value.Value) (value.Value, *value.Value) {
 			e := failure("out of range", value.Pair{Key: "field", Val: text("delimiter")}, value.Pair{Key: "value", Val: d})
 			return value.Value{}, &e
 		}
+		// A list's items are its elements, which a Whose Clause walks.
+		if name == "items" && v.Kind == value.List {
+			return v, nil
+		}
 		if name == "items" && integerRange(v) {
 			result, _ := rangeList(v, 1, measure("items", v))
 			return result, nil
 		}
 		if v.Kind != value.Text {
+			if name == "items" {
+				return bad("list")
+			}
 			return bad("text")
 		}
 		kind := strings.TrimSuffix(name, "s")

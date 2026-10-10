@@ -15,6 +15,8 @@ A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../
 
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
 
+Whose Clauses ([ADR 0074](../../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)) parse as a whole Expression into a `whose` node, whose `NameToken` is the chunk word: an Every Head is a `chunk` node with an `every` ordinal, and either head sits in a `delimited` node when it has `delimited by`, so `no item chunk` covers it. A Whose Key is a `key` node on a synthetic `it`, never a name. The checker reports `not in a whose` at a condition's non-Built-in call or Lambda, and an `unknown name` in a condition suggests `it's` in its message. Lowering walks the plural property with `iterate` and `next`, and `it` in the condition loads the innermost clause's temp, as chapter 8 lays out. `the items of` a list is the list itself, as chapter 4's property table says.
+
 Sequential List growth with `put … after/before`, spreading or `collecting`
 uses amortized constant host work per added item. Lists retain immutable windows
 over shared storage; extending an older endpoint that has already grown copies

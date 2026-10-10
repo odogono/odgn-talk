@@ -329,15 +329,15 @@ export const checkSyntax = (
   };
   const diagnostics: Diagnostic[] = [];
   const reported = new Set<string>();
-  const report = (code: DiagnosticCode, token: Token) => {
+  const report = (
+    code: DiagnosticCode,
+    token: Token,
+    message = `${code}: ${token.v}`,
+  ) => {
     const key = `${code}:${token.pos}`;
     if (!reported.has(key)) {
       reported.add(key);
-      diagnostics.push({
-        code,
-        span: span(token),
-        message: `${code}: ${token.v}`,
-      });
+      diagnostics.push({ code, span: span(token), message });
     }
   };
   let nextBinding = 0;
@@ -890,6 +890,23 @@ export const checkSyntax = (
       }
     }
   }
+  // Only a Whose Clause condition's first token is a Whose Key, so a later
+  // unknown name there is probably a key spelt without `it's` (ADR 0074).
+  const inWhoseCondition = (token: Token) => {
+    for (
+      let node = context.get(token)?.parent;
+      node;
+      node = context.get(node)?.parent
+    ) {
+      if (
+        node.rule === 'Expression' &&
+        context.get(node)?.parent?.rule === 'Whose'
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
   const lookup = (site: Site): Binding | undefined => {
     for (let scope: Scope | null = site.scope; scope; scope = scope.parent) {
       const binding = scope.bindings.get(site.name.text);
@@ -958,7 +975,13 @@ export const checkSyntax = (
         report('unknown name', site.token);
       }
     } else if (!binding) {
-      report('unknown name', site.token);
+      report(
+        'unknown name',
+        site.token,
+        inWhoseCondition(site.token)
+          ? `unknown name: ${site.token.v}; a key of the chunk is \`it's ${site.token.v}\``
+          : undefined,
+      );
     } else {
       site.name.binding = binding;
       if (

@@ -1,0 +1,4 @@
+on go xs
+ put given n: n into abs
+ return the first item of xs whose abs(it) > 1
+end go

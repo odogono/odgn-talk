@@ -1,0 +1,16 @@
+-- A Whose Key is the condition's first token. A local of the same name isn't
+-- read there, a later Name is a local, and brackets make a plain Name
+-- (ADR 0074).
+script variable orders = [{amount: 1, length: 9}, {amount: 5, length: 2}, {amount: 9, length: 7}]
+
+on keys
+ put 4 into amount
+ put 100 into length
+ put 6 into limit
+ return [every item of orders whose amount > limit, every item of orders whose amount > amount, every item of ["ab", "abcd"] whose length > 3, every item of orders whose (limit) > 1, every item of orders whose it's amount < amount]
+end keys
+
+on currencies
+ put "EUR" into currency
+ return every item of [{amount: {currency: "GBP"}}, {amount: {currency: "EUR"}}] whose amount's currency is "GBP"
+end currencies

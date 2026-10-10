@@ -1,0 +1,10 @@
+on pick orders, report, limit
+ put every item of orders whose amount > limit and it's paid into big
+ put the first item of orders whose length > 1 into wide
+ put the last word of report whose it begins with "a" into last
+ put the third line of report whose it is not empty into third
+ put every item of report delimited by ";" whose it is not empty into fields
+ put the tenth item of line 2 of report delimited by ";" whose it > limit into tenth
+ put every code point of report whose it is not " " into points
+ return every item of orders whose (every item of it whose it > limit) is not empty
+end pick

@@ -516,3 +516,36 @@ return [f(3), g(3)]`),
     ).toBe('[3, 6]');
   });
 });
+
+describe('Whose Clauses', () => {
+  test('every gives a list, and an ordinal or last one chunk or nothing', () => {
+    expect(
+      value(`put [{amount: 5, paid: true}, {amount: 50, paid: false}, {amount: 70, paid: true}] into orders
+return [every item of orders whose amount > 10, the first item of orders whose it's paid, the last item of orders whose amount > 1, the second item of orders whose it's paid, the third item of orders whose it's paid, every item of orders whose amount > 100]`),
+    ).toBe(
+      '[[{amount: 50, paid: false}, {amount: 70, paid: true}], {amount: 5, paid: true}, {amount: 70, paid: true}, {amount: 70, paid: true}, nothing, []]',
+    );
+  });
+  test('text chunks give lists of texts, with `delimited by`', () => {
+    expect(
+      value(`put "a bb" & newline & newline & "ccc" into report
+return [every line of report whose length > 1, every word of report whose length = 2, the second line of report whose it is empty, every item of "a;;b" delimited by ";" whose it is not empty, the first item of line 1 of "x;y" delimited by ";" whose it is "y", every character of "abc" whose it <> "b"]`),
+    ).toBe('[["a bb", "ccc"], ["bb"], nothing, ["a", "b"], "y", ["a", "c"]]');
+  });
+  test('the n-th match stops the walk, and `it` is the chunk', () => {
+    expect(
+      value(
+        'return [the second item of [1, 2, 3, 0] whose 6 / it > 1, every item of [1, 2, 3] whose (every item of [it, 5] whose it > 2) is not empty, it]',
+      ),
+    ).toBe('[2, [1, 2, 3], nothing]');
+  });
+  test('a condition that is not a boolean raises `wrong kind`', () => {
+    const outcome = run(
+      'on go\nreturn every item of [1] whose it\nend go',
+    ).outcome;
+    expect(outcome.kind).toBe('errored');
+    expect(outcome.kind === 'errored' && outcome.error.toString()).toContain(
+      'code: "wrong kind", message: "Expected " & quote & "boolean" & quote & ", but got " & quote & "number" & quote & ": 1", expected: "boolean", got: "number", value: 1, at: {unit: "test", handler: "go", line: 2, column: 26}',
+    );
+  });
+});

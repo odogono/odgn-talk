@@ -1,0 +1,13 @@
+-- Lists of maps, by a Whose Key and by a key of `it` (ADR 0074).
+script variable orders = [{id: 1, amount: 150 GBP, price: {currency: "GBP"}, paid: true}, {id: 2, amount: 80 GBP, price: {currency: "EUR"}, paid: false}, {id: 3, amount: 120 GBP, price: {currency: "GBP"}, paid: false}]
+
+on big
+ return every item of orders whose amount > 100 GBP
+end big
+
+on picks
+ put the first item of orders whose it's paid is false into firstUnpaid
+ put the last item of orders whose amount > 100 GBP into lastBig
+ put the second item of orders whose price's currency is "GBP" into secondPounds
+ return [the id of firstUnpaid, the id of lastBig, the id of secondPounds]
+end picks

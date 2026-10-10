@@ -1,0 +1,7 @@
+function big x
+ return x > 1
+end big
+
+on go xs
+ return every item of xs whose big(it)
+end go

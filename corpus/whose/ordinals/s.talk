@@ -1,0 +1,9 @@
+-- The n-th match stops the walk, so the condition never sees the chunks
+-- after it, while `last` and `every` test every chunk (ADR 0074).
+on nth
+ return [the first item of [4, 2, 0] whose 8 / it > 1, the second item of [4, 2, 0] whose 8 / it > 1, the third item of [5, 6, 7, 8] whose it > 4, the tenth item of (1..20) whose it mod 2 = 0]
+end nth
+
+on lastMatch
+ return the last item of [4, 2, 0] whose 8 / it > 1
+end lastMatch

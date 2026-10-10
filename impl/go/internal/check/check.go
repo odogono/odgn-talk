@@ -89,13 +89,14 @@ func (u *Unit) Resolve(body *Body, name string) (Symbol, bool) {
 	}
 	return Symbol{}, false
 }
-func (u *Unit) add(code string, pos syntax.Position) {
+func (u *Unit) add(code string, pos syntax.Position) { u.addMessage(code, pos, "") }
+func (u *Unit) addMessage(code string, pos syntax.Position, message string) {
 	for _, d := range u.Diagnostics {
 		if d.Code == code && d.Pos == pos {
 			return
 		}
 	}
-	u.Diagnostics = append(u.Diagnostics, Diagnostic{Code: code, Pos: pos})
+	u.Diagnostics = append(u.Diagnostics, Diagnostic{Code: code, Pos: pos, Message: message})
 }
 
 // A clash belongs to the later name, even when globals were collected first.
@@ -617,7 +618,10 @@ type context struct {
 	recovery     bool
 	recoveryLoop int
 	guard        bool
-	body         *Body
+	// whose is set in a Whose Clause's condition, outside its Lambdas, and
+	// inWhose in one at any depth (ADR 0074).
+	whose, inWhose bool
+	body           *Body
 }
 
 func (u *Unit) validateBody(b *Body, ctx context) {
@@ -633,6 +637,7 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 		ctx.joinTry = false
 		ctx.timeout = false
 		ctx.recovery = false
+		ctx.whose = false
 	}
 	for _, p := range b.Node.Params {
 		if p.Kind != "name" {
@@ -737,6 +742,9 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		if ctx.guard {
 			u.add("not in a guard", n.Pos())
 		}
+		if ctx.whose {
+			u.add("not in a whose", n.Pos())
+		}
 		u.validateBody(u.Bodies[n], ctx)
 		return
 	}
@@ -744,6 +752,11 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		s, _ := u.Resolve(b, n.Text)
 		if s.Kind != "builtin" {
 			u.add("not in a guard", n.Pos())
+		}
+	}
+	if ctx.whose && n.Kind == "call" {
+		if s, _ := u.Resolve(b, n.Text); s.Kind != "builtin" {
+			u.add("not in a whose", n.Pos())
 		}
 	}
 	if ctx.guard && (n.Kind == "key" || n.Kind == "key-computed") {
@@ -818,7 +831,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		}
 	case "name", "pin":
 		if _, ok := u.Resolve(b, n.Text); !ok {
-			u.add("unknown name", n.BindingPos())
+			u.unknownName(n, ctx)
 		} else {
 			s, _ := u.Resolve(b, n.Text)
 			if n.Kind == "name" && (s.Kind == "handler" || s.Kind == "builtin") {
@@ -853,7 +866,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	case "call":
 		s, ok := u.Resolve(b, n.Text)
 		if !ok {
-			u.add("unknown name", n.BindingPos())
+			u.unknownName(n, ctx)
 		} else if s.Kind == "function" && (len(n.Children) < s.Required || len(n.Children) > s.Maximum) {
 			u.add("wrong argument count", n.Pos())
 		}
@@ -905,6 +918,12 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		if !hasItem {
 			u.add("no item chunk", n.Pos())
 		}
+	case "whose":
+		// The head is shaped as an ordinal chunk, so `delimited` checks it.
+		u.validate(n.Children[0], b, ctx)
+		ctx.whose, ctx.inWhose = true, true
+		u.validate(n.Children[1], b, ctx)
+		return
 	case "text-pattern":
 		u.pattern(n, b, ctx)
 		return
@@ -1081,6 +1100,16 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	for _, child := range n.Branches {
 		u.validate(child, b, ctx)
 	}
+}
+
+// Only a Whose Clause condition's first token is a Whose Key, so a later
+// unknown name there is probably a key spelt without `it's` (ADR 0074).
+func (u *Unit) unknownName(n *syntax.Node, ctx context) {
+	message := ""
+	if ctx.inWhose {
+		message = fmt.Sprintf("unknown name: %s; a key of the chunk is `it's %s`", n.Text, n.Text)
+	}
+	u.addMessage("unknown name", n.BindingPos(), message)
 }
 func (u *Unit) constant(n *syntax.Node, available map[string]bool) {
 	syntax.Walk(n, func(x *syntax.Node) bool {

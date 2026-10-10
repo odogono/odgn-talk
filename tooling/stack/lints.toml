@@ -165,6 +165,14 @@ message = "Consider collecting each value into {name} in the repeat head."
 status = "implemented"
 
 [[lint]]
+id = "suggest-whose"
+flags = "a `filter` call whose Lambda has one plain parameter and a body that would be a valid Whose Clause condition"
+beginner = "hint"
+standard = "off"
+message = "Consider `every item of … whose …`, with `it` for {name}, in place of `filter` and a Lambda."
+status = "implemented"
+
+[[lint]]
 id = "store-race"
 flags = "a `store` `set` of a key whose value came from a `get` of that key through the same Grant in one Handler"
 beginner = "hint"

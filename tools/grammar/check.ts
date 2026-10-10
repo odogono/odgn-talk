@@ -236,13 +236,6 @@ for (const dir of ['docs', 'spec']) {
   }
 }
 broken();
-// Whose Clauses (ADR 0074), which the Cores' tests don't read until both
-// Cores parse them.
-mustParse(
-  readFileSync(join(import.meta.dir, 'whose/sketch.talk'), 'utf8'),
-  'tools/grammar/whose/sketch.talk',
-);
-broken(join(import.meta.dir, 'whose/broken.talk'));
 for (const r of total.relexes) {
   problems.push(`${r.site} ${r.line}:${r.col}: relexed ${r.was} as ${r.now}`);
 }

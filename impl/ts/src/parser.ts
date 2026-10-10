@@ -183,6 +183,7 @@ class Parser {
   brackets: string[] = []; // the open brackets, innermost last
   build = 0; // inside a `<< … >>` build value, where `as uint16` is a field type
   size = 0; // inside a parenthesised Binary Pattern size, where `^n` is allowed
+  whoseKeyAt = -1; // the offset of a Whose Clause condition's first token
   // A newline is skipped only while more brackets are open than the top of
   // this stack. A Lambda head and a block Lambda body push their own depth.
   nlBase: number[] = [0];
@@ -1930,7 +1931,78 @@ class Parser {
     if (this.atWord('given')) {
       return (yield this.lambda()) as Node;
     }
-    return (yield this.or()) as Node;
+    // A Whose Clause is a whole Expression, as a Lambda is (ADR 0074): an
+    // Every Head is decided at the start of one, and an ordinal Chunk
+    // Expression takes `whose` only when it is the whole operand.
+    const t = this.peek(0);
+    if (this.isWord(t, 'every')) {
+      const n = this.la2('every-chunk', 'operator');
+      if (this.isWord(n) && (SINGULAR.has(n.v) || n.v === 'code')) {
+        const frame = this.enter('Whose');
+        try {
+          const head = (yield this.everyHead()) as Node;
+          const op = this.expectWord('whose', 'operator');
+          return this.at(op, {
+            ...head,
+            k: 'Whose',
+            every: true,
+            cond: (yield this.whoseCondition()) as Node,
+          });
+        } finally {
+          this.leave(frame);
+        }
+      }
+    }
+    const e = (yield this.or()) as Node;
+    if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
+      const frame = this.enter('Whose', 1);
+      try {
+        const op = this.next('operator');
+        return this.at(op, {
+          k: 'Whose',
+          of: e,
+          cond: (yield this.whoseCondition()) as Node,
+        });
+      } finally {
+        this.leave(frame);
+      }
+    }
+    return e;
+  }
+
+  // `every item of xs`, which a Whose Clause must follow (ADR 0074). The head
+  // is the outermost Chunk Expression, so it takes the chain's `delimited by`.
+  *everyHead(): ParseTask<Node> {
+    const frame = this.enter('EveryHead');
+    try {
+      this.next();
+      let kind = this.next().v;
+      if (kind === 'code') {
+        this.expectWord('point');
+        kind = 'code point';
+      }
+      this.expectWord('of', 'operator');
+      const src = (yield this.postfix()) as Node;
+      let delimiter: Node | undefined;
+      if (
+        this.atOperatorWord('delimited') &&
+        this.isWord(this.la2('delimited-by', 'operator'), 'by')
+      ) {
+        this.next('operator');
+        this.next();
+        delimiter = (yield this.postfix()) as Node;
+      }
+      return { k: 'EveryHead', kind, src, delimiter };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // A Name operand that is the condition's first token is a Whose Key, a key
+  // or property of `it`: `whose amount > 100 GBP` (ADR 0074).
+  *whoseCondition(): ParseTask<Node> {
+    this.whoseKeyAt = this.peek(0).pos;
+    return (yield this.expr()) as Node;
   }
 
   // `given p1, p2: expr`, or `given p1, p2` at the end of a line, then
@@ -2520,6 +2592,14 @@ class Parser {
     const p = this.peek(0, 'operator');
     if (this.isOp(p, '(') && !p.spaceBefore) {
       return (yield this.call(w)) as Node;
+    }
+    if (t.pos === this.whoseKeyAt) {
+      this.leave(this.enter('WhoseKey', 1));
+      return {
+        k: PROPERTIES.has(w) ? 'Property' : 'Key',
+        key: w,
+        base: { k: 'Const', v: 'it' },
+      };
     }
     return { k: 'Name', name: w };
   }

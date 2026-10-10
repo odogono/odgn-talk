@@ -286,6 +286,37 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
 };
 
 /**
+ * A Whose Clause's condition may call only Built-ins and holds no Lambda
+ * (ADR 0074). A nested clause's condition is checked on its own.
+ */
+const checkWhose = (condition: SemanticNode, report: Report) => {
+  const work = [condition];
+  while (work.length) {
+    const node = work.pop()!;
+    const [head] = node.children;
+    if (node.rule === 'Lambda') {
+      report('not in a whose', head as Leaf);
+      continue;
+    }
+    if (
+      node.rule === 'Call' &&
+      head?.kind === 'name' &&
+      head.binding?.kind !== 'builtin function'
+    ) {
+      report('not in a whose', head);
+    }
+    const children =
+      node.rule === 'Whose' ? node.children.slice(0, 1) : node.children;
+    for (let index = children.length - 1; index >= 0; index--) {
+      const child = children[index]!;
+      if (child.kind === 'node') {
+        work.push(child);
+      }
+    }
+  }
+};
+
+/**
  * Check where control-flow statements, `pass`, `the target`, `private`,
  * what Library code may not use,
  * Guard contents and Handler suffixes may appear. Each Handler, function and
@@ -542,6 +573,9 @@ export const checkControl = (
       if (child.kind === 'node') {
         if (child.rule === 'Expression' && word(children[index - 1], 'where')) {
           checkGuard(child, report);
+        }
+        if (child.rule === 'Expression' && node.rule === 'Whose') {
+          checkWhose(child, report);
         }
         // A `finally` block's own loops may still be left by `exit repeat`.
         const cleanup = word(children[index - 1], 'finally');

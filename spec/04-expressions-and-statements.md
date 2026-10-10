@@ -192,7 +192,7 @@ A Whose Clause, `whose c`, keeps only the chunks for which `c` is `true` ([ADR 0
 
 > **Example.**
 >
-> ```
+> ```talk
 > put every item of [3, 8, 1, 12] whose it > 5 into big          -- [8, 12]
 > put every item of orders whose amount > 100 GBP into large
 > put the first item of tickets whose status is "open" and it's owner is empty into next
