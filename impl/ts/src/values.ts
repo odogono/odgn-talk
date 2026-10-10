@@ -253,6 +253,10 @@ export class Value {
       ? ((this.#data as Pairs).find(([k]) => k === nfc)?.[1] ?? nothing)
       : nothing;
   }
+  /** Internal: the frozen pairs themselves, without copying. */
+  mapPairs(): Pairs | undefined {
+    return this.kind === 'map' ? (this.#data as Pairs) : undefined;
+  }
   entries(): [string, Value][] {
     return this.kind === 'map'
       ? (this.#data as Pairs).map(([k, v]) => [k, v])
@@ -526,6 +530,10 @@ export const dec = (s: string): Value => {
   return makeValue('number', makeDecimal(canonical));
 };
 
+/** Internal: a number from canonical text the decimal arithmetic produced. */
+export const canonicalNumber = (canonical: string): Value =>
+  makeValue('number', makeDecimal(canonical));
+
 /** ECMAScript's shortest round-trip digits, expanded without rounding. */
 export const num = (n: number | bigint): Value => {
   if (typeof n !== 'number' && typeof n !== 'bigint') {
@@ -701,6 +709,29 @@ export const extendList = (
   prepend: boolean,
   all: boolean,
 ): Value => extendListValue(current, part, prepend, all);
+/**
+ * Internal: a Map with one normalised key set, or removed when `value` is
+ * undefined. The other pairs are already checked and frozen, so they're shared.
+ */
+export const mapWithEntry = (
+  m: Value,
+  nfc: string,
+  value: Value | undefined,
+): Value => {
+  const pairs = m.mapPairs()!;
+  const at = pairs.findIndex(([k]) => k === nfc);
+  const next = pairs.slice();
+  if (value === undefined) {
+    if (at >= 0) {
+      next.splice(at, 1);
+    }
+  } else if (at >= 0) {
+    next[at] = Object.freeze([nfc, value] as const);
+  } else {
+    next.push(Object.freeze([nfc, value] as const));
+  }
+  return makeValue('map', Object.freeze(next));
+};
 export const map = (
   input: Map<string, Value> | Iterable<[string, Value]>,
 ): Value => {

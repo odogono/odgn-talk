@@ -183,6 +183,30 @@ describe('correctly rounded number functions', () => {
   });
 });
 
+describe('exact arithmetic', () => {
+  // Results that fit 34 digits keep their ideal exponent; the rest round.
+  test('keeps the ideal exponent when the exact result fits', () => {
+    expect(
+      value(
+        '[1.50 + 2.25, 1.5 * 2, 0.1 * 0.1, 0 * -5, -2 * 0.0, 5 - 5.00, 3 - 7]',
+      ),
+    ).toBe('[3.75, 3.0, 0.01, 0, 0.0, 0.00, -4]');
+    expect(value('9999999999999999999999999999999999 * 1.0')).toBe(
+      '9999999999999999999999999999999999',
+    );
+  });
+
+  test('rounds or overflows past 34 digits or exponent -6176', () => {
+    expect(value('999999999999999999999999999999999.9 + 0.1')).toBe(
+      '1000000000000000000000000000000000',
+    );
+    expect(value('9999999999999999999999999999999999 + 1')).toBe(
+      'error code: "overflow", operator: "+"',
+    );
+    expect(value(`${tiny} * 0.5`)).toBe(`0.${'0'.repeat(6176)}`);
+  });
+});
+
 describe('floats', () => {
   test('reading', () => {
     expect(value('fromFloat32(<<0x3D, 0xCC, 0xCC, 0xCD>>)')).toBe('0.1');
