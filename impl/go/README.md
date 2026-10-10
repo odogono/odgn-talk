@@ -345,6 +345,12 @@ captures and named defaults. The Built-ins include number functions, IEEE float
 codecs, pinned case mapping, date fields and fixed-offset conversion, and Function
 Value metadata, plus `objectKind`, `isDisposed` and Core-held Object ids.
 
+The `items` Built-in property returns a list unchanged, splits text, and
+materializes integer ranges. Unsupported subjects raise `wrong kind` with
+`expected` `"list"`. The `text-model/items-property` Trace Case protects the
+results, error fields and costs in ordinary and save/restore replay; its first
+human blessing remains pending (#565).
+
 Generated Cost Model 0 charges precede committed instruction changes. Fuel,
 allocation, depth and dynamic Pattern Size faults leave the faulting instruction
 uncharged and restore Script Variables to the Segment's starting snapshot. Range

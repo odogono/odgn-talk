@@ -349,6 +349,7 @@ text-model/combining-mark-search
 text-model/fenced-text
 text-model/host-text-joins-in-nfc
 text-model/host-text-normalised-to-nfc
+text-model/items-property
 text-model/nfc-at-join-seams
 text-model/word-break-anchor
 text-model/word-chunks-keep-punctuation

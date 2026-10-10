@@ -1,0 +1,16 @@
+# Unblessed: items property list reads and wrong-kind fields (#565); first blessing awaits human review.
+# Pins chapter 4's items results and Cost Model 0 charges on both Cores.
+> load items identity=d79e25178ccb0346bda4824f7d9fcebfa35038872b50abdfa31b566c7223a1f7
+> deliver d1 to=items message=go
+> pump clock=2026-09-30T09:00:00Z
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+raise items/r1 code="wrong kind" at=items:57 pos=11:11
+seg items/r1 start delivery=d1 handler=go clause=1 fuel=419 alloc=3817 state=1547 end=return
+run items/r1 outcome=completed delivery=d1 handler=go fuel=419 alloc=3817
+pumped state=idle fuel=419
+> vars
+vars items results=[[1, 2], [], [nothing, {amount: 2}, [3]], [1, 2], ["a", " b"], ["a", "b"], [], [2, 3, 4], []] errors=[["wrong kind", "list", "number", 42], ["wrong kind", "list", "boolean", true], ["wrong kind", "list", "nothing", nothing], ["wrong kind", "list", "map", {a: 1}], ["wrong kind", "list", "bytes", <<0x01, 0x02>>], ["wrong kind", "list", "range", 1.5..3.5]]
