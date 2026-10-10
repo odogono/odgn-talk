@@ -204,7 +204,7 @@ test('asks a user prompt once, and takes its answer from a line or a dialog', ()
   );
   take();
   driver.input('sure and wait');
-  const question = {
+  const question: DriverEvent = {
     k: 'question',
     call: 'session/r1.c1',
     prompt: { k: 'confirm', message: 'Sure?' },
