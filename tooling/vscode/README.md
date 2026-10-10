@@ -32,7 +32,9 @@ the language server, so it needs no checkout, Bun or Node once installed.
   and the path to its absolute `tooling/cli/src/main.ts`.
 
 Changing a `northtalk.server` setting restarts the server; **NorthTalk: Restart
-Language Server** does so on demand. Enable `editor.inlayHints.enabled` to see
+Language Server** does so on demand. **NorthTalk: Show Dictionary** opens the
+Host Manifest's Grants and their Operations, with how each is called, as a
+Markdown document beside the editor. Enable `editor.inlayHints.enabled` to see
 suspension marks.
 
 ## Development

@@ -24,7 +24,9 @@ import {
   references,
   rename,
   suspensionHints,
+  type ClientFeatures,
 } from './lsp/features';
+import { dictionaryOf, dictionaryText } from './dictionary';
 import {
   offsetAt,
   range,
@@ -51,6 +53,21 @@ export type WorkspaceConfiguration = {
   profile?: LintProfile;
   sources?: readonly WorkspaceSource[];
 };
+// Optional client capabilities are read leniently: anything malformed is off.
+const clientFeatures = (capabilities: unknown): ClientFeatures => {
+  const text = (capabilities as { textDocument?: Record<string, unknown> })
+    ?.textDocument;
+  const hover = text?.hover as { contentFormat?: unknown } | undefined;
+  const item = (
+    text?.completion as { completionItem?: Record<string, unknown> } | undefined
+  )?.completionItem;
+  return {
+    markdown:
+      Array.isArray(hover?.contentFormat) &&
+      hover.contentFormat.includes('markdown'),
+    snippets: item?.snippetSupport === true,
+  };
+};
 export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   let initialized = false;
   let shutdown = false;
@@ -59,6 +76,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
   let manifestError: string | null = null;
   let profile: LintProfile = 'standard';
   let sources: readonly WorkspaceSource[] = [];
+  let client: ClientFeatures = { markdown: false, snippets: false };
   const open = new Map<string, Document>();
   let analyses = new Map<
     string,
@@ -141,6 +159,7 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
         throw new RpcError(-32_600, 'Already initialized');
       }
       settings(params.initializationOptions);
+      client = clientFeatures(params.capabilities);
       initialized = true;
       return {
         capabilities: {
@@ -185,6 +204,12 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
       settings(params.settings);
       refresh();
       return null;
+    }
+    if (method === 'northtalk/dictionary') {
+      return dictionaryText(
+        manifest ? dictionaryOf(manifest) : [],
+        params.format === 'plaintext' ? 'plaintext' : 'markdown',
+      );
     }
     if (method === 'northtalk/librarySource') {
       if (!analyses.size) {
@@ -300,9 +325,9 @@ export const createLanguageServer = (send: (message: RpcMessage) => void) => {
     const offset = offsetAt(analysis.document.text, position(params.position));
     switch (method) {
       case 'textDocument/completion':
-        return completion(analysis, offset, manifest, analyses);
+        return completion(analysis, offset, manifest, analyses, client);
       case 'textDocument/hover':
-        return hover(analyses, analysis, offset, manifest);
+        return hover(analyses, analysis, offset, manifest, client);
       case 'textDocument/definition':
         return definition(analyses, analysis, offset);
       case 'textDocument/references': {

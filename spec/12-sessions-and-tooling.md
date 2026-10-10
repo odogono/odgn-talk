@@ -330,7 +330,7 @@ Tooling learns what a Host offers from the Host Manifest it exports for each kin
 ### The Playground
 
 - **Public name:** NorthTalk Playground.
-- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Inspect, Canvas, live Debug, Replay and Setup.
+- **Workbench:** a resizable editor and inspector above a collapsible console, with system/light/dark themes. The inspector offers Syntax, Inspect, Canvas, live Debug, Replay, Setup and a Dictionary of the session's Grants and their Operations.
 - **Syntax** is a readable projection of the recovering parser tree of the current editor text, including errors. Source selection and tree selection are linked; it does not describe the last loaded session.
 - **Run fresh** prepares a replacement from the setup, current Library tabs and Script tab. Failed loading preserves the live session. Successful loading replaces it, starts a fresh Transcript, then evaluates the launch Entry if nonempty; an execution fault belongs to that new session.
 - **Apply** enters changed declarations into the live session, retaining Script Variables. Removing declarations offers a Restart. While the debugger is paused in a Run that can be rewound, Apply is Fix and Continue: it lists the effects that will happen again, and on confirmation enters `:fix` with the changed declarations. **Evaluate** enters the launch Entry against the loaded session without applying edits. Neither execution workflow is implicit in saving preferences.

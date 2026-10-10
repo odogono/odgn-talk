@@ -10,13 +10,20 @@ import {
 } from '../src/lsp';
 
 type Results = {
+  'northtalk/dictionary': string;
   'textDocument/codeAction': {
     edit: { changes: Record<string, TextEdit[]> };
   }[];
-  'textDocument/completion': { label: string }[];
+  'textDocument/completion': {
+    detail?: string;
+    documentation?: string | { kind: string; value: string };
+    insertText?: string;
+    insertTextFormat?: number;
+    label: string;
+  }[];
   'textDocument/definition': Location;
   'textDocument/formatting': TextEdit[];
-  'textDocument/hover': { contents: { value: string } };
+  'textDocument/hover': { contents: { kind: string; value: string } };
   'textDocument/implementation': Location[];
   'textDocument/inlayHint': { position: Position }[];
   'textDocument/prepareCallHierarchy': { name: string }[];
@@ -86,15 +93,24 @@ test('LSP publishes binding advice separately from load errors and updates manif
   const without = (sent.at(-1)!.params as Published).diagnostics;
   expect(without.map(d => d.code)).toEqual(['shadows-builtin']);
 });
-const setup = (source: string, withManifest = true) => {
+const setup = (
+  source: string,
+  withManifest: boolean | object = true,
+  capabilities: object = {},
+) => {
   const sent: RpcMessage[] = [];
   const server = createLanguageServer(message => sent.push(message));
-  server.configure({ manifest: withManifest ? manifest : null });
+  server.configure({
+    manifest: withManifest === true ? manifest : withManifest || null,
+  });
   server.handle({
     jsonrpc: '2.0',
     id: 1,
     method: 'initialize',
-    params: { initializationOptions: { northtalk: { profile: 'beginner' } } },
+    params: {
+      capabilities,
+      initializationOptions: { northtalk: { profile: 'beginner' } },
+    },
   });
   server.handle({
     jsonrpc: '2.0',
@@ -311,8 +327,8 @@ describe('language server', () => {
     expect(request('textDocument/hover', at(3, 7)).contents.value).toContain(
       'Home Script',
     );
-    expect(request('textDocument/hover', at(4, 14)).contents.value).toContain(
-      'suspending',
+    expect(request('textDocument/hover', at(4, 14)).contents.value).toBe(
+      "ask http to fetch ‹text› and wait\n  Suspending: a Suspension Point that waits at most the Script's MaxWait\n  Cost per call: 1 Fuel\n  Errors: offline",
     );
   });
   test("completes, hovers and marks a tell block's lines as their receiver's Operations", () => {
@@ -323,7 +339,7 @@ describe('language server', () => {
       request('textDocument/completion', at(3, 3)).map(c => c.label),
     ).toContain('fetch');
     expect(request('textDocument/hover', at(2, 4)).contents.value).toContain(
-      'suspending',
+      'Suspending',
     );
     const hints = request('textDocument/inlayHint', {
       range: {
@@ -364,6 +380,151 @@ describe('language server', () => {
       ['empty timeout', { line: 4, character: 1 }],
       ['not in a timeout', { line: 5, character: 3 }],
     ]);
+  });
+  const shop = {
+    ...manifest,
+    grants: [
+      {
+        name: 'ledger',
+        capability: 'books',
+        operations: [
+          {
+            name: 'begin',
+            mode: 'immediate',
+            args: [],
+            result: { object: 'transaction' },
+            cost: { fuel: 2, alloc: 0 },
+            scope: { opens: 'transaction', abandon: 'rollback' },
+          },
+          {
+            name: 'charge',
+            mode: 'suspending',
+            args: [
+              { quantity: 'GBP' },
+              { optional: { map: [{ key: 'note', shape: 'text' }] } },
+            ],
+            result: { oneOf: ['text', 'nothing'] },
+            cost: { fuel: 5, alloc: 64 },
+            maxPending: 3000,
+            errors: [
+              { code: 'declined', fields: [{ key: 'reason', shape: 'text' }] },
+            ],
+          },
+          {
+            name: 'note',
+            mode: 'fire-and-forget',
+            args: ['text'],
+            cost: { fuel: 1, alloc: 0 },
+            errors: [],
+          },
+          {
+            name: 'poll',
+            mode: 'suspending',
+            args: [],
+            cost: { fuel: 1, alloc: 0 },
+          },
+          {
+            name: 'post',
+            mode: 'immediate',
+            args: [{ list: 'number' }],
+            cost: { fuel: 1, alloc: 0 },
+            segmentBound: true,
+          },
+        ],
+      },
+    ],
+  };
+  const snippets = {
+    textDocument: {
+      completion: { completionItem: { snippetSupport: true } },
+      hover: { contentFormat: ['markdown', 'plaintext'] },
+    },
+  };
+  const items = (source: string, line: number, character: number, caps = {}) =>
+    Object.fromEntries(
+      setup(source, shop, caps)
+        .request('textDocument/completion', at(line, character))
+        .map(c => [c.label, c]),
+    );
+  const labels = (source: string, line: number, character: number) =>
+    Object.keys(items(source, line, character));
+  test("completes only the Operations a call's verb allows, adding `and wait` exactly when the mode needs it", () => {
+    expect(labels('on demo\n tell ledger to \nend demo', 1, 17)).toEqual([
+      'note',
+    ]);
+    expect(labels('on demo\n ask ledger to \nend demo', 1, 16)).toEqual([
+      'begin',
+      'charge',
+      'poll',
+      'post',
+    ]);
+    expect(
+      labels('on demo\n tell ledger\n   \n end tell\nend demo', 2, 3),
+    ).toEqual(['begin', 'charge', 'note', 'poll', 'post']);
+
+    const ask = items('on demo\n ask ledger to \nend demo', 1, 16, snippets);
+    expect(ask.charge).toMatchObject({
+      detail:
+        'ask ledger to charge ‹quantity in GBP›, [‹{note: text}›] and wait',
+      insertText: 'charge ${1} and wait',
+      insertTextFormat: 2,
+      documentation: { kind: 'markdown' },
+    });
+    expect(ask.poll).toMatchObject({ insertText: 'poll and wait' });
+    expect(ask.poll!.insertTextFormat).toBeUndefined();
+    expect(ask.begin).toMatchObject({ insertText: 'begin' });
+    // Without snippets, a suspending Operation with arguments inserts its name.
+    const plain = items('on demo\n ask ledger to \nend demo', 1, 16);
+    expect(plain.charge!.insertText).toBeUndefined();
+    expect(typeof plain.charge!.documentation).toBe('string');
+    // A line that already waits keeps its single `and wait`.
+    const editing = items(
+      'on demo\n ask ledger to ch 5 GBP and wait\nend demo',
+      1,
+      17,
+      snippets,
+    );
+    expect(editing.charge).toMatchObject({ insertText: 'charge' });
+    const block = items(
+      'on demo\n tell ledger\n   \n end tell\nend demo',
+      2,
+      3,
+      snippets,
+    );
+    expect(block.charge!.insertText).toBe('charge ${1} and wait');
+    expect(block.note!.insertText).toBe('note');
+  });
+  test('hovers an Operation with its dictionary entry, in markdown when the client shows it', () => {
+    const source =
+      'on demo\n ask ledger to post [1]\n ask ledger to begin\nend demo\n';
+    const { request } = setup(source, shop, snippets);
+    expect(request('textDocument/hover', at(1, 16)).contents).toEqual({
+      kind: 'markdown',
+      value:
+        '```northtalk\nask ledger to post ‹list of number›\n```\n\n- Immediate: answers at the call\n- Cost per call: 1 Fuel\n- Segment-bound: commits or rolls back with the Segment',
+    });
+    expect(
+      setup(source, shop).request('textDocument/hover', at(2, 16)).contents,
+    ).toEqual({
+      kind: 'plaintext',
+      value:
+        'ask ledger to begin\n  Immediate: answers at the call\n  Result: transaction object\n  Cost per call: 2 Fuel\n  Scope: opens transaction, abandoned by rollback',
+    });
+  });
+  test('answers northtalk/dictionary with every Grant and its Operations', () => {
+    const text = setup('', shop).request('northtalk/dictionary');
+    expect(text).toStartWith(
+      '# Dictionary\n\n## ledger (books)\n\n### begin\n',
+    );
+    expect(text).toContain(
+      '### charge\n\n```northtalk\nask ledger to charge ‹quantity in GBP›, [‹{note: text}›] and wait\n```\n\n- Suspending: a Suspension Point that waits at most 3000 ms (maxPending)\n- Result: text or nothing\n- Cost per call: 5 Fuel, 64 allocation\n- Errors: declined (reason)\n',
+    );
+    expect(text).toContain(
+      '- Fire-and-forget: runs at the call, and its result is dropped\n- Cost per call: 1 Fuel\n- Errors: none declared\n',
+    );
+    expect(
+      setup('', false).request('northtalk/dictionary', { format: 'plaintext' }),
+    ).toBe('No Host Manifest, so no Grants to show.\n');
   });
   test('navigates and renames through imports while preserving aliases and lexical scopes', () => {
     const { request } = setup(

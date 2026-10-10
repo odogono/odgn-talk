@@ -76,6 +76,10 @@
       {
         "command": "northtalk.restartServer",
         "title": "NorthTalk: Restart Language Server"
+      },
+      {
+        "command": "northtalk.showDictionary",
+        "title": "NorthTalk: Show Dictionary"
       }
     ]
   },

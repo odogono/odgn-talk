@@ -330,6 +330,11 @@ button.copy { padding: 0 6px; font-size: 11px; }
 .canvas-stage { padding: 16px; background: var(--panel); display: grid; place-items: center; min-height: 200px; }
 #drawing { max-width: 100%; height: auto; background: repeating-conic-gradient(#eee 0% 25%, white 0% 50%) 0 / 16px 16px; box-shadow: 0 0 0 1px var(--line); }
 #canvas .hint { margin-top: 12px; }
+#dictionary-view h3 { margin: 16px 0 8px; font-family: ui-monospace, monospace; }
+#dictionary-view h3 span { color: var(--muted); font-weight: 400; }
+.dictionary-op { margin: 0 0 12px; padding: 8px 12px; background: var(--panel); }
+.dictionary-op code { display: block; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.dictionary-op ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
 #share-dialog { min-width: 0; width: min(560px, 90vw); padding: 24px; background: var(--bg); color: var(--text); border: 1px solid var(--line); }
 @media (max-width: 767px) {
   body { height: auto; min-height: 100dvh; }

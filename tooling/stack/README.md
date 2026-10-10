@@ -154,9 +154,26 @@ errors and the shipped Lints in `northtalk.profile` (`standard` by default).
 Manifest Library source supplies export contracts, suspension information and
 bindings; imported Library diagnostics and transitive Grant requirements are
 reported at the importing `use` line. Constants are evaluated by the Core's
-initializer and shown in the display form. Operations show their manifest
-Declaration; Function Values show their Home Script. Hover also shows Declaration Documentation for named functions, Constants, Script Variables and each Handler Clause in declaration order. Imports and aliases resolve to the defining Library's block; Built-ins use the catalogue's descriptive text. Locals and parameters do not inherit a same-spelled declaration's documentation. Formatting delegates to
+initializer and shown in the display form. Operations show their dictionary
+entry, below; Function Values show their Home Script. Hover also shows Declaration Documentation for named functions, Constants, Script Variables and each Handler Clause in declaration order. Imports and aliases resolve to the defining Library's block; Built-ins use the catalogue's descriptive text. Locals and parameters do not inherit a same-spelled declaration's documentation. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
+
+Each Grant's Operations form a dictionary, built from the manifest's Operation
+Declarations by `@odgn/northtalk-tooling/dictionary`
+([#526](https://github.com/odogono/odgn-talk/issues/526)). An Operation's entry
+is the call its mode allows (`tell g to …`, `ask g to …` or `ask g to … and
+wait`, with argument Shapes as placeholders), then its mode and how long a
+suspending one waits, result Shape, per-call cost, declared errors, Capability
+Scope and whether it is Segment-bound. Hover on an Operation name shows it,
+as Markdown when the client's `hover.contentFormat` includes it. Completion
+after `tell g to` offers only fire-and-forget Operations, after `ask g to` only
+the others, and on a `tell g` block's line every Operation; the entry is each
+item's documentation and its call is the detail. A suspending Operation's item
+inserts `and wait` unless the line already has it after the cursor; with
+arguments this needs the client's `snippetSupport`, and without it the item
+inserts the name alone. The custom request `northtalk/dictionary`, with optional
+`format` `markdown` (the default) or `plaintext`, answers the whole dictionary
+as text.
 
 Argument Labels participate through their full Selector: `move knight to "e4"`
 navigates to `on move piece to square`, separately from an unlabelled `move`.
