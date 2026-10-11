@@ -19,6 +19,8 @@ steps = [
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[0.1]', gives = '[{t: "real", v: 0.1}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[9223372036854775808]', gives = '[{t: "real", v: 9223372036854776000}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[12345678901234567890.5]', gives = '[{t: "real", v: 12345678901234567000}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t", params = '[-9223372036854775809]', gives = '[{t: "real"}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(?1) AS t", params = '[9999999999999999999999999999999999]', gives = '[{t: "real"}]' },
   { in = "a", do = "query", sql = "SELECT ?1 + ?2 AS v", params = '[0.1, 0.2]', gives = '[{v: 0.30000000000000004}]' },
 ]
 
@@ -27,6 +29,7 @@ name = "Nothing, text, Bytes and booleans bind as NULL, TEXT, BLOB and 1 or 0"
 steps = [
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[nothing]', gives = '[{t: "null", v: nothing}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '["Zoë"]', gives = '[{t: "text", v: "Zoë"}]' },
+  { in = "a", do = "query", sql = "SELECT length(?1) AS n, hex(?1) AS h", params = '["é"]', gives = '[{n: 1, h: "C3A9"}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[""]', gives = '[{t: "text", v: ""}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[<<0x01, 0xFF>>]', gives = '[{t: "blob", v: <<0x01, 0xFF>>}]' },
   { in = "a", do = "query", sql = "SELECT typeof(?1) AS t, ?1 AS v", params = '[true]', gives = '[{t: "integer", v: 1}]' },
@@ -49,7 +52,12 @@ steps = [
 name = "values out: INTEGER, REAL by its shortest digits, TEXT as NFC, BLOB and NULL"
 steps = [
   { in = "a", do = "query", sql = "SELECT 1 AS i, 1.0 AS r, 0.1 AS f, 1e-7 AS s, -0.0 AS z", gives = '[{i: 1, r: 1, f: 0.1, s: 0.0000001, z: 0}]' },
+  { in = "a", do = "query", sql = "SELECT 9223372036854775807 AS max, -9223372036854775808 AS min", gives = '[{max: 9223372036854775807, min: -9223372036854775808}]' },
+  { in = "a", do = "query", sql = "SELECT typeof(9223372036854775808) AS t, 9223372036854775808 AS v", gives = '[{t: "real", v: 9223372036854776000}]' },
   { in = "a", do = "query", sql = "SELECT 9.99e33 AS big", gives = '[{big: 9990000000000000000000000000000000}]' },
+  { in = "a", do = "query", sql = "SELECT 9.999999999999998e33 AS big", gives = '[{big: 9999999999999998000000000000000000}]' },
+  # SQLite stores a NaN as NULL, so no NaN reaches the conversion.
+  { in = "a", do = "query", sql = "SELECT 9e999 - 9e999 AS x", gives = '[{x: nothing}]' },
   { in = "a", do = "query", sql = "SELECT 'e' || char(769) AS t", gives = '[{t: "é"}]' },
   { in = "a", do = "query", sql = "SELECT x'00ff' AS b, NULL AS n", gives = '[{b: <<0x00, 0xFF>>, n: nothing}]' },
   { in = "a", do = "query", sql = "SELECT 1 = 1 AS yes, 1 = 2 AS no", gives = '[{yes: 1, no: 0}]' },
@@ -62,6 +70,7 @@ steps = [
   { in = "a", do = "query", sql = "SELECT 1 AS ok, 9e999 AS x", error = '{code: "unrepresentable", column: "x"}' },
   { in = "a", do = "query", sql = "SELECT -9e999 AS x", error = '{code: "unrepresentable", column: "x"}' },
   { in = "a", do = "query", sql = "SELECT 1e34 AS x", error = '{code: "unrepresentable", column: "x"}' },
+  { in = "a", do = "query", sql = "SELECT ?1 AS x", params = '[9999999999999999999999999999999999]', error = '{code: "unrepresentable", column: "x"}' },
   { in = "a", do = "query", sql = "SELECT CAST(x'ff' AS TEXT) AS x", error = '{code: "unrepresentable", column: "x"}' },
 ]
 

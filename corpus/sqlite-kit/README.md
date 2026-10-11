@@ -4,6 +4,10 @@ Statement and lifecycle sequences that every `sqlite` implementation must follow
 
 These aren't Trace Cases, and the corpus runners skip this directory. The TS runner is [`impl/ts/tools/sqlite-kit.ts`](../../impl/ts/tools/sqlite-kit.ts), which runs the kit on the TS `node:sqlite` implementation under Bun, Node and Deno. The Go runner is [`impl/go/internal/sqlitekit`](../../impl/go/internal/sqlitekit/), which [`impl/go/sqlite`](../../impl/go/sqlite/) runs on the Go implementation. The Go Host keeps no Stores in a database yet, so it skips `store.toml`.
 
+## SQLite version
+
+The expectations were taken from SQLite 3.53.4, the version in Node 26's and Deno 2.9's `node:sqlite` and in the Go Host's `go-sqlite3-wasm` v6.3.35304. They also pass on 3.54.0, in Bun 1.4's `node:sqlite`. A newer SQLite can change what the same SQL gives ([chapter 7](../../spec/07-libraries-and-the-standard-library.md#sqlite)), so a step that fails on another version may be drift rather than a broken implementation. Check the change against SQLite's release notes before you edit the expectation, and update this section when you take expectations from a new version.
+
 ## Format
 
 Each `.toml` file lists default `grants` and `[[sequence]]` tables. Each sequence has a `name`, optional `grants` of its own, optional `setup` and `steps`. A runner opens a fresh, empty database for each sequence, runs each `setup` statement on it directly, outside every Segment and with no authorizer, and then runs the steps in order.
