@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import unicode from '../../spec/data/unicode.toml';
 import { generateGoUnicode } from './generate-go';
+import { generateZigUnicode } from './generate-zig';
 import { writeOutput } from '../go/output';
 
 const root = resolve(import.meta.dir, '../..');
@@ -255,6 +256,7 @@ if (import.meta.main) {
     await writeFile(target, generated);
   }
   await generateGoUnicode(data, args.includes('--check'));
+  await generateZigUnicode(data, args.includes('--check'));
   const license = await readFile(
     resolve(import.meta.dir, 'UNICODE-LICENSE.txt'),
     'utf8',
@@ -262,6 +264,7 @@ if (import.meta.main) {
   for (const directory of [
     'impl/ts/src/generated',
     'impl/go/internal/generated',
+    'impl/zig/src/generated',
   ]) {
     await writeOutput(
       resolve(root, directory, 'UNICODE-LICENSE.txt'),

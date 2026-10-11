@@ -1,0 +1,53 @@
+name: Zig Core
+
+on:
+  pull_request:
+    paths:
+      - 'impl/zig/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'tools/zig/**'
+      - 'tools/unicode/**'
+      - '.github/workflows/zig.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'impl/zig/**'
+      - 'spec/**'
+      - 'corpus/**'
+      - 'tools/zig/**'
+      - 'tools/unicode/**'
+      - '.github/workflows/zig.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      # The Unicode check formats the Go Core's table too, with gofmt.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # Downloads and verifies the pinned UCD the conformance tests read, and
+      # holds the Zig Core's generated tables to the Data Files.
+      - run: bun run unicode:check
+      - run: bun run zig:check
+      - run: zig fmt --check impl/zig
+      # Fails on a talk.h name talk.go doesn't declare, and lists the talk.go
+      # names talk.h doesn't declare yet.
+      - run: bun tools/zig/api.ts
+      - run: zig build test --summary all
+        working-directory: impl/zig
+      - run: zig build
+        working-directory: impl/zig
+      - run: zig build -Dtarget=wasm32-wasi
+        working-directory: impl/zig

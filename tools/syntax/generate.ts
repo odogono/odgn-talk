@@ -13,6 +13,7 @@ import version from '../../spec/data/version.toml';
 import { resolve } from 'node:path';
 import { parseSource } from '../../impl/ts/src/parser';
 import { generateGoCatalogues } from '../go/generate';
+import { generateZigCatalogues } from '../zig/generate';
 import { compileCostModel } from '../costs/compile';
 
 const compiledCosts = compileCostModel(costs);
@@ -301,3 +302,4 @@ for (const [path, text] of outputs) {
   }
 }
 await generateGoCatalogues(process.argv.includes('--check'));
+await generateZigCatalogues(process.argv.includes('--check'));

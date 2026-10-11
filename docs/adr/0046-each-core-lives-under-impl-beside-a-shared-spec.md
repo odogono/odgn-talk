@@ -14,8 +14,9 @@ The repository holds one language and several implementations of it, so its layo
 
 - **The Go module** has the path `github.com/odogono/odgn-talk/impl/go`. Its release tags are prefixed `impl/go/vX.Y.Z`. The driver is `.../impl/go/driver`, the Session Host is `.../impl/go/session`, and the Go REPL is `impl/go/cmd/northtalk`. The Go REPL lives with its Core because ADR 0028 makes it the only Go tooling. The package identifier stays `northtalk`. This amends ADR 0039.
 - **`impl/go/`** was created by the first Go Core issue (#248).
-- **Workspaces:** the root `package.json` is a private Bun workspace over `impl/ts`, `tooling/*` and `tools`. ESLint, Prettier and the base `tsconfig.base.json` are shared from the root. The Go module stays outside the workspace, and there's no `go.work` until a second Go module exists.
-- **Generated tables** are written by `tools/` into each Core's directory and checked in. Each generator's `--check` holds them to the Data Files. The Go emitters come with the Go Core.
-- **CI** is split by path. `spec.yml` runs the Spec checks on every change. `ts.yml` runs the TS Core on changes to `impl/ts/`, `tooling/`, `spec/` or `corpus/`. `go.yml` runs the Go Core on changes to `impl/go/`, `spec/` or `corpus/`. A change to the Spec or the corpus runs every Core.
+- **`impl/zig/`** is the Zig Core (ADR 0078): one Zig package with its C API in `impl/zig/include/talk.h`, created by #631.
+- **Workspaces:** the root `package.json` is a private Bun workspace over `impl/ts`, `tooling/*` and `tools`. ESLint, Prettier and the base `tsconfig.base.json` are shared from the root. The Go module and the Zig package stay outside the workspace, and there's no `go.work` until a second Go module exists.
+- **Generated tables** are written by `tools/` into each Core's directory and checked in. Each generator's `--check` holds them to the Data Files. The Go emitters come with the Go Core, and the Zig emitters with the Zig Core.
+- **CI** is split by path. `spec.yml` runs the Spec checks on every change. `ts.yml` runs the TS Core on changes to `impl/ts/`, `tooling/`, `spec/` or `corpus/`. `go.yml` runs the Go Core on changes to `impl/go/`, `spec/` or `corpus/`, and `zig.yml` the Zig Core on changes to `impl/zig/`, `spec/` or `corpus/`. A change to the Spec or the corpus runs every Core.
 - **`spikes/`** stays at the root as finished evidence that the ADRs cite, outside the workspaces and CI.
 - **Unchanged:** `spec/`, `corpus/` and `docs/` keep their paths, so the schema identity URLs and links into them stay valid.
