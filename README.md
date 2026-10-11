@@ -19,13 +19,14 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`impl/ts/examples/webhooks/`](impl/ts/examples/webhooks/): a runnable Bun webhook rules Example Host on the real Clock, driven by `autoDrive`, with Promise-backed suspending calls cancelled through `AbortSignal`.
 - [`impl/go/examples/tenants/`](impl/go/examples/tenants/): a runnable multi-tenant Go Example Host, an HTTP server with a Group per tenant pumped in parallel by the driver Pool.
 - [`impl/go/`](impl/go/): the Go Core, module `github.com/odogono/odgn-talk/impl/go`, with immutable values, decimal arithmetic, Value Encoding, Unicode text primitives, source lowering, standalone machine execution, the Group embedding interface, a Message Layer sidecar and WASI reactor, a Session Host, REPL, Transcript replay and a corpus runner.
+- [`impl/zig/`](impl/zig/): the Zig Core, under construction for embedding outside Go and TS ([ADR 0078](docs/adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)), with its C API in [`talk.h`](impl/zig/include/talk.h), a `wasm32-wasi` build, generated tables and Unicode text primitives so far.
 - [`tooling/`](tooling/): the TS tooling stack (the [`northtalk` command](tooling/cli/), the [formatter](tooling/stack/README.md#formatter) and [Lint engine](tooling/stack/README.md#lints), the [LSP](tooling/cli/README.md#language-server) and its [VS Code and Cursor extension](tooling/vscode/), the [live](tooling/stack/README.md#live-debugger) and [replay debugger](tooling/stack/README.md#replay-debugger), and the [Playground](tooling/playground/)), none of it normative.
 - [`bench/`](bench/): the Benchmark Suite, which times the same Scripts on each Core and checks their Fuel agrees, none of it normative.
 - [`tools/`](tools/): the Spec checks and the generators that write each Core's tables from the Data Files.
 - [`spikes/`](spikes/): finished experiments the ADRs cite, kept as evidence.
 - [`docs/`](docs/): the tour, the ADRs and research notes.
 
-Run `bun install` at the root. `bun run check` runs the Spec checks; `bun run test`, `bun run typecheck` and `bun run build` run across the workspaces. Generator checks require Go 1.27 for `gofmt`; see the [Go guide](impl/go/README.md) for Go build and test commands.
+Run `bun install` at the root. `bun run check` runs the Spec checks; `bun run test`, `bun run typecheck` and `bun run build` run across the workspaces. Generator checks require Go 1.27 for `gofmt`; see the [Go guide](impl/go/README.md) for Go build and test commands, and the [Zig guide](impl/zig/README.md) for Zig ones.
 
 ## The REPL
 
