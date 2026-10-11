@@ -131,6 +131,9 @@ func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, set
 		}
 		fields["abandoned"] = format(xs)
 	}
+	if !already {
+		g.releaseGrants(s, ReleaseStop)
+	}
 	*reports = append(*reports, stop)
 	g.record("stopped", false, []string{s.name}, fields)
 	for _, x := range runs {

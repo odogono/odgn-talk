@@ -117,7 +117,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 
 ## Capabilities
 
-**Pending addition:** [Store Notifications](proposals/store-notifications.md#embedding) adds a Grant release hook, which the Core calls when a Script's named Grant stops being effective, `store` watch Operations, a notification router helper and a `release` message-layer request. Neither Core supports them yet.
+**Pending addition:** [Store Notifications](proposals/store-notifications.md#embedding) adds a Grant release hook, which the Core calls when a Script's named Grant stops being effective, `store` watch Operations, a notification router helper and a `release` message-layer request. Both Cores implement the staged release hook (#618), and the Go adapter carries its exchange. Store watch Operations, the router and checkpoints remain pending.
 
 - **Defining one:** `DefineCapability` takes a name and its Operations, once per process. Each Operation is a declaration (name, argument and result Shapes, cost, mode, `maxPending`, declared error codes, optional `scope` and `segmentBound` metadata, and an optional `description` and `examples`) paired with the Host function that implements it. Declarations are ordered by name, whatever order the Host gives. `ask`, `tell`, `send` and `wait` are refused as Operation names.
 - **Documentation:** an Operation's `description` is plain text and its `examples` are a list of NorthTalk source texts, each calling the Operation, for tooling to show ([ADR 0077](../docs/adr/0076-operation-declarations-carry-documentation-that-only-tooling-reads.md)). An empty description or list is the same as none. A `description` that isn't text, or `examples` that aren't a list of text, are refused. The Core never parses or checks the text, and only the Host Manifest carries it: the Group Fingerprint, saves, restore's declaration matching and the Trace leave it out. The Standard Capabilities' declarations have none.
@@ -285,7 +285,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
 | `hello` | `protocol` | `language`, `costModel`, `unicode`, `core`, `saveFormat` | `CoreVersions` |
-| `define-capability` | `name`, `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
+| `define-capability` | `name`, `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks. `sqlite` isn't offered through the message layer yet | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
@@ -306,6 +306,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `pump` | `now`, `fuelSlice`, `fuelCap` | `state`, `nextDeadline`, `fuelUsed`, `reports`, `abandoned`, `trace` | `Pump` |
 | `op` (interim) | `call`, `script`, `run`, `segment`, `grant`, `capability`, `operation`, `mode`, `now`, `args (V)`, optional `scope`, `automatic`, and `fuelLeft` for Script calls only | `op-result`: `{result (V)}`, `{started}`, `{done}`, `{fail}`, `{limit}` or `{hostError}`, each with `charged` | `Do`, `Start`, `Fire` |
 | `effect` (interim) | `script`, `run`, `segment`, `grant`: the first enrolled, `grants`: every enrolled Grant name in enrollment order, optional `coordinator`, `phase`: `begin`, `commit` or `rollback`, `now` | `effect-result`: `{status: "ok" \| "failed" \| "unknown", detail?}` | Segment lifecycle hooks |
+| `release` (interim) | `script`, `grant`, `reason`: `stop`, `reload`, `revoke` or `disable`, `now` | `release-result`: no fields | [Grant release hook](proposals/store-notifications.md#the-grant-release-hook) (staged) |
 | `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
 | `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
@@ -322,7 +323,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 - **Traces:** when a Group was made with `trace: true`, the reply to every message that is a Host Input recorded in the Trace carries `trace`, the records it made ([chapter 11](11-the-trace-and-conformance.md)).
 - **Framing:** over WASI, the Host writes a frame into a buffer the export `talk_buffer(n)` gives, and `talk_send(n)` returns the reply's pointer and length packed as `ptr << 32 | len`. A sidecar sends each frame as a 4-byte big-endian length, then the JSON, both ways on stdio.
 
-Automatic `op` requests have `automatic: true`, no `fuelLeft`, and a zero `charged` reply. They take `args: []` and use the ordinary immediate `op-result`; an invalid result is a failed abandonment. Script requests have `automatic: false`. The Core applies acquisition/closure acknowledgements before processing result conversion or queued interruption. Lifecycle `effect-result` replies carry no Script values or charges. The enclosing worker call returns final reports only after all its interim exchanges complete. A malformed lifecycle reply is `unknown`, not an ordinary Script error.
+Automatic `op` requests have `automatic: true`, no `fuelLeft`, and a zero `charged` reply. They take `args: []` and use the ordinary immediate `op-result`; an invalid result is a failed abandonment. Script requests have `automatic: false`. The Core applies acquisition/closure acknowledgements before processing result conversion or queued interruption. Lifecycle `effect-result` replies carry no Script values or charges. A staged `release` exchange carries the enclosing `pump`, `reload` or `replace-library` ref and waits for `release-result`; it adds no Trace record or charge. The enclosing worker call returns final reports only after all its interim exchanges complete. A malformed lifecycle reply is `unknown`, not an ordinary Script error.
 
 ## Host error catalogue
 

@@ -192,6 +192,19 @@ export type ScopeDecl =
   | { opens: string; abandon: string; closes?: never }
   | { closes: string; opens?: never; abandon?: never };
 
+/** The staged Grant release contract; see proposals/store-notifications.md. */
+export type ReleaseReason = "stop" | "reload" | "revoke" | "disable";
+export interface GrantContext<B> {
+  readonly group: Group;
+  readonly scriptName: string;
+  readonly grantName: string;
+  readonly binding: B;
+  readonly now: bigint;
+  readonly reason: ReleaseReason;
+}
+/** Synchronous and unmetered; exceptions cannot refuse release. */
+export type ReleaseHook<B> = (context: GrantContext<B>) => void;
+
 /** Synchronous, unmetered Host lifecycle work; see embedding/scoped-effects.md. */
 export interface SegmentContext<B> {
   readonly group: Group; // identity namespace, not just its name
@@ -489,7 +502,7 @@ export interface Library {
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
   /** A plain lifecycle makes each Grant its own coordinator. */
-  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>): CapabilityDef<B>;
+  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>, release?: ReleaseHook<B>): CapabilityDef<B>;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   clockCapability(costs: Costs): CapabilityDef<void>;
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone

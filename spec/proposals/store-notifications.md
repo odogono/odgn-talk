@@ -1,6 +1,6 @@
 # Store Notifications
 
-**Status: accepted design, specified; implementation pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Neither Core, Session Host nor the reference tools offers `watch` or `unwatch` yet. The numbered chapters and executable Data Files remain the active specification.
+**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); remaining implementation pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Neither Core, Session Host nor the reference tools offers `watch` or `unwatch` yet. The numbered chapters and executable Data Files remain the active specification.
 
 Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged: nothing here adds syntax, instructions or costs. On implementation, move these rules into the chapters named in [Acceptance and delivery handoff](#acceptance-and-delivery-handoff), activate the deferred Data File entries, replace the chapters' pending-addition notices, and retire this document. Examples use `text` fences because documentation `talk` fences are checked against the current Operation catalogue. Their results are specified behavior, not execution evidence.
 
@@ -291,7 +291,7 @@ export interface StoreImpl extends SegmentLifecycle<string> {
 }
 ```
 
-In Go, `DefineCapability` and `DefineSegmentCapability` take an option carrying a `func(GrantContext)` release hook, and `StoreImpl` gains `Watch(c *Call, name, prefix, message string) error`, `Unwatch(c *Call, name string) error` and `Release(GrantContext)`. The `store` factory requires all eight Operations, the three Segment lifecycle hooks and `release`; a missing one is `invalid value`. The Host Manifest and Group Fingerprint cover the two new Operation Declarations as usual, and exclude the hook.
+In Go, `DefineCapability`, `DefineSegmentCapability` and `DefineCoordinatedCapability` take Operation declarations and `WithReleaseHook(func(GrantContext))` as `CapabilityOption` values, and `StoreImpl` gains `Watch(c *Call, name, prefix, message string) error`, `Unwatch(c *Call, name string) error` and `Release(GrantContext)`. The `store` factory requires all eight Operations, the three Segment lifecycle hooks and `release`; a missing one is `invalid value`. The Host Manifest and Group Fingerprint cover the two new Operation Declarations as usual, and exclude the hook.
 
 ### The router
 
@@ -430,3 +430,17 @@ The implementation must include both Cores, both routers, both Session Hosts and
 - **Chapters to integrate:** chapter 7's `store` section (Operations, validation, routing, payload, limits), chapter 6's error table, chapter 9's Capabilities, release hook, message layer and Host error catalogue, chapter 10's save rules and checkpoints, chapter 11's scenario tables and chapter 12's Session Store.
 - **Tooling:** the reference checker, LSP and Playground learn the two Operations from the regenerated catalogue. No new Advanced tag is needed.
 - **First blessing:** every new Trace Case, kit sequence and Transcript expectation is written or derived independently and reviewed by a person before blessing. Execution agreement between the Cores isn't approval. Present the expectation diffs, including changed Fingerprints of existing `store` cases, for review.
+
+## Release-hook delivery (#618)
+
+Both Cores implement the embedding release hook and its lifecycle scenarios.
+`spec/embedding/talk.ts`, `talk.go` and chapter 9's Message Layer table carry its
+declarations. Go's adapter supports `release`/`release-result` for Pump, Reload
+and Library replacement. There is no TS Message Layer adapter; its transport
+acceptance is deferred by the maintainer. See the [TS guide](../../impl/ts/README.md#grant-release-hooks)
+and [Go guide](../../impl/go/README.md#grant-release-hooks) for current support.
+
+Store Operations, the router, checkpoints, Session integration and their Data
+File entries remain deferred to the remaining implementation steps. This step
+adds embedding and transport tests, with no new Corpus expectations or first
+blessings.

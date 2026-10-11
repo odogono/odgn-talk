@@ -76,7 +76,7 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 		ops[i].Mode = Immediate
 	}
 	coordinator := c.storeCoordinator(impl)
-	def, err := c.DefineCoordinatedCapability("store", func(any) *SegmentLifecycle { return coordinator }, ops...)
+	def, err := c.defineCapability("store", nil, func(any) *SegmentLifecycle { return coordinator }, ops...)
 	if err != nil {
 		return nil, err
 	}

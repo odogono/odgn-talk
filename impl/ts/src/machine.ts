@@ -1186,7 +1186,6 @@ export class Run {
           },
         );
       } catch (error) {
-        this.host!.disableGrant(scope.grantName);
         let failed = map([]);
         let status: 'failed' | 'unknown' = 'unknown';
         if (!contractFailure && error instanceof HostScriptError) {
@@ -1236,6 +1235,7 @@ export class Run {
             detail: hostDetail(error),
           },
         );
+        this.host!.disableGrant(scope.grantName);
         if (this.enrolled(scope.grantName)) {
           this.participantAbandonment ??= {
             script: this.script.name,

@@ -664,6 +664,32 @@ fire-and-forget calls carry a background Context. Segment-bound Operations use
 `DefineSegmentCapability` or `DefineCoordinatedCapability` with synchronous
 lifecycle hooks, described below.
 
+### Grant release hooks
+
+`DefineCapability`, `DefineSegmentCapability` and `DefineCoordinatedCapability`
+accept Operation declarations and `WithReleaseHook(func(GrantContext))` as
+`CapabilityOption` values. A caller expanding a slice uses `[]CapabilityOption`
+rather than `[]Operation`. `GrantContext` identifies the Group instance, Script,
+named Grant, binding, last Clock reading and `ReleaseReason`: `ReleaseStop`,
+`ReleaseReload`, `ReleaseRevoke` or `ReleaseDisable`.
+
+This implements the first step of the staged
+[Store Notifications contract](../../spec/proposals/store-notifications.md#the-grant-release-hook)
+([#618](https://github.com/odogono/odgn-talk/issues/618)). Stop, owner disposal
+and fatal effect uncertainty release all kept Grants with hooks in code-point
+name order after abandonment and rollback, before the Stop report. Successful
+Reload and Library replacement release those Grants with `reload`, including
+revoked and disabled ones. Rejected updates, Extend, Save and Restore release
+nothing. Revocation releases once when drained; failed automatic abandonment
+releases immediately after its `effect failure` report.
+
+Hooks are synchronous and unmetered, with no Trace record or Fingerprint field.
+They may queue Host Inputs; worker calls are `reentrant call`, and panics cannot
+refuse release. `grant_release_test.go` verifies lifecycle ordering and identity.
+The TS Core supports the same embedding hook; it has no Message Layer adapter,
+so its transport tests are deferred. Store watches, routers and checkpoints
+remain deferred.
+
 ### Segment-bound Operations
 
 A Segment's participant is a Segment Coordinator, a `*SegmentLifecycle` with
@@ -1239,9 +1265,13 @@ frames receive a protocol error with `ref: -1`; the Session remains usable,
 including any pending Host exchange. Quoted delimiters do not count. This
 transport limit is identical on native and WASI builds.
 
-A `pump` runs on its own goroutine. Each Operation or property it reaches
-returns a `need` (`op` or `prop`) from `Send`, and parks until the Host's
-`op-result` or `prop-result` arrives under the same `ref`. Any other message
+A `pump`, `reload` or `replace-library` runs on its own goroutine. Each
+Operation, property or Grant release hook it reaches returns a `need` (`op`,
+`prop` or `release`) from `Send`, and parks until its matching `op-result`,
+`prop-result` or `release-result` arrives under the same `ref`. A Capability
+advertises its hook with `release: true` in `define-capability`; the `release`
+need carries `script`, `grant`, `reason` and `now`. The enclosing worker
+returns its final reports after every acknowledgement. Any other message
 sent meanwhile is a protocol error. So the Core never calls the Host, and the
 same `Session` serves the `wasip1` exports, where a goroutine parks across
 exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
@@ -1253,8 +1283,10 @@ It carries `hello`, `define-capability`, the `clock` Standard Capability,
 `add`, `define-object-kind`, `grant`, `new-group`, `load`, `object`,
 `set-parent`, `dispose`, `deliver`, `request`, `cancel-delivery`, `broadcast`,
 `answer`, `fail`, `pump`, `save`, `fingerprint`, `stop`, `cancel-run`,
-`rewind-run`, `revoke`, `counters` and `grants`. It doesn't yet carry
-Libraries, `call`, `decide`, `inspect`, `restore` and `settle`, `reload`,
+`rewind-run`, `revoke`, `counters`, `grants`, `compile-library`, `add-library`,
+`replace-library` and `reload`. Library compilation accepts import identities
+and Operation declarations. It doesn't yet carry
+`call`, `decide`, `inspect`, `restore` and `settle`,
 `extend`, `export-manifest`, Segment lifecycles and Coordinators, the other
 Standard Capabilities, or the `$function` form of Function Values. Those
 messages reply with a protocol error that says so. A protocol error,

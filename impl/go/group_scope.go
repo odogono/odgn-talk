@@ -95,6 +95,7 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipan
 			}
 			*reports = append(*reports, report)
 			g.record("effect-failure", false, []string{string(x.id)}, map[string]string{"grant": slot.grantName, "segment": call.segmentID, "phase": "abandon", "status": string(status), "scope": slot.name})
+			g.releaseGrant(s, slot.grantName, ReleaseDisable)
 		}
 	}
 	return participatingFailure

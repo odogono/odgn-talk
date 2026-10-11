@@ -36,7 +36,7 @@ Recovery Offers and two-phase catch search are specified in [chapter 4](04-expre
 
 ## Staged specifications
 
-[Store Notifications](proposals/store-notifications.md) is the specified contract for Store `watch` and `unwatch` ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227)): Operation Declarations, routing, the Grant release hook, checkpoints, limits, the Session Host's rules and conformance cases. No Core, router or Session Host supports it yet, and its Data File entries are deferred to implementation.
+[Store Notifications](proposals/store-notifications.md) is the specified contract for Store `watch` and `unwatch` ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227)): Operation Declarations, routing, the Grant release hook, checkpoints, limits, the Session Host's rules and conformance cases. Both Cores support its Grant release hook (#618); Store watches, routers and Session Host support remain pending, and the Operation/error Data File entries are deferred to integration.
 
 ## Data Files
 

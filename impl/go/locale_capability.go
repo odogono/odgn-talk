@@ -80,7 +80,7 @@ func (c *Core) LocaleCapability(impl LocaleImpl, costs Costs) (*CapabilityDef, e
 			return nil, err
 		}
 	}
-	def, err := c.DefineCapability("locale", ops...)
+	def, err := c.defineCapability("locale", nil, nil, ops...)
 	if err != nil {
 		return nil, err
 	}
