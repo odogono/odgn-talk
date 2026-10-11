@@ -23,8 +23,9 @@ on:
       - 'bun.lock'
       - '.github/workflows/go.yml'
 
+# Independent jobs, so the check takes as long as its slowest part.
 jobs:
-  check:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +57,64 @@ jobs:
       # Skips the exhaustive single-goroutine replays, which the run above covers.
       - run: go test -race ./...
         working-directory: impl/go
+
+  # The sqlite Host is its own module, so the core runs skip it.
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - run: go vet ./... && go test -v ./... && go test -race ./...
+        working-directory: impl/go/sqlite
+
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      # Every case, in ordinary and save/restore replay; a failure names its
+      # first divergence and the command that reproduces it.
+      - name: Run the complete Corpus on the Go Core
+        run: go run ./cmd/corpus --check-passing
+        working-directory: impl/go
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # The TS workflow's deterministic dual-Core smoke, for changes to the Go Core.
+      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
+      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --go-runner .cache/fuzzworker
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-smoke-findings
+          path: fuzz-findings
+          if-no-files-found: ignore
+
+  # Each job builds its own reactor, which is quicker than waiting on a shared build.
+  wasi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -66,23 +125,30 @@ jobs:
           GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi
           python -m pip install wasmtime==49.0.0 brotli==1.2.0
           python tools/wasi/check.py .cache/messagelayer.wasm
-      - name: Check WASI List memory at conformance minimums
-        timeout-minutes: 10
-        run: python tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm --profile minimum
-      # The sqlite Host is its own module, so the runs above skip it.
-      - run: go vet ./... && go test -v ./... && go test -race ./...
-        working-directory: impl/go/sqlite
-      # Every case, in ordinary and save/restore replay; a failure names its
-      # first divergence and the command that reproduces it.
-      - name: Run the complete Corpus on the Go Core
-        run: go run ./cmd/corpus --check-passing
-        working-directory: impl/go
-      # The TS workflow's deterministic dual-Core smoke, for changes to the Go Core.
-      - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
-      - run: bun run fuzz smoke --seed 1 --output fuzz-findings --go-runner .cache/fuzzworker
-      - if: failure()
-        uses: actions/upload-artifact@v4
+
+  # One job per workload, since they run serially and local/nothing alone takes about 3 minutes.
+  wasi-memory:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [local, persistent]
+        item: [text, nothing]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          name: fuzz-smoke-findings
-          path: fuzz-findings
-          if-no-files-found: ignore
+          go-version: '1.27'
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build the WASI Message Layer reactor
+        timeout-minutes: 5
+        run: |
+          mkdir -p .cache
+          GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi
+          python -m pip install wasmtime==49.0.0 brotli==1.2.0
+      - name: Check WASI List memory at conformance minimums
+        timeout-minutes: 6
+        run: python tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm --profile minimum --workload ${{ matrix.workload }} --item ${{ matrix.item }}
