@@ -1,0 +1,405 @@
+//! Chapter 9's deterministic, lossless JSON Value Encoding. JSON is scanned
+//! for depth before parsing; decimal tokens never pass through binary floats.
+const std = @import("std");
+const model = @import("value.zig");
+const display = @import("display.zig");
+const Value = model.Value;
+const Json = std.json.Value;
+/// Every refusal the writer can report, including the writer's own failure.
+pub const Error = model.Error || error{WriteFailed};
+/// 2^53: integers below it in magnitude are plain JSON numbers, which every
+/// JSON reader holds exactly; larger ones and fractions are `$dec`.
+const plain_integer_limit: u128 = 9007199254740992;
+fn quoted(w: *std.Io.Writer, s: []const u8) !void {
+    try w.writeByte('"');
+    for (s) |c| switch (c) {
+        '"' => try w.writeAll("\\\""),
+        '\\' => try w.writeAll("\\\\"),
+        0...31 => try w.print("\\u00{x:0>2}", .{c}),
+        else => try w.writeByte(c),
+    };
+    try w.writeByte('"');
+}
+fn tag(w: *std.Io.Writer, name: []const u8) !void {
+    try w.writeAll("{\"$");
+    try w.writeAll(name);
+    try w.writeAll("\":");
+}
+/// Writes `v`'s Value Encoding. A Function at any depth is NotEncodable.
+pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
+    const a = v.allocator;
+    switch (v.data) {
+        .nothing => try w.writeAll("null"),
+        .bool => |b| try w.writeAll(if (b) "true" else "false"),
+        .text => |s| try quoted(w, s),
+        .number => |n| {
+            const s = try n.string(a);
+            defer a.free(s);
+            if (n.exponent == 0 and n.coefficient < plain_integer_limit) try w.writeAll(s) else {
+                try tag(w, "dec");
+                try quoted(w, s);
+                try w.writeByte('}');
+            }
+        },
+        .quantity => |q| {
+            const s = try q.number.string(a);
+            defer a.free(s);
+            const u = try q.unit.string(a, false);
+            defer a.free(u);
+            try tag(w, "quantity");
+            try w.writeByte('[');
+            try quoted(w, s);
+            try w.writeByte(',');
+            try quoted(w, u);
+            try w.writeAll("]}");
+        },
+        .bytes => |b| {
+            const codec = std.base64.standard.Encoder;
+            const out = try a.alloc(u8, codec.calcSize(b.len));
+            defer a.free(out);
+            const encoded = codec.encode(out, b);
+            try tag(w, "bytes");
+            try quoted(w, encoded);
+            try w.writeByte('}');
+        },
+        .list => |xs| {
+            try w.writeByte('[');
+            for (xs, 0..) |x, i| {
+                if (i > 0) try w.writeByte(',');
+                try write(w, x);
+            }
+            try w.writeByte(']');
+        },
+        .map => |xs| {
+            var escaped = false;
+            for (xs) |p| if (p.key.len > 0 and p.key[0] == '$') {
+                escaped = true;
+                break;
+            };
+            if (escaped) {
+                try tag(w, "map");
+                try w.writeByte('[');
+            } else try w.writeByte('{');
+            for (xs, 0..) |p, i| {
+                if (i > 0) try w.writeByte(',');
+                if (escaped) try w.writeByte('[');
+                try quoted(w, p.key);
+                try w.writeByte(if (escaped) ',' else ':');
+                try write(w, p.value);
+                if (escaped) try w.writeByte(']');
+            }
+            try w.writeAll(if (escaped) "]}" else "}");
+        },
+        .range => |r| {
+            try tag(w, "range");
+            try w.writeByte('[');
+            try write(w, r.from);
+            try w.writeByte(',');
+            try write(w, r.to);
+            try w.writeAll("]}");
+        },
+        .civil_date => |f| {
+            const s = try model.dates.string(a, f, false);
+            defer a.free(s);
+            try tag(w, "date");
+            try quoted(w, s);
+            try w.writeByte('}');
+        },
+        .instant => |t| {
+            const s = try model.dates.string(a, model.dates.fields(t), true);
+            defer a.free(s);
+            try tag(w, "instant");
+            try quoted(w, s);
+            try w.writeByte('}');
+        },
+        .pattern => |s| {
+            try tag(w, "pattern");
+            try quoted(w, s);
+            try w.writeByte('}');
+        },
+        .object => |o| {
+            try tag(w, "object");
+            try w.writeByte('[');
+            try quoted(w, o.kind);
+            try w.writeByte(',');
+            try quoted(w, o.id);
+            try w.writeAll("]}");
+        },
+        .function => return error.NotEncodable,
+    }
+}
+/// `v`'s Value Encoding, owned by the caller.
+pub fn encode(a: std.mem.Allocator, v: *const Value) Error![]u8 {
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    write(&out.writer, v) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
+    return out.toOwnedSlice();
+}
+fn string(j: Json) model.Error![]const u8 {
+    return if (j == .string) j.string else error.InvalidValue;
+}
+fn pair(j: Json) model.Error![]Json {
+    if (j != .array or j.array.items.len != 2) return error.InvalidValue;
+    return j.array.items;
+}
+fn canonicalDecimal(a: std.mem.Allocator, s: []const u8) model.Error!model.Decimal {
+    const n = try model.Decimal.parse(s);
+    const canonical = try n.string(a);
+    defer a.free(canonical);
+    if (!std.mem.eql(u8, canonical, s)) return error.InvalidValue;
+    return n;
+}
+fn fromJson(a: std.mem.Allocator, j: Json, r: display.Resolver, depth: usize) model.Error!*Value {
+    if (depth >= model.max_depth) return error.TooDeep;
+    switch (j) {
+        .null => return model.scalar(a, .nothing),
+        .bool => |b| return model.scalar(a, .{ .bool = b }),
+        .string => |s| return model.text(a, s),
+        .number_string => |s| {
+            const n = try model.Decimal.parse(s);
+            if (n.exponent != 0 or n.coefficient >= plain_integer_limit) return error.InvalidValue;
+            return model.scalar(a, .{ .number = n });
+        },
+        .array => |array| {
+            var out: std.ArrayList(*Value) = .empty;
+            defer {
+                for (out.items) |v| v.release();
+                out.deinit(a);
+            }
+            for (array.items) |child| {
+                const v = try fromJson(a, child, r, depth + 1);
+                out.append(a, v) catch {
+                    v.release();
+                    return error.OutOfMemory;
+                };
+            }
+            return model.list(a, out.items);
+        },
+        .object => |object| {
+            if (object.count() == 1) {
+                const name = object.keys()[0];
+                const payload = object.values()[0];
+                if (std.mem.eql(u8, name, "$dec")) return model.scalar(a, .{ .number = try canonicalDecimal(a, try string(payload)) });
+                if (std.mem.eql(u8, name, "$quantity")) {
+                    const p = try pair(payload);
+                    const value = try model.quantity(a, try canonicalDecimal(a, try string(p[0])), try string(p[1]));
+                    errdefer value.release();
+                    if (value.data != .quantity) return error.InvalidValue;
+                    const unit = value.data.quantity.unit.string(a, false) catch return error.OutOfMemory;
+                    defer a.free(unit);
+                    if (!std.mem.eql(u8, unit, try string(p[1]))) return error.InvalidValue;
+                    return value;
+                }
+                if (std.mem.eql(u8, name, "$range")) {
+                    const p = try pair(payload);
+                    const from = try fromJson(a, p[0], r, depth + 1);
+                    defer from.release();
+                    const to = try fromJson(a, p[1], r, depth + 1);
+                    defer to.release();
+                    return model.range(a, from, to);
+                }
+                if (std.mem.eql(u8, name, "$date")) return model.scalar(a, .{ .civil_date = try model.dates.parseCivil(try string(payload)) });
+                if (std.mem.eql(u8, name, "$instant")) {
+                    const source = try string(payload);
+                    if (source.len == 0 or source[source.len - 1] != 'Z') return error.InvalidValue;
+                    return model.scalar(a, .{ .instant = try model.dates.parseInstant(source) });
+                }
+                if (std.mem.eql(u8, name, "$bytes")) {
+                    const s = try string(payload);
+                    const decoder = std.base64.standard.Decoder;
+                    const len = decoder.calcSizeForSlice(s) catch return error.InvalidValue;
+                    const b = try a.alloc(u8, len);
+                    defer a.free(b);
+                    decoder.decode(b, s) catch return error.InvalidValue;
+                    const encoder = std.base64.standard.Encoder;
+                    const canonical = try a.alloc(u8, encoder.calcSize(b.len));
+                    defer a.free(canonical);
+                    if (!std.mem.eql(u8, s, encoder.encode(canonical, b))) return error.InvalidValue;
+                    return model.bytes(a, b);
+                }
+                if (std.mem.eql(u8, name, "$object")) {
+                    const p = try pair(payload);
+                    const resolve = r.object orelse return error.InvalidValue;
+                    return resolve(r.context, try string(p[0]), try string(p[1]));
+                }
+                if (std.mem.eql(u8, name, "$pattern")) {
+                    return @import("pattern.zig").parse(a, try string(payload));
+                }
+                if (std.mem.eql(u8, name, "$map")) {
+                    if (payload != .array) return error.InvalidValue;
+                    var pairs: std.ArrayList(model.Pair) = .empty;
+                    defer {
+                        for (pairs.items) |p| p.value.release();
+                        pairs.deinit(a);
+                    }
+                    for (payload.array.items) |item| {
+                        const p = try pair(item);
+                        const k = try string(p[0]);
+                        const v = try fromJson(a, p[1], r, depth + 1);
+                        pairs.append(a, .{ .key = k, .value = v }) catch {
+                            v.release();
+                            return error.OutOfMemory;
+                        };
+                    }
+                    return model.map(a, pairs.items);
+                }
+            }
+            var pairs: std.ArrayList(model.Pair) = .empty;
+            defer {
+                for (pairs.items) |p| p.value.release();
+                pairs.deinit(a);
+            }
+            for (object.keys(), object.values()) |k, child| {
+                if (k.len > 0 and k[0] == '$') return error.InvalidValue;
+                const v = try fromJson(a, child, r, depth + 1);
+                pairs.append(a, .{ .key = k, .value = v }) catch {
+                    v.release();
+                    return error.OutOfMemory;
+                };
+            }
+            return model.map(a, pairs.items);
+        },
+        else => return error.InvalidValue,
+    }
+}
+/// Reads one Value Encoding, refusing invalid UTF-8, nesting beyond
+/// `max_depth`, duplicate keys, unknown tags and noncanonical decimal, Unit
+/// and Base64 payloads. Host Objects come from `r`.
+pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Error!*Value {
+    if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
+    var depth: usize = 0;
+    var quoted_string = false;
+    var escaped = false;
+    for (s) |c| {
+        if (quoted_string) {
+            if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') quoted_string = false;
+        } else if (c == '"') quoted_string = true else if (c == '[' or c == '{') {
+            depth += 1;
+            if (depth > model.max_depth) return error.TooDeep;
+        } else if (c == ']' or c == '}') {
+            if (depth == 0) return error.InvalidValue;
+            depth -= 1;
+        }
+    }
+    const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+    defer parsed.deinit();
+    return fromJson(a, parsed.value, r, 0);
+}
+test "lossless encoding, escaping, map tags and strict Base64" {
+    const a = std.testing.allocator;
+    const cases = .{
+        .{ "7.50", "{\"$dec\":\"7.50\"}" },                                                                                                        .{ "9007199254740992", "{\"$dec\":\"9007199254740992\"}" },                       .{ "{\"$ref\": 1}", "{\"$map\":[[\"$ref\",1]]}" },
+        .{ "[<<0xFB, 0xFF>>, 3 m..7 cm]", "[{\"$bytes\":\"+/8=\"},{\"$range\":[{\"$quantity\":[\"3\",\"m\"]},{\"$quantity\":[\"7\",\"cm\"]}]}]" }, .{ "newline & tab & fromCodePoint(0) & quote", "\"\\u000a\\u0009\\u0000\\\"\"" },
+    };
+    inline for (cases) |c| {
+        const v = try display.parse(a, c[0], .{});
+        defer v.release();
+        const s = try encode(a, v);
+        defer a.free(s);
+        try std.testing.expectEqualStrings(c[1], s);
+        const copy = try decode(a, s, .{});
+        defer copy.release();
+        try std.testing.expect(try v.equal(copy));
+        const again = try encode(a, copy);
+        defer a.free(again);
+        try std.testing.expectEqualStrings(s, again);
+    }
+    for ([_][]const u8{ "{\"$bytes\":\"AB==\"}", "{\"$bytes\":\"AQ\"}", "{\"$bytes\":\"AQ===\"}", "{\"$wat\":0}", "{\"a\":1,\"a\":2}", "{\"$range\":[1,true]}" }) |s| try std.testing.expectError(error.InvalidValue, decode(a, s, .{}));
+    const deep = try a.alloc(u8, 300);
+    defer a.free(deep);
+    @memset(deep, '[');
+    try std.testing.expectError(error.TooDeep, decode(a, deep, .{}));
+}
+
+fn allocationRoundTrip(a: std.mem.Allocator) !void {
+    const v = try display.parse(a, "{\"$key\": [\"é\" & quote, <<0x01>>, 2.50 GBP, 2026-09-27]}", .{});
+    defer v.release();
+    const encoded = try encode(a, v);
+    defer a.free(encoded);
+    const copy = try decode(a, encoded, .{});
+    defer copy.release();
+    const rendered = try display.string(a, copy);
+    defer a.free(rendered);
+    const reparsed = try display.parse(a, rendered, .{});
+    defer reparsed.release();
+    try std.testing.expect(try v.equal(reparsed));
+}
+test "every allocation failure cleans up partially built values" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, allocationRoundTrip, .{});
+    for ([_][]const u8{ "{a: 1,}", "{a: 1 broken}", "[1,]", "{a: [1, 2}" }) |s| try std.testing.expectError(error.InvalidValue, display.parse(std.testing.allocator, s, .{}));
+}
+
+fn testResolveObject(context: ?*anyopaque, kind: []const u8, id: []const u8) model.Error!*Value {
+    const v: *Value = @ptrCast(@alignCast(context.?));
+    if (!std.mem.eql(u8, kind, v.data.object.kind) or !std.mem.eql(u8, id, v.data.object.id)) return error.InvalidValue;
+    return v.retain();
+}
+test "pattern and object encoding round trips; functions including nested are refused" {
+    const a = std.testing.allocator;
+    const pattern = try @import("pattern.zig").parse(a, "<\"ID-\", 4 digits>");
+    defer pattern.release();
+    const object = try model.object(a, "item", "object-slot-183", 42);
+    defer object.release();
+    const object_list = try model.list(a, &.{ object, pattern });
+    defer object_list.release();
+    const encoded = try encode(a, object_list);
+    defer a.free(encoded);
+    try std.testing.expectEqualStrings("[{\"$object\":[\"item\",\"object-slot-183\"]},{\"$pattern\":\"<\\\"ID-\\\", 4 digits>\"}]", encoded);
+    const copy = try decode(a, encoded, .{ .context = object, .object = testResolveObject });
+    defer copy.release();
+    try std.testing.expect(try object_list.equal(copy));
+    const captures = try model.map(a, &.{});
+    defer captures.release();
+    const function = try model.function(a, "weather", "<function weather:tax>", 7, captures);
+    defer function.release();
+    const source = try display.string(a, function);
+    defer a.free(source);
+    try std.testing.expectEqualStrings("<function weather:tax>", source);
+    try std.testing.expectError(error.NotEncodable, encode(a, function));
+    const nested = try model.list(a, &.{function});
+    defer nested.release();
+    try std.testing.expectError(error.NotEncodable, encode(a, nested));
+    try std.testing.expectError(error.InvalidValue, decode(a, "{\"$pattern\":\"<nonsense>\"}", .{}));
+    try std.testing.expectError(error.InvalidValue, decode(a, "{\"$object\":[\"item\",\"missing\"]}", .{ .context = object, .object = testResolveObject }));
+}
+
+test "tags require canonical decimal and Unit payloads" {
+    for ([_][]const u8{ "{\"$dec\":\"0x0A\"}", "{\"$dec\":\"01\"}", "{\"$quantity\":[\"3\",\"days\"]}", "{\"$quantity\":[\"1\",\"m/m\"]}", "{\"$instant\":\"1970-01-01T01:00:00+01:00\"}" }) |s| try std.testing.expectError(error.InvalidValue, decode(std.testing.allocator, s, .{}));
+}
+
+test "every encodable kind round trips through encode and decode" {
+    const gpa = std.testing.allocator;
+    const object = try model.object(gpa, "item", "slot-1", 1);
+    defer object.release();
+    const resolver: display.Resolver = .{ .context = object, .object = testResolveObject };
+    const sources = [_][]const u8{ "nothing", "true", "false", "42", "-9007199254740991", "7.50", "2.50 GBP", "\"Café\"", "<<0x00, 0xFF>>", "[1, [\"a\"]]", "{a: 1, \"$b\": [nothing]}", "1..10", "1970-01-01T00:00:00.5Z", "2026-09-27", "2026-09-27T14:30:00.25" };
+    var seen = std.EnumSet(model.Kind).empty;
+    var values: std.ArrayList(*Value) = .empty;
+    defer {
+        for (values.items) |v| v.release();
+        values.deinit(gpa);
+    }
+    for (sources) |source| {
+        const v = try display.parse(gpa, source, .{});
+        errdefer v.release();
+        try values.append(gpa, v);
+    }
+    try values.append(gpa, try @import("pattern.zig").parse(gpa, "<\"ID-\", 4 digits>"));
+    try values.append(gpa, object.retain());
+    for (values.items) |v| {
+        seen.insert(v.kind());
+        const encoded = try encode(gpa, v);
+        defer gpa.free(encoded);
+        const copy = try decode(gpa, encoded, resolver);
+        defer copy.release();
+        try std.testing.expectEqual(v.kind(), copy.kind());
+        try std.testing.expect(try v.equal(copy));
+        const again = try encode(gpa, copy);
+        defer gpa.free(again);
+        try std.testing.expectEqualStrings(encoded, again);
+    }
+    // Functions are the one kind with no encoding.
+    var expected = std.EnumSet(model.Kind).full;
+    expected.remove(.function);
+    try std.testing.expect(seen.eql(expected));
+}

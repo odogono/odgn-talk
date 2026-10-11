@@ -1,0 +1,5 @@
+# Cases protected by the Zig Core's incremental conformance gate.
+bytes/value-encoding
+dates/value-encoding
+quantities/value-encoding
+text-model/host-text-normalised-to-nfc

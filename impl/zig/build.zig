@@ -37,12 +37,31 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(library);
     }
 
+    const corpus_module = b.createModule(.{
+        .root_source_file = b.path("src/corpus/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    corpus_module.addImport("northtalk", core);
+    const c_api = b.addTranslateC(.{ .root_source_file = b.path("include/talk.h"), .target = target, .optimize = optimize, .link_libc = false });
+    corpus_module.addImport("talk-c", c_api.createModule());
+    corpus_module.addIncludePath(b.path("include"));
+    const corpus = b.addExecutable(.{ .name = "talk-corpus", .root_module = corpus_module });
+    const run_corpus = b.addRunArtifact(corpus);
+    run_corpus.setCwd(b.path("."));
+    run_corpus.addPassthruArgs();
+    b.step("corpus", "Run supported conformance cases through talk.h").dependOn(&run_corpus.step);
+
     const test_step = b.step("test", "Run the Zig Core's tests");
     const tests = b.addTest(.{ .root_module = core });
     const run_tests = b.addRunArtifact(tests);
     // Tests read the pinned Unicode data from the repository's .cache.
     run_tests.setCwd(b.path("."));
     test_step.dependOn(&run_tests.step);
+    const corpus_tests = b.addTest(.{ .root_module = corpus_module });
+    const run_corpus_tests = b.addRunArtifact(corpus_tests);
+    run_corpus_tests.setCwd(b.path("."));
+    test_step.dependOn(&run_corpus_tests.step);
 
     // The C API's own tests, compiled as a Host would compile them against
     // talk.h. libc serves only the test program; the Core links none.
