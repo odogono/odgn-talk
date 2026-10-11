@@ -51,3 +51,5 @@ jobs:
         working-directory: impl/zig
       - run: zig build -Dtarget=wasm32-wasi
         working-directory: impl/zig
+      - run: zig build corpus -- --check-passing
+        working-directory: impl/zig

@@ -1,6 +1,11 @@
 //! The NorthTalk Zig Core. Hosts use it through include/talk.h; see README.md.
 
 pub const unicode = @import("unicode/unicode.zig");
+pub const decimal = @import("decimal/decimal.zig");
+pub const value = @import("value.zig");
+pub const display = @import("display.zig");
+pub const encoding = @import("encoding.zig");
+pub const corpus_trace = @import("corpus/trace.zig");
 pub const talk = @import("talk.zig");
 
 /// Tables generated from the Spec's Data Files by tools/zig/generate.ts and
@@ -26,5 +31,12 @@ comptime {
 
 test {
     _ = unicode;
+    _ = decimal;
+    _ = value;
+    _ = display;
+    _ = encoding;
+    _ = @import("pattern.zig");
+    _ = corpus_trace;
+    _ = @import("dates.zig");
     _ = talk;
 }
