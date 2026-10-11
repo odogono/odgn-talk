@@ -346,8 +346,9 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 			continue
 		}
 		if d.kind == "revoke" {
-			if grant := d.script.grants[d.fields["grant"]]; grant != nil {
+			if grant := d.script.grants[d.fields["grant"]]; grant != nil && !grant.revoked {
 				grant.revoked = true
+				g.releaseGrants(d.script, []string{d.fields["grant"]}, ReleaseRevoke)
 			}
 			continue
 		}

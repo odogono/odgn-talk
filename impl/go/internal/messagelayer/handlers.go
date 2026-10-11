@@ -152,12 +152,29 @@ func (s *Session) defineCapability(f fields) (map[string]any, error) {
 		}
 		ops = append(ops, s.bind(name, op))
 	}
-	def, err := s.core.DefineCapability(name, ops...)
+	var options talk.CapabilityOptions
+	if release, _ := f.bool("release"); release {
+		options.Release = s.release
+	}
+	def, err := s.core.DefineCapabilityWith(name, options, ops...)
 	if err != nil {
 		return nil, err
 	}
 	s.caps[name] = def
 	return nil, nil
+}
+
+// release makes a release hook a `release` request to the Host. Only `pump`
+// is carried here, so a release outside one has no exchange to reply on.
+func (s *Session) release(c talk.GrantContext) {
+	if s.waiting == nil {
+		return
+	}
+	now, err := instantText(c.Now)
+	if err != nil {
+		return
+	}
+	s.ask(map[string]any{"m": "release", "script": c.ScriptName, "grant": c.GrantName, "reason": string(c.Reason), "now": now})
 }
 
 // bind makes each of op's callbacks an `op` request to the Host.

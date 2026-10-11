@@ -60,6 +60,7 @@ type CapabilityDef struct {
 	lifecycle *SegmentLifecycle
 	// coordinate maps a binding to its Segment Coordinator at Grant creation.
 	coordinate func(binding any) *SegmentLifecycle
+	release    func(GrantContext)
 }
 type Grant struct {
 	definition *CapabilityDef
@@ -91,6 +92,38 @@ func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding
 		return nil, &HostError{InvalidValue, "a Segment Coordinator mapping is required"}
 	}
 	return c.defineCapability(name, nil, coordinator, ops...)
+}
+
+// CapabilityOptions are what a Capability supplies beside its Operations.
+// Lifecycle and Coordinator are exclusive, as the other constructors are.
+type CapabilityOptions struct {
+	Lifecycle   *SegmentLifecycle
+	Coordinator func(binding any) *SegmentLifecycle
+	// Release is called synchronously when one Script's named Grant stops
+	// being effective. It is unmetered, and the Core ignores its panics.
+	Release func(GrantContext)
+}
+
+func (c *Core) DefineCapabilityWith(name string, o CapabilityOptions, ops ...Operation) (*CapabilityDef, error) {
+	var (
+		def *CapabilityDef
+		err error
+	)
+	switch {
+	case o.Lifecycle != nil && o.Coordinator != nil:
+		return nil, &HostError{InvalidValue, "a Capability has one Segment lifecycle or a Coordinator mapping, not both"}
+	case o.Lifecycle != nil:
+		def, err = c.DefineSegmentCapability(name, *o.Lifecycle, ops...)
+	case o.Coordinator != nil:
+		def, err = c.DefineCoordinatedCapability(name, o.Coordinator, ops...)
+	default:
+		def, err = c.DefineCapability(name, ops...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	def.release = o.Release
+	return def, nil
 }
 
 func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordinate func(any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {

@@ -363,6 +363,26 @@ type SegmentLifecycle struct {
 	Rollback func(SegmentContext) EffectResult
 }
 
+type ReleaseReason string
+
+const (
+	ReleaseStop    ReleaseReason = "stop"
+	ReleaseReload  ReleaseReason = "reload"
+	ReleaseRevoke  ReleaseReason = "revoke"
+	ReleaseDisable ReleaseReason = "disable"
+)
+
+// GrantContext identifies one Script's named Grant when it stops being
+// effective. Now is the Group's last Clock reading.
+type GrantContext struct {
+	Group      *Group
+	ScriptName string
+	GrantName  string
+	Binding    any
+	Now        time.Time
+	Reason     ReleaseReason
+}
+
 // CapabilityDef is defined once per process and reused by every Grant.
 // Declarations are ordered by name, whatever order Ops is in.
 type CapabilityDef struct { /* opaque */
@@ -674,6 +694,20 @@ func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, 
 // once, when a Grant is created. Grants mapped to one pointer share a
 // Segment's participant.
 func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
+
+// CapabilityOptions are what a Capability supplies beside its Operations.
+// Lifecycle and Coordinator are exclusive.
+type CapabilityOptions struct {
+	Lifecycle   *SegmentLifecycle
+	Coordinator func(binding any) *SegmentLifecycle
+	// Release is synchronous, unmetered and infallible: the Core calls it
+	// once a Script's named Grant stops being effective, and ignores panics.
+	Release func(GrantContext)
+}
+
+// DefineCapabilityWith is the other constructors with a release hook. The
+// Host Manifest and Group Fingerprint exclude the hook.
+func (c *Core) DefineCapabilityWith(name string, o CapabilityOptions, ops ...Operation) (*CapabilityDef, error)
 func (c *Core) DefineObjectKind(k ObjectKindDef) (*ObjectKind, error)
 
 type Versions struct {

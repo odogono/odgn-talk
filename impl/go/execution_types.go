@@ -221,6 +221,24 @@ type SegmentLifecycle struct {
 	Rollback func(SegmentContext) EffectResult
 }
 
+type ReleaseReason string
+
+const (
+	ReleaseStop    ReleaseReason = "stop"
+	ReleaseReload  ReleaseReason = "reload"
+	ReleaseRevoke  ReleaseReason = "revoke"
+	ReleaseDisable ReleaseReason = "disable"
+)
+
+type GrantContext struct {
+	Group      *Group
+	ScriptName string
+	GrantName  string
+	Binding    any
+	Now        time.Time
+	Reason     ReleaseReason
+}
+
 const (
 	Idle   GroupState = iota // nothing runnable until an input or a deadline
 	Sliced                   // a slice or the cap ran out with work left

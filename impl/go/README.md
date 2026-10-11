@@ -1248,6 +1248,10 @@ exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
 Fuel the Run can still be charged; the reply's `charged` goes through
 `Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
 reply lists the started calls the Core has abandoned under `abandoned`.
+A `define-capability` with `release: true` gives the Capability a Grant
+release hook, which the Core relays as a `release` request with `script`,
+`grant`, `reason` and `now`, answered by `release-result`. Only `pump` can
+carry it, since `reload` and `replace-library` aren't carried yet.
 
 It carries `hello`, `define-capability`, the `clock` Standard Capability,
 `add`, `define-object-kind`, `grant`, `new-group`, `load`, `object`,

@@ -85,7 +85,7 @@ func (s *Session) Send(frame []byte) []byte {
 		if ref != x.ref {
 			return replyFrame(ref, nil, protocolErrorf("ref %d is waiting on the Host's result", x.ref))
 		}
-		if name != "op-result" && name != "prop-result" {
+		if name != "op-result" && name != "prop-result" && name != "release-result" {
 			return replyFrame(ref, nil, protocolErrorf("%s sent while ref %d waits on a result", name, x.ref))
 		}
 		x.results <- f

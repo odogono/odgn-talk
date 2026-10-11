@@ -82,6 +82,7 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipan
 		}
 		g.record("scope", false, []string{string(call.id)}, map[string]string{"grant": slot.grantName, "name": slot.name, "action": action})
 		if failure != nil {
+			newlyDisabled := !slot.grant.disabled
 			slot.grant.disabled = true
 			status := EffectStatus("failed")
 			detail := fmt.Sprint(err)
@@ -95,6 +96,9 @@ func (g *Group) abandonGrantScopes(s *Script, x *execution, p *segmentParticipan
 			}
 			*reports = append(*reports, report)
 			g.record("effect-failure", false, []string{string(x.id)}, map[string]string{"grant": slot.grantName, "segment": call.segmentID, "phase": "abandon", "status": string(status), "scope": slot.name})
+			if newlyDisabled {
+				g.releaseGrants(s, []string{slot.grantName}, ReleaseDisable)
+			}
 		}
 	}
 	return participatingFailure

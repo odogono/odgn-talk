@@ -146,6 +146,8 @@ func (s *Script) applyReload(state *machine.State, source string, keepMailbox bo
 			return reports, &HostError{EffectStateUnknown, "Reload participant rollback failed"}
 		}
 	}
+	// Release before the revoked Grants are dropped below: they are included.
+	g.releaseGrants(s, sortedKeys(s.grants), ReleaseReload)
 	queue, runs := s.queue, s.runs
 	s.queue = nil
 	s.runs = nil

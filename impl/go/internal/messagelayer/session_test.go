@@ -387,3 +387,34 @@ func TestClockStandardCapability(t *testing.T) {
 		t.Fatal(show(err))
 	}
 }
+
+func TestReleaseIsAnInterimRequestOfPump(t *testing.T) {
+	h := newHost(t)
+	h.ok("hello", `"protocol":1`)
+	h.ok("define-capability", `"name":"api","release":true,"ops":[{"name":"noop","mode":"immediate","result":"nothing"}]`)
+	grant := h.ok("grant", `"capability":"api","ops":"all"`)["grant"]
+	h.ok("new-group", `"group":"g","name":"g"`)
+	h.ok("load", fmt.Sprintf(`"group":"g","name":"s","source":"on go\nend go","grants":{"b":%v,"a":%v}`, grant, grant))
+	h.ok("revoke", `"group":"g","script":"s","grant":"b"`)
+	need := must(t, h.send("pump", `"group":"g",`+now), "need")
+	if need["m"] != "release" || need["script"] != "s" || need["grant"] != "b" || need["reason"] != "revoke" || need["now"] != "2026-10-09T12:00:00Z" {
+		t.Fatal(show(need))
+	}
+	if ok := must(t, h.result("release-result", ""), "ok"); ok["state"] != "idle" {
+		t.Fatal(show(ok))
+	}
+	// Stop releases every kept Grant in name order; the final reply waits.
+	h.ok("stop", `"group":"g","script":"s","reason":"done"`)
+	need = must(t, h.send("pump", `"group":"g",`+now), "need")
+	if need["m"] != "release" || need["grant"] != "a" || need["reason"] != "stop" {
+		t.Fatal(show(need))
+	}
+	need = must(t, h.result("release-result", ""), "need")
+	if need["m"] != "release" || need["grant"] != "b" || need["reason"] != "stop" {
+		t.Fatal(show(need))
+	}
+	ok := must(t, h.result("release-result", ""), "ok")
+	if !strings.Contains(show(ok["reports"]), `"kind":"stop"`) {
+		t.Fatal(show(ok))
+	}
+}

@@ -84,6 +84,9 @@ func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, set
 		// Stretch. No further Script execution is allowed once uncertainty lands.
 		return
 	}
+	if !already {
+		g.releaseGrants(s, sortedKeys(s.grants), ReleaseStop)
+	}
 	for _, x := range runs {
 		g.accountEnd(x, "discarded", "stop", reports)
 	}

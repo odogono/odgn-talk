@@ -193,7 +193,7 @@ The hook receives the Group's identity, the Script's name, the named Grant, its 
 - **When, relative to other cleanup:** for `stop` and `reload`, after abandoning the Script's scopes and rolling back its participant, and before the `stop` report, the replacement code or any later execution. For `disable`, right after the `effect failure` report for the failed abandonment. For `revoke`, when the input is drained, before anything later in that Pump.
 - **Not released:** a rejected Reload or Library replacement, an Extend, a repeated revocation, a revocation of a name the Script doesn't keep, or Save. A Restore never calls the hook: the new Group's routing is set up by [checkpoint restore](#checkpoints).
 - **Its contract:** like the Segment lifecycle hooks, it is Host work with no Script result, cost or Trace record. It runs inside a Pump, or within `Reload` or `ReplaceLibrary` outside one. It may queue inputs but can't make worker calls, which are `reentrant call`. It returns nothing, and the Core ignores anything it throws or panics with, because releasing can't be refused. Its timing follows records the Trace already has, so a replay calls it at the same points.
-- **On the message layer:** the Core sends `release` as an interim reply to `pump`, `reload` or `replace-library`, with `script`, `grant`, `reason` and `now`, and the Host answers `release-result` with no fields.
+- **On the message layer:** a `define-capability` with `release: true` advertises the hook, as `segmentLifecycle: true` advertises the Segment lifecycle. The Core sends `release` as an interim reply to `pump`, `reload` or `replace-library`, with `script`, `grant`, `reason` and `now`, and the Host answers `release-result` with no fields.
 
 ### What release does
 

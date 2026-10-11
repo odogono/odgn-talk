@@ -56,6 +56,23 @@ func (g *Group) effectHook(s *Script, x *execution, p *segmentParticipant, phase
 	return failure
 }
 
+// releaseGrants calls each named Grant's release hook, in the order given.
+// Like the lifecycle hooks it is Host work: worker calls from it are
+// reentrant, and the Core ignores its panics, since releasing can't be refused.
+func (g *Group) releaseGrants(s *Script, names []string, reason ReleaseReason) {
+	for _, name := range names {
+		grant := s.grants[name]
+		if grant == nil || grant.definition.release == nil {
+			continue
+		}
+		ctx := GrantContext{Group: g, ScriptName: s.name, GrantName: name, Binding: grant.binding, Now: g.clock, Reason: reason}
+		func() {
+			defer func() { _ = recover() }()
+			grant.definition.release(ctx)
+		}()
+	}
+}
+
 // enrollParticipant enrolls a Grant whose coordinator the conflict check has
 // accepted. Only the first enrollment in a Segment invokes begin.
 func (g *Group) enrollParticipant(s *Script, x *execution, name string, grant *Grant, reports *[]Report) *EffectFailure {

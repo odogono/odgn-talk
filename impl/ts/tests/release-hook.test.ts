@@ -73,7 +73,7 @@ const host = (
     },
     context => {
       contexts.push(context);
-      const reported = lines.some(l => l.startsWith('stopped '));
+      const reported = lines.some(l => l.startsWith(`stopped ${context.scriptName} `));
       events.push(
         `release:${context.scriptName}:${context.grantName}:${context.reason}${reported ? ':after stop' : ''}`,
       );
