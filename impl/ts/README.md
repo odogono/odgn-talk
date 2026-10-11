@@ -109,6 +109,11 @@ updates, Extend, Save and Restore release nothing. Revocation releases once
 when drained, and failed automatic abandonment releases immediately after its
 `effect failure` report.
 
+Library replacement completes abandonment and rollback for every affected
+Script before releasing any Grants with `reload`. If a rollback leaves effect
+state unknown, the Group stops and releases its Scripts with `stop`, keeping
+the previous code.
+
 Hooks spend no Script resources and add no Trace records or Manifest/Fingerprint
 fields. They may queue Host Inputs; worker calls are `reentrant call`. Throws
 are ignored and do not prevent subsequent Grants from being released. The

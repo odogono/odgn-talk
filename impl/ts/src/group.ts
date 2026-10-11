@@ -2649,6 +2649,18 @@ export class Group {
     const reports: Report[] = [];
     this.drainReports = reports;
     try {
+      // A Library replacement can reload several Scripts. Finish all external
+      // cleanup before releasing any Grants or publishing a Reload's Stop:
+      // a later failed rollback stops the whole Group with the old code.
+      for (const { s } of replacements) {
+        for (const running of this.runsOf(s)) {
+          this.finalizeEffects(running, true);
+          if (running.run.effectStateUnknown) {
+            this.stopUnknownEffects();
+            return reports;
+          }
+        }
+      }
       for (const { s } of replacements) {
         if (s.stopped) {
           this.releaseGrants(s, 'reload');
