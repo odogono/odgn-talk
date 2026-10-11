@@ -17,7 +17,8 @@ export type HostErrorCode =
   | 'unknown call'
   | 'state too large'
   | 'effects pending'
-  | 'effect state unknown';
+  | 'effect state unknown'
+  | 'invalid checkpoint';
 
 export class HostError extends Error {
   constructor(

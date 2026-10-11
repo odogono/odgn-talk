@@ -1,0 +1,203 @@
+# Checkpoints: a Group save with the router's state beside it.
+#
+# Each sequence detaches a Group once it has checkpointed it, as a Host that
+# stops using it does, unless it means to keep both.
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b", "c"] }
+
+[[sequence]]
+name = "a restore with unchanged Stores reinstates watches, pending work and retry position, with no Delivery"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "k", "kChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "mailbox", script = "b", room = 0 },
+  { do = "mailbox", script = "c", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "mailbox", script = "a", room = 1 },
+  { do = "mailbox", script = "b", room = 1 },
+  { do = "mailbox", script = "c", room = 1 },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "c", message = "kChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w", "b.store.w", "c.store.w"] },
+  { do = "pumped", group = "g2", deliveries = [
+    { group = "g2", script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "g2", script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+    { group = "g2", script = "c", message = "kChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+    { group = "g2", script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "g2", script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 3]]', deliveries = [
+    { group = "g2", script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "g2", script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "g2", script = "c", message = "kChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a commit that changes nothing leaves the revision, so restoring sends no marker"
+steps = [
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "commit", ops = '[["set", "k", 1], ["delete", "missing"]]' },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w"] },
+  { do = "pumped", group = "g2" },
+]
+
+[[sequence]]
+name = "a restore sends one marker to each restored watch on a changed Store, at once, in the order of watches"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", grant = "other", store = "other", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w", "b.other.w", "b.store.w"], resynced = ["a.store.w", "b.store.w"], deliveries = [
+    { group = "g2", script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+    { group = "g2", script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+  { do = "pumped", group = "g2" },
+  { do = "commit", store = "other", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "g2", script = "b", message = "storeChanged", payload = '{grant: "other", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a revision changed while no router watched is detected on restore"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "revision", store = "default" },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w"], resynced = ["a.store.w"], deliveries = [
+    { group = "g2", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "g2", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a resyncing watch restores resyncing"
+limits = { watches = 100, watchSize = 65536, pending = 1, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w"] },
+  { do = "pumped", group = "g2", deliveries = [
+    { group = "g2", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+]
+
+[[sequence]]
+name = "watches whose Grant is unbound or re-bound to another Store are dropped and listed"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "restore", checkpoint = "saved", as = "g2", grants = { "a.store" = false, "b.store" = "other" }, restored = ["c.store.w"], dropped = ["a.store.w", "b.store.w"] },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "g2", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", store = "other", ops = '[["set", "k", 1]]' },
+]
+
+# A revoked or disabled Grant is released when the Core revokes or disables
+# it, so the checkpoint holds none of its watches; a Grant the restore
+# doesn't re-bind is restored revoked, and dropped as unbound.
+[[sequence]]
+name = "watches of revoked and disabled Grants are released before a checkpoint, and none is restored"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "release", script = "a", reason = "revoke" },
+  { do = "release", script = "b", reason = "disable" },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["c.store.w"] },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "g2", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a variables-only restore registers no watches"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "revision", store = "default" },
+  { do = "restore", checkpoint = "saved", as = "g2", variablesOnly = true },
+  { do = "pumped", group = "g2" },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+]
+
+[[sequence]]
+name = "a damaged checkpoint is invalid checkpoint, and nothing is made"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "detach", group = "g" },
+  { do = "restore", checkpoint = "saved", as = "g2", damage = "missing", error = '{code: "invalid checkpoint"}' },
+  { do = "restore", checkpoint = "saved", as = "g3", damage = "digest", error = '{code: "invalid checkpoint"}' },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "restore", checkpoint = "saved", as = "g4", restored = ["a.store.w"], resynced = ["a.store.w"], deliveries = [
+    { group = "g4", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+]
+
+[[sequence]]
+name = "effects pending refuses a checkpoint"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "refused", effects = true, error = '{code: "effects pending"}' },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+# The restored Group is a new Group, so it takes its place after the Groups
+# already watching.
+[[sequence]]
+name = "a restore registers without checking limits, and later registrations count the restored totals"
+limits = { watches = 2, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b"], h = ["c"] }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "checkpoint", group = "g", as = "saved" },
+  { do = "restore", checkpoint = "saved", as = "g2", restored = ["a.store.w"] },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "g2", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "watch", group = "g2", args = '["w", "", "storeChanged"]' },
+  { do = "watch", group = "g2", script = "b", args = '["w", "", "storeChanged"]', error = '{code: "watch limit", limit: "watches"}' },
+  { do = "detach", group = "g" },
+  { do = "detach", group = "h" },
+  { do = "watch", group = "g2", script = "b", args = '["w", "", "storeChanged"]' },
+]

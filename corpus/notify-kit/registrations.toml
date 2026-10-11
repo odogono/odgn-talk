@@ -1,0 +1,183 @@
+# Registering, replacing and removing watches, and the four limits.
+#
+# Sizes, for the limits: text is 16 + its UTF-8 bytes (chapter 8). A watch
+# counts its name, prefix and effective message toward watchSize, so
+# ["w", "", "storeChanged"] is 17 + 16 + 28 = 61. Every watch reserves one
+# marker toward pending and pendingSize; for Grant "store", a one-letter
+# watch name and prefix "", its payload is 240 (see pending.toml).
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b"] }
+
+[[sequence]]
+name = "watch with the same parameters keeps the watch and its pending work"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "watch with different parameters discards pending work and routes only under the new ones"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "k", "kChanged"]' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g" },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "kChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+  ] },
+  { do = "watch", args = '["w", "k", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 3]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "an over-limit replacement leaves the old watch and its pending work as they were"
+limits = { watches = 100, watchSize = 61, pending = 1000, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "longer/", "storeChanged"]', error = '{code: "watch limit", limit: "size"}' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "j", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "unwatch removes the watch and its pending work, and an unknown name does nothing"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+  { do = "unwatch", args = '["missing"]' },
+  { do = "unwatch", script = "b", args = '["w"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "unwatch", args = '["w"]' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "v", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "v", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "two Grants on one Store hold separate watches with the same name"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", grant = "alias", args = '["w", "k", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "alias", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "unwatch", grant = "alias", args = '["w"]' },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "the watches limit counts the Store's watches across Scripts and Groups"
+limits = { watches = 2, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a"], h = ["c"] }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "watches"}' },
+  { do = "watch", store = "other", grant = "elsewhere", args = '["v", "", "storeChanged"]' },
+  { do = "watch", args = '["w", "k", "storeChanged"]' },
+  { do = "unwatch", group = "h", script = "c", args = '["w"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+]
+
+[[sequence]]
+name = "the watchSize limit counts names, prefixes and effective messages"
+limits = { watches = 100, watchSize = 121, pending = 1000, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "size"}' },
+  { do = "watch", args = '["w", "", "s"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+]
+
+[[sequence]]
+name = "the pending limit reserves a marker for every watch from registration"
+limits = { watches = 100, watchSize = 65536, pending = 2, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+  { do = "watch", args = '["u", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "unwatch", args = '["v"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["u", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+]
+
+# w's two held Notifications and its reservation make 3 of 3. Replacing w
+# discards its pending work, so the replacement counts only its reservation.
+[[sequence]]
+name = "a replacement counts in place of the watch and pending work it replaces"
+limits = { watches = 100, watchSize = 65536, pending = 3, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "watch", args = '["w", "k", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+]
+
+[[sequence]]
+name = "the pendingSize limit reserves each watch's marker payload"
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 480 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+  { do = "watch", args = '["u", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "watch", args = '["w", "longer", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "watch", args = '["w", "", "other"]' },
+]
+
+[[sequence]]
+name = "a watch over several limits names the first, in the table's order"
+limits = { watches = 1, watchSize = 61, pending = 1, pendingSize = 240 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "watches"}' },
+  { do = "limits", limits = { watches = 2, watchSize = 61, pending = 1, pendingSize = 240 } },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "size"}' },
+  { do = "limits", limits = { watches = 2, watchSize = 122, pending = 1, pendingSize = 240 } },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "limits", limits = { watches = 2, watchSize = 122, pending = 2, pendingSize = 240 } },
+  { do = "watch", args = '["v", "", "storeChanged"]', error = '{code: "watch limit", limit: "pending"}' },
+  { do = "limits", limits = { watches = 2, watchSize = 122, pending = 2, pendingSize = 480 } },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+]
+
+[[sequence]]
+name = "watch with the same parameters and unwatch never fail on a limit"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+  { do = "limits", limits = { watches = 1, watchSize = 1, pending = 1, pendingSize = 1 } },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "unwatch", args = '["v"]' },
+  { do = "unwatch", args = '["v"]' },
+  { do = "watch", args = '["w", "", "other"]', error = '{code: "watch limit", limit: "size"}' },
+]

@@ -2102,6 +2102,11 @@ export class Group {
     return this.scripts.find(s => s.name === name)?.handle;
   }
 
+  /** Any time, inside a Pump too. Its Scripts' names, in load order; not a Host Input. */
+  scriptNames(): string[] {
+    return this.scripts.map(s => s.name);
+  }
+
   // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
   private queueInput(input: QueuedInput): void {
     const landing = this.debugController?.current;

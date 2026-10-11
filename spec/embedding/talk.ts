@@ -40,7 +40,7 @@ export type HostErrorCode =
   | "reentrant call" | "wrong group" | "library mismatch"
   | "reserved name" | "not adoptable" | "invalid value"
   | "invalid save" | "save mismatch" | "unknown call" | "state too large"
-  | "effects pending" | "effect state unknown";
+  | "effects pending" | "effect state unknown" | "invalid checkpoint";
 
 /** Host misuse, refused at the call that made it (09-embedding.md). */
 export declare class HostError extends Error {
@@ -266,7 +266,7 @@ export interface CapabilityDef<B> {
   /** A reusable template. Each load binds it to one Script. */
   grant(ops: string[] | "all", binding: B): Grant<B>;
 }
-export interface Grant<B> { readonly binding: B }
+export interface Grant<B> { readonly binding: B; readonly capability: CapabilityDef<B> }
 
 export interface Call<B> {
   readonly group: Group; // worker calls remain forbidden in callbacks
@@ -573,6 +573,8 @@ export type CarryOver = "reset variables" | "carry variables";
 export interface Group {
   readonly name: string;
   script(name: string): Script | undefined;
+  /** Any time, inside a Pump too. Its Scripts' names in load order; not a Host Input, and not traced. */
+  scriptNames(): string[];
   /** Worker. Throws LoadError or HostError. */
   load(o: LoadOptions): Script;
   /** Worker, Host Input. */

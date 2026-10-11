@@ -1,0 +1,95 @@
+# Release and detach remove watches and their pending work.
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b", "c", "d", "e"] }
+
+[[sequence]]
+name = "each release reason removes the owner's watches and pending work"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "d", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "e", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "mailbox", script = "b", room = 0 },
+  { do = "mailbox", script = "c", room = 0 },
+  { do = "mailbox", script = "d", room = 0 },
+  { do = "mailbox", script = "e", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "release", script = "b", reason = "reload" },
+  { do = "release", script = "c", reason = "revoke" },
+  { do = "release", script = "d", reason = "disable" },
+  { do = "mailbox", script = "a" },
+  { do = "mailbox", script = "b" },
+  { do = "mailbox", script = "c" },
+  { do = "mailbox", script = "d" },
+  { do = "mailbox", script = "e" },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "e", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { script = "e", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "release removes only the named Grant's watches, and leaves admitted Deliveries"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["v", "", "storeChanged"]' },
+  { do = "watch", grant = "alias", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "alias", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "v", prefix: "", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "release", reason = "revoke" },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "alias", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a release with nothing to remove does nothing, and a new watch registers again"
+steps = [
+  { do = "release", reason = "stop" },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "release", reason = "reload" },
+  { do = "release", reason = "reload" },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "released watches free their place in the limits"
+limits = { watches = 1, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]', error = '{code: "watch limit", limit: "watches"}' },
+  { do = "release", script = "a", reason = "stop" },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+]
+
+[[sequence]]
+name = "detach removes every watch of the Group's Scripts"
+groups = { g = ["a", "b"], h = ["c"] }
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", store = "other", args = '["w", "", "storeChanged"]' },
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "detach", group = "g" },
+  { do = "mailbox", script = "a" },
+  { do = "pumped", group = "g" },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", store = "other", ops = '[["set", "k", 1]]' },
+]

@@ -1,6 +1,6 @@
 # Store Notifications
 
-**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); remaining implementation pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Neither Core, Session Host nor the reference tools offers `watch` or `unwatch` yet. The numbered chapters and executable Data Files remain the active specification.
+**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); notification routers and the router kit implemented in both Cores (#619); remaining implementation pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Neither Core, Session Host nor the reference tools offers `watch` or `unwatch` yet. The numbered chapters and executable Data Files remain the active specification.
 
 Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged: nothing here adds syntax, instructions or costs. On implementation, move these rules into the chapters named in [Acceptance and delivery handoff](#acceptance-and-delivery-handoff), activate the deferred Data File entries, replace the chapters' pending-addition notices, and retire this document. Examples use `text` fences because documentation `talk` fences are checked against the current Operation catalogue. Their results are specified behavior, not execution evidence.
 
@@ -20,7 +20,7 @@ on scoresChanged change, queued
   if the resync of change then
     refresh()
   else
-    repeat for each key in the keys of change
+    repeat for each key in the "keys" of change
       ask scores to get key
       put it into board[key]
     end repeat
@@ -129,7 +129,7 @@ The Store applies a commit and the router routes it as one step under the Store'
 
 For a commit with changed keys, each watch on that Store whose prefix is a code-point prefix of at least one changed key receives one ordinary Notification, holding each such key once. Every watch matches, including those of the Script whose Segment committed.
 
-The router visits matching watches in its **order of watches**: by Group, in the order the router first registered a watch from that Group, then by Script, in the Group's load order, then by named Grant and watch name, each in Unicode code-point order. A replaced watch keeps its place; one removed and registered again goes to its new place.
+The router visits matching watches in its **order of watches**: by Group, in the order the router first registered a watch from that Group, then by Script, in the Group's load order, then by named Grant and watch name, each in Unicode code-point order. A Group that comes to hold no watches loses its place, and takes a new one when it next registers. A replaced watch keeps its place; one removed and registered again goes to its new place. The router reads load order with `Group.ScriptNames`, which is safe inside a Pump and adds no Trace line ([chapter 9](../09-embedding.md#threads-and-the-input-queue)).
 
 ### Payload
 
@@ -232,7 +232,7 @@ The router restores a checkpoint by calling `Core.Restore` with the Host's optio
 1. **Reading:** a checkpoint without routing state, with routing state the router can't read, or whose recorded digest doesn't match its save, is the Host error `invalid checkpoint`. Restoring the save on its own would silently lose its watches, so the router never does that.
 2. **The Group:** `Core.Restore` runs as [chapter 10](../10-save-and-restore.md#restoring) says, and its errors are returned unchanged.
 3. **Variables-only:** a variables-only restore registers no watches, as Reload removes them, and the Host starts its Scripts again as after a Reload.
-4. **Full:** each recorded watch is registered again, with its pending work, its place and the retry position, if its Script's named Grant is re-bound to a `store` Grant, through this router, whose binding names the recorded Store. A watch whose Grant is unbound, restored revoked or disabled, or bound to another Store is dropped. Nothing reruns Script code, and nothing is redelivered: every admitted Notification is already in the restored Group's mailboxes or input queue.
+4. **Full:** each recorded watch is registered again, with its pending work, its place and the retry position, if its Script's named Grant is re-bound to a `store` Grant, through this router, whose binding names the recorded Store. A watch whose Grant is unbound, restored revoked or disabled, or bound to another Store is dropped. A Grant the restore doesn't re-bind is restored revoked ([chapter 10](../10-save-and-restore.md#restoring)), so it is dropped as unbound; a Grant revoked or disabled before the checkpoint was released then, so the checkpoint holds none of its watches. The restored Group is a new Group, and takes its place among Groups when its first watch is registered. Nothing reruns Script code, and nothing is redelivered: every admitted Notification is already in the restored Group's mailboxes or input queue.
 5. **Source changes:** for each Store whose revision now differs from the recorded one, each restored watch on it becomes resyncing, replacing its pending work with one Reconciliation Marker, and the router attempts to admit those markers immediately, in the order of watches. The marker is a new Host Input, not a replay of the changes it covers.
 
 The result tells the Host which watches were restored, which were dropped and which were resynced.
@@ -349,7 +349,7 @@ The run ids in this Transcript are illustrative:
 ```text
 > :grant scores store
 > on scoresChanged change, queued
-|   say the keys of change
+|   say the "keys" of change
 | end scoresChanged
 > ask scores to watch "all", "", "scoresChanged"
 > ask scores to set "alex", 3
@@ -430,6 +430,17 @@ The implementation must include both Cores, both routers, both Session Hosts and
 - **Chapters to integrate:** chapter 7's `store` section (Operations, validation, routing, payload, limits), chapter 6's error table, chapter 9's Capabilities, release hook, message layer and Host error catalogue, chapter 10's save rules and checkpoints, chapter 11's scenario tables and chapter 12's Session Store.
 - **Tooling:** the reference checker, LSP and Playground learn the two Operations from the regenerated catalogue. No new Advanced tag is needed.
 - **First blessing:** every new Trace Case, kit sequence and Transcript expectation is written or derived independently and reviewed by a person before blessing. Execution agreement between the Cores isn't approval. Present the expectation diffs, including changed Fingerprints of existing `store` cases, for review.
+
+## Router delivery (#619)
+
+Both Cores supply the router: `@odgn/northtalk/notify` in TS and
+`github.com/odogono/odgn-talk/impl/go/notify` in Go. Both pass the
+[router kit](../../corpus/notify-kit/README.md), whose expectations await
+first-blessing review ([review notes](../../docs/reviews/notify-blessings/README.md)).
+`Group.ScriptNames` joins both Cores and `talk.ts`/`talk.go` so a router can read
+Script load order inside a Pump, and `invalid checkpoint` joins
+`host-errors.toml`. No Store is wired to a router yet, and no Core offers `watch`
+or `unwatch`; those, and the remaining Data File entries, are #620's.
 
 ## Release-hook delivery (#618)
 
