@@ -1,0 +1,6 @@
+on go
+  ask st to watch "w", ""
+end go
+on remove
+  ask st to unwatch "w"
+end remove

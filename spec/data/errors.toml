@@ -272,6 +272,20 @@ sources = ["ADR 0050", "#226"]
 message = "A Store key can't be empty text"
 
 [[error]]
+code = "invalid watch"
+fields = ["field"]
+raised_when = "A `store` `watch` or `unwatch` is given empty text as its name, or `watch` an effective message that isn't a plain Name; `field` is `name` or `message`, and the Core raises it before the Host function runs"
+sources = ["ADR 0061", "#227"]
+message = "A watch's {field} isn't valid"
+
+[[error]]
+code = "watch limit"
+fields = ["limit"]
+raised_when = "A `watch` would take its Store's watches past a limit, after removing the watch it replaces; `limit` is `watches`, `size` or `pending`, and the Host raises it before anything changes"
+sources = ["ADR 0061", "#227"]
+message = "The Store's {limit} limit for watches would be exceeded"
+
+[[error]]
 code = "can't store"
 fields = ["kind"]
 raised_when = "A `store` write's value holds a Host Object, at any depth; `kind` is its Object Kind, and the Host raises it"

@@ -135,7 +135,7 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		case "calendar":
 			names = []string{"today", "now", "toCivil", "toInstant", "offset", "zone"}
 		case "store":
-			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
+			names = []string{"get", "set", "delete", "keys", "increment", "swap", "watch", "unwatch"}
 		case "sqlite":
 			names = []string{"query", "change", "begin", "commit", "rollback"}
 		case "locale":
@@ -181,6 +181,8 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 			// A Script Load rechecks imported calls against the factory's exact
 			// number-or-Quantity Shape; there is no public any-Quantity Shape.
 			out.declarations[name] = map[string]talk.OperationCheck{
+				"watch":     {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.TextShape, talk.Optional(talk.TextShape)}},
+				"unwatch":   {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}},
 				"get":       {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.Optional(talk.AnyShape)}},
 				"set":       {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape, talk.AnyShape}},
 				"delete":    {Mode: talk.Immediate, Args: []talk.Shape{talk.TextShape}},
@@ -553,6 +555,22 @@ func (o *operationReplay) effect(phase string) func(talk.SegmentContext) talk.Ef
 }
 
 type replayStore struct{ replay *operationReplay }
+
+func (h replayStore) Release(talk.GrantContext) {}
+func (h replayStore) Watch(c *talk.Call, name, prefix, message string) error {
+	v, e := h.replay.invoke("store.watch", talk.Immediate, c)
+	if e == nil && v.Kind() != talk.KindNothing {
+		return fmt.Errorf("store.watch Stub is not Nothing")
+	}
+	return e
+}
+func (h replayStore) Unwatch(c *talk.Call, name string) error {
+	v, e := h.replay.invoke("store.unwatch", talk.Immediate, c)
+	if e == nil && v.Kind() != talk.KindNothing {
+		return fmt.Errorf("store.unwatch Stub is not Nothing")
+	}
+	return e
+}
 
 func (h replayStore) Begin(c talk.SegmentContext) talk.EffectResult {
 	return h.replay.effect("begin")(c)

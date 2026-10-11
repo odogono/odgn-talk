@@ -1,0 +1,22 @@
+script variable errors = []
+on watch name, prefix, message
+  try
+    ask st to watch name, prefix, message
+  catch e
+    put e after errors
+  end try
+end watch
+on unwatch name
+  try
+    ask st to unwatch name
+  catch e
+    put e after errors
+  end try
+end unwatch
+on recover
+  try
+    ask st to watch "", ""
+  catch e
+  end try
+  ask st to watch "ok", ""
+end recover

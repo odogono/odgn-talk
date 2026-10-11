@@ -346,6 +346,10 @@ export interface TimerImpl {
  * for the database that keeps its Stores (ADR 0070).
  */
 export interface StoreImpl extends SegmentLifecycle<string> {
+  /** Final at the call; message is effective, defaulting to storeChanged. */
+  watch(call: Call<string>, name: string, prefix: string, message: string): void;
+  unwatch(call: Call<string>, name: string): void;
+  release(context: GrantContext<string>): void;
   get(call: Call<string>, key: string, fallback?: Value): Value;
   set(call: Call<string>, key: string, value: Value): void;
   delete(call: Call<string>, key: string): void;

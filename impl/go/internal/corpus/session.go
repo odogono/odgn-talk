@@ -116,9 +116,9 @@ func sessionSetup(h *session.Host, dir string) (Setup, error) {
 		}
 		if cap == "store" {
 			costs := Setup{}
-			for _, name := range []string{"get", "keys", "set", "delete", "increment", "swap"} {
+			for _, name := range []string{"get", "keys", "set", "delete", "increment", "swap", "watch", "unwatch"} {
 				fuel := int64(4)
-				if name == "get" || name == "keys" {
+				if name == "get" || name == "keys" || name == "unwatch" {
 					fuel = 2
 				}
 				costs[name] = Setup{"fuel": fuel}

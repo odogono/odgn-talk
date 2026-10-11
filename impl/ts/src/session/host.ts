@@ -192,6 +192,8 @@ const DEFAULT_BINDING: Record<string, string> = {
 };
 // What the Session Store's Operations cost (chapter 12, Sessions).
 const STORE_COSTS = {
+  watch: { fuel: 4 },
+  unwatch: { fuel: 2 },
   get: { fuel: 2 },
   keys: { fuel: 2 },
   set: { fuel: 4 },

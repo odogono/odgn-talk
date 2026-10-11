@@ -692,8 +692,7 @@ Hooks are synchronous and unmetered, with no Trace record or Fingerprint field.
 They may queue Host Inputs; worker calls are `reentrant call`, and panics cannot
 refuse release. `grant_release_test.go` verifies lifecycle ordering and identity.
 The TS Core supports the same embedding hook; it has no Message Layer adapter,
-so its transport tests are deferred. Store `watch`/`unwatch` remain deferred;
-see the router below.
+so its transport tests are deferred. The `store` factory forwards its implementation's release hook; see the router below.
 
 ### The notification router
 
@@ -717,8 +716,14 @@ Pump and untraced, and checks restored Grants with `(*Grant).Capability` and
 router synchronously. `notify/kit_test.go` runs the
 [router kit](../../corpus/notify-kit/) on stand-in Groups, and
 `notify/router_test.go` drives real Groups, including concurrent Pumps and
-commits under `-race`. No Store routes its commits through it yet; #620 wires
-the `store` factory and the Session Store.
+commits under `-race`. `store.Stores` routes Segment commits and Host
+`Replace`/`Clear` through its public `Router`. Hosts call `Router.Pumped`
+after Pumps, `Detach` on discard and `Save`/`Restore` for companion
+checkpoints. `store.NewWithWatchLimits` overrides the Session watch limits.
+The Session Store accepts watching with costs 4/2 and limits 100 watches,
+65,536 watch bytes, 1,000 pending Notifications and 1,048,576 pending bytes.
+Session re-pumping, retry/detach and checkpoint integration remain
+[#621](https://github.com/odogono/odgn-talk/issues/621).
 
 ### Segment-bound Operations
 
@@ -853,7 +858,16 @@ no Script error codes. Invalid read results and Host failures become `host error
 ### Store Standard Capability
 
 `Core.StoreCapability(StoreImpl, Costs)` supplies immediate `get`, `set`,
-`delete`, `keys`, `increment` and `swap`. The Grant binding names the Store.
+`delete`, `keys`, `increment`, `swap`, `watch` and `unwatch`. The Grant binding
+names the Store. The interface requires all eight methods, three Segment
+hooks and `Release`, and the factory requires all eight costs. `watch` and
+`unwatch` give Nothing, never enroll a participant, and are final at the call.
+`watch` passes the effective message to the implementation: `storeChanged`
+when omitted or Nothing, while the Trace preserves supplied arguments.
+After Shapes, empty watch names and non-plain messages raise uncharged
+`invalid watch` with `field` set to `name` or `message`, in that order.
+Only `watch` declares `watch limit`, with `limit` `watches`, `size` or `pending`.
+The factory forwards `Release` for owner cleanup.
 The implementation is one Segment Coordinator for every binding, the same
 pointer for every `StoreCapability` over one comparable implementation, so
 writes to several Stores, or to one Store through several Grants, enroll in one

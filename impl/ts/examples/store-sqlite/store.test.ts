@@ -16,10 +16,9 @@ import { sessionQuotas } from '../../src/store/index';
 import { runStoreKitSequence, storeKitSequences } from '../../tools/store-kit';
 
 const costs = Object.fromEntries(
-  ['get', 'set', 'delete', 'keys', 'increment', 'swap'].map(op => [
-    op,
-    { fuel: 4 },
-  ]),
+  ['get', 'set', 'delete', 'keys', 'increment', 'swap', 'watch', 'unwatch'].map(
+    op => [op, { fuel: 4 }],
+  ),
 );
 
 const directories: string[] = [];

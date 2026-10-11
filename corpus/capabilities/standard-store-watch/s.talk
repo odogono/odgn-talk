@@ -1,0 +1,9 @@
+script variable seen = nothing
+on go
+  ask st to watch "w", ""
+  ask st to watch "w", "score/", nothing
+  ask st to watch "w", "score/", "scoresChanged"
+  ask st to unwatch "missing"
+  ask st to unwatch "w"
+  put it into seen
+end go

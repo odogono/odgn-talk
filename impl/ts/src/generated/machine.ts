@@ -1398,6 +1398,8 @@ export const errorMessages = {
   "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called",
   "offer unavailable": "The recovery offer {name} is unavailable",
   "invalid key": "A Store key can't be empty text",
+  "invalid watch": "A watch's {field} isn't valid",
+  "watch limit": "The Store's {limit} limit for watches would be exceeded",
   "can't store": "A {kind} object can't be kept in a Store",
   "store full": "The Store's {limit} limit would be exceeded",
   "store busy": "Another Segment is writing {key}",

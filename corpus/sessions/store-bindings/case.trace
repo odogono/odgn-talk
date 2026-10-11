@@ -1,4 +1,5 @@
-# Unblessed: Session Store Grant bindings and replay (#538); first blessing awaits human review.
+# Unblessed: Session Store Grant bindings and replay (#538), updated Store Fingerprint (#620); first blessing awaits human review.
+# See docs/reviews/store-watch-blessings for the changed restore Fingerprint.
 > load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
 > extend session source="on score" & newline & "  ask scores to increment " & quote & "plays" & quote & ", 3" & newline & "  say it" & newline & "end score" identity=05aef0246cf85e497e3e33dd9f0229dfe04b524efb8c9989a04f9df69060855c
 > extend session source="on peek" & newline & "  ask same to get " & quote & "plays" & quote & newline & "  say it" & newline & "  ask other to get " & quote & "plays" & quote & newline & "  say it" & newline & "end peek" identity=5123b5bc1067c46f66c1425be97b058944585d4f55b03d579085a8fca3e3d228
@@ -23,7 +24,7 @@ effect session/r2.s1 grant=scores phase=commit status=ok
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=52 alloc=16 state=0 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=52 alloc=16
 pumped state=idle fuel=52
-> restore from=s1 fingerprint=338633553cce221fda923553ccc015abd0bcf3d9465f8a1edabe58101c4cdc1d mode=full
+> restore from=s1 fingerprint=b048ce2e6c1e3641ea58128cc96440ff3c4e4d006d4cc236b516a51b93b4e2de mode=full
 > extend session source="on entry2" & newline & "peek" & newline & "end entry2" & newline identity=4389a804d4088ce89f6377cc27afe969e028c07414caa133c93cf2aa9b485e67
 > request d2 to=session message=entry2
 > pump clock=2026-10-09T10:00:02Z

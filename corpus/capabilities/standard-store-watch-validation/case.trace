@@ -1,0 +1,97 @@
+# Unblessed: Store watch Operations (#620); first blessing awaits human review.
+# Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
+> load s identity=7bb0e4a4ac457e9343871506bd58ae1e7bbcb105c5ffbe84095c47c816e81a6b
+> deliver d1 to=s message=watch args=["", "", "put"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r1 code="invalid watch" at=s:7 pos=4:5
+seg s/r1 start delivery=d1 handler=watch clause=1 fuel=25 alloc=434 state=450 end=return
+run s/r1 outcome=completed delivery=d1 handler=watch fuel=25 alloc=434
+pumped state=idle fuel=25
+> deliver d2 to=s message=watch args=["w", "", ""]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r2 code="invalid watch" at=s:7 pos=4:5
+seg s/r2 start delivery=d2 handler=watch clause=1 fuel=25 alloc=440 state=890 end=return
+run s/r2 outcome=completed delivery=d2 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d3 to=s message=watch args=["w", "", "all"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r3 code="invalid watch" at=s:7 pos=4:5
+seg s/r3 start delivery=d3 handler=watch clause=1 fuel=25 alloc=440 state=1330 end=return
+run s/r3 outcome=completed delivery=d3 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d4 to=s message=watch args=["w", "", "_"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r4 code="invalid watch" at=s:7 pos=4:5
+seg s/r4 start delivery=d4 handler=watch clause=1 fuel=25 alloc=440 state=1770 end=return
+run s/r4 outcome=completed delivery=d4 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d5 to=s message=watch args=["w", "", "put"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r5 code="invalid watch" at=s:7 pos=4:5
+seg s/r5 start delivery=d5 handler=watch clause=1 fuel=25 alloc=440 state=2210 end=return
+run s/r5 outcome=completed delivery=d5 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d6 to=s message=watch args=["w", "", "move:"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r6 code="invalid watch" at=s:7 pos=4:5
+seg s/r6 start delivery=d6 handler=watch clause=1 fuel=25 alloc=440 state=2650 end=return
+run s/r6 outcome=completed delivery=d6 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d7 to=s message=watch args=["w", "", "to:at:"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r7 code="invalid watch" at=s:7 pos=4:5
+seg s/r7 start delivery=d7 handler=watch clause=1 fuel=25 alloc=440 state=3090 end=return
+run s/r7 outcome=completed delivery=d7 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d8 to=s message=watch args=["w", "", "9lives"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r8 code="invalid watch" at=s:7 pos=4:5
+seg s/r8 start delivery=d8 handler=watch clause=1 fuel=25 alloc=440 state=3530 end=return
+run s/r8 outcome=completed delivery=d8 handler=watch fuel=25 alloc=440
+pumped state=idle fuel=25
+> deliver d9 to=s message=watch args=[1, "", "put"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r9 code="wrong kind" at=s:7 pos=4:5
+seg s/r9 start delivery=d9 handler=watch clause=1 fuel=25 alloc=690 state=4220 end=return
+run s/r9 outcome=completed delivery=d9 handler=watch fuel=25 alloc=690
+pumped state=idle fuel=25
+> deliver d10 to=s message=watch args=["", 1, "put"]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r10 code="wrong kind" at=s:7 pos=4:5
+seg s/r10 start delivery=d10 handler=watch clause=1 fuel=25 alloc=690 state=4910 end=return
+run s/r10 outcome=completed delivery=d10 handler=watch fuel=25 alloc=690
+pumped state=idle fuel=25
+> deliver d11 to=s message=watch args=["w", "", 1]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r11 code="wrong kind" at=s:7 pos=4:5
+seg s/r11 start delivery=d11 handler=watch clause=1 fuel=25 alloc=712 state=5622 end=return
+run s/r11 outcome=completed delivery=d11 handler=watch fuel=25 alloc=712
+pumped state=idle fuel=25
+> deliver d12 to=s message=unwatch args=[""]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r12 code="invalid watch" at=s:27 pos=11:5
+seg s/r12 start delivery=d12 handler=unwatch clause=1 fuel=23 alloc=436 state=6058 end=return
+run s/r12 outcome=completed delivery=d12 handler=unwatch fuel=23 alloc=436
+pumped state=idle fuel=23
+> deliver d13 to=s message=unwatch args=[1]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r13 code="wrong kind" at=s:27 pos=11:5
+seg s/r13 start delivery=d13 handler=unwatch clause=1 fuel=23 alloc=694 state=6752 end=return
+run s/r13 outcome=completed delivery=d13 handler=unwatch fuel=23 alloc=694
+pumped state=idle fuel=23
+> deliver d14 to=s message=unwatch args=[nothing]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r14 code="wrong kind" at=s:27 pos=11:5
+seg s/r14 start delivery=d14 handler=unwatch clause=1 fuel=23 alloc=694 state=7446 end=return
+run s/r14 outcome=completed delivery=d14 handler=unwatch fuel=23 alloc=694
+pumped state=idle fuel=23
+> stub store.watch value=nothing
+> deliver d15 to=s message=recover
+> pump clock=2026-10-11T12:00:00Z
+raise s/r15 code="invalid watch" at=s:48 pos=18:5
+call s/r15.c1 op=st.watch args=["ok", ""] result=nothing
+seg s/r15 start delivery=d15 handler=recover clause=1 fuel=33 alloc=8 state=7446 end=return
+run s/r15 outcome=completed delivery=d15 handler=recover fuel=33 alloc=8
+pumped state=idle fuel=33
+> vars
+vars s errors=[{code: "invalid watch", field: "name", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "message", at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, capability: "st", operation: "watch", argument: 1, at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, capability: "st", operation: "watch", argument: 2, at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "wrong kind", expected: "text or nothing", got: "number", value: 1, capability: "st", operation: "watch", argument: 3, at: {unit: "s", handler: "watch", line: 4, column: 5}}, {code: "invalid watch", field: "name", at: {unit: "s", handler: "unwatch", line: 11, column: 5}}, {code: "wrong kind", expected: "text", got: "number", value: 1, capability: "st", operation: "unwatch", argument: 1, at: {unit: "s", handler: "unwatch", line: 11, column: 5}}, {code: "wrong kind", expected: "text", got: "nothing", value: nothing, capability: "st", operation: "unwatch", argument: 1, at: {unit: "s", handler: "unwatch", line: 11, column: 5}}]

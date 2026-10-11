@@ -1,0 +1,9 @@
+on go
+  ask st to watch "w", ""
+end go
+function unused
+  ask remove to unwatch "w"
+end unused
+on invalid
+  ask st to watch "", "", "put"
+end invalid

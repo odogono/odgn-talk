@@ -42,7 +42,7 @@ export type SqliteDatabaseOptions = {
 
 /** The Stores a database keeps: the `store` implementation and the Host's commands. */
 export type SqliteStores = StoreImpl &
-  Pick<Stores, 'clear' | 'entries' | 'replace'>;
+  Pick<Stores, 'clear' | 'entries' | 'replace' | 'router'>;
 
 const OK: EffectResult = { status: 'ok' };
 
@@ -678,6 +678,11 @@ export class SqliteDatabase {
     engine: Stores,
   ): Omit<SqliteStores, keyof SegmentCoordinator> {
     return {
+      router: engine.router,
+      watch: (call, name, prefix, message) =>
+        engine.watch(call, name, prefix, message),
+      unwatch: (call, name) => engine.unwatch(call, name),
+      release: context => engine.release(context),
       get: (call, key, fallback) => engine.get(call, key, fallback),
       keys: (call, prefix) => engine.keys(call, prefix),
       set: (call, key, value) => {

@@ -15,13 +15,13 @@ The normative [Session observation contract](session-observation.md) defines Dec
 - **Limits:** the default limit profile ([chapter 6](06-errors-and-limits.md#limits)). `:limits` tightens it for later Entries.
 - **Libraries:** the stdlib Libraries are always registered, so `use pad from text` works at the prompt ([chapter 7](07-libraries-and-the-standard-library.md#imports)). User Libraries come in with `:library`.
 - **Pumps** have no Fuel Slice and no Fuel cap, so a Segment always runs to its end within one Pump.
-- **Costs:** `console`'s and `user`'s Operations and every mock Operation cost nothing. `store`'s `get` and `keys` cost 2 Fuel, and its `set`, `delete`, `increment` and `swap` 4, with no declared allocation.
+- **Costs:** `console`'s and `user`'s Operations and every mock Operation cost nothing. `store`'s `get`, `keys` and `unwatch` cost 2 Fuel, and its `set`, `delete`, `increment`, `swap` and `watch` 4, with no declared allocation.
 - **The Clock** is real by default, and virtual under `:clock virtual`.
 - **The end of the Message Path:** a message that reaches it is reported, not an error, since the Session Script's path is flat.
 
 ### The Session Store
 
-**Pending addition:** [the Session Host's Store Notifications](proposals/store-notifications.md#the-session-host) grant `watch` and `unwatch`, set their costs and limits, pump while Notifications are queued, and keep checkpoints for `:save` and `:restore`. Neither Session Host supports them yet.
+Both Session Hosts grant `watch` and `unwatch`, with the costs above and the finite limits in [Store Notifications](proposals/store-notifications.md#the-session-host) (#620): for each Session Store, 100 watches, 65,536 logical bytes of registration state, 1,000 pending Notifications and 1,048,576 logical bytes of pending work. Notification re-pumping, background output and companion checkpoints for `:save` and `:restore` remain #621; full chapter integration remains #622.
 
 `store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 

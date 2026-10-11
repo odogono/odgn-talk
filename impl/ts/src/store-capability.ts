@@ -1,5 +1,5 @@
 // Chapter 7's `store` declarations and chapter 9's `add`. The Core checks the
-// Shapes, `invalid key` and the result kinds; keeping the Store, with its
+// Shapes, domain validation and result kinds; keeping the Store, with its
 // reservations and quotas, is the Host implementation's obligation.
 import {
   defineCapability,
@@ -7,6 +7,7 @@ import {
   type Call,
   type CapabilityDef,
   type ImmediateOp,
+  type GrantContext,
   type SegmentCoordinator,
   type SegmentLifecycle,
   type Shape,
@@ -14,22 +15,26 @@ import {
 import { HostError, ScriptError as HostScriptError } from './errors';
 import { errorMessages } from './generated/machine';
 import { arithmetic, ScriptError } from './operations';
+import { validComputedMessageName } from './selectors';
 import { costOf, fixed, type Costs } from './standard-capabilities';
 import { registerStandardChecks } from './standard-capability-checks';
-import { bool, map, nothing, type Value } from './values';
+import { bool, map, nothing, text, type Value } from './values';
 
 /**
  * The binding is the Store's name. `set`, `delete`, `increment` and `swap`
  * act on the calling Segment's pending writes, to every Store it writes,
  * which `commit` applies together and `rollback` discards (chapter 7,
  * ADR 0062). The implementation is the Segment Coordinator of every binding,
- * so its hooks see each enrolled Store's Grant (ADR 0069).
+ * so its hooks see each enrolled Store's Grant (ADR 0069). Watch registrations
+ * are final at the call, independent of the participant, and release drops
+ * their owner when the named Grant stops being effective (ADR 0061).
  */
 export type StoreImpl = SegmentLifecycle<string> & {
   delete(call: Call<string>, key: string): void;
   get(call: Call<string>, key: string, fallback?: Value): Value;
   increment(call: Call<string>, key: string, by?: Value): Value;
   keys(call: Call<string>, prefix?: string): Value;
+  release(context: GrantContext<string>): void;
   set(call: Call<string>, key: string, value: Value): void;
   swap(
     call: Call<string>,
@@ -37,6 +42,13 @@ export type StoreImpl = SegmentLifecycle<string> & {
     expected: Value,
     replacement: Value,
   ): boolean;
+  unwatch(call: Call<string>, name: string): void;
+  watch(
+    call: Call<string>,
+    name: string,
+    prefix: string,
+    message: string,
+  ): void;
 };
 
 /** A Core-raised error as the Host sees it, with its catalogue message. */
@@ -71,7 +83,16 @@ const textShape = shape.text;
 const keyShape = textShape;
 const quantityShape: Shape = { k: 'kind', kind: 'quantity' };
 const amountShape = shape.oneOf(shape.number, quantityShape);
-const OPERATIONS = ['get', 'set', 'delete', 'keys', 'increment', 'swap'];
+const OPERATIONS = [
+  'get',
+  'set',
+  'delete',
+  'keys',
+  'increment',
+  'swap',
+  'watch',
+  'unwatch',
+];
 
 const isText = (data: Value, field: string) => data.get(field).kind === 'text';
 // The fields each code the Host may fail with must carry.
@@ -80,6 +101,8 @@ const errorFields: Record<string, (data: Value) => boolean> = {
   'store full': data =>
     ['size', 'keys', 'value'].includes(data.get('limit').asText() ?? ''),
   'store busy': data => isText(data, 'key'),
+  'watch limit': data =>
+    ['watches', 'size', 'pending'].includes(data.get('limit').asText() ?? ''),
   'wrong kind': data =>
     isText(data, 'expected') &&
     isText(data, 'got') &&
@@ -93,6 +116,25 @@ const checkKey = (args: readonly Value[]) => {
   }
 };
 
+const effectiveMessage = (args: readonly Value[]) =>
+  args[2]?.asText() ?? 'storeChanged';
+const checkUnwatch = (args: readonly Value[]) => {
+  if (args[0]!.asText() === '') {
+    throw new ScriptError('invalid watch', [['field', text('name')]], true);
+  }
+};
+const checkWatch = (args: readonly Value[]) => {
+  checkUnwatch(args);
+  const message = effectiveMessage(args);
+  if (message.includes(':') || !validComputedMessageName(message, 1)) {
+    throw new ScriptError('invalid watch', [['field', text('message')]], true);
+  }
+};
+const argumentChecks: Record<string, (args: readonly Value[]) => void> = {
+  watch: checkWatch,
+  unwatch: checkUnwatch,
+};
+
 const errors = (...codes: string[]) => codes.map(code => ({ code }));
 const writes = ["can't store", 'store full', 'store busy'];
 const key = (args: readonly Value[]) => args[0]!.asText()!;
@@ -102,12 +144,40 @@ export const storeCapability = (
   impl: StoreImpl,
   costs: Costs,
 ): CapabilityDef<string> => {
-  for (const name of [...OPERATIONS, 'begin', 'commit', 'rollback']) {
+  for (const name of [
+    ...OPERATIONS,
+    'begin',
+    'commit',
+    'rollback',
+    'release',
+  ]) {
     if (!impl || typeof impl[name as keyof StoreImpl] !== 'function') {
       throw new HostError('invalid value', `Store needs ${name}`);
     }
   }
   const operations: Record<string, ImmediateOp<string>> = {
+    watch: {
+      mode: 'immediate',
+      args: [textShape, textShape, shape.optional(textShape)],
+      result: shape.nothing,
+      errors: errors('watch limit'),
+      cost: costOf(costs, 'watch'),
+      do: (call, ...args) => {
+        impl.watch(call, key(args), args[1]!.asText()!, effectiveMessage(args));
+        return nothing;
+      },
+    },
+    unwatch: {
+      mode: 'immediate',
+      args: [textShape],
+      result: shape.nothing,
+      errors: [],
+      cost: costOf(costs, 'unwatch'),
+      do: (call, ...args) => {
+        impl.unwatch(call, key(args));
+        return nothing;
+      },
+    },
     get: {
       mode: 'immediate',
       args: [keyShape, shape.optional(shape.any)],
@@ -177,9 +247,14 @@ export const storeCapability = (
   // One coordinator for every binding, compared by identity, so writes to
   // several of its Stores in one Segment share a participant (ADR 0069).
   const coordinator = impl as SegmentCoordinator;
-  const capability = defineCapability<string>('store', operations, {
-    coordinator: () => coordinator,
-  });
+  const capability = defineCapability<string>(
+    'store',
+    operations,
+    {
+      coordinator: () => coordinator,
+    },
+    context => impl.release(context),
+  );
   // Segment-bound declarations are copied, so the checks attach to the copies.
   for (const [name, op] of capability.operations) {
     registerStandardChecks(op, {
@@ -187,7 +262,11 @@ export const storeCapability = (
         Boolean(
           op.errors?.some(e => e.code === code) && errorFields[code]?.(data),
         ),
-      ...(name === 'keys' ? {} : { arguments: checkKey }),
+      ...(name === 'keys'
+        ? {}
+        : {
+            arguments: argumentChecks[name] ?? checkKey,
+          }),
     });
   }
   return fixed(capability);

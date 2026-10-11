@@ -205,6 +205,15 @@ The `grants-as-used`, `revoke-in-flight` and `revoke-reissue` cases in `capabili
 
 The `standard-store` cases pin the Core's side of `store` ([#226](https://github.com/odogono/odgn-talk/issues/226)): all six Operations through Stubs and `stub-effect` lines, `invalid key` before charging, Shape and result checks, declared Store failures and their catalogue fields, a read-only Grant that never enlists, and rollback at a Limit Fault. The TS Core produced their expectations, and the maintainer approved their first blessings on 2026-10-07; see the [approval record](../docs/reviews/store-blessings/README.md). For [#461](https://github.com/odogono/odgn-talk/issues/461), every Store shares one Segment Coordinator, so in `standard-store-segments` a second Store's write joins the participant instead of raising `segment participant conflict`; that change, and the new `standard-store-coordinator` case for the "Two Stores in one Segment" worked example, are Unblessed until reviewed. Go reproduces all five traces in ordinary and Save/Restore replay, and requires them in its passing gate. Current support and limitations are described in the [TS Group and Trace Cases guide](../impl/ts/README.md#the-group-and-trace-cases) and the [Go Store guide](../impl/go/README.md#store-standard-capability).
 
+The seven `standard-store-watch*` cases cover the Store watch Operations
+(#620), validation and supplied arguments, Host failures, Segment independence,
+GrantsAsUsed, revocation and disablement precedence. Both Cores reproduce them
+in ordinary and save/restore replay, and Go requires them in its passing gate.
+Their first blessings, the changed Group Fingerprints of the five existing
+Store cases and the changed `sessions/store-bindings` restore Fingerprint await
+human review in the [review package](../docs/reviews/store-watch-blessings/README.md).
+Current support is in the [TS](../impl/ts/README.md) and [Go](../impl/go/README.md) guides.
+
 The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover nanosecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
 
 The `standard-console`, `standard-console-cancel` and `standard-console-timeout`

@@ -797,7 +797,7 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 
 ### `store`
 
-**Pending addition:** [Store Notifications](proposals/store-notifications.md) adds `watch` and `unwatch`, which deliver a Notification to a Script for each commit that changes the keys it watches. Neither Core nor Session Host offers them yet, and the table below lists only the supported Operations.
+Both Cores and Session Hosts offer `watch` and `unwatch` (#620). The bundled Store implementations route committed changes through the notification router. The staged [Store Notifications](proposals/store-notifications.md) contract defines their behavior; Session notification driving and checkpoints remain #621, and full chapter integration remains #622.
 
 <!-- generated: stdlib.capability.store -->
 
@@ -809,13 +809,20 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 | `keys [prefix]` | immediate | The keys the Segment sees that begin with `prefix`, in Unicode code-point order |  |
 | `increment key [, by]` | immediate | The key's value as the Segment sees it after adding `by`, 1 by default; commit adds `by` to the value committed then | `invalid key`, `wrong kind`, `incompatible units`, `overflow`, `store full`, `store busy` |
 | `swap key, expected, new` | immediate | `true`, after putting `new` under `key`, if the Segment sees `expected` there, and `false` otherwise | `invalid key`, `can't store`, `store full`, `store busy` |
+| `watch name, prefix [, message]` | immediate | Nothing; from now on, each commit that changes keys beginning with `prefix` delivers `message` to the Script, replacing its watch called `name` | `invalid watch`, `watch limit` |
+| `unwatch name` | immediate | Nothing; removes the Script's watch called `name` through this Grant, if there is one | `invalid watch` |
 
 <!-- end -->
+
+The catalogue also carries `watch` and `unwatch` (#620). Their Shapes,
+validation, default message, final-at-call effects and Host routing obligations
+are in the staged [Store Notifications](proposals/store-notifications.md#operations)
+contract until chapter integration (#622).
 
 `store` keeps data values under text keys, outside every Script, so they outlive a reload and are shared by every Script granted the same Store ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)). Its writes commit or roll back with the Segment that made them, as Script Variables do ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)). Like `timer`, the Spec states its semantics as obligations on the Host, and the Core takes no part in keeping the Store.
 
 - **Naming a Store:** the Grant's binding is the Store's name, never the Script's text. Every Grant whose binding names the same Store reaches the same contents, across Scripts and Groups.
-- **Shapes:** every Operation's first argument, `key`, is text. `get` takes an Optional `any` default; `set` an `any` value; `keys` an Optional text prefix; `increment` an Optional choice of number or Quantity; and `swap` two `any` values. `delete` takes only its key.
+- **Shapes of the six data Operations:** the first argument is text: a key, or `keys`' prefix. `get` takes an Optional `any` default; `set` an `any` value; `keys` an Optional text prefix; `increment` an Optional choice of number or Quantity; and `swap` two `any` values. `delete` takes only its key.
 - **Keys** are nonempty text, compared exactly as NFC text ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)). Empty text raises `invalid key` after the Shape checks, before the call is charged or the Host function runs.
 - **Values** are data values, stored by [the Value Encoding](09-embedding.md#json-and-the-value-encoding). A Function Value anywhere in a value raises `not encodable` from the Shape check, and the Host fails with `can't store`, with `kind` the Object Kind, for a Host Object anywhere in one. A key holding Nothing and a missing key are one state, so setting Nothing deletes the key.
 - **What a Segment sees:** the committed Store, with the Segment's own uncommitted writes applied in call order. Every other Segment sees only the committed Store.
@@ -833,7 +840,7 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 - **Outside the Script:** Store contents never count toward Persistent State, and no save includes them ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)). Converting a value `get` gives is charged to the Run, as for any result ([chapter 9](09-embedding.md#capabilities)).
 - **Results:** `get` gives a data value; `set` and `delete` Nothing; `keys` a list of text; `increment` a number or a Quantity; and `swap` a boolean. The Core checks these result kinds, and a mismatch becomes `host error`.
 
-All six Operations are immediate: a Segment-bound Operation must be, and a read answers at once. A Host backed by remote storage answers from a working set it holds.
+The six data Operations and the two watch Operations are immediate: a Segment-bound Operation must be, and a read answers at once. A Host backed by remote storage answers from a working set it holds.
 
 > **Example.**
 >

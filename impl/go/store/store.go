@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
+	"github.com/odogono/odgn-talk/impl/go/notify"
 )
 
 // Quotas counts each Store's committed contents and live Segments' net growth
@@ -38,18 +40,50 @@ type segment map[string]map[string]pending
 // is the Segment Coordinator of every Store it holds, so one Segment's
 // writes to several Stores commit together (ADR 0069).
 type Stores struct {
-	mu       sync.Mutex
-	quotas   Quotas
-	contents map[string]map[string]talk.Value
-	segments map[identity]segment
-	order    []identity // live Segments in begin order, for sequential rounding
+	// Router routes committed changes to watches. A Host that drives
+	// Notifications pumps it after each Group Pump; it owns companion checkpoints.
+	Router *notify.Router
+	// Revisions are written under the router's per-Store lock and read from
+	// its revision callback, so Stores locked separately share them safely.
+	revisions sync.Map
+	mu        sync.Mutex
+	quotas    Quotas
+	contents  map[string]map[string]talk.Value
+	segments  map[identity]segment
+	order     []identity // live Segments in begin order, for sequential rounding
 }
 
 var _ talk.StoreImpl = (*Stores)(nil)
 
-func New(quotas Quotas) *Stores {
-	return &Stores{quotas: quotas, contents: map[string]map[string]talk.Value{}, segments: map[identity]segment{}}
+// SessionWatchLimits returns the Session Store's notification limits.
+func SessionWatchLimits() notify.WatchLimits {
+	return notify.WatchLimits{Watches: 100, WatchSize: 65536, Pending: 1000, PendingSize: 1048576}
 }
+func New(quotas Quotas) *Stores { return NewWithWatchLimits(quotas, SessionWatchLimits()) }
+func NewWithWatchLimits(quotas Quotas, limits notify.WatchLimits) *Stores {
+	s := &Stores{quotas: quotas, contents: map[string]map[string]talk.Value{}, segments: map[identity]segment{}}
+	s.Router = notify.New(notify.RouterOptions{Limits: func(string) notify.WatchLimits { return limits }, Revision: func(name string) string { return strconv.FormatUint(s.revision(name), 10) }})
+	return s
+}
+func (s *Stores) revision(name string) uint64 {
+	revision, _ := s.revisions.Load(name)
+	if revision == nil {
+		return 0
+	}
+	return revision.(uint64)
+}
+
+// bump moves a Store's notification revision on when a commit changes keys.
+func (s *Stores) bump(name string, keys []string) {
+	if len(keys) > 0 {
+		s.revisions.Store(name, s.revision(name)+1)
+	}
+}
+func (s *Stores) Watch(c *talk.Call, name, prefix, message string) error {
+	return s.Router.Watch(c, name, prefix, message)
+}
+func (s *Stores) Unwatch(c *talk.Call, name string) error { return s.Router.Unwatch(c, name) }
+func (s *Stores) Release(c talk.GrantContext)             { s.Router.Release(c) }
 func storeName(binding any) (string, error) {
 	name, ok := binding.(string)
 	if !ok {
@@ -112,15 +146,28 @@ func (s *Stores) Commit(c talk.SegmentContext) talk.EffectResult {
 		}
 	}
 	// No Store changes until every value of every Store has been computed.
-	for name, values := range changes {
-		entries := s.committed(name)
-		for key, v := range values {
-			if v.Kind() == talk.KindNothing {
-				delete(entries, key)
-			} else {
-				entries[key] = v
+	names := make([]string, 0, len(changes))
+	for name := range changes {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		s.Router.Commit(name, func() ([]string, error) {
+			entries := s.committed(name)
+			keys := []string{}
+			for key, v := range changes[name] {
+				if notify.Changed(entries[key], v) {
+					keys = append(keys, key)
+				}
+				if v.Kind() == talk.KindNothing {
+					delete(entries, key)
+				} else {
+					entries[key] = v
+				}
 			}
-		}
+			s.bump(name, keys)
+			return keys, nil
+		})
 	}
 	return talk.EffectResult{Status: talk.EffectOK}
 }
@@ -515,7 +562,23 @@ func (s *Stores) Replace(name string, entries []talk.Pair) error {
 	if int64(len(next)) > s.quotas.Keys || total > s.quotas.Size {
 		return fmt.Errorf("The contents are past the Store’s quotas")
 	}
-	s.contents[name] = next
+	s.Router.Commit(name, func() ([]string, error) {
+		keys := []string{}
+		old := s.committed(name)
+		for k, v := range next {
+			if notify.Changed(old[k], v) {
+				keys = append(keys, k)
+			}
+		}
+		for k := range old {
+			if _, found := next[k]; !found {
+				keys = append(keys, k)
+			}
+		}
+		s.contents[name] = next
+		s.bump(name, keys)
+		return keys, nil
+	})
 	return nil
 }
 func (s *Stores) Clear(name string) error { return s.Replace(name, nil) }

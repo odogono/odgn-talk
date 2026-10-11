@@ -1,0 +1,19 @@
+script variable count = 0
+on go
+  ask writer to set "k", 1
+  ask st to watch "w", ""
+  ask st to unwatch "w"
+  put count + 1 into count
+end go
+on spin
+  ask st to watch "kept", ""
+  ask writer to set "k", 2
+  put count + 1 into count
+  repeat while true
+  end repeat
+end spin
+on failed
+  ask st to watch "alsoKept", ""
+  ask writer to set "k", 3
+  put count + 1 into count
+end failed

@@ -132,3 +132,14 @@ func TestSessionStoreTranscriptParity(t *testing.T) {
 		t.Fatal("Replay depends on the source file")
 	}
 }
+
+func TestSessionStoreWatchOperationsAndLimits(t *testing.T) {
+	h, _, _ := storeSession(nil)
+	input(t, h, ":grant s store")
+	input(t, h, `ask s to watch "w", ""`)
+	input(t, h, `ask s to unwatch "w"`)
+	input(t, h, "on fill\nrepeat for each n in 1..101\nask s to watch n as text, \"\"\nend repeat\nend fill")
+	if out := h.Input("fill"); len(out) != 1 || !strings.Contains(out[0], "watch limit") {
+		t.Fatal(out)
+	}
+}

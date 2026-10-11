@@ -2,6 +2,7 @@ import { operationalReports } from './operational-reports';
 import { expect, test } from 'bun:test';
 import {
   add,
+  checkSource,
   bool,
   createCore,
   defineCapability,
@@ -36,7 +37,16 @@ import {
 import { fakeStorage } from '../tools/store-kit';
 
 const now = parseInstant('2026-10-07T12:00:00Z');
-const OPERATIONS = ['get', 'set', 'delete', 'keys', 'increment', 'swap'];
+const OPERATIONS = [
+  'get',
+  'set',
+  'delete',
+  'keys',
+  'increment',
+  'swap',
+  'watch',
+  'unwatch',
+];
 const costs: Costs = Object.fromEntries(
   OPERATIONS.map(name => [
     name,
@@ -45,6 +55,9 @@ const costs: Costs = Object.fromEntries(
 );
 const ok = () => ({ status: 'ok' as const });
 const inert: StoreImpl = {
+  watch: () => {},
+  unwatch: () => {},
+  release: () => {},
   begin: ok,
   commit: ok,
   rollback: ok,
@@ -126,7 +139,13 @@ test('add applies the + rules and throws the ScriptError + would raise', () => {
 });
 
 test('storeCapability needs every Operation, hook and cost, and copies costs', () => {
-  for (const name of [...OPERATIONS, 'begin', 'commit', 'rollback']) {
+  for (const name of [
+    ...OPERATIONS,
+    'begin',
+    'commit',
+    'rollback',
+    'release',
+  ]) {
     expect(() =>
       storeCapability(
         { ...inert, [name]: undefined } as unknown as StoreImpl,
@@ -617,4 +636,418 @@ test('Segments of two Groups sharing one Store are kept apart', () => {
   expect(stores.entries('shared').map(([k, v]) => `${k}=${v}`)).toEqual([
     'k=1',
   ]);
+});
+
+test('watch keeps supplied arguments while passing the effective message, without enrolling', () => {
+  const calls: string[] = [];
+  const result = run(
+    `ask s to watch "w", ""
+ask s to watch "w", "score/", nothing
+ask s to watch "w", "score/", "scoresChanged"
+ask s to unwatch "w"`,
+    {
+      ...inert,
+      begin: () => {
+        throw new Error('watch enlisted');
+      },
+      watch: (_call, _name, _prefix, message) => {
+        calls.push(message);
+      },
+    },
+  );
+  expect(result.outcome).toBe('completed');
+  expect(calls).toEqual(['storeChanged', 'storeChanged', 'scoresChanged']);
+  expect(result.lines.filter(l => l.startsWith('effect '))).toEqual([]);
+  expect(result.lines.filter(l => l.startsWith('call '))).toEqual([
+    'call s/r1.c1 op=s.watch args=["w", ""] result=nothing',
+    'call s/r1.c2 op=s.watch args=["w", "score/", nothing] result=nothing',
+    'call s/r1.c3 op=s.watch args=["w", "score/", "scoresChanged"] result=nothing',
+    'call s/r1.c4 op=s.unwatch args=["w"] result=nothing',
+  ]);
+});
+
+test('watch checks Shapes before name then message, with no cost, Host call or call id', () => {
+  const impl = {
+    ...inert,
+    watch: () => {
+      throw new Error('invalid watch reached Host');
+    },
+    unwatch: () => {
+      throw new Error('invalid unwatch reached Host');
+    },
+  };
+  const costly = {
+    ...costs,
+    watch: { fuel: 1_000_000, alloc: 1_000_000 },
+    unwatch: { fuel: 1_000_000, alloc: 1_000_000 },
+  };
+  const bodies = [
+    ['ask s to watch "", "", "put"', 'invalid watch', 'name'],
+    ['ask s to unwatch ""', 'invalid watch', 'name'],
+    ...[
+      '',
+      'all',
+      '_',
+      'put',
+      'move:',
+      'to:at:',
+      '9lives',
+      ' name',
+      'a-b',
+      'élan',
+    ].map(message => [
+      `ask s to watch "w", "", ${JSON.stringify(message)}`,
+      'invalid watch',
+      'message',
+    ]),
+    ['put 1 into bad\nask s to watch "", bad, "put"', 'wrong kind', undefined],
+    ['put 1 into bad\nask s to watch bad, ""', 'wrong kind', undefined],
+    ['put 1 into bad\nask s to watch "w", "", bad', 'wrong kind', undefined],
+    ['put nothing into bad\nask s to unwatch bad', 'wrong kind', undefined],
+  ];
+  for (const [body, code, field] of bodies) {
+    const plain = run(body!, impl);
+    const charged = run(body!, impl, { costed: costly });
+    expect(charged.error?.code).toBe(code!);
+    if (field) {
+      expect(charged.error!.data.get('field').asText()).toBe(field);
+    }
+    expect(charged.lines.some(l => l.startsWith('call '))).toBe(false);
+    expect(charged.lines.filter(l => l.startsWith('seg '))).toEqual(
+      plain.lines.filter(l => l.startsWith('seg ')),
+    );
+  }
+  const recovered = run(
+    `try
+ask s to watch "", ""
+catch e
+end try
+ask s to watch "ok", ""`,
+    inert,
+  );
+  expect(recovered.lines.find(l => l.startsWith('call '))).toContain('s/r1.c1');
+});
+
+test('watch/unwatch reject wrong supplied counts at Load', () => {
+  for (const body of [
+    'ask s to watch',
+    'ask s to watch "w"',
+    'ask s to watch "w", "", "changed", "extra"',
+    'ask s to unwatch',
+    'ask s to unwatch "w", "extra"',
+  ]) {
+    expect(() => run(body, inert)).toThrow(LoadError);
+  }
+});
+
+test('watch limit only accepts its three catalogue words and unwatch declares no Host errors', () => {
+  for (const limit of [
+    'watches',
+    'size',
+    'pending',
+    'pendingSize',
+    '',
+    'value',
+  ]) {
+    const impl = {
+      ...inert,
+      watch: () => {
+        throw new ScriptError(
+          'watch limit',
+          'full',
+          readDisplay(`{limit: ${JSON.stringify(limit)}}`),
+        );
+      },
+    };
+    const result = run('ask s to watch "w", ""', impl);
+    expect(result.error?.code).toBe(
+      ['watches', 'size', 'pending'].includes(limit)
+        ? 'watch limit'
+        : 'host error',
+    );
+  }
+  for (const code of ['invalid watch', 'store busy', 'unavailable']) {
+    const impl = {
+      ...inert,
+      watch: () => {
+        throw new ScriptError(code, 'Host failure');
+      },
+      unwatch: () => {
+        throw new ScriptError(
+          'watch limit',
+          'full',
+          readDisplay('{limit: "watches"}'),
+        );
+      },
+    };
+    expect(run('ask s to watch "w", ""', impl).error?.code).toBe('host error');
+    expect(run('ask s to unwatch "w"', impl).error?.code).toBe('host error');
+  }
+});
+
+test('read-only watches route own commits, survive fault rollback, and release on Stop', () => {
+  const stores = memoryStores(sessionQuotas);
+  const group = newGroup({ name: 'g' });
+  const def = storeCapability(stores, costs);
+  const script = group.load({
+    name: 's',
+    grants: {
+      observer: def.grant(['get', 'keys', 'watch', 'unwatch'], 'scores'),
+      writer: def.grant('all', 'scores'),
+    },
+    source: `script variable seen = []
+on go
+ask writer to set "score/a", 1
+ask observer to watch "w", "score/"
+end go
+on storeChanged change, queued
+put change after seen
+end storeChanged
+on spin
+ask observer to watch "later", "later/"
+ask writer to set "later/rolledback", 1
+repeat while true
+end repeat
+end spin`,
+  });
+  script.deliver({ name: 'go' });
+  group.pump(now);
+  group.pump(now);
+  expect(
+    group
+      .inspect()
+      .scripts[0]!.vars.find(([k]) => k === 'seen')![1]
+      .toString(),
+  ).toBe(
+    '[{grant: "observer", watch: "w", prefix: "score/", keys: ["score/a"], resync: false}]',
+  );
+  script.deliver({ name: 'spin', limits: { fuelPerRun: 200 } });
+  group.pump(now);
+  expect(stores.entries('scores').map(([k]) => k)).toEqual(['score/a']);
+  stores.replace('scores', [['later/kept', num(2)]]);
+  group.pump(now);
+  expect(
+    group
+      .inspect()
+      .scripts[0]!.vars.find(([k]) => k === 'seen')![1]
+      .toString(),
+  ).toContain('watch: "later"');
+  script.stop('test');
+  group.pump(now);
+  stores.replace('scores', [['later/afterStop', num(3)]]);
+  expect(stores.router.pumped(group)).toBe(false);
+  expect(group.inspect().scripts[0]!.mailbox).toEqual([]);
+});
+
+test('invalid replacement leaves routing intact; unwatch stops later commits', () => {
+  const stores = memoryStores(sessionQuotas);
+  const group = newGroup({ name: 'g' });
+  const script = group.load({
+    name: 's',
+    grants: { st: storeCapability(stores, costs).grant('all', 'scores') },
+    source: `script variable seen = []
+on start
+ask st to watch "w", "a"
+end start
+on invalid
+ask st to watch "w", "b", "put"
+end invalid
+on storeChanged change, queued
+put the "keys" of change after seen
+end storeChanged
+on finish
+ask st to unwatch "w"
+end finish`,
+  });
+  script.deliver({ name: 'start' });
+  group.pump(now);
+  script.deliver({ name: 'invalid' });
+  group.pump(now);
+  stores.replace('scores', [
+    ['a', num(1)],
+    ['b', num(2)],
+  ]);
+  group.pump(now);
+  expect(
+    group
+      .inspect()
+      .scripts[0]!.vars.find(([k]) => k === 'seen')![1]
+      .toString(),
+  ).toBe('[["a"]]');
+  script.deliver({ name: 'finish' });
+  group.pump(now);
+  stores.clear('scores');
+  group.pump(now);
+  expect(
+    group
+      .inspect()
+      .scripts[0]!.vars.find(([k]) => k === 'seen')![1]
+      .toString(),
+  ).toBe('[["a"]]');
+});
+
+test('disabled and revoked watch Grants refuse before Shapes and domain validation', () => {
+  const store = storeCapability(inert, {
+    ...costs,
+    watch: { fuel: 1_000_000 },
+    unwatch: { fuel: 1_000_000 },
+  });
+  const watched = store.operations.get('watch')!;
+  // A Standard Store has no scopes, so an embedding fixture adds one to
+  // reach disablement through real failed automatic abandonment.
+  const def = defineCapability<string>('scoped-watch', {
+    watch: watched,
+    unwatch: store.operations.get('unwatch')!,
+    open: {
+      mode: 'immediate',
+      args: [],
+      result: shape.nothing,
+      cost: { fuel: 0 },
+      scope: { opens: 'fixture', abandon: 'close' },
+      do: () => nothing,
+    },
+    close: {
+      mode: 'immediate',
+      args: [],
+      result: shape.nothing,
+      cost: { fuel: 0 },
+      scope: { closes: 'fixture' },
+      do: () => {
+        throw new Error('fixture abandonment failed');
+      },
+    },
+  });
+  const group = newGroup({ name: 'g' });
+  const script = group.load({
+    name: 's',
+    grants: { st: def.grant('all', 'scores') },
+    source: `on open
+ask st to open
+end open
+on invalid value
+ask st to watch value, "", "put"
+end invalid
+on remove value
+ask st to unwatch value
+end remove`,
+  });
+  script.deliver({ name: 'open' });
+  group.pump(now);
+  expect(group.inspect().scripts[0]!.disabledGrants).toEqual(['st']);
+  for (const revoke of [false, true]) {
+    if (revoke) {
+      script.revoke('st');
+    }
+    for (const [name, value] of [
+      ['invalid', text('')],
+      ['invalid', num(1)],
+      ['remove', text('')],
+    ] as const) {
+      script.deliver({ name, args: [value] });
+      expect(
+        operationalReports(group.pump(now).reports).find(
+          r => r.kind === 'run end',
+        )!.error?.code,
+      ).toBe('capability disabled');
+    }
+  }
+});
+
+test('watch/unwatch remain only as used and release is independent of declarations', () => {
+  const released: string[] = [];
+  const def = storeCapability(
+    {
+      ...inert,
+      release: c => {
+        released.push(`${c.grantName}:${c.reason}`);
+      },
+    },
+    costs,
+  );
+  const group = newGroup({ name: 'g' });
+  const script = group.load({
+    name: 's',
+    grantsAsUsed: true,
+    grants: {
+      st: def.grant('all', 'scores'),
+      remove: def.grant('all', 'scores'),
+      unused: def.grant('all', 'scores'),
+    },
+    source: `on go
+ask st to watch "w", ""
+end go
+function unused
+ask remove to unwatch "w"
+end unused`,
+  });
+  expect(script.grants()).toEqual({ st: ['watch'], remove: ['unwatch'] });
+  script.stop('test');
+  group.pump(now);
+  expect(released).toEqual(['remove:stop', 'st:stop']);
+});
+
+test('reference checker accepts watch and unwatch from the factory catalogue', () => {
+  const def = storeCapability(inert, costs);
+  const grants = {
+    st: Object.fromEntries(
+      [...def.operations].map(([name, op]) => [
+        name,
+        { mode: op.mode, args: op.args ?? [] },
+      ]),
+    ),
+  };
+  expect(
+    checkSource(
+      'on go\nask st to watch "w", ""\nask st to watch "w", "", nothing\nask st to unwatch "w"\nend go',
+      { grants },
+    ).ok,
+  ).toBe(true);
+  expect(
+    checkSource('on go\nask st to watch "w"\nend go', {
+      grants,
+    }).diagnostics.map(d => d.code),
+  ).toContain('wrong argument count');
+});
+
+test('a refused Store commit leaves its immediate watch registered', () => {
+  let refuse = true;
+  const stores = new Stores(
+    {
+      load: () => [],
+      save: () => {
+        if (refuse) {
+          throw new Error('commit refused');
+        }
+      },
+    },
+    sessionQuotas,
+  );
+  const group = newGroup({ name: 'g' });
+  const script = group.load({
+    name: 's',
+    grants: { st: storeCapability(stores, costs).grant('all', 'scores') },
+    source: `script variable seen = []
+on go
+ask st to watch "w", ""
+ask st to set "k", 1
+end go
+on storeChanged change, queued
+put the "keys" of change after seen
+end storeChanged`,
+  });
+  script.deliver({ name: 'go' });
+  expect(
+    operationalReports(group.pump(now).reports).find(r => r.kind === 'run end')!
+      .outcome,
+  ).toBe('effect failed');
+  expect(stores.entries('scores')).toEqual([]);
+  refuse = false;
+  stores.replace('scores', [['later', num(2)]]);
+  group.pump(now);
+  expect(
+    group
+      .inspect()
+      .scripts[0]!.vars.find(([k]) => k === 'seen')![1]
+      .toString(),
+  ).toBe('[["later"]]');
 });

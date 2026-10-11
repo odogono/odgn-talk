@@ -9,10 +9,24 @@ import (
 )
 
 type storeHost struct {
-	invoke func(string, *Call, []Value) (Value, error)
-	effect func(string, SegmentContext) EffectResult
+	release func(GrantContext)
+	invoke  func(string, *Call, []Value) (Value, error)
+	effect  func(string, SegmentContext) EffectResult
 }
 
+func (s *storeHost) Release(c GrantContext) {
+	if s.release != nil {
+		s.release(c)
+	}
+}
+func (s *storeHost) Watch(c *Call, name, prefix, message string) error {
+	_, err := s.invoke("watch", c, []Value{mustPublicText(name), mustPublicText(prefix), mustPublicText(message)})
+	return err
+}
+func (s *storeHost) Unwatch(c *Call, name string) error {
+	_, err := s.invoke("unwatch", c, []Value{mustPublicText(name)})
+	return err
+}
 func (s *storeHost) Begin(c SegmentContext) EffectResult    { return s.effect("begin", c) }
 func (s *storeHost) Commit(c SegmentContext) EffectResult   { return s.effect("commit", c) }
 func (s *storeHost) Rollback(c SegmentContext) EffectResult { return s.effect("rollback", c) }
@@ -39,7 +53,7 @@ func (s *storeHost) Swap(c *Call, k string, expected, replacement Value) (bool, 
 	return b, err
 }
 func storeCosts() Costs {
-	return Costs{"get": {}, "set": {}, "delete": {}, "keys": {}, "increment": {}, "swap": {}}
+	return Costs{"watch": {}, "unwatch": {}, "get": {}, "set": {}, "delete": {}, "keys": {}, "increment": {}, "swap": {}}
 }
 func inertStore() *storeHost {
 	return &storeHost{effect: func(string, SegmentContext) EffectResult { return EffectResult{Status: EffectOK} }, invoke: func(op string, _ *Call, _ []Value) (Value, error) {
@@ -165,7 +179,7 @@ func TestStoreFactoryCostsAndDeclarations(t *testing.T) {
 		t.Fatal("Costs were not copied")
 	}
 	for name, op := range def.ops {
-		writing := name != "get" && name != "keys"
+		writing := name == "set" || name == "delete" || name == "increment" || name == "swap"
 		if op.Mode != Immediate || op.SegmentBound != writing {
 			t.Fatalf("incorrect declaration %s", name)
 		}
@@ -289,5 +303,89 @@ func TestStoreValidatesHostResultsAndFailures(t *testing.T) {
 				t.Fatalf("got %q (%v), want %q", got, end.Error, test.want)
 			}
 		})
+	}
+}
+
+func TestStoreWatchEffectiveMessagesAndSuppliedTrace(t *testing.T) {
+	h := inertStore()
+	messages := []string{}
+	h.effect = func(string, SegmentContext) EffectResult { t.Fatal("watch enlisted"); return EffectResult{} }
+	h.invoke = func(op string, c *Call, a []Value) (Value, error) {
+		if op == "watch" {
+			message, _ := a[2].AsText()
+			messages = append(messages, message)
+		}
+		return Nothing, nil
+	}
+	end, trace := storeRun(t, "ask st to watch \"w\", \"\"\nask st to watch \"w\", \"score/\", nothing\nask st to watch \"w\", \"score/\", \"scoresChanged\"\nask st to unwatch \"w\"", h, storeCosts())
+	if end.Outcome != Completed || !reflect.DeepEqual(messages, []string{"storeChanged", "storeChanged", "scoresChanged"}) {
+		t.Fatal(end, messages)
+	}
+	lines := strings.Join(trace, "\n")
+	for _, want := range []string{`op=st.watch args=["w", ""] result=nothing`, `op=st.watch args=["w", "score/", nothing] result=nothing`, `op=st.watch args=["w", "score/", "scoresChanged"] result=nothing`, `op=st.unwatch args=["w"] result=nothing`} {
+		if !strings.Contains(lines, want) {
+			t.Fatal("missing supplied arguments", want, lines)
+		}
+	}
+}
+
+func TestStoreWatchValidationIsUnchargedAfterShapes(t *testing.T) {
+	h := inertStore()
+	h.invoke = func(string, *Call, []Value) (Value, error) {
+		t.Fatal("invalid watch reached Host")
+		return Nothing, nil
+	}
+	tests := []struct{ body, code, field string }{
+		{`ask st to watch "", "", "put"`, "invalid watch", "name"},
+		{`ask st to unwatch ""`, "invalid watch", "name"},
+		{"put 1 into bad\nask st to watch \"\", bad, \"put\"", "wrong kind", ""},
+		{"put 1 into bad\nask st to watch bad, \"\"", "wrong kind", ""},
+		{"put 1 into bad\nask st to watch \"w\", \"\", bad", "wrong kind", ""},
+		{"put nothing into bad\nask st to unwatch bad", "wrong kind", ""},
+	}
+	for _, message := range []string{"", "all", "_", "put", "move:", "to:at:", "9lives", " name", "a-b", "élan"} {
+		tests = append(tests, struct{ body, code, field string }{`ask st to watch "w", "", ` + mustPublicText(message).String(), "invalid watch", "message"})
+	}
+	for _, test := range tests {
+		plain, _ := storeRun(t, test.body, h, storeCosts())
+		costly := storeCosts()
+		costly["watch"] = Cost{Fuel: 1000000, Alloc: 1000000}
+		costly["unwatch"] = costly["watch"]
+		end, trace := storeRun(t, test.body, h, costly)
+		if end.Error == nil || end.Error.Code != test.code || end.Fuel != plain.Fuel || end.Alloc != plain.Alloc {
+			t.Fatalf("%s: %+v, plain %+v", test.body, end, plain)
+		}
+		if test.field != "" && end.Error.Data.Get("field").String() != mustPublicText(test.field).String() {
+			t.Fatal(end.Error)
+		}
+		if strings.Contains(strings.Join(trace, "\n"), "\ncall ") {
+			t.Fatal("invalid watch allocated a call", trace)
+		}
+	}
+}
+
+func TestStoreWatchReleaseAndKeptDeclarations(t *testing.T) {
+	core := New()
+	h := inertStore()
+	releases := []GrantContext{}
+	h.release = func(c GrantContext) { releases = append(releases, c) }
+	def, err := core.StoreCapability(h, storeCosts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := core.NewGroup(GroupOptions{})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\nask st to watch \"w\", \"\"\nend go\nfunction unused\nask remove to unwatch \"w\"\nend unused", GrantsAsUsed: true, Grants: map[string]*Grant{"st": def.GrantAll("scores"), "remove": def.GrantAll("scores"), "unused": def.GrantAll("scores")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.Grants(), map[string][]string{"st": {"watch"}, "remove": {"unwatch"}}) {
+		t.Fatal(s.Grants())
+	}
+	s.Stop("test")
+	if _, err := g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(releases) != 2 || releases[0].GrantName != "remove" || releases[1].GrantName != "st" || releases[0].Reason != ReleaseStop {
+		t.Fatal(releases)
 	}
 }

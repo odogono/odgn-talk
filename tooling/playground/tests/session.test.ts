@@ -583,3 +583,12 @@ test('a user prompt waits in the foreground, takes its answer and replays', () =
   }
   expect(opened.session.trace).toEqual(s.trace);
 });
+
+test('Playground accepts Store watching through the Session catalogue', () => {
+  const { env } = environment();
+  const s = new PlaygroundSession(env);
+  expect(s.input(':grant scores store')).toEqual([]);
+  expect(s.input('ask scores to watch "board", "score/"')).toEqual([]);
+  expect(s.input('ask scores to watch "board", "score/", nothing')).toEqual([]);
+  expect(s.input('ask scores to unwatch "board"')).toEqual([]);
+});

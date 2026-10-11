@@ -1,0 +1,38 @@
+# Unblessed: disabled watch Grants (#620); first blessing awaits human review.
+# Failed automatic abandonment disables st. Its watch and unwatch calls
+# must fail before Shapes, invalid names/messages, and unaffordable costs;
+# a later revocation does not change disabled-first precedence.
+> load s identity=54eb9569582d764e43c4a6a51043c3ab82585bbee90fe6d339f9a01f97c520b8
+> stub store.open value=nothing
+> stub store.close error={}
+> deliver d1 to=s message=open
+> pump clock=2026-10-11T12:00:00Z
+call s/r1.c1 op=st.open args=[] result=nothing
+scope s/r1.c1 grant=st name=fixture action=opened
+call s/r1.c2 op=st.close args=[] error={} automatic=yes
+scope s/r1.c2 grant=st name=fixture action=failed
+effect-failure s/r1 grant=st segment=s/r1.s1 phase=abandon status=unknown scope=fixture
+seg s/r1 start delivery=d1 handler=open clause=1 fuel=19 alloc=8 state=0 end=return
+run s/r1 outcome=completed delivery=d1 handler=open fuel=19 alloc=8
+pumped state=idle fuel=19
+> deliver d2 to=s message=invalid args=[""]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r2 code="capability disabled" at=s:10 pos=5:3
+seg s/r2 start delivery=d2 handler=invalid clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=invalid error={code: "capability disabled", capability: "st", operation: "watch", at: {unit: "s", handler: "invalid", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> deliver d3 to=s message=invalid args=[1]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r3 code="capability disabled" at=s:10 pos=5:3
+seg s/r3 start delivery=d3 handler=invalid clause=1 fuel=11 alloc=0 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=invalid error={code: "capability disabled", capability: "st", operation: "watch", at: {unit: "s", handler: "invalid", line: 5, column: 3}} fuel=11 alloc=0
+pumped state=idle fuel=11
+> revoke s grant=st
+> deliver d4 to=s message=remove args=[""]
+> pump clock=2026-10-11T12:00:00Z
+raise s/r4 code="capability disabled" at=s:16 pos=8:3
+seg s/r4 start delivery=d4 handler=remove clause=1 fuel=9 alloc=0 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=remove error={code: "capability disabled", capability: "st", operation: "unwatch", at: {unit: "s", handler: "remove", line: 8, column: 3}} fuel=9 alloc=0
+pumped state=idle fuel=9
+> vars
+vars s
