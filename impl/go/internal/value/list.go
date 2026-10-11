@@ -2,7 +2,6 @@ package value
 
 import (
 	"slices"
-	"sync"
 	"sync/atomic"
 )
 
@@ -10,14 +9,25 @@ const listChunkSize = 32
 
 // A List is a persistent AVL sequence of small chunks. Published chunks and
 // nodes are immutable, so updates and branched growth copy only a tree path.
+// Appends fill a shared tail chunk outside the tree: the first view to extend
+// a tail claims its next slot in place, and a later branch copies the tail.
+// The tree path is therefore copied once per chunk instead of once per append.
 // Legacy contiguous reads materialize once; machine point operations use
 // ListLen and ListAt without flattening the collection.
 type listView struct {
 	root        *tree[int, []Value]
 	first, last int
-	once        sync.Once
-	items       []Value
-	contents    atomic.Int64 // Logical contents size + 1; zero means unmeasured.
+	tail        *listTail
+	tailLen     int
+	items       atomic.Pointer[[]Value] // Materialized contiguous items.
+	contents    atomic.Int64            // Logical contents size + 1; zero means unmeasured.
+}
+
+// listTail slots below a view's tailLen never change; used is the number of
+// claimed slots, so only one view may write each slot.
+type listTail struct {
+	items [listChunkSize]Value
+	used  atomic.Int64
 }
 
 func NewList(vs []Value) Value {
@@ -27,19 +37,36 @@ func NewList(vs []Value) Value {
 		view.last++
 		view.root = treePut(view.root, view.last, chunk, len(chunk))
 	}
-	return Value{Kind: List, list: view}
+	return Value{Kind: List, data: view}
 }
+
+// sealed returns the view's tree with its tail stored as the last chunk.
+func (view *listView) sealed() (*tree[int, []Value], int, int) {
+	root, first, last := view.root, view.first, view.last
+	if view.tailLen > 0 {
+		last++
+		if root == nil {
+			first = last
+		}
+		root = treePut(root, last, view.tail.items[:view.tailLen:view.tailLen], view.tailLen)
+	}
+	return root, first, last
+}
+func (v Value) view() *listView { x, _ := v.data.(*listView); return x }
 func (v Value) ListLen() int {
-	if v.list != nil {
-		return treeTotal(v.list.root)
+	if view := v.view(); view != nil {
+		return treeTotal(view.root) + view.tailLen
 	}
 	return len(v.Items())
 }
 func (v Value) ListAt(i int) Value {
-	if v.list != nil {
-		n, at := treeAt(v.list.root, i)
+	if view := v.view(); view != nil {
+		n, at := treeAt(view.root, i)
 		if n != nil {
 			return n.val[at]
+		}
+		if i -= treeTotal(view.root); i >= 0 && i < view.tailLen {
+			return view.tail.items[i]
 		}
 		return Value{}
 	}
@@ -51,10 +78,14 @@ func (v Value) ListAt(i int) Value {
 
 // SetListItem replaces or deletes one existing item (zero-based).
 func (v Value) SetListItem(i int, part Value, deleting bool) Value {
-	if v.list == nil {
+	if v.view() == nil {
 		v = NewList(v.Items())
 	}
-	view := v.list
+	view := v.view()
+	if view.tailLen > 0 {
+		root, first, last := view.sealed()
+		view = &listView{root: root, first: first, last: last}
+	}
 	n, at := treeAt(view.root, i)
 	chunk := slices.Clone(n.val)
 	if deleting {
@@ -75,76 +106,103 @@ func (v Value) SetListItem(i int, part Value, deleting bool) Value {
 	if last, _ := treeAt(root, treeTotal(root)-1); last != nil {
 		next.last = last.key
 	}
-	return Value{Kind: List, CoreMessage: v.CoreMessage, list: next}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: next}
 }
 func (v Value) ExtendList(vs []Value, prepend bool) Value {
 	if len(vs) == 0 {
 		return v
 	}
-	if v.list == nil {
+	if v.view() == nil {
 		v = NewList(v.Items())
 	}
-	view := v.list
-	root, first, last := view.root, view.first, view.last
-	done := 0
-	position := treeTotal(root) - 1
-	if prepend {
-		position = 0
+	if !prepend {
+		return v.appendList(vs)
 	}
-	if edge, _ := treeAt(root, position); edge != nil && edge.span < listChunkSize {
+	root, first, last := v.view().sealed()
+	done := 0
+	if edge, _ := treeAt(root, 0); edge != nil && edge.span < listChunkSize {
 		n := min(len(vs), listChunkSize-edge.span)
 		chunk := make([]Value, 0, edge.span+n)
-		if prepend {
-			chunk = append(chunk, vs[len(vs)-n:]...)
-			chunk = append(chunk, edge.val...)
-		} else {
-			chunk = append(chunk, edge.val...)
-			chunk = append(chunk, vs[:n]...)
-		}
+		chunk = append(chunk, vs[len(vs)-n:]...)
+		chunk = append(chunk, edge.val...)
 		root = treePut(root, edge.key, chunk, len(chunk))
 		done = n
 	}
 	for done < len(vs) {
 		n := min(listChunkSize, len(vs)-done)
-		start := done
-		if prepend {
-			start = len(vs) - done - n
-		}
-		chunk := slices.Clone(vs[start : start+n])
+		start := len(vs) - done - n
 		key := 0
 		if root != nil {
-			if prepend {
-				key = first - 1
-			} else {
-				key = last + 1
-			}
+			key = first - 1
 		}
-		root = treePut(root, key, chunk, n)
-		if prepend || treeTotal(root) == n {
-			first = key
-		}
-		if !prepend || treeTotal(root) == n {
+		root = treePut(root, key, slices.Clone(vs[start:start+n]), n)
+		first = key
+		if treeTotal(root) == n {
 			last = key
 		}
 		done += n
 	}
-	return Value{Kind: List, CoreMessage: v.CoreMessage, list: &listView{root: root, first: first, last: last}}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: &listView{root: root, first: first, last: last}}
+}
+
+func (v Value) appendList(vs []Value) Value {
+	view := v.view()
+	root, first, last, tail, n := view.root, view.first, view.last, view.tail, view.tailLen
+	if tail == nil {
+		// Reopen a partial last chunk so alternating ends keep chunks full.
+		tail = &listTail{}
+		if edge, _ := treeAt(root, treeTotal(root)-1); edge != nil && edge.span < listChunkSize {
+			n = copy(tail.items[:], edge.val)
+			root, last = treeRemove(root, edge.key), edge.key-1
+		}
+		tail.used.Store(int64(n))
+	}
+	for _, item := range vs {
+		if n == listChunkSize {
+			last++
+			if root == nil {
+				first = last
+			}
+			root = treePut(root, last, tail.items[:], n)
+			tail, n = &listTail{}, 0
+		} else if !tail.used.CompareAndSwap(int64(n), int64(n+1)) {
+			// Another branch claimed this slot; copy the shared prefix.
+			branch := &listTail{}
+			copy(branch.items[:], tail.items[:n])
+			branch.used.Store(int64(n + 1))
+			tail = branch
+		} else {
+			tail.items[n] = item
+			n++
+			continue
+		}
+		if n == 0 {
+			tail.used.Store(1)
+		}
+		tail.items[n] = item
+		n++
+	}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: &listView{root: root, first: first, last: last, tail: tail, tailLen: n}}
 }
 
 // ListContents counts every logical child, even when chunks are shared.
 func (v Value) ListContents(size func(Value) int64) int64 {
-	if v.list != nil {
-		if cached := v.list.contents.Load(); cached != 0 {
+	view := v.view()
+	if view != nil {
+		if cached := view.contents.Load(); cached != 0 {
 			return cached - 1
 		}
 	}
 	var total int64
-	if v.list != nil {
-		treeWalk(v.list.root, func(chunk []Value) {
+	if view != nil {
+		treeWalk(view.root, func(chunk []Value) {
 			for _, item := range chunk {
 				total += size(item)
 			}
 		})
+		for _, item := range view.tail.prefix(view.tailLen) {
+			total += size(item)
+		}
 	} else {
 		for _, item := range v.Items() {
 			total += size(item)
@@ -154,7 +212,14 @@ func (v Value) ListContents(size func(Value) int64) int64 {
 	return total
 }
 func (v Value) CacheListContents(contents int64) {
-	if v.list != nil {
-		v.list.contents.Store(contents + 1)
+	if view := v.view(); view != nil {
+		view.contents.Store(contents + 1)
 	}
+}
+
+func (tail *listTail) prefix(n int) []Value {
+	if tail == nil {
+		return nil
+	}
+	return tail.items[:n]
 }

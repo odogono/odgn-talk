@@ -105,7 +105,6 @@ type Value struct {
 	Kind        Kind
 	CoreMessage bool
 	Bool        bool
-	list        *listView
 	data        any
 }
 
@@ -199,12 +198,18 @@ func (v Value) WithNumber(n decimal.Number) Value {
 	return v
 }
 func (v Value) Items() []Value {
-	if v.list != nil {
-		v.list.once.Do(func() {
-			v.list.items = make([]Value, 0, treeTotal(v.list.root))
-			treeWalk(v.list.root, func(chunk []Value) { v.list.items = append(v.list.items, chunk...) })
-		})
-		return v.list.items
+	if view := v.view(); view != nil {
+		if items := view.items.Load(); items != nil {
+			return *items
+		}
+		items := make([]Value, 0, v.ListLen())
+		treeWalk(view.root, func(chunk []Value) { items = append(items, chunk...) })
+		items = append(items, view.tail.prefix(view.tailLen)...)
+		// Concurrent first reads may build equal copies; keep the published one.
+		if !view.items.CompareAndSwap(nil, &items) {
+			return *view.items.Load()
+		}
+		return items
 	}
 	x, _ := v.data.([]Value)
 	return x
@@ -212,7 +217,6 @@ func (v Value) Items() []Value {
 func (v Value) WithItems(x []Value) Value {
 	if v.Kind == List || v.Kind == Range {
 		v.data = x
-		v.list = nil
 	}
 	return v
 }
