@@ -37,7 +37,7 @@ func NewList(vs []Value) Value {
 		view.last++
 		view.root = treePut(view.root, view.last, chunk, len(chunk))
 	}
-	return Value{Kind: List, list: view}
+	return Value{Kind: List, data: view}
 }
 
 // sealed returns the view's tree with its tail stored as the last chunk.
@@ -52,20 +52,21 @@ func (view *listView) sealed() (*tree[int, []Value], int, int) {
 	}
 	return root, first, last
 }
+func (v Value) view() *listView { x, _ := v.data.(*listView); return x }
 func (v Value) ListLen() int {
-	if v.list != nil {
-		return treeTotal(v.list.root) + v.list.tailLen
+	if view := v.view(); view != nil {
+		return treeTotal(view.root) + view.tailLen
 	}
 	return len(v.Items())
 }
 func (v Value) ListAt(i int) Value {
-	if v.list != nil {
-		n, at := treeAt(v.list.root, i)
+	if view := v.view(); view != nil {
+		n, at := treeAt(view.root, i)
 		if n != nil {
 			return n.val[at]
 		}
-		if i -= treeTotal(v.list.root); i >= 0 && i < v.list.tailLen {
-			return v.list.tail.items[i]
+		if i -= treeTotal(view.root); i >= 0 && i < view.tailLen {
+			return view.tail.items[i]
 		}
 		return Value{}
 	}
@@ -77,10 +78,10 @@ func (v Value) ListAt(i int) Value {
 
 // SetListItem replaces or deletes one existing item (zero-based).
 func (v Value) SetListItem(i int, part Value, deleting bool) Value {
-	if v.list == nil {
+	if v.view() == nil {
 		v = NewList(v.Items())
 	}
-	view := v.list
+	view := v.view()
 	if view.tailLen > 0 {
 		root, first, last := view.sealed()
 		view = &listView{root: root, first: first, last: last}
@@ -105,19 +106,19 @@ func (v Value) SetListItem(i int, part Value, deleting bool) Value {
 	if last, _ := treeAt(root, treeTotal(root)-1); last != nil {
 		next.last = last.key
 	}
-	return Value{Kind: List, CoreMessage: v.CoreMessage, list: next}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: next}
 }
 func (v Value) ExtendList(vs []Value, prepend bool) Value {
 	if len(vs) == 0 {
 		return v
 	}
-	if v.list == nil {
+	if v.view() == nil {
 		v = NewList(v.Items())
 	}
 	if !prepend {
 		return v.appendList(vs)
 	}
-	root, first, last := v.list.sealed()
+	root, first, last := v.view().sealed()
 	done := 0
 	if edge, _ := treeAt(root, 0); edge != nil && edge.span < listChunkSize {
 		n := min(len(vs), listChunkSize-edge.span)
@@ -141,11 +142,11 @@ func (v Value) ExtendList(vs []Value, prepend bool) Value {
 		}
 		done += n
 	}
-	return Value{Kind: List, CoreMessage: v.CoreMessage, list: &listView{root: root, first: first, last: last}}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: &listView{root: root, first: first, last: last}}
 }
 
 func (v Value) appendList(vs []Value) Value {
-	view := v.list
+	view := v.view()
 	root, first, last, tail, n := view.root, view.first, view.last, view.tail, view.tailLen
 	if tail == nil {
 		// Reopen a partial last chunk so alternating ends keep chunks full.
@@ -181,24 +182,25 @@ func (v Value) appendList(vs []Value) Value {
 		tail.items[n] = item
 		n++
 	}
-	return Value{Kind: List, CoreMessage: v.CoreMessage, list: &listView{root: root, first: first, last: last, tail: tail, tailLen: n}}
+	return Value{Kind: List, CoreMessage: v.CoreMessage, data: &listView{root: root, first: first, last: last, tail: tail, tailLen: n}}
 }
 
 // ListContents counts every logical child, even when chunks are shared.
 func (v Value) ListContents(size func(Value) int64) int64 {
-	if v.list != nil {
-		if cached := v.list.contents.Load(); cached != 0 {
+	view := v.view()
+	if view != nil {
+		if cached := view.contents.Load(); cached != 0 {
 			return cached - 1
 		}
 	}
 	var total int64
-	if v.list != nil {
-		treeWalk(v.list.root, func(chunk []Value) {
+	if view != nil {
+		treeWalk(view.root, func(chunk []Value) {
 			for _, item := range chunk {
 				total += size(item)
 			}
 		})
-		for _, item := range v.list.tail.prefix(v.list.tailLen) {
+		for _, item := range view.tail.prefix(view.tailLen) {
 			total += size(item)
 		}
 	} else {
@@ -210,8 +212,8 @@ func (v Value) ListContents(size func(Value) int64) int64 {
 	return total
 }
 func (v Value) CacheListContents(contents int64) {
-	if v.list != nil {
-		v.list.contents.Store(contents + 1)
+	if view := v.view(); view != nil {
+		view.contents.Store(contents + 1)
 	}
 }
 
