@@ -292,6 +292,18 @@ export type CoordinatedLifecycle<B> = {
   coordinator(binding: B): SegmentCoordinator;
 };
 
+export type ReleaseReason = 'stop' | 'reload' | 'revoke' | 'disable';
+export type GrantContext<B> = {
+  readonly binding: B;
+  readonly grantName: string;
+  readonly group: Group;
+  readonly now: bigint;
+  readonly reason: ReleaseReason;
+  readonly scriptName: string;
+};
+/** Synchronous, unmetered and infallible; called once the named Grant stops being effective. */
+export type ReleaseHook<B> = (context: GrantContext<B>) => void;
+
 export type Cost = { alloc?: number; fuel: number };
 export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
 type OpBase = {
@@ -352,6 +364,8 @@ export type CapabilityDef<B> = {
   readonly name: string;
   /** Its Operations, ordered by name. */
   readonly operations: ReadonlyMap<string, Operation<B>>;
+  /** Method syntax keeps CapabilityDef<B> assignable to CapabilityDef<unknown>. */
+  release?(context: GrantContext<B>): void;
 };
 export type Grant<B> = {
   readonly binding: B;
@@ -377,6 +391,7 @@ export const defineCapability = <B = void>(
   name: string,
   ops: Record<string, Operation<B>>,
   lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
+  release?: ReleaseHook<B>,
 ): CapabilityDef<B> => {
   for (const op of Object.keys(ops)) {
     if (refusedNames.has(op)) {
@@ -394,6 +409,9 @@ export const defineCapability = <B = void>(
     invalidValue(
       'A participant requires synchronous begin, commit and rollback hooks',
     );
+  }
+  if (release !== undefined && typeof release !== 'function') {
+    invalidValue('A release hook must be a function');
   }
   const hooks = coordinated ? undefined : (lifecycle as SegmentLifecycle<B>);
   const scopes = new Map<string, string>();
@@ -510,6 +528,7 @@ export const defineCapability = <B = void>(
           coordinator: (binding: B) => coordinated.coordinator(binding),
         }
       : {}),
+    ...(release ? { release } : {}),
     grant: (granted, binding) => {
       const names = granted === 'all' ? [...operations.keys()] : granted;
       for (const op of names) {

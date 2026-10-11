@@ -223,6 +223,18 @@ export interface CoordinatedLifecycle<B> {
   coordinator(binding: B): SegmentCoordinator;
 }
 
+export type ReleaseReason = "stop" | "reload" | "revoke" | "disable";
+export interface GrantContext<B> {
+  readonly group: Group;
+  readonly scriptName: string;
+  readonly grantName: string;
+  readonly binding: B;
+  readonly now: bigint; // the Group's last Clock reading
+  readonly reason: ReleaseReason;
+}
+/** Synchronous, unmetered and infallible; called once the named Grant stops being effective. */
+export type ReleaseHook<B> = (context: GrantContext<B>) => void;
+
 export interface ImmediateOp<B> extends OpBase {
   mode: "immediate";
   scope?: ScopeDecl;
@@ -488,8 +500,8 @@ export interface Library {
 
 /** Process-wide: the compile cache, and Capability and Object Kind definitions. */
 export interface Core {
-  /** A plain lifecycle makes each Grant its own coordinator. */
-  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>): CapabilityDef<B>;
+  /** A plain lifecycle makes each Grant its own coordinator. Segment lifecycle and release are independent. */
+  defineCapability<B = void>(name: string, ops: Record<string, Operation<B>>, lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>, release?: ReleaseHook<B>): CapabilityDef<B>;
   defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
   clockCapability(costs: Costs): CapabilityDef<void>;
   calendarCapability(impl: CalendarImpl, costs: Costs): CapabilityDef<string>; // binding: default zone

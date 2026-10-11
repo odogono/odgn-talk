@@ -54,7 +54,12 @@ import {
   type Suspension,
   type Script as Loaded,
 } from './machine';
-import { type Grant, type Call, type Operation } from './capabilities';
+import {
+  type Grant,
+  type Call,
+  type Operation,
+  type ReleaseReason,
+} from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData } from './manifest';
 import {
@@ -1667,8 +1672,9 @@ export class Group {
         break;
       case 'revoke': {
         const s = this.scripts.find(s => s.name === action.name)!;
-        if (s.grants.has(action.grant)) {
+        if (s.grants.has(action.grant) && !s.revoked.has(action.grant)) {
           s.revoked.add(action.grant);
+          this.release(s, [action.grant], 'revoke');
         }
         break;
       }
@@ -1893,7 +1899,16 @@ export class Group {
       this.forgetWait(s, r);
     }
     s.queue = keepMailbox ? mailbox : [];
-    if (!this.effectStateUnknown && runs.some(r => r.run.effectStateUnknown)) {
+    const unknown = runs.some(r => r.run.effectStateUnknown);
+    this.release(
+      s,
+      [...s.grants.keys()].sort(compareText),
+      // A Reload whose cleanup leaves effects unknown doesn't succeed.
+      reason === 'reload' && !unknown && !this.effectStateUnknown
+        ? 'reload'
+        : 'stop',
+    );
+    if (!this.effectStateUnknown && unknown) {
       s.stopReason = 'effect state unknown';
       this.stopUnknownEffects(s, () =>
         this.reportStop(
@@ -2088,6 +2103,39 @@ export class Group {
   private worker() {
     if (this.pumping || this.cleaning) {
       throw new HostError('reentrant call');
+    }
+  }
+
+  // Release hooks are Host work like lifecycle hooks: worker calls from them
+  // are reentrant, and what they throw is ignored.
+  private release(
+    s: ScriptState,
+    names: readonly string[],
+    reason: ReleaseReason,
+  ) {
+    const cleaning = this.cleaning;
+    this.cleaning = true;
+    try {
+      for (const grantName of names) {
+        const grant = s.grants.get(grantName);
+        if (!grant?.capability.release) {
+          continue;
+        }
+        try {
+          grant.capability.release({
+            group: this,
+            scriptName: s.name,
+            grantName,
+            binding: grant.binding,
+            now: this.lastClock ?? 0n,
+            reason,
+          });
+        } catch {
+          // Releasing can't be refused.
+        }
+      }
+    } finally {
+      this.cleaning = cleaning;
     }
   }
 
@@ -2754,7 +2802,12 @@ export class Group {
         );
       },
       group,
-      disableGrant: name => s.disabled.add(name),
+      disableGrant: name => {
+        const disabled = !s.disabled.has(name);
+        s.disabled.add(name);
+        return disabled;
+      },
+      release: (name, reason) => this.release(s, [name], reason),
       isDisabled: name => s.disabled.has(name),
       grants: s.grants,
       isUnbound: name => s.unbound.has(name),

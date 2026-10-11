@@ -741,7 +741,8 @@ export type RunHost = {
   callValue(fn: Value, args: Value[], reply: string): string;
   /** Land Stop and CancelRun after the crossing record, before conversion. */
   crossing?(): boolean;
-  disableGrant(name: string): void;
+  /** True when the Grant wasn't already disabled. */
+  disableGrant(name: string): boolean;
   expose?(tree: unknown): void;
   /**
    * Queues its failure, as `fail`; null fails with what isn't a Script error,
@@ -760,6 +761,8 @@ export type RunHost = {
   readonly now: bigint;
   /** The well-known Host Object the Host bound to a name at load. */
   object(name: string): Value | undefined;
+  /** Calls the Grant's release hook, if its Capability has one. */
+  release(name: string, reason: 'disable'): void;
   /**
    * Puts a message in the mailbox of a Script, or of an object's nearest
    * Owning Script, or throws ScriptError `mailbox full`; `reply` is the call
@@ -1186,7 +1189,7 @@ export class Run {
           },
         );
       } catch (error) {
-        this.host!.disableGrant(scope.grantName);
+        const disabled = this.host!.disableGrant(scope.grantName);
         let failed = map([]);
         let status: 'failed' | 'unknown' = 'unknown';
         if (!contractFailure && error instanceof HostScriptError) {
@@ -1236,6 +1239,9 @@ export class Run {
             detail: hostDetail(error),
           },
         );
+        if (disabled) {
+          this.host!.release(scope.grantName, 'disable');
+        }
         if (this.enrolled(scope.grantName)) {
           this.participantAbandonment ??= {
             script: this.script.name,
