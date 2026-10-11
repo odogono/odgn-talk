@@ -328,3 +328,37 @@ func TestGrantReleaseUsesTrimmedGrants(t *testing.T) {
 	releasePump(t, g)
 	releaseEvents(t, names, []string{"api"})
 }
+
+func TestScriptNamesInLoadOrderInsideAPump(t *testing.T) {
+	c := New()
+	var lines, during, released []string
+	d, err := c.DefineCapability("probe", Operation{Name: "look", Mode: Immediate, Result: NothingShape, Do: func(call *Call, _ []Value) (Value, error) {
+		during = call.Group().ScriptNames()
+		return Nothing, nil
+	}}, WithReleaseHook(func(ctx GrantContext) { released = ctx.Group.ScriptNames() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c.NewGroup(GroupOptions{Name: "g", Trace: traceFunc(func(line string) { lines = append(lines, line) })})
+	z := releaseLoad(t, g, "z", "on go\n  ask probe to look\nend go\n", map[string]*Grant{"probe": d.GrantAll(nil)})
+	releaseLoad(t, g, "a", "on go\nend go\n", nil)
+	before := len(lines)
+	if got := g.ScriptNames(); !reflect.DeepEqual(got, []string{"z", "a"}) {
+		t.Fatal(got)
+	}
+	if len(lines) != before {
+		t.Fatalf("ScriptNames recorded %v", lines[before:])
+	}
+	if _, err := z.Deliver(Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	releasePump(t, g)
+	if !reflect.DeepEqual(during, []string{"z", "a"}) {
+		t.Fatal(during)
+	}
+	z.Stop("done")
+	releasePump(t, g)
+	if !reflect.DeepEqual(released, []string{"z", "a"}) {
+		t.Fatal(released)
+	}
+}

@@ -79,6 +79,7 @@ const (
 	StateTooLarge      HostErrorCode = "state too large"
 	EffectsPending     HostErrorCode = "effects pending"
 	EffectStateUnknown HostErrorCode = "effect state unknown"
+	InvalidCheckpoint  HostErrorCode = "invalid checkpoint"
 )
 
 // ErrMailboxFull is load shedding, not a bug: the Host decides whether to
@@ -401,6 +402,9 @@ func (d *CapabilityDef) Name() string
 // binds it to one Script under the name the Script uses.
 type Grant struct { /* opaque */
 }
+
+func (g *Grant) Capability() *CapabilityDef // the definition it was made from
+func (g *Grant) Binding() any
 
 func (d *CapabilityDef) Grant(ops []string, binding any) (*Grant, error) // an unknown Operation is refused
 func (d *CapabilityDef) GrantAll(binding any) *Grant
@@ -774,6 +778,9 @@ type Group struct { /* opaque */
 
 func (g *Group) Name() string
 func (g *Group) Script(name string) *Script // nil if none
+// ScriptNames may be called at any time, inside a Pump too. It gives the
+// Scripts' names in load order, and is neither a Host Input nor traced.
+func (g *Group) ScriptNames() []string
 
 type LoadOptions struct {
 	Name   string

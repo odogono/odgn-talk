@@ -113,3 +113,8 @@ jobs:
         working-directory: impl/ts
         env:
           NORTHTALK_SQLITE_RUNTIMES: node,deno
+      # The notification router must pass the router kit under each runtime too.
+      - run: bun test tests/notify-runtimes.test.ts
+        working-directory: impl/ts
+        env:
+          NORTHTALK_NOTIFY_RUNTIMES: node,deno

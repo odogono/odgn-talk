@@ -1,0 +1,171 @@
+# Which commits route, to which watches, in which order, with what payload.
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b"] }
+
+[[sequence]]
+name = "a changed value routes once, with sorted unique keys"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "b", 1], ["set", "a", 1], ["set", "b", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["a", "b"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a commit that changes no value routes nothing"
+steps = [
+  { do = "commit", ops = '[["set", "k", 1], ["set", "n", {x: [1, "y"]}]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["delete", "missing"]]' },
+  { do = "commit", ops = '[["set", "missing", nothing]]' },
+  { do = "commit", ops = '[["set", "k", 2], ["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "fresh", 1], ["delete", "fresh"]]' },
+  { do = "commit", ops = '[["increment", "k", 0]]' },
+  { do = "commit", ops = '[["set", "n", {x: [1, "y"]}]]' },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a deleted key is a changed key"
+steps = [
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["delete", "k"]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", nothing]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a prefix matches keys it begins, by code points"
+steps = [
+  { do = "watch", args = '["all", "", "storeChanged"]' },
+  { do = "watch", args = '["exact", "score/alex", "storeChanged"]' },
+  { do = "watch", args = '["none", "other/", "storeChanged"]' },
+  { do = "watch", args = '["scores", "score/", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "score/alex", 1], ["set", "score/alexa", 1], ["set", "board", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "all", prefix: "", keys: ["board", "score/alex", "score/alexa"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "exact", prefix: "score/alex", keys: ["score/alex", "score/alexa"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "scores", prefix: "score/", keys: ["score/alex", "score/alexa"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "other", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "all", prefix: "", keys: ["other"], resync: false}' },
+  ] },
+]
+
+# Text is NFC, so a decomposed "é" is the one code point U+00E9, which
+# doesn't begin with "e".
+[[sequence]]
+name = "prefixes compare NFC text by code points"
+steps = [
+  { do = "watch", args = "[\"accented\", \"é\", \"storeChanged\"]" },
+  { do = "watch", args = '["plain", "e", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "été", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "accented", prefix: "é", keys: ["été"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "eta", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "plain", prefix: "e", keys: ["eta"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a commit spanning two watches routes one Notification to each"
+steps = [
+  { do = "watch", script = "a", args = '["x", "x/", "xChanged"]' },
+  { do = "watch", script = "b", args = '["y", "y/", "yChanged"]' },
+  { do = "commit", ops = '[["set", "y/1", 1], ["set", "x/2", 1], ["set", "x/1", 1], ["set", "z", 1]]', deliveries = [
+    { script = "a", message = "xChanged", payload = '{grant: "store", watch: "x", prefix: "x/", keys: ["x/1", "x/2"], resync: false}' },
+    { script = "b", message = "yChanged", payload = '{grant: "store", watch: "y", prefix: "y/", keys: ["y/1"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "only the committed Store's watches match"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", store = "other", args = '["w", "", "storeChanged"]' },
+  { do = "commit", store = "other", ops = '[["set", "k", 1]]', deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "the writing Script's own watch receives its commit"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "write", in = "a/r1", script = "a", ops = '[["set", "k", 1]]' },
+  { do = "commit", in = "a/r1", script = "a", deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "watches are ordered by Group, then Script load order, Grant name and watch name"
+groups = { g = ["a", "b"], h = ["c"] }
+steps = [
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "a", args = '["v", "", "storeChanged"]' },
+  { do = "watch", script = "a", grant = "alias", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "alias", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "v", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+# A Group's place is where it first registered a watch while it held none.
+[[sequence]]
+name = "a replaced watch keeps its place, and one removed and registered again moves"
+groups = { g = ["a"], h = ["c"] }
+steps = [
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "watch", group = "h", script = "c", args = '["w", "k", "kChanged"]' },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { group = "h", script = "c", message = "kChanged", payload = '{grant: "store", watch: "w", prefix: "k", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "unwatch", group = "h", script = "c", args = '["w"]' },
+  { do = "watch", group = "h", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "k", 3]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { group = "h", script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a commit before watch isn't routed to it, and a commit after is"
+steps = [
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "commit", ops = '[["set", "j", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a Segment's own pending write, committed after its watch, is routed"
+steps = [
+  { do = "write", in = "a/r1", ops = '[["set", "k", 1]]' },
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "write", in = "a/r1", ops = '[["set", "j", 1]]' },
+  { do = "commit", in = "a/r1", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j", "k"], resync: false}' },
+  ] },
+]

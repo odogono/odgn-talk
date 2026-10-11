@@ -129,6 +129,12 @@ type Grant struct {
 }
 
 func (d *CapabilityDef) Name() string { return d.name }
+
+// Capability returns the definition the Grant was made from.
+func (g *Grant) Capability() *CapabilityDef { return g.definition }
+
+// Binding returns the Host value the Grant was bound to.
+func (g *Grant) Binding() any { return g.binding }
 func (c *Core) DefineCapability(name string, options ...CapabilityOption) (*CapabilityDef, error) {
 	ops, release, err := capabilityOptions(options)
 	if err != nil {

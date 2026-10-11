@@ -165,6 +165,20 @@ func (c *Core) NewGroup(o GroupOptions) *Group {
 }
 func (g *Group) Name() string               { return g.options.Name }
 func (g *Group) Script(name string) *Script { g.mu.Lock(); defer g.mu.Unlock(); return g.script(name) }
+
+// ScriptNames returns the Group's Scripts' names in load order. It is Host
+// inspection, not a worker call, so it records nothing in the Trace and may be
+// called at any time, including from an Operation or hook inside a Pump: the
+// Core never holds the Group's lock while Host code runs.
+func (g *Group) ScriptNames() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	names := make([]string, len(g.scripts))
+	for i, s := range g.scripts {
+		names[i] = s.name
+	}
+	return names
+}
 func (g *Group) script(name string) *Script {
 	for _, s := range g.scripts {
 		if s.name == name {

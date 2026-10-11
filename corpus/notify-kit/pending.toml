@@ -1,0 +1,251 @@
+# Admission, pending work, overload, resyncing and retrying after a Pump.
+#
+# Payload sizes, for the pendingSize limits: a map is 16 + 8 per entry, plus
+# its keys and values, and text is 16 + its UTF-8 bytes (chapter 8). So a
+# marker for Grant "store", watch "w" and prefix "" is 240, and an ordinary
+# Notification adds 24 + the key's bytes for each key: 265 for ["k"].
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 1048576 }
+groups = { g = ["a", "b", "c"] }
+
+[[sequence]]
+name = "a refused Notification is held, later commits queue behind it, and retry admits them in order"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "pumped", group = "g", pending = true },
+  { do = "mailbox" },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 3]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a retry stops at a watch's first refusal and keeps the rest in order"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "commit", ops = '[["set", "i", 1]]' },
+  { do = "mailbox", room = 1 },
+  { do = "pumped", group = "g", pending = true, deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "mailbox", room = 1 },
+  { do = "pumped", group = "g", pending = true, deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+  ] },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["i"], resync: false}' },
+  ] },
+]
+
+# Two watches reserve 2 of pending's 4, leaving room for two held Notifications.
+[[sequence]]
+name = "exceeding pending turns only the overloaded watch resyncing"
+limits = { watches = 100, watchSize = 65536, pending = 4, pendingSize = 1048576 }
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "b", room = 1 },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "j", 1]]', deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["j"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 3]]', deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "pumped", group = "g", pending = true },
+  { do = "mailbox", script = "b" },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 4]]', deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+# One marker reserved (240) and one held Notification for ["k"] (265) fit in
+# 505; a second held Notification for ["j"] (265) doesn't.
+[[sequence]]
+name = "exceeding pendingSize turns the watch resyncing"
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 505 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+]
+
+[[sequence]]
+name = "a held Notification that fits pendingSize stays ordinary"
+limits = { watches = 100, watchSize = 65536, pending = 1000, pendingSize = 505 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a resyncing watch adds nothing for later commits, and its marker returns it to ordinary"
+limits = { watches = 100, watchSize = 65536, pending = 2, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "commit", ops = '[["set", "i", 1]]' },
+  { do = "commit", ops = '[["delete", "k"]]' },
+  { do = "pumped", group = "g", pending = true },
+  { do = "mailbox" },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+  { do = "pumped", group = "g" },
+  { do = "commit", ops = '[["set", "h", 1]]', deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["h"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a resyncing watch whose marker is refused stays resyncing"
+limits = { watches = 100, watchSize = 65536, pending = 1, pendingSize = 1048576 }
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "pumped", group = "g", pending = true },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "pumped", group = "g", pending = true },
+  { do = "mailbox", room = 1 },
+  { do = "pumped", group = "g", deliveries = [
+    { message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: [], resync: true}' },
+  ] },
+]
+
+[[sequence]]
+name = "retry rounds rotate their starting watch"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "mailbox", script = "b", room = 0 },
+  { do = "mailbox", script = "c", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "mailbox", script = "a", room = 1 },
+  { do = "mailbox", script = "b", room = 1 },
+  { do = "mailbox", script = "c", room = 1 },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+  { do = "mailbox", script = "a", room = 1 },
+  { do = "mailbox", script = "b", room = 1 },
+  { do = "mailbox", script = "c", room = 1 },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "commit", ops = '[["set", "k", 3]]' },
+  { do = "mailbox", script = "a", room = 1 },
+  { do = "mailbox", script = "b", room = 1 },
+  { do = "mailbox", script = "c", room = 1 },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+# After a round started at a, the next starts at the first watch with pending
+# work after a, here c.
+[[sequence]]
+name = "a round starts after the previous round's start, skipping watches with no pending work"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "c", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "mailbox", script = "c", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "pumped", group = "g", pending = true },
+  { do = "mailbox", script = "a" },
+  { do = "mailbox", script = "c" },
+  { do = "pumped", group = "g", deliveries = [
+    { script = "c", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+    { script = "a", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "one watch's refusal doesn't stop another's admission"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", room = 0 },
+  { do = "mailbox", script = "b", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "mailbox", script = "b" },
+  { do = "pumped", group = "g", pending = true, deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a refusal other than MailboxFull removes the watch"
+steps = [
+  { do = "watch", script = "a", args = '["w", "", "storeChanged"]' },
+  { do = "watch", script = "b", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", script = "a", gone = true },
+  { do = "commit", ops = '[["set", "k", 1]]', deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+  { do = "mailbox", script = "a" },
+  { do = "commit", ops = '[["set", "k", 2]]', deliveries = [
+    { script = "b", message = "storeChanged", payload = '{grant: "store", watch: "w", prefix: "", keys: ["k"], resync: false}' },
+  ] },
+]
+
+[[sequence]]
+name = "a refusal other than MailboxFull on retry removes the watch and its pending work"
+steps = [
+  { do = "watch", args = '["w", "", "storeChanged"]' },
+  { do = "mailbox", room = 0 },
+  { do = "commit", ops = '[["set", "k", 1]]' },
+  { do = "commit", ops = '[["set", "j", 1]]' },
+  { do = "mailbox", gone = true },
+  { do = "pumped", group = "g" },
+  { do = "mailbox" },
+  { do = "pumped", group = "g" },
+  { do = "commit", ops = '[["set", "k", 2]]' },
+]

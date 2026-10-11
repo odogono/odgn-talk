@@ -687,8 +687,33 @@ Hooks are synchronous and unmetered, with no Trace record or Fingerprint field.
 They may queue Host Inputs; worker calls are `reentrant call`, and panics cannot
 refuse release. `grant_release_test.go` verifies lifecycle ordering and identity.
 The TS Core supports the same embedding hook; it has no Message Layer adapter,
-so its transport tests are deferred. Store watches, routers and checkpoints
-remain deferred.
+so its transport tests are deferred. Store `watch`/`unwatch` remain deferred;
+see the router below.
+
+### The notification router
+
+Package [`notify`](notify/) supplies `notify.New(RouterOptions{Limits, Revision})`,
+the staged [notification router](../../spec/proposals/store-notifications.md#the-router)
+([#619](https://github.com/odogono/odgn-talk/issues/619)). `Watch`, `Unwatch`
+and `Release` register and remove watches by owner (Group, Script, named Grant)
+and name. `Commit(store, apply)` applies a commit under the Store's mutex and
+routes its changed keys as ordinary `Script.Deliver` Deliveries; an error from
+`apply` routes nothing. What `MailboxFull` refuses is held within the Store's
+four limits, falling back to one Reconciliation Marker on overload, and
+`Pumped(g)` retries fairly after each Pump. `Detach` drops a Group. `Save`
+writes a checkpoint with the save's SHA-256 and each watched Store's revision,
+and `Restore` refuses anything else as `invalid checkpoint` before calling
+`Core.Restore`. `Changed(before, after)` is the net-change test, by Value
+Encoding bytes.
+
+The router reads Script load order with `(*Group).ScriptNames`, safe inside a
+Pump and untraced, and checks restored Grants with `(*Grant).Capability` and
+`(*Grant).Binding`. A Group's `OnReady` callback must not call back into the
+router synchronously. `notify/kit_test.go` runs the
+[router kit](../../corpus/notify-kit/) on stand-in Groups, and
+`notify/router_test.go` drives real Groups, including concurrent Pumps and
+commits under `-race`. No Store routes its commits through it yet; #620 wires
+the `store` factory and the Session Store.
 
 ### Segment-bound Operations
 

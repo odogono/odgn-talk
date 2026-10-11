@@ -27,6 +27,7 @@ const (
 	ReentrantCall      HostErrorCode = "reentrant call"
 	WrongGroup         HostErrorCode = "wrong group"
 	EffectStateUnknown HostErrorCode = "effect state unknown"
+	InvalidCheckpoint  HostErrorCode = "invalid checkpoint"
 )
 
 type Core struct {

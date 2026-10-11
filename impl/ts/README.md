@@ -115,7 +115,31 @@ are ignored and do not prevent subsequent Grants from being released. The
 embedding tests in `tests/grant-release.test.ts` cover lifecycle order and
 identity. This Core has no Message Layer adapter; its release transport tests
 are deferred, while the [Go adapter](../go/README.md#message-layer) carries the
-exchange. Store `watch`/`unwatch`, routers and checkpoints remain deferred.
+exchange. Store `watch`/`unwatch` remain deferred; see the router below.
+
+## The notification router
+
+`@odgn/northtalk/notify` supplies `createRouter({limits, revision})`, the
+staged [notification router](../../spec/proposals/store-notifications.md#the-router)
+([#619](https://github.com/odogono/odgn-talk/issues/619)). It holds watches by
+owner (Group, Script, named Grant) and name, routes each `commit(store, apply)`
+to matching watches as ordinary `Script.deliver` Deliveries, holds what
+`MailboxFull` refuses within the Store's four limits, falls back to one
+Reconciliation Marker on overload, and retries fairly from `pumped(group)`.
+`release` and `detach` remove watches. `save(group)` writes a checkpoint: a
+header, the routing state as one JSON line with the save's SHA-256 and each
+watched Store's revision, then the `Group.save` bytes. `restore(core, checkpoint,
+options)` refuses anything else as `invalid checkpoint` before calling
+`Core.restore`. `changed(before, after)` is the net-change test a Store uses to
+compute a commit's changed keys.
+
+The router uses only the embedding interface, plus `Group.scriptNames()`, which
+reads Script load order inside a Pump with no Trace record. It runs under Bun,
+Node and Deno. `tests/notify-kit.test.ts` runs the
+[router kit](../../corpus/notify-kit/) on stand-in Groups,
+`tests/notify-runtimes.test.ts` runs it under Node and Deno, and
+`tests/notify.test.ts` drives it with real Groups. No Store routes its commits
+through it yet; #620 wires the `store` factory and the Session Store.
 
 ## Capability Scopes
 
