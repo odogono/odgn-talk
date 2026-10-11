@@ -94,6 +94,29 @@ The hook controls execution and reads state; it does not edit Script Variables o
 
 `exportManifest({ kind, version, grants, libraries, messages, objectKinds, objects })` returns compact JSON with one trailing LF for the Host to write to `<kind>.talk-manifest.json`. Optional collections default to empty arrays. Declarations, receiving kinds and parent kinds are sorted in code-point order; argument Shapes, map fields and alternatives retain declaration order. Properties include `name`, `shape` (default `"value"`), `readOnly`, `getCost` and `setCost` (default zero Fuel and allocation). Operation Declarations use the same data helpers as saves and Group Fingerprints. Bindings, native objects and executable Host callbacks never appear, and export never calls them. The manifest is tooling-only and outside Trace parity.
 
+## Grant release hooks
+
+`defineCapability(name, operations, lifecycle?, release?)` accepts an independent,
+synchronous release hook with `GrantContext`: Group instance, Script and named
+Grant, binding, last Clock reading and reason `stop`, `reload`, `revoke` or
+`disable`. This implements the first step of the staged
+[Store Notifications contract](../../spec/proposals/store-notifications.md#the-grant-release-hook)
+([#618](https://github.com/odogono/odgn-talk/issues/618)). Stop, owner disposal
+and fatal effect uncertainty release kept Grants in code-point name order after
+abandonment and rollback, before the Stop report. Successful Reload and Library
+replacement use `reload`, including Grants already revoked or disabled; rejected
+updates, Extend, Save and Restore release nothing. Revocation releases once
+when drained, and failed automatic abandonment releases immediately after its
+`effect failure` report.
+
+Hooks spend no Script resources and add no Trace records or Manifest/Fingerprint
+fields. They may queue Host Inputs; worker calls are `reentrant call`. Throws
+are ignored and do not prevent subsequent Grants from being released. The
+embedding tests in `tests/grant-release.test.ts` cover lifecycle order and
+identity. This Core has no Message Layer adapter; its release transport tests
+are deferred, while the [Go adapter](../go/README.md#message-layer) carries the
+exchange. Store `watch`/`unwatch`, routers and checkpoints remain deferred.
+
 ## Capability Scopes
 
 Immediate Operations support `scope: { opens, abandon }` and `scope: { closes }` from [the lifecycle contract](../../spec/embedding/scoped-effects.md). Grant the abandonment Operation along with its opener; `grantsAsUsed` retains this dependency. Host Calls identify resources by `group` instance, `scriptName`, `runId`, `grantName` and `scopeName`, with `segmentId` identifying the current Segment.

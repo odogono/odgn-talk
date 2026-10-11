@@ -255,10 +255,14 @@ func setupOperations(core *talk.Core, setup Setup) (*operationReplay, error) {
 		for _, op := range ops {
 			bound = bound || op.SegmentBound
 		}
+		options := make([]talk.CapabilityOption, len(ops))
+		for i, op := range ops {
+			options[i] = op
+		}
 		if bound {
-			d, e = core.DefineCoordinatedCapability(name, out.coordinate, ops...)
+			d, e = core.DefineCoordinatedCapability(name, out.coordinate, options...)
 		} else {
-			d, e = core.DefineCapability(name, ops...)
+			d, e = core.DefineCapability(name, options...)
 		}
 		if e != nil {
 			return nil, e

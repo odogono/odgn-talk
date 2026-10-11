@@ -161,7 +161,7 @@ func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*Ca
 	// once, when the Grant is created, which is where a bad binding fails.
 	// A binding that isn't a SqliteBinding maps to no coordinator, which
 	// Grant refuses as HostError `invalid value`.
-	def, err := c.DefineCoordinatedCapability("sqlite", func(binding any) *SegmentLifecycle {
+	def, err := c.defineCapability("sqlite", nil, func(binding any) *SegmentLifecycle {
 		b, ok := sqliteBindingOf(binding)
 		if !ok {
 			return nil

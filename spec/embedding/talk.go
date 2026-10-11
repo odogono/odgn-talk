@@ -327,6 +327,32 @@ type ScopeDecl struct {
 	Closes  string
 }
 
+// ReleaseReason identifies the lifecycle boundary that releases a named Grant.
+type ReleaseReason string
+
+const (
+	ReleaseStop    ReleaseReason = "stop"
+	ReleaseReload  ReleaseReason = "reload"
+	ReleaseRevoke  ReleaseReason = "revoke"
+	ReleaseDisable ReleaseReason = "disable"
+)
+
+type GrantContext struct {
+	Group      *Group
+	ScriptName string
+	GrantName  string
+	Binding    any
+	Now        time.Time
+	Reason     ReleaseReason
+}
+type ReleaseHook func(GrantContext)
+
+// CapabilityOption is an Operation or a definition option.
+type CapabilityOption interface{ capabilityOption() }
+
+func (Operation) capabilityOption()
+func WithReleaseHook(hook ReleaseHook) CapabilityOption
+
 // SegmentContext supplies ownership and the last observed Clock, without a
 // Script budget or a cancellable context. See embedding/scoped-effects.md.
 type SegmentContext struct {
@@ -664,16 +690,16 @@ type Core struct { /* opaque */
 
 func New() *Core
 
-func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error)
+func (c *Core) DefineCapability(name string, options ...CapabilityOption) (*CapabilityDef, error)
 
 // DefineSegmentCapability is DefineCapability with all three synchronous hooks.
 // Each Grant is its own Segment Coordinator.
-func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
+func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, options ...CapabilityOption) (*CapabilityDef, error)
 
 // DefineCoordinatedCapability maps each binding to its Segment Coordinator
 // once, when a Grant is created. Grants mapped to one pointer share a
 // Segment's participant.
-func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error)
+func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, options ...CapabilityOption) (*CapabilityDef, error)
 func (c *Core) DefineObjectKind(k ObjectKindDef) (*ObjectKind, error)
 
 type Versions struct {

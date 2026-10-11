@@ -24,11 +24,12 @@ import (
 const Protocol = 1
 
 type Session struct {
-	core   *talk.Core
-	caps   map[string]*talk.CapabilityDef
-	kinds  map[string]*talk.ObjectKind
-	grants map[int64]*talk.Grant
-	groups map[string]*group
+	core      *talk.Core
+	caps      map[string]*talk.CapabilityDef
+	kinds     map[string]*talk.ObjectKind
+	grants    map[int64]*talk.Grant
+	groups    map[string]*group
+	libraries map[[32]byte]*talk.Library
 	// waiting is the worker call parked on the Host, or nil.
 	waiting *exchange
 }
@@ -52,6 +53,7 @@ type exchange struct {
 	group   *group
 	out     chan outFrame
 	results chan fields
+	result  string
 }
 
 type outFrame struct {
@@ -60,7 +62,7 @@ type outFrame struct {
 }
 
 func NewSession() *Session {
-	return &Session{core: talk.New(), caps: map[string]*talk.CapabilityDef{}, kinds: map[string]*talk.ObjectKind{}, grants: map[int64]*talk.Grant{}, groups: map[string]*group{}}
+	return &Session{core: talk.New(), caps: map[string]*talk.CapabilityDef{}, kinds: map[string]*talk.ObjectKind{}, grants: map[int64]*talk.Grant{}, groups: map[string]*group{}, libraries: map[[32]byte]*talk.Library{}}
 }
 
 // Send takes one message frame and returns its reply frame: a final reply, or
@@ -85,7 +87,7 @@ func (s *Session) Send(frame []byte) []byte {
 		if ref != x.ref {
 			return replyFrame(ref, nil, protocolErrorf("ref %d is waiting on the Host's result", x.ref))
 		}
-		if name != "op-result" && name != "prop-result" {
+		if name != x.result {
 			return replyFrame(ref, nil, protocolErrorf("%s sent while ref %d waits on a result", name, x.ref))
 		}
 		x.results <- f
@@ -93,6 +95,9 @@ func (s *Session) Send(frame []byte) []byte {
 	}
 	if name == "pump" {
 		return s.pump(ref, f)
+	}
+	if name == "reload" || name == "replace-library" {
+		return s.worker(ref, name, f)
 	}
 	ok, err := s.call(name, f)
 	return replyFrame(ref, ok, err)
@@ -110,6 +115,7 @@ func (s *Session) await(x *exchange) []byte {
 // Host's result arrives.
 func (s *Session) ask(need map[string]any) fields {
 	x := s.waiting
+	x.result = need["m"].(string) + "-result"
 	x.out <- outFrame{frame: mustMarshal(map[string]any{"ref": x.ref, "need": need})}
 	return <-x.results
 }

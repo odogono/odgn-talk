@@ -53,8 +53,64 @@ type operationChecks struct {
 	result    func(corevalue.Value, []corevalue.Value) bool
 	failure   func(string, corevalue.Value) bool
 }
+
+// ReleaseReason identifies the lifecycle boundary that releases a named Grant.
+type ReleaseReason string
+
+const (
+	ReleaseStop    ReleaseReason = "stop"
+	ReleaseReload  ReleaseReason = "reload"
+	ReleaseRevoke  ReleaseReason = "revoke"
+	ReleaseDisable ReleaseReason = "disable"
+)
+
+// GrantContext identifies one loaded Script's named Grant within its Group.
+type GrantContext struct {
+	Group      *Group
+	ScriptName string
+	GrantName  string
+	Binding    any
+	Now        time.Time
+	Reason     ReleaseReason
+}
+
+type ReleaseHook func(GrantContext)
+
+// CapabilityOption is an Operation declaration or a definition option.
+// Operation implements it, so ordinary calls can pass Operations directly.
+type CapabilityOption interface{ capabilityOption() }
+
+func (Operation) capabilityOption() {}
+
+type releaseOption struct{ hook ReleaseHook }
+
+func (releaseOption) capabilityOption() {}
+
+// WithReleaseHook installs synchronous, unmetered cleanup; a panic is ignored.
+func WithReleaseHook(hook ReleaseHook) CapabilityOption { return releaseOption{hook} }
+
+func capabilityOptions(options []CapabilityOption) ([]Operation, ReleaseHook, error) {
+	var ops []Operation
+	var release ReleaseHook
+	for _, option := range options {
+		switch o := option.(type) {
+		case Operation:
+			ops = append(ops, o)
+		case releaseOption:
+			if o.hook == nil || release != nil {
+				return nil, nil, &HostError{InvalidValue, "a single non-nil release hook is required"}
+			}
+			release = o.hook
+		default:
+			return nil, nil, &HostError{InvalidValue, "invalid Capability option"}
+		}
+	}
+	return ops, release, nil
+}
+
 type CapabilityDef struct {
 	name      string
+	release   ReleaseHook
 	ops       map[string]Operation
 	checks    map[string]operationChecks
 	lifecycle *SegmentLifecycle
@@ -73,24 +129,48 @@ type Grant struct {
 }
 
 func (d *CapabilityDef) Name() string { return d.name }
-func (c *Core) DefineCapability(name string, ops ...Operation) (*CapabilityDef, error) {
-	return c.defineCapability(name, nil, nil, ops...)
+func (c *Core) DefineCapability(name string, options ...CapabilityOption) (*CapabilityDef, error) {
+	ops, release, err := capabilityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	d, err := c.defineCapability(name, nil, nil, ops...)
+	if d != nil {
+		d.release = release
+	}
+	return d, err
 }
 
-func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+func (c *Core) DefineSegmentCapability(name string, lifecycle SegmentLifecycle, options ...CapabilityOption) (*CapabilityDef, error) {
 	if lifecycle.Begin == nil || lifecycle.Commit == nil || lifecycle.Rollback == nil {
 		return nil, &HostError{InvalidValue, "all Segment lifecycle hooks are required"}
 	}
-	return c.defineCapability(name, &lifecycle, nil, ops...)
+	ops, release, err := capabilityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	d, err := c.defineCapability(name, &lifecycle, nil, ops...)
+	if d != nil {
+		d.release = release
+	}
+	return d, err
 }
 
 // DefineCoordinatedCapability resolves each Grant's Segment Coordinator once,
 // when the Grant is created; Grants mapped to one pointer share a participant.
-func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {
+func (c *Core) DefineCoordinatedCapability(name string, coordinator func(binding any) *SegmentLifecycle, options ...CapabilityOption) (*CapabilityDef, error) {
 	if coordinator == nil {
 		return nil, &HostError{InvalidValue, "a Segment Coordinator mapping is required"}
 	}
-	return c.defineCapability(name, nil, coordinator, ops...)
+	ops, release, err := capabilityOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	d, err := c.defineCapability(name, nil, coordinator, ops...)
+	if d != nil {
+		d.release = release
+	}
+	return d, err
 }
 
 func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordinate func(any) *SegmentLifecycle, ops ...Operation) (*CapabilityDef, error) {

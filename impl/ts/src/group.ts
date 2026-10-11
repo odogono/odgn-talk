@@ -54,7 +54,12 @@ import {
   type Suspension,
   type Script as Loaded,
 } from './machine';
-import { type Grant, type Call, type Operation } from './capabilities';
+import {
+  type Grant,
+  type Call,
+  type Operation,
+  type ReleaseReason,
+} from './capabilities';
 import { languageVersion, costModel } from './generated/machine';
 import { canonicalJSON, grantData } from './manifest';
 import {
@@ -405,6 +410,7 @@ type Running = {
   delivery: Delivery;
   id: string;
   parked?: boolean;
+  recordsWritten?: number;
   /** Ready to resume from a Suspension Point, not a preemption. */
   resuming: boolean;
   /** Rewound while it ran: its turn ends and its message goes back (ADR 0068). */
@@ -1667,8 +1673,9 @@ export class Group {
         break;
       case 'revoke': {
         const s = this.scripts.find(s => s.name === action.name)!;
-        if (s.grants.has(action.grant)) {
+        if (s.grants.has(action.grant) && !s.revoked.has(action.grant)) {
           s.revoked.add(action.grant);
+          this.releaseGrant(s, action.grant, 'revoke');
         }
         break;
       }
@@ -1872,7 +1879,12 @@ export class Group {
     this.answer(delivery, { kind: 'stopped' });
   }
 
-  private stopState(s: ScriptState, reason: string, keepMailbox = false) {
+  private stopState(
+    s: ScriptState,
+    reason: string,
+    keepMailbox = false,
+    releaseReason: ReleaseReason = 'stop',
+  ) {
     if (s.stopped) {
       return;
     }
@@ -1907,7 +1919,7 @@ export class Group {
       return;
     }
     const report = () =>
-      this.reportStop(s, reason, runs, messages, pendingCalls);
+      this.reportStop(s, reason, runs, messages, pendingCalls, releaseReason);
     if (this.terminalReports) {
       this.terminalReports.push(report);
     } else if (this.active?.s === s) {
@@ -1956,13 +1968,44 @@ export class Group {
     }
   }
 
+  private releaseGrant(s: ScriptState, name: string, reason: ReleaseReason) {
+    const grant = s.grants.get(name);
+    if (!grant?.capability.release) {
+      return;
+    }
+    const cleaning = this.cleaning;
+    this.cleaning = true;
+    try {
+      grant.capability.release({
+        group: this,
+        scriptName: s.name,
+        grantName: name,
+        binding: grant.binding,
+        now: this.lastClock ?? 0n,
+        reason,
+      });
+    } catch {
+      // Host cleanup is infallible from the Core's perspective.
+    } finally {
+      this.cleaning = cleaning;
+    }
+  }
+
+  private releaseGrants(s: ScriptState, reason: ReleaseReason) {
+    for (const name of [...s.grants.keys()].sort(compareText)) {
+      this.releaseGrant(s, name, reason);
+    }
+  }
+
   private reportStop(
     s: ScriptState,
     reason: string,
     runs: Running[],
     messages: Delivery[],
     pendingCalls: string[],
+    releaseReason: ReleaseReason = 'stop',
   ) {
+    this.releaseGrants(s, releaseReason);
     this.trace(
       recordLine(
         'stopped',
@@ -2607,7 +2650,11 @@ export class Group {
     this.drainReports = reports;
     try {
       for (const { s } of replacements) {
-        this.stopState(s, 'reload', keepMailbox);
+        if (s.stopped) {
+          this.releaseGrants(s, 'reload');
+        } else {
+          this.stopState(s, 'reload', keepMailbox, 'reload');
+        }
       }
       // Cleanup has already happened. Return its reports even if it stopped
       // the Group; publishing replacement code would hide the failed effects.
@@ -2754,7 +2801,13 @@ export class Group {
         );
       },
       group,
-      disableGrant: name => s.disabled.add(name),
+      disableGrant: name => {
+        s.disabled.add(name);
+        const running = this.runsOf(s).find(r => r.run === run);
+        if (running) {
+          this.writeRecords(running, 0);
+        }
+      },
       isDisabled: name => s.disabled.has(name),
       grants: s.grants,
       isUnbound: name => s.unbound.has(name),
@@ -4404,7 +4457,12 @@ export class Group {
 
   private writeRecords(running: Running, records0: number) {
     const { run } = running;
-    for (let i = records0; i < run.records.length; i++) {
+    for (
+      let i = Math.max(records0, running.recordsWritten ?? 0);
+      i < run.records.length;
+      i++
+    ) {
+      running.recordsWritten = i + 1;
       const rec = run.records[i]!;
       if (rec.kind === 'scope') {
         this.trace(
@@ -4459,6 +4517,13 @@ export class Group {
           ...(rec.scope ? { scope: rec.scope } : {}),
           detail: rec.detail,
         });
+        if (rec.phase === 'abandon') {
+          this.releaseGrant(
+            this.scripts.find(s => s.name === run.script.name)!,
+            rec.grant,
+            'disable',
+          );
+        }
         continue;
       }
       if (rec.kind === 'abandon') {

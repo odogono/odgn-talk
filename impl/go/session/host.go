@@ -230,7 +230,7 @@ func (h *Host) start() {
 	h.grants["console"], err = console.Grant([]string{"write", "read"}, nil)
 	must(err)
 	defs := map[string]*talk.CapabilityDef{}
-	ops := map[string][]talk.Operation{}
+	ops := map[string][]talk.CapabilityOption{}
 	for _, m := range h.mocks {
 		key := m.capability + "." + m.operation
 		op := talk.Operation{Name: m.operation, Mode: m.mode, Result: talk.AnyShape}

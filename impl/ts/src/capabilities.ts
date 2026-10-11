@@ -342,6 +342,19 @@ export class LimitReached extends Error {
   override name = 'LimitReached';
 }
 
+export type ReleaseReason = 'stop' | 'reload' | 'revoke' | 'disable';
+/** One loaded Script's named Grant, identified within its Group. */
+export type GrantContext<B> = {
+  readonly binding: B;
+  readonly grantName: string;
+  readonly group: Group;
+  readonly now: bigint;
+  readonly reason: ReleaseReason;
+  readonly scriptName: string;
+};
+/** Synchronous, unmetered cleanup. Exceptions cannot refuse release. */
+export type ReleaseHook<B> = (context: GrantContext<B>) => void;
+
 export type CapabilityDef<B> = {
   /** Maps a Grant's binding to its Segment Coordinator. */
   coordinator?(binding: B): SegmentCoordinator;
@@ -352,6 +365,7 @@ export type CapabilityDef<B> = {
   readonly name: string;
   /** Its Operations, ordered by name. */
   readonly operations: ReadonlyMap<string, Operation<B>>;
+  release?(context: GrantContext<B>): void;
 };
 export type Grant<B> = {
   readonly binding: B;
@@ -377,7 +391,11 @@ export const defineCapability = <B = void>(
   name: string,
   ops: Record<string, Operation<B>>,
   lifecycle?: SegmentLifecycle<B> | CoordinatedLifecycle<B>,
+  release?: ReleaseHook<B>,
 ): CapabilityDef<B> => {
+  if (release !== undefined && typeof release !== 'function') {
+    invalidValue('A release hook must be a function');
+  }
   for (const op of Object.keys(ops)) {
     if (refusedNames.has(op)) {
       throw new HostError('invalid value', `${op} can't name an Operation`);
@@ -496,6 +514,7 @@ export const defineCapability = <B = void>(
   const def: CapabilityDef<B> = {
     name,
     operations,
+    ...(release ? { release } : {}),
     ...(hooks
       ? {
           lifecycle: Object.freeze({

@@ -146,6 +146,7 @@ func (s *Script) applyReload(state *machine.State, source string, keepMailbox bo
 			return reports, &HostError{EffectStateUnknown, "Reload participant rollback failed"}
 		}
 	}
+	g.releaseGrants(s, ReleaseReload)
 	queue, runs := s.queue, s.runs
 	s.queue = nil
 	s.runs = nil

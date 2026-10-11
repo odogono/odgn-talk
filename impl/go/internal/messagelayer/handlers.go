@@ -18,6 +18,10 @@ var handlers map[string]handler
 func init() {
 	handlers = map[string]handler{
 		"hello":               (*Session).hello,
+		"compile-library":     (*Session).compileLibrary,
+		"add-library":         traced((*Session).addLibrary),
+		"replace-library":     traced((*Session).replaceLibrary),
+		"reload":              traced((*Session).reload),
 		"define-capability":   (*Session).defineCapability,
 		"standard-capability": (*Session).standardCapability,
 		"add":                 (*Session).add,
@@ -47,7 +51,7 @@ func init() {
 
 // unsupported names the messages in the Spec that this adapter doesn't carry
 // yet, so a Host can tell them from a typo.
-var unsupported = map[string]bool{"compile-library": true, "add-library": true, "replace-library": true, "call": true, "decide": true, "inspect": true, "restore": true, "settle": true, "reload": true, "extend": true, "export-manifest": true}
+var unsupported = map[string]bool{"call": true, "decide": true, "inspect": true, "restore": true, "settle": true, "extend": true, "export-manifest": true}
 
 // traced attaches the Trace records a Host Input made to its reply.
 func traced(h handler) handler {
@@ -141,7 +145,7 @@ func (s *Session) defineCapability(f fields) (map[string]any, error) {
 	if err := f.decode("ops", &decls); err != nil {
 		return nil, err
 	}
-	var ops []talk.Operation
+	var ops []talk.CapabilityOption
 	for _, d := range decls {
 		op, err := d.operation()
 		if err != nil {
@@ -151,6 +155,13 @@ func (s *Session) defineCapability(f fields) (map[string]any, error) {
 			return nil, protocolErrorf("Segment-bound Operations aren't carried by this Message Layer yet")
 		}
 		ops = append(ops, s.bind(name, op))
+	}
+	release, err := f.bool("release")
+	if err != nil {
+		return nil, err
+	}
+	if release {
+		ops = append(ops, talk.WithReleaseHook(s.release))
 	}
 	def, err := s.core.DefineCapability(name, ops...)
 	if err != nil {
@@ -224,7 +235,7 @@ func (s *Session) bind(capability string, op talk.Operation) talk.Operation {
 			if err, failed := failure(r); failed {
 				return talk.Nothing, err
 			}
-			if !r.has("result") {
+			if _, present := r["result"]; !present {
 				return talk.Nothing, errors.New("op-result for an immediate Operation has no result")
 			}
 			return r.value("result", s.waiting.group)

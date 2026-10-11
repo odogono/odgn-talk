@@ -53,7 +53,7 @@ func (c *Core) CalendarCapability(impl CalendarImpl, costs Costs) (*CapabilityDe
 			ops[i].Errors = append(ops[i].Errors, ErrorDecl{Code: "ambiguous time", Fields: []Field{{Key: "civil", Shape: CivilDateShape}, {Key: "zone", Shape: TextShape}}})
 		}
 	}
-	def, err := c.DefineCapability("calendar", ops...)
+	def, err := c.defineCapability("calendar", nil, nil, ops...)
 	if err != nil {
 		return nil, err
 	}
