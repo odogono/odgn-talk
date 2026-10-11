@@ -108,13 +108,14 @@ After it pumps, while the Entry's Run hasn't ended, the Session Host:
 
 - **Following Runs:** public [Run accounting](09-embedding.md#run-accounting) identifies dispatch, ancestry, exact Fuel and terminal/discarded work. The Trace's `seg` and `call` observations still identify console callers and foreground suspension. The Session Host never inserts `Inspect()` merely to follow execution ([ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md), narrowed by [ADR 0065](../docs/adr/0065-run-accounting-is-returned-to-every-host.md)).
 - **Echo:** when an expression's Run completes, its value is printed in the display form, which tells `"5"` from `5`.
-- **In the background,** the Session Host pumps whenever the next deadline comes under a real Clock, and after every Entry and Session Command that queues a Host Input.
+- **In the background,** the Session Host pumps whenever the next deadline comes under a real Clock.
+- **Queued Host Inputs:** after the Pumps of an Entry, a Session Command, an answer or a deadline, if Host Inputs are queued, including ones its Host adapters queued during those Pumps (a property getter's `deliver`, say), the Session Host pumps once more, as a separate Host call. That Pump is never followed by another for the same reason, and what it leaves queued waits for the next Entry, Session Command, answer or deadline. So a getter whose message reads the getter again can't keep the session pumping.
 - **Answers:** the Session Host pumps after answering a `read`, and after a built-in Capability's suspending call is answered.
 - **Ctrl-C** is `:cancel` of the foreground Run. The Session Host makes Host calls only between Pumps, so a Run spinning in one Segment ends at its Fuel limit.
 
 ### Output
 
-Ordinary execution prints the lines below; [observation commands](session-observation.md) add their specified rows. `<where>` is `<line>:<column>` in the Entry, or `<unit>:<line>:<column>` elsewhere.
+Ordinary execution prints the lines below; [observation commands](session-observation.md) add their specified rows. A Host call's lines come after all of its Pumps, in the order they produced them, so in a Session Transcript they follow its `@` and `%` lines. `<where>` is `<line>:<column>` in the Entry, or `<unit>:<line>:<column>` elsewhere.
 
 | Line | Printed for |
 | --- | --- |
@@ -237,7 +238,7 @@ OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
 - **`> `** starts the first line of an Entry, or a Session Command.
 - **`| `** starts each further line of an Entry, or a line of the source that `:library` or `:fix` records. A `|` alone is an empty one.
 - **`< `** starts a line the user typed for `console`'s `read`, and a `<` alone is an empty one.
-- **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
+- **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. The Pumps that one causes in turn, an `:inspect` reader's and the [Pump for queued Host Inputs](#the-foreground), take the readings that follow. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
 - **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map: its `code`, its `message` and its other fields, or `{}` for a failure that isn't a Script error, which the Script sees as `host error`. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
 - **`% `** introduces the compact JSON [object crossing envelope](session-observation.md#object-crossings-in-session-transcripts), including declarations, initial bindings, property callbacks, external Host actions and resolver outcomes.
 - **`#`** starts a comment, which a REPL never writes.
