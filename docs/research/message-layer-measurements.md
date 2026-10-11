@@ -4,7 +4,7 @@ Answers [#554](https://github.com/odogono/odgn-talk/issues/554), part of [#532](
 
 ## Outcome
 
-**The Message Layer is good enough for both Hosts, and no third Core is built.** #122 does not proceed.
+**The Message Layer is good enough for both Hosts.** Under ADR 0071's gate, no third Core would be built. [ADR 0078](../adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md) builds the Zig third Core in #122 anyway, and these figures are the baseline it is measured against.
 
 - **The Elixir Host** meets every row on Wasmex and on the sidecar. It needed only one of the two.
 - **The C Host** meets every row on wasmtime.

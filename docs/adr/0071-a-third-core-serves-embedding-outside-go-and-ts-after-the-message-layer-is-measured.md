@@ -19,3 +19,4 @@ With both Cores passing the Conformance Corpus, the gate in ADR 0040 is met, and
 - **The measurement** records, for each Host: the payload, the cost per Pump and per Capability call, instantiation time and memory, and that a Script fault never traps the instance. Its thresholds are set in [#532](https://github.com/odogono/odgn-talk/issues/532) before measuring.
 - **Unchanged:** ADR 0009's two Cores, the browser on the TS Core, and same-Core saves (ADR 0008).
 - Narrows [ADR 0040](0040-a-third-native-core-is-deferred-until-both-cores-conform.md).
+- Superseded in part by [ADR 0078](0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md): the Message Layer met its thresholds for both Hosts, and the Zig third Core is built anyway. Everything else here stands.

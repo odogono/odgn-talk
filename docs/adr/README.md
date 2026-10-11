@@ -79,3 +79,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0075: English comparison words spell the existing comparisons](0075-english-comparison-words-spell-the-existing-comparisons.md)
 - [0076: Operation Declarations carry documentation that only tooling reads](0076-operation-declarations-carry-documentation-that-only-tooling-reads.md)
 - [0077: `user` is an optional Standard Capability that asks the person running a Script](0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)
+- [0078: The Zig third Core is built though the Message Layer meets its thresholds](0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)
