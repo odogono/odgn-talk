@@ -683,6 +683,11 @@ revoked and disabled ones. Rejected updates, Extend, Save and Restore release
 nothing. Revocation releases once when drained; failed automatic abandonment
 releases immediately after its `effect failure` report.
 
+Library replacement completes abandonment and rollback for every affected
+Script before releasing any Grants with `reload`. If a rollback leaves effect
+state unknown, the Group stops and releases its Scripts with `stop`, keeping
+the previous code.
+
 Hooks are synchronous and unmetered, with no Trace record or Fingerprint field.
 They may queue Host Inputs; worker calls are `reentrant call`, and panics cannot
 refuse release. `grant_release_test.go` verifies lifecycle ordering and identity.

@@ -34,6 +34,13 @@ const capability = (release?: ReleaseHook<string>) =>
     release,
   );
 
+const releaseLibrary = (value: number) =>
+  compileLibrary({
+    name: 'helper',
+    version: String(value),
+    source: `function f\nreturn ${value}\nend f`,
+  });
+
 test('Stop releases kept Grants in code-point order before its report, including revoked Grants', () => {
   const events: string[] = [];
   const contexts: GrantContext<string>[] = [];
@@ -368,6 +375,99 @@ test('Library replacement releases only its dependents, only after successful va
   );
   expect(events).toEqual(['s:reload']);
 });
+
+test.each(['ok', 'failed', 'unknown'] as const)(
+  'Library replacement completes rollback before release (%s)',
+  status => {
+    const events: string[] = [];
+    const trace: string[] = [];
+    const def = defineCapability<string>(
+      'resource',
+      {
+        touch: {
+          mode: 'immediate',
+          result: shape.nothing,
+          cost: { fuel: 0 },
+          segmentBound: true,
+          do: () => nothing,
+        },
+      },
+      {
+        begin: c => {
+          events.push(`begin:${c.scriptName}`);
+          return { status: 'ok' };
+        },
+        commit: () => ({ status: 'ok' }),
+        rollback: c => {
+          events.push(`rollback:${c.scriptName}`);
+          return { status: c.scriptName === 'second' ? status : 'ok' };
+        },
+      },
+      c => {
+        events.push(`${c.reason}:${c.scriptName}`);
+      },
+    );
+    const group = newGroup({
+      name: 'g',
+      trace: line => {
+        trace.push(line);
+        if (line.startsWith('stopped ')) {
+          events.push(`stopped:${line.split(' ')[1]}`);
+        } else if (line.startsWith('effect-failure ')) {
+          events.push('effect failure');
+        }
+      },
+    });
+    group.addLibrary(releaseLibrary(1));
+    for (const name of ['first', 'second']) {
+      group
+        .load({
+          name,
+          source:
+            'use f from helper\non go\nask api to touch\nrepeat forever\nend repeat\nend go',
+          grants: { api: def.grant('all', name) },
+        })
+        .deliver({ name: 'go' });
+    }
+    group.pump(now, { fuelSlice: 40 });
+    expect(events).toEqual(['begin:first', 'begin:second']);
+    events.length = 0;
+    trace.length = 0;
+    const before = group.fingerprint();
+    group.replaceLibrary(releaseLibrary(2), 'reset variables');
+    const fatal = status !== 'ok';
+    const reason = fatal ? 'stop' : 'reload';
+    expect(events).toEqual([
+      'rollback:first',
+      'rollback:second',
+      ...(fatal ? ['effect failure'] : []),
+      `${reason}:first`,
+      'stopped:first',
+      `${reason}:second`,
+      'stopped:second',
+    ]);
+    const stopReason = fatal ? 'effect state unknown' : 'reload';
+    expect(trace.filter(line => !line.startsWith('> '))).toEqual([
+      'effect first/r1.s1 grant=api phase=rollback status=ok',
+      `effect second/r1.s1 grant=api phase=rollback status=${status}`,
+      ...(fatal
+        ? [
+            `effect-failure second/r1 grant=api segment=second/r1.s1 phase=rollback status=${status}`,
+          ]
+        : []),
+      `stopped first reason="${stopReason}" discarded=[first/r1]`,
+      `stopped second reason="${stopReason}" discarded=[second/r1]`,
+    ]);
+    if (fatal) {
+      expect(group.fingerprint()).toEqual(before);
+      expect(() =>
+        group.replaceLibrary(releaseLibrary(2), 'reset variables'),
+      ).toThrow('effect state unknown');
+    } else {
+      expect(group.fingerprint()).not.toEqual(before);
+    }
+  },
+);
 
 test('hook exceptions are ignored, worker calls refused, and inputs may be queued', () => {
   const events: string[] = [];

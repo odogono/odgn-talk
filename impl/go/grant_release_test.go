@@ -265,6 +265,109 @@ func TestGrantReleaseLibraryReplacement(t *testing.T) {
 	releaseEvents(t, events, []string{"s:reload"})
 }
 
+type releaseReplacementTrace struct {
+	releaseTrace
+	trace *lines
+}
+
+func (r releaseReplacementTrace) Record(line string) {
+	r.releaseTrace.Record(line)
+	r.trace.Record(line)
+}
+
+func TestGrantReleaseLibraryReplacementCleanup(t *testing.T) {
+	for _, status := range []EffectStatus{EffectOK, EffectFailed, EffectUnknown} {
+		t.Run(string(status), func(t *testing.T) {
+			c := New()
+			var events []string
+			var trace lines
+			d, err := c.DefineSegmentCapability("resource", SegmentLifecycle{
+				Begin: func(ctx SegmentContext) EffectResult {
+					events = append(events, "begin:"+ctx.ScriptName)
+					return effectOK(ctx)
+				},
+				Commit: effectOK,
+				Rollback: func(ctx SegmentContext) EffectResult {
+					events = append(events, "rollback:"+ctx.ScriptName)
+					if ctx.ScriptName == "second" {
+						return EffectResult{Status: status}
+					}
+					return effectOK(ctx)
+				},
+			}, Operation{Name: "touch", Mode: Immediate, Result: NothingShape, SegmentBound: true, Do: func(*Call, []Value) (Value, error) { return Nothing, nil }},
+				WithReleaseHook(func(ctx GrantContext) { events = append(events, string(ctx.Reason)+":"+ctx.ScriptName) }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			compile := func(value string) *Library {
+				t.Helper()
+				lib, err := c.CompileLibrary(LibrarySource{Name: "helper", Version: value, Source: "function f\nreturn " + value + "\nend f"}, nil, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return lib
+			}
+			g := c.NewGroup(GroupOptions{Name: "g", Trace: releaseReplacementTrace{releaseTrace{&events}, &trace}})
+			if err := g.AddLibrary(compile("1")); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"first", "second"} {
+				s := releaseLoad(t, g, name, "use f from helper\non go\nask api to touch\nrepeat forever\nend repeat\nend go", map[string]*Grant{"api": d.GrantAll(name)})
+				if _, err := s.Deliver(Message{Name: "go"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := g.Pump(releaseNow, PumpOptions{FuelSlice: 40}); err != nil {
+				t.Fatal(err)
+			}
+			releaseEvents(t, events, []string{"begin:first", "begin:second"})
+			events = nil
+			trace = nil
+			before := g.Fingerprint()
+			_, err = g.ReplaceLibrary(compile("2"), ResetVariables)
+			fatal := status != EffectOK
+			reason, stopReason := "reload", "reload"
+			if fatal {
+				reason, stopReason = "stop", "effect state unknown"
+				var host *HostError
+				if !errors.As(err, &host) || host.Code != EffectStateUnknown {
+					t.Fatalf("fatal replacement: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			wantEvents := []string{"rollback:first", "rollback:second"}
+			wantTrace := []string{
+				"effect first/r1.s1 grant=api phase=rollback status=ok",
+				"effect second/r1.s1 grant=api phase=rollback status=" + string(status),
+			}
+			if fatal {
+				wantEvents = append(wantEvents, "effect failure")
+				wantTrace = append(wantTrace, "effect-failure second/r1 grant=api segment=second/r1.s1 phase=rollback status="+string(status))
+			}
+			wantEvents = append(wantEvents, reason+":first", "stopped:first", reason+":second", "stopped:second")
+			wantTrace = append(wantTrace,
+				"stopped first reason=\""+stopReason+"\" discarded=[first/r1]",
+				"stopped second reason=\""+stopReason+"\" discarded=[second/r1]",
+			)
+			releaseEvents(t, events, wantEvents)
+			var records []string
+			for _, line := range trace {
+				if !strings.HasPrefix(line, "> ") {
+					records = append(records, line)
+				}
+			}
+			releaseEvents(t, records, wantTrace)
+			if fatal && g.Fingerprint() != before {
+				t.Fatal("replacement published after fatal cleanup")
+			}
+			if !fatal && g.Fingerprint() == before {
+				t.Fatal("successful replacement kept old code")
+			}
+		})
+	}
+}
+
 func TestGrantReleasePanicAndQueuedInputs(t *testing.T) {
 	c := New()
 	var events []string
