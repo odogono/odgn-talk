@@ -63,6 +63,48 @@ func TestPersistentListEditsAndBranches(t *testing.T) {
 	empty := NewList([]Value{{}}).SetListItem(0, Value{}, true)
 	check(empty.ExtendList([]Value{collectionNumber(9)}, true), []Value{collectionNumber(9)})
 }
+
+// Appends claim slots in a shared tail; every retained view must keep its own
+// prefix when a later branch appends from it.
+func TestListAppendBranchesFromSharedTail(t *testing.T) {
+	views := []Value{NewList(make([]Value, 40))}
+	want := [][]Value{make([]Value, 40)}
+	for i := range 100 {
+		views = append(views, views[i].ExtendList([]Value{collectionNumber(i)}, false))
+		want = append(want, append(slices.Clone(want[i]), collectionNumber(i)))
+	}
+	for i, view := range views {
+		branch := view.ExtendList([]Value{collectionNumber(-i), collectionNumber(-i)}, false)
+		edited := view.SetListItem(view.ListLen()-1, collectionNumber(-i), false)
+		for _, got := range []Value{views[i], branch, edited} {
+			if got.ListLen() == 0 || !got.ListAt(got.ListLen()).Equal(Value{}) {
+				t.Fatal("List reads past its end")
+			}
+		}
+		edits := slices.Clone(want[i])
+		edits[len(edits)-1] = collectionNumber(-i)
+		if !slices.EqualFunc(views[i].Items(), want[i], Value.Equal) ||
+			!slices.EqualFunc(branch.Items(), append(slices.Clone(want[i]), collectionNumber(-i), collectionNumber(-i)), Value.Equal) ||
+			!slices.EqualFunc(edited.Items(), edits, Value.Equal) {
+			t.Fatalf("view %d changed after a branch", i)
+		}
+	}
+}
+func TestListAppendAllocationIsAmortized(t *testing.T) {
+	const appends = 1 << 14
+	list := NewList(nil)
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range appends {
+		list = list.ExtendList([]Value{{}}, false)
+	}
+	runtime.ReadMemStats(&after)
+	collectionSink = list
+	if bytes := (after.TotalAlloc - before.TotalAlloc) / appends; bytes > 160 {
+		t.Fatalf("%d bytes per append, ceiling 160", bytes)
+	}
+}
 func TestPersistentMapEditsAndOrder(t *testing.T) {
 	current, _ := NewMap(nil)
 	var expected []Pair
