@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,10 +10,10 @@
 #include <wasi.h>
 #include <wasmtime.h>
 #include "cJSON.h"
+#include <unistd.h>
 #ifdef __APPLE__
 #include <mach/mach.h>
-#else
-#include <unistd.h>
+#include <mach/mach_time.h>
 #endif
 
 typedef struct {
@@ -44,6 +46,12 @@ static void check(wasmtime_error_t *error, wasm_trap_t *trap) {
 }
 
 static double seconds(void) {
+#ifdef __APPLE__
+  // CLOCK_MONOTONIC resolves only to microseconds on macOS.
+  static mach_timebase_info_data_t base;
+  if (!base.denom && mach_timebase_info(&base) != KERN_SUCCESS) fail("mach_timebase_info failed");
+  return (double)mach_absolute_time() * base.numer / base.denom / 1e9;
+#endif
   struct timespec t;
   if (clock_gettime(CLOCK_MONOTONIC, &t)) fail("clock_gettime failed");
   return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
@@ -87,14 +95,14 @@ static wasmtime_val_t invoke(host *h, wasmtime_func_t *f, uint32_t n,
   return result;
 }
 
-static host open_host(wasm_engine_t *engine, wasmtime_linker_t *linker,
-                      wasmtime_module_t *module) {
+static host open_capped(wasm_engine_t *engine, wasmtime_linker_t *linker,
+                        wasmtime_module_t *module, int64_t memory_cap) {
   host h = {0};
   h.store = wasmtime_store_new(engine, NULL, NULL);
   if (!h.store) fail("store allocation failed");
   h.ctx = wasmtime_store_context(h.store);
   // A backstop, distinct from Script budgets. Hitting it may trap Go's runtime.
-  wasmtime_store_limiter(h.store, 256 * 1024 * 1024, -1, 1, -1, 1);
+  wasmtime_store_limiter(h.store, memory_cap, -1, 1, -1, 1);
   wasi_config_t *wasi = wasi_config_new();
   if (!wasi) fail("WASI allocation failed");
   wasi_config_inherit_stderr(wasi);
@@ -113,6 +121,11 @@ static host open_host(wasm_engine_t *engine, wasmtime_linker_t *linker,
   e = exported(&h, "memory", WASMTIME_EXTERN_MEMORY);
   h.memory = e.of.memory;
   return h;
+}
+
+static host open_host(wasm_engine_t *engine, wasmtime_linker_t *linker,
+                      wasmtime_module_t *module) {
+  return open_capped(engine, linker, module, 256 * 1024 * 1024);
 }
 
 static cJSON *field(cJSON *object, const char *name) {
@@ -308,8 +321,18 @@ static void faults(host *h, cJSON *result) {
     cJSON_Delete(reply);
     healthy(h);
   }
+  // A length talk_buffer never allocated: the reactor must refuse, not trap.
+  uint64_t packed = (uint64_t)invoke(h, &h->send, UINT32_MAX, WASMTIME_I64).of.i64;
+  uint32_t ptr = (uint32_t)(packed >> 32), len = (uint32_t)packed;
+  size_t size = wasmtime_memory_data_size(h->ctx, &h->memory);
+  if (!len || ptr > size || len > size - ptr) fail("reply outside linear memory");
+  cJSON *reply = cJSON_ParseWithLength((const char *)wasmtime_memory_data(h->ctx, &h->memory) + ptr, len);
+  if (!reply || !is(field(field(reply, "err"), "kind"), "protocol error"))
+    fail("talk_send past its buffer was not a protocol error");
+  cJSON_Delete(reply);
+  healthy(h);
   cJSON_AddNumberToObject(result, "script_faults_checked", 30);
-  cJSON_AddNumberToObject(result, "hostile_frames_checked", 4);
+  cJSON_AddNumberToObject(result, "hostile_frames_checked", 5);
   cJSON_AddBoolToObject(result, "same_instance_healthy_after_each", 1);
 }
 
@@ -320,23 +343,346 @@ static int positive(const char *text, int max) {
   return (int)n;
 }
 
+static uint8_t *read_file(const char *path, size_t *length) {
+  FILE *f = fopen(path, "rb");
+  if (!f || fseek(f, 0, SEEK_END)) fail("cannot read reactor");
+  long n = ftell(f);
+  if (n <= 0 || fseek(f, 0, SEEK_SET)) fail("invalid reactor size");
+  uint8_t *bytes = malloc((size_t)n);
+  if (!bytes || fread(bytes, 1, (size_t)n, f) != (size_t)n) fail("short reactor read");
+  fclose(f);
+  *length = (size_t)n;
+  return bytes;
+}
+
+static int setting(const char *name, int fallback) {
+  const char *text = getenv(name);
+  return text && *text ? positive(text, 1000000) : fallback;
+}
+
+// The figures #532 sets thresholds for, defined as in the Elixir Host's
+// bench/message-layer/elixir/lib/talk_host/measure.ex so the Hosts compare.
+
+static const char *calls_source =
+  "on calls n\n  repeat for each i in 1..n\n"
+  "    ask api to echo {items: [i, \"hello\", true], count: 1}\n"
+  "  end repeat\nend calls\n";
+static const char *ping_source = "on ping\nend ping\n";
+
+// hello, an `echo` Capability costing 1 Fuel, Group `g` and Script `s`.
+static void setup_measured(host *h, const char *source) {
+  hello(h);
+  cJSON *req = request(h, "define-capability");
+  cJSON_AddStringToObject(req, "name", "api");
+  cJSON_AddItemToObject(req, "ops", cJSON_Parse(
+    "[{\"name\":\"echo\",\"mode\":\"immediate\",\"args\":[\"any\"],\"result\":\"any\","
+    "\"cost\":{\"fuel\":1}}]"));
+  ok(h, req);
+  req = request(h, "grant");
+  cJSON_AddStringToObject(req, "capability", "api");
+  cJSON_AddStringToObject(req, "ops", "all");
+  cJSON *reply = send_request(h, req);
+  require_ok(reply);
+  int grant = field(field(reply, "ok"), "grant")->valueint;
+  cJSON_Delete(reply);
+  req = group_request(h, "new-group");
+  cJSON_AddStringToObject(req, "name", "g");
+  ok(h, req);
+  req = group_request(h, "load");
+  cJSON_AddStringToObject(req, "name", "s");
+  cJSON_AddStringToObject(req, "source", source);
+  cJSON_AddNumberToObject(cJSON_AddObjectToObject(req, "grants"), "api", grant);
+  ok(h, req);
+}
+
+static int by_value(const void *a, const void *b) {
+  double x = *(const double *)a, y = *(const double *)b;
+  return (x > y) - (x < y);
+}
+
+static double percentile(const double *sorted, int n, double p) {
+  int i = (int)ceil(p * n) - 1;
+  return sorted[i < 0 ? 0 : i >= n ? n - 1 : i];
+}
+
+// p50, p99, mean, min and max in microseconds; sorts the samples.
+static cJSON *summarize(double *samples, int n) {
+  qsort(samples, (size_t)n, sizeof(double), by_value);
+  double sum = 0;
+  for (int i = 0; i < n; ++i) sum += samples[i];
+  cJSON *s = cJSON_CreateObject();
+  cJSON_AddNumberToObject(s, "n", n);
+  cJSON_AddNumberToObject(s, "p50", percentile(samples, n, 0.50));
+  cJSON_AddNumberToObject(s, "p99", percentile(samples, n, 0.99));
+  cJSON_AddNumberToObject(s, "mean", sum / n);
+  cJSON_AddNumberToObject(s, "min", samples[0]);
+  cJSON_AddNumberToObject(s, "max", samples[n - 1]);
+  return s;
+}
+
+// Judges a figure on the run with the median p50, keeping every run.
+static cJSON *median_run(cJSON *runs) {
+  int n = cJSON_GetArraySize(runs);
+  double *p50 = malloc((size_t)n * sizeof(double));
+  if (!p50) fail("allocation failed");
+  for (int i = 0; i < n; ++i) p50[i] = field(cJSON_GetArrayItem(runs, i), "p50")->valuedouble;
+  qsort(p50, (size_t)n, sizeof(double), by_value);
+  cJSON *chosen = NULL, *run;
+  cJSON_ArrayForEach(run, runs)
+    if (!chosen && field(run, "p50")->valuedouble == p50[n / 2]) chosen = run;
+  free(p50);
+  cJSON *figure = cJSON_Duplicate(chosen, 1);
+  cJSON_AddItemToObject(figure, "runs", runs);
+  return figure;
+}
+
+typedef struct {
+  wasm_engine_t *engine;
+  wasmtime_linker_t *linker;
+  wasmtime_module_t *module;
+  int runs, samples, warmup, instances, memory;
+} measure;
+
+// One Pump of `calls` echo calls. Appends the intervals between successive
+// `op` needs: encoding the op-result, both crossings, the Core resuming the
+// Run, one loop iteration and decoding the next need's small Map.
+static int call_pump(host *h, int calls, double *out, int room) {
+  cJSON *args = cJSON_CreateArray();
+  cJSON_AddItemToArray(args, cJSON_CreateNumber(calls));
+  deliver(h, "s", "calls", args);
+  cJSON *req = group_request(h, "pump");
+  cJSON_AddStringToObject(req, "now", "2026-10-10T12:00:00Z");
+  cJSON *reply = send_request(h, req), *need;
+  double last = 0;
+  int seen = 0, kept = 0;
+  while ((need = cJSON_GetObjectItemCaseSensitive(reply, "need"))) {
+    double now = seconds();
+    if (seen++ && kept < room) out[kept++] = (now - last) * 1e6;
+    last = now;
+    req = cJSON_CreateObject();
+    cJSON_AddStringToObject(req, "m", "op-result");
+    cJSON_AddNumberToObject(req, "ref", field(reply, "ref")->valueint);
+    cJSON_AddNumberToObject(req, "charged", 0);
+    cJSON_AddItemToObject(req, "result", cJSON_Duplicate(cJSON_GetArrayItem(field(need, "args"), 0), 1));
+    cJSON_Delete(reply);
+    reply = send_request(h, req);
+  }
+  require_ok(reply);
+  run_end(reply, "completed");
+  cJSON_Delete(reply);
+  if (seen != calls) fail("wrong number of Capability calls");
+  return kept;
+}
+
+static cJSON *capability_call(measure *m) {
+  const int calls = 100;
+  cJSON *runs = cJSON_CreateArray();
+  double *samples = malloc((size_t)m->samples * sizeof(double));
+  if (!samples) fail("allocation failed");
+  for (int r = 0; r < m->runs; ++r) {
+    host h = open_host(m->engine, m->linker, m->module);
+    setup_measured(&h, calls_source);
+    double scratch[100];
+    for (int i = 0; i < m->warmup / calls + 1; ++i) call_pump(&h, calls, scratch, 0);
+    int n = 0;
+    while (n < m->samples) n += call_pump(&h, calls, samples + n, m->samples - n);
+    cJSON_AddItemToArray(runs, summarize(samples, n));
+    wasmtime_store_delete(h.store);
+  }
+  free(samples);
+  return median_run(runs);
+}
+
+static double ping(host *h) {
+  double start = seconds();
+  deliver(h, "s", "ping", NULL);
+  cJSON *req = group_request(h, "pump");
+  cJSON_AddStringToObject(req, "now", "2026-10-10T12:00:00Z");
+  cJSON *reply = send_request(h, req);
+  double us = (seconds() - start) * 1e6;
+  require_ok(reply);
+  run_end(reply, "completed");
+  cJSON_Delete(reply);
+  return us;
+}
+
+// A `deliver` and then a `pump` of a Handler with no Operations.
+static cJSON *pump_figure(measure *m) {
+  cJSON *runs = cJSON_CreateArray();
+  double *samples = malloc((size_t)m->samples * sizeof(double));
+  if (!samples) fail("allocation failed");
+  for (int r = 0; r < m->runs; ++r) {
+    host h = open_host(m->engine, m->linker, m->module);
+    setup_measured(&h, ping_source);
+    for (int i = 0; i < m->warmup; ++i) ping(&h);
+    for (int i = 0; i < m->samples; ++i) samples[i] = ping(&h);
+    cJSON_AddItemToArray(runs, summarize(samples, m->samples));
+    wasmtime_store_delete(h.store);
+  }
+  free(samples);
+  return median_run(runs);
+}
+
+// From the compiled module to the `hello` reply: a Store, WASI context,
+// instantiation, `_initialize` and the exchange. Deleting the Store is outside.
+static cJSON *instantiation(measure *m) {
+  cJSON *runs = cJSON_CreateArray();
+  double *samples = malloc((size_t)m->instances * sizeof(double));
+  if (!samples) fail("allocation failed");
+  for (int r = 0; r < m->runs; ++r) {
+    for (int i = -20; i < m->instances; ++i) {
+      double start = seconds();
+      host h = open_host(m->engine, m->linker, m->module);
+      hello(&h);
+      if (i >= 0) samples[i] = (seconds() - start) * 1e6;
+      wasmtime_store_delete(h.store);
+    }
+    cJSON_AddItemToArray(runs, summarize(samples, m->instances));
+  }
+  free(samples);
+  return median_run(runs);
+}
+
+// Linear memory after `hello`, a Group, a small Script and one Pump.
+static cJSON *memory_figure(measure *m) {
+  double *bytes = malloc((size_t)m->memory * sizeof(double));
+  if (!bytes) fail("allocation failed");
+  for (int i = 0; i < m->memory; ++i) {
+    host h = open_host(m->engine, m->linker, m->module);
+    setup_measured(&h, ping_source);
+    ping(&h);
+    bytes[i] = (double)wasmtime_memory_data_size(h.ctx, &h.memory);
+    wasmtime_store_delete(h.store);
+  }
+  qsort(bytes, (size_t)m->memory, sizeof(double), by_value);
+  cJSON *out = cJSON_CreateObject();
+  cJSON_AddNumberToObject(out, "instances", m->memory);
+  cJSON_AddNumberToObject(out, "medianBytes", bytes[m->memory / 2]);
+  cJSON_AddNumberToObject(out, "maxBytes", bytes[m->memory - 1]);
+  free(bytes);
+  return out;
+}
+
+static cJSON *thresholds(measure *m) {
+  cJSON *out = cJSON_CreateObject();
+  cJSON *sizes = cJSON_AddObjectToObject(out, "sizes");
+  cJSON_AddNumberToObject(sizes, "runs", m->runs);
+  cJSON_AddNumberToObject(sizes, "samples", m->samples);
+  cJSON_AddNumberToObject(sizes, "warmup", m->warmup);
+  cJSON_AddNumberToObject(sizes, "instances", m->instances);
+  cJSON_AddNumberToObject(sizes, "memory", m->memory);
+  cJSON_AddItemToObject(out, "call", capability_call(m));
+  cJSON_AddItemToObject(out, "pump", pump_figure(m));
+  cJSON_AddItemToObject(out, "instantiation", instantiation(m));
+  cJSON_AddItemToObject(out, "memory", memory_figure(m));
+  return out;
+}
+
+static int memory_fd = -1;
+
+// Keeps the instance's linear memory in $TALK_MEMORY, for containment.
+static void note_memory(host *h) {
+  if (memory_fd < 0) return;
+  char text[32];
+  int n = snprintf(text, sizeof text, "%20" PRIu64 "\n",
+                   (uint64_t)wasmtime_memory_data_size(h->ctx, &h->memory));
+  if (pwrite(memory_fd, text, (size_t)n, 0) != n) fail("cannot write $TALK_MEMORY");
+}
+
+static int lost(host *h, wasmtime_error_t *error, wasm_trap_t *trap) {
+  wasm_byte_vec_t message;
+  if (error) {
+    wasmtime_error_message(error, &message);
+    wasmtime_error_delete(error);
+  } else {
+    wasm_trap_message(trap, &message);
+    wasm_trap_delete(trap);
+  }
+  note_memory(h);
+  fprintf(stderr, "wasmtime: %.*s\n", (int)message.size, message.data);
+  wasm_byte_vec_delete(&message);
+  return 3;
+}
+
+static int read_all(void *data, size_t n) { return fread(data, 1, n, stdin) == n; }
+
+static void write_frame(const void *data, uint32_t n) {
+  uint8_t len[4] = {n >> 24, n >> 16, n >> 8, n};
+  if (fwrite(len, 1, 4, stdout) != 4 || fwrite(data, 1, n, stdout) != n || fflush(stdout))
+    exit(4);
+}
+
+// One instance on stdin and stdout, in the sidecar's framing: a 4-byte
+// big-endian length, then the JSON. The Elixir Host's fault and containment
+// suites drive it, so the C Host faces the same cases. A trap ends the
+// process, which those suites count as a lost instance. `cap` bounds linear
+// memory in bytes, or 0 for wasm32's 4 GiB.
+static int serve(const char *path, int64_t cap) {
+  size_t length;
+  uint8_t *bytes = read_file(path, &length);
+  wasm_engine_t *engine = wasm_engine_new();
+  wasmtime_linker_t *linker = wasmtime_linker_new(engine);
+  check(wasmtime_linker_define_wasi(linker), NULL);
+  wasmtime_module_t *module = NULL;
+  check(wasmtime_module_new(engine, bytes, length, &module), NULL);
+  free(bytes);
+  host h = open_capped(engine, linker, module, cap ? cap : -1);
+  const char *memory = getenv("TALK_MEMORY");
+  if (memory && (memory_fd = open(memory, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+    fail("cannot open $TALK_MEMORY");
+  note_memory(&h);
+  uint8_t len[4];
+  char *data = NULL;
+  while (read_all(len, 4)) {
+    uint32_t n = (uint32_t)len[0] << 24 | (uint32_t)len[1] << 16 | (uint32_t)len[2] << 8 | len[3];
+    free(data);
+    if (!(data = malloc(n ? n : 1)) || !read_all(data, n)) fail("short frame");
+    wasmtime_val_t arg = {.kind = WASMTIME_I32, .of.i32 = (int32_t)n}, result;
+    wasm_trap_t *trap = NULL;
+    wasmtime_error_t *error = wasmtime_func_call(h.ctx, &h.buffer, &arg, 1, &result, 1, &trap);
+    if (error || trap) return lost(&h, error, trap);
+    uint32_t ptr = (uint32_t)result.of.i32;
+    // The reactor declines a buffer it can't give; the Core never sees the frame.
+    if (!ptr) {
+      const char *refused = "{\"refused\":\"null_buffer\"}";
+      write_frame(refused, (uint32_t)strlen(refused));
+      continue;
+    }
+    size_t size = wasmtime_memory_data_size(h.ctx, &h.memory);
+    if (ptr > size || n > size - ptr) fail("input outside linear memory");
+    memcpy(wasmtime_memory_data(h.ctx, &h.memory) + ptr, data, n);
+    error = wasmtime_func_call(h.ctx, &h.send, &arg, 1, &result, 1, &trap);
+    if (error || trap) return lost(&h, error, trap);
+    uint64_t packed = (uint64_t)result.of.i64;
+    ptr = (uint32_t)(packed >> 32);
+    uint32_t reply = (uint32_t)packed;
+    size = wasmtime_memory_data_size(h.ctx, &h.memory);
+    if (ptr > size || reply > size - ptr) fail("reply outside linear memory");
+    note_memory(&h);
+    write_frame(wasmtime_memory_data(h.ctx, &h.memory) + ptr, reply);
+  }
+  return 0;
+}
+
 int main(int argc, char **argv) {
-  if (argc != 5) fail("usage: host reactor.wasm samples iterations instances");
+  if (argc == 4 && strcmp(argv[1], "--serve") == 0) {
+    char *end;
+    long long cap = strtoll(argv[3], &end, 10);
+    if (!*argv[3] || *end || cap < 0) fail("invalid memory cap");
+    return serve(argv[2], cap);
+  }
+  if (argc != 5) fail("usage: host reactor.wasm samples iterations instances\n"
+                      "       host --serve reactor.wasm memory-cap-bytes");
   int samples = positive(argv[2], 1000), iterations = positive(argv[3], 10000);
   int instances = positive(argv[4], 128);
-  FILE *f = fopen(argv[1], "rb");
-  if (!f || fseek(f, 0, SEEK_END)) fail("cannot read reactor");
-  long length = ftell(f);
-  if (length <= 0 || fseek(f, 0, SEEK_SET)) fail("invalid reactor size");
-  uint8_t *bytes = malloc((size_t)length);
-  if (!bytes || fread(bytes, 1, (size_t)length, f) != (size_t)length) fail("short reactor read");
-  fclose(f);
+  size_t length;
+  uint8_t *bytes = read_file(argv[1], &length);
   wasm_engine_t *engine = wasm_engine_new();
   wasmtime_linker_t *linker = wasmtime_linker_new(engine);
   check(wasmtime_linker_define_wasi(linker), NULL);
   wasmtime_module_t *module = NULL;
   double start = seconds();
-  check(wasmtime_module_new(engine, bytes, (size_t)length, &module), NULL);
+  check(wasmtime_module_new(engine, bytes, length, &module), NULL);
   double compile_ms = (seconds() - start) * 1000;
   free(bytes);
   cJSON *out = cJSON_CreateObject();
@@ -423,6 +769,9 @@ int main(int argc, char **argv) {
     }
     cJSON_Delete(value);
   }
+  measure m = {engine, linker, module, setting("RUNS", 3), setting("THRESHOLD_SAMPLES", 5000),
+               setting("WARMUP", 500), setting("THRESHOLD_INSTANCES", 5000), setting("MEMORY_INSTANCES", 20)};
+  cJSON_AddItemToObject(out, "thresholds", thresholds(&m));
   faults(h, cJSON_AddObjectToObject(out, "fault_checks"));
   cJSON_AddNumberToObject(out, "linear_memory_after_workloads_bytes", (double)wasmtime_memory_data_size(h->ctx, &h->memory));
   char *text = cJSON_Print(out);

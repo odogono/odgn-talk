@@ -97,7 +97,7 @@ A variable declared at Script level, visible to all of the Script's Handlers and
 _Avoid_: global, static, script property
 
 **Core**:
-An implementation of the language that Hosts embed: the Go Core or the TS Core. Neither is the reference; both answer to the spec and the Conformance Corpus. Each is written from the spec, never translated from another Core.
+An implementation of the language that Hosts embed: the Go Core, the TS Core or the Zig Core. None is the reference; each answers to the spec and the Conformance Corpus. Each is written from the spec, never translated from another Core.
 _Avoid_: runtime, engine, interpreter (for the whole), VM, port (for a new Core)
 
 **Script Group**:

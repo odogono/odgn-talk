@@ -7,6 +7,8 @@ defmodule TalkHost.Artifacts do
   def root, do: Path.expand("../../..", File.cwd!())
   def wasm, do: Path.join(root(), ".cache/messagelayer.wasm")
   def sidecar, do: Path.join(root(), ".cache/messagelayer")
+  @doc "The minimal C Host, built by bench/message-layer-c/run.sh."
+  def c_host, do: Path.join(root(), "bench/message-layer-c/out/host")
   def linux_sidecar, do: Path.join(root(), ".cache/messagelayer-linux-#{linux_arch()}")
 
   def build! do
