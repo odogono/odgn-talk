@@ -385,3 +385,10 @@ whose/not-in-a-whose
 whose/ordinals
 whose/text-chunks
 whose/wrong-kind
+capabilities/standard-store-watch
+capabilities/standard-store-watch-counts
+capabilities/standard-store-watch-disabled
+capabilities/standard-store-watch-errors
+capabilities/standard-store-watch-grants
+capabilities/standard-store-watch-segments
+capabilities/standard-store-watch-validation

@@ -1011,3 +1011,19 @@ describe('senders and implementors of a message', () => {
     ]);
   });
 });
+
+test('Session Store watch Operations are accepted and offered by LSP completion', () => {
+  const host = new SessionHost({ now: () => 0n });
+  host.input(':grant scores store');
+  const source =
+    'on go\n  ask scores to watch "board", "score/"\n  ask scores to unwatch "board"\nend go';
+  const { sent, request } = setup(source, JSON.parse(host.exportManifest()));
+  expect(
+    (sent.at(-1)!.params as Published).diagnostics.filter(
+      d => d.severity === 1,
+    ),
+  ).toEqual([]);
+  const completion = request('textDocument/completion', at(1, 16));
+  expect(completion.map(c => c.label)).toContain('watch');
+  expect(completion.map(c => c.label)).toContain('unwatch');
+});

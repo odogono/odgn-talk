@@ -1,0 +1,110 @@
+# Unblessed: Store watch Operations (#620); first blessing awaits human review.
+# Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
+> load s identity=49004332940fdc2b64b8d68081aaaeedeac1e1e2064d602050654407cbf504c1
+> stub store.watch error={code: "watch limit", limit: "watches"}
+> deliver d1 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r1.c1 op=st.watch args=["w", ""] error={code: "watch limit", limit: "watches"}
+raise s/r1 code="watch limit" at=s:4 pos=2:3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=27 alloc=68 state=0 end=error
+run s/r1 outcome=errored delivery=d1 handler=go error={code: "watch limit", limit: "watches", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=27 alloc=68
+pumped state=idle fuel=27
+> stub store.watch error={code: "watch limit", limit: "size"}
+> deliver d2 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r2.c1 op=st.watch args=["w", ""] error={code: "watch limit", limit: "size"}
+raise s/r2 code="watch limit" at=s:4 pos=2:3
+seg s/r2 start delivery=d2 handler=go clause=1 fuel=27 alloc=65 state=0 end=error
+run s/r2 outcome=errored delivery=d2 handler=go error={code: "watch limit", limit: "size", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=27 alloc=65
+pumped state=idle fuel=27
+> stub store.watch error={code: "watch limit", limit: "pending"}
+> deliver d3 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r3.c1 op=st.watch args=["w", ""] error={code: "watch limit", limit: "pending"}
+raise s/r3 code="watch limit" at=s:4 pos=2:3
+seg s/r3 start delivery=d3 handler=go clause=1 fuel=27 alloc=68 state=0 end=error
+run s/r3 outcome=errored delivery=d3 handler=go error={code: "watch limit", limit: "pending", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=27 alloc=68
+pumped state=idle fuel=27
+> stub store.watch error={code: "watch limit", limit: "pendingSize"}
+> deliver d4 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r4.c1 op=st.watch args=["w", ""] error={code: "watch limit", limit: "pendingSize"}
+call-failed s/r4.c1 op=st.watch
+raise s/r4 code="host error" at=s:4 pos=2:3
+seg s/r4 start delivery=d4 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r4 outcome=errored delivery=d4 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch error={code: "watch limit"}
+> deliver d5 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r5.c1 op=st.watch args=["w", ""] error={code: "watch limit"}
+call-failed s/r5.c1 op=st.watch
+raise s/r5 code="host error" at=s:4 pos=2:3
+seg s/r5 start delivery=d5 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r5 outcome=errored delivery=d5 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch error={code: "watch limit", limit: 1}
+> deliver d6 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r6.c1 op=st.watch args=["w", ""] error={code: "watch limit", limit: 1}
+call-failed s/r6.c1 op=st.watch
+raise s/r6 code="host error" at=s:4 pos=2:3
+seg s/r6 start delivery=d6 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r6 outcome=errored delivery=d6 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch error={code: "invalid watch", field: "name"}
+> deliver d7 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r7.c1 op=st.watch args=["w", ""] error={code: "invalid watch", field: "name"}
+call-failed s/r7.c1 op=st.watch
+raise s/r7 code="host error" at=s:4 pos=2:3
+seg s/r7 start delivery=d7 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r7 outcome=errored delivery=d7 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch error={code: "store busy", key: "k"}
+> deliver d8 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r8.c1 op=st.watch args=["w", ""] error={code: "store busy", key: "k"}
+call-failed s/r8.c1 op=st.watch
+raise s/r8 code="host error" at=s:4 pos=2:3
+seg s/r8 start delivery=d8 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r8 outcome=errored delivery=d8 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch error={code: "offline"}
+> deliver d9 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r9.c1 op=st.watch args=["w", ""] error={code: "offline"}
+call-failed s/r9.c1 op=st.watch
+raise s/r9 code="host error" at=s:4 pos=2:3
+seg s/r9 start delivery=d9 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r9 outcome=errored delivery=d9 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.watch value=1
+> deliver d10 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r10.c1 op=st.watch args=["w", ""] error={}
+call-failed s/r10.c1 op=st.watch
+raise s/r10 code="host error" at=s:4 pos=2:3
+seg s/r10 start delivery=d10 handler=go clause=1 fuel=24 alloc=0 state=0 end=error
+run s/r10 outcome=errored delivery=d10 handler=go error={code: "host error", capability: "st", operation: "watch", at: {unit: "s", handler: "go", line: 2, column: 3}} fuel=24 alloc=0
+pumped state=idle fuel=24
+> stub store.unwatch value=1
+> deliver d11 to=s message=remove
+> pump clock=2026-10-11T12:00:00Z
+call s/r11.c1 op=st.unwatch args=["w"] error={}
+call-failed s/r11.c1 op=st.unwatch
+raise s/r11 code="host error" at=s:10 pos=5:3
+seg s/r11 start delivery=d11 handler=remove clause=1 fuel=21 alloc=0 state=0 end=error
+run s/r11 outcome=errored delivery=d11 handler=remove error={code: "host error", capability: "st", operation: "unwatch", at: {unit: "s", handler: "remove", line: 5, column: 3}} fuel=21 alloc=0
+pumped state=idle fuel=21
+> stub store.unwatch error={code: "watch limit", limit: "watches"}
+> deliver d12 to=s message=remove
+> pump clock=2026-10-11T12:00:00Z
+call s/r12.c1 op=st.unwatch args=["w"] error={code: "watch limit", limit: "watches"}
+call-failed s/r12.c1 op=st.unwatch
+raise s/r12 code="host error" at=s:10 pos=5:3
+seg s/r12 start delivery=d12 handler=remove clause=1 fuel=21 alloc=0 state=0 end=error
+run s/r12 outcome=errored delivery=d12 handler=remove error={code: "host error", capability: "st", operation: "unwatch", at: {unit: "s", handler: "remove", line: 5, column: 3}} fuel=21 alloc=0
+pumped state=idle fuel=21
+> vars
+vars s

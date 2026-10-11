@@ -4,7 +4,7 @@ language = "1.0-rc.2"
 costModel = "0"
 [[standard]]
 capability = "store"
-costs = { get = { fuel = 2 }, keys = { fuel = 2 }, set = { fuel = 4 }, delete = { fuel = 4 }, increment = { fuel = 4 }, swap = { fuel = 4, alloc = 3 } }
+costs = { watch = { fuel = 4 }, unwatch = { fuel = 2 }, get = { fuel = 2 }, keys = { fuel = 2 }, set = { fuel = 4 }, delete = { fuel = 4 }, increment = { fuel = 4 }, swap = { fuel = 4, alloc = 3 } }
 [[scripts]]
 name = "s"
 source = "s.talk"

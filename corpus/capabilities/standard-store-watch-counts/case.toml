@@ -1,0 +1,31 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[standard]]
+capability = "store"
+costs = { get = { fuel = 2 }, keys = { fuel = 2 }, set = { fuel = 4 }, delete = { fuel = 4 }, increment = { fuel = 4 }, swap = { fuel = 4 }, watch = { fuel = 4 }, unwatch = { fuel = 2 } }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }
+[[scripts]]
+name = "bad0"
+source = "bad0.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }
+[[scripts]]
+name = "bad1"
+source = "bad1.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }
+[[scripts]]
+name = "bad2"
+source = "bad2.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }
+[[scripts]]
+name = "bad3"
+source = "bad3.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }
+[[scripts]]
+name = "bad4"
+source = "bad4.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }

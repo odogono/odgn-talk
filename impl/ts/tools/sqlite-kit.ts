@@ -194,7 +194,16 @@ export const runSqliteKitSequence = (
     ) as CapabilityDef<unknown>;
     const store = storeCapability(
       subject.store,
-      costs(['get', 'set', 'delete', 'keys', 'increment', 'swap']),
+      costs([
+        'get',
+        'set',
+        'delete',
+        'keys',
+        'increment',
+        'swap',
+        'watch',
+        'unwatch',
+      ]),
     ) as CapabilityDef<unknown>;
     const grants = new Map(
       Object.entries(sequence.grants).map(([name, spec]) => {

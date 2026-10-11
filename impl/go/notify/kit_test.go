@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/corpus"
+	"github.com/odogono/odgn-talk/impl/go/internal/toml"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -24,12 +24,12 @@ const kitRoot = "../../../corpus/notify-kit"
 
 type kitSequence struct {
 	file, name string
-	groups     corpus.Setup
+	groups     toml.Table
 	limits     WatchLimits
-	steps      []corpus.Setup
+	steps      []toml.Table
 }
 
-func limitsOf(s corpus.Setup) WatchLimits {
+func limitsOf(s toml.Table) WatchLimits {
 	return WatchLimits{Watches: s["watches"].(int64), WatchSize: s["watchSize"].(int64), Pending: s["pending"].(int64), PendingSize: s["pendingSize"].(int64)}
 }
 
@@ -45,21 +45,21 @@ func kitSequences(t *testing.T) []kitSequence {
 		if err != nil {
 			t.Fatal(err)
 		}
-		kit, err := corpus.ReadTOML(string(b))
+		kit, err := toml.ReadTOML(string(b))
 		if err != nil {
 			t.Fatalf("%s: %v", file, err)
 		}
 		for _, raw := range kit["sequence"].([]any) {
-			seq := raw.(corpus.Setup)
-			s := kitSequence{file: filepath.Base(file), name: seq["name"].(string), groups: kit["groups"].(corpus.Setup), limits: limitsOf(kit["limits"].(corpus.Setup))}
-			if own, ok := seq["groups"].(corpus.Setup); ok {
+			seq := raw.(toml.Table)
+			s := kitSequence{file: filepath.Base(file), name: seq["name"].(string), groups: kit["groups"].(toml.Table), limits: limitsOf(kit["limits"].(toml.Table))}
+			if own, ok := seq["groups"].(toml.Table); ok {
 				s.groups = own
 			}
-			if own, ok := seq["limits"].(corpus.Setup); ok {
+			if own, ok := seq["limits"].(toml.Table); ok {
 				s.limits = limitsOf(own)
 			}
 			for _, step := range seq["steps"].([]any) {
-				s.steps = append(s.steps, step.(corpus.Setup))
+				s.steps = append(s.steps, step.(toml.Table))
 			}
 			out = append(out, s)
 		}
@@ -93,7 +93,7 @@ func listOf(source string) []talk.Value {
 }
 func textOf(v talk.Value) string { s, _ := v.AsText(); return s }
 
-func str(step corpus.Setup, key, fallback string) string {
+func str(step toml.Table, key, fallback string) string {
 	if s, ok := step[key].(string); ok {
 		return s
 	}
@@ -170,11 +170,11 @@ func stringList(raw any) []string {
 	return out
 }
 
-func expectedOutcome(step corpus.Setup) stepOutcome {
+func expectedOutcome(step toml.Table) stepOutcome {
 	out := stepOutcome{Deliveries: []string{}}
 	if list, ok := step["deliveries"].([]any); ok {
 		for _, raw := range list {
-			d := raw.(corpus.Setup)
+			d := raw.(toml.Table)
 			out.Deliveries = append(out.Deliveries, fmt.Sprintf("%s %s %s %s", str(d, "group", "g"), str(d, "script", "a"), d["message"].(string), display(d["payload"].(string))))
 		}
 	}
@@ -245,7 +245,7 @@ func runSequence(seq kitSequence) *kitFailure {
 	segments := map[string]*segment{}
 	checkpoints := map[string]checkpoint{}
 
-	groupOf := func(step corpus.Setup) *standIn {
+	groupOf := func(step toml.Table) *standIn {
 		g := groups[str(step, "group", "g")]
 		if g == nil {
 			panic("no stand-in Group " + str(step, "group", "g"))
@@ -256,7 +256,7 @@ func runSequence(seq kitSequence) *kitFailure {
 		group                  *standIn
 		script, grant, binding string
 	}
-	ownerOf := func(step corpus.Setup) owner {
+	ownerOf := func(step toml.Table) owner {
 		o := owner{groupOf(step), str(step, "script", "a"), str(step, "grant", "store"), str(step, "store", "default")}
 		o.group.bindings[o.script+"."+o.grant] = o.binding
 		return o
@@ -317,7 +317,7 @@ func runSequence(seq kitSequence) *kitFailure {
 		return keys
 	}
 
-	restore := func(step corpus.Setup) (RoutingResult, error) {
+	restore := func(step toml.Table) (RoutingResult, error) {
 		kept, ok := checkpoints[step["checkpoint"].(string)]
 		if !ok {
 			panic("no checkpoint " + step["checkpoint"].(string))
@@ -334,7 +334,7 @@ func runSequence(seq kitSequence) *kitFailure {
 		as := step["as"].(string)
 		bindingOf := func(script, grant string) (string, bool) {
 			owned := script + "." + grant
-			if grants, ok := step["grants"].(corpus.Setup); ok {
+			if grants, ok := step["grants"].(toml.Table); ok {
 				if override, ok := grants[owned]; ok {
 					s, isText := override.(string)
 					return s, isText
@@ -365,7 +365,7 @@ func runSequence(seq kitSequence) *kitFailure {
 		})
 	}
 
-	run := func(step corpus.Setup, out *stepOutcome) error {
+	run := func(step toml.Table, out *stepOutcome) error {
 		switch step["do"] {
 		case "watch":
 			args := listOf(step["args"].(string))
@@ -411,7 +411,7 @@ func runSequence(seq kitSequence) *kitFailure {
 		case "detach":
 			router.detach(groupOf(step))
 		case "limits":
-			limits = limitsOf(step["limits"].(corpus.Setup))
+			limits = limitsOf(step["limits"].(toml.Table))
 		case "checkpoint":
 			g := groupOf(step)
 			g.effects, _ = step["effects"].(bool)
@@ -468,13 +468,13 @@ func TestRouterKit(t *testing.T) {
 // A runner that can't fail proves nothing: break expectations in memory and
 // check the runner reports each.
 func TestRouterKitDetectsDivergence(t *testing.T) {
-	mutations := map[string]func(corpus.Setup){
-		"a delivery's payload": func(s corpus.Setup) {
-			d := s["deliveries"].([]any)[0].(corpus.Setup)
+	mutations := map[string]func(toml.Table){
+		"a delivery's payload": func(s toml.Table) {
+			d := s["deliveries"].([]any)[0].(toml.Table)
 			d["payload"] = strings.Replace(d["payload"].(string), "resync: false", "resync: true", 1)
 		},
-		"a missing delivery": func(s corpus.Setup) { delete(s, "deliveries") },
-		"an error":           func(s corpus.Setup) { s["error"] = `{code: "watch limit", limit: "size"}` },
+		"a missing delivery": func(s toml.Table) { delete(s, "deliveries") },
+		"an error":           func(s toml.Table) { s["error"] = `{code: "watch limit", limit: "size"}` },
 	}
 	for what, mutate := range mutations {
 		broken := false
@@ -483,19 +483,19 @@ func TestRouterKitDetectsDivergence(t *testing.T) {
 				if _, ok := step["deliveries"]; !ok && what != "an error" || step["do"] != "commit" {
 					continue
 				}
-				copied := corpus.Setup{}
+				copied := toml.Table{}
 				for k, v := range step {
 					copied[k] = v
 				}
 				if d, ok := copied["deliveries"].([]any); ok {
-					first := corpus.Setup{}
-					for k, v := range d[0].(corpus.Setup) {
+					first := toml.Table{}
+					for k, v := range d[0].(toml.Table) {
 						first[k] = v
 					}
 					copied["deliveries"] = append([]any{first}, d[1:]...)
 				}
 				mutate(copied)
-				seq.steps = append(append(append([]corpus.Setup{}, seq.steps[:i]...), copied), seq.steps[i+1:]...)
+				seq.steps = append(append(append([]toml.Table{}, seq.steps[:i]...), copied), seq.steps[i+1:]...)
 				f := runSequence(seq)
 				if f == nil || f.step != i+1 {
 					t.Fatalf("%s: breaking %s at step %d went unnoticed (%v)", seq.name, what, i+1, f)

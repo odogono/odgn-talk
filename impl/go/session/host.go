@@ -278,7 +278,7 @@ func (h *Host) start() {
 		}
 		names := []string{}
 		if capability == "store" {
-			names = []string{"get", "set", "delete", "keys", "increment", "swap"}
+			names = []string{"get", "set", "delete", "keys", "increment", "swap", "watch", "unwatch"}
 		} else if capability == "clock" {
 			names = []string{"now"}
 		} else if capability == "user" {
@@ -696,7 +696,7 @@ func (h *Host) UserLibraries() []talk.LibrarySource {
 // GrantBinding is the recorded binding used for independent Session replay.
 func (h *Host) GrantBinding(name string) string { return h.bindings[name] }
 func storeCosts() talk.Costs {
-	return talk.Costs{"get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
+	return talk.Costs{"watch": {Fuel: 4}, "unwatch": {Fuel: 2}, "get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
 }
 
 func hasEnvelopes(items []Item) bool {

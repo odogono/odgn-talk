@@ -52,7 +52,16 @@ const host = (source: string) => {
   );
   const store = storeCapability(
     db.stores!,
-    fuel(['get', 'set', 'delete', 'keys', 'increment', 'swap']),
+    fuel([
+      'get',
+      'set',
+      'delete',
+      'keys',
+      'increment',
+      'swap',
+      'watch',
+      'unwatch',
+    ]),
   );
   const group = newGroup({ name: 'g' });
   const script = group.load({

@@ -1,0 +1,40 @@
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+# Synthetic scoped Store declaration: the standard factory has no scope to
+# abandon. This fixture reaches a disabled Grant through real Core cleanup.
+[[operations]]
+capability = "store"
+name = "watch"
+mode = "immediate"
+args = ["text", "text", { optional = "text" }]
+result = "nothing"
+cost = { fuel = 1000000 }
+[[operations]]
+capability = "store"
+name = "unwatch"
+mode = "immediate"
+args = ["text"]
+result = "nothing"
+cost = { fuel = 1000000 }
+[[operations]]
+capability = "store"
+name = "open"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 0 }
+scope = { opens = "fixture", abandon = "close" }
+[[operations]]
+capability = "store"
+name = "close"
+mode = "immediate"
+args = []
+result = "nothing"
+cost = { fuel = 0 }
+scope = { closes = "fixture" }
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { st = { capability = "store", ops = "all", binding = "scores" } }

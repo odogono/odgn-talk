@@ -1,0 +1,3 @@
+on go
+  ask st to watch "w"
+end go

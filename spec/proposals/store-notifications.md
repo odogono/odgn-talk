@@ -1,8 +1,8 @@
 # Store Notifications
 
-**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); notification routers and the router kit implemented in both Cores (#619); remaining implementation pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Neither Core, Session Host nor the reference tools offers `watch` or `unwatch` yet. The numbered chapters and executable Data Files remain the active specification.
+**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); notification routers and the router kit implemented in both Cores (#619); Store watch Operations and Session Store router wiring implemented in both Cores (#620); full Session integration and chapter integration pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Both Cores, the Session Store factories and the reference tools offer `watch` and `unwatch`. Session re-pumping, retry/detach and checkpoints remain #621. The numbered chapters and executable Data Files remain the active specification.
 
-Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged: nothing here adds syntax, instructions or costs. On implementation, move these rules into the chapters named in [Acceptance and delivery handoff](#acceptance-and-delivery-handoff), activate the deferred Data File entries, replace the chapters' pending-addition notices, and retire this document. Examples use `text` fences because documentation `talk` fences are checked against the current Operation catalogue. Their results are specified behavior, not execution evidence.
+Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged: nothing here adds syntax, instructions or costs. On implementation, move these rules into the chapters named in [Acceptance and delivery handoff](#acceptance-and-delivery-handoff), finish the remaining Data File wording, replace the chapters' pending-addition notices, and retire this document. Examples use `text` fences because documentation `talk` fences are checked against the current Operation catalogue. Their results are specified behavior, not execution evidence.
 
 ## Purpose and example
 
@@ -56,7 +56,7 @@ A commit that sets `score/alex` to a new value delivers `scoresChanged` with one
 
 ### Declarations
 
-These entries join `stdlib.toml` on implementation, after `swap`:
+These entries are active in `stdlib.toml`, after `swap` (#620):
 
 ```toml
 [[operation]]
@@ -94,7 +94,7 @@ These checks are the Core's. Every other failure is the Host's: `watch limit` ([
 
 ### New error codes
 
-These entries join `errors.toml` on implementation, with sources `ADR 0061` and `#227`:
+These entries are active in `errors.toml` (#620), with sources `ADR 0061` and `#227`:
 
 | Code | Fields | Raised when | Message |
 | --- | --- | --- | --- |
@@ -423,9 +423,13 @@ Add Transcripts under `corpus/sessions/` for an ordinary Notification, a Handler
 
 ## Acceptance and delivery handoff
 
-The implementation must include both Cores, both routers, both Session Hosts and the reference tools before these rules are moved into the chapters and the Data Files are activated. Generated declarations alone don't implement behavior.
+Both Cores, routers, Session Hosts and reference tools must be implemented
+before full chapter integration (#622). #620 activates the Operation and Error
+Data Files with their behavior on both Cores and Session Store forwarding;
+#621 completes Session driving and checkpoints. Generated declarations alone
+do not implement behavior.
 
-- **Deferred Data File entries:** `stdlib.toml` (`watch` and `unwatch`), `errors.toml` (`invalid watch` and `watch limit`), `host-errors.toml` (`invalid checkpoint`) and their generated consumers. `session.toml` changes only in its `:grant` and `:store` wording. `corpus.toml` and `trace.ebnf` need no change: Notifications are ordinary `deliver` inputs.
+- **Active Data File entries:** `stdlib.toml` (`watch` and `unwatch`), `errors.toml` (`invalid watch` and `watch limit`), `host-errors.toml` (`invalid checkpoint`) and their regenerated consumers (#619, #620). `session.toml` changes only in its `:grant` and `:store` wording. `corpus.toml` and `trace.ebnf` need no change: Notifications are ordinary `deliver` inputs.
 - **Embedding files:** `spec/embedding/talk.ts` and `talk.go` gain the declarations in [Embedding](#embedding), and the message-layer table gains `release`.
 - **Chapters to integrate:** chapter 7's `store` section (Operations, validation, routing, payload, limits), chapter 6's error table, chapter 9's Capabilities, release hook, message layer and Host error catalogue, chapter 10's save rules and checkpoints, chapter 11's scenario tables and chapter 12's Session Store.
 - **Tooling:** the reference checker, LSP and Playground learn the two Operations from the regenerated catalogue. No new Advanced tag is needed.
@@ -439,8 +443,8 @@ Both Cores supply the router: `@odgn/northtalk/notify` in TS and
 first-blessing review ([review notes](../../docs/reviews/notify-blessings/README.md)).
 `Group.ScriptNames` joins both Cores and `talk.ts`/`talk.go` so a router can read
 Script load order inside a Pump, and `invalid checkpoint` joins
-`host-errors.toml`. No Store is wired to a router yet, and no Core offers `watch`
-or `unwatch`; those, and the remaining Data File entries, are #620's.
+`host-errors.toml`. Store factories and bundled Stores are wired in #620;
+full Session driving and checkpoints remain #621.
 
 ## Release-hook delivery (#618)
 
@@ -451,7 +455,20 @@ and Library replacement. There is no TS Message Layer adapter; its transport
 acceptance is deferred by the maintainer. See the [TS guide](../../impl/ts/README.md#grant-release-hooks)
 and [Go guide](../../impl/go/README.md#grant-release-hooks) for current support.
 
-Store Operations, the router, checkpoints, Session integration and their Data
-File entries remain deferred to the remaining implementation steps. This step
+Store Operations and routers are implemented in #619/#620; full Session
+integration and chapter integration remain #621/#622. The release-hook step
 adds embedding and transport tests, with no new Corpus expectations or first
 blessings.
+
+## Store Operation delivery
+
+Both Cores implement `watch`, `unwatch`, uncharged Core validation and the
+`StoreImpl` release hook (#620). The Data Files and embedding declarations
+carry the additions. Memory Stores, and TS Web Storage and SQLite Stores,
+forward registration and release to a router and route successful commits and
+Host replacements. Both Session factories offer all eight Operations at the
+Session costs and watch limits. Session driving and checkpoints remain #621.
+
+Seven new Trace Cases, the existing Stores' changed Group Fingerprints and
+the Session binding restore Fingerprint await human first-blessing review;
+see the [review package](../../docs/reviews/store-watch-blessings/README.md).

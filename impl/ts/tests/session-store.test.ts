@@ -162,3 +162,17 @@ describe('The Session Store', () => {
     ).toBe(recorded);
   });
 });
+
+test(':grant store offers watching at the Session costs and finite limits', () => {
+  const { host } = session();
+  expect(host.input(':grant s store')).toEqual([]);
+  expect(host.input('ask s to watch "w", ""')).toEqual([]);
+  expect(host.input('ask s to unwatch "w"')).toEqual([]);
+  expect(
+    host.setup.standard!.find(s => s.capability === 'store')!.costs,
+  ).toMatchObject({ watch: { fuel: 4 }, unwatch: { fuel: 2 } });
+  host.input(
+    'on fill\nrepeat for each n in 1..101\nask s to watch n as text, ""\nend repeat\nend fill',
+  );
+  expect(host.input('fill')[0]).toContain('watch limit');
+});

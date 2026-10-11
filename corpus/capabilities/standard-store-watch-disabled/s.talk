@@ -1,0 +1,9 @@
+on open
+  ask st to open
+end open
+on invalid value
+  ask st to watch value, "", "put"
+end invalid
+on remove value
+  ask st to unwatch value
+end remove

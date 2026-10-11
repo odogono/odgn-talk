@@ -1045,6 +1045,22 @@ gives = "`true`, after putting `new` under `key`, if the Segment sees `expected`
 errors = ["invalid key", "can't store", "store full", "store busy"]
 
 [[operation]]
+capability = "store"
+name = "watch"
+mode = "immediate"
+call = "watch name, prefix [, message]"
+gives = "Nothing; from now on, each commit that changes keys beginning with `prefix` delivers `message` to the Script, replacing its watch called `name`"
+errors = ["invalid watch", "watch limit"]
+
+[[operation]]
+capability = "store"
+name = "unwatch"
+mode = "immediate"
+call = "unwatch name"
+gives = "Nothing; removes the Script's watch called `name` through this Grant, if there is one"
+errors = ["invalid watch"]
+
+[[operation]]
 capability = "sqlite"
 name = "query"
 mode = "immediate"

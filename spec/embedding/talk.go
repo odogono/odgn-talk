@@ -515,6 +515,9 @@ func (c *Core) ConsoleCapability(impl ConsoleImpl, costs Costs) (*CapabilityDef,
 // {limit} or `store busy` {key}, and from Increment with the error Add returns
 // (chapter 7, ADR 0062).
 type StoreImpl interface {
+ Watch(c *Call, name, prefix, message string) error
+ Unwatch(c *Call, name string) error
+ Release(GrantContext)
 	Begin(ctx SegmentContext) EffectResult
 	Commit(ctx SegmentContext) EffectResult
 	Rollback(ctx SegmentContext) EffectResult

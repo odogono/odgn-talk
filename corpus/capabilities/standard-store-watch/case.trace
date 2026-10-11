@@ -1,0 +1,20 @@
+# Unblessed: Store watch Operations (#620); first blessing awaits human review.
+# Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
+> load s identity=f80303ed0b6234a70095f1d5a55c3d17205abbbcdb60a5eb96683e9137df65fb
+> stub store.watch value=nothing
+> stub store.watch value=nothing
+> stub store.watch value=nothing
+> stub store.unwatch value=nothing
+> stub store.unwatch value=nothing
+> deliver d1 to=s message=go
+> pump clock=2026-10-11T12:00:00Z
+call s/r1.c1 op=st.watch args=["w", ""] result=nothing
+call s/r1.c2 op=st.watch args=["w", "score/", nothing] result=nothing
+call s/r1.c3 op=st.watch args=["w", "score/", "scoresChanged"] result=nothing
+call s/r1.c4 op=st.unwatch args=["missing"] result=nothing
+call s/r1.c5 op=st.unwatch args=["w"] result=nothing
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=96 alloc=40 state=8 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=96 alloc=40
+pumped state=idle fuel=96
+> vars
+vars s seen=nothing

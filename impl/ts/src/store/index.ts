@@ -4,6 +4,7 @@ export {
   decodeContents,
   encodeContents,
   sessionQuotas,
+  sessionWatchLimits,
   StoreContentsError,
   Stores,
   StoreStateUnknownError,

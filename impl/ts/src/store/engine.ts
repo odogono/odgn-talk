@@ -5,10 +5,21 @@
 // backend only loads a Store once and applies each commit's changes, to all
 // of a Segment's Stores, at once. The engine is the Segment Coordinator of
 // every Store it keeps (ADR 0069).
-import type { Call, EffectResult, SegmentContext } from '../capabilities';
+import type {
+  Call,
+  EffectResult,
+  GrantContext,
+  SegmentContext,
+} from '../capabilities';
 import { sizeOf } from '../costs';
 import { quoteJSON, encodeValue } from '../encoding';
 import { invalidValue } from '../errors';
+import {
+  changed,
+  createRouter,
+  type NotificationRouter,
+  type WatchLimits,
+} from '../notify/router';
 import { decodeValueMembers } from '../readers';
 import { add, hostScriptError, type StoreImpl } from '../store-capability';
 import { compareText } from '../text';
@@ -29,6 +40,14 @@ export const sessionQuotas: StoreQuotas = Object.freeze({
   size: 1_048_576,
   keys: 1000,
   value: 65_536,
+});
+
+/** The Session Store's notification limits (Store Notifications, The Session Host). */
+export const sessionWatchLimits: WatchLimits = Object.freeze({
+  watches: 100,
+  watchSize: 65_536,
+  pending: 1000,
+  pendingSize: 1_048_576,
 });
 
 /** Where Stores' committed contents are kept, by Store name. */
@@ -102,6 +121,8 @@ export const decodeContents = (source: string): [string, Value][] =>
 
 /** Every Store a Host keeps through one backend, as one `StoreImpl`. */
 export class Stores implements StoreImpl {
+  readonly router: NotificationRouter;
+  private readonly revisions = new Map<string, bigint>();
   private readonly contents = new Map<string, Contents>();
   // Live Segments by Group identity and Segment id, since Segment ids are
   // unique only within a Group.
@@ -112,7 +133,28 @@ export class Stores implements StoreImpl {
   constructor(
     private readonly backend: StoreBackend,
     readonly quotas: StoreQuotas,
-  ) {}
+    watchLimits: WatchLimits = sessionWatchLimits,
+  ) {
+    this.router = createRouter({
+      limits: () => watchLimits,
+      revision: store => (this.revisions.get(store) ?? 0n).toString(),
+    });
+  }
+
+  watch(
+    call: Call<string>,
+    name: string,
+    prefix: string,
+    message: string,
+  ): void {
+    this.router.watch(call, name, prefix, message);
+  }
+  unwatch(call: Call<string>, name: string): void {
+    this.router.unwatch(call, name);
+  }
+  release(context: GrantContext<string>): void {
+    this.router.release(context);
+  }
 
   // ------------------------------------------------------------ lifecycle
 
@@ -161,11 +203,22 @@ export class Stores implements StoreImpl {
       }
       return { status: 'failed', detail: (error as Error).message };
     }
-    for (const [store, values] of changes) {
-      const contents = this.committed(store);
-      for (const [key, value] of values) {
-        this.put(contents, key, absent(value) ? undefined : value);
-      }
+    // Route in Store name order, as the Go Core does.
+    for (const [store, values] of [...changes].sort(([a], [b]) =>
+      compareText(a, b),
+    )) {
+      this.router.commit(store, () => {
+        const contents = this.committed(store);
+        const keys: string[] = [];
+        for (const [key, value] of values) {
+          if (changed(contents.entries.get(key), value)) {
+            keys.push(key);
+          }
+          this.put(contents, key, absent(value) ? undefined : value);
+        }
+        this.bump(store, keys);
+        return keys;
+      });
     }
     return { status: 'ok' };
   }
@@ -284,8 +337,18 @@ export class Stores implements StoreImpl {
     if (next.entries.size > this.quotas.keys || next.size > this.quotas.size) {
       throw new StoreContentsError('The contents are past the Store’s quotas');
     }
-    this.backend.save(new Map([[store, this.changesTo(store, next)]]));
-    this.contents.set(store, next);
+    this.router.commit(store, () => {
+      const changes = this.changesTo(store, next);
+      const keys = [...changes]
+        .filter(([key, value]) =>
+          changed(this.committed(store).entries.get(key), value),
+        )
+        .map(([key]) => key);
+      this.backend.save(new Map([[store, changes]]));
+      this.contents.set(store, next);
+      this.bump(store, keys);
+      return keys;
+    });
   }
 
   /** Empties a Store, between Pumps. */
@@ -294,6 +357,13 @@ export class Stores implements StoreImpl {
   }
 
   // ------------------------------------------------------------ internals
+
+  // A commit that changes keys moves the Store's notification revision on.
+  private bump(store: string, keys: readonly string[]): void {
+    if (keys.length) {
+      this.revisions.set(store, (this.revisions.get(store) ?? 0n) + 1n);
+    }
+  }
 
   private committed(store: string): Contents {
     let contents = this.contents.get(store);

@@ -12,7 +12,7 @@ import (
 )
 
 func costs() talk.Costs {
-	return talk.Costs{"get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
+	return talk.Costs{"watch": {Fuel: 4}, "unwatch": {Fuel: 2}, "get": {Fuel: 2}, "keys": {Fuel: 2}, "set": {Fuel: 4}, "delete": {Fuel: 4}, "increment": {Fuel: 4}, "swap": {Fuel: 4}}
 }
 func ended(t *testing.T, g *talk.Group) *talk.RunEnd {
 	t.Helper()
@@ -275,5 +275,132 @@ func TestMemoryStoreReplaceValidationAndAtomicity(t *testing.T) {
 	}
 	if len(stores.Entries("s")) != 0 {
 		t.Fatal("Clear failed")
+	}
+}
+
+func TestWatchesRegisterBeforeOwnCommitSurviveFaultAndStopReleases(t *testing.T) {
+	stores := store.New(store.SessionQuotas())
+	core := talk.New()
+	def, err := core.StoreCapability(stores, costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := core.NewGroup(talk.GroupOptions{})
+	observer, err := def.Grant([]string{"get", "keys", "watch", "unwatch"}, "scores")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := g.Load(talk.LoadOptions{Name: "s", Source: `script variable seen = []
+on go
+ask writer to set "score/a", 1
+ask observer to watch "w", "score/"
+end go
+on storeChanged change, queued
+put change after seen
+end storeChanged
+on spin
+ask observer to watch "later", "later/"
+ask writer to set "later/rolledback", 1
+repeat while true
+end repeat
+end spin`, Grants: map[string]*talk.Grant{"observer": observer, "writer": def.GrantAll("scores")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pump := func() {
+		t.Helper()
+		if _, err := g.Pump(time.Unix(0, 0), talk.PumpOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Deliver(talk.Message{Name: "go"})
+	pump()
+	pump()
+	seen := func() string { return g.Inspect().Scripts[0].Vars[0].Val.String() }
+	if seen() != `[{grant: "observer", watch: "w", prefix: "score/", keys: ["score/a"], resync: false}]` {
+		t.Fatal(seen())
+	}
+	s.Deliver(talk.Message{Name: "spin", Limits: &talk.LimitOverride{FuelPerRun: 200}})
+	pump()
+	if !reflect.DeepEqual(entries(stores, "scores"), []string{"score/a=1"}) {
+		t.Fatal(entries(stores, "scores"))
+	}
+	if err := stores.Replace("scores", []talk.Pair{talk.KV("later/kept", talk.Int(2))}); err != nil {
+		t.Fatal(err)
+	}
+	pump()
+	if !strings.Contains(seen(), `watch: "later"`) {
+		t.Fatal(seen())
+	}
+	s.Stop("test")
+	pump()
+	before := seen()
+	if err := stores.Replace("scores", []talk.Pair{talk.KV("later/afterStop", talk.Int(3))}); err != nil {
+		t.Fatal(err)
+	}
+	pump()
+	if seen() != before || stores.Router.Pumped(g) {
+		t.Fatal(seen())
+	}
+}
+
+func TestStoreCheckpointConcurrentWithHostCommits(t *testing.T) {
+	stores := store.New(store.SessionQuotas())
+	core := talk.New()
+	def, err := core.StoreCapability(stores, costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := core.NewGroup(talk.GroupOptions{})
+	s, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nask st to watch \"w\", \"\"\nend go", Grants: map[string]*talk.Grant{"st": def.GrantAll("scores")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Deliver(talk.Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	ended(t, g)
+	var wg sync.WaitGroup
+	for _, name := range []string{"scores", "elsewhere"} {
+		wg.Go(func() {
+			for n := int64(0); n < 20; n++ {
+				if err := stores.Replace(name, []talk.Pair{talk.KV("k", talk.Int(n))}); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		})
+	}
+	for range 20 {
+		if _, err := stores.Router.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wg.Wait()
+}
+func TestUnwatchRefusesANonTextBindingAsWatchDoes(t *testing.T) {
+	core := talk.New()
+	def, err := core.StoreCapability(store.New(store.SessionQuotas()), costs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := []string{}
+	for _, ask := range []string{`watch "w", ""`, `unwatch "w"`} {
+		g := core.NewGroup(talk.GroupOptions{})
+		script, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nask st to " + ask + "\nend go", Grants: map[string]*talk.Grant{"st": def.GrantAll(42)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := script.Deliver(talk.Message{Name: "go"}); err != nil {
+			t.Fatal(err)
+		}
+		end := ended(t, g)
+		if end.Error == nil {
+			t.Fatal("Expected", ask, "to fail on a non-text binding")
+		}
+		codes = append(codes, end.Error.Code)
+	}
+	if codes[0] != codes[1] {
+		t.Fatal(codes)
 	}
 }

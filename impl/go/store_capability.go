@@ -3,8 +3,10 @@ package northtalk
 import (
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
+	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -19,8 +21,13 @@ func Add(a, b Value) (Value, error) {
 
 // StoreImpl keeps Stores named by the Grant binding. Writes belong to the
 // calling Segment; Commit applies them together, and Rollback discards them.
-// Omitted fallback and by arguments reach the Host as Nothing.
+// Omitted fallback and by arguments reach the Host as Nothing. Watch receives
+// the effective message; registration is final at the call and Release drops
+// every registration of its owner (ADR 0061).
 type StoreImpl interface {
+	Watch(c *Call, name, prefix, message string) error
+	Unwatch(c *Call, name string) error
+	Release(GrantContext)
 	Begin(ctx SegmentContext) EffectResult
 	Commit(ctx SegmentContext) EffectResult
 	Rollback(ctx SegmentContext) EffectResult
@@ -32,7 +39,10 @@ type StoreImpl interface {
 	Swap(c *Call, key string, expected, replacement Value) (bool, error)
 }
 
-// StoreCapability defines the six immediate store Operations. The Core checks
+// defaultStoreMessage is the message `watch` delivers when none is supplied.
+const defaultStoreMessage = "storeChanged"
+
+// StoreCapability defines the eight immediate store Operations. The Core checks
 // Shapes, empty keys, result kinds and declared catalogue failure fields. It
 // maps every binding to impl as one Segment Coordinator, the same for every
 // StoreCapability over impl, so writes to several Stores, or one Store
@@ -57,6 +67,14 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 	}
 	key := func(args []Value) string { s, _ := args[0].AsText(); return s }
 	ops := []Operation{
+		{Name: "watch", Args: []Shape{TextShape, TextShape, Optional(TextShape)}, Result: NothingShape, Errors: errors("watch limit"), Do: func(c *Call, a []Value) (Value, error) {
+			message, ok := optional(a, 2).AsText()
+			if !ok {
+				message = defaultStoreMessage
+			}
+			return Nothing, impl.Watch(c, key(a), a[1].inner.Text(), message)
+		}},
+		{Name: "unwatch", Args: []Shape{TextShape}, Result: NothingShape, Errors: errors(), Do: func(c *Call, a []Value) (Value, error) { return Nothing, impl.Unwatch(c, key(a)) }},
 		{Name: "get", Args: []Shape{TextShape, Optional(AnyShape)}, Result: AnyShape, Errors: errors(), Do: func(c *Call, a []Value) (Value, error) { return impl.Get(c, key(a), optional(a, 1)) }},
 		{Name: "set", Args: []Shape{TextShape, AnyShape}, Result: NothingShape, SegmentBound: true, Errors: errors("can't store", "store full", "store busy"), Do: func(c *Call, a []Value) (Value, error) { return Nothing, impl.Set(c, key(a), a[1]) }},
 		{Name: "delete", Args: []Shape{TextShape}, Result: NothingShape, SegmentBound: true, Errors: errors("store busy"), Do: func(c *Call, a []Value) (Value, error) { return Nothing, impl.Delete(c, key(a)) }},
@@ -80,12 +98,33 @@ func (c *Core) StoreCapability(impl StoreImpl, costs Costs) (*CapabilityDef, err
 	if err != nil {
 		return nil, err
 	}
+	def.release = impl.Release
 	def.checks = map[string]operationChecks{}
 	for _, op := range ops {
 		checks := operationChecks{failure: func(code string, data corevalue.Value) bool {
 			return slices.ContainsFunc(op.Errors, func(e ErrorDecl) bool { return e.Code == code }) && storeFailure(code, data)
 		}}
-		if op.Name != "keys" {
+		if op.Name == "watch" || op.Name == "unwatch" {
+			checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
+				field := ""
+				if a[0].Text() == "" {
+					field = "name"
+				} else if op.Name == "watch" {
+					message := defaultStoreMessage
+					if len(a) > 2 && a[2].Kind != corevalue.Nothing {
+						message = a[2].Text()
+					}
+					if strings.Contains(message, ":") || !syntax.ValidComputedMessageName(message, 1) {
+						field = "message"
+					}
+				}
+				if field != "" {
+					e := machine.ErrorValue("invalid watch", corevalue.Pair{Key: "field", Val: mustText(field)})
+					return &e
+				}
+				return nil
+			}
+		} else if op.Name != "keys" {
 			checks.arguments = func(a []corevalue.Value, _ any, _ []corevalue.Pair) *corevalue.Value {
 				if a[0].Text() == "" {
 					e := machine.ErrorValue("invalid key")
@@ -125,6 +164,8 @@ func storeFailure(code string, data corevalue.Value) bool {
 		return text("kind")
 	case "store full":
 		return text("limit") && slices.Contains([]string{"size", "keys", "value"}, data.Get("limit").Text())
+	case "watch limit":
+		return text("limit") && slices.Contains([]string{"watches", "size", "pending"}, data.Get("limit").Text())
 	case "store busy":
 		return text("key")
 	case "wrong kind":

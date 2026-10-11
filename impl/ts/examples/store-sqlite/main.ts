@@ -14,10 +14,16 @@ const path = process.argv[2] ?? 'store.sqlite';
 const db = openSqliteDatabase(path, { stores: sessionQuotas });
 try {
   const costs = Object.fromEntries(
-    ['get', 'set', 'delete', 'keys', 'increment', 'swap'].map(op => [
-      op,
-      { fuel: 4 },
-    ]),
+    [
+      'get',
+      'set',
+      'delete',
+      'keys',
+      'increment',
+      'swap',
+      'watch',
+      'unwatch',
+    ].map(op => [op, { fuel: 4 }]),
   );
   const group = newGroup({ name: 'counter' });
   const script = group.load({

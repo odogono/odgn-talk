@@ -520,6 +520,30 @@ var Errors = ErrorsTable{
 			Message: "A Store key can't be empty text",
 		},
 		ErrorsTableErrorEntry{
+			Code: "invalid watch",
+			Fields: []string{
+				"field",
+			},
+			RaisedWhen: "A `store` `watch` or `unwatch` is given empty text as its name, or `watch` an effective message that isn't a plain Name; `field` is `name` or `message`, and the Core raises it before the Host function runs",
+			Sources: []string{
+				"ADR 0061",
+				"#227",
+			},
+			Message: "A watch's {field} isn't valid",
+		},
+		ErrorsTableErrorEntry{
+			Code: "watch limit",
+			Fields: []string{
+				"limit",
+			},
+			RaisedWhen: "A `watch` would take its Store's watches past a limit, after removing the watch it replaces; `limit` is `watches`, `size` or `pending`, and the Host raises it before anything changes",
+			Sources: []string{
+				"ADR 0061",
+				"#227",
+			},
+			Message: "The Store's {limit} limit for watches would be exceeded",
+		},
+		ErrorsTableErrorEntry{
 			Code: "can't store",
 			Fields: []string{
 				"kind",
