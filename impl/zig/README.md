@@ -95,11 +95,15 @@ A `, deciding` Handler's `veto` and `pass` are checked over every path through
 its body for `after a suspension`.
 
 Capability calls, `say` included, are checked only when the `Context` gives
-the Grants, and `wrong argument` (a literal against an Operation's Shape),
-`missing grant`,
-`import cycle`, `pattern too large` and `initialiser failed` are not raised
-yet: they need the Group's Shapes and Library graph, Text Pattern programs, and
-a run of the initialiser, which later parts of step 1 and step 2 bring.
+the Grants, `wrong argument` among them for a literal against an Operation's
+Shape. The checker also records each call as a Library's `needs`, which a
+Script's load checks against its Grants for `missing grant`. Loading raises two
+diagnostics after the checker: `pattern too large` for a Text Pattern literal
+whose compiled program, every copy of a counted repetition counted, runs past
+the default `patternSize`, and `initialiser failed` at the instruction where a
+unit's initialiser raises, which leaves no Script in the Group, or no compiled
+Library. `import cycle` is never raised: `talk_compile_library` takes a
+Library's imports already compiled, so a cycle can't be built.
 
 ## Lowering
 

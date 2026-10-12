@@ -28,6 +28,7 @@ const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
 const Opcode = @import("../generated/opcodes.zig").Opcode;
 const stdlib_sources = @import("../generated/stdlib_sources.zig").sources;
+const limits_table = @import("../generated/limits.zig").limits;
 const Value = model.Value;
 
 /// Something on a frame's operand stack: a Script value, or one of the
@@ -161,6 +162,9 @@ pub const Run = struct {
     suspended_at: []const u8 = "",
     /// Once ready, what it waited on.
     waited: Waited = .{},
+    /// Where its last error was raised, which an initialiser's
+    /// `initialiser failed` diagnostic names.
+    raised_at: ?lower.Position = null,
     /// The Join it is in, from `join-start` to its closing `end`.
     join: ?*Join = null,
     /// The body of the Handler Clause it was dispatched to, whose Queueing
@@ -460,7 +464,16 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     defer run.frames.deinit(gpa);
     try group.pushFrame(&run, 0, &.{});
     switch (try group.execute(&run, false)) {
-        .returned, .errored => |v| v.release(),
+        .returned => |v| v.release(),
+        .errored => |v| {
+            // `initialiser failed`, at the raising instruction.
+            v.release();
+            const at = run.raised_at orelse lower.Position{ .line = 1, .column = 1 };
+            const diags = try gpa.alloc(Diagnostic, 1);
+            diags[0] = .{ .code = "initialiser failed", .line = at.line, .column = at.column };
+            l.destroy();
+            return .{ .refused = diags };
+        },
         else => {},
     }
     return .{ .library = l };
@@ -523,6 +536,28 @@ pub const FunctionCode = struct {
     library: ?*Library,
     body: u32,
 };
+
+/// The default `patternSize`, since a Script's limits come with step 4.
+fn patternSize() u64 {
+    for (limits_table.limit) |l| if (std.mem.eql(u8, l.ts, "patternSize")) return @intCast(l.default);
+    unreachable;
+}
+
+/// The positions of a unit's Text Pattern literals, those with no splices,
+/// whose programs run over `limit` instructions, counting every copy of a
+/// counted repetition.
+fn oversizedPatterns(a: Allocator, unit: *const lower.Unit, limit: u64) ![]lower.Position {
+    var out: std.ArrayList(lower.Position) = .empty;
+    for (unit.code) |ins| {
+        if (ins.op != .@"const") continue;
+        const c = unit.values[@intCast(ins.operands[0].int)];
+        if (c != .pattern) continue;
+        const elements = matcher.read(a, c.pattern, false) catch continue;
+        const program = matcher.compile(a, elements, false) catch continue;
+        if (program.code.len > limit) try out.append(a, ins.position);
+    }
+    return out.items;
+}
 
 /// A well-known object the Host binds at Load, by name.
 pub const NamedObject = struct { name: []const u8, object: *objects.Object };
@@ -628,22 +663,7 @@ pub const Group = struct {
         g.calls.deinit(g.gpa);
         for (g.ids.items) |id| g.gpa.free(id);
         g.ids.deinit(g.gpa);
-        for (g.scripts.items) |s| {
-            for (s.variables) |v| v.release();
-            g.gpa.free(s.variables);
-            for (s.definitions) |v| v.release();
-            g.gpa.free(s.definitions);
-            for (s.work.items) |w| switch (w) {
-                .message => |d| g.releaseDelivery(d),
-                .run => {},
-            };
-            s.work.deinit(g.gpa);
-            for (s.live.items) |r| g.destroyRun(r);
-            s.live.deinit(g.gpa);
-            for (s.unit.values) |v| if (v == .value) v.value.release();
-            s.arena.deinit();
-            g.gpa.destroy(s);
-        }
+        for (g.scripts.items) |s| g.destroyScript(s);
         g.scripts.deinit(g.gpa);
         // A live Run removed its own wait; any left belongs to none.
         for (g.pending.items) |p| g.destroyPending(p);
@@ -736,6 +756,16 @@ pub const Group = struct {
         }
         s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = context, .values = g.gpa });
         lowered = true;
+        // A Text Pattern literal over the Script's `patternSize` is a load
+        // error, at its opening `<`.
+        const oversized = try oversizedPatterns(a, &s.unit, patternSize());
+        if (oversized.len > 0) {
+            for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ name, p.line, p.column });
+            for (s.unit.values) |v| if (v == .value) v.value.release();
+            s.arena.deinit();
+            g.gpa.destroy(s);
+            return .{ .refused = oversized.len };
+        }
         if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, s.imports, options.grants_as_used);
         s.objects = try a.alloc(NamedObject, options.objects.len);
         for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
@@ -761,7 +791,21 @@ pub const Group = struct {
         }
         try g.pushFrame(&run, 0, &.{});
         switch (try g.execute(&run, false)) {
-            .returned, .errored => |v| v.release(),
+            .returned => |v| v.release(),
+            .errored => |v| {
+                // `initialiser failed`, at the raising instruction: the
+                // Script leaves the Group.
+                v.release();
+                const at = run.raised_at orelse lower.Position{ .line = 1, .column = 1 };
+                g.write("diag {s} code=\"initialiser failed\" pos={d}:{d}\n", .{ name, at.line, at.column });
+                _ = g.scripts.pop();
+                if (s.owner) |o| if (o.owner_of) |x| {
+                    g.gpa.free(x);
+                    o.owner_of = null;
+                };
+                g.destroyScript(s);
+                return .{ .refused = 1 };
+            },
             else => {},
         }
         return .{ .loaded = s };
@@ -942,6 +986,23 @@ pub const Group = struct {
         g.gpa.free(d.message);
         if (d.during) |x| x.release();
         if (d.from) |x| g.gpa.free(x);
+    }
+
+    fn destroyScript(g: *Group, s: *Script) void {
+        for (s.variables) |v| v.release();
+        g.gpa.free(s.variables);
+        for (s.definitions) |v| v.release();
+        g.gpa.free(s.definitions);
+        for (s.work.items) |w| switch (w) {
+            .message => |d| g.releaseDelivery(d),
+            .run => {},
+        };
+        s.work.deinit(g.gpa);
+        for (s.live.items) |r| g.destroyRun(r);
+        s.live.deinit(g.gpa);
+        for (s.unit.values) |v| if (v == .value) v.value.release();
+        s.arena.deinit();
+        g.gpa.destroy(s);
     }
 
     fn destroyPending(g: *Group, p: *Pending) void {
@@ -2645,6 +2706,10 @@ pub const Group = struct {
     }
 
     fn writeRaise(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
+        run.raised_at = ins.position;
+        // An initialiser's error is the unit's load diagnostic, not a
+        // `raise` record.
+        if (run.id.len == 0) return;
         const w = g.trace orelse return;
         const code = err.get("code") orelse return;
         w.print("raise {s} code=", .{run.id}) catch {};
