@@ -13,9 +13,14 @@ pub const Measures = struct {
     result: ?*Value = null,
     scanned: u64 = 0,
     count: u64 = 0,
+    /// The Text Pattern matcher's steps (chapter 8, Running).
+    steps: u64 = 0,
     /// A Built-in's rate key, `builtin.<name>`, in place of `call-builtin`'s.
     builtin: []const u8 = "",
     args: []const *Value = &.{},
+    /// Allocation beyond the formula's: `bin-bits`'s later values, whose
+    /// sizes add to the first's.
+    alloc_extra: u64 = 0,
 
     pub fn release(self: *Measures) void {
         if (self.input) |v| v.release();
@@ -45,7 +50,7 @@ pub fn charge(key: []const u8, m: *const Measures) Charge {
     var buf: [64]u8 = undefined;
     const full = if (m.builtin.len > 0) std.fmt.bufPrint(&buf, "builtin.{s}", .{m.builtin}) catch key else key;
     const rate = find(full) orelse return .{ .fuel = 0, .alloc = 0 };
-    return .{ .fuel = evaluate(rate.fuel, m), .alloc = evaluate(rate.alloc, m) };
+    return .{ .fuel = evaluate(rate.fuel, m), .alloc = evaluate(rate.alloc, m) + m.alloc_extra };
 }
 
 fn evaluate(terms: []const rates.CostTerm, m: *const Measures) u64 {
@@ -64,6 +69,7 @@ fn evaluate(terms: []const rates.CostTerm, m: *const Measures) u64 {
             rates.measure_constant => 1,
             rates.measure_scanned => m.scanned,
             rates.measure_count => m.count,
+            rates.measure_steps => m.steps,
             else => if (subject) |v| measure(t.measure, v) else 0,
         };
         const n = @as(u64, @intCast(t.factor)) * measured;

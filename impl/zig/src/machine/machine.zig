@@ -17,6 +17,9 @@ const ast = @import("../syntax/ast.zig");
 const chunks = @import("chunks.zig");
 const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
+const binary = @import("binary.zig");
+const conversions = @import("convert.zig");
+const literal = @import("literal.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
@@ -28,13 +31,22 @@ const Value = model.Value;
 pub const Slot = union(enum) {
     value: *Value,
     iterator: *Iterator,
+    reader: *binary.Reader,
 
     fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
             .value => |v| v.release(),
             .iterator => |it| {
+                it.references -= 1;
+                if (it.references > 0) return;
                 if (it.subject) |s| s.release();
                 gpa.destroy(it);
+            },
+            .reader => |r| {
+                r.references -= 1;
+                if (r.references > 0) return;
+                r.subject.release();
+                gpa.destroy(r);
             },
         }
     }
@@ -42,6 +54,8 @@ pub const Slot = union(enum) {
 
 /// A list or range snapshot and a position, or a count left.
 pub const Iterator = struct {
+    /// A dispatch activation's copy of the owner's prefix shares it.
+    references: usize = 1,
     subject: ?*Value,
     position: usize = 0,
     left: u64 = 0,
@@ -59,6 +73,11 @@ pub const Delivery = struct {
     message: []const u8,
     args: []*Value,
     request: bool,
+    /// For an `error` message: the message the failed Run was handling, as
+    /// `{name, args}`, which `, during` binds.
+    during: ?*Value = null,
+    /// For an `error` message: the Run that errored.
+    from: ?[]const u8 = null,
 };
 
 pub const Run = struct {
@@ -70,6 +89,23 @@ pub const Run = struct {
     delivery: Delivery,
     handler: []const u8 = "",
     clause: u32 = 0,
+    /// The error being unwound, with the `finally` blocks still to run.
+    unwinding: ?Unwinding = null,
+};
+
+/// An accepted catch: its frame, where it goes on, and its dispatch
+/// activation's stack, which becomes the frame's.
+pub const Accept = struct { frame: usize, pc: u32, stack: std.ArrayList(Slot) };
+
+pub const Cleanup = struct { frame: usize, target: u32, depth: u32 };
+
+pub const Then = union(enum) { accept: Accept, end };
+
+pub const Unwinding = struct {
+    err: *Value,
+    cleanups: std.ArrayList(Cleanup),
+    next: usize = 0,
+    then: Then,
 };
 
 pub const Script = struct {
@@ -113,6 +149,8 @@ pub const Group = struct {
     results: std.AutoHashMapUnmanaged(u64, *Value) = .empty,
     /// The error an instruction raised, until the run loop takes it.
     pending_error: ?*Value = null,
+    /// Whether the Core raised it, so it gets a `message`.
+    pending_core: bool = false,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
@@ -128,7 +166,12 @@ pub const Group = struct {
             g.gpa.free(s.variables);
             for (s.definitions) |v| v.release();
             g.gpa.free(s.definitions);
-            for (s.mailbox.items) |d| releaseAll(d.args, g.gpa);
+            for (s.mailbox.items) |d| {
+                releaseAll(d.args, g.gpa);
+                g.gpa.free(d.message);
+                if (d.during) |x| x.release();
+                if (d.from) |x| g.gpa.free(x);
+            }
             s.mailbox.deinit(g.gpa);
             for (s.unit.values) |v| if (v == .value) v.value.release();
             s.arena.deinit();
@@ -221,7 +264,7 @@ pub const Group = struct {
                         out.writeAll(" args=[") catch {};
                         for (d.delivery.args, 0..) |v, i| {
                             if (i > 0) out.writeAll(", ") catch {};
-                            display.write(out, v) catch {};
+                            display.writeTrace(out, v) catch {};
                         }
                         out.writeAll("]") catch {};
                     }
@@ -244,8 +287,13 @@ pub const Group = struct {
             },
         };
         g.inputs.clearRetainingCapacity();
-        for (g.scripts.items) |s| {
-            while (s.mailbox.items.len > 0) {
+        // Turns: each Script with work, in load order, round and round.
+        var busy = true;
+        while (busy) {
+            busy = false;
+            for (g.scripts.items) |s| {
+                if (s.mailbox.items.len == 0) continue;
+                busy = true;
                 const d = s.mailbox.orderedRemove(0);
                 try g.dispatch(s, d);
             }
@@ -261,7 +309,7 @@ pub const Group = struct {
             w.print("vars {s}", .{s.name}) catch {};
             for (s.unit.variables, s.variables) |name, v| {
                 w.print(" {s}=", .{name}) catch {};
-                display.write(w, v) catch {};
+                display.writeTrace(w, v) catch {};
             }
             w.writeAll("\n") catch {};
         }
@@ -269,16 +317,31 @@ pub const Group = struct {
 
     // ------------------------------------------------------------ dispatch
 
+    /// The start keys of a Run's first Stretch and its `run` record: its
+    /// Delivery, or the Run whose error it handles.
+    fn writeOrigin(w: *std.Io.Writer, d: Delivery) void {
+        if (d.from) |from| w.print(" from={s}", .{from}) catch {} else w.print(" delivery=d{d}", .{d.id}) catch {};
+    }
+
     fn dispatch(g: *Group, s: *Script, d: Delivery) !void {
+        defer {
+            releaseAll(d.args, g.gpa);
+            g.gpa.free(d.message);
+            if (d.during) |x| x.release();
+            if (d.from) |x| g.gpa.free(x);
+        }
+        // An `error` message with no `on error` is dropped unseen.
+        if (d.from != null) {
+            const any = for (s.unit.bodies) |b| {
+                if (b.kind == .handler and std.mem.eql(u8, b.name, "error")) break true;
+            } else false;
+            if (!any) return;
+        }
         s.runs += 1;
         var id_buf: [64]u8 = undefined;
         const id = try std.fmt.bufPrint(&id_buf, "{s}/r{d}", .{ s.name, s.runs });
         var run: Run = .{ .id = id, .script = s, .delivery = d, .handler = d.message };
         defer run.frames.deinit(g.gpa);
-        defer {
-            releaseAll(d.args, g.gpa);
-            g.gpa.free(d.message);
-        }
         // Each clause of the Handler, in order, whose parameter count fits.
         var clause: u32 = 0;
         var outcome: Outcome = .unhandled;
@@ -288,6 +351,11 @@ pub const Group = struct {
             if (b.params.len != d.args.len) continue;
             run.clause = clause;
             try g.pushFrame(&run, @intCast(i), d.args);
+            if (b.during) |slot| if (d.during) |during| {
+                const f = &run.frames.items[run.frames.items.len - 1];
+                f.locals[slot].release();
+                f.locals[slot] = during.retain();
+            };
             // Dispatch charges the clause at the body's first instruction.
             run.fuel += 4;
             outcome = try g.execute(&run, true);
@@ -296,37 +364,65 @@ pub const Group = struct {
         }
         g.pump_fuel += run.fuel;
         const state = g.persistentState(s);
-        switch (outcome) {
-            .returned => |v| {
-                g.write("seg {s} start delivery=d{d} handler={s} clause={d} fuel={d} alloc={d} state={d} end=return\n", .{ id, d.id, run.handler, run.clause, run.fuel, run.alloc, state });
-                if (g.trace) |w| {
-                    w.print("run {s} outcome=completed delivery=d{d} handler={s}", .{ id, d.id, run.handler }) catch {};
-                    if (v.data != .nothing) {
-                        w.writeAll(" value=") catch {};
-                        display.write(w, v) catch {};
-                    }
-                    w.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
-                }
-                if (d.request) try g.results.put(g.gpa, d.id, v) else v.release();
-            },
-            .errored => |e| {
-                g.write("seg {s} start delivery=d{d} handler={s} clause={d} fuel={d} alloc={d} state={d} end=error\n", .{ id, d.id, run.handler, run.clause, run.fuel, run.alloc, state });
-                if (g.trace) |w| {
-                    w.print("run {s} outcome=errored delivery=d{d} handler={s} error=", .{ id, d.id, run.handler }) catch {};
-                    display.write(w, e) catch {};
-                    w.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
-                }
-                e.release();
-            },
-            .faulted => {
-                g.write("seg {s} start delivery=d{d} handler={s} clause={d} fuel={d} alloc={d} state={d} end=fault\n", .{ id, d.id, run.handler, run.clause, run.fuel, run.alloc, state });
-                g.write("run {s} outcome=limit-fault delivery=d{d} handler={s} limit=fuel fuel={d} alloc={d}\n", .{ id, d.id, run.handler, run.fuel, run.alloc });
-            },
-            .unhandled, .clause_failed => {
-                g.write("seg {s} start delivery=d{d} handler={s} fuel={d} alloc={d} state={d} end=unhandled\n", .{ id, d.id, run.handler, run.fuel, run.alloc, state });
-                g.write("run {s} outcome=unhandled delivery=d{d} handler={s} fuel={d} alloc={d}\n", .{ id, d.id, run.handler, run.fuel, run.alloc });
-            },
+        const w = g.trace;
+        const end: []const u8 = switch (outcome) {
+            .returned => "return",
+            .errored => "error",
+            .faulted => "fault",
+            .unhandled, .clause_failed => "unhandled",
+        };
+        if (w) |out| {
+            out.print("seg {s} start", .{id}) catch {};
+            writeOrigin(out, d);
+            out.print(" handler={s}", .{run.handler}) catch {};
+            if (outcome != .unhandled and outcome != .clause_failed) out.print(" clause={d}", .{run.clause}) catch {};
+            out.print(" fuel={d} alloc={d} state={d} end={s}\n", .{ run.fuel, run.alloc, state, end }) catch {};
+            const word: []const u8 = switch (outcome) {
+                .returned => "completed",
+                .errored => "errored",
+                .faulted => "limit-fault",
+                .unhandled, .clause_failed => "unhandled",
+            };
+            out.print("run {s} outcome={s}", .{ id, word }) catch {};
+            writeOrigin(out, d);
+            out.print(" handler={s}", .{run.handler}) catch {};
+            switch (outcome) {
+                .returned => |v| if (v.data != .nothing) {
+                    out.writeAll(" value=") catch {};
+                    display.writeTrace(out, v) catch {};
+                },
+                .errored => |e| {
+                    out.writeAll(" error=") catch {};
+                    display.writeTrace(out, e) catch {};
+                },
+                .faulted => out.writeAll(" limit=fuel") catch {},
+                else => {},
+            }
+            out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
         }
+        switch (outcome) {
+            .returned => |v| if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
+            .errored => |e| {
+                // An uncaught error sends the Script its `error` message,
+                // unless the Run was handling one.
+                if (d.from == null) {
+                    const during = try g.messageMap(d);
+                    const args = try g.gpa.alloc(*Value, 1);
+                    args[0] = e;
+                    try s.mailbox.append(g.gpa, .{ .id = 0, .message = try g.gpa.dupe(u8, "error"), .args = args, .request = false, .during = during, .from = try g.gpa.dupe(u8, id) });
+                } else e.release();
+            },
+            else => {},
+        }
+    }
+
+    /// A message as `{name, args}`, for `, during`.
+    fn messageMap(g: *Group, d: Delivery) !*Value {
+        const name = try model.text(g.gpa, d.message);
+        defer name.release();
+        const args = try model.list(g.gpa, d.args);
+        defer args.release();
+        return model.map(g.gpa, &.{ .{ .key = "name", .value = name }, .{ .key = "args", .value = args } });
     }
 
     /// The Script's Persistent State at a Segment's end: its Script
@@ -380,10 +476,9 @@ pub const Group = struct {
             const ins = run.script.unit.code[pc];
             frame.pc += 1;
             var charge: costs.Measures = .{};
-            var done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
+            const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
                 error.Raised => blk: {
-                    const err = g.pending_error.?;
-                    g.pending_error = null;
+                    const err = try g.completeError(run, pc, ins);
                     break :blk Step{ .raised = err };
                 },
                 else => |other| return other,
@@ -397,9 +492,12 @@ pub const Group = struct {
                 // step 4's; this bound keeps every Run finite until then.
                 if (run.fuel > fuel_per_run) {
                     charge.release();
-                    if (done == .returned) done.returned.release();
-                    if (done == .raised) done.raised.release();
+                    switch (done) {
+                        .returned, .raised => |v| v.release(),
+                        else => {},
+                    }
                     g.write("fault {s} limit=fuel at={s}:{d} pos={d}:{d}\n", .{ run.id, run.script.name, pc, ins.position.line, ins.position.column });
+                    g.abandonUnwinding(run);
                     while (run.frames.items.len > 0) g.popFrame(run);
                     return .faulted;
                 }
@@ -418,22 +516,356 @@ pub const Group = struct {
                     return .clause_failed;
                 },
                 .raised => |err| {
-                    // Step 1 ends the Run; unwinding to a catch comes with
-                    // the Unwind Table.
-                    g.writeRaise(run, err, pc, ins);
-                    while (run.frames.items.len > 0) g.popFrame(run);
-                    return .{ .errored = err };
+                    if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
                 },
+                .end_cleanup => if (try g.nextCleanup(run)) |end| return end,
+                .guard_value => |v| {
+                    defer v.release();
+                    if (g.guardEntry(run, pc)) |entry| {
+                        if (g.trace) |w| {
+                            w.print("guard-skip {s} at={s}:{d} pos={d}:{d} value=", .{ run.id, run.script.name, pc, ins.position.line, ins.position.column }) catch {};
+                            display.writeTrace(w, v) catch {};
+                            w.writeAll("\n") catch {};
+                        }
+                        try g.cutStack(run, run.frames.items.len - 1, entry.depth);
+                        run.frames.items[run.frames.items.len - 1].pc = entry.target;
+                    }
+                },
+                .catch_accept, .catch_next => unreachable,
             }
         }
+    }
+
+    /// Completes the error an instruction raised: a Core-raised one gets its
+    /// `message` and its fields in catalogue order, and every one its `at`,
+    /// unless it has one.
+    fn completeError(g: *Group, run: *Run, pc: u32, ins: lower.Instruction) !*Value {
+        _ = pc;
+        const raw = g.pending_error.?;
+        g.pending_error = null;
+        defer raw.release();
+        const frame = &run.frames.items[run.frames.items.len - 1];
+        const at = try g.atMap(run, frame.body, ins);
+        defer at.release();
+        var pairs: std.ArrayList(model.Pair) = .empty;
+        defer pairs.deinit(g.gpa);
+        var message: ?*Value = null;
+        defer if (message) |m| m.release();
+        if (g.pending_core) {
+            g.pending_core = false;
+            const code = raw.get("code").?;
+            try pairs.append(g.gpa, .{ .key = "code", .value = code });
+            const entry = errorEntry(code.data.text);
+            message = try model.text(g.gpa, try g.messageText(entry, raw));
+            try pairs.append(g.gpa, .{ .key = "message", .value = message.? });
+            if (entry) |e| {
+                for (e.fields) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
+                if (e.optional) |opt| for (opt) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
+            }
+            for (raw.data.map) |p| {
+                const listed = for (pairs.items) |q| {
+                    if (std.mem.eql(u8, q.key, p.key)) break true;
+                } else false;
+                if (!listed) try pairs.append(g.gpa, p);
+            }
+        } else {
+            try pairs.appendSlice(g.gpa, raw.data.map);
+            if (raw.get("at") != null) return raw.retain();
+        }
+        try pairs.append(g.gpa, .{ .key = "at", .value = at });
+        const full = try model.map(g.gpa, pairs.items);
+        full.core_message = message != null;
+        return full;
+    }
+
+    fn messageText(g: *Group, entry: ?errors_table.ErrorsTableErrorEntry, raw: *Value) ![]const u8 {
+        const a = g.scratch.allocator();
+        const template = if (entry) |e| e.message else return raw.get("code").?.data.text;
+        var out: std.ArrayList(u8) = .empty;
+        var i: usize = 0;
+        while (i < template.len) {
+            if (template[i] == '{') if (std.mem.indexOfScalarPos(u8, template, i, '}')) |close| {
+                if (raw.get(template[i + 1 .. close])) |v| try out.appendSlice(a, try display.string(a, v));
+                i = close + 1;
+                continue;
+            };
+            try out.append(a, template[i]);
+            i += 1;
+        }
+        return out.items;
+    }
+
+    /// `{unit, handler, line, column}` for an instruction of a body.
+    fn atMap(g: *Group, run: *Run, body: u32, ins: lower.Instruction) !*Value {
+        const b = run.script.unit.bodies[body];
+        var handler = b.name;
+        // A Lambda's or event test's errors name the body it is written in.
+        if (b.kind == .lambda) {
+            while (std.mem.lastIndexOfScalar(u8, handler, ':')) |colon| {
+                const tail = handler[colon + 1 ..];
+                if (tail.len == 0 or !std.ascii.isDigit(tail[0])) break;
+                const before = handler[0..colon];
+                const c2 = std.mem.lastIndexOfScalar(u8, before, ':') orelse break;
+                handler = before[0..c2];
+            }
+        }
+        const unit = try model.text(g.gpa, run.script.name);
+        defer unit.release();
+        const h = try model.text(g.gpa, handler);
+        defer h.release();
+        const line = try chunks.numberValue(g.gpa, ins.position.line);
+        defer line.release();
+        const column = try chunks.numberValue(g.gpa, ins.position.column);
+        defer column.release();
+        return model.map(g.gpa, &.{ .{ .key = "unit", .value = unit }, .{ .key = "handler", .value = h }, .{ .key = "line", .value = line }, .{ .key = "column", .value = column } });
     }
 
     fn writeRaise(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
         const w = g.trace orelse return;
         const code = err.get("code") orelse return;
         w.print("raise {s} code=", .{run.id}) catch {};
-        display.write(w, code) catch {};
+        display.writeTrace(w, code) catch {};
         w.print(" at={s}:{d} pos={d}:{d}\n", .{ run.script.name, pc, ins.position.line, ins.position.column }) catch {};
+    }
+
+    // ------------------------------------------------------------ unwinding
+
+    fn covers(e: lower.Unwind, pc: u32) bool {
+        return e.first <= pc and pc <= e.last;
+    }
+
+    /// The guard region of the top frame covering `pc`.
+    fn guardEntry(g: *Group, run: *Run, pc: u32) ?lower.Unwind {
+        _ = g;
+        for (run.script.unit.unwind) |e| if (e.kind == .guard and covers(e, pc)) return e;
+        return null;
+    }
+
+    /// The pc a frame is at: the raising instruction for the top frame, the
+    /// call it waits on for a caller.
+    fn framePc(run: *Run, index: usize, raised: u32) u32 {
+        if (index == run.frames.items.len - 1) return raised;
+        return run.frames.items[index].pc - 1;
+    }
+
+    /// Cuts a frame's operand stack to `depth` slots.
+    fn cutStack(g: *Group, run: *Run, index: usize, depth: u32) !void {
+        const f = &run.frames.items[index];
+        while (f.stack.items.len > depth) f.stack.pop().?.release(g.gpa);
+    }
+
+    /// Takes a raised error: a guard region skips its clause; otherwise a
+    /// two-phase catch search runs each catch's tests before anything is
+    /// discarded, then the exited `finally` blocks run, innermost first.
+    /// Returns the Run's end, if the error ends it.
+    fn unwind(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction, charged: bool) !?Outcome {
+        const top = run.frames.items.len - 1;
+        if (g.guardEntry(run, pc)) |entry| {
+            defer err.release();
+            if (g.trace) |w| {
+                w.print("guard-skip {s} at={s}:{d} pos={d}:{d} code=", .{ run.id, run.script.name, pc, ins.position.line, ins.position.column }) catch {};
+                display.writeTrace(w, err.get("code").?) catch {};
+                w.writeAll("\n") catch {};
+            }
+            try g.cutStack(run, top, entry.depth);
+            run.frames.items[top].pc = entry.target;
+            return null;
+        }
+        // An error raised while unwinding replaces the one in flight, which
+        // becomes its `during`.
+        var current = err;
+        if (run.unwinding) |*u| {
+            if (current.get("during") == null) {
+                const with = try withKey(g.gpa, current, "during", u.err);
+                current.release();
+                current = with;
+            }
+            g.abandonUnwinding(run);
+        }
+        g.writeRaise(run, current, pc, ins);
+        return g.search(run, current, pc, top, charged);
+    }
+
+    fn search(g: *Group, run: *Run, err: *Value, pc: u32, from: usize, charged: bool) !?Outcome {
+        const unit = &run.script.unit;
+        var position: usize = from + 1;
+        var index: usize = from + 1;
+        while (index > 0) {
+            index -= 1;
+            const fpc = framePc(run, index, pc);
+            const body = unit.bodies[run.frames.items[index].body];
+            for (unit.unwind, 0..) |e, ei| {
+                if (e.kind != .@"catch" or !covers(e, fpc) or e.first < body.first or e.last > body.last) continue;
+                // Each search step charges the frames it leaves.
+                if (charged) run.fuel += 4 * (position - 1 - index);
+                position = index + 1;
+                switch (try g.dispatchCatch(run, index, e, err, charged)) {
+                    .declined => continue,
+                    .accepted => |acc| {
+                        try g.startCleanup(run, err, index, fpc, ei, pc, .{ .accept = acc });
+                        return g.nextCleanup(run);
+                    },
+                }
+            }
+        }
+        if (charged) run.fuel += 4 * position;
+        try g.startCleanup(run, err, null, 0, 0, pc, .end);
+        return g.nextCleanup(run);
+    }
+
+    const Dispatch = union(enum) { accepted: Accept, declined };
+
+    /// Runs a catch's tests in a dispatch activation of frame `index`: its
+    /// own operand stack, the owner's iterator prefix and the error, over the
+    /// owner's locals. Frames above it are held aside meanwhile.
+    fn dispatchCatch(g: *Group, run: *Run, index: usize, entry: lower.Unwind, err: *Value, charged: bool) !Dispatch {
+        const held_len = run.frames.items.len - index - 1;
+        const held = try g.gpa.dupe(Frame, run.frames.items[index + 1 ..]);
+        defer g.gpa.free(held);
+        run.frames.shrinkRetainingCapacity(index + 1);
+        const owner = &run.frames.items[index];
+        const owner_stack = owner.stack;
+        const owner_pc = owner.pc;
+        var activation: std.ArrayList(Slot) = .empty;
+        for (owner_stack.items[0..@min(entry.depth, owner_stack.items.len)]) |slot| try activation.append(g.gpa, retainSlot(slot));
+        try activation.append(g.gpa, .{ .value = err.retain() });
+        owner.stack = activation;
+        owner.pc = entry.target;
+        const result: Dispatch = while (true) {
+            _ = g.scratch.reset(.retain_capacity);
+            const f = &run.frames.items[index];
+            const pc = f.pc;
+            const ins = run.script.unit.code[pc];
+            f.pc += 1;
+            var charge: costs.Measures = .{};
+            const done = g.instruction(run, f, ins, &charge) catch |e| switch (e) {
+                error.Raised => blk: {
+                    const raised = try g.completeError(run, pc, ins);
+                    break :blk Step{ .raised = raised };
+                },
+                else => |other| return other,
+            };
+            if (charged) {
+                const cost = costs.charge(costKey(ins, &charge), &charge);
+                run.fuel += cost.fuel;
+                run.alloc += cost.alloc;
+            }
+            charge.release();
+            switch (done) {
+                .next => {},
+                .catch_accept => break .{ .accepted = .{ .frame = index, .pc = f.pc, .stack = f.stack } },
+                .catch_next => {
+                    for (f.stack.items) |slot| slot.release(g.gpa);
+                    f.stack.deinit(g.gpa);
+                    break .declined;
+                },
+                .raised => |raised| {
+                    // An error in a clause's tests skips the clause.
+                    defer raised.release();
+                    if (g.guardEntry(run, pc)) |guard| {
+                        if (g.trace) |w| {
+                            w.print("guard-skip {s} at={s}:{d} pos={d}:{d} code=", .{ run.id, run.script.name, pc, ins.position.line, ins.position.column }) catch {};
+                            display.writeTrace(w, raised.get("code").?) catch {};
+                            w.writeAll("\n") catch {};
+                        }
+                        try g.cutStack(run, index, guard.depth + 1);
+                        f.pc = guard.target;
+                    } else {
+                        for (f.stack.items) |slot| slot.release(g.gpa);
+                        f.stack.deinit(g.gpa);
+                        break .declined;
+                    }
+                },
+                .guard_value => |v| {
+                    defer v.release();
+                    if (g.guardEntry(run, pc)) |guard| {
+                        if (g.trace) |w| {
+                            w.print("guard-skip {s} at={s}:{d} pos={d}:{d} value=", .{ run.id, run.script.name, pc, ins.position.line, ins.position.column }) catch {};
+                            display.writeTrace(w, v) catch {};
+                            w.writeAll("\n") catch {};
+                        }
+                        try g.cutStack(run, index, guard.depth + 1);
+                        f.pc = guard.target;
+                    }
+                },
+                .returned, .clause_failed, .end_cleanup => unreachable,
+            }
+        };
+        // The owner keeps its own stack until acceptance moves it on.
+        const f = &run.frames.items[index];
+        f.stack = owner_stack;
+        f.pc = owner_pc;
+        try run.frames.appendSlice(g.gpa, held[0..held_len]);
+        return result;
+    }
+
+    /// Schedules the `finally` blocks an error leaves: every one covering the
+    /// held frames' places, innermost first, then the ones nested in the
+    /// catching `try` of its own frame, then what follows.
+    fn startCleanup(g: *Group, run: *Run, err: *Value, catching: ?usize, catch_pc: u32, catch_entry: usize, raised: u32, then: Then) !void {
+        const unit = &run.script.unit;
+        var cleanups: std.ArrayList(Cleanup) = .empty;
+        var index = run.frames.items.len;
+        const lowest = catching orelse 0;
+        while (index > lowest) {
+            index -= 1;
+            const fpc = if (catching != null and index == catching.?) catch_pc else framePc(run, index, raised);
+            const body = unit.bodies[run.frames.items[index].body];
+            for (unit.unwind, 0..) |e, ei| {
+                if (e.kind != .finally or !covers(e, fpc) or e.first < body.first or e.last > body.last) continue;
+                if (catching != null and index == catching.? and ei > catch_entry) continue;
+                try cleanups.append(g.gpa, .{ .frame = index, .target = e.target, .depth = e.depth });
+            }
+        }
+        run.unwinding = .{ .err = err, .cleanups = cleanups, .then = then };
+    }
+
+    /// Runs the next scheduled `finally` block, or what follows the last.
+    fn nextCleanup(g: *Group, run: *Run) !?Outcome {
+        var u = &(run.unwinding orelse return null);
+        if (u.next < u.cleanups.items.len) {
+            const c = u.cleanups.items[u.next];
+            u.next += 1;
+            while (run.frames.items.len > c.frame + 1) g.popFrame(run);
+            try g.cutStack(run, c.frame, c.depth);
+            run.frames.items[c.frame].pc = c.target;
+            return null;
+        }
+        const then = u.then;
+        const err = u.err;
+        u.cleanups.deinit(g.gpa);
+        run.unwinding = null;
+        switch (then) {
+            .accept => |acc| {
+                err.release();
+                while (run.frames.items.len > acc.frame + 1) g.popFrame(run);
+                const f = &run.frames.items[acc.frame];
+                for (f.stack.items) |slot| slot.release(g.gpa);
+                f.stack.deinit(g.gpa);
+                f.stack = acc.stack;
+                f.pc = acc.pc;
+                return null;
+            },
+            .end => {
+                while (run.frames.items.len > 0) g.popFrame(run);
+                return .{ .errored = err };
+            },
+        }
+    }
+
+    fn abandonUnwinding(g: *Group, run: *Run) void {
+        var u = run.unwinding orelse return;
+        switch (u.then) {
+            .accept => |acc| {
+                var stack = acc.stack;
+                for (stack.items) |slot| slot.release(g.gpa);
+                stack.deinit(g.gpa);
+            },
+            .end => {},
+        }
+        u.err.release();
+        u.cleanups.deinit(g.gpa);
+        run.unwinding = null;
     }
 
     const Step = union(enum) {
@@ -441,6 +873,11 @@ pub const Group = struct {
         returned: *Value,
         clause_failed,
         raised: *Value,
+        catch_accept,
+        catch_next,
+        end_cleanup,
+        /// A Guard gave something other than a boolean.
+        guard_value: *Value,
     };
 
     fn push(g: *Group, frame: *Frame, v: *Value) !void {
@@ -460,6 +897,7 @@ pub const Group = struct {
         pairs.append(g.gpa, .{ .key = "code", .value = code_value }) catch return error.OutOfMemory;
         pairs.appendSlice(g.gpa, fields) catch return error.OutOfMemory;
         g.pending_error = model.map(g.gpa, pairs.items) catch return error.OutOfMemory;
+        g.pending_core = true;
         return error.Raised;
     }
 
@@ -524,8 +962,13 @@ pub const Group = struct {
             .jump => frame.pc = @intCast(ops[0].int),
             .branch_false, .branch_true => {
                 const v = pop(frame);
+                if (v.data != .bool) {
+                    // A Guard that isn't a boolean skips its clause.
+                    if (ins.op == .branch_false and g.guardEntry(run, frame.pc - 1) != null) return .{ .guard_value = v };
+                    defer v.release();
+                    return g.wrongKind("boolean", v);
+                }
                 defer v.release();
-                if (v.data != .bool) return g.wrongKind("boolean", v);
                 if (v.data.bool == (ins.op == .branch_true)) frame.pc = @intCast(ops[0].int);
             },
             .check_boolean => {
@@ -634,15 +1077,46 @@ pub const Group = struct {
                     std.mem.eql(u8, kindName(x), want);
                 try g.push(frame, try boolean(gpa, is));
             },
+            .convert, .can_convert => {
+                const v = pop(frame);
+                defer v.release();
+                m.input = v.retain();
+                const r = conversions.convert(a, gpa, v, ops[0].text) catch |e| switch (e) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    else => null,
+                };
+                if (ins.op == .can_convert) {
+                    if (r) |x| x.release();
+                    try g.push(frame, try boolean(gpa, r != null));
+                } else {
+                    const out = r orelse {
+                        const to = try model.text(gpa, ops[0].text);
+                        defer to.release();
+                        return g.raise("can't convert", &.{ .{ .key = "value", .value = v }, .{ .key = "to", .value = to } });
+                    };
+                    m.result = out.retain();
+                    try g.push(frame, out);
+                }
+            },
             .contains, .begins_with, .ends_with => {
                 const y = pop(frame);
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                if (x.data != .text) return g.wrongKind("text", x);
-                if (y.data != .text) return g.wrongKind("text", y);
-                const r = textSearch(a, x.data.text, y.data.text, ins.op) catch return error.OutOfMemory;
-                try g.push(frame, try boolean(gpa, r));
+                const kind: literal.Kind = switch (ins.op) {
+                    .contains => .search,
+                    .begins_with => .prefix,
+                    else => .suffix,
+                };
+                const r = if (x.data == .bytes and y.data == .bytes)
+                    try literal.run(a, try literal.bytes(a, x.data.bytes), try literal.bytes(a, y.data.bytes), kind)
+                else blk: {
+                    if (x.data != .text) return g.wrongKind("text", x);
+                    if (y.data != .text) return g.wrongKind("text", y);
+                    break :blk try literal.run(a, try characters(a, x.data.text), try characters(a, y.data.text), kind);
+                };
+                m.steps = r.steps;
+                try g.push(frame, try boolean(gpa, r.found));
             },
             .get_key, .get_key_computed => {
                 const base = pop(frame);
@@ -663,18 +1137,17 @@ pub const Group = struct {
                 var delimiter: []const u8 = ",";
                 var d: ?*Value = null;
                 defer if (d) |x| x.release();
-                if (ins.op == .property_delimited) {
-                    d = pop(frame);
-                    delimiter = try g.delimiterText(d.?);
-                }
+                if (ins.op == .property_delimited) d = pop(frame);
                 const base = pop(frame);
                 defer base.release();
+                // Charged on its subject even when the delimiter raises.
+                m.input = base.retain();
+                if (d) |x| delimiter = try g.delimiterText(x);
                 var effect: chunks.Effect = .{};
                 const r = chunks.property(a, gpa, base, ops[0].text, delimiter, &effect) catch |e| switch (e) {
                     error.Raised => return g.raiseChunk(effect, base),
                     else => |other| return other,
                 };
-                m.input = base.retain();
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -714,11 +1187,12 @@ pub const Group = struct {
                 const index = pop(frame);
                 defer index.release();
                 var effect: chunks.Effect = .{};
+                // Charged on its inputs even when it raises.
+                m.input = part.retain();
                 const r = chunks.set(a, gpa, whole, chunkKind(ops[0].text), index, part, delimiter, &effect) catch |e| switch (e) {
                     error.Raised => return g.raiseChunk(effect, whole),
                     else => |other| return other,
                 };
-                m.input = part.retain();
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -972,7 +1446,110 @@ pub const Group = struct {
                 m.result = r.retain();
                 try g.push(frame, r);
             },
+            .test_constant => {
+                const v = pop(frame);
+                defer v.release();
+                const c = try g.constant(unit, @intCast(ops[0].int));
+                defer c.release();
+                const fold = ops.len == 3;
+                m.scanned = compared(a, v, c);
+                if (!(try equalFolded(a, v, c, fold))) frame.pc = @intCast(ops[ops.len - 1].int);
+            },
+            .test_equal => {
+                const y = pop(frame);
+                defer y.release();
+                const x = pop(frame);
+                defer x.release();
+                m.scanned = compared(a, x, y);
+                if (!(x.equal(y) catch false)) frame.pc = @intCast(ops[0].int);
+            },
+            .test_list, .test_list_at_least => {
+                const v = pop(frame);
+                defer v.release();
+                const n: usize = @intCast(ops[0].int);
+                const ok = v.data == .list and (if (ins.op == .test_list) v.data.list.len == n else v.data.list.len >= n);
+                if (!ok) frame.pc = @intCast(ops[1].int);
+            },
+            .list_item => {
+                const v = pop(frame);
+                defer v.release();
+                try g.push(frame, v.data.list[@intCast(ops[0].int - 1)].retain());
+            },
+            .list_rest => {
+                const v = pop(frame);
+                defer v.release();
+                const from: usize = @intCast(ops[0].int - 1);
+                const r = model.list(gpa, v.data.list[@min(from, v.data.list.len)..]) catch return error.OutOfMemory;
+                m.result = r.retain();
+                try g.push(frame, r);
+            },
+            .test_map => {
+                const v = pop(frame);
+                defer v.release();
+                if (v.data != .map) frame.pc = @intCast(ops[0].int);
+            },
+            .map_get => {
+                const v = pop(frame);
+                defer v.release();
+                const key = try keyOperand(a, ops[0].text);
+                if (v.get(key)) |found| try g.push(frame, found.retain()) else frame.pc = @intCast(ops[1].int);
+            },
+            .bytes_field, .bytes_sized, .bytes_bits => {
+                var problem: ?binary.Raise = null;
+                var values: std.ArrayList(*Value) = .empty;
+                defer for (values.items) |v| v.release();
+                const n: usize = switch (ins.op) {
+                    .bytes_field => 1,
+                    .bytes_sized => 2,
+                    else => @intCast(ops[1].int),
+                };
+                for (0..n) |_| try values.insert(a, 0, pop(frame));
+                const so_far = pop(frame);
+                defer so_far.release();
+                const r = switch (ins.op) {
+                    .bytes_field => blk: {
+                        m.input = values.items[0].retain();
+                        break :blk binary.field(a, gpa, so_far.data.bytes, ops[0].text, values.items[0], &problem);
+                    },
+                    .bytes_sized => blk: {
+                        m.input = values.items[0].retain();
+                        break :blk binary.sized(a, gpa, so_far.data.bytes, ops[0].text, values.items[0], values.items[1], &problem);
+                    },
+                    else => binary.bits(a, gpa, so_far.data.bytes, unit.values[@intCast(ops[0].int)].widths, values.items, &problem),
+                } catch |e| switch (e) {
+                    error.Raised => return g.raiseBinary(problem.?),
+                    else => |other| return other,
+                };
+                m.result = r.retain();
+                try g.push(frame, r);
+            },
+            .bin_start => {
+                const v = pop(frame);
+                if (v.data != .bytes) {
+                    v.release();
+                    frame.pc = @intCast(ops[0].int);
+                } else {
+                    const r = try gpa.create(binary.Reader);
+                    r.* = .{ .subject = v };
+                    try frame.stack.append(gpa, .{ .reader = r });
+                }
+            },
+            .bin_literal, .bin_int, .bin_bits, .bin_bytes, .bin_rest, .bin_end => {
+                const fail: u32 = @intCast(ops[ops.len - 1].int);
+                var size: ?*Value = null;
+                defer if (size) |x| x.release();
+                if (ins.op == .bin_bytes) size = pop(frame);
+                const reader = frame.stack.items[frame.stack.items.len - 1].reader;
+                const ok = try g.readField(run, frame, ins, reader, size, m);
+                if (!ok) {
+                    frame.stack.pop().?.release(gpa);
+                    frame.pc = fail;
+                }
+            },
             .@"return" => return .{ .returned = pop(frame) },
+            .catch_accept => return .catch_accept,
+            .catch_next => return .catch_next,
+            .end_cleanup => return .end_cleanup,
             .clause_fail => return .clause_failed,
             .raise => return g.raise(ops[0].text, &.{}),
             .throw => {
@@ -992,6 +1569,91 @@ pub const Group = struct {
             else => return g.raise("not implemented", &.{}),
         }
         return .next;
+    }
+
+    fn raiseBinary(g: *Group, r: binary.Raise) error{ Raised, OutOfMemory } {
+        switch (r) {
+            .wrong_kind => |w| return g.wrongKind(w.expected, w.got),
+            .out_of_range => |o| {
+                const f = model.text(g.gpa, o.field) catch return error.OutOfMemory;
+                defer f.release();
+                return g.raise("out of range", &.{ .{ .key = "field", .value = f }, .{ .key = "value", .value = @constCast(o.value) } });
+            },
+        }
+    }
+
+    /// One field of a Binary Pattern, read off the reader on the stack:
+    /// false when it doesn't match, so the pattern fails.
+    fn readField(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, r: *binary.Reader, size: ?*Value, m: *costs.Measures) !bool {
+        const gpa = g.gpa;
+        const unit = &run.script.unit;
+        const ops = ins.operands;
+        switch (ins.op) {
+            .bin_literal => {
+                const c = try g.constant(unit, @intCast(ops[0].int));
+                defer c.release();
+                const want: []const u8 = switch (c.data) {
+                    .text => |t| t,
+                    .number => |n| blk: {
+                        const b = n.integer(u8) catch return false;
+                        break :blk &[_]u8{b};
+                    },
+                    else => return false,
+                };
+                if (!std.mem.startsWith(u8, r.rest(), want)) return false;
+                r.position += want.len;
+            },
+            .bin_int => {
+                const n = binary.readInt(r, ops[0].text) orelse return false;
+                const v = try model.scalar(gpa, .{ .number = model.Decimal{ .coefficient = @intCast(@abs(n)), .negative = n < 0 } });
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .bin_bits => {
+                const widths = unit.values[@intCast(ops[0].int)].widths;
+                const values = (try binary.readBits(g.scratch.allocator(), r, widths)) orelse return false;
+                for (values, 0..) |n, i| {
+                    const v = try model.scalar(gpa, .{ .number = model.Decimal{ .coefficient = n } });
+                    if (i == 0) m.result = v.retain() else m.alloc_extra += costs.size(v);
+                    try g.push(frame, v);
+                }
+            },
+            .bin_bytes => {
+                const s = size.?;
+                if (s.data != .number) return false;
+                const n = s.data.number.integer(i64) catch return false;
+                if (n < 0 or r.rest().len < n) return false;
+                const taken = r.rest()[0..@intCast(n)];
+                const v = if (std.mem.eql(u8, ops[0].text, "bytes as text")) blk: {
+                    if (!binary.validText(taken)) return false;
+                    break :blk try model.text(gpa, taken);
+                } else try model.bytes(gpa, taken);
+                r.position += @intCast(n);
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .bin_rest => {
+                const taken = r.rest();
+                const v = if (std.mem.eql(u8, ops[0].text, "bytes as text")) blk: {
+                    if (!binary.validText(taken)) return false;
+                    break :blk try model.text(gpa, taken);
+                } else try model.bytes(gpa, taken);
+                frame.stack.pop().?.release(gpa);
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .bin_end => {
+                const done = r.rest().len == 0;
+                frame.stack.pop().?.release(gpa);
+                if (!done) {
+                    // The reader is gone already: jump without popping again.
+                    frame.pc = @intCast(ops[0].int);
+                }
+                return true;
+            },
+            else => unreachable,
+        }
+        return true;
     }
 
     fn raiseBuiltin(g: *Group, raised: builtins.Raised) error{ Raised, OutOfMemory } {
@@ -1062,36 +1724,69 @@ fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
         return n;
     }
     _ = a;
+    if (x.data == .bytes and y.data == .bytes) {
+        const b = x.data.bytes;
+        const c = y.data.bytes;
+        for (0..@min(b.len, c.len)) |i| if (b[i] != c[i]) return i + 1;
+        return @min(b.len, c.len);
+    }
     if (x.data == .list and y.data == .list) return @min(x.data.list.len, y.data.list.len);
     return 0;
 }
 
-fn textSearch(a: Allocator, text: []const u8, needle: []const u8, op: Opcode) !bool {
-    // Whole Characters only: a match starts and ends at Character
-    // boundaries of the text.
-    const bounds = try boundaries(a, text);
-    for (bounds) |start| {
-        if (op == .begins_with and start != 0) break;
-        if (!std.mem.startsWith(u8, text[start..], needle)) continue;
-        const end = start + needle.len;
-        const at_boundary = std.mem.indexOfScalar(usize, bounds, end) != null or end == text.len;
-        if (!at_boundary) continue;
-        if (op == .ends_with and end != text.len) continue;
-        return true;
-    }
-    if (needle.len == 0) return true;
-    return false;
-}
-
-fn boundaries(a: Allocator, text: []const u8) ![]usize {
-    var out: std.ArrayList(usize) = .empty;
+/// Text split into its Characters.
+fn characters(a: Allocator, text: []const u8) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
     var i: usize = 0;
     while (i < text.len) {
-        try out.append(a, i);
-        i = unicode.grapheme.end(text, i);
+        const end = unicode.grapheme.end(text, i);
+        try out.append(a, text[i..end]);
+        i = end;
     }
-    try out.append(a, text.len);
     return out.items;
+}
+
+const errors_table = @import("../generated/errors.zig");
+
+fn errorEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
+    for (errors_table.errors.@"error") |e| if (std.mem.eql(u8, e.code, code)) return e;
+    return null;
+}
+
+fn retainSlot(slot: Slot) Slot {
+    return switch (slot) {
+        .value => |v| .{ .value = v.retain() },
+        .iterator => |it| blk: {
+            it.references += 1;
+            break :blk .{ .iterator = it };
+        },
+        .reader => |r| blk: {
+            r.references += 1;
+            break :blk .{ .reader = r };
+        },
+    };
+}
+
+/// A map with `key` added at its end.
+fn withKey(gpa: Allocator, map: *Value, key: []const u8, value: *Value) !*Value {
+    var pairs: std.ArrayList(model.Pair) = .empty;
+    defer pairs.deinit(gpa);
+    try pairs.appendSlice(gpa, map.data.map);
+    try pairs.append(gpa, .{ .key = key, .value = value });
+    const out = try model.map(gpa, pairs.items);
+    out.core_message = map.core_message;
+    return out;
+}
+
+/// `=` between two values, comparing texts by simple case folding under
+/// `ignoring case`.
+fn equalFolded(a: Allocator, x: *const Value, y: *const Value, fold: bool) !bool {
+    if (fold and x.data == .text and y.data == .text) {
+        const fx = try unicode.foldText(a, x.data.text);
+        const fy = try unicode.foldText(a, y.data.text);
+        return std.mem.eql(u8, fx, fy);
+    }
+    return x.equal(y) catch false;
 }
 
 fn definitionIndex(unit: *const lower.Unit, name: []const u8) usize {

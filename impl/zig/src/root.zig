@@ -49,6 +49,9 @@ test {
     _ = lower;
     _ = machine;
     _ = @import("machine/chunks.zig");
+    _ = @import("machine/binary.zig");
+    _ = @import("machine/convert.zig");
+    _ = @import("machine/literal.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;
     _ = corpus_case;

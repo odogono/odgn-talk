@@ -1,8 +1,11 @@
 # Cases protected by the Zig Core's incremental conformance gate.
+bytes/build-and-match
+bytes/build-errors
 bytes/value-encoding
 collecting/condition-target
 collecting/exit
 collecting/next-filter
+collecting/partial-error
 collecting/zero-passes
 dates/value-encoding
 disassembly/calls-and-lambdas
@@ -18,6 +21,7 @@ disassembly/recovery-offers
 disassembly/tell-block
 disassembly/timeout-block
 disassembly/whose
+errors/items-delimiter
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here
@@ -58,12 +62,15 @@ load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
 quantities/value-encoding
 text-model/chunk-read-out-of-range
+text-model/chunk-write-out-of-range
 text-model/chunk-write-padding
 text-model/fenced-text
 text-model/host-text-joins-in-nfc
 text-model/host-text-normalised-to-nfc
+text-model/items-property
 text-model/nfc-at-join-seams
 text-model/word-chunks-keep-punctuation
 whose/keys
 whose/maps
 whose/not-in-a-whose
+whose/ordinals
